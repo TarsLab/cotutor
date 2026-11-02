@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { check, done } from './_check.ts';
 import { startFakeChat, type ChatBody } from './_fake-bailian-chat.ts';
+import { keysHome, writeKeys } from './_keys.ts';
 
 const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-brain-api-')));
 process.env.HOME = home;
@@ -18,7 +19,7 @@ const { initWorkspace } = await import('../src/app/cli/init.ts');
 const { loadWorkspace } = await import('../src/app/workspace.ts');
 const { createContext, dayView, overview } = await import('../src/app/http/app.ts');
 const { DIGEST_HEAD } = await import('../src/runtime/context/thread-digest.ts');
-const { bailianBase, effortFetch, effortOf, thinkingOf } = await import('../src/brain/api.ts');
+const { effortFetch, effortOf, thinkingOf } = await import('../src/brain/api.ts');
 const { localDate } = await import('../src/shared/time.ts');
 const { readIndex } = await import('../src/runtime/journal/store.ts');
 
@@ -45,7 +46,8 @@ try {
   mkdirSync(join(root, 'captures'), { recursive: true });
   writeFileSync(join(root, 'captures', 'dot.png'), Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a5G8AAAAASUVORK5CYII=', 'base64'));
 
-  const env = { ...process.env, HOME: home, DASHSCOPE_API_KEY: SECRET, DASHSCOPE_WORKSPACE_ID: 'ws-test', COTUTOR_BRAIN_ENDPOINT: fake.baseURL };
+  writeKeys(home, { payg: SECRET, workspaceId: 'ws-test' });
+  const env = { ...process.env, HOME: home, COTUTOR_BRAIN_ENDPOINT: fake.baseURL };
   const ctx = createContext(loadWorkspace(root), { env, warm: false, now: () => NOW });
   const send = async (tutor: string, input: Parameters<typeof ctx.runner.send>[1]) => {
     const started = await ctx.runner.send(tutor, input);
@@ -179,7 +181,7 @@ try {
   check('key 不落盘(日志、历史、run 文件、err.log)', leaks.length === 0, leaks.join(' '));
 
   // ---- 没配百炼:不发请求,家长端说去哪配 ----
-  const bare = Object.fromEntries(Object.entries(env).filter(([k]) => !['DASHSCOPE_API_KEY', 'DASHSCOPE_WORKSPACE_ID', 'COTUTOR_BRAIN_ENDPOINT'].includes(k)));
+  const bare = { ...Object.fromEntries(Object.entries(env).filter(([k]) => k !== 'COTUTOR_BRAIN_ENDPOINT')), HOME: keysHome() };
   const ctx2 = createContext(loadWorkspace(root), { env: bare, warm: false, now: () => NOW });
   n = fake.requests.length;
   const s10 = await ctx2.runner.send('math-tutor', { from: 'kid', text: '你好', newThread: true });
@@ -214,8 +216,6 @@ try {
   const ovThreads = ov.tutors.find((x) => x.name === 'math-tutor')?.threads ?? [];
   check('换过运行时:家长端那个话题标 oldRuntime(卡上说一句,记账按钮不算它);新话题不标', ovThreads.find((x) => x.thread === s11.thread)?.oldRuntime === 'api38' && !ovThreads.find((x) => x.thread === s12.thread)?.oldRuntime, JSON.stringify(ovThreads.map((x) => ({ thread: x.thread, old: x.oldRuntime }))));
   ctx3.runner.close();
-  // 端点:有业务空间 id 走它的域名;只有按量 key 走公网域名(同 qwen 按量那条线)
-  check('端点:业务空间域名 / 公网域名', bailianBase('ws-1') === 'https://ws-1.cn-beijing.maas.aliyuncs.com/compatible-mode/v1' && bailianBase(null) === 'https://dashscope.aliyuncs.com/compatible-mode/v1');
   ctx.runner.close();
   ctx2.runner.close();
 } finally {

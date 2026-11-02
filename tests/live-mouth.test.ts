@@ -28,7 +28,6 @@ const { mouthIndex } = await import('../src/runtime/journal/mouth-index.ts');
 const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-live-mouth-')));
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
-delete process.env.DASHSCOPE_API_KEY;
 
 const { initWorkspace } = await import('../src/app/cli/init.ts');
 const { loadWorkspace } = await import('../src/app/workspace.ts');
@@ -63,7 +62,7 @@ writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 const ctx = createContext(loadWorkspace(wsRoot), { warm: false });
 await ctx.reload();
 // 每次回答完、安静时就换连接:换了连接还接着留
-const upgrade = makeLiveUpgrade({ endpoint: fake.endpoint, env: { DASHSCOPE_API_KEY: 'sk-t' }, swapTokens: 1 });
+const upgrade = makeLiveUpgrade({ endpoint: fake.endpoint, swapTokens: 1 });
 const server = createServer(createHandler(ctx));
 server.on('upgrade', (req, socket, head) => { void upgrade(req, socket, head, ctx).then((took) => { if (!took) socket.destroy(); }); });
 await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));

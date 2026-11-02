@@ -2,9 +2,9 @@
  * 百炼:孩子端的老师靠实时模型开口,没配百炼孩子端打不开,家长在家长端「首页」里配。
  * 配的是按量的 key + 业务空间 id(Token Plan 的 `sk-sp-` 没有 realtime;端点要业务空间 id 的域名)。
  * 存机器级 ~/.config/cotutor/bailian.json(0600,同 PIN、证书,几个孩子的 workspace 共用),不进 cotutor.json:
- * workspace 是 git 仓,工作台的 PATCH /api/config 也能改它。读的顺序(家长端配的在最前)见 src/shared/qianwen.ts。
+ * workspace 是 git 仓,工作台的 PATCH /api/config 也能改它。cotutor 的 key 只认这里(开发机另有 token-plan.json),见 src/shared/qianwen.ts。
  *
- *   GET  /api/parent/bailian        {ready, from, keyTail, workspaceId, canEdit}
+ *   GET  /api/parent/bailian        {ready, keyTail, workspaceId, canEdit}
  *   PUT  /api/parent/bailian        {key, workspaceId}:先试连,通了才存;回 GET 那份 + ms
  *   POST /api/parent/bailian/test   拿现在用的那份试连一次:{ok, ms, message?}
  *
@@ -14,7 +14,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname } from 'node:path';
-import { bailianFile, cotutorBailian } from '../../shared/qianwen.ts';
+import { bailianFile } from '../../shared/qianwen.ts';
 import { dashscopeAuth } from '../../realtime/bailian.ts';
 import { probeRealtime } from '../../realtime/preview.ts';
 import type { Who } from '../http/access.ts';
@@ -28,8 +28,6 @@ export interface BailianAuth {
 export interface BailianStatus {
   /** 孩子端能用:按量 key 与业务空间 id 都有(或指了假端点) */
   ready: boolean;
-  /** 用的那份是哪来的:parent = 家长端配的;machine = 这台电脑别处配的(环境变量、qwen、voxtell);null = 没有 */
-  from: 'parent' | 'machine' | null;
   /** key 的末四位(不回显整把) */
   keyTail: string | null;
   workspaceId: string | null;
@@ -49,9 +47,8 @@ export function createBailian(opts: { env?: NodeJS.ProcessEnv; probe?: (auth?: B
   return {
     status() {
       const auth = dashscopeAuth(env);
-      if (!auth) return { ready: Boolean(fake), from: null, keyTail: null, workspaceId: null };
-      const mine = cotutorBailian(home);
-      return { ready: true, from: mine.apiKey === auth.key && mine.workspaceId === auth.workspaceId ? 'parent' : 'machine', keyTail: auth.key.slice(-4), workspaceId: auth.workspaceId };
+      if (!auth) return { ready: Boolean(fake), keyTail: null, workspaceId: null };
+      return { ready: true, keyTail: auth.key.slice(-4), workspaceId: auth.workspaceId };
     },
     probe: opts.probe ?? ((auth) => probeRealtime({ auth, env, endpoint: fake })),
     async save(auth) {

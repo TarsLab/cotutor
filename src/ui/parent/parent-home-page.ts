@@ -210,7 +210,7 @@ ${pageDomJs(3200)}
     const st = BL.st;
     if (!st) { blEl.replaceChildren(); return; }
     const rows = [];
-    if (st.ready) rows.push(h('div', { class: 'it' }, h('span', { class: 'tx' }, h('b', {}, '配好了'), h('small', {}, (st.keyTail ? 'key …' + st.keyTail + ' · 业务空间 ' + st.workspaceId : '测试用的假百炼') + (st.from === 'machine' ? '(这台电脑上别处配的)' : ''))),
+    if (st.ready) rows.push(h('div', { class: 'it' }, h('span', { class: 'tx' }, h('b', {}, '配好了'), h('small', {}, (st.keyTail ? 'key …' + st.keyTail + ' · 业务空间 ' + st.workspaceId : '测试用的假百炼'))),
       h('button', { type: 'button', class: 'x', disabled: BL.busy || null, on: { click: blTest } }, BL.busy && !BL.open ? '在试…' : '试连'),
       st.canEdit ? h('button', { type: 'button', class: 'x', on: { click: () => { BL.open = !BL.open; BL.msg = ''; blDraw(); } } }, BL.open ? '收起' : '换一把') : null));
     else rows.push(h('div', { class: 'box' }, h('b', {}, '还没配,孩子那边打不开'), h('div', { class: 'note', style: 'padding:0' }, '老师开口和想讲稿都走百炼,要百炼「按量付费」的 API key(控制台「密钥管理」里创建)和业务空间 id(控制台的业务空间详情里看);Token Plan 的 sk-sp- 不行。存在这台电脑上,不进孩子的文件夹。')));

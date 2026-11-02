@@ -14,7 +14,6 @@ import { startFakeRealtime } from './_fake-realtime.ts';
 const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-live-')));
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
-delete process.env.DASHSCOPE_API_KEY;
 
 const { initWorkspace } = await import('../src/app/cli/init.ts');
 const { loadWorkspace } = await import('../src/app/workspace.ts');
@@ -48,7 +47,7 @@ const ctx = createContext(loadWorkspace(wsRoot), { warm: false });
 await ctx.reload();
 const finished: [string, string][] = [];
 // 心跳缺省 30 秒,前面几段跑不到;断线那段改短
-const liveDeps: { endpoint: string; env: NodeJS.ProcessEnv; heartbeatMs?: number; keepAliveMs?: number; swapTokens?: number; idleSwapMs?: number; echoWaitMs?: number; ringMs?: number; stallMs?: number; onFinished: (tutor: string, why: string) => void } = { endpoint: fake.endpoint, env: { DASHSCOPE_API_KEY: 'sk-t' }, onFinished: (tutor, why) => finished.push([tutor, why]) };
+const liveDeps: { endpoint: string; heartbeatMs?: number; keepAliveMs?: number; swapTokens?: number; idleSwapMs?: number; echoWaitMs?: number; ringMs?: number; stallMs?: number; onFinished: (tutor: string, why: string) => void } = { endpoint: fake.endpoint, onFinished: (tutor, why) => finished.push([tutor, why]) };
 const liveUpgrade = makeLiveUpgrade(liveDeps);
 const server = createServer(createHandler(ctx));
 server.on('upgrade', (req, socket, head) => { void liveUpgrade(req, socket, head, ctx).then((took) => { if (!took) socket.destroy(); }); });

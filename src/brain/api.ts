@@ -1,5 +1,6 @@
 /**
  * 脑执行的 API 实现(2026-10-29):不起 CLI,应用在服务进程里直连百炼的 Chat Completions(AI SDK + @ai-sdk/alibaba,cotutor-api-prototype 验过这条路)。
+ * - 发到哪按模型选(src/shared/qianwen.ts 的 compatibleLine):Token Plan 有这个模型、本机有 token-plan.json 就走 Token Plan(2026-11-02 起),否则百炼按量
  * - 系统提示 = runner 给的 systemBody(老师正文或 activity + 板书写法);消息 = 上下文包 + 孩子的话,本轮的照片直接附成图,不靠老师自己去读
  * - 同一话题的模型历史应用自己存:<日期>.<话题>.brain.jsonl,一行一轮(会话 id、模型、这轮的用户消息、模型回的全部消息、成没成);
  *   接着话题时把同一会话的那几行拼回去。照片只记相对 workspace 根的路径,发的时候再编码。没回完的一轮只留写出来的正文,下一条消息前头注明
@@ -25,7 +26,6 @@ import type { AssistantPart, CliEvent, CliFinal, ToolResult } from './cli/types.
 import { getRuntime, type RunPlan } from './cli/run-plan.ts';
 import { createPartialReader } from './stream.ts';
 import { parseTranscript, toolCalls, toolSummary } from './transcript.ts';
-import { compatibleBase, DASHSCOPE_HOST } from '../shared/qianwen.ts';
 import { isApiRuntime, type ApiRuntime, type CotutorConfig, type Policy } from '../schema/index.ts';
 import { readOnlyTools } from './api-tools.ts';
 import type { BrainHooks, BrainRequest, BrainResult, BrainRun, WarmKey } from './index.ts';
@@ -87,13 +87,6 @@ export function effortFetch(effort: 'low' | 'xhigh', base: typeof fetch = fetch)
     const { thinking_budget: _budget, ...body } = JSON.parse(init.body) as Record<string, unknown>;
     return base(input, { ...init, body: JSON.stringify({ ...body, reasoning_effort: effort }) });
   };
-}
-
-/**
- * 百炼 Chat Completions 的端点:知道业务空间 id 就走它的域名(原型验过,同 realtime);只有按量 key 就走公网域名(qwen 那边按量的线也走它,2026-10-29 真跑通)
- */
-export function bailianBase(workspaceId: string | null): string {
-  return workspaceId ? `https://${workspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1` : compatibleBase(DASHSCOPE_HOST);
 }
 
 /** 历史文件的一行 = 一轮 */
@@ -220,14 +213,17 @@ async function pastOf(file: string, session: string, root: string, current: { im
   return { messages, note, photos };
 }
 
+/** 这个模型发到哪、带哪把 key(src/shared/qianwen.ts 的 compatibleLine);null = 没配 */
+export type BrainLine = (model: string) => { baseURL: string; key: string; plan: boolean } | null;
+
 export class ApiBrain {
   private readonly workspace: () => { config: CotutorConfig; root: string };
-  private readonly auth: () => { key: string; workspaceId: string | null } | null;
-  /** 测试与探针:…/compatible-mode/v1(假百炼);不给按业务空间 id 拼 */
+  private readonly line: BrainLine;
+  /** 测试与探针:…/compatible-mode/v1(假百炼);不给按模型选线 */
   private readonly endpoint: string | undefined;
-  constructor(opts: { workspace: () => { config: CotutorConfig; root: string }; auth: () => { key: string; workspaceId: string | null } | null; endpoint?: string }) {
+  constructor(opts: { workspace: () => { config: CotutorConfig; root: string }; line: BrainLine; endpoint?: string }) {
     this.workspace = opts.workspace;
-    this.auth = opts.auth;
+    this.line = opts.line;
     this.endpoint = opts.endpoint;
   }
 
@@ -259,8 +255,8 @@ export class ApiBrain {
       const stored = images.map((p) => { const rel = relative(root, p); return rel.startsWith('..') || isAbsolute(rel) ? p : rel.split(sep).join('/'); });
       const record: TurnRecord = { v: 1, session, at: new Date().toISOString(), model: runtime.model, codec: CODEC, user: { text: req.prompt, images: stored }, messages: [], ok: false };
       let final: CliFinal;
-      const auth = this.auth();
-      if (!auth && !this.endpoint) {
+      const line = this.line(runtime.model);
+      if (!line && !this.endpoint) {
         final = { ok: false, text: null, reason: 'auth:没有百炼按量 key' };
         warnings.push('百炼还没配好(按量 key):家长端「首页」里填,这位老师的运行时是 API 的,没有它说不了话');
       } else {
@@ -275,7 +271,7 @@ export class ApiBrain {
         }
         const user = await userMessage(text, attach, root, warnings);
         const tier = effortOf(runtime.model, req.effort, req.tools);
-        const alibaba = createAlibaba({ apiKey: auth?.key ?? 'sk-endpoint', baseURL: this.endpoint ?? bailianBase(auth!.workspaceId), includeUsage: true, ...(tier ? { fetch: effortFetch(tier) } : {}) });
+        const alibaba = createAlibaba({ apiKey: line?.key ?? 'sk-endpoint', baseURL: this.endpoint ?? line!.baseURL, includeUsage: true, ...(tier ? { fetch: effortFetch(tier) } : {}) });
         // 断流看门狗:stall.ms 没有一块流到就停(工具在本进程里跑,几毫秒的事,不另算)
         const abort = new AbortController();
         let stalled = false;
@@ -382,7 +378,7 @@ export class ApiBrain {
       hooks.onExit(Date.now());
       await new Promise<void>((r) => out.end(r));
       // 没配凭证的那轮连请求都没发:不进历史
-      if (auth || this.endpoint) await appendFile(files.history, `${JSON.stringify(record)}\n`).catch(() => {});
+      if (line || this.endpoint) await appendFile(files.history, `${JSON.stringify(record)}\n`).catch(() => {});
       const logText = await readFile(files.log, 'utf8').catch(() => '');
       const transcript = parseTranscript(logText, parseEventLine);
       const tools = toolCalls(logText, parseEventLine).slice(0, 200);

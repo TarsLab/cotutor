@@ -29,8 +29,8 @@ const home = probeDir('cotutor-probe-bailian-');
 const shots = outAt > 0 ? process.argv[outAt + 1] : join(home, 'shots');
 mkdirSync(shots, { recursive: true });
 const root = join(home, 'ws');
-// 没有任何百炼的 key:HOME 是空的临时目录,环境里的也摘掉(DASHSCOPE_API_KEY 是 sk-sp- 时本来也不算按量的)
-const env = { ...process.env, HOME: home, COTUTOR_WORKSPACE: '', COTUTOR_LIVE_ENDPOINT: '', DASHSCOPE_API_KEY: '', DASHSCOPE_WORKSPACE_ID: '' };
+// 没有任何百炼的 key:HOME 是空的临时目录(key 只认 ~/.config/cotutor/)
+const env = { ...process.env, HOME: home, COTUTOR_WORKSPACE: '', COTUTOR_LIVE_ENDPOINT: '' };
 const run = (args) => new Promise((resolve, reject) => { const p = spawn(process.execPath, [join(repo, 'bin', 'cotutor.js'), ...args], { env, stdio: 'pipe' }); let out = ''; p.stdout.on('data', (d) => { out += d; }); p.stderr.on('data', (d) => { out += d; }); p.on('exit', (c) => (c === 0 ? resolve(out) : reject(new Error(out)))); });
 await run(['init', 'probe', '--dir', root, '--name', '小探']);
 const cfgFile = join(root, 'cotutor.json');

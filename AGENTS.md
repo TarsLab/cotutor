@@ -69,6 +69,7 @@
 - 历史不迁移:话题只能在开它的那种运行时下接着聊、记账;换过运行时就当那个话题已经结束——接着说开新话题、不记账(家长端说为什么),记录照样能看,不导入、不转换(`sameRuntime`)。以后换脑、换 SDK 编码同此
 - workspace 解析链 `--workspace` > `COTUTOR_WORKSPACE` > cwd 祖先 > `~/.config/cotutor/config.json` > `~/cotutor/` 唯一目录;init 幂等补缺,已有文件不动
 - 证书是机器级的,`~/.config/cotutor/certs/`
+- 千问 key 是机器级的,只认 `~/.config/cotutor/bailian.json`(百炼按量 + 业务空间 id,家长端写)与 `token-plan.json`(开发机才有);环境变量、qwen、voxtell 的配置都不读(`src/shared/qianwen.ts`)。测试要 key 往临时 HOME 写假文件(`tests/_keys.ts`),要真效果就用真的家
 
 ## 实时对话的核心约束
 

@@ -2,9 +2,9 @@
  * 千问的两套账:千问 AI 平台的 Token Plan(`sk-sp-`,只认 token-plan 域名,按订阅 Credits 抵)
  * 与百炼按量(`sk-` / `sk-ws-`,dashscope 域名)。两把 key 互不通用。
  * 一条线调哪个模型:Token Plan 有这个模型、本机又有它的 key 就走 Token Plan,否则走按量(2026-10-13 定)。key 只进请求头与子进程环境。
- * - Token Plan 的 key:环境变量 QWENCLOUD_TOKEN_PLAN_API_KEY(Qwen Code 官方页用的名字);DASHSCOPE_API_KEY 里放的是 `sk-sp-` 也认作它。
- * - 按量的 key:先看家长在家长端配的(~/.config/cotutor/bailian.json),再看 DASHSCOPE_API_KEY(不是 `sk-sp-` 时),
- *   再看本机 qwen(~/.qwen/settings.json 的 env)、voxtell(~/.config/voxtell/config.json)的配置。
+ * key 只放机器级的 ~/.config/cotutor/(2026-11-02 起,所有命令读同一处;环境变量、本机 qwen、voxtell 的配置都不看):
+ * - bailian.json:百炼按量 key + 业务空间 id,家长端「首页」写(src/app/machine/bailian.ts),每台都要有;
+ * - token-plan.json:Token Plan 的 key,只有开发机有,手写;文件在就是开关。
  */
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -12,7 +12,6 @@ import { join } from 'node:path';
 
 export const TOKEN_PLAN_HOST = 'token-plan.maas.qianwenaiapi.com';
 export const DASHSCOPE_HOST = 'dashscope.aliyuncs.com';
-export const TOKEN_PLAN_KEY_ENV = 'QWENCLOUD_TOKEN_PLAN_API_KEY';
 
 /**
  * Token Plan 个人版调得通的模型(2026-10-13:文档表、token-plan 的 /models、实测三处对过)。
@@ -52,18 +51,6 @@ function readJson(file: string): Record<string, unknown> | null {
 
 const text = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null);
 
-/** 本机 qwen 配好的百炼 key(~/.qwen/settings.json 的 env);读不到就是 null */
-export function localDashscopeKey(home = homedir()): string | null {
-  const env = readJson(join(home, '.qwen', 'settings.json'))?.env;
-  return env && typeof env === 'object' ? text((env as Record<string, unknown>).DASHSCOPE_API_KEY) : null;
-}
-
-/** voxtell 的配置(~/.config/voxtell/config.json):按量 key 与业务空间 id */
-export function voxtellConfig(home = homedir()): { apiKey: string | null; workspaceId: string | null } {
-  const v = readJson(join(home, '.config', 'voxtell', 'config.json'));
-  return { apiKey: text(v?.apiKey), workspaceId: text(v?.workspaceId) };
-}
-
 /** 家长端配的百炼(机器级,几个孩子的 workspace 共用;写在 src/app/machine/bailian.ts):按量 key 与业务空间 id */
 export const bailianFile = (home = homedir()): string => join(home, '.config', 'cotutor', 'bailian.json');
 export function cotutorBailian(home = homedir()): { apiKey: string | null; workspaceId: string | null } {
@@ -71,23 +58,26 @@ export function cotutorBailian(home = homedir()): { apiKey: string | null; works
   return { apiKey: text(v?.apiKey), workspaceId: text(v?.workspaceId) };
 }
 
-/** 百炼的业务空间 id(按量的 realtime、配音走它的域名):先看家长端配的,再看环境,再看 voxtell 的配置 */
+/** 开发机的 Token Plan:{"apiKey": "sk-sp-…"},手写;家长端存 bailian.json 是整份重写,所以不和它放一起 */
+export const tokenPlanFile = (home = homedir()): string => join(home, '.config', 'cotutor', 'token-plan.json');
+export const tokenPlanKey = (home = homedir()): string | null => text(readJson(tokenPlanFile(home))?.apiKey);
+
+/** 百炼的业务空间 id(按量的 realtime、配音走它的域名) */
 export function bailianWorkspaceId(env: NodeJS.ProcessEnv = process.env): string | null {
-  const home = env.HOME || homedir();
-  return cotutorBailian(home).workspaceId || text(env.DASHSCOPE_WORKSPACE_ID) || voxtellConfig(home).workspaceId;
+  return cotutorBailian(env.HOME || homedir()).workspaceId;
 }
 
 /** 业务空间的域名(北京地域);公网域名连 realtime 1 秒就断、配音不认 */
 export const workspaceHost = (workspaceId: string): string => `${workspaceId}.cn-beijing.maas.aliyuncs.com`;
 
-/** 本机的两把 key:先看家长端配的,再看环境,再看 qwen、voxtell 的配置;哪处放错了套(按量的位置放了 `sk-sp-`)就挪到对的那格 */
+/** 本机的两把 key(env 只取 HOME,测试拿它指别的家);放错了套(bailian.json 里放了 `sk-sp-`)就挪到对的那格 */
 export function qianwenKeys(env: NodeJS.ProcessEnv = process.env): QianwenKeys {
   const home = env.HOME || homedir();
-  const named = text(env[TOKEN_PLAN_KEY_ENV]);
-  const candidates = [cotutorBailian(home).apiKey, text(env.DASHSCOPE_API_KEY), localDashscopeKey(home), voxtellConfig(home).apiKey];
+  const plan = tokenPlanKey(home);
+  const payg = cotutorBailian(home).apiKey;
   return {
-    plan: named ?? candidates.find((k) => k && isPlanKey(k)) ?? null,
-    payg: candidates.find((k) => k && !isPlanKey(k)) ?? null,
+    plan: plan && isPlanKey(plan) ? plan : payg && isPlanKey(payg) ? payg : null,
+    payg: payg && !isPlanKey(payg) ? payg : null,
   };
 }
 
@@ -109,6 +99,18 @@ export function qianwenLine(model: string, keys: QianwenKeys): QianwenLine | nul
 /** 几种接口的地址 */
 export const chatUrl = (host: string): string => `https://${host}/compatible-mode/v1/chat/completions`;
 export const compatibleBase = (host: string): string => `https://${host}/compatible-mode/v1`;
+
+/**
+ * 兼容接口(老师的脑,src/brain/api.ts)这个模型发到哪:Token Plan 有它、本机有 token-plan.json 就走 Token Plan(2026-11-02 起,同配音、画图);
+ * 否则百炼按量,知道业务空间 id 走它的域名,不知道走公网域名
+ */
+export function compatibleLine(model: string, env: NodeJS.ProcessEnv = process.env): { baseURL: string; key: string; plan: boolean } | null {
+  const line = qianwenLine(model, qianwenKeys(env));
+  if (!line) return null;
+  if (line.plan) return { baseURL: compatibleBase(line.host), key: line.key, plan: true };
+  const ws = bailianWorkspaceId(env);
+  return { baseURL: compatibleBase(ws ? workspaceHost(ws) : line.host), key: line.key, plan: false };
+}
 export const imageUrl = (host: string): string => `https://${host}/api/v1/services/aigc/multimodal-generation/generation`;
 export const ttsUrl = (host: string): string => `https://${host}/api/v1/services/audio/tts/SpeechSynthesizer`;
 

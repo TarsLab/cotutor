@@ -130,7 +130,7 @@ export function paintNote(r: PaintRecord | null): string {
   const why = e.startsWith('daily:') ? `今天画了 ${e.slice(6).split('/')[0]} 张,到了当时一天的上限(现在不限了)`
     : e.startsWith('gate:') ? `应用拦下了,没交给画家(activity「应用拦的」:${e.slice(5)})`
     : e === 'replay' ? '回放不画'
-    : e === 'no_key' ? '拿不到百炼 key(DASHSCOPE_API_KEY,或本机 ~/.qwen/settings.json)'
+    : e === 'no_key' ? '拿不到百炼 key(家长端「首页」里填)'
     : e === 'stale' ? '画到一半服务重起了'
     : e.includes('DataInspectionFailed') ? '百炼的内容审核没过'
     : e === 'timeout' ? '等了太久(超时)'

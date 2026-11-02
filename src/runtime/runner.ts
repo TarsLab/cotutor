@@ -47,8 +47,7 @@ import { TUTOR_RULES_PATH, takesTutorRules, tutorRulesBody, BOARD_GUIDE_IN_SYSTE
 import { DubQueue } from '../media/tts.ts';
 import { continueContext } from './home/store.ts';
 import { kidInput, type KidAccept } from './kid-input.ts';
-import { dashscopeAuth } from '../realtime/bailian.ts';
-import { qianwenKeys } from '../shared/qianwen.ts';
+import { compatibleLine } from '../shared/qianwen.ts';
 import { DRAW_ONLY_TEXT, drawingPackLine } from '../board/paper.ts';
 import { makeDraw, type Draw } from '../media/draw.ts';
 import { paintLines, startPaints } from '../scenes/paint/painter.ts';
@@ -411,10 +410,10 @@ export class Runner {
     this.getWs = getWs;
     this.opts = opts;
     this.draw = opts.draw ?? makeDraw({ env: opts.env });
-    // API 运行时的凭证与实时那边同一条查找链(家长端配的在最前);只有按量 key、没有业务空间 id 也能用(走公网域名,同 qwen)。
+    // API 运行时的 key 与配音、画图同一套选法(~/.config/cotutor/):Token Plan 有这个模型就走它,否则百炼按量;只有按量 key、没有业务空间 id 也能用(走公网域名)。
     // COTUTOR_BRAIN_ENDPOINT:测试与探针指到假百炼
     const env = opts.env ?? process.env;
-    this.brain = createBrain({ workspace: () => { const ws = this.getWs(); return { config: ws.config, root: ws.root }; }, env: opts.env, warmIdleMs: opts.warmIdleMs, auth: () => dashscopeAuth(env) ?? (qianwenKeys(env).payg ? { key: qianwenKeys(env).payg!, workspaceId: null } : null), endpoint: env.COTUTOR_BRAIN_ENDPOINT || undefined });
+    this.brain = createBrain({ workspace: () => { const ws = this.getWs(); return { config: ws.config, root: ws.root }; }, env: opts.env, warmIdleMs: opts.warmIdleMs, line: (model) => compatibleLine(model, env), endpoint: env.COTUTOR_BRAIN_ENDPOINT || undefined });
   }
 
   /** 孩子端发一条的验与拼(HTTP 与实时老师共用,./kid-input.ts):拼成 send 的入参,或回 reject;不起老师 */

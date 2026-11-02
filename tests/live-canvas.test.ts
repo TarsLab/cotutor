@@ -16,7 +16,6 @@ import { startFakeRealtime } from './_fake-realtime.ts';
 const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-live-canvas-')));
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
-delete process.env.DASHSCOPE_API_KEY;
 
 const { initWorkspace } = await import('../src/app/cli/init.ts');
 const { loadWorkspace } = await import('../src/app/workspace.ts');
@@ -50,7 +49,7 @@ cfg.kid.name = 'Ray';
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 const ctx = createContext(loadWorkspace(wsRoot), { warm: false });
 await ctx.reload();
-const liveUpgrade = makeLiveUpgrade({ endpoint: fake.endpoint, env: { DASHSCOPE_API_KEY: 'sk-t' } });
+const liveUpgrade = makeLiveUpgrade({ endpoint: fake.endpoint });
 const server = createServer(createHandler(ctx));
 server.on('upgrade', (req, socket, head) => { void liveUpgrade(req, socket, head, ctx).then((took) => { if (!took) socket.destroy(); }); });
 await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));

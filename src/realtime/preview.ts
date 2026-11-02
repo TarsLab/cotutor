@@ -16,7 +16,7 @@ export async function previewVoice(o: { voice: string; text: string; model?: str
     onResponse: (st) => { if (st === 'done') done = true; },
   });
   const why = await s.connect();
-  if (why !== null) return { error: why === 'no_auth' ? '没有百炼的 key 或业务空间 id(DASHSCOPE_API_KEY、DASHSCOPE_WORKSPACE_ID)' : `连不上:${why}` };
+  if (why !== null) return { error: why === 'no_auth' ? '没有百炼的 key 或业务空间 id(家长端「首页」里填,存在 ~/.config/cotutor/bailian.json)' : `连不上:${why}` };
   s.createResponse(readCue([o.text]));
   const until = Date.now() + (o.timeoutMs ?? 20_000);
   while (!done && !err && Date.now() < until) await new Promise((r) => setTimeout(r, 50));

@@ -3,6 +3,7 @@ import { ADAPTERS, STREAM_JSON, adapterFor, controlsTools, factoryRuntimes, fill
 import { qwen } from '../src/brain/cli/qwen.ts';
 import { parseStreamJson } from '../src/brain/cli/stream-json.ts';
 import { check, done } from './_check.ts';
+import { keysHome } from './_keys.ts';
 
 const j = (o: unknown): string => JSON.stringify(o);
 
@@ -59,7 +60,8 @@ const j = (o: unknown): string => JSON.stringify(o);
   check('qwen 的家与思考量:high → xhigh;没给 root 不设', env.QWEN_HOME === '/ws/.cotutor/qwen/home' && env.QWEN_CODE_SYSTEM_SETTINGS_PATH === '/ws/.cotutor/qwen/effort-xhigh.json' && Object.keys(qwen.planEnv!({ effort: 'low', tools: 'off' })).length === 0);
   check('qwen:effort low 不带工具不想,带工具(照片、记账)至少想一点', qwen.planEnv!({ root: '/ws', effort: 'low', tools: 'off' }).QWEN_CODE_SYSTEM_SETTINGS_PATH.endsWith('effort-none.json') && qwen.planEnv!({ root: '/ws', effort: 'low', tools: 'on' }).QWEN_CODE_SYSTEM_SETTINGS_PATH.endsWith('effort-low.json'));
   check('qwen 只读那轮把可读目录划进来', j(fillArgs(qwen, ['{toolArgs}'], { agent: 'a', prompt: 'p', tools: 'on', readDirs: ['/ws', '/vault'] }).slice(4)) === j(['--include-directories', '/ws', '--include-directories', '/vault']) && !fillArgs(qwen, ['{toolArgs}'], { agent: 'a', prompt: 'p', tools: 'off', readDirs: ['/ws'] }).includes('--include-directories'));
-  check('qwen 体检:0.25 以下要升级', !qwen.check!({ version: '0.21.13', env: { DASHSCOPE_API_KEY: 'k' } })[0].ok && qwen.check!({ version: '0.25.0', env: { DASHSCOPE_API_KEY: 'k' } }).every((c) => c.ok));
+  const withKey = keysHome({ payg: 'sk-k', workspaceId: 'llm-x' });
+  check('qwen 体检:0.25 以下要升级', !qwen.check!({ version: '0.21.13', env: { HOME: withKey } })[0].ok && qwen.check!({ version: '0.25.0', env: { HOME: withKey } }).every((c) => c.ok));
 }
 
 done();

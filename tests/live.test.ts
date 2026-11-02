@@ -119,7 +119,7 @@ const endpoint = `ws://127.0.0.1:${port}/api-ws/v1/realtime?model=test`;
   const resp: [string, string | null, Usage | null][] = [];
   const errors: string[] = [];
   let closed = '';
-  const s = new RealtimeSession({ instructions: '你是英语老师', voice: 'Serena', turn: 'manual', endpoint, env: { DASHSCOPE_API_KEY: 'sk-x' } }, {
+  const s = new RealtimeSession({ instructions: '你是英语老师', voice: 'Serena', turn: 'manual', endpoint }, {
     onAudio: (b) => audio.push(b), onTutorText: (d, w) => tutor.push([d, w]), onKidText: (t) => kid.push(t), onResponse: (st, status, u) => resp.push([st, status, u]), onError: (m) => errors.push(m), onClose: (r) => { closed = r; },
   });
   check('没连上时发什么都回 false', !s.appendAudio(Buffer.alloc(10)) && !s.appendImage(Buffer.from('jpg')) && !s.commit() && !s.createResponse() && !s.addText('x') && !s.isReady);
@@ -169,16 +169,16 @@ const endpoint = `ws://127.0.0.1:${port}/api-ws/v1/realtime?model=test`;
 {
   mode = 'error-on-update';
   const errs: string[] = [];
-  const s = new RealtimeSession({ instructions: 'x', endpoint, env: { DASHSCOPE_API_KEY: 'sk-x' } }, { onError: (m) => errs.push(m) });
+  const s = new RealtimeSession({ instructions: 'x', endpoint }, { onError: (m) => errs.push(m) });
   const why = await s.connect();
   check('配会话时服务端报错:connect 回它的话,不抛', why === 'bad: Voice not supported' && !s.isReady, JSON.stringify([why, errs]));
   mode = 'close-after-created';
   let closed = '';
-  const s2 = new RealtimeSession({ instructions: 'x', endpoint, env: { DASHSCOPE_API_KEY: 'sk-x' }, timeoutMs: 2000 }, { onClose: (r) => { closed = r; } });
+  const s2 = new RealtimeSession({ instructions: 'x', endpoint, timeoutMs: 2000 }, { onClose: (r) => { closed = r; } });
   const why2 = await s2.connect();
   check('还没配好服务端就断:connect 回 closed:码,onClose 一次', why2 === 'closed:1011' && closed.startsWith('closed:1011'), JSON.stringify([why2, closed]));
   mode = 'ok';
-  const s3 = new RealtimeSession({ instructions: 'x', endpoint: `ws://127.0.0.1:1/x`, env: { DASHSCOPE_API_KEY: 'sk-x' }, timeoutMs: 2000 });
+  const s3 = new RealtimeSession({ instructions: 'x', endpoint: `ws://127.0.0.1:1/x`, timeoutMs: 2000 });
   const why3 = await s3.connect();
   check('连不上:connect 回 connect / closed,不抛', why3 !== null && !s3.isReady, String(why3));
 }

@@ -68,9 +68,18 @@ import { loadWorkspace } from 'cotutor/workspace';                        // 解
 
 ## 配置模型
 
-**缺省:应用直连百炼。** 嘴和脑都用家长端「首页」填的那份百炼按量 API Key 与业务空间 ID,存在本机 `~/.config/cotutor/bailian.json`(几个孩子的 workspace 共用);也可以在起 `serve` 的终端设 `DASHSCOPE_API_KEY` 与 `DASHSCOPE_WORKSPACE_ID`。老师用哪个模型写在 `cotutor.json` 的 `runtimes` 里:出厂的 `api`(`qwen3.8-max`,三位老师都用它)和 `api-flash`(`qwen3.8-flash`,便宜些;换之前先跑 `cotutor activity eval` 看例子过不过)。卡的配音、听写认字、口语单、画图也用这份 key;机器上同时有千问 Token Plan 的 key 时,Token Plan 有的模型先走它。
+**缺省:应用直连百炼。** 嘴和脑都用家长端「首页」填的那份百炼按量 API Key 与业务空间 ID,存在本机 `~/.config/cotutor/bailian.json`(几个孩子的 workspace 共用)。老师用哪个模型写在 `cotutor.json` 的 `runtimes` 里:出厂的 `api`(`qwen3.8-max`,三位老师都用它)和 `api-flash`(`qwen3.8-flash`,便宜些;换之前先跑 `cotutor activity eval` 看例子过不过)。卡的配音、听写认字、口语单、画图也用这份 key。
 
-**备用:Qwen Code。** 订了千问 Token Plan 的开发者,可以让老师的脑走 Qwen Code:装 Qwen Code ≥ 0.25,在起 `serve` 的终端设 `QWENCLOUD_TOKEN_PLAN_API_KEY`(或 `DASHSCOPE_API_KEY`),把老师的 `runtime` 改成出厂的 `qwen`(`qwen3.8-max`)或 `qwen-flash`(`qwen3.8-flash`)。嘴照样要百炼按量 key,Token Plan 的 key 不能用于实时语音。
+**key 只放 `~/.config/cotutor/`**,所有命令(`serve`、`send`、`replay`、`doctor`……)读同一处,环境变量(`DASHSCOPE_API_KEY` 之类)和别的工具的配置都不看:
+
+| 文件 | 内容 | 谁写 |
+|---|---|---|
+| `bailian.json` | `{"apiKey": "sk-…", "workspaceId": "llm-…"}`,百炼按量 | 家长端「首页」;没有浏览器的机器照格式手写,或从别的机器拷过来 |
+| `token-plan.json` | `{"apiKey": "sk-sp-…"}`,千问 Token Plan | 订了 Token Plan 的开发者手写;有它,Token Plan 有的模型先走它 |
+
+手写的存成 UTF-8(不带 BOM)。配了什么、通不通看 `cotutor doctor`(`--live` 真连一次)。
+
+**备用:Qwen Code。** 订了千问 Token Plan 的开发者,可以让老师的脑走 Qwen Code:装 Qwen Code ≥ 0.25,写好 `token-plan.json`,把老师的 `runtime` 改成出厂的 `qwen`(`qwen3.8-max`)或 `qwen-flash`(`qwen3.8-flash`)。嘴照样要百炼按量 key,Token Plan 的 key 不能用于实时语音。
 
 换了运行时,之前的话题接不上,也不导入历史:孩子接着说会开新话题;换之前聊的话题不记账,家长端卡上标「换过运行时 · 不记账」,记录照样能看。模型、预算与老师运行时都在 workspace 的 `cotutor.json` 里,编辑器按首行 `$schema` 提供字段说明。
 

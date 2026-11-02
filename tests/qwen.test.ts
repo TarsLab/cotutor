@@ -1,19 +1,22 @@
 /**
  * qwen 适配器走完整条路(假 CLI 的 qwen 方言,不花钱):
- * 隔离的家(QWEN_HOME 与思考量配置按 effort 选)、key 从环境或本机 ~/.qwen/settings.json 来且不落盘、有 Token Plan 的 key 就走 Token Plan、别处的 OPENAI_MODEL 去掉、
+ * 隔离的家(QWEN_HOME 与思考量配置按 effort 选)、key 从 ~/.config/cotutor/ 来且不落盘、有 Token Plan 的 key 就走 Token Plan、别处的 OPENAI_MODEL 与 shell 里的千问 key 去掉、
  * 孩子的话工具表为空 / 系统轮只读三样、多出来的工具记提醒、没有钱数记 token、超时退出不吐 result 当出错、旧出厂模板 upgrade 整份换新。
  */
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { check, done } from './_check.ts';
+import { writeKeys } from './_keys.ts';
 
 const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-qwen-home-')));
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
-process.env.DASHSCOPE_API_KEY = 'sk-from-env';
-delete process.env.QWENCLOUD_TOKEN_PLAN_API_KEY;
+writeKeys(home, { payg: 'sk-from-file', workspaceId: 'llm-x' });
+// shell 里 export 着的不算数,也不进老师的子进程
+process.env.DASHSCOPE_API_KEY = 'sk-shell';
+process.env.QWENCLOUD_TOKEN_PLAN_API_KEY = 'sk-sp-shell';
 process.env.OPENAI_MODEL = 'gpt-x';
 
 const { initWorkspace } = await import('../src/app/cli/init.ts');
@@ -45,7 +48,7 @@ const send = async (tutor: string, text: string, from: 'kid' | 'system' = 'kid',
   const d = (await route('GET', `/api/conversations/${tutor}/${DATE}`, ctx)).json as { index: { messages: Msg[] } };
   return d.index.messages.find((m) => m.job === job)!;
 };
-const init = (tutor: string, job: string) => JSON.parse(readFileSync(join(root, 'conversations', tutor, `${DATE}.${job}.log`), 'utf8').split('\n')[0]) as { tools: string[]; qwenHome?: string; effortFile?: string; key: string | null; base: string | null; openai: boolean };
+const init = (tutor: string, job: string) => JSON.parse(readFileSync(join(root, 'conversations', tutor, `${DATE}.${job}.log`), 'utf8').split('\n')[0]) as { tools: string[]; qwenHome?: string; effortFile?: string; key: string | null; base: string | null; openai: boolean; shellKey: boolean };
 
 try {
   const kid = await send('chinese-tutor', '大海怎么写');
@@ -56,7 +59,8 @@ try {
   check('家里的 settings.json:关了它自己的记忆整理与使用统计,只写 key 的环境变量名', settings.includes('"enableManagedAutoMemory": false') && settings.includes('"usageStatisticsEnabled": false') && settings.includes('"envKey": "COTUTOR_QWEN_API_KEY"') && settings.includes('"baseUrl": "${COTUTOR_QWEN_BASE_URL}"') && !settings.includes('sk-'));
   check('.cotutor/qwen/ 整个不进 git(会话记录是对话原文)', readFileSync(join(root, '.cotutor', 'qwen', '.gitignore'), 'utf8').split('\n').includes('*'));
   check('思考量:语文老师 effort low → 不想(effort-none.json)', i1.effortFile === join(root, '.cotutor', 'qwen', 'effort-none.json') && readFileSync(i1.effortFile!, 'utf8').includes('"reasoningEffort": "none"'));
-  check('key 从环境来(百炼按量);别处的 OPENAI_MODEL 去掉', i1.key === 'sk-from-env' && i1.base === 'https://dashscope.aliyuncs.com/compatible-mode/v1' && !i1.openai, JSON.stringify(i1));
+  check('key 从 bailian.json 来(百炼按量);别处的 OPENAI_MODEL、shell 里的千问 key 去掉', i1.key === 'sk-from-file' && i1.base === 'https://dashscope.aliyuncs.com/compatible-mode/v1' && !i1.openai && !i1.shellKey, JSON.stringify(i1));
+  check('key 只进子进程的环境,家里的 settings.json 不写', !readFileSync(join(root, '.cotutor', 'qwen', 'home', 'settings.json'), 'utf8').includes('sk-from-file'));
   check('没有钱数,记 token(输入含缓存读)', kid.costUsd === undefined && kid.tokens?.in === 2500 && kid.tokens?.out === 120, JSON.stringify(kid));
   // 续会话时 qwen 收尾报的是整个会话的累计(2026-10-30 在 ray 上量出来的):这一轮的 token 按每次请求自己的加总,同一条回复分几行出的只算一次
   const again = await send('chinese-tutor', '再讲一遍', 'kid', kid.job);
@@ -74,20 +78,13 @@ try {
   const slow = await send('chinese-tutor', '这次会超时');
   check('超时退出(55)不吐 result:当出错', slow.result === 'error' && (slow.error ?? '').includes('55'), JSON.stringify(slow));
 
-  delete process.env.DASHSCOPE_API_KEY;
-  mkdirSync(join(home, '.qwen'), { recursive: true });
-  writeFileSync(join(home, '.qwen', 'settings.json'), JSON.stringify({ env: { DASHSCOPE_API_KEY: 'sk-from-qwen' } }));
-  const local = await send('chinese-tutor', '没有环境变量');
-  check('环境里没有 key:从本机 ~/.qwen/settings.json 现读,只进子进程', init('chinese-tutor', local.job).key === 'sk-from-qwen' && !readFileSync(join(root, '.cotutor', 'qwen', 'home', 'settings.json'), 'utf8').includes('sk-from-qwen'));
-
-  process.env.QWENCLOUD_TOKEN_PLAN_API_KEY = 'sk-sp-plan';
+  writeKeys(home, { plan: 'sk-sp-plan' });
   const i3 = init('chinese-tutor', (await send('chinese-tutor', '有 Token Plan')).job);
   check('有 Token Plan 的 key:端点换 token-plan,key 用它', i3.key === 'sk-sp-plan' && i3.base === 'https://token-plan.maas.qianwenaiapi.com/compatible-mode/v1', JSON.stringify(i3));
-  delete process.env.QWENCLOUD_TOKEN_PLAN_API_KEY;
-  process.env.DASHSCOPE_API_KEY = 'sk-sp-misplaced';
+  rmSync(join(home, '.config', 'cotutor', 'token-plan.json'));
+  writeKeys(home, { payg: 'sk-sp-misplaced', workspaceId: 'llm-x' });
   const i4 = init('chinese-tutor', (await send('chinese-tutor', 'key 放错了格')).job);
-  check('DASHSCOPE_API_KEY 里放的是 sk-sp-:认作 Token Plan 的', i4.key === 'sk-sp-misplaced' && i4.base?.includes('token-plan') === true, JSON.stringify(i4));
-  delete process.env.DASHSCOPE_API_KEY;
+  check('bailian.json 里放的是 sk-sp-:认作 Token Plan 的', i4.key === 'sk-sp-misplaced' && i4.base?.includes('token-plan') === true, JSON.stringify(i4));
 } finally {
   ctx.runner.close();
 }

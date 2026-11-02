@@ -10,7 +10,7 @@ import type { ToolCall, Transcript } from './transcript.ts';
 import { isApiRuntime, type CotutorConfig, type Policy, type Runtime } from '../schema/index.ts';
 import type { ToolSet } from './cli/adapters.ts';
 import type { Slot } from './cli/warm.ts';
-import { API_CLI, ApiBrain, parseEventLine } from './api.ts';
+import { API_CLI, ApiBrain, parseEventLine, type BrainLine } from './api.ts';
 import { CliBrain } from './cli/run.ts';
 
 export type { ToolSet } from './cli/adapters.ts';
@@ -109,10 +109,10 @@ export interface BrainExecutor {
 }
 
 /**
- * auth:百炼按量 key,知道的话带业务空间 id(API 运行时用;runner 给的是和实时那边同一条查找链);endpoint:测试与探针指到假百炼(…/compatible-mode/v1)
+ * line:API 运行时这个模型发到哪、带哪把 key(runner 给 compatibleLine);endpoint:测试与探针指到假百炼(…/compatible-mode/v1)
  */
-export function createBrain(opts: { workspace: () => { config: CotutorConfig; root: string }; env?: NodeJS.ProcessEnv; warmIdleMs?: number; auth?: () => { key: string; workspaceId: string | null } | null; endpoint?: string }): BrainExecutor {
-  return new Brains(opts.workspace, new CliBrain(opts), new ApiBrain({ workspace: opts.workspace, auth: opts.auth ?? (() => null), endpoint: opts.endpoint }));
+export function createBrain(opts: { workspace: () => { config: CotutorConfig; root: string }; env?: NodeJS.ProcessEnv; warmIdleMs?: number; line?: BrainLine; endpoint?: string }): BrainExecutor {
+  return new Brains(opts.workspace, new CliBrain(opts), new ApiBrain({ workspace: opts.workspace, line: opts.line ?? (() => null), endpoint: opts.endpoint }));
 }
 
 /** 按这轮的运行时分给 CLI 或 API;预热只有 CLI 有 */

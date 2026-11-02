@@ -121,7 +121,7 @@ async function withEmoji(ctx: AppContext, name: string, words: { chars: string; 
   for (const c of home?.cards ?? []) if (c.kind === 'dictation' && c.props.tutor === name) for (const w of (c.props.words ?? []) as { chars: string; emoji?: string }[]) if (w.emoji) had.set(w.chars, w.emoji);
   const ask = [...new Set(words.map((w) => w.chars).filter((w) => !had.has(w)))];
   const fake = process.env.COTUTOR_EMOJI_ENDPOINT;
-  const got = ask.length ? await wordEmoji(ask, fake ? { endpoint: fake, env: { DASHSCOPE_API_KEY: 'sk-fake' } } : {}) : {};
+  const got = ask.length ? await wordEmoji(ask, fake ? { endpoint: fake } : {}) : {};
   return words.map((w) => { const e = had.get(w.chars) ?? got[w.chars]; return e ? { ...w, emoji: e } : w; });
 }
 

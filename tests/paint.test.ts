@@ -6,12 +6,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { check, done } from './_check.ts';
+import { keysHome } from './_keys.ts';
 
 const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-paint-home-')));
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
-delete process.env.DASHSCOPE_API_KEY;
-delete process.env.QWENCLOUD_TOKEN_PLAN_API_KEY;
 
 const { paintPrompt, paintLayout, paintSize, PAINT_NEGATIVE } = await import('../src/scenes/paint/prompt.ts');
 const { makeDraw } = await import('../src/media/draw.ts');
@@ -70,7 +69,7 @@ const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
   });
   await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r));
   const endpoint = `http://127.0.0.1:${(srv.address() as { port: number }).port}/gen`;
-  const draw = makeDraw({ env: { DASHSCOPE_API_KEY: 'k-test' }, endpoint });
+  const draw = makeDraw({ env: { HOME: keysHome({ payg: 'k-test' }) }, endpoint });
   const ok = await draw({ prompt: '一张画', model: 'qwen-image-2.0-pro', size: '1280*1280' });
   const sent = got[0]?.body as { model?: string; parameters?: { size?: string; n?: number; prompt_extend?: boolean; watermark?: boolean; negative_prompt?: string } } | undefined;
   check('画好:下载图片地址拿回 PNG', ok.ok && ok.data.equals(PNG) && ok.model === 'qwen-image-2.0-pro', JSON.stringify(ok));
@@ -81,7 +80,7 @@ const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
   check('拿回来的不是 PNG:not_png', !notPng.ok && notPng.error === 'not_png', JSON.stringify(notPng));
   const noKey = await makeDraw({ env: { HOME: home }, endpoint })({ prompt: 'x', model: 'm', size: '1*1' });
   check('没 key:no_key,不发请求', !noKey.ok && noKey.error === 'no_key' && got.length === 3);
-  const down = await makeDraw({ env: { DASHSCOPE_API_KEY: 'k' }, endpoint: 'http://127.0.0.1:1/gen' })({ prompt: 'x', model: 'm', size: '1*1' });
+  const down = await makeDraw({ env: { HOME: keysHome({ payg: 'k' }) }, endpoint: 'http://127.0.0.1:1/gen' })({ prompt: 'x', model: 'm', size: '1*1' });
   check('连不上:network', !down.ok && down.error === 'network', JSON.stringify(down));
   srv.close();
 }

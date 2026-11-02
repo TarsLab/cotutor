@@ -74,7 +74,7 @@ export interface RealtimeEvents {
   onClose?(reason: string): void;
 }
 
-/** 百炼按量的 key 与业务空间 id(Token Plan 没有 omni realtime;key 怎么找见 src/shared/qianwen.ts,业务空间 id 先看家长端配的、再看环境、再看 voxtell 的配置) */
+/** 百炼按量的 key 与业务空间 id(Token Plan 没有 omni realtime;都在 ~/.config/cotutor/bailian.json,见 src/shared/qianwen.ts) */
 export function dashscopeAuth(env: NodeJS.ProcessEnv = process.env): { key: string; workspaceId: string } | null {
   const key = qianwenKeys(env).payg;
   const workspaceId = bailianWorkspaceId(env);
@@ -150,7 +150,8 @@ export class RealtimeSession {
   async connect(): Promise<string | null> {
     let url = this.opts.endpoint;
     let key = '';
-    if (url) key = this.opts.env?.DASHSCOPE_API_KEY ?? 'sk-test';
+    // 指了端点的是测试与探针的假百炼,不看 key
+    if (url) key = 'sk-test';
     else {
       const auth = this.opts.auth ?? dashscopeAuth(this.opts.env);
       if (!auth) return 'no_auth';

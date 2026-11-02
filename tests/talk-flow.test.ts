@@ -7,12 +7,12 @@ import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { check, done } from './_check.ts';
+import { keysHome } from './_keys.ts';
 
 const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-talk-')));
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
-delete process.env.DASHSCOPE_API_KEY;
-delete process.env.QWENCLOUD_TOKEN_PLAN_API_KEY;
+const keyed = { HOME: keysHome({ payg: 'sk-t' }) };
 
 const { initWorkspace } = await import('../src/app/cli/init.ts');
 const { loadWorkspace } = await import('../src/app/workspace.ts');
@@ -49,10 +49,10 @@ const omni = createServer(async (req, res) => {
 await new Promise<void>((r) => omni.listen(0, '127.0.0.1', r));
 const omniEndpoint = `http://127.0.0.1:${(omni.address() as { port: number }).port}/v1/chat/completions`;
 {
-  const r = await readList({ data: Buffer.from('PNG'), mime: 'image/png' }, { env: { DASHSCOPE_API_KEY: 'sk-t' }, endpoint: omniEndpoint, model: 'm' });
+  const r = await readList({ data: Buffer.from('PNG'), mime: 'image/png' }, { env: keyed, endpoint: omniEndpoint, model: 'm' });
   const b = omniSeen[0];
   check('readList:不想、只要文字、图 + 提示;回口语单', r.ok && r.list.words.length === 2 && b.reasoning_effort === 'none' && b.model === 'm' && b.messages[0].content[1].text.includes('印刷') && b.messages[0].content[0].image_url.url.startsWith('data:image/png;base64,'), JSON.stringify(r));
-  const r2 = await readList({ data: Buffer.from('BAD'), mime: 'image/jpeg' }, { env: { DASHSCOPE_API_KEY: 'sk-t' }, endpoint: omniEndpoint });
+  const r2 = await readList({ data: Buffer.from('BAD'), mime: 'image/jpeg' }, { env: keyed, endpoint: omniEndpoint });
   const r3 = await readList({ data: Buffer.from('PNG'), mime: 'image/png' }, { env: { HOME: home }, endpoint: omniEndpoint });
   check('readList:回的不是 JSON → bad_json;没 key → no_key', !r2.ok && r2.error === 'bad_json' && !r3.ok && r3.error === 'no_key');
 }
@@ -67,7 +67,7 @@ cfg.kid.name = 'Ray';
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 const ctx = createContext(loadWorkspace(wsRoot), { warm: false });
 const fakeRead = (photo: { data: Buffer; mime: string }, opts: Record<string, unknown>) => readList(photo, { ...opts, endpoint: omniEndpoint });
-const talkRoute = makeTalkRoute({ readList: fakeRead as typeof readList, env: { DASHSCOPE_API_KEY: 'sk-t' } });
+const talkRoute = makeTalkRoute({ readList: fakeRead as typeof readList, env: keyed });
 const call = (method: string, path: string, body?: unknown) => { void ctx.reload(); return talkRoute(method, new URL(path, 'http://x'), ctx, body); };
 await ctx.reload();
 

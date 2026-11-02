@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { check, done } from './_check.ts';
+import { keysHome } from './_keys.ts';
 
 const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-dictation-')));
 process.env.HOME = home;
@@ -277,7 +278,7 @@ try {
     const port = (srv.address() as { port: number }).port;
     const seen: string[] = [];
     let sentPrompt = '';
-    const rr = await recognizePhoto({ data: Buffer.from('jpg'), mime: 'image/jpeg' }, (p) => { seen.push(p.items.map((x) => x.text).join('')); }, { env: { DASHSCOPE_API_KEY: 'k-test' }, endpoint: `http://127.0.0.1:${port}/`, prompt: ['挑写字栏'] });
+    const rr = await recognizePhoto({ data: Buffer.from('jpg'), mime: 'image/jpeg' }, (p) => { seen.push(p.items.map((x) => x.text).join('')); }, { env: { HOME: keysHome({ payg: 'k-test' }) }, endpoint: `http://127.0.0.1:${port}/`, prompt: ['挑写字栏'] });
     const none = await recognizePhoto({ data: Buffer.from('jpg'), mime: 'image/jpeg' }, () => {}, { env: { HOME: home } });
     srv.close();
     check('流式认:边收边回调、key 只进请求头、缺省 qwen3.8-max、提示词是传进来的要求 + 格式;全文也收;没有 key 回 no_key', rr.ok && seen.includes('肚皮') && seen[seen.length - 1] === '肚皮孩' && rr.full.join() === '肚皮 白白 的' && seenAuth === 'Bearer k-test' && seenModel === 'qwen3.8-max' && sentPrompt.startsWith('挑写字栏\n') && sentPrompt.includes('{"full":') && !none.ok && none.error === 'no_key', JSON.stringify(rr));
@@ -303,7 +304,7 @@ try {
     const fake = createServer((req, res) => { let b = ''; req.on('data', (c: Buffer) => (b += c)); req.on('end', () => { sent = JSON.parse(b).messages[0].content[1].text; res.writeHead(200, { 'content-type': 'text/event-stream' }); res.end('data: [DONE]\n\n'); }); });
     await new Promise<void>((r) => fake.listen(0, '127.0.0.1', () => r()));
     const { recognizePhoto: rp } = await import('../src/app/dictation/recognize.ts');
-    await rp({ data: Buffer.from('jpg'), mime: 'image/jpeg' }, () => {}, { env: { DASHSCOPE_API_KEY: 'k' }, endpoint: `http://127.0.0.1:${(fake.address() as { port: number }).port}/`, text: '整段给的要求' });
+    await rp({ data: Buffer.from('jpg'), mime: 'image/jpeg' }, () => {}, { env: { HOME: keysHome({ payg: 'k' }) }, endpoint: `http://127.0.0.1:${(fake.address() as { port: number }).port}/`, text: '整段给的要求' });
     fake.close();
     check('recognizePhoto 给了 text 就整段用它', sent === '整段给的要求');
   }

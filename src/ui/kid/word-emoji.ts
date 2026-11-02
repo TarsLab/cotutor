@@ -44,11 +44,13 @@ export async function wordEmoji(words: readonly string[], opts: { env?: NodeJS.P
   if (!words.length) return {};
   const model = opts.model ?? EMOJI_MODEL;
   const line = qianwenLine(model, qianwenKeys(opts.env ?? process.env));
-  if (!line) return {};
+  // 指了端点的是测试与探针的假服务,不看 key
+  const url = opts.endpoint ?? (line && chatUrl(line.host));
+  if (!url) return {};
   try {
-    const res = await fetch(opts.endpoint ?? chatUrl(line.host), {
+    const res = await fetch(url, {
       method: 'POST',
-      headers: { authorization: `Bearer ${line.key}`, 'content-type': 'application/json' },
+      headers: { authorization: `Bearer ${line?.key ?? 'sk-test'}`, 'content-type': 'application/json' },
       body: JSON.stringify({ model, reasoning_effort: 'none', messages: [{ role: 'user', content: emojiPrompt(words) }] }),
       signal: AbortSignal.timeout(opts.timeoutMs ?? EMOJI_TIMEOUT_MS),
     });

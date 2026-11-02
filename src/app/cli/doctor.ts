@@ -6,8 +6,10 @@
 import { isRealtimeVoice } from '../../realtime/voices.ts';
 import { dashscopeAuth } from '../../realtime/bailian.ts';
 import { TTS_MODEL, ttsTarget } from '../../media/tts.ts';
+import { compatibleLine, isPlanKey, tokenPlanKey } from '../../shared/qianwen.ts';
 import { adapterFor, parserOf, prepareCli, processEnv, runtimeIssue } from '../../brain/index.ts';
 import { execFile } from 'node:child_process';
+import { homedir } from 'node:os';
 import { access, lstat, readFile, readdir, stat } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
@@ -90,7 +92,7 @@ export function explainLlmFailure(text: string, runtime: readonly string[]): str
     return `这版 ${bin} 不认模型:检查 cotutor.json 的运行时 run / resume 中 -m 后的模型名,或运行 ${bin} update 升级`;
   }
   if (/403|request not allowed/i.test(text)) return `API 拒了(403):检查 ${bin} 使用的千问 key、端点与模型权限`;
-  if (/not logged in|login|authentication|401|unauthorized/i.test(text)) return `${bin} 的 key 无效:检查 QWENCLOUD_TOKEN_PLAN_API_KEY 或 DASHSCOPE_API_KEY,再跑 cotutor doctor`;
+  if (/not logged in|login|authentication|401|unauthorized/i.test(text)) return `${bin} 的 key 无效:检查家长端「首页」的百炼 key(有 Token Plan 的还有 ~/.config/cotutor/token-plan.json),再跑 cotutor doctor`;
   if (/ENOENT|command not found/i.test(text)) return `PATH 里没有 ${bin}`;
   return `看上面的原文;不认识的错先在终端手跑一次同样的命令`;
 }
@@ -574,8 +576,14 @@ export async function doctorWorkspace(
     }
 
     // ---- 百炼:老师靠实时模型开口,没配孩子端打不开;--live 真试连一次(握手就挂,不花钱) ----
+    // key 只认 ~/.config/cotutor/(2026-11-02 起);shell 里还 export 着旧的,说一句免得以为配了
     const bl = dashscopeAuth(env);
-    push({ name: 'bailian', ok: Boolean(bl), required: true, detail: bl ? `百炼按量 key …${bl.key.slice(-4)}、业务空间 ${bl.workspaceId}` : '没有百炼按量的 key 或业务空间 id:孩子端打不开(只出「老师们还没到」)', fix: bl ? undefined : '家长端「首页」里配(在这台电脑上开,或者先 cotutor pin 设家长密码);Token Plan 的 sk-sp- 不行' });
+    const oldEnv = env.DASHSCOPE_API_KEY ? '(环境变量 DASHSCOPE_API_KEY 已经不读了)' : '';
+    push({ name: 'bailian', ok: Boolean(bl), required: true, detail: bl ? `百炼按量 key …${bl.key.slice(-4)}、业务空间 ${bl.workspaceId}` : `没有百炼按量的 key 或业务空间 id:孩子端打不开(只出「老师们还没到」)${oldEnv}`, fix: bl ? undefined : '家长端「首页」里配(在这台电脑上开,或者先 cotutor pin 设家长密码),存在 ~/.config/cotutor/bailian.json;Token Plan 的 sk-sp- 不行' });
+    // Token Plan 只有开发机有,没有就不提
+    const plan = tokenPlanKey(env.HOME || homedir());
+    if (plan) push({ name: 'token-plan', ok: isPlanKey(plan), required: false, detail: isPlanKey(plan) ? `Token Plan key …${plan.slice(-4)}:Token Plan 有的模型先走它` : 'token-plan.json 里的 key 不是 sk-sp- 开头,不认', fix: isPlanKey(plan) ? undefined : '换成千问 Token Plan 的 key,或删掉 ~/.config/cotutor/token-plan.json' });
+    else if (env.QWENCLOUD_TOKEN_PLAN_API_KEY) push({ name: 'token-plan', ok: false, required: false, detail: '环境变量 QWENCLOUD_TOKEN_PLAN_API_KEY 已经不读了,全走百炼按量', fix: '写进 ~/.config/cotutor/token-plan.json:{"apiKey": "sk-sp-…"}' });
     if (bl && opts.live) {
       const { probeRealtime } = await import('../../realtime/preview.ts');
       const { probeMessage } = await import('../machine/bailian.ts');
@@ -607,7 +615,8 @@ export async function doctorWorkspace(
       for (const [runtime, p] of Object.entries(ws.config.runtimes)) {
         if (runtime === 'default' || typeof p === 'string') continue;
         if (isApiRuntime(p)) {
-          push({ name: `runtime.${runtime}`, ok: true, required: usedRuntimes.has(runtime), detail: `API 运行时(百炼 ${p.model}),不用装 CLI;凭证看 bailian 那条` });
+          const via = compatibleLine(p.model, env)?.plan ? '走 Token Plan' : '走百炼按量';
+          push({ name: `runtime.${runtime}`, ok: true, required: usedRuntimes.has(runtime), detail: `API 运行时(${p.model},${via}),不用装 CLI;凭证看 bailian 那条` });
           continue;
         }
         if (runtimeIssue(p)) continue;

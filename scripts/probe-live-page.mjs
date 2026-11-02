@@ -55,7 +55,7 @@ cfg.kid.name = 'Ray';
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 const ctx = createContext(loadWorkspace(wsRoot), { warm: false });
 await ctx.reload();
-const upgrade = makeLiveUpgrade({ endpoint: fake.endpoint, env: { DASHSCOPE_API_KEY: 'sk-probe' } });
+const upgrade = makeLiveUpgrade({ endpoint: fake.endpoint });
 const server = createServer(createHandler(ctx));
 server.on('upgrade', (req, socket, head) => { void upgrade(req, socket, head, ctx).then((took) => { if (!took) socket.destroy(); }); });
 await new Promise((r) => server.listen(0, '127.0.0.1', r));

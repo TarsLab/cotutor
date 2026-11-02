@@ -91,8 +91,8 @@ export function qwenFiles(root: string): Record<string, string> {
   return files;
 }
 
-/** 别处的设置会盖掉家里选的模型与供应商,起进程时去掉 */
-const FOREIGN = ['OPENAI_API_KEY', 'OPENAI_BASE_URL', 'OPENAI_MODEL', 'QWEN_MODEL'];
+/** 别处的设置会盖掉家里选的模型与供应商,起进程时去掉;shell 里的千问 key 也去掉,老师只用 ~/.config/cotutor/ 那份 */
+const FOREIGN = ['OPENAI_API_KEY', 'OPENAI_BASE_URL', 'OPENAI_MODEL', 'QWEN_MODEL', 'DASHSCOPE_API_KEY', 'QWENCLOUD_TOKEN_PLAN_API_KEY'];
 
 export const qwen: CliAdapter = {
   name: 'qwen',
@@ -135,8 +135,8 @@ export const qwen: CliAdapter = {
     return [
       { name: 'version', ok: !old, detail: old ? `qwen ${version || '?'}:要 0.25 起(关工具的旗标、隔离的家、思考量配置都按 0.25 定的)` : `qwen ${version}`, fix: old ? 'qwen update(或 brew upgrade qwen-code)' : undefined },
       line
-        ? { name: 'key', ok: true, detail: line.plan ? '走千问 Token Plan(QWENCLOUD_TOKEN_PLAN_API_KEY)' : '走百炼按量(DASHSCOPE_API_KEY,或本机 qwen / voxtell 的配置)' }
-        : { name: 'key', ok: false, detail: '千问的 key 一把都拿不到:老师进程起来就会 401', fix: '在起 serve 的 shell 里 export QWENCLOUD_TOKEN_PLAN_API_KEY(Token Plan,sk-sp-)或 DASHSCOPE_API_KEY(百炼按量)' },
+        ? { name: 'key', ok: true, detail: line.plan ? '走千问 Token Plan(~/.config/cotutor/token-plan.json)' : '走百炼按量(家长端「首页」配的那把)' }
+        : { name: 'key', ok: false, detail: '千问的 key 一把都拿不到:老师进程起来就会 401', fix: '家长端「首页」里填百炼按量 key;有 Token Plan 的写进 ~/.config/cotutor/token-plan.json({"apiKey": "sk-sp-…"})' },
     ];
   },
   runtimes: (): Record<string, CliRuntime> => {

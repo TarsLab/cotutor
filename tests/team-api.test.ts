@@ -85,7 +85,7 @@ try {
   check('Qwen 不受 Claude 的嵌套环境影响', !nested.checks.some((c) => c.name === 'env.nested' || c.name === 'env.userSettings' || c.name === 'proxy'));
   check('没有百炼的 key → tts 报出来(不是必需,卡只是不配音)', nested.checks.some((c) => c.name === 'tts' && !c.ok && !c.required && c.detail.includes('没有百炼的 key') && c.fix), JSON.stringify(nested.checks.find((c) => c.name === 'tts')));
   check('模型不认 → 检查 -m 与升级', explainLlmFailure('does not support this model', ['qwen']).includes('-m'));
-  check('401 → 检查千问 key', explainLlmFailure('401 Unauthorized', ['qwen']).includes('QWENCLOUD_TOKEN_PLAN_API_KEY'));
+  check('401 → 检查千问 key', explainLlmFailure('401 Unauthorized', ['qwen']).includes('token-plan.json'));
   check('403 → 检查模型权限', explainLlmFailure('403 Request not allowed', ['qwen']).includes('模型权限'));
   // --live 走假 CLI(第一位开着的老师),看它能把结果摆出来
   const node = process.execPath;

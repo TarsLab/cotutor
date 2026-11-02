@@ -16,6 +16,7 @@ const { loadWorkspace } = await import('../src/app/workspace.ts');
 const { readIndex, readRunFile } = await import('../src/runtime/journal/store.ts');
 const { createContext } = await import('../src/app/http/app.ts');
 const { localDate } = await import('../src/shared/time.ts');
+const { yamlScalar } = await import('../src/runtime/context/context-pack.ts');
 const { main } = await import('../src/app/cli/main.ts');
 
 const FAKE = fileURLToPath(new URL('./_fake-cli.ts', import.meta.url));
@@ -63,7 +64,8 @@ const date = localDate(new Date());
   const shot = readdirSync(join(root, 'captures', date));
   check('照片原样拷进 captures/<日期>/', shot.length === 1 && readFileSync(join(root, 'captures', date, shot[0])).equals(readFileSync(png)));
   const runFile = m ? await readRunFile(ws, 'chinese-tutor', date, m.job) : null;
-  check('上下文包带 photos: 与 photoFiles:', JSON.stringify(runFile).includes(m?.photos?.[0] ?? '?') && JSON.stringify(runFile).includes(join(root, m?.photos?.[0] ?? '?')));
+  // photoFiles 是本机写法的绝对路径,包里按 YAML 写(Windows 上带引号、反斜杠转义)
+  check('上下文包带 photos: 与 photoFiles:', (runFile?.prompt ?? '').includes(m?.photos?.[0] ?? '?') && (runFile?.prompt ?? '').includes(yamlScalar(join(root, m?.photos?.[0] ?? '?'))));
 }
 
 {

@@ -5,7 +5,7 @@
  * 一张一张排着画。孩子端没有错误:没画成就停在分幅那几句,原因只给家长看。
  */
 import { mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { join, relative } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import type { BoardSection } from '../../board/presentation.ts';
 import { cardId, conversationFiles } from '../../schema/index.ts';
 import { PaintPropsSchema, type PaintProps } from '../../board/cards/index.ts';
@@ -152,7 +152,8 @@ export async function enrichPaints(ws: PaintSpace, tutor: string, date: string, 
     const since = (x: string): number => now - Date.parse(x);
     if (r?.state === 'drawing' && since(r.at) > PAINT_STALE_MS) r = { state: 'none', at: r.at, error: 'stale' };
     const drawn: NonNullable<PaintProps['drawn']> = r ? (r.state === 'done' ? 'done' : r.state) : since(at) > PAINT_STALE_MS ? 'none' : 'drawing';
-    const pic = drawn === 'done' ? relative(ws.root, files.cardAsset(job, n, PAINT_PNG)) : undefined;
+    // 孩子端按它拼取图的地址:Windows 上 relative 给的是反斜杠,换成 /
+    const pic = drawn === 'done' ? relative(ws.root, files.cardAsset(job, n, PAINT_PNG)).split(sep).join('/') : undefined;
     return { ...c, props: { ...c.props, drawn, ...(pic ? { pic } : {}), ...(opts.parent ? { note: paintNote(r) } : {}) } };
   }));
   return { ...section, cards };

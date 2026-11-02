@@ -121,7 +121,8 @@ export function readOnlyTools(roots: readonly string[], opts: { images?: readonl
   const relOf = async (p: string): Promise<string> => {
     for (const root of await realRoots()) {
       const rel = relative(root, p);
-      if (!outside(rel)) return rel;
+      // 模型给的通配按 / 写(如 随便/*期中*.md),Windows 上 relative 给的是反斜杠
+      if (!outside(rel)) return rel.split(sep).join('/');
     }
     return p;
   };

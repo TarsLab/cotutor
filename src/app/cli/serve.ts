@@ -83,7 +83,8 @@ export function listenInfo(https: boolean, port: number): ListenInfo {
 
 export async function serveWorkspace(opts: ServeOptions = {}): Promise<ServeResult> {
   const ws = loadWorkspace(opts.workspace, opts);
-  const report = await doctorWorkspace(ws.root, { ...opts, probeEnv: false });
+  // 不探 CLI(起服务不用等它);防火墙要查:平板连不上时这里是家长唯一看得到提醒的地方
+  const report = await doctorWorkspace(ws.root, { ...opts, probeEnv: false, firewall: true });
   const warnings = report.checks.filter((c) => !c.ok).map((c) => `${c.name}:${c.detail}${c.fix ? `(${c.fix})` : ''}`);
   const port = opts.port ?? ws.config.server.port;
   const ctx = createContext(ws);

@@ -195,7 +195,16 @@ async function probeLive(ws: Workspace, push: (c: DoctorCheck) => number, env: N
 
 export async function doctorWorkspace(
   override?: string,
-  opts: ResolveOptions & { probeEnv?: boolean; live?: boolean; /** 测试钉时间用:首页「几天前发布的」按它算 */ now?: Date } = {},
+  opts: ResolveOptions & {
+    probeEnv?: boolean;
+    live?: boolean;
+    /** 测试钉时间用:首页「几天前发布的」按它算 */
+    now?: Date;
+    /** Windows 上查防火墙放没放行(起一次 PowerShell,一秒多):缺省跟 probeEnv;serve 起来时要查 */
+    firewall?: boolean;
+    /** 防火墙按哪个端口查:缺省 cotutor.json 的 server.port,serve --port 换了就传进来 */
+    port?: number;
+  } = {},
 ): Promise<DoctorReport> {
   const probeEnv = opts.probeEnv ?? true;
   const env = opts.env ?? process.env;
@@ -342,6 +351,17 @@ export async function doctorWorkspace(
       }
     }
 
+    if (process.platform === 'win32' && (opts.firewall ?? probeEnv)) {
+      // 平板连不连得进来:Windows 只在第一次监听时问一次「允许访问」,点了取消就再也连不上(firewall.ts)
+      const { judgeFirewall, probeFirewall } = await import('./firewall.ts');
+      const port = opts.port ?? ws.config.server.port;
+      const state = await probeFirewall(port);
+      if (state) {
+        const v = judgeFirewall(state, port, process.execPath);
+        push({ name: 'firewall', ok: v.ok, required: false, detail: v.detail, fix: v.fix });
+      }
+    }
+
     {
       // 舞台包:小课堂 / 画板卡要它;没有只是重卡打不开,轻卡与对话照常。做课包(cotutor chalk bake / snap)与服务端烤画面也开它,在本机的 Chrome 里
       const { stageBuilt } = await import('../http/stage.ts');
@@ -349,7 +369,7 @@ export async function doctorWorkspace(
       push({ name: 'stage.bundle', ok: built, required: false, detail: built ? 'dist/stage/ 在(舞台包:小课堂与画板卡的舞台)' : 'dist/stage/ 不在,小课堂与画板卡的舞台打不开(轻卡照常)', fix: built ? undefined : '仓库根 pnpm run build:stage(npm 装的包自带)' });
       const { chromePath } = await import('./chalk/browser.ts');
       const chrome = chromePath(env);
-      push({ name: 'chalk.chrome', ok: chrome !== null, required: false, detail: chrome ? `本机的 Chrome 在(${redactHome(chrome)}):做课包截图、烤画面用它` : '找不到 Chrome:cotutor chalk bake / snap 做不了,没烤过的课包孩子端在浏览器里现画(慢、iPad 上可能不顺)', fix: chrome ? undefined : '装 Google Chrome,或环境变量 CHROME 指到 Chrome / Chromium 的可执行文件' });
+      push({ name: 'chalk.chrome', ok: chrome !== null, required: false, detail: chrome ? `本机的浏览器在(${redactHome(chrome)}):做课包截图、烤画面用它` : '找不到 Chrome:cotutor chalk bake / snap 做不了,没烤过的课包孩子端在浏览器里现画(慢、iPad 上可能不顺)', fix: chrome ? undefined : '装 Google Chrome,或环境变量 CHROME 指到 Chrome / Chromium / Edge 的可执行文件' });
       const { CLAUDE_SKILLS_LINK, skillStatuses } = await import('./skills.ts');
       for (const sk of teachingPack ? await skillStatuses(root) : []) {
         const label: Record<string, string> = { latest: sk.machine ? '机器件,最新' : '出厂件,最新', upgradable: sk.machine ? '机器件,和包里不一样(改过或包已更新)' : `出厂件,基于 ${sk.basedOn},包已更新`, custom: `自定义(基于 ${sk.basedOn})`, untracked: '自定义(没有出厂记录)', missing: sk.machine ? '缺(机器件,老师或家长的技能靠它)' : '缺' };

@@ -6,6 +6,13 @@
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
+// 版本不够先说清楚:不然源码直跑报「Unknown file extension .ts」,npm 装的报「没有 stripTypeScriptTypes」,都带一串栈(Windows 自带的常是 Node 18)
+const [major, minor] = process.versions.node.split('.').map(Number);
+if (major < 22 || (major === 22 && minor < 18)) {
+  console.error(`cotutor: 要 Node ≥ 22.18,这台是 ${process.versions.node}。到 https://nodejs.org 装新的 LTS 版,装好重开终端再跑。`);
+  process.exit(2);
+}
+
 const src = new URL('../src/app/cli/main.ts', import.meta.url);
 const entry = existsSync(fileURLToPath(src)) ? src : new URL('../dist/app/cli/main.js', import.meta.url);
 try {

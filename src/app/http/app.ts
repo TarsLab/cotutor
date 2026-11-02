@@ -3,7 +3,7 @@
  * R1 的查询接口照旧;R2 加:对话(列日期、看一天的家长视图、发消息)、cotutor.json 补丁(老师团页)、工作台 /dev(2026-09-22 之前叫家长页 /parent;
  * 现在 /parent 是家长端 = 家长板书页,给不懂技术的家长日常用)。
  * R3 加:孩子端 `/`(kidPage)与 /api/kid/*(首页:课程表 + 老师卡 + 家长发布的首页卡;对话:服务端过滤后的孩子视图;发消息:from 固定 kid)、配音文件 /api/audio。
- * 配置热重载:每个请求先看 cotutor.json 的 mtime,改了就重读;改坏了留旧配置并把错误挂在 /api/health 上。
+ * 配置热重载:每个请求先读一遍 cotutor.json,原文变了就重读(不比修改时间,Windows 上连写两次常常一样);改坏了留旧配置并把错误挂在 /api/health 上。
  */
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
@@ -61,7 +61,7 @@ import { IndexError, capturePathOk, deleteThread, listDates, rateThread, readErr
 import { memoryLineText } from '../../memory/vault-notes.ts';
 import { childItem } from '../../memory/proposals.ts';
 import { IMAGE_EXT, parseCardState, stripSecrets } from '../../board/cards/index.ts';
-import { resolve, sep } from 'node:path';
+import { isAbsolute, resolve, sep } from 'node:path';
 import { bundleAsset, stageAsset, stageIndex, stageVersion } from './stage.ts';
 import { themeFiles } from './theme.ts';
 import { enrichPaints } from '../../scenes/paint/painter.ts';
@@ -110,7 +110,7 @@ export interface AppContext {
 }
 
 export function createContext(ws: Workspace, opts: { now?: () => Date; env?: NodeJS.ProcessEnv; warm?: boolean; draw?: Draw; access?: Access; bailian?: Bailian } = {}): AppContext {
-  let mtime = -1;
+  let configText: string | null = null;
   const ctx: AppContext = {
     ws,
     runner: new Runner(() => ctx.ws, opts),
@@ -121,9 +121,9 @@ export function createContext(ws: Workspace, opts: { now?: () => Date; env?: Nod
     bailian: opts.bailian ?? createBailian({ env: opts.env }),
     async reload() {
       try {
-        const r = await reloadIfChanged(ctx.ws, mtime);
+        const r = await reloadIfChanged(ctx.ws, configText);
         ctx.ws = r.ws;
-        mtime = r.mtime;
+        configText = r.text;
         ctx.configError = null;
       } catch (err) {
         if (!(err instanceof ConfigError)) throw err;
@@ -894,7 +894,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       const rel = ws.config.tutors[av[1]]?.avatar ?? '';
       const file = resolve(ws.root, rel);
       const ext = IMAGE_EXT.exec(rel)?.[1]?.toLowerCase() ?? '';
-      if (!rel || rel.startsWith('/') || !file.startsWith(ws.root + sep) || !IMAGE_TYPES[ext]) return { status: 404, json: { error: 'not_found' } };
+      if (!rel || isAbsolute(rel) || !file.startsWith(ws.root + sep) || !IMAGE_TYPES[ext]) return { status: 404, json: { error: 'not_found' } };
       if (!(await stat(file).catch(() => null))?.isFile()) return { status: 404, json: { error: 'not_found' } };
       return { status: 200, file, contentType: IMAGE_TYPES[ext], cacheControl: 'no-cache' };
     }
@@ -923,7 +923,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       const rel = url.searchParams.get('p') ?? '';
       const file = resolve(ws.root, rel);
       const ext = IMAGE_EXT.exec(rel)?.[1]?.toLowerCase() ?? '';
-      if (!rel || rel.startsWith('/') || !file.startsWith(ws.root + sep) || !IMAGE_TYPES[ext]) return { status: 404, json: { error: 'not_found' } };
+      if (!rel || isAbsolute(rel) || !file.startsWith(ws.root + sep) || !IMAGE_TYPES[ext]) return { status: 404, json: { error: 'not_found' } };
       if (!(await stat(file).catch(() => null))?.isFile()) return { status: 404, json: { error: 'not_found' } };
       return { status: 200, file, contentType: IMAGE_TYPES[ext] };
     }

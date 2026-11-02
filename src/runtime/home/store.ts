@@ -127,7 +127,7 @@ export async function publishHome(ws: Workspace, opts: { force?: boolean; from?:
   const f = homeFiles(ws);
   const src = opts.from ? (isAbsolute(opts.from) ? opts.from : resolve(ws.root, opts.from)) : f.draft;
   const md = await readFile(src, 'utf8').catch(() => null);
-  const shown = relative(ws.root, src) || src;
+  const shown = relative(ws.root, src).split(sep).join('/') || src;
   if (md === null) throw new UsageError(opts.from ? `读不到 ${opts.from}` : '还没有草稿 home/draft.md(用 cotutor-home 技能写一份)');
   return publishHomeMd(ws, md, shown, opts);
 }

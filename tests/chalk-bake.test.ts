@@ -2,13 +2,15 @@
  * 烤好的画面(src/chalk/paint.ts):样本是 13 − 8 那份课包烤出来的 bake.json(浏览器里烤,这里不开浏览器)。
  * 某一刻的 SVG 字符串:没开始的不出、画到一半的按描边揭示、字按裁剪框露、全画完不带揭示的属性;笔尖只在真画着时出现;
  * 一个元素的画法(paintElement):描边按长度首尾相接、实心填充最后淡入、虚线轮到它才出现;画面指纹变了要重烤。
+ * 烤画面用的浏览器在哪(chromePath):Windows 上 Chrome、Edge 不在 PATH 里,按装的位置找。
  */
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { frameAt, lessonClock, paintElement, pictureHash, renderFrameSvg, type BakedElement, type BakedLesson } from '../src/chalk/index.ts';
 import { bakeIsFresh } from '../src/app/cli/chalk/bake.ts';
+import { chromePath } from '../src/app/cli/chalk/browser.ts';
 import type { ChalkSkeleton, ChalkStep } from '../src/chalk/types.ts';
 import { check, done as finish } from './_check.ts';
 
@@ -78,6 +80,28 @@ check('笔尖沿轨迹插值', JSON.stringify(paintElement(el, 0.25).pointer) ==
     const sj = JSON.parse(readFileSync(join(dir, 'scene.json'), 'utf8')) as { skeletons: ChalkSkeleton[] };
     writeFileSync(join(tmp, 'po', 'scene.json'), JSON.stringify({ ...sj, skeletons: sj.skeletons.map((e, i) => (i ? e : { ...e, x: e.x! + 1 })) }));
     check('画面变了(挪了一个元素)要重烤;没有 bake.json 也算不新鲜', !(await bakeIsFresh(join(tmp, 'po'))) && !(await bakeIsFresh(join(tmp, 'nope'))));
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+{
+  // Windows:Chrome 先于 Edge,全机装的先于只给自己装的;PATH 里的带 .exe;CHROME 指了就只认它
+  const tmp = mkdtempSync(join(tmpdir(), 'chalk-chrome-'));
+  try {
+    const put = (...parts: string[]): string => { mkdirSync(join(tmp, ...parts.slice(0, -1)), { recursive: true }); writeFileSync(join(tmp, ...parts), ''); return join(tmp, ...parts); };
+    const pf = join(tmp, 'pf'), pf86 = join(tmp, 'pf86'), local = join(tmp, 'local'), bin = join(tmp, 'bin');
+    const env = { ProgramFiles: pf, 'ProgramFiles(x86)': pf86, LOCALAPPDATA: local, PATH: bin };
+    check('Windows:什么都没装 → null', chromePath(env, 'win32') === null);
+    const edge = put('pf86', 'Microsoft', 'Edge', 'Application', 'msedge.exe');
+    check('Windows:只有自带的 Edge → 用 Edge', chromePath(env, 'win32') === edge);
+    const mine = put('local', 'Google', 'Chrome', 'Application', 'chrome.exe');
+    check('Windows:装了 Chrome(只给自己装的)→ 先用 Chrome', chromePath(env, 'win32') === mine);
+    const all = put('pf', 'Google', 'Chrome', 'Application', 'chrome.exe');
+    check('Windows:全机装的 Chrome 先于只给自己装的', chromePath(env, 'win32') === all);
+    const onPath = put('bin', 'chromium.exe');
+    check('Windows:没有装在固定位置的,PATH 里找 chromium.exe', chromePath({ PATH: bin }, 'win32') === onPath && chromePath({ PATH: bin }, 'linux') === null);
+    check('CHROME 指了就只认它(指错了是 null,不往下找)', chromePath({ ...env, CHROME: edge }, 'win32') === edge && chromePath({ ...env, CHROME: join(tmp, 'nope.exe') }, 'win32') === null);
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

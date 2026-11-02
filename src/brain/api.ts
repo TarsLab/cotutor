@@ -20,7 +20,7 @@ import { isStepCount, streamText, type ModelMessage } from 'ai';
 import { randomUUID } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
 import { appendFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { dirname, extname, isAbsolute, join, relative } from 'node:path';
+import { dirname, extname, isAbsolute, join, relative, sep } from 'node:path';
 import type { AssistantPart, CliEvent, CliFinal, ToolResult } from './cli/types.ts';
 import { getRuntime, type RunPlan } from './cli/run-plan.ts';
 import { createPartialReader } from './stream.ts';
@@ -256,7 +256,7 @@ export class ApiBrain {
       const session = plan.session ?? `api-${randomUUID()}`;
       event({ kind: 'session', id: session });
       const images = req.images ?? [];
-      const stored = images.map((p) => { const rel = relative(root, p); return rel.startsWith('..') || isAbsolute(rel) ? p : rel; });
+      const stored = images.map((p) => { const rel = relative(root, p); return rel.startsWith('..') || isAbsolute(rel) ? p : rel.split(sep).join('/'); });
       const record: TurnRecord = { v: 1, session, at: new Date().toISOString(), model: runtime.model, codec: CODEC, user: { text: req.prompt, images: stored }, messages: [], ok: false };
       let final: CliFinal;
       const auth = this.auth();

@@ -85,8 +85,6 @@ try {
     if (patch === undefined) delete c.figshot;
     else c.figshot = patch;
     writeFileSync(cfgFile, JSON.stringify(c, null, 2));
-    const t = new Date(Date.now() + 2000 + Math.random() * 1000);
-    utimesSync(cfgFile, t, t);   // 热重载按 mtime,同一毫秒里连写两次会被当成没改
   };
   withFigshot({});
   check('配了 figshot 没写端口:缺省 8477', (await kidHome()).figshot?.port === 8477);
@@ -203,7 +201,7 @@ for: 2026-09-18
   const run1 = await readRunFile(ctx.ws, 'chinese-tutor', '2026-09-17', j1);
   const sec16 = (await readIndex(ctx.ws, 'chinese-tutor', '2026-09-16')).messages[0].section!;
   check('接着以前的话题:新话题(不接今天的)、按钮上的字、消息记 continues', m1.thread === j1 && m1.text === '接着讲昨天的' && JSON.stringify(m1.continues) === JSON.stringify({ date: '2026-09-16', thread: t16 }), JSON.stringify(m1));
-  check('接着以前的话题:上下文包带 continue 段(哪天哪个、话题名、那一节的讲稿与卡、索引路径)+ 讲法', run1?.prompt.includes(`  continue:\n    from: "2026-09-16 ${t16}"\n    title: "讲讲板书"`) === true && run1.prompt.includes(`      - ${JSON.stringify(sec16.lines[0].text)}`) && run1.prompt.includes(`${t16}/0 ${sec16.cards[0].kind}`) && run1.prompt.includes(join('conversations', 'chinese-tutor', '2026-09-16.json')) && run1.prompt.includes('brief: "先问他还记不记得"'), run1?.prompt);
+  check('接着以前的话题:上下文包带 continue 段(哪天哪个、话题名、那一节的讲稿与卡、索引路径)+ 讲法', run1?.prompt.includes(`  continue:\n    from: "2026-09-16 ${t16}"\n    title: "讲讲板书"`) === true && run1.prompt.includes(`      - ${JSON.stringify(sec16.lines[0].text)}`) && run1.prompt.includes(`${t16}/0 ${sec16.cards[0].kind}`) && run1.prompt.includes('conversations/chinese-tutor/2026-09-16.json') && run1.prompt.includes('brief: "先问他还记不记得"'), run1?.prompt);
 
   const s2 = await kidSend('math-tutor', { text: '我想问个别的', newThread: true, via: { home: h1.home, button: 'new' } });
   await wait('math-tutor');

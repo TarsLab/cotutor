@@ -8,7 +8,7 @@
  */
 import { createHash } from 'node:crypto';
 import { cp, lstat, mkdir, readFile, readdir, readlink, rm, symlink } from 'node:fs/promises';
-import { dirname, join, relative } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BOARD_SKILL } from '../../board/cards/docs.ts';
 import { ANALYZE_SKILL } from '../skills/analyze-doc.ts';
@@ -196,7 +196,11 @@ export async function upgradeSkills(root: string): Promise<SkillUpgradeStep[]> {
 /** Claude Code 只认 .claude/skills(Codex、Qwen Code 认 .agents/skills):在那里放一条相对链,两边看到的是同一份 */
 export const CLAUDE_SKILLS_LINK = '.claude/skills';
 
-/** init / upgrade 用:没有就建链;已经是链不动;是实体目录(老 workspace 没搬完)不碰,报一声 */
+/**
+ * init / upgrade 用:没有就建链;已经是链不动;是实体目录(老 workspace 没搬完)不碰,报一声。
+ * Windows 上建目录联接(junction):符号链接要「创建符号链接」权限,家长平常开的终端没有(UAC 拿掉了,开发者模式也多半没开)。
+ * 联接读回来是绝对路径,所以按指到哪儿比、不按字面比。还是建不了就跳过:这条链只给在 workspace 里用 Claude Code 的人,cotutor 自己不读它。
+ */
 export async function linkClaudeSkills(root: string): Promise<SkillStep> {
   const link = join(root, CLAUDE_SKILLS_LINK);
   const target = join('..', SKILLS_DIR);
@@ -204,10 +208,15 @@ export async function linkClaudeSkills(root: string): Promise<SkillStep> {
   const st = await lstat(link).catch(() => null);
   if (st?.isSymbolicLink()) {
     const to = await readlink(link);
-    return to === target ? { item, action: 'exists' } : { item, action: 'kept', note: `已经是指向 ${to} 的链,没动` };
+    const key = (p: string): string => (process.platform === 'win32' ? p.toLowerCase() : p);
+    return key(resolve(dirname(link), to.replace(/^\\\\\?\\/, ''))) === key(resolve(root, SKILLS_DIR)) ? { item, action: 'exists' } : { item, action: 'kept', note: `已经是指向 ${to} 的链,没动` };
   }
   if (st) return { item, action: 'kept', note: `${CLAUDE_SKILLS_LINK} 是实体目录,没建链:把里面的技能挪进 ${SKILLS_DIR}/、删掉它,再跑 cotutor upgrade` };
   await mkdir(dirname(link), { recursive: true });
-  await symlink(target, link);
+  try {
+    await symlink(target, link, process.platform === 'win32' ? 'junction' : undefined);
+  } catch (err) {
+    return { item, action: 'kept', note: `建不了链(${(err as NodeJS.ErrnoException).code ?? err}),跳过:只影响在 workspace 里用 Claude Code 看技能,cotutor 照常用` };
+  }
   return { item, action: 'created', note: 'Claude Code 只认 .claude/skills,链到同一份' };
 }

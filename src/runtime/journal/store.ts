@@ -249,7 +249,7 @@ export async function snapshotSources(ws: Workspace, name: string): Promise<RunS
   const file = tutorFilePath(ws.dirs.agents, name);
   try {
     const body = await readFile(file, 'utf8');
-    agent = { file: relative(ws.root, file), hash: sha(body), body };
+    agent = { file: relative(ws.root, file).split(sep).join('/'), hash: sha(body), body };
   } catch {
     /* 读不到:记 null */
   }

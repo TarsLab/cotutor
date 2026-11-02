@@ -2,26 +2,40 @@
  * 做课包用的浏览器(2026-10-31 替掉 drawtell 的 playwright):起本机的 Chrome(无头、自己的临时 profile,不碰平时用的那个),
  * 走 DevTools 协议(CDP)开页面、等、取值、截图。不另装浏览器:烤画面、截图与孩子端是同一种渲染就够。
  * 每条命令都有超时(回包不来就报错,不挂着);收尾杀进程、删临时 profile,出错也在 finally 里收(scripts/_guard.mjs 那次的教训:无头 Chrome 挂了两天)。
- * Chrome 在哪:环境变量 CHROME > macOS 的 /Applications/Google Chrome.app > PATH 里的 google-chrome / chromium。
+ * Chrome 在哪:环境变量 CHROME > macOS 的 /Applications/Google Chrome.app > Windows 的 Chrome、再 Edge(装在 Program Files 或自己的 AppData 下,不在 PATH 里)
+ * > PATH 里的 google-chrome / chromium(Windows 带 .exe)。Edge 是 Windows 10/11 自带的 Chromium,CDP 一样,烤出的画面一字不差(2026-11-02 在 Windows 上对过)。
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
+import { UsageError } from '../../workspace.ts';
 
 const MAC_CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const PATH_NAMES = ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser'];
+/** Windows:先 Chrome 后 Edge,每样依次看全机装的、32 位的、只给自己装的 */
+const WIN_BROWSERS = [['Google', 'Chrome', 'Application', 'chrome.exe'], ['Microsoft', 'Edge', 'Application', 'msedge.exe']];
+const WIN_ROOTS = ['ProgramFiles', 'ProgramFiles(x86)', 'LOCALAPPDATA'];
 /** 一条 CDP 命令最多等多久 */
 const SEND_MS = 60_000;
 
-/** 本机 Chrome 的可执行文件;找不到 null */
-export function chromePath(env: NodeJS.ProcessEnv = process.env): string | null {
+/** 本机 Chrome(Windows 上没有 Chrome 就是 Edge)的可执行文件;找不到 null */
+export function chromePath(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform): string | null {
   const set = env.CHROME?.trim();
   if (set) return existsSync(set) ? set : null;
-  if (process.platform === 'darwin' && existsSync(MAC_CHROME)) return MAC_CHROME;
+  if (platform === 'darwin' && existsSync(MAC_CHROME)) return MAC_CHROME;
+  if (platform === 'win32') {
+    for (const parts of WIN_BROWSERS) {
+      for (const root of WIN_ROOTS) {
+        const dir = env[root];
+        if (dir && existsSync(join(dir, ...parts))) return join(dir, ...parts);
+      }
+    }
+  }
+  const exe = platform === 'win32' ? '.exe' : '';
   for (const dir of (env.PATH ?? '').split(delimiter)) {
-    for (const name of PATH_NAMES) if (dir && existsSync(join(dir, name))) return join(dir, name);
+    for (const name of PATH_NAMES) if (dir && existsSync(join(dir, name + exe))) return join(dir, name + exe);
   }
   return null;
 }
@@ -89,7 +103,7 @@ async function connect(url: string): Promise<{ send: Send; close(): void }> {
 /** 起一个 Chrome、开一页交给 fn;不论成败都收干净 */
 export async function withBrowser<T>(fn: (page: Page) => Promise<T>, opts: { width?: number; height?: number; env?: NodeJS.ProcessEnv } = {}): Promise<T> {
   const bin = chromePath(opts.env);
-  if (!bin) throw new Error('找不到 Chrome:装 Google Chrome,或环境变量 CHROME 指到 Chrome / Chromium 的可执行文件');
+  if (!bin) throw new UsageError('找不到 Chrome:装 Google Chrome,或环境变量 CHROME 指到 Chrome / Chromium / Edge 的可执行文件');
   const width = opts.width ?? 1280;
   const height = opts.height ?? 960;
   const profile = await mkdtemp(join(tmpdir(), 'cotutor-chalk-'));

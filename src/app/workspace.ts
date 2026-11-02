@@ -7,7 +7,7 @@
  * 配置"在但解析不了"响亮报错,不静默走缺省(沿 drawtell 的教训)。
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { writeFile, rename, stat } from 'node:fs/promises';
+import { readFile, writeFile, rename } from 'node:fs/promises';
 import { ConfigError, UsageError } from '../shared/errors.ts';
 import { redactDeep, redactHome } from '../shared/home.ts';
 import { SKILLS_DIR, type RootSource, type Workspace } from '../schema/workspace.ts';
@@ -259,11 +259,19 @@ export async function patchConfig(ws: Workspace, patch: Record<string, unknown>,
   return r.data;
 }
 
-/** 文件改了(页面写的、或家长在编辑器改的)就重读;坏了抛 ConfigError,调用方决定是留旧的还是响 */
-export async function reloadIfChanged(ws: Workspace, lastMtime: number): Promise<{ ws: Workspace; mtime: number }> {
-  const st = await stat(ws.files.config);
-  if (st.mtimeMs === lastMtime) return { ws, mtime: lastMtime };
-  const raw = readJson(ws.files.config);
-  if (raw === null) throw new ConfigError(ws.files.config, '不存在了');
-  return { ws: assembleWorkspace(ws.root, ws.source, parseConfig(raw, ws.files.config)), mtime: st.mtimeMs };
+/**
+ * 文件内容变了(页面写的、或家长在编辑器改的)就重读;坏了抛 ConfigError,调用方决定是留旧的还是响。
+ * 比原文不比修改时间:Windows 上写 .tmp 再 rename 连写两次,修改时间常常一模一样(10-31 实测 200 次里 105 次);文件只有几 K,每次读一遍不贵。
+ */
+export async function reloadIfChanged(ws: Workspace, lastText: string | null): Promise<{ ws: Workspace; text: string }> {
+  const text = await readFile(ws.files.config, 'utf8').catch(() => null);
+  if (text === null) throw new ConfigError(ws.files.config, '不存在了');
+  if (text === lastText) return { ws, text };
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch (err) {
+    throw new ConfigError(ws.files.config, `不是合法 JSON:${err instanceof Error ? err.message : String(err)}`);
+  }
+  return { ws: assembleWorkspace(ws.root, ws.source, parseConfig(raw, ws.files.config)), text };
 }

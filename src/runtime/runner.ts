@@ -375,7 +375,7 @@ export function vaultPack(paths: Workspace['paths']): NonNullable<ContextPack['v
     const p = paths[r];
     if (!p) continue;
     const rel = relative(root, p);
-    out[r] = !rel || rel.startsWith('..') || isAbsolute(rel) ? p : rel;
+    out[r] = !rel || rel.startsWith('..') || isAbsolute(rel) ? p : rel.split(sep).join('/');
   }
   return out;
 }

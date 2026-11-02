@@ -203,7 +203,7 @@ export async function main(argv: string[]): Promise<void> {
             process.stdout.write(
               dryRun
                 ? `\n${r.gaps.length} 项要改,还没动文件:cotutor upgrade --config 真改(只加缺的、删不再用的出厂段,你改过的值不动)\n`
-                : `\n改了 ${r.gaps.length} 项到 ${redactHome(r.file)};服务在跑的话不用重启(按 mtime 热重载)。\n`,
+                : `\n改了 ${r.gaps.length} 项到 ${redactHome(r.file)};服务在跑的话不用重启(改了就热重载)。\n`,
             );
           }
           return;

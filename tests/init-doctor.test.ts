@@ -1,7 +1,7 @@
 /** init 幂等补缺、老师文件是拷贝;doctor 把缺文件、坏配置、坏账本摆到明面。 */
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { check, done } from './_check.ts';
 // 包根 skills/:不能静态 import skills.ts(它会带进 workspace.ts,HOME 得先注入再动态 import)
 const PACKAGE_SKILLS_DIR = join(import.meta.dirname, '..', 'skills');
@@ -34,7 +34,10 @@ try {
   check('analyze 技能出厂(2026-09-15):手写 SKILL.md + 生成的 references/命令与文件.md(命令行从 usage 取、文件名从 conversationFiles 取)', analyzeMd.startsWith('---\nname: cotutor-analyze\ndescription: ') && readFileSync(join(ws, '.agents', 'skills', 'cotutor-analyze', 'references', '命令与文件.md'), 'utf8').includes('cotutor replay <老师> <job>') && readFileSync(join(ws, '.agents', 'skills', 'cotutor-analyze', 'references', '命令与文件.md'), 'utf8').includes('<日期>.<job>.run.json'));
   const tuneRef = readFileSync(join(ws, '.agents', 'skills', 'cotutor-tune', 'references', '字段.md'), 'utf8');
   check('tune 技能出厂(2026-09-15):手写 SKILL.md + 生成的 references/字段.md(tutors 字段与政策缺省从契约取、frontmatter 键从 agent-file 取)', readFileSync(join(ws, '.agents', 'skills', 'cotutor-tune', 'SKILL.md'), 'utf8').startsWith('---\nname: cotutor-tune\ndescription: ') && tuneRef.includes('| `display` | 必需 |') && tuneRef.includes('| `contextPack.entryChars` | 必需 | 4000 |') && tuneRef.includes('`permissionMode`') && tuneRef.includes('cotutor add <老师名>'));
-  check('Claude Code 的 .claude/skills 是链到 .agents/skills 的相对链,读得到同一份', lstatSync(join(ws, '.claude', 'skills')).isSymbolicLink() && readlinkSync(join(ws, '.claude', 'skills')) === join('..', '.agents', 'skills') && readFileSync(join(ws, '.claude', 'skills', 'cotutor-board', 'SKILL.md'), 'utf8') === skillMd);
+  const claudeTo = readlinkSync(join(ws, '.claude', 'skills'));
+  // Windows 上是目录联接(不要权限),读回绝对路径;别处是相对链
+  const linkOk = process.platform === 'win32' ? resolve(claudeTo.replace(/^\\\\\?\\/, '')).toLowerCase() === resolve(ws, '.agents', 'skills').toLowerCase() : claudeTo === join('..', '.agents', 'skills');
+  check('Claude Code 的 .claude/skills 链到 .agents/skills(相对链;Windows 上是目录联接),读得到同一份', lstatSync(join(ws, '.claude', 'skills')).isSymbolicLink() && linkOk && readFileSync(join(ws, '.claude', 'skills', 'cotutor-board', 'SKILL.md'), 'utf8') === skillMd);
   check('cotutor-vault 不再出厂(2026-10-30)', !existsSync(join(ws, '.agents', 'skills', 'cotutor-vault')));
   {
     // 旧 workspace:出厂记录里有退役的机器件 → upgrade 删目录、删记录
@@ -298,6 +301,28 @@ try {
     check('再补一次是空操作', (await upgradeConfig(ws)).gaps.length === 0);
   } finally {
     rmSync(home2, { recursive: true, force: true });
+  }
+}
+
+// ---- .claude/skills 的链:按指到哪儿认(Windows 上的目录联接读回绝对路径);建不了就跳过,init 不停 ----
+{
+  const { linkClaudeSkills } = await import('../src/app/cli/skills.ts');
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-link-')));
+  try {
+    mkdirSync(join(root, '.agents', 'skills'), { recursive: true });
+    mkdirSync(join(root, '.claude'));
+    symlinkSync(join(root, '.agents', 'skills'), join(root, '.claude', 'skills'), 'junction');
+    check('已有的链是绝对路径、指到同一处(Windows 的目录联接就是这样)→ 认作已经有了', (await linkClaudeSkills(root)).action === 'exists');
+    rmSync(join(root, '.claude', 'skills'));
+    // 建不了链:拿只读的 .claude 模拟(Windows 上目录的只读不拦,root 也不拦,跳过)
+    if (process.platform !== 'win32' && process.getuid?.() !== 0) {
+      chmodSync(join(root, '.claude'), 0o555);
+      const s = await linkClaudeSkills(root);
+      chmodSync(join(root, '.claude'), 0o755);
+      check('建不了链 → 跳过并说一句(不抛,init 不停)', s.action === 'kept' && (s.note ?? '').includes('建不了链(EACCES)') && !existsSync(join(root, '.claude', 'skills')), JSON.stringify(s));
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 }
 

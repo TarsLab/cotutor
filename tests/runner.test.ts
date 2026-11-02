@@ -2,9 +2,9 @@
  * 发消息全流程(假 CLI,不花钱):拼上下文包 → spawn / resume → 日志落盘 → 索引物化;
  * 三轮 resume 同会话、换运行时新开、跨天新开、忙时 409、出错标 error、固定段剥掉、老师团补丁写回并热重载、关掉老师即消失。
  */
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { check, done } from './_check.ts';
 import { formatEvent, parseEvents } from '../src/runtime/journal/events.ts';
@@ -188,7 +188,7 @@ try {
   check('音色列表:整张表、字段齐、谁在用谁', vl.ok && vl.count === TTS_VOICES.length && vl.count > 500 && vl.voices.every((v) => v.voice.startsWith('qwen-audio-3.0-tts-plus-') && v.name && v.gender && typeof v.age === 'number') && vl.inUse['v-math']?.[0] === 'math-tutor' && vl.inUse.fail?.[0] === 'english-tutor' && vl.sample.length > 5, JSON.stringify({ count: vl.count, inUse: vl.inUse }));
   const asked = tts.requests.length;
   const pv = await route('GET', '/api/tts/preview?voice=v-kid', ctx);
-  check('试听:合成到配音缓存 .cotutor/tts/ 并给 mp3 文件;没前缀的音色走 plus 模型', pv.status === 200 && pv.contentType === 'audio/mpeg' && typeof pv.file === 'string' && pv.file.includes('/.cotutor/tts/') && readFileSync(pv.file, 'utf8') === 'fake-mp3:v-kid:你好呀,我是你的老师。今天我们一起来学一个新东西,准备好了吗?' && tts.requests.at(-1)?.model === 'qwen-audio-3.0-tts-plus', JSON.stringify(pv));
+  check('试听:合成到配音缓存 .cotutor/tts/ 并给 mp3 文件;没前缀的音色走 plus 模型', pv.status === 200 && pv.contentType === 'audio/mpeg' && typeof pv.file === 'string' && pv.file.includes(`${sep}.cotutor${sep}tts${sep}`) && readFileSync(pv.file, 'utf8') === 'fake-mp3:v-kid:你好呀,我是你的老师。今天我们一起来学一个新东西,准备好了吗?' && tts.requests.at(-1)?.model === 'qwen-audio-3.0-tts-plus', JSON.stringify(pv));
   const pvAgain = await route('GET', '/api/tts/preview?voice=v-kid', ctx);
   check('试听:同句同音色不重合成(同一个文件,只请求了一次)', pvAgain.file === pv.file && tts.requests.length === asked + 1);
   check('试听:自定义句子进文件名', (await route('GET', '/api/tts/preview?voice=v-kid&text=' + encodeURIComponent('另一句'), ctx)).file !== pv.file);
@@ -655,10 +655,11 @@ try {
     check('孩子没带照片的那条:不带工具(--tools 填空),上下文包没有 refs: / vault:', r1Run.argv[r1Run.argv.indexOf('--tools') + 1] === '' && !r1Run.prompt.includes('\n  refs:') && !r1Run.prompt.includes('\n  vault:'), r1Run.prompt.slice(0, 500));
   }
   const phRuns = ((await day('math-tutor', phDate)).json as Day).runs[phJ.job];
-  check('转录里能看到 Read 了哪张', phRuns.some((r) => r.kind === 'tool' && JSON.stringify(r).includes(phOne)), JSON.stringify(phRuns));
+  // Read 的是上下文包给的绝对路径(Windows 上是反斜杠),比之前换成 /
+  check('转录里能看到 Read 了哪张', phRuns.some((r) => r.kind === 'tool' && JSON.stringify(r).replaceAll('\\\\', '/').includes(phOne)), JSON.stringify(phRuns));
   // 记录层(2026-09-15):消息物化 tools(名字 / 路径 / 成没成 / 字数),run.json 记老师文件正文与 hash、技能 hash
   const phTools = (phM as { tools?: { name: string; arg: string; ok: boolean | null; chars: number }[] }).tools ?? [];
-  check('消息 tools:Read 了那张照片,参数是路径', phTools.some((t) => t.name === 'Read' && t.arg.endsWith(phOne)), JSON.stringify(phTools));
+  check('消息 tools:Read 了那张照片,参数是路径', phTools.some((t) => t.name === 'Read' && t.arg.replaceAll('\\', '/').endsWith(phOne)), JSON.stringify(phTools));
   const phSrc = (JSON.parse(readFileSync(join(root, 'conversations', 'math-tutor', `${phDate}.${phJ.job}.run.json`), 'utf8')) as { sources?: { agent: { file: string; hash: string; body: string } | null; skills: Record<string, string> } }).sources;
   check('run.json sources:老师文件正文与 hash、技能 hash', phSrc?.agent?.file === 'agents/math-tutor.md' && phSrc.agent.hash.startsWith('sha256:') && phSrc.agent.body.includes('name: math-tutor') && typeof phSrc.skills === 'object' && 'cotutor-board' in phSrc.skills, JSON.stringify({ file: phSrc?.agent?.file, skills: Object.keys(phSrc?.skills ?? {}) }));
   const rawPh = (await route('GET', `/api/conversations/math-tutor/${phDate}/raw/${phJ.job}`, ctx)).json as { tools: { name: string; kind: string; ok: boolean | null; chars: number }[]; stations: { id: string; note: string }[]; pack: { sources: { agent: { hash: string } } | null } };
@@ -681,7 +682,7 @@ try {
     const cvJob = (cvR.json as { job: string }).job;
     const cvRun = JSON.parse(readFileSync(join(root, 'conversations', 'math-tutor', `${phDate}.${cvJob}.run.json`), 'utf8')) as { prompt: string; argv: string[] };
     const cvM = ((await day('math-tutor', phDate)).json as { index: { messages: { job: string; cards?: { card: string; text: string }[] }[] } }).index.messages.find((m) => m.job === cvJob)!;
-    check('交了画板的那条:带只读工具,包里是图的绝对路径,消息里是相对的', cvPut.status === 200 && existsSync(join(root, cvRel)) && cvR.status === 202 && cvRun.argv[cvRun.argv.indexOf('--tools') + 1] === 'read_file,glob,grep_search' && cvRun.prompt.includes(`画了 2 笔,图:${join(root, cvRel)}(用 Read 看)`) && cvM.cards?.[0]?.text.endsWith(`画了 2 笔,图:${cvRel}(用 Read 看)`) === true, JSON.stringify({ put: cvPut.status, tools: cvRun.argv[cvRun.argv.indexOf('--tools') + 1], cards: cvM.cards, prompt: cvRun.prompt.slice(0, 600) }));
+    check('交了画板的那条:带只读工具,包里是图的绝对路径,消息里是相对的', cvPut.status === 200 && existsSync(join(root, cvRel)) && cvR.status === 202 && cvRun.argv[cvRun.argv.indexOf('--tools') + 1] === 'read_file,glob,grep_search' && cvRun.prompt.includes(`画了 2 笔,图:${JSON.stringify(join(root, cvRel)).slice(1, -1)}(用 Read 看)`) && cvM.cards?.[0]?.text.endsWith(`画了 2 笔,图:${cvRel}(用 Read 看)`) === true, JSON.stringify({ put: cvPut.status, tools: cvRun.argv[cvRun.argv.indexOf('--tools') + 1], cards: cvM.cards, prompt: cvRun.prompt.slice(0, 600) }));
   }
   await route('PUT', rateUrl(phJ.thread), ctx, { rating: 4 });
   const phBk = await route('POST', `/api/conversations/math-tutor/${phDate}/bookkeep`, ctx, { threads: [phJ.thread] });
@@ -737,10 +738,16 @@ try {
   await new Promise((r) => setTimeout(r, 10));
   writeFileSync(cfgFile, JSON.stringify(edited, null, 2));
   check('编辑器改了 → 热重载', ((await route('GET', '/api/config', ctx)).json as { title: string }).title === '改过的标题');
+  // 修改时间一样、长度也一样也要重读:Windows 上连写两次修改时间常常一样(10-31 实测 200 次里 105 次)
+  const stamp = statSync(cfgFile).mtime;
+  edited.title = '又改的标题';
+  writeFileSync(cfgFile, JSON.stringify(edited, null, 2));
+  utimesSync(cfgFile, stamp, stamp);
+  check('修改时间没变、内容变了 → 照样重读', ((await route('GET', '/api/config', ctx)).json as { title: string }).title === '又改的标题');
   await new Promise((r) => setTimeout(r, 10));
   writeFileSync(cfgFile, '{ 坏');
   const hh = (await route('GET', '/api/health', ctx)).json as { ok: boolean; configError: string | null };
-  check('改坏了 → 留旧配置,health 报错', hh.configError !== null && ctx.ws.config.title === '改过的标题', JSON.stringify(hh));
+  check('改坏了 → 留旧配置,health 报错', hh.configError !== null && ctx.ws.config.title === '又改的标题', JSON.stringify(hh));
   check('工作台 /dev 在', ((await route('GET', '/dev', ctx)).html ?? '').includes('老师团'));
 } finally {
   await tts.close();

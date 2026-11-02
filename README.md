@@ -49,7 +49,8 @@ cotutor serve                              # 孩子端 http://<ip>:5180/,家长�
 cotutor add science-tutor --display 科学老师 --subject 科学 --avatar 🔬
 ```
 
-名字以 `-tutor` 结尾的是老师(有脸),其余是孩子看不到的工具人。头像可以是 emoji,也可以是
+名字以 `-tutor` 结尾的是老师(有脸),其余是孩子看不到的工具人。没设头像时,语文、数学、英语老师用包里自带的
+出厂头像(包根 `avatars/`,三个木钉娃娃),别的老师显示学科首字。头像可以是 emoji,也可以是
 workspace 里的一张图(`avatars/<老师>.png`):用 [figshot](https://github.com/tarslab/figshot)
 `figshot pick --workspace ~/cotutor/<孩子>` 让孩子自己搭一个乐高人仔当老师,存盘直接落到这里。
 `cotutor.json` 里加一行 `"figshot": { "port": 8477 }`,孩子端首页就多一张「给老师们换个样子」,iPad 上点了直接进去(figshot 没开着时这张卡不出现)。

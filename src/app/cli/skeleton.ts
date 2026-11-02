@@ -142,16 +142,17 @@ export interface ConfigTemplateInput {
   tutors: ShippedAgent[];
 }
 
-/** 出厂老师的条目;cards = 板书写法里讲哪几种卡(《卡片协议.md》「谁拿到哪些卡」,2026-10-07),text 总在 */
-const TUTOR_DEFAULTS: Record<string, { display: string; subject?: string; avatar: string; hidden?: boolean; runtime?: string; enabled?: boolean; cards?: BoardCardKind[]; policy?: { effort?: 'low' | 'medium' | 'high'; tools?: 'on' } }> = {
+/** 出厂老师的条目;cards = 板书写法里讲哪几种卡(《卡片协议.md》「谁拿到哪些卡」,2026-10-07),text 总在;
+ *  不写 avatar:三门主科用包里的出厂头像(src/app/http/avatars.ts) */
+const TUTOR_DEFAULTS: Record<string, { display: string; subject?: string; hidden?: boolean; runtime?: string; enabled?: boolean; cards?: BoardCardKind[]; policy?: { effort?: 'low' | 'medium' | 'high'; tools?: 'on' } }> = {
   // 数学多想一会儿:算错的代价大(别的老师用缺省 low);走 qwen3.8-max(同语文老师)。运行时 api = 应用直连百炼(2026-10-31 起出厂缺省;Qwen Code 那条是 qwen)
-  'math-tutor': { display: '数学老师', subject: '数学', avatar: '🧮', runtime: 'api', cards: ['text', 'choice', 'image', 'lecture', 'canvas', 'code'], policy: { effort: 'medium' } },
+  'math-tutor': { display: '数学老师', subject: '数学', runtime: 'api', cards: ['text', 'choice', 'image', 'lecture', 'canvas', 'code'], policy: { effort: 'medium' } },
   // 画图卡(paint)不在这里:只在「你说我画」activity 的话题里有(agents/chinese-tutor/activities/你说我画.md 头上的 cards)
   // 语文老师走 qwen3.8-max(你说我画、看图说话两套 activity eval 在它上面验证;2026-10-31 Ray 上 API 与 Qwen Code 对照过)
-  'chinese-tutor': { display: '语文老师', subject: '语文', avatar: '📚', runtime: 'api', cards: ['text', 'read', 'choice', 'image', 'tianzige', 'lecture', 'canvas'] },
+  'chinese-tutor': { display: '语文老师', subject: '语文', runtime: 'api', cards: ['text', 'read', 'choice', 'image', 'tianzige', 'lecture', 'canvas'] },
   // 英语也走 api(qwen3.8-max):2026-10-31 api-flash 真跑英语四个 activity,13 次里 5 次第一轮只出一张拍照卡、没有讲稿(实时页嘴没话可念);max 在 Ray 上都过。
   // 想省钱改 api-flash,先跑 activity eval。medium 是 2026-10-27 给 flash 加的(low 偶尔只出卡或念规则,详见年级教学包验证记录)
-  'english-tutor': { display: '英语老师', subject: '英语', avatar: '🔤', runtime: 'api', cards: ['text', 'read', 'choice', 'image', 'word', 'lecture'], policy: { effort: 'medium' } },
+  'english-tutor': { display: '英语老师', subject: '英语', runtime: 'api', cards: ['text', 'read', 'choice', 'image', 'word', 'lecture'], policy: { effort: 'medium' } },
 };
 
 /** cotutor.json 模板:只在文件不存在时写入;政策文件永不自动重建或覆盖(家长的决定不由机器代做)。 */
@@ -160,7 +161,7 @@ export function configTemplate(input: ConfigTemplateInput): string {
   for (const a of input.tutors) {
     const p = TUTOR_DEFAULTS[a.name];
     tutors[a.name] = p
-      ? { display: p.display, ...(p.subject ? { subject: p.subject } : {}), avatar: p.avatar, enabled: p.enabled ?? true, ...(p.hidden ? { hidden: true } : {}), ...(p.runtime ? { runtime: p.runtime } : {}), ...(p.cards ? { cards: p.cards } : {}), ...(p.policy ? { policy: p.policy } : {}) }
+      ? { display: p.display, ...(p.subject ? { subject: p.subject } : {}), enabled: p.enabled ?? true, ...(p.hidden ? { hidden: true } : {}), ...(p.runtime ? { runtime: p.runtime } : {}), ...(p.cards ? { cards: p.cards } : {}), ...(p.policy ? { policy: p.policy } : {}) }
       : { display: a.name, enabled: true };
   }
   const cfg = {

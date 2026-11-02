@@ -76,7 +76,7 @@ export const TutorSchema = z.object({
   display: z.string().min(1).describe('显示名:孩子端头像下的字,计划文件的 H2 标题'),
   subject: z.string().optional().describe('学科:与课程表的学科列、观察的 subject、vault 入口文件的 subject 属性对齐即归到这位老师'),
   /** 头像:一个 emoji 或图片相对路径 */
-  avatar: z.string().optional().describe('头像:一个 emoji,或 workspace 根以内的图片相对路径(如 avatars/math-tutor.png;figshot pick --workspace 会写这个)'),
+  avatar: z.string().optional().describe('头像:一个 emoji,或 workspace 根以内的图片相对路径(如 avatars/math-tutor.png;figshot pick --workspace 会写这个);不写 = 语文、数学、英语用出厂头像,其余显示学科首字'),
   /** 学科色:头像的环、牌的边、新话题气泡(白字压在上面)、听写页的按钮;不写 = 自动(src/ui/shared/tutor-color.ts) */
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/, '要 #rrggbb').optional().describe('学科色 #rrggbb:头像的环、牌的边、新话题气泡(白字压在上面,要够深,doctor 会查)、听写页的按钮;不写 = 语文粉、数学蓝、英语绿,其余按先后自动分、不撞色'),
   /** 卡的配音音色 id(src/media/tts-voices.ts);没有 = 卡不配音 */

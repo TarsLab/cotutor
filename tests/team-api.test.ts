@@ -35,9 +35,17 @@ try {
   check('config 回报出厂名单与路径', cfg.shipped.length === 3 && !cfg.shipped.includes('scene-maker') && !cfg.shipped.includes('planner') && !cfg.shipped.includes('science-tutor') && typeof cfg.resolvedPaths.vault === 'string' && !('tts' in cfg));
 
   // ---- 老师头像(R5b):avatar 是图片相对路径时 /api/kid/avatar/<老师> 给文件,no-cache;emoji / 越界 / 不是图 / 不存在 / 没这位都 404 ----
-  check('emoji 头像 404(孩子端自己显示 emoji)', (await route('GET', '/api/kid/avatar/math-tutor', ctx)).status === 404);
-  check('没这位老师 404', (await route('GET', '/api/kid/avatar/nobody-tutor', ctx)).status === 404);
+  // 出厂头像(avatars.ts):init 不写 avatar,三门主科给包里的图;旧版 init 写的 emoji 也当没写;别的老师没有
+  check('init 不往 cotutor.json 写头像', Object.values((cfgRaw as unknown as { tutors: Record<string, { avatar?: string }> }).tutors).every((t) => t.avatar === undefined));
+  const factory = await route('GET', '/api/kid/avatar/math-tutor', ctx);
+  check('没写头像 → 出厂的 math.webp', factory.status === 200 && factory.file?.endsWith(join('avatars', 'math.webp')) && factory.contentType === 'image/webp' && existsSync(factory.file ?? ''), JSON.stringify(factory));
+  const shown = async (name: string) => ((await route('GET', '/api/kid/home', ctx)).json as { tutors: { name: string; avatar: string | null }[] }).tutors.find((t) => t.name === name)?.avatar;
+  check('孩子端老师表下发 factory:<文件名>(带后缀,页面当图)', (await shown('chinese-tutor')) === 'factory:chinese.webp' && (await shown('english-tutor')) === 'factory:english.webp');
+  check('不是三门主科的照家长写的', (await shown('science-tutor')) === '🔬' && (await route('GET', '/api/kid/avatar/science-tutor', ctx)).status === 404);
   const setAvatar = async (avatar: string) => { const r = await route('PATCH', '/api/config', ctx, { tutors: { 'math-tutor': { avatar } } }); return r.status; };
+  check('旧版出厂的 🧮 当没写', (await setAvatar('🧮')) === 200 && (await route('GET', '/api/kid/avatar/math-tutor', ctx)).status === 200 && (await shown('math-tutor')) === 'factory:math.webp');
+  check('家长换成别的 emoji → 404(孩子端自己显示 emoji)', (await setAvatar('🔢')) === 200 && (await route('GET', '/api/kid/avatar/math-tutor', ctx)).status === 404 && (await shown('math-tutor')) === '🔢');
+  check('没这位老师 404', (await route('GET', '/api/kid/avatar/nobody-tutor', ctx)).status === 404);
   check('PATCH 头像成路径过契约', (await setAvatar('avatars/math-tutor.png')) === 200);
   check('文件还没有 → 404', (await route('GET', '/api/kid/avatar/math-tutor', ctx)).status === 404);
   const dr0 = await doctorWorkspace(root, { probeEnv: false, env: {} });
@@ -51,7 +59,7 @@ try {
   check('越界 404', (await setAvatar('../x.png')) === 200 && (await route('GET', '/api/kid/avatar/math-tutor', ctx)).status === 404);
   check('绝对路径 404', (await setAvatar(join(root, 'avatars', 'math-tutor.png'))) === 200 && (await route('GET', '/api/kid/avatar/math-tutor', ctx)).status === 404);
   check('不是图 404', (await setAvatar('cotutor.json')) === 200 && (await route('GET', '/api/kid/avatar/math-tutor', ctx)).status === 404);
-  check('换回 emoji', (await setAvatar('🧮')) === 200 && (await route('GET', '/api/kid/avatar/math-tutor', ctx)).status === 404);
+  check('换回 emoji', (await setAvatar('🔢')) === 200 && (await route('GET', '/api/kid/avatar/math-tutor', ctx)).status === 404);
 
   // ---- 老师文件读写 ----
   const f = (await route('GET', '/api/tutors/science-tutor/file', ctx)).json as { text: string; state: string };

@@ -36,6 +36,7 @@ import { configGapsOf, upgradeConfig } from '../cli/migrate.ts';
 import { ICON_SIZES, appIconPng, webManifest } from '../../ui/shared/icon.ts';
 import { faviconResponse } from '../../ui/shared/favicon.ts';
 import { cookieOf, createAccess, gatePage, isKidPath, type Access, type Who } from './access.ts';
+import { factoryAvatarFile, shownAvatar } from './avatars.ts';
 import { deviceCookie, newDeviceId, parseKidLog, readDevices, recordKidLog, renameDevice, validDevice } from '../../runtime/journal/kid-log.ts';
 import { DEVICE_COOKIE } from '../../schema/kid-device.ts';
 import { BUILD, codeChanged, headNow, shortCommit } from '../build.ts';
@@ -186,7 +187,7 @@ export async function kidTutors(ctx: AppContext): Promise<KidTutor[]> {
   const out: KidTutor[] = [];
   const colors = tutorColors(ctx.ws.config.tutors);
   for (const t of listTutors(ctx.ws.config, { kidOnly: true })) {
-    out.push({ name: t.name, display: t.display, avatar: t.avatar ?? null, subject: t.subject ?? null, color: colors[t.name], mark: boardMarkOf(t.subject), lang: subjectLang(t.subject), hasVoice: Boolean(t.voice), extras: t.extras.filter((x) => (x !== 'talk' || ctx.ws.config.talk.enabled)), listen: ctx.ws.config.live.listen });
+    out.push({ name: t.name, display: t.display, avatar: shownAvatar(t), subject: t.subject ?? null, color: colors[t.name], mark: boardMarkOf(t.subject), lang: subjectLang(t.subject), hasVoice: Boolean(t.voice), extras: t.extras.filter((x) => (x !== 'talk' || ctx.ws.config.talk.enabled)), listen: ctx.ws.config.live.listen });
   }
   return out;
 }
@@ -362,7 +363,7 @@ export async function parentReel(ctx: AppContext, tutor: string, date: string, t
   const kid = await kidDay(ctx, tutor, date);
   const device = [...mine].reverse().find((m) => m.device)?.device ?? null;
   const t = ctx.ws.config.tutors[tutor];
-  const face = { name: tutor, display: t?.display ?? tutor, avatar: t?.avatar ?? null, subject: t?.subject ?? null, color: tutorColors(ctx.ws.config.tutors)[tutor] ?? NEUTRAL_COLOR, mark: boardMarkOf(t?.subject) };
+  const face = { name: tutor, display: t?.display ?? tutor, avatar: t ? shownAvatar(t) : null, subject: t?.subject ?? null, color: tutorColors(ctx.ws.config.tutors)[tutor] ?? NEUTRAL_COLOR, mark: boardMarkOf(t?.subject) };
   const live = date === localDate(ctx.now()) || mine.some((m) => m.result === 'running');
   return { tutor, date, thread, reel, messages: day.messages.filter((m) => m.thread === thread), kid: kid.messages.filter((m) => m.thread === thread), device, face, live, realtime: mine.some((m) => m.live) };
 }
@@ -518,7 +519,7 @@ export async function overview(ctx: AppContext, date: string): Promise<Overview>
       if (n) th.misses = n;
     }
     const booking = index.messages.some((m) => (m.bookkeep || m.tidy) && m.result === 'running');
-    tutors.push({ name: t.name, display: t.display, avatar: t.avatar ?? null, subject: t.subject ?? null, color: colors[t.name] ?? NEUTRAL_COLOR, turns: index.messages.length, threads: [...by.values()], booking, extras: t.extras.filter((x) => (x !== 'talk' || ctx.ws.config.talk.enabled)) });
+    tutors.push({ name: t.name, display: t.display, avatar: shownAvatar(t), subject: t.subject ?? null, color: colors[t.name] ?? NEUTRAL_COLOR, turns: index.messages.length, threads: [...by.values()], booking, extras: t.extras.filter((x) => (x !== 'talk' || ctx.ws.config.talk.enabled)) });
   }
   const today = localDate(ctx.now());
   const names = tutors.map((t) => t.name);
@@ -888,9 +889,12 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       return putCardState(ctx, ws, tutor, job, Number(nStr), body);
     }
     // 老师头像(R5b,2026-09-16):cotutor.json 里 avatar 是图片相对路径时(figshot 写的 avatars/<老师>.png)从这里取;
+    // 没写(或还是旧的出厂 emoji)的三门主科给包里的出厂头像(avatars.ts);
     // emoji 头像、越界、不是图、不存在都 404(孩子端退回显示 emoji / 首字)。no-cache:figshot 换了脸孩子端要马上见到
     const av = /^\/api\/kid\/avatar\/([a-z0-9][a-z0-9-]*)$/.exec(p);
     if (av && method === 'GET') {
+      const factory = ws.config.tutors[av[1]] ? factoryAvatarFile(ws.config.tutors[av[1]]) : null;
+      if (factory) return { status: 200, file: factory, contentType: 'image/webp', cacheControl: 'no-cache' };
       const rel = ws.config.tutors[av[1]]?.avatar ?? '';
       const file = resolve(ws.root, rel);
       const ext = IMAGE_EXT.exec(rel)?.[1]?.toLowerCase() ?? '';

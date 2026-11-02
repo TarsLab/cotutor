@@ -18,6 +18,7 @@ import { editPublished, readPublished, type PublishResult } from '../../runtime/
 import { patchConfig } from '../workspace.ts';
 import { tutorColors } from '../../ui/shared/tutor-color.ts';
 import { wordEmoji } from '../../ui/kid/word-emoji.ts';
+import { shownAvatar } from './avatars.ts';
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const bad = (message: string): RouteResult => ({ status: 400, json: { error: 'bad_request', message } });
@@ -60,7 +61,7 @@ export async function parentHome(ctx: AppContext): Promise<Record<string, unknow
     return {
       name,
       display: t.display,
-      avatar: t.avatar ?? null,
+      avatar: shownAvatar(t),
       subject: t.subject ?? null,
       hidden: t.hidden,
       extras: tutorExtras(t, c.talk.enabled),

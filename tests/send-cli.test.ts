@@ -16,7 +16,6 @@ process.env.COTUTOR_BRAIN_ENDPOINT = teacher.baseURL;
 const { initWorkspace } = await import('../src/app/cli/init.ts');
 const { loadWorkspace } = await import('../src/app/workspace.ts');
 const { readIndex, readRunFile } = await import('../src/runtime/journal/store.ts');
-const { createContext } = await import('../src/app/http/app.ts');
 const { localDate } = await import('../src/shared/time.ts');
 const { yamlScalar } = await import('../src/runtime/context/context-pack.ts');
 const { main } = await import('../src/app/cli/main.ts');
@@ -73,12 +72,6 @@ const date = localDate(new Date());
   check('太大的拒,说怎么缩', r2.code !== 0 && /太大/.test(r2.out + r2.err) && /sips/.test(r2.out + r2.err), r2.out + r2.err);
   const r3 = await run(['send', 'chinese-tutor']);
   check('没话也没照片要报用法', r3.code !== 0 && /send 需要老师名和消息/.test(r3.out + r3.err));
-}
-
-{
-  // send 用 warm: false:跑完不留备用老师进程,不然进程挂到 WARM_IDLE_MS 才退
-  const ctx = createContext(loadWorkspace(root), { warm: false });
-  check('warm: false 不预热', (await ctx.runner.prewarm('chinese-tutor')) === false && !ctx.runner.spares.has('chinese-tutor'));
 }
 
 await teacher.close();

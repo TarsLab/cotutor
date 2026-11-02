@@ -1,5 +1,5 @@
 /** cotutor.json 契约:模板可解析、缺省与政策合并、错误即修复指南、运行时占位填充。 */
-import { CotutorConfigSchema, explainIssues, fillRuntime, isApiRuntime, listTutors, MOUTH_VOICE, mouthVoice, resolvePolicy, type CliRuntime } from '../src/schema/index.ts';
+import { CotutorConfigSchema, explainIssues, isApiRuntime, listTutors, MOUTH_VOICE, mouthVoice, resolvePolicy } from '../src/schema/index.ts';
 import { configTemplate, shippedAgents } from '../src/app/cli/skeleton.ts';
 import { check, done } from './_check.ts';
 
@@ -11,7 +11,7 @@ const cfg = CotutorConfigSchema.parse(raw);
 check('模板可解析', cfg.kid.slug === 'ming' && cfg.title === '小明的老师们' && cfg.server.port === 5181);
 check('老师表齐;没有画图老师与它的运行时', Object.keys(cfg.tutors).length === 3 && !('scene-maker' in cfg.tutors) && !('claude-scene' in cfg.runtimes) && !('qwen-scene' in cfg.runtimes));
 check('enabled 缺省 true;出厂老师都开着', cfg.tutors['math-tutor'].enabled === true && Object.values(cfg.tutors).every((t) => t.enabled === true));
-check('出厂运行时:缺省 api(应用直连百炼),api-flash 与 Qwen Code 的两条备用', Object.keys(cfg.runtimes).join() === 'default,api,api-flash,qwen,qwen-flash' && cfg.runtimes.default === 'api');
+check('出厂运行时:缺省 api(应用直连百炼),还有 api-flash;没有 Qwen Code 的了', Object.keys(cfg.runtimes).join() === 'default,api,api-flash' && cfg.runtimes.default === 'api');
 
 const pol = resolvePolicy(cfg, 'math-tutor');
 check('政策缺省 60/10/10/4000,没有每天条数', pol.replyMaxChars === 60 && !('dailyMessages' in pol) && pol.contextPack.recent === 10 && pol.contextPack.planLines === 10 && pol.contextPack.entryChars === 4000 && !('reviewGate' in pol) && !('forms' in pol));
@@ -47,19 +47,12 @@ const lines = bad.success ? [] : explainIssues(bad.error.issues);
 check('指南点名 version', lines.some((l) => l.startsWith('version:')), lines.join(' | '));
 check('指南点名 slug 格式', lines.some((l) => l.startsWith('kid.slug:')), lines.join(' | '));
 check('指南点名空 display', lines.some((l) => l.startsWith('tutors.x.display:') && l.includes('不能为空')), lines.join(' | '));
-const bad2 = CotutorConfigSchema.safeParse({ ...raw, runtimes: { default: 'nope', qwen: raw.runtimes.qwen } });
+const bad2 = CotutorConfigSchema.safeParse({ ...raw, runtimes: { default: 'nope', api: raw.runtimes.api } });
 check('运行时 default 不存在 → 指南', !bad2.success && explainIssues(bad2.error.issues).some((l) => l.includes('runtimes.default') && l.includes('nope')));
 
-const filled = fillRuntime(['{agent}', '{prompt}', '{session}', '{systemBody}', '{boardFile}'], { agent: 'math-tutor', prompt: 'hi', session: 's-1', systemBody: '正文', boardFile: '/ws/board.md' });
-check('占位填充', filled.join() === 'math-tutor,hi,s-1,正文,/ws/board.md');
-// 思考深浅(2026-09-20):政策 effort 三层覆盖,填进模板的 {effort};模板里没有 {effort} 的运行时(qwen)不受影响
-const effortOf = (argv: string[]): string | undefined => argv[argv.indexOf('--effort') + 1];
-const qwenRun = (cfg.runtimes.qwen as CliRuntime).run;
+// 思考深浅(2026-09-20):政策 effort 三层覆盖;API 运行时映射成思考档(src/brain/api.ts)
 check('effort:出厂缺省 low,数学、英语老师 medium;policyDefaults 与老师条目逐层盖', resolvePolicy(cfg, 'chinese-tutor').effort === 'low' && resolvePolicy(cfg, 'math-tutor').effort === 'medium' && resolvePolicy(cfg, 'english-tutor').effort === 'medium' && resolvePolicy(CotutorConfigSchema.parse({ ...raw, policyDefaults: { effort: 'high' } }), 'chinese-tutor').effort === 'high' && resolvePolicy(CotutorConfigSchema.parse({ ...raw, policyDefaults: { effort: 'high' } }), 'math-tutor').effort === 'medium');
 check('effort:不认的档位过不了契约', !CotutorConfigSchema.safeParse({ ...raw, policyDefaults: { effort: 'max' } }).success);
-check('{effort} 通用占位仍可用,qwen 由环境配置控制', effortOf(fillRuntime(['--effort', '{effort}'], { agent: 'x', prompt: 'p', effort: 'medium' })) === 'medium' && !qwenRun.join(' ').includes('{effort}'));
-const q = fillRuntime(qwenRun, { agent: 'x', prompt: 'p' });
-check('没给 systemBody / boardFile 就原样留着(doctor 会报)', q.includes('{systemBody}') && fillRuntime(['{boardFile}'], { agent: 'x', prompt: 'p' }).includes('{boardFile}'));
 
 {
   const { resolvePolicy, POLICY_DEFAULTS } = await import('../src/schema/index.ts');
@@ -76,7 +69,8 @@ check('口语课页不再打电话:talk 只剩开关、读口语单的模型、�
   const withApi = CotutorConfigSchema.safeParse({ ...raw, runtimes: { ...raw.runtimes, default: 'api', api: { api: 'bailian', model: 'qwen3.6-plus', maxSteps: 4 } } });
   const rt = withApi.success ? withApi.data.runtimes.api : null;
   check('API 运行时:{api, model} 过得了契约,default 能指它', withApi.success && typeof rt === 'object' && rt !== null && isApiRuntime(rt) && rt.model === 'qwen3.6-plus' && rt.maxSteps === 4, JSON.stringify(withApi.error?.issues ?? null));
-  check('API 运行时:qwen 那条照旧是 CLI 运行时', withApi.success && !isApiRuntime(withApi.data.runtimes.qwen as CliRuntime));
+  const legacy = CotutorConfigSchema.safeParse({ ...raw, runtimes: { ...raw.runtimes, qwen: { run: ['qwen', '{prompt}'], resume: ['qwen', '--resume', '{session}'], stdin: 'stream-json' } } });
+  check('旧的命令行运行时照样读得进来(用不用得了归 src/brain/runtime.ts)', legacy.success && !isApiRuntime(legacy.data.runtimes.qwen as never), JSON.stringify(legacy.error?.issues ?? null));
   check('API 运行时:不认的家、没写模型过不了契约', !CotutorConfigSchema.safeParse({ ...raw, runtimes: { ...raw.runtimes, x: { api: 'openai', model: 'm' } } }).success && !CotutorConfigSchema.safeParse({ ...raw, runtimes: { ...raw.runtimes, x: { api: 'bailian' } } }).success);
 }
 

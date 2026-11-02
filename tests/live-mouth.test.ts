@@ -55,7 +55,7 @@ for (const t of Object.values(cfg.tutors as Record<string, { runtime?: string }>
 cfg.live = { voices: { 'chinese-tutor': 'Serena' } };
 cfg.kid.name = 'Ray';
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
-const ctx = createContext(loadWorkspace(wsRoot), { warm: false });
+const ctx = createContext(loadWorkspace(wsRoot));
 await ctx.reload();
 // 每次回答完、安静时就换连接:换了连接还接着留
 const upgrade = makeLiveUpgrade({ endpoint: fake.endpoint, swapTokens: 1 });

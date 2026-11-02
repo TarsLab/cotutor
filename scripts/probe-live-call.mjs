@@ -50,7 +50,7 @@ if (runtime === 'api') cfg.runtimes.api = { api: 'bailian', model: 'qwen3.8-max'
 if (runtime) cfg.tutors[tutor].runtime = runtime;
 const brain = cfg.tutors[tutor].runtime ?? cfg.runtimes.default;
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
-const ctx = createContext(loadWorkspace(wsRoot), { warm: false });
+const ctx = createContext(loadWorkspace(wsRoot));
 await ctx.reload();
 const server = createServer(createHandler(ctx));
 const upgrade = makeLiveUpgrade({});

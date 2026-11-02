@@ -10,7 +10,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { cardLabel } from '../board/cards/index.ts';
-import { logParser } from '../brain/index.ts';
+import { parseLogLine } from '../brain/index.ts';
 import { UsageError } from '../shared/errors.ts';
 import type { Workspace } from '../schema/index.ts';
 import { conversationFiles, threads } from '../schema/index.ts';
@@ -177,7 +177,7 @@ export function compareSides(base: { tutor: string; date: string; job: string; e
 async function toolsOf(ws: Workspace, tutor: string, date: string, m: ConversationMessage): Promise<ToolCall[]> {
   if (m.tools) return m.tools;
   const text = await readFile(conversationFiles(ws.dirs.conversations, tutor, date).log(m.job), 'utf8').catch(() => '');
-  return toolCalls(text, logParser(ws.config.runtimes, m.runtime));
+  return toolCalls(text, parseLogLine);
 }
 
 export async function compareReplay(ws: Workspace, tutor: string, date: string, evalJob: string): Promise<Compare | null> {

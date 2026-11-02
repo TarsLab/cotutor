@@ -2233,9 +2233,7 @@ __WORD_DRAW_JS__
   const loadDay = async (silent) => {
     if (!S.tutor || S.reel) return;
     try {
-      // 今天、选了话题:带上它,服务端把 resume 那个预热进程换成这个话题的
-      const warmHint = !S.hist && S.thread ? '?thread=' + encodeURIComponent(S.thread) : '';
-      const d = await api('GET', CONV + S.tutor.name + '/' + (S.hist || 'today') + warmHint);
+      const d = await api('GET', CONV + S.tutor.name + '/' + (S.hist || 'today'));
       setOffline(false);
       S.day = d;
       // 话题:没选过就是当前(末条所在)的;板书只铺这个话题的节。新话题空白态什么都不铺,发出第一句才有话题

@@ -43,7 +43,7 @@ for (const t of Object.values(cfg.tutors as Record<string, { runtime?: string }>
 cfg.live = { voices: { 'chinese-tutor': 'Serena' } };
 cfg.kid.name = 'Ray';
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
-const ctx = createContext(loadWorkspace(wsRoot), { warm: false });
+const ctx = createContext(loadWorkspace(wsRoot));
 await ctx.reload();
 const liveUpgrade = makeLiveUpgrade({ endpoint: fake.endpoint });
 const server = createServer(createHandler(ctx));

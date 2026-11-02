@@ -1,13 +1,13 @@
 /**
- * 流式:老师还在说的时候,从 CLI 的输出事件里拼出「当前这条顶层回复的正文」,给板书的 partial 解析用。
- * 有增量的 CLI(claude 加 `--include-partial-messages`、qwen 0.25 同)每个字来一条 delta,每条新回复前有 start;没有增量开关的只有整条 assistant——两种都认:
+ * 流式:老师还在说的时候,从脑的输出事件里拼出「当前这条顶层回复的正文」,给板书的 partial 解析用。
+ * 增量来的每一小段是一条 delta,每条新回复前有 start;只有整条 assistant 的(旧轮次的一些 CLI)也认:
  * delta 往当前文本上追加,start 时当前段带围栏或 H2 就留下(与 kid-view 的 kidSource 同一条规则:老师板书完再用工具,卡不丢)、否则丢掉,
  * 新段从空开始;顶层 assistant 的正文直接当作当前段(与拼出来的一样)。text() = 留下的段 + 当前段。
- * 子代理的一律跳过。读哪家的输出由 CLI 适配器定(src/brain/cli/),这里只认统一事件。
+ * 子代理的一律跳过(旧轮次的 CLI 才有)。这里只认统一事件(./log.ts 读)。
  */
 
-import { parseStreamJson } from './cli/stream-json.ts';
-import { textsOf, type CliEvent } from './cli/types.ts';
+import { parseLogLine } from './log.ts';
+import { textsOf, type CliEvent } from './types.ts';
 
 export interface PartialReader {
   /** 喂一块 stdout(原始字节,行没收完的先攒着);返回文本有没有变 */
@@ -22,8 +22,8 @@ export interface PartialReader {
 
 const KEEP = /^\s*(?:```|~~~|## )/m;
 
-/** parse:一行输出 → 统一事件(CLI 适配器的 parse);缺省按 stream-json 读 */
-export function createPartialReader(parse: (line: string) => CliEvent[] = parseStreamJson): PartialReader {
+/** parse:一行输出 → 统一事件;缺省 parseLogLine(统一事件,旧轮次的 stream-json 也认) */
+export function createPartialReader(parse: (line: string) => CliEvent[] = parseLogLine): PartialReader {
   let rest = '';
   let text = '';
   // 当前段收到过整条 assistant 了(已进会话,不算「断在半截」)

@@ -29,7 +29,7 @@ writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 mkdirSync(join(root, 'vault', '记忆'), { recursive: true });
 
 let now = new Date(2026, 9, 26, 10, 0);
-const ctx = createContext(loadWorkspace(root), { now: () => now, warm: false });
+const ctx = createContext(loadWorkspace(root), { now: () => now });
 const at = (d: number, h: number, m = 0): Date => new Date(2026, 9, d, h, m);
 /** 孩子说一句(新话题或接着 thread),跑完;now 往后走一分钟 */
 const say = async (text: string, thread?: string): Promise<string> => {

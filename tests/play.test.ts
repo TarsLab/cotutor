@@ -101,7 +101,6 @@ try {
   const del = await route('DELETE', `/api/conversations/math-tutor/${date}/threads/${job}`, ctx);
   check('删话题:play.jsonl 一起删', del.status === 200 && !existsSync(play));
 } finally {
-  await ctx.runner.close?.();
   await teacher.close();
 }
 

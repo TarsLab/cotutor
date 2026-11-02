@@ -32,7 +32,7 @@ writeFileSync(memFile, '---\ncotutor: memory\nagent: math-tutor\n---\n\n- 2026-1
 
 const now = new Date(2026, 9, 30, 16, 0);
 const DATE = '2026-10-30';
-const ctx = createContext(loadWorkspace(root), { now: () => now, warm: false });
+const ctx = createContext(loadWorkspace(root), { now: () => now });
 let thread = '';
 const say = async (text: string): Promise<string> => {
   const s = await ctx.runner.send('math-tutor', { from: 'kid', text, ...(thread ? { thread } : { newThread: true }) });

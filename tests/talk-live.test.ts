@@ -22,7 +22,7 @@ const cfgFile = join(ws, 'cotutor.json');
 const cfg = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, any>;
 cfg.talk = { ...(cfg.talk ?? {}), enabled: true, minutes: 4, note: '这周学方位词' };
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
-const ctx = createContext(loadWorkspace(ws), { warm: false });
+const ctx = createContext(loadWorkspace(ws));
 await ctx.reload();
 
 const id = '2026-10-17-1106';

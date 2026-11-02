@@ -24,19 +24,19 @@ try {
   const rep = (await get('/api/workspace')).json as { workspace: string; tutors: string[] };
   check('workspace 回报脱敏', rep.workspace.startsWith('$HOME') && rep.tutors.length === 3, JSON.stringify(rep));
   const cfg = (await get('/api/config')).json as { title: string; runtimes: string[]; tutors: { name: string; policy: { replyMaxChars: number } }[]; tutorPatches: Record<string, unknown> };
-  check('配置接口带老师、政策、运行时名', cfg.title === '小明的老师们' && cfg.tutors.length === 3 && cfg.tutors[0].policy.replyMaxChars === 60 && cfg.runtimes.join() === 'api,api-flash,qwen,qwen-flash' && 'chinese-tutor' in cfg.tutorPatches);
+  check('配置接口带老师、政策、运行时名', cfg.title === '小明的老师们' && cfg.tutors.length === 3 && cfg.tutors[0].policy.replyMaxChars === 60 && cfg.runtimes.join() === 'api,api-flash' && 'chinese-tutor' in cfg.tutorPatches);
   check('孩子端老师列表不含 hidden', ((await get('/api/tutors?kid=1')).json as unknown[]).length === 3);
   // 政策文件补缺:新 workspace 没有差异;老 workspace 的差异由 /api/config 带给设置页,POST 补(与 cotutor upgrade --config 同一条路)
   check('新 workspace 没有可补的出厂件', ((await get('/api/config')).json as { migrate: unknown[] }).migrate.length === 0);
   {
     const cfgFile = join(root, 'cotutor.json');
     const raw = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, any>;
-    delete raw.runtimes.qwen;
+    delete raw.runtimes['api-flash'];
     writeFileSync(cfgFile, `${JSON.stringify(raw, null, 2)}\n`);
     await ctx.reload();
-    check('缺的出厂运行时出现在 /api/config 的 migrate 里', ((await get('/api/config')).json as { migrate: { path: string }[] }).migrate.map((g) => g.path).join() === 'runtimes.qwen');
+    check('缺的出厂运行时出现在 /api/config 的 migrate 里', ((await get('/api/config')).json as { migrate: { path: string }[] }).migrate.map((g) => g.path).join() === 'runtimes.api-flash');
     const done = await route('POST', '/api/config/migrate', ctx);
-    check('POST /api/config/migrate 补上并热重载', done.status === 200 && (done.json as { applied: boolean }).applied && ((await get('/api/config')).json as { migrate: unknown[] }).migrate.length === 0 && 'qwen' in (JSON.parse(readFileSync(cfgFile, 'utf8')) as { runtimes: Record<string, unknown> }).runtimes);
+    check('POST /api/config/migrate 补上并热重载', done.status === 200 && (done.json as { applied: boolean }).applied && ((await get('/api/config')).json as { migrate: unknown[] }).migrate.length === 0 && 'api-flash' in (JSON.parse(readFileSync(cfgFile, 'utf8')) as { runtimes: Record<string, unknown> }).runtimes);
   }
   check('首页 html 是板书页,没有家长入口', (await get('/')).html?.includes('发消息或按住说话') === true && (await get('/')).html?.includes('/parent') === false);
   // 主题:页面 link /kid/theme.css;css 与清单从 workspace 的 themes/default/ 现读;改了 css 不重起就换

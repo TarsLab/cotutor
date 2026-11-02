@@ -11,5 +11,5 @@ export * from '../memory/plan.ts';
 export * from '../runtime/journal/ledger.ts';
 export * from '../runtime/journal/conversation.ts';
 export * from '../shared/time.ts';
-export * from '../brain/cli/run-plan.ts';
+export * from '../brain/runtime.ts';
 export * from '../memory/timetable.ts';

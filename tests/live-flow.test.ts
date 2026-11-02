@@ -39,7 +39,7 @@ cfg.tutors['chinese-tutor'].voice = 'v-chinese';
 cfg.live = { voices: { 'chinese-tutor': 'Serena' } };
 cfg.kid.name = 'Ray';
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
-const ctx = createContext(loadWorkspace(wsRoot), { warm: false });
+const ctx = createContext(loadWorkspace(wsRoot));
 await ctx.reload();
 const finished: [string, string][] = [];
 // 心跳缺省 30 秒,前面几段跑不到;断线那段改短

@@ -1,13 +1,13 @@
 /**
- * 老师进程的转录(.log,一行一个 JSON)→ 家长视图条目 + 最终文本。起初抄自 growth-apps 的 gen-transcript(2026-08-26,claude 2.1.220),
- * 现在按 CLI 适配器读成统一事件再拼(src/brain/cli/,缺省 stream-json,claude / qwen 同族):子代理的条目标 sub,
- * 收尾的最终正文单独取出作 final——各家 CLI 都有的稳定锚点,孩子视图只看它。
+ * 一轮的转录(.log,一行一个 JSON)→ 家长视图条目 + 最终文本。起初抄自 growth-apps 的 gen-transcript(2026-08-26,claude 2.1.220),
+ * 现在读成统一事件再拼(./log.ts:API 轮次的统一事件,旧轮次的 stream-json):子代理的条目标 sub(旧轮次的 CLI 才有),
+ * 收尾的最终正文单独取出作 final,孩子视图只看它。
  */
-import { parseStreamJson } from './cli/stream-json.ts';
-import type { CliEvent, CliFinal, RequestUsage } from './cli/types.ts';
+import { parseLogLine } from './log.ts';
+import type { CliEvent, CliFinal, RequestUsage } from './types.ts';
 import { tokenText } from '../shared/tokens.ts';
 
-/** 一行输出 → 统一事件(CLI 适配器的 parse) */
+/** 一行输出 → 统一事件(./log.ts) */
 export type LineParser = (line: string) => CliEvent[];
 
 export interface TranscriptItem {
@@ -20,7 +20,7 @@ export interface TranscriptItem {
 
 export type TranscriptRow = TranscriptItem | { kind: 'fold'; tools: TranscriptItem[] };
 
-/** 收尾:result 的最终正文、成没成、费用或 token(见 src/brain/cli/types.ts 的 CliFinal) */
+/** 收尾:result 的最终正文、成没成、费用或 token(见 ./types.ts 的 CliFinal) */
 export type TranscriptFinal = CliFinal;
 
 export interface Transcript {
@@ -98,7 +98,7 @@ export function toolArg(input: Record<string, unknown> | undefined): string {
   return '';
 }
 
-export function toolCalls(text: string, parse: LineParser = parseStreamJson): ToolCall[] {
+export function toolCalls(text: string, parse: LineParser = parseLogLine): ToolCall[] {
   const calls: ToolCall[] = [];
   const byId = new Map<string, ToolCall>();
   for (const line of text.split('\n')) {
@@ -123,7 +123,7 @@ export function toolCalls(text: string, parse: LineParser = parseStreamJson): To
   return calls;
 }
 
-export function parseTranscript(text: string, parse: LineParser = parseStreamJson): Transcript {
+export function parseTranscript(text: string, parse: LineParser = parseLogLine): Transcript {
   let sessionId: string | null = null;
   const items: TranscriptItem[] = [];
   let final: TranscriptFinal | null = null;

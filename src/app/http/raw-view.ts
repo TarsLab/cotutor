@@ -12,7 +12,7 @@ import { conversationFiles, type CardStateFile } from '../../schema/index.ts';
 import { kidSource, truncateReply } from '../../runtime/kid-view.ts';
 import type { BoardCard, BoardSection } from '../../board/presentation.ts';
 import { foldRuns, toolCalls, type ToolCall, type TranscriptRow } from '../../brain/transcript.ts';
-import { logParser, toolKind, type ToolKind } from '../../brain/index.ts';
+import { parseLogLine, toolKind, type ToolKind } from '../../brain/index.ts';
 import { resolvePolicy, type ConversationMessage } from '../../schema/index.ts';
 import type { Workspace } from '../../schema/index.ts';
 import { readErrLog, readIndex, readRunFile, readTranscript, scanCards, type RunSources } from '../../runtime/journal/store.ts';
@@ -131,7 +131,7 @@ export async function rawView(ws: Workspace, tutor: string, date: string, job: s
   if (!m) return null;
   const files = conversationFiles(ws.dirs.conversations, tutor, date);
   const policy = resolvePolicy(ws.config, tutor);
-  const transcript = await readTranscript(ws, tutor, date, job, m.runtime);
+  const transcript = await readTranscript(ws, tutor, date, job);
   const pack = await readRunFile(ws, tutor, date, job);
   const blocks = (transcript?.items ?? []).filter((i) => i.kind === 'text' && !i.sub).map((i) => i.text.trim());
   const src = (transcript ? kidSource(transcript) : null) ?? '';
@@ -165,7 +165,7 @@ export async function rawView(ws: Workspace, tutor: string, date: string, job: s
 
   const err = await readErrLog(ws, tutor, date, job);
   // 读了什么:索引里物化过的优先(和当时一致),没有(老轮次)就从 .log 现抽
-  const tools = (m.tools ?? toolCalls(await readFile(files.log(job), 'utf8').catch(() => ''), logParser(ws.config.runtimes, m.runtime))).map((t) => ({ ...t, kind: toolKind(t.name) }));
+  const tools = (m.tools ?? toolCalls(await readFile(files.log(job), 'utf8').catch(() => ''), parseLogLine)).map((t) => ({ ...t, kind: toolKind(t.name) }));
   const toolFiles = new Set(tools.filter((t) => t.kind === 'read' && t.arg).map((t) => t.arg)).size;
   const toolFailed = tools.filter((t) => t.ok === false).length;
   const events = parseEvents(await readFile(files.events(job), 'utf8').catch(() => ''));

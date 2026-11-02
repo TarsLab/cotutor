@@ -547,8 +547,7 @@ export async function main(argv: string[]): Promise<void> {
           if (data.length > PHOTO_MAX_BYTES) throw new UsageError(`--photo ${f} 太大(${(data.length / 1e6).toFixed(1)} MB,最多 ${PHOTO_MAX_BYTES / 1e6} MB);先缩,如 sips -s format jpeg -Z 2000 ${f} --out x.jpg`);
           photos.push(await writeCapture(ws, new Date(), data, ext === 'png' ? 'png' : 'jpg'));
         }
-        // 不预热:send 跑完就退,备用进程会把这个进程挂住(WARM_IDLE_MS)
-        const ctx = createContext(ws, { warm: false });
+        const ctx = createContext(ws);
         // 现场打印每道工序的事件(--quiet / --json 不打);事件同时落在 events.jsonl,事后 cotutor trace 能回放
         if (!json && flags.quiet !== true) {
           const keep = laneFilter(typeof flags.lane === 'string' ? flags.lane : undefined);

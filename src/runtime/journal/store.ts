@@ -10,7 +10,7 @@ import { emptyIndex } from './conversation.ts';
 import { localDate } from '../../shared/time.ts';
 import { cardAssetName, conversationFiles, threads, tutorFilePath, type CardAssets, type CardStateFile, type CardStates } from '../../schema/index.ts';
 import { parseTranscript, type Transcript } from '../../brain/transcript.ts';
-import { logParser } from '../../brain/index.ts';
+import { parseLogLine } from '../../brain/index.ts';
 import {
   ConversationIndexSchema,
   DATE_RE,
@@ -72,10 +72,10 @@ export async function listDates(ws: Workspace, tutor: string): Promise<string[]>
   }
 }
 
-/** runtime:这轮的运行时名(消息上记着),按它的 CLI 适配器读;不给按 stream-json */
-export async function readTranscript(ws: Workspace, tutor: string, date: string, job: string, runtime?: string): Promise<Transcript | null> {
+/** 一轮的转录:统一事件,旧轮次的 stream-json 也读(src/brain/log.ts) */
+export async function readTranscript(ws: Workspace, tutor: string, date: string, job: string): Promise<Transcript | null> {
   try {
-    return parseTranscript(await readFile(conversationFiles(ws.dirs.conversations, tutor, date).log(job), 'utf8'), logParser(ws.config.runtimes, runtime));
+    return parseTranscript(await readFile(conversationFiles(ws.dirs.conversations, tutor, date).log(job), 'utf8'), parseLogLine);
   } catch {
     return null;
   }
@@ -202,7 +202,7 @@ export interface RunFile {
   session: string | null;
   /** 老师文件与技能的快照;2026-09-15 之前的轮次没有 */
   sources?: RunSources;
-  /** 这个运行时把老师正文塞进了命令行({agentBody} / {systemBody}) */
+  /** 老师正文进了系统提示(API 运行时总是;旧轮次看那时的命令模板) */
   agentBody: boolean;
 }
 
@@ -262,7 +262,7 @@ export async function snapshotSources(ws: Workspace, name: string): Promise<RunS
   return { agent, skills };
 }
 
-/** 老师文件正文(系统提示),给 {agentBody} / {systemBody};从 agents/<name>.md 读(所有运行时都从这里拿) */
+/** 老师文件正文(系统提示的前半);从 agents/<name>.md 读 */
 export async function readAgentBody(ws: Workspace, name: string): Promise<string> {
   const file = tutorFilePath(ws.dirs.agents, name);
   try {

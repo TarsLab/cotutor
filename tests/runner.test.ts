@@ -19,7 +19,7 @@ const { initWorkspace } = await import('../src/app/cli/init.ts');
 const { loadWorkspace } = await import('../src/app/workspace.ts');
 const { createContext, route } = await import('../src/app/http/app.ts');
 const { parseTranscript } = await import('../src/brain/transcript.ts');
-const { parseEventLine } = await import('../src/brain/api.ts');
+const { parseEventLine } = await import('../src/brain/log.ts');
 /** 发出这段上下文包的那次请求带了哪些工具;没找到那次请求 → null */
 const toolsOf = (prompt: string): string[] | null => {
   const tail = JSON.stringify(prompt.slice(-200)).slice(1, -1);
@@ -92,7 +92,7 @@ try {
     check('pack 干跑:不写盘', !existsSync(join(root, 'conversations', 'math-tutor')));
     // 按老师配卡(《卡片协议.md》「谁拿到哪些卡」):init 给出厂老师写了 cards,板书写法按清单从包里现拼;API 运行时放进系统提示,上下文包只写「已在系统提示里」
     const { boardGuideOf } = await import('../src/runtime/runner.ts');
-    const guideOf = async (w: ReturnType<typeof loadWorkspace>, tutor: string): Promise<string> => (await boardGuideOf(w, tutor))?.body ?? '';
+    const guideOf = async (w: ReturnType<typeof loadWorkspace>, tutor: string): Promise<string> => (await boardGuideOf(w, tutor)) ?? '';
     const mathGuide = await guideOf(loadWorkspace(root), 'math-tutor');
     check('上下文包:板书写法已在系统提示里', (r.pack.boardGuide ?? '').startsWith('已在你的系统提示里'), String(r.pack.boardGuide));
     check('按老师裁的板书写法:数学有选择题、画板、作业照片,没有田字格 / 单词 / 点读', mathGuide.startsWith('# 板书怎么写') && mathGuide.includes('### choice') && mathGuide.includes('### canvas') && mathGuide.includes('## 作业照片') && !mathGuide.includes('### tianzige') && !mathGuide.includes('### word') && !mathGuide.includes('### read'), mathGuide.slice(0, 200));
@@ -109,7 +109,7 @@ try {
     check('只讲 text / read 的老师:板书写法没有选择题那句、没有作业照片;守则没有小课堂那几段;数学的守则有「想要小课堂」(看完怎么聊搬进了 小课堂 activity)', gk.includes('### read') && !gk.includes('能选,就配一张') && !gk.includes('## 作业照片') && !kRules.includes('小课堂') && kRules.includes('## 记忆') && mRules.includes('## 想要小课堂') && !mRules.includes('孩子刚看完小课堂') && !mRules.includes('{{'), kRules.slice(0, 200));
     const wsAll = loadWorkspace(root);
     delete wsAll.config.tutors['chinese-tutor'].cards;
-    check('没写 cards → 照旧递出厂的 SKILL.md(全部卡)', (await boardGuideOf(wsAll, 'chinese-tutor'))?.path === '.agents/skills/cotutor-board/SKILL.md');
+    check('没写 cards → 照旧递出厂的 SKILL.md(全部卡)', (await guideOf(wsAll, 'chinese-tutor')).includes('### tianzige') && (await guideOf(wsAll, 'chinese-tutor')).includes('### choice'));
     const rs = await ctx.runner.send('science-tutor', { from: 'kid', text: '你好', newThread: true });
     await wait('science-tutor');
     const runS = JSON.parse(readFileSync(join(root, 'conversations', 'science-tutor', `2026-09-08.${rs.job}.run.json`), 'utf8')) as { prompt: string };

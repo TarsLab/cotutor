@@ -4,8 +4,7 @@
  * cotutor.json 是**政策文件**:init 只在缺失时写模板,已有的那份机器永不改(家长的决定不由机器代做)。
  * 代价是包更新带来的新出厂件不会自己出现在老 workspace 里,而且「没有」的表现是**静默**的——
  * 所以有这一层:把「出厂模板有、你这份没有」算出来(doctor 的 `config.migrate` 点名、家长端设置页顶部提示),
- * `cotutor upgrade --config` 只**补缺**——加缺的键、往命令模板里插缺的旗标;家长写过的值一个都不动
- * (改小的预算、加过的 `-m qwen3.8-flash`、换掉的 default 运行时全都原样留着)。
+ * `cotutor upgrade --config` 只**补缺**——加缺的键;家长写过的值一个都不动(改小的预算、换掉的 default 运行时全都原样留着)。
  * 唯一删的是 RETIRED 里点了名的出厂段(机器写进去、应用已经不读的,如 2026-10-31 的 tts);家长自己加的键不在表里,不碰。
  *
  * 差异是**现算的**:拿家长自己的 slug / name / port 生成一份出厂模板,和她这份逐项比,
@@ -20,11 +19,11 @@ import { installTutors, type InstallStep } from './tutors.ts';
 import { CONFIG_FILE, ConfigError, readJson } from '../workspace.ts';
 
 /** section:出厂模板里有的整段(dictation 这种后加的),你这份没有;retired:出厂写进去、应用已经不读的整段,补缺时删掉 */
-export type GapKind = 'tutor' | 'runtime' | 'flag' | 'cards' | 'section' | 'retired';
+export type GapKind = 'tutor' | 'runtime' | 'cards' | 'section' | 'retired';
 
 export interface ConfigGap {
   kind: GapKind;
-  /** 点位:tutors.math-tutor / runtimes.qwen / runtimes.qwen.run */
+  /** 点位:tutors.math-tutor / runtimes.api-flash / dictation */
   path: string;
   /** 人话:缺的是什么、补上有什么用 */
   detail: string;
@@ -33,40 +32,6 @@ export interface ConfigGap {
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
-
-/** 命令模板里一个旗标带几个词:`--output-format stream-json` 是两个,`--include-partial-messages` 是一个(值不以 - 打头) */
-function flagSpan(argv: readonly string[], i: number): string[] {
-  const span = [argv[i] as string];
-  for (let j = i + 1; j < argv.length && !(argv[j] as string).startsWith('-'); j++) span.push(argv[j] as string);
-  return span;
-}
-
-/**
- * 把出厂模板里有、这份没有的旗标插进来,**位置照出厂模板**:
- * 插到「出厂模板里排在它前面、这份也有」的那个旗标之后;一个都找不到就放末尾。
- * 已经有的旗标一律不碰——值被家长改过(预算 2 → 5)是她的决定。
- */
-export function insertMissingFlags(mine: readonly string[], factory: readonly string[]): { argv: string[]; added: string[] } {
-  const argv = [...mine];
-  const added: string[] = [];
-  for (let i = 0; i < factory.length; i++) {
-    const tok = factory[i] as string;
-    if (!tok.startsWith('-') || argv.includes(tok)) continue;
-    const span = flagSpan(factory, i);
-    let at = argv.length;
-    for (let j = i - 1; j >= 0; j--) {
-      const prev = factory[j] as string;
-      if (!prev.startsWith('-')) continue;
-      const k = argv.indexOf(prev);
-      if (k === -1) continue;
-      at = k + flagSpan(argv, k).length;
-      break;
-    }
-    argv.splice(at, 0, ...span);
-    added.push(...span);
-  }
-  return { argv, added };
-}
 
 /** 出厂模板:拿这份配置自己的 slug / name / port 生成,免得差异里混进「孩子叫什么」这种无关项 */
 async function factoryConfig(raw: Record<string, unknown>, agentsDir?: string): Promise<Record<string, unknown>> {
@@ -111,22 +76,6 @@ export async function configGaps(raw: unknown, agentsDir?: string): Promise<Conf
   for (const [name, rt] of Object.entries(factoryRuntimes)) {
     if (name === 'default' || name in mineRuntimes) continue;
     gaps.push({ kind: 'runtime', path: `runtimes.${name}`, detail: `出厂运行时 ${name} 不在 runtimes 里`, value: rt });
-  }
-  for (const [name, rt] of Object.entries(factoryRuntimes)) {
-    if (name === 'default' || !isObj(rt)) continue;
-    const mine = mineRuntimes[name];
-    if (!isObj(mine)) continue; // 整个运行时都缺,上面那轮已经报了
-    // 出厂模板换了说话方式(消息改走 stdin)而你的改过:逐个补旗标会拼出过不了契约的模板,不动(家长的决定)
-    if (rt.stdin && !mine.stdin) continue;
-    for (const key of ['run', 'resume'] as const) {
-      const f = rt[key];
-      const u = mine[key];
-      if (!Array.isArray(f) || !Array.isArray(u)) continue;
-      const { argv, added } = insertMissingFlags(u as string[], f as string[]);
-      if (!added.length) continue;
-      const what = `缺出厂旗标 ${added.join(' ')}`;
-      gaps.push({ kind: 'flag', path: `runtimes.${name}.${key}`, detail: `${name} 的 ${key} 命令模板${what}`, value: argv });
-    }
   }
   // 后加的整段(2026-10-10 听写的拍照认词要求):写进文件家长才看得见、改得动;已经有这一段就不碰
   for (const key of SECTIONS) {

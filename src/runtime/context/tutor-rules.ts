@@ -7,7 +7,7 @@ import { parseAgentFile } from '../agent-file.ts';
 import { stripHumanNotes } from '../../shared/human-notes.ts';
 import { applyCardGuards } from '../../board/card-guards.ts';
 import { BOARD_CARD_KINDS } from '../../schema/config.ts';
-import { toolKind } from '../../brain/cli/adapters.ts';
+import { toolKind } from '../../brain/index.ts';
 import { SKILLS_DIR } from '../../schema/workspace.ts';
 
 export const TUTOR_SKILL = 'cotutor-tutor';
@@ -44,8 +44,8 @@ export function boardGuideBody(skillMd: string): string {
 export const BOARD_GUIDE_IN_SYSTEM = '已在你的系统提示里(「# 板书怎么写」),不用读';
 
 /**
- * 回归检查(与 CLI 无关):板书写法已经递到手里,老师这轮还用工具去读它 → 预载没起作用(换模型 / 换 CLI / 升版本后最先坏的地方)。
- * 认三种:技能工具(claude 的 Skill、qwen 的 skill,按 src/brain/cli/ 的工具类别认)点名 cotutor-board;任何工具的参数里带 cotutor-board/SKILL.md(Read、cat、别家 CLI 的读文件工具),或按老师裁的那份 .cotutor/board/。
+ * 回归检查:板书写法已经在系统提示里,老师这轮还用工具去读它 → 系统提示里那份没起作用(换模型后最先坏的地方)。
+ * 认三种:技能工具(旧轮次 claude 的 Skill、qwen 的 skill,按工具类别认)点名 cotutor-board;任何工具的参数里带 cotutor-board/SKILL.md(read_file 等),或旧轮次按老师裁的那份 .cotutor/board/。
  * references/<种类>.md 是按需读的,不算。
  */
 export function boardGuideReads(tools: readonly { name: string; arg: string }[]): string[] {

@@ -1,5 +1,5 @@
-/** 运行规划:同运行时有会话 → resume;跨运行时 / 无会话 → 新开;{agentBody} 只给用到它的运行时;ISO 周;recent 取材。 */
-import { boardPreloaded, getRuntime, planRun, runtimeUses } from '../src/brain/cli/run-plan.ts';
+/** 运行时:按名字找、不存在的报可用的;旧的命令行运行时读得进来、用不了;换运行时后的会话;回读检查;守则裁剪;ISO 周。 */
+import { getRuntime, runtimeIssue } from '../src/brain/runtime.ts';
 import { boardGuideReads, tutorRulesBody } from '../src/runtime/context/tutor-rules.ts';
 import { isoWeek } from '../src/memory/plan.ts';
 import { applyRun, emptyIndex, addMessage } from '../src/runtime/journal/conversation.ts';
@@ -9,27 +9,16 @@ import { configTemplate, shippedAgents } from '../src/app/cli/skeleton.ts';
 import { parseConfig } from '../src/app/workspace.ts';
 import { check, done } from './_check.ts';
 
-// 这里规划的是 CLI:出厂缺省是 api(应用直连百炼,不起命令行),缺省换成 Qwen Code 那条
 const tpl = JSON.parse(configTemplate({ slug: 'ming', tutors: await shippedAgents() })) as { runtimes: Record<string, unknown> };
-const config = parseConfig({ ...tpl, runtimes: { ...tpl.runtimes, default: 'qwen' } }, 'x');
-const vars = { agent: 'math-tutor', prompt: 'cotutor:\n  from: kid\n---\n不懂\n', agentBody: '正文', systemBody: '正文', root: '/ws' };
+const qwenRt = { run: ['qwen', '-m', 'qwen3.8-max'], resume: ['qwen', '--resume', '{session}'] };
+const config = parseConfig({ ...tpl, runtimes: { ...tpl.runtimes, qwen: qwenRt } }, 'x');
 
 {
-  const fresh = planRun(config, { session: null }, vars);
-  check('无会话 → run,缺省 Qwen,消息走 stdin', fresh.runtime === 'qwen' && !fresh.resume && fresh.argv[0] === 'qwen' && !fresh.argv.includes('--resume') && !fresh.argv.includes(vars.prompt) && JSON.parse(fresh.stdin!).message.content === vars.prompt);
-  check('思考量由环境配置控制;工具是只读白名单', planRun(config, { session: null }, { ...vars, effort: 'medium' }).env.QWEN_CODE_SYSTEM_SETTINGS_PATH.endsWith('effort-low.json') && planRun(config, { session: { id: 's-1', runtime: 'qwen' } }, { ...vars, effort: 'high' }).env.QWEN_CODE_SYSTEM_SETTINGS_PATH.endsWith('effort-xhigh.json') && fresh.argv[fresh.argv.indexOf('--core-tools') + 1] === 'read_file,glob,grep_search');
-  const again = planRun(config, { session: { id: 's-1', runtime: 'qwen' } }, vars);
-  check('同运行时有会话 → resume 带 id', again.resume && again.session === 's-1' && again.argv[again.argv.indexOf('--resume') + 1] === 's-1');
-  const switched = planRun(config, { session: { id: 's-1', runtime: 'qwen' } }, { ...vars, systemBody: '正文\n\n板书写法', runtime: 'qwen-flash' });
-  check('换模型运行时 → 新开,不带原会话 id', switched.runtime === 'qwen-flash' && !switched.resume && !switched.argv.includes('s-1'));
-  check('Qwen 模板拿到老师正文 + 板书写法', switched.argv.includes('正文\n\n板书写法') && runtimeUses(config.runtimes.qwen as { run: string[]; resume: string[] }, '{systemBody}'));
-  let threw = '';
-  try {
-    getRuntime(config, 'gemini');
-  } catch (e) {
-    threw = (e as Error).message;
-  }
-  check('不存在的运行时 → 报错列出可用的', threw.includes('gemini') && threw.includes('qwen-flash') && threw.includes('qwen'), threw);
+  check('出厂只有 API 运行时:缺省 api,还有 api-flash', JSON.stringify(Object.keys(tpl.runtimes)) === JSON.stringify(['default', 'api', 'api-flash']) && tpl.runtimes.default === 'api', JSON.stringify(Object.keys(tpl.runtimes)));
+  check('按名字找;缺省 runtimes.default', getRuntime(config).name === 'api' && getRuntime(config, 'api-flash').runtime.model === 'qwen3.8-flash');
+  const err = (name: string): string => { try { getRuntime(config, name); return ''; } catch (e) { return (e as Error).message; } };
+  check('不存在的运行时 → 报错列出可用的', err('gemini').includes('gemini') && err('gemini').includes('api-flash'), err('gemini'));
+  check('旧的命令行运行时:配置读得进来,用不了,说改成 api', config.runtimes.qwen !== undefined && err('qwen').includes('不再支持') && err('qwen').includes('api') && runtimeIssue(qwenRt) === runtimeIssue({ run: ['claude'], resume: ['claude'] }) && runtimeIssue({ api: 'bailian', model: 'm' }) === null, err('qwen'));
 }
 {
   // 换运行时后 applyRun 要把索引里的会话换成新的(不然下一条又拿旧 id 去 resume)
@@ -48,14 +37,9 @@ const vars = { agent: 'math-tutor', prompt: 'cotutor:\n  from: kid\n---\n不懂\
   check('出错写 error 原因', bad.messages[0].result === 'error' && bad.messages[0].error === 'error_max_turns');
 }
 {
-  const rt = (run: string[]) => ({ run, resume: run });
-  check('板书预载的判断:{boardFile} / {systemBody} / 头一版写死的路径算预载;什么都没有(codex 之类)不算', boardPreloaded(rt(['fake', '--board-file', '{boardFile}'])) && boardPreloaded(rt(['qwen', '--append-system-prompt', '{systemBody}'])) && boardPreloaded(rt(['fake', '--board-file', '../../.claude/skills/cotutor-board/SKILL.md'])) && !boardPreloaded(rt(['codex', 'exec', '{prompt}'])) && !boardPreloaded(rt(['qwen', '--append-system-prompt', '{agentBody}'])));
-  const cfg = parseConfig(JSON.parse(configTemplate({ slug: 'x', name: 'x', tutors: [] })), 'x');
-  const p2 = planRun(cfg, { session: null }, { agent: 'math-tutor', prompt: 'hi', agentBody: 'A', systemBody: 'A\n\nB', runtime: 'qwen' });
-  check('占位符:Qwen 填 systemBody;没给值的原样留着', p2.argv.includes('A\n\nB') && planRun(cfg, { session: null }, { agent: 'a', prompt: 'hi', runtime: 'qwen' }).argv.includes('{systemBody}'));
   const reads = boardGuideReads([{ name: 'Skill', arg: 'cotutor-board' }, { name: 'Read', arg: '/ws/.agents/skills/cotutor-board/SKILL.md' }, { name: 'Bash', arg: 'cat ../../.agents/skills/cotutor-board/SKILL.md' }, { name: 'Read', arg: '/ws/.agents/skills/cotutor-board/references/choice.md' }, { name: 'Skill', arg: 'cotutor-home' }]);
-  check('回读检查:Skill 点名、Read / cat SKILL.md 都算;references 与别的技能不算', reads.length === 3 && !reads.join().includes('choice.md') && !reads.join().includes('cotutor-home'), JSON.stringify(reads));
-  check('按老师裁的那份也算回读', boardGuideReads([{ name: 'Read', arg: '/ws/.cotutor/board/math-tutor-1a2b3c4d.md' }]).length === 1);
+  check('回读检查:Skill 点名、Read / cat SKILL.md 都算(旧轮次的工具名);references 与别的技能不算', reads.length === 3 && !reads.join().includes('choice.md') && !reads.join().includes('cotutor-home'), JSON.stringify(reads));
+  check('read_file 读 SKILL.md 算回读;旧轮次按老师裁的那份也算', boardGuideReads([{ name: 'read_file', arg: '.agents/skills/cotutor-board/SKILL.md' }]).length === 1 && boardGuideReads([{ name: 'Read', arg: '/ws/.cotutor/board/math-tutor-1a2b3c4d.md' }]).length === 1);
   const guarded = '---\nname: x\n---\n\n# 守则\n\n{{有 lecture}}\n## 小课堂\n- 放一段\n{{/有}}\n\n## 记忆\n';
   check('守则按老师的卡裁:没给 = 全有;没有 lecture 那段去掉;守卫写坏了只去掉守卫行', tutorRulesBody(guarded).includes('## 小课堂') && !tutorRulesBody(guarded).includes('{{') && !tutorRulesBody(guarded, ['text']).includes('小课堂') && tutorRulesBody(guarded, ['text']).includes('## 记忆') && tutorRulesBody('# 守则\n{{有 lecture}}\n- 一条\n', ['text']) === '# 守则\n- 一条');
   const rules = tutorRulesBody('---\nname: x\n---\n\n<!-- 给人看\n谁读:老师\n-->\n\n# 守则\n\n- 一条\n<!-- 为什么:因为 -->\n- 两条 <!-- 行内的留着 -->\n\n<!--\n  多行\n-->\n## 尾\n');

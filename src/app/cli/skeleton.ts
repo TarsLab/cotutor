@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseAgentFile } from '../../runtime/agent-file.ts';
 import { CONFIG_SCHEMA_FILE, DICTATION_DEFAULT, cotutorJsonSchema, type BoardCardKind } from '../../schema/index.ts';
-import { FACTORY_API_RUNTIMES, factoryRuntimes } from '../../brain/index.ts';
+import { FACTORY_API_RUNTIMES } from '../../brain/index.ts';
 import { DEFAULT_GRADE, PACKAGE_GRADES_DIR } from './grades.ts';
 
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -58,7 +58,7 @@ talk/
 captures/
 # 家长在 workspace 里用 Claude Code 时它的个人设置
 .claude/settings.local.json
-# .cotutor/ 是机器文件(板书写法缓存、配音缓存、二维码、日志、CLI 壳、qwen 的家),只留出厂 hash 与 schema
+# .cotutor/ 是机器文件(板书写法缓存、配音缓存、二维码、日志),只留出厂 hash 与 schema
 .cotutor/*
 !.cotutor/shipped.json
 !.cotutor/cotutor.schema.json
@@ -145,7 +145,7 @@ export interface ConfigTemplateInput {
 /** 出厂老师的条目;cards = 板书写法里讲哪几种卡(《卡片协议.md》「谁拿到哪些卡」,2026-10-07),text 总在;
  *  不写 avatar:三门主科用包里的出厂头像(src/app/http/avatars.ts) */
 const TUTOR_DEFAULTS: Record<string, { display: string; subject?: string; hidden?: boolean; runtime?: string; enabled?: boolean; cards?: BoardCardKind[]; policy?: { effort?: 'low' | 'medium' | 'high'; tools?: 'on' } }> = {
-  // 数学多想一会儿:算错的代价大(别的老师用缺省 low);走 qwen3.8-max(同语文老师)。运行时 api = 应用直连百炼(2026-10-31 起出厂缺省;Qwen Code 那条是 qwen)
+  // 数学多想一会儿:算错的代价大(别的老师用缺省 low);走 qwen3.8-max(同语文老师)。运行时 api = 应用直连百炼(2026-10-31 起出厂缺省)
   'math-tutor': { display: '数学老师', subject: '数学', runtime: 'api', cards: ['text', 'choice', 'image', 'lecture', 'canvas', 'code'], policy: { effort: 'medium' } },
   // 画图卡(paint)不在这里:只在「你说我画」activity 的话题里有(agents/chinese-tutor/activities/你说我画.md 头上的 cards)
   // 语文老师走 qwen3.8-max(你说我画、看图说话两套 activity eval 在它上面验证;2026-10-31 Ray 上 API 与 Qwen Code 对照过)
@@ -173,9 +173,8 @@ export function configTemplate(input: ConfigTemplateInput): string {
     paths: {},
     policyDefaults: {},
     tutors,
-    // 缺省 api:应用直连百炼,家长端「首页」填一次按量 key + 业务空间 id 就能用(2026-10-31)。
-    // Qwen Code 那两条留作备用(开发者、有 Token Plan 的):由适配器给(src/brain/cli/<cli>.ts 的 runtimes(),旗标为什么这么写的注释也在那里)
-    runtimes: { default: 'api', ...FACTORY_API_RUNTIMES, ...factoryRuntimes() },
+    // 缺省 api:应用直连百炼,家长端「首页」填一次按量 key + 业务空间 id 就能用(2026-10-31);2026-11-02 起只有 API 运行时
+    runtimes: { default: 'api', ...FACTORY_API_RUNTIMES },
     // 听写的拍照认词:模型与挑词要求(prompt 一行一个字符串)写进文件,家长看得见、改得动
     dictation: DICTATION_DEFAULT,
     // 字段说明不写在这里:一写进去就冻住(政策文件永不覆盖),$schema 指的 schema 文件每次 init / upgrade 从 zod 的 .describe() 刷新

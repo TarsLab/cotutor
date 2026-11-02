@@ -65,7 +65,7 @@ const cfg = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, any>;
 cfg.talk = { enabled: true, minutes: 1 };
 cfg.kid.name = 'Ray';
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
-const ctx = createContext(loadWorkspace(wsRoot), { warm: false });
+const ctx = createContext(loadWorkspace(wsRoot));
 const fakeRead = (photo: { data: Buffer; mime: string }, opts: Record<string, unknown>) => readList(photo, { ...opts, endpoint: omniEndpoint });
 const talkRoute = makeTalkRoute({ readList: fakeRead as typeof readList, env: keyed });
 const call = (method: string, path: string, body?: unknown) => { void ctx.reload(); return talkRoute(method, new URL(path, 'http://x'), ctx, body); };

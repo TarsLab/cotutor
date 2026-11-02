@@ -1,6 +1,6 @@
 /**
- * Qwen Code 的 stream-json(`--output-format stream-json`,一行一个 JSON)读成统一事件。
- * 同时保留历史日志的费用字段解析,让已有对话仍能查看。Qwen Code 0.25 的输出:
+ * 旧轮次的 .log:2026-11-02 以前老师的脑是起 Qwen Code(或更早的 Claude Code),输出是 stream-json(一行一个 JSON),这里读成统一事件,
+ * 那时的记录照样能看(看原文、读了什么、转录)。不再起 CLI,只读。Qwen Code 0.25 的输出:
  * - `{"type":"system","subtype":"init","session_id","tools":[…]}`(qwen 的 json 模式叫 session_start)
  * - `{"type":"stream_event","event":{…}}`:`--include-partial-messages` 才有;message_start 开新的一条,content_block_delta 的 text_delta 是正文、thinking_delta 是在想
  * - `{"type":"assistant","message":{"id","content":[text / tool_use 块],"usage"}}`:一条整的回复;usage 是这一次请求自己的
@@ -116,9 +116,4 @@ export function parseStreamJson(line: string): CliEvent[] {
       break;
   }
   return out;
-}
-
-/** stream-json 输入的一条用户消息(`--input-format stream-json` 一行一条) */
-export function streamJsonUserMessage(prompt: string): string {
-  return `${JSON.stringify({ type: 'user', message: { role: 'user', content: prompt } })}\n`;
 }

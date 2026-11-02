@@ -117,7 +117,7 @@ export async function evalActivity(ws: Workspace, tutor: string, name: string, o
   for (const e of examples) if (e.lecture && !(await readLecture(ws, e.lecture.bundle))) throw new UsageError(`例子「${e.name}」的课 ${e.lecture.bundle} 不在 bundles/ 或 lectures/ 里:拷一份进来,或把「课:」换成你自己的课`);
   const kid = opts.kid ?? makeKidModel({ env: opts.env });
   const evalWs = evalWorkspace(ws);
-  const runner = new Runner(() => evalWs, { env: opts.env, warm: false, draw: opts.draw ?? fakeDraw });
+  const runner = new Runner(() => evalWs, { env: opts.env, draw: opts.draw ?? fakeDraw });
   const out: EvalExampleReport[] = [];
   for (const e of examples) {
     const run = runsOf.get(e)!;

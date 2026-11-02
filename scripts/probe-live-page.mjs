@@ -54,7 +54,7 @@ for (const t of Object.values(cfg.tutors)) delete t.runtime;
 cfg.live = { voices: { 'chinese-tutor': 'Serena' } };
 cfg.kid.name = 'Ray';
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
-const ctx = createContext(loadWorkspace(wsRoot), { warm: false });
+const ctx = createContext(loadWorkspace(wsRoot));
 await ctx.reload();
 const upgrade = makeLiveUpgrade({ endpoint: fake.endpoint });
 const server = createServer(createHandler(ctx));

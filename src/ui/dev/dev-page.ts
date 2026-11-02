@@ -1033,7 +1033,7 @@ ${pageDomJs(4000)}
       return h('div', { class: 'dsec' },
         h('h5', {}, '发给老师的(消息正文在最后)'),
         h('pre', {}, raw.pack.prompt),
-        h('h5', {}, '命令行 · ' + raw.pack.runtime + (raw.pack.resume ? ' · resume ' + (raw.pack.session || '') : ' · 新开会话') + (raw.pack.agentBody ? ' · 老师正文塞在 {agentBody}' : '')),
+        h('h5', {}, '命令行 · ' + raw.pack.runtime + (raw.pack.resume ? ' · resume ' + (raw.pack.session || '') : ' · 新开会话')),
         h('pre', {}, cmd),
         raw.pack.sources ? h('p', { class: 'hintline' }, '当时的老师文件 ' + (raw.pack.sources.agent ? raw.pack.sources.agent.file + ' ' + raw.pack.sources.agent.hash.slice(7) : '(读不到)') + ' · 技能 ' + Object.entries(raw.pack.sources.skills).map(([k, v]) => k + ' ' + v.slice(7, 13)).join(' / ') + '(正文在 run.json 的 sources 里;cotutor show --json 吐)') : h('p', { class: 'hintline' }, '这轮没记老师文件与技能的快照(2026-09-15 之前跑的)'),
         h('div', {},
@@ -2088,7 +2088,7 @@ ${pageDomJs(4000)}
         ...Object.entries(pv.values).map(([k, v]) => h('span', { class: 'tag' }, k + ' ' + v)),
         ...pv.paramIssues.map((x) => h('span', { class: 'st err' }, x))));
       out.push(h('pre', { class: 'pv' }, pv.text));
-      out.push(h('div', { class: 'srow' }, h('span', { class: 'note', style: 'flex:1;min-width:160px' }, '这就是这个话题老师的系统提示(Qwen 的 systemBody):不读老师文件,注释已剥,后面再接这几种卡的板书写法。'), h('button', { class: 'btn small', type: 'button', on: { click: (e) => copy(pv.text, e.target) } }, '复制全文')));
+      out.push(h('div', { class: 'srow' }, h('span', { class: 'note', style: 'flex:1;min-width:160px' }, '这就是这个话题老师的系统提示:不读老师文件,注释已剥,后面再接这几种卡的板书写法。'), h('button', { class: 'btn small', type: 'button', on: { click: (e) => copy(pv.text, e.target) } }, '复制全文')));
     }
     for (const t of pv.tools) {
       out.push(rule(), h('h3', {}, t.tool + '收到什么'), h('p', { class: 'note' }, '{{插槽}} 由应用在交出去那一刻填。'), h('pre', { class: 'pv tool' }, t.prompt));
@@ -2145,7 +2145,7 @@ ${pageDomJs(4000)}
       pv.board ? h('span', { class: 'tag', title: pv.board.cards.length ? '这位老师的卡:' + pv.board.cards.join(' ') : '全部的卡' }, '+ 板书写法 ' + pv.board.chars.toLocaleString() + ' 字') : null,
       pv.rules ? h('span', { class: 'tag' }, '+ 守则 ' + pv.rules.chars.toLocaleString() + ' 字') : null)];
     out.push(h('pre', { class: 'pv' }, pv.text || '(空)'));
-    out.push(h('div', { class: 'srow' }, h('span', { class: 'note', style: 'flex:1;min-width:160px' }, '这就是新话题里老师的系统提示(Qwen 的 systemBody):老师文件去掉 frontmatter' + (pv.board ? ',后面再接板书写法' : '') + '。'), h('button', { class: 'btn small', type: 'button', on: { click: (e) => copy(pv.text, e.target) } }, '复制全文')));
+    out.push(h('div', { class: 'srow' }, h('span', { class: 'note', style: 'flex:1;min-width:160px' }, '这就是新话题里老师的系统提示:老师文件去掉 frontmatter' + (pv.board ? ',后面再接板书写法' : '') + '。'), h('button', { class: 'btn small', type: 'button', on: { click: (e) => copy(pv.text, e.target) } }, '复制全文')));
     if (pv.rules) {
       out.push(rule(), h('h3', {}, '话题第一条还带守则'),
         h('p', { class: 'note' }, '有脸的老师共用的 ' + pv.rules.path + ',机器件,cotutor upgrade 每次覆盖,这里不改。这位老师要不一样的做法,写进上面的老师文件,它优先。'),

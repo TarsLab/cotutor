@@ -155,7 +155,7 @@ export async function checkDevTutorFile(ws: Workspace, tutor: string, text: stri
     preview: {
       text: body,
       chars: charsOf(body),
-      board: guide ? { chars: charsOf(guide.body), cards: kinds ? [...kinds] : [] } : null,
+      board: guide ? { chars: charsOf(guide), cards: kinds ? [...kinds] : [] } : null,
       rules,
     },
     diff: shipped === null ? null : diffHunks(shipped, text),

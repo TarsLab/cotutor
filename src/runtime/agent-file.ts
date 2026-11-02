@@ -1,9 +1,9 @@
 /**
  * 老师文件(agents/<name>.md):YAML frontmatter + 正文即系统提示。
- * 这里只认平铺的 `key: value` frontmatter(两个 CLI 的公共子集:name / description / maxTurns / permissionMode / memory);
- * 正文给没有 --agent 的 CLI 经 {agentBody} 塞进 --append-system-prompt。
+ * 这里只认平铺的 `key: value` frontmatter(name / description / maxTurns / permissionMode / memory,当初两个 CLI 的公共子集,应用只读 name);
+ * 正文是系统提示的前半(后面接板书写法)。
  */
-/** 两个 CLI 的公共子集:老师文件 frontmatter 只写这几个键(人设 / 政策 / 开关在 cotutor.json);技能 cotutor-tune 的字段表从这里取 */
+/** 老师文件 frontmatter 只写这几个键(人设 / 政策 / 开关在 cotutor.json);技能 cotutor-tune 的字段表从这里取 */
 export const AGENT_FRONTMATTER_KEYS = ['name', 'description', 'maxTurns', 'permissionMode', 'memory'] as const;
 
 export interface AgentFile {

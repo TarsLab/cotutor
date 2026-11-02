@@ -294,13 +294,6 @@ export function parseBoard(text: string, opts: ParseBoardOptions = {}): ParsedBo
   };
 }
 
-/** 回复停在写成正文的工具调用上(后面只剩空行):老师在等工具的结果,这一轮其实没写完(runner 据此 resume 一次) */
-export function endsWithToolCall(text: string): boolean {
-  const { spans } = parseBoard(text);
-  const last = spans.toolCalls[spans.toolCalls.length - 1];
-  return Boolean(last) && text.split('\n').slice(last[1] + 1).every((l) => !l.trim());
-}
-
 /** 原文一行的角色:解析器把它当什么了 */
 export type SourceRole =
   /** 讲稿一句(念出来) */

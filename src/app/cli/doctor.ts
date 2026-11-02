@@ -7,15 +7,12 @@ import { isRealtimeVoice } from '../../realtime/voices.ts';
 import { dashscopeAuth } from '../../realtime/bailian.ts';
 import { TTS_MODEL, ttsTarget } from '../../media/tts.ts';
 import { compatibleLine, isPlanKey, tokenPlanKey } from '../../shared/qianwen.ts';
-import { adapterFor, parserOf, prepareCli, processEnv, runtimeIssue } from '../../brain/index.ts';
-import { execFile } from 'node:child_process';
+import { runtimeIssue } from '../../brain/index.ts';
 import { homedir } from 'node:os';
 import { access, lstat, readFile, readdir, stat } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
-import { basename, dirname, join, relative, resolve, sep } from 'node:path';
-import { promisify } from 'node:util';
-import { boardPreloaded, planRun, runtimeUses } from '../../brain/cli/run-plan.ts';
-import { BOARD_GUIDE_PATH, boardGuideBody, takesTutorRules } from '../../runtime/context/tutor-rules.ts';
+import { dirname, join, relative, resolve, sep } from 'node:path';
+import { takesTutorRules } from '../../runtime/context/tutor-rules.ts';
 import { parseAgentFile } from '../../runtime/agent-file.ts';
 import { localDate } from '../../shared/time.ts';
 import { MIN_CONTRAST, contrastWithWhite } from '../../ui/shared/tutor-color.ts';
@@ -31,7 +28,6 @@ import { readPin } from '../http/access.ts';
 import { gradeOfSemester } from '../../memory/grade.ts';
 import { DIRS } from './skeleton.ts';
 import { tutorStatuses, readManifest } from './tutors.ts';
-import { tokenText } from '../../shared/tokens.ts';
 import { workspaceGradePack, type GradePack } from './grades.ts';
 import {
   CONFIG_FILE,
@@ -64,10 +60,6 @@ export interface DoctorReport {
   checks: DoctorCheck[];
 }
 
-const execFileP = promisify(execFile);
-/** doctor --live 发给老师的那句 */
-const LIVE_PROMPT = '只回一个字:好';
-
 async function statOrNull(p: string): Promise<import('node:fs').Stats | null> {
   return stat(p).catch(() => null);
 }
@@ -80,108 +72,18 @@ async function evictedCount(dir: string): Promise<number> {
   }
 }
 
-/** 运行时的 CLI 名(run[0] 的 basename) */
-export function runtimeCli(run: readonly string[]): string {
-  return basename(run[0] ?? '');
-}
-
-/** 已知的环境坑,从 CLI 的输出里认出来给修复命令(错误信息即修复指南) */
-export function explainLlmFailure(text: string, runtime: readonly string[]): string {
-  const bin = runtimeCli(runtime);
-  if (/does not support this model|version [\d.]+ or newer is required/i.test(text)) {
-    return `这版 ${bin} 不认模型:检查 cotutor.json 的运行时 run / resume 中 -m 后的模型名,或运行 ${bin} update 升级`;
-  }
-  if (/403|request not allowed/i.test(text)) return `API 拒了(403):检查 ${bin} 使用的千问 key、端点与模型权限`;
-  if (/not logged in|login|authentication|401|unauthorized/i.test(text)) return `${bin} 的 key 无效:检查家长端「首页」的百炼 key(有 Token Plan 的还有 ~/.config/cotutor/token-plan.json),再跑 cotutor doctor`;
-  if (/ENOENT|command not found/i.test(text)) return `PATH 里没有 ${bin}`;
-  return `看上面的原文;不认识的错先在终端手跑一次同样的命令`;
-}
-
 /**
- * --live:真起一次老师(运行时的 run 模板,第一位开着的老师,只回一个字),把 API 层的坑(模型不认、没登录)摆到明面。
- * 花一分钱级别的费用,所以缺省不跑。配音同理:老师配了 voice 就合成一句。
+ * --live:老师用的是 API 运行时,不在这里真起一轮(真跑一轮用 cotutor send);配音照真合成一句(老师配了 voice 的),花一分钱级别,所以缺省不跑。
  */
 async function probeLive(ws: Workspace, push: (c: DoctorCheck) => number, env: NodeJS.ProcessEnv): Promise<void> {
-  const { spawn } = await import('node:child_process');
   const { listTutors } = await import('../../schema/index.ts');
   const { synthesize } = await import('../../media/tts.ts');
-  const { parseTranscript } = await import('../../brain/transcript.ts');
-  const { parseAgentFile } = await import('../../runtime/agent-file.ts');
   const { tmpdir } = await import('node:os');
   const { mkdtemp, rm } = await import('node:fs/promises');
   const tutors = listTutors(ws.config).filter((t) => t.enabled);
-  const first = tutors[0];
-  if (!first) {
-    push({ name: 'live.agent', ok: false, required: false, detail: '没有开着的老师,没法探', fix: 'cotutor.json 里至少开一位' });
-    return;
-  }
   const runtimeName = ws.config.runtimes.default;
   const runtime = ws.config.runtimes[runtimeName];
-  if (!runtime || typeof runtime === 'string') return;
-  if (isApiRuntime(runtime)) {
-    push({ name: `live.${runtimeName}`, ok: true, required: false, detail: `API 运行时(百炼 ${runtime.model}),不起 CLI;真跑一轮用 cotutor send` });
-    return;
-  }
-  if (runtimeIssue(runtime)) return; // 静态体检已报退役,不启动旧 CLI
-  let agentBody: string | undefined;
-  try {
-    agentBody = parseAgentFile(await readFile(tutorFilePath(ws.dirs.agents, first.name), 'utf8')).body;
-  } catch {
-    /* 上面 tutor.* 已报 */
-  }
-  let boardBody: string | undefined;
-  try {
-    boardBody = boardGuideBody(await readFile(join(ws.root, BOARD_GUIDE_PATH), 'utf8'));
-  } catch {
-    /* skills.* 已报 */
-  }
-  const systemBody = agentBody !== undefined ? (boardBody && takesTutorRules(first.name) ? `${agentBody}\n\n${boardBody}` : agentBody) : undefined;
-  // 和真跑同一条规划:命令行、stdin 那行、环境变量都由这个运行时的 CLI 适配器定
-  const plan = planRun(ws.config, { session: null }, { agent: first.name, prompt: LIVE_PROMPT, agentBody, systemBody, boardFile: join(ws.root, BOARD_GUIDE_PATH), runtime: runtimeName, root: ws.root, readDirs: [...new Set([ws.root, ws.paths.vault])] });
-  const { argv } = plan;
-  const parse = parserOf(plan.cli);
-  await prepareCli(plan.cli, ws.root);
-  const cwd = join(ws.dirs.agents, first.name);
-  const run = await new Promise<{ out: string; err: string; code: number | null; spawnErr?: string }>((resolveRun) => {
-    let out = '';
-    let err = '';
-    const child = spawn(argv[0], argv.slice(1), { cwd, env: processEnv(plan, { ...env, COTUTOR_WORKSPACE: ws.root }), stdio: [plan.stdin ? 'pipe' : 'ignore', 'pipe', 'pipe'] });
-    const timer = setTimeout(() => child.kill(), 120_000);
-    // 消息走 stdin 的运行时:写一条,看到收尾就关 stdin
-    if (plan.stdin) {
-      child.stdin?.on('error', () => {});
-      child.stdin?.write(plan.stdin);
-    }
-    let rest = '';
-    child.stdout?.on('data', (d: Buffer) => {
-      out += d.toString();
-      rest += d.toString();
-      const lines = rest.split('\n');
-      rest = lines.pop() ?? '';
-      if (plan.stdin && lines.some((l) => parse(l).some((e) => e.kind === 'result'))) child.stdin?.end();
-    });
-    child.stderr?.on('data', (d: Buffer) => (err += d.toString()));
-    child.once('error', (e) => {
-      clearTimeout(timer);
-      resolveRun({ out, err, code: null, spawnErr: e.message });
-    });
-    child.once('close', (code) => {
-      clearTimeout(timer);
-      resolveRun({ out, err, code });
-    });
-  });
-  const t = parseTranscript(run.out, parse);
-  const said = t.items.filter((i) => i.kind === 'text' && !i.sub).map((i) => i.text).join(' ');
-  const ok = Boolean(t.final?.ok) && !run.spawnErr;
-  const raw = run.spawnErr ?? (t.final ? `${t.final.reason ?? ''} ${said}`.trim() : `没有 result 事件(exit ${run.code}):${run.err.trim().split('\n').slice(-3).join(' / ')}`);
-  push({
-    name: `live.${runtimeName}`,
-    ok,
-    required: false,
-    detail: ok ? `${first.display} 回了「${(t.final?.text ?? '').slice(0, 20)}」${t.final?.inTokens !== undefined ? ` · ${tokenText({ in: t.final.inTokens, out: t.final.outTokens ?? 0 })}` : ''}` : `起不来或没答上:${raw.slice(0, 300)}`,
-    fix: ok ? undefined : explainLlmFailure(raw, runtime.run),
-  });
-
+  if (runtime && typeof runtime !== 'string' && isApiRuntime(runtime)) push({ name: `live.${runtimeName}`, ok: true, required: false, detail: `API 运行时(百炼 ${runtime.model}),不起老师;真跑一轮用 cotutor send` });
   const voiced = tutors.find((x) => x.voice);
   if (!voiced) {
     push({ name: 'live.tts', ok: true, required: false, detail: '没有老师配 voice,不探配音(点读、单词卡没有声音)' });
@@ -296,7 +198,7 @@ export async function doctorWorkspace(
 
   if (ws) {
     // ---- 老师:定义文件(拷贝)+ 名字一致 + 出厂 / 自定义状态 + 老师目录 ----
-    // 老师文件只有 agents/<name>.md 这一份:应用读正文递进系统提示({agentBody} / {systemBody})
+    // 老师文件只有 agents/<name>.md 这一份:应用读正文递进系统提示
     const statuses = new Map((teachingPack ? await tutorStatuses(root) : []).map((s) => [s.name, s]));
     for (const name of Object.keys(ws.config.tutors)) {
       const shipped = statuses.has(name);
@@ -556,25 +458,6 @@ export async function doctorWorkspace(
     const { mkcertHint } = await import('./cert.ts');
     push({ name: 'https', ok: tls !== null, required: false, detail: tls ? `${redactHome(tls.cert)}` : '没有证书,serve 走 HTTP(平板、手机上按住说话不可用)', fix: tls ? undefined : `cotutor cert(需要 mkcert:${mkcertHint()})` });
 
-    // ---- 板书写法怎么递给老师:有脸的老师用到的运行时逐个说清,run / resume 不一致点名 ----
-    {
-      const used = new Set<string>();
-      for (const [name, t] of Object.entries(ws.config.tutors)) if (takesTutorRules(name) && t.enabled !== false) used.add(t.runtime ?? ws.config.runtimes.default);
-      for (const name of used) {
-        const rt = ws.config.runtimes[name];
-        if (!rt || typeof rt === 'string') continue;
-        if (isApiRuntime(rt)) {
-          push({ name: `runtime.${name}.board`, ok: true, required: false, detail: 'API 运行时:板书写法连老师正文一起进系统提示' });
-          continue;
-        }
-        const inRun = boardPreloaded({ run: rt.run, resume: rt.run });
-        const inResume = boardPreloaded({ run: rt.resume, resume: rt.resume });
-        const how = runtimeUses(rt, '{boardFile}') ? '{boardFile} 追加进系统提示' : runtimeUses(rt, '{systemBody}') ? '{systemBody} 连老师正文一起进系统提示' : '模板里写死的 SKILL.md 路径';
-        if (inRun !== inResume) push({ name: `runtime.${name}.board`, ok: false, required: false, detail: `板书写法的预载只在 ${inRun ? 'run' : 'resume'} 模板里,两边不一致(压缩后系统提示按 resume 的旗标重建)`, fix: 'cotutor upgrade --config 补旗标,或手改 cotutor.json 让两条模板一致' });
-        else push({ name: `runtime.${name}.board`, ok: true, required: false, detail: inRun ? `板书写法预载进系统提示(${how}),各话题共享缓存` : '板书写法由应用放进每个话题第一条(<cotutor-board>);这个 CLI 能从文件或参数收系统提示的话,模板里用 {boardFile} / {systemBody} 更省' });
-      }
-    }
-
     // ---- 百炼:老师靠实时模型开口,没配孩子端打不开;--live 真试连一次(握手就挂,不花钱) ----
     // key 只认 ~/.config/cotutor/(2026-11-02 起);shell 里还 export 着旧的,说一句免得以为配了
     const bl = dashscopeAuth(env);
@@ -602,40 +485,20 @@ export async function doctorWorkspace(
       push({ name: 'live.voices', ok: !bad.length, required: false, detail: bad.length ? `${bad.map(([t, v]) => `${t} 的「${v}」`).join('、')}:这个模型不认,嘴会一直不出声` : `嘴的音色:${who}`, fix: bad.length ? '工作台「音色」页「实时的嘴」里换一个(这个模型认的 56 个在 src/realtime/voices.ts),或改 cotutor.json 的 live.voices' : undefined });
     }
 
-    // 旧配置允许加载与升级;退役运行时不探版本、不启动。
+    // 旧配置里的命令行运行时(Qwen Code 等)读得进来,用不了:用到它的老师发不出去
     const usedRuntimes = new Set([ws.config.runtimes.default, ...Object.values(ws.config.tutors).filter((t) => t.enabled).map((t) => t.runtime ?? ws.config.runtimes.default)]);
     for (const [name, rt] of Object.entries(ws.config.runtimes)) {
       if (typeof rt === 'string' || isApiRuntime(rt)) continue;
       const issue = runtimeIssue(rt);
-      if (issue) push({ name: `runtime.${name}`, ok: false, required: usedRuntimes.has(name), detail: issue, fix: '按 README.md 的「旧 workspace 换运行时」说明迁移' });
+      if (issue) push({ name: `runtime.${name}`, ok: false, required: usedRuntimes.has(name), detail: issue, fix: '按 README.md 的「旧 workspace 换运行时」说明改' });
     }
 
-    // ---- 运行时的 CLI 在不在 ----
+    // ---- 运行时:API 的走哪条线 ----
     if (probeEnv) {
       for (const [runtime, p] of Object.entries(ws.config.runtimes)) {
-        if (runtime === 'default' || typeof p === 'string') continue;
-        if (isApiRuntime(p)) {
-          const via = compatibleLine(p.model, env)?.plan ? '走 Token Plan' : '走百炼按量';
-          push({ name: `runtime.${runtime}`, ok: true, required: usedRuntimes.has(runtime), detail: `API 运行时(${p.model},${via}),不用装 CLI;凭证看 bailian 那条` });
-          continue;
-        }
-        if (runtimeIssue(p)) continue;
-        const bin = runtimeCli(p.run);
-        const required = usedRuntimes.has(runtime);
-        // 没有老师用的 CLI 运行时(新装缺省 api,Qwen Code 那两条是备用):不探,免得没装 qwen 的家长看到一串「起不来」
-        if (!required) {
-          push({ name: `runtime.${runtime}`, ok: true, required: false, detail: `备用(${bin}),没有老师用它;要用就把老师的 runtime 改成 ${runtime},再跑一次 doctor` });
-          continue;
-        }
-        try {
-          const { stdout } = await execFileP(bin, ['--version'], { timeout: 8000 });
-          const version = stdout.trim().split('\n')[0];
-          push({ name: `runtime.${runtime}`, ok: true, required, detail: `${bin} ${version}` });
-          // 这个 CLI 的适配器要多看的几样(qwen:版本、百炼 key)
-          for (const c of adapterFor(p).check?.({ version, env }) ?? []) push({ name: `runtime.${runtime}.${c.name}`, ok: c.ok, required, detail: c.detail, fix: c.fix });
-        } catch {
-          push({ name: `runtime.${runtime}`, ok: false, required, detail: `PATH 里没有 ${bin}`, fix: required ? `装 ${bin},或把 runtimes.default 改成装了的那个运行时` : undefined });
-        }
+        if (runtime === 'default' || typeof p === 'string' || !isApiRuntime(p)) continue;
+        const via = compatibleLine(p.model, env)?.plan ? '走 Token Plan' : '走百炼按量';
+        push({ name: `runtime.${runtime}`, ok: true, required: usedRuntimes.has(runtime), detail: `API 运行时(${p.model},${via});凭证看 bailian 那条` });
       }
     }
   }

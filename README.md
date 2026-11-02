@@ -80,8 +80,6 @@ import { loadWorkspace } from 'cotutor/workspace';                        // 解
 
 手写的存成 UTF-8(不带 BOM)。配了什么、通不通看 `cotutor doctor`(`--live` 真连一次)。
 
-**备用:Qwen Code。** 订了千问 Token Plan 的开发者,可以让老师的脑走 Qwen Code:装 Qwen Code ≥ 0.25,写好 `token-plan.json`,把老师的 `runtime` 改成出厂的 `qwen`(`qwen3.8-max`)或 `qwen-flash`(`qwen3.8-flash`)。嘴照样要百炼按量 key,Token Plan 的 key 不能用于实时语音。
-
 换了运行时,之前的话题接不上,也不导入历史:孩子接着说会开新话题;换之前聊的话题不记账,家长端卡上标「换过运行时 · 不记账」,记录照样能看。模型、预算与老师运行时都在 workspace 的 `cotutor.json` 里,编辑器按首行 `$schema` 提供字段说明。
 
 `cotutor doctor` 检查缺失配置并给修复建议;`--live` 会实际连接服务。页面上的老师起不来时,先看 doctor 和 `conversations/<老师>/<日期>.<job>.err.log`。家长端与工作台需要访问锁时,运行 `cotutor pin` 设置本机 PIN。
@@ -103,9 +101,7 @@ cotutor doctor
 
 ### 旧 workspace 换运行时
 
-2026-10-31 之前建的 workspace 缺省走 Qwen Code。要换成应用直连百炼:先 `cotutor upgrade --config` 补上出厂的 `api` / `api-flash`,再把 `runtimes.default` 和 `tutors.*.runtime` 改成 `api`,在家长端「首页」填好百炼。换之前聊的话题照上面「配置模型」说的办:不导入、不记账。
-
-更早还留着 Claude 运行时的:同样先 `cotutor upgrade --config`,把指向 Claude 的 `runtimes.default` 和 `tutors.*.runtime` 改成 `api`(或 `qwen`),再删掉旧条目。旧 `proxy` 字段可删除,对应命令已移除。
+2026-11-02 起不再起命令行(Qwen Code;Claude CLI 更早就去掉了),老师只走应用直连百炼。2026-10-31 之前建的 workspace 缺省走 Qwen Code,doctor 会报「命令行运行时不再支持」:先 `cotutor upgrade --config` 补上出厂的 `api` / `api-flash`,把 `runtimes.default` 和 `tutors.*.runtime` 改成 `api`,在家长端「首页」填好百炼,再删掉 `qwen`、`qwen-flash`(或更早的 Claude)条目。换之前聊的话题照上面「配置模型」说的办:记录照样能看,不导入、不记账。旧 `proxy` 字段可删除,对应命令已移除。
 
 ## 开发
 

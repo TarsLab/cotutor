@@ -48,7 +48,7 @@ try {
 
   writeKeys(home, { payg: SECRET, workspaceId: 'ws-test' });
   const env = { ...process.env, HOME: home, COTUTOR_BRAIN_ENDPOINT: fake.baseURL };
-  const ctx = createContext(loadWorkspace(root), { env, warm: false, now: () => NOW });
+  const ctx = createContext(loadWorkspace(root), { env, now: () => NOW });
   const send = async (tutor: string, input: Parameters<typeof ctx.runner.send>[1]) => {
     const started = await ctx.runner.send(tutor, input);
     const index = await started.done;
@@ -182,7 +182,7 @@ try {
 
   // ---- 没配百炼:不发请求,家长端说去哪配 ----
   const bare = { ...Object.fromEntries(Object.entries(env).filter(([k]) => k !== 'COTUTOR_BRAIN_ENDPOINT')), HOME: keysHome() };
-  const ctx2 = createContext(loadWorkspace(root), { env: bare, warm: false, now: () => NOW });
+  const ctx2 = createContext(loadWorkspace(root), { env: bare, now: () => NOW });
   n = fake.requests.length;
   const s10 = await ctx2.runner.send('math-tutor', { from: 'kid', text: '你好', newThread: true });
   const m10 = (await s10.done).messages.find((x) => x.job === s10.job)!;
@@ -197,7 +197,7 @@ try {
   // 真走一轮:qwen3.8 的运行时,发出去的请求带 reasoning_effort、不带 thinking_budget
   cfg.runtimes.api38 = { api: 'bailian', model: 'qwen3.8-max' };
   writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
-  const ctx3 = createContext(loadWorkspace(root), { env, warm: false, now: () => NOW });
+  const ctx3 = createContext(loadWorkspace(root), { env, now: () => NOW });
   n = fake.requests.length;
   const s11 = await ctx3.runner.send('math-tutor', { from: 'kid', text: '你好', newThread: true, runtime: 'api38' });
   await s11.done;
@@ -215,9 +215,6 @@ try {
   const ov = await overview(ctx3, date);
   const ovThreads = ov.tutors.find((x) => x.name === 'math-tutor')?.threads ?? [];
   check('换过运行时:家长端那个话题标 oldRuntime(卡上说一句,记账按钮不算它);新话题不标', ovThreads.find((x) => x.thread === s11.thread)?.oldRuntime === 'api38' && !ovThreads.find((x) => x.thread === s12.thread)?.oldRuntime, JSON.stringify(ovThreads.map((x) => ({ thread: x.thread, old: x.oldRuntime }))));
-  ctx3.runner.close();
-  ctx.runner.close();
-  ctx2.runner.close();
 } finally {
   await fake.close();
   rmSync(home, { recursive: true, force: true });

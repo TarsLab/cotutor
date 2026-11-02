@@ -83,11 +83,11 @@ try {
     legacy.proxy = 'http://127.0.0.1:7890';
     writeFileSync(file, JSON.stringify(legacy));
     const retired = await doctorWorkspace(ws, { probeEnv: false, env: {} });
-    check('旧配置仍能读;默认运行时退役时点名迁移,不检查旧代理', retired.checks.some((c) => c.name === 'runtime.old' && !c.ok && c.required && c.detail.includes('Claude CLI 已移除')) && !retired.checks.some((c) => c.name === 'proxy'));
-    legacy.runtimes.default = 'qwen';
+    check('旧配置仍能读;缺省运行时是命令行的时点名怎么改,不检查旧代理', retired.checks.some((c) => c.name === 'runtime.old' && !c.ok && c.required && c.detail.includes('不再支持') && c.detail.includes('api')) && !retired.checks.some((c) => c.name === 'proxy'));
+    legacy.runtimes.default = 'api';
     writeFileSync(file, JSON.stringify(legacy));
     const unused = await doctorWorkspace(ws, { probeEnv: false, env: {} });
-    check('闲置的旧运行时只提醒删除,不要求安装 Claude', unused.checks.some((c) => c.name === 'runtime.old' && !c.required));
+    check('闲置的旧运行时只提醒,不是必需项', unused.checks.some((c) => c.name === 'runtime.old' && !c.required));
     legacy.tutors['math-tutor'].runtime = 'old';
     writeFileSync(file, JSON.stringify(legacy));
     const tutor = await doctorWorkspace(ws, { probeEnv: false, env: {} });
@@ -223,24 +223,13 @@ try {
 {
   const { configTemplate } = await import('../src/app/cli/skeleton.ts');
   const tpl = JSON.parse(configTemplate({ slug: 'x', name: 'x', tutors: [] }));
-  check('出厂运行时:缺省 api,api-flash 与 Qwen Code 的两条备用', Object.keys(tpl.runtimes).join() === 'default,api,api-flash,qwen,qwen-flash' && tpl.runtimes.default === 'api' && tpl.runtimes.api.model === 'qwen3.8-max' && tpl.runtimes['api-flash'].model === 'qwen3.8-flash');
-  for (const name of ['qwen', 'qwen-flash']) {
-    const rt = tpl.runtimes[name];
-    check(`${name}:流式、stdin、只读工具与系统提示`, rt.stdin === 'stream-json' && ['run', 'resume'].every((k) => rt[k].includes('--include-partial-messages') && rt[k].includes('{toolArgs}') && rt[k].includes('{systemBody}')));
-  }
+  check('出厂运行时:缺省 api,还有 api-flash', Object.keys(tpl.runtimes).join() === 'default,api,api-flash' && tpl.runtimes.default === 'api' && tpl.runtimes.api.model === 'qwen3.8-max' && tpl.runtimes['api-flash'].model === 'qwen3.8-flash', JSON.stringify(tpl.runtimes));
 }
 // ---- 老 workspace 迁移(步 2):cotutor.json 是政策文件,机器不自动改,所以要算差异 + 只补缺 ----
 {
-  const { configGaps, insertMissingFlags, upgradeConfig } = await import('../src/app/cli/migrate.ts');
+  const { configGaps, upgradeConfig } = await import('../src/app/cli/migrate.ts');
 
-  // 旗标插的位置照出厂模板:排在它前面、我这份也有的那个旗标之后;已有的旗标与值不碰
-  const factory = ['qwen', '-m', 'qwen3.8-max', '--output-format', 'stream-json', '--include-partial-messages', '--max-wall-time', '10m'];
-  const mine = ['qwen', '-m', 'qwen3.8-flash', '--output-format', 'stream-json', '--max-wall-time', '5m'];
-  const ins = insertMissingFlags(mine, factory);
-  check('缺的旗标按出厂位置补,家长的模型与时限不动', ins.argv.join(' ') === 'qwen -m qwen3.8-flash --output-format stream-json --include-partial-messages --max-wall-time 5m' && ins.added.join() === '--include-partial-messages');
-  check('已经齐了就没有 added', insertMissingFlags(factory, factory).added.length === 0);
-
-  // 老版的 cotutor.json:还没有英语老师,qwen 模板没有流式旗标
+  // 老版的 cotutor.json:还没有英语老师、没有 api-flash,缺省还是 Qwen Code(qwen 那条留着,升级不删也不改)
   const home2 = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-migrate-')));
   try {
     const r = await initWorkspace({ slug: 'ming', name: '小明', dir: join(home2, 'ws') });
@@ -248,11 +237,8 @@ try {
     const cfgFile = join(ws, 'cotutor.json');
     const old = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, any>;
     delete old.tutors['english-tutor'];
-    for (const k of ['run', 'resume'] as const) {
-      old.runtimes.qwen[k] = (old.runtimes.qwen[k] as string[]).filter((a) => a !== '--include-partial-messages');
-      const model = old.runtimes.qwen[k].indexOf('-m');
-      old.runtimes.qwen[k][model + 1] = 'qwen3.8-flash';
-    }
+    delete old.runtimes['api-flash'];
+    old.runtimes.qwen = { run: ['qwen', '-m', 'qwen3.8-flash', '{prompt}'], resume: ['qwen', '--resume', '{session}', '{prompt}'] };
     old.policyDefaults = { replyMaxChars: 40 };
     old.runtimes.default = 'qwen';
     old.tutors['chinese-tutor'].enabled = false;
@@ -269,7 +255,7 @@ try {
     writeFileSync(join(ws, '.cotutor', 'shipped.json'), `${JSON.stringify(shipped, null, 2)}\n`);
 
     const gaps = await configGaps(old);
-    check('差异四项:新老师 + run / resume 各一条 + 不再用的 tts', gaps.map((g) => g.path).join(' ') === 'tutors.english-tutor runtimes.qwen.run runtimes.qwen.resume tts' && gaps[3].kind === 'retired' && gaps[3].detail.includes('不再用'), JSON.stringify(gaps.map((g) => g.path)));
+    check('差异三项:新老师 + api-flash + 不再用的 tts', gaps.map((g) => g.path).join(' ') === 'tutors.english-tutor runtimes.api-flash tts' && gaps[2].kind === 'retired' && gaps[2].detail.includes('不再用'), JSON.stringify(gaps.map((g) => g.path)));
 
     {
       // 卡的清单(2026-10-07)之前的条目:没有 cards → 补出厂的;写过的(哪怕是全部)不动
@@ -287,12 +273,12 @@ try {
 
     const before = readFileSync(cfgFile, 'utf8');
     const dry = await upgradeConfig(ws, { dryRun: true });
-    check('--dry-run 列差异但不动文件', dry.gaps.length === 4 && !dry.applied && readFileSync(cfgFile, 'utf8') === before);
+    check('--dry-run 列差异但不动文件', dry.gaps.length === 3 && !dry.applied && readFileSync(cfgFile, 'utf8') === before);
 
     const applied = await upgradeConfig(ws);
     const after = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, any>;
-    check('补上之后:新老师、旗标都在', applied.applied && after.tutors['english-tutor'].display === '英语老师' && ['run', 'resume'].every((k) => after.runtimes.qwen[k].includes('--include-partial-messages')));
-    check('家长写过的一个都没动(每句字数、缺省运行时、关掉的老师、自己加的 --model、_note、自己加的键)', after.policyDefaults.replyMaxChars === 40 && after.runtimes.default === 'qwen' && after.tutors['chinese-tutor'].enabled === false && after.runtimes.qwen.run[after.runtimes.qwen.run.indexOf('-m') + 1] === 'qwen3.8-flash' && after._note === '家长自己写的说明' && after.myNote === '家长自己加的键' && after.$schema === old.$schema);
+    check('补上之后:新老师、api-flash 都在', applied.applied && after.tutors['english-tutor'].display === '英语老师' && after.runtimes['api-flash']?.model === 'qwen3.8-flash');
+    check('家长写过的一个都没动(每句字数、缺省运行时、关掉的老师、自己加的 --model、_note、自己加的键)', after.policyDefaults.replyMaxChars === 40 && after.runtimes.default === 'qwen' && after.tutors['chinese-tutor'].enabled === false && after.runtimes.qwen.run[2] === 'qwen3.8-flash' && after._note === '家长自己写的说明' && after.myNote === '家长自己加的键' && after.$schema === old.$schema);
     check('不再用的 tts 删掉了', !('tts' in after), JSON.stringify(Object.keys(after)));
     check('新老师的文件、家跟着补上(不再建 .qwen 链)', existsSync(join(ws, 'agents', 'english-tutor.md')) && !existsSync(join(ws, '.qwen', 'agents', 'english-tutor.md')) && existsSync(join(ws, 'agents', 'english-tutor', '.gitkeep')) && applied.installed.length > 0);
 

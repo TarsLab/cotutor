@@ -27,7 +27,7 @@ const { createContext, createHandler } = await import(join(repo, 'src', 'app', '
 const tmp = probeDir('cotutor-probe-kid-nav-');
 const wsRoot = join(tmp, 'ws');
 await initWorkspace({ slug: 'ray', name: 'Ray', dir: wsRoot });
-const ctx = createContext(loadWorkspace(wsRoot), { warm: false });
+const ctx = createContext(loadWorkspace(wsRoot));
 await ctx.reload();
 const server = createServer(createHandler(ctx));
 await new Promise((r) => server.listen(0, '127.0.0.1', r));

@@ -171,7 +171,7 @@ const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
   writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
   let calls = 0;
   const now = new Date('2026-10-11T02:00:00Z');
-  const ctx = createContext(loadWorkspace(root), { now: () => now, warm: false, draw: async ({ model }) => { calls++; return { ok: true, data: PNG, model, ms: 10 }; } });
+  const ctx = createContext(loadWorkspace(root), { now: () => now, draw: async ({ model }) => { calls++; return { ok: true, data: PNG, model, ms: 10 }; } });
   const sent = await route('POST', '/api/kid/conversations/chinese-tutor/messages', ctx, { text: '我说完了,画图吧' });
   check('发出去', sent.status === 202, JSON.stringify(sent.json));
   for (let i = 0; i < 100 && ctx.runner.running('chinese-tutor'); i++) await new Promise((r) => setTimeout(r, 50));

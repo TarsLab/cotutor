@@ -2,7 +2,7 @@
 export const USAGE = `用法:
   cotutor init <slug> [--dir <path>] [--name <孩子名>] [--grade <1-6>] [--port <n>]   建 ~/cotutor/<slug>/ 骨架(幂等补缺;默认二年级教学包)
   cotutor grades [--json]                                          列出本包可安装的年级教学包
-  cotutor doctor [--workspace <dir>] [--json] [--live]                 逐项体检;--live 真起一次老师与配音(花一分钱)把 API 层的坑摆出来
+  cotutor doctor [--workspace <dir>] [--json] [--live]                 逐项体检;--live 真连一次百炼实时模型、真合成一句配音(花一分钱)把 API 层的坑摆出来(真跑老师用 cotutor send)
   cotutor upgrade [--workspace <dir>] [--force <老师>]...                老师文件、activity 与 skill 换新版:没改过的直接换,改过的只报 diff(--force <老师> 或 --force <老师>/<名> 才覆盖,原文留 .bak)
   cotutor upgrade --config [--dry-run] [--workspace <dir>]              cotutor.json 补缺:新出厂老师 / 运行时 / 命令模板旗标(只加缺的,你改过的值不动)
   cotutor add <老师名> --display <显示名> [--subject <学科>] [--avatar <emoji|图片相对路径>] [--hidden]   加一位自家的老师:出模板文件、进 cotutor.json、建目录(名字以 -tutor 结尾的是老师,figshot 给它做头像)

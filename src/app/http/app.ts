@@ -11,7 +11,7 @@ import { appendFile, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/p
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { join } from 'node:path';
 import { foldRuns, type TranscriptRow } from '../../brain/transcript.ts';
-import { RuntimeError } from '../../brain/cli/run-plan.ts';
+import { RuntimeError } from '../../brain/index.ts';
 import { PHOTO_MAX_SIDE } from '../../ui/kid/photo-edit.ts';
 import { currentThread, lastJobOf, sameRuntime } from '../../runtime/journal/conversation.ts';
 import { localDate, weekOf } from '../../shared/time.ts';
@@ -110,7 +110,7 @@ export interface AppContext {
   bailian: Bailian;
 }
 
-export function createContext(ws: Workspace, opts: { now?: () => Date; env?: NodeJS.ProcessEnv; warm?: boolean; draw?: Draw; access?: Access; bailian?: Bailian } = {}): AppContext {
+export function createContext(ws: Workspace, opts: { now?: () => Date; env?: NodeJS.ProcessEnv; draw?: Draw; access?: Access; bailian?: Bailian } = {}): AppContext {
   let configText: string | null = null;
   const ctx: AppContext = {
     ws,
@@ -151,7 +151,7 @@ export async function dayView(ctx: AppContext, tutor: string, date: string): Pro
   const runs: Record<string, TranscriptRow[]> = {};
   const errors: Record<string, string> = {};
   for (const m of index.messages) {
-    const t = await readTranscript(ctx.ws, tutor, date, m.job, m.runtime);
+    const t = await readTranscript(ctx.ws, tutor, date, m.job);
     runs[m.job] = t ? foldRuns(t.items) : [];
     if (m.result === 'error') {
       const tail = (await readErrLog(ctx.ws, tutor, date, m.job)).trim().split('\n').slice(-5).join('\n');
@@ -610,12 +610,6 @@ async function paperRoute(ctx: AppContext, tutor: string, date: string, method: 
   return { status: 200, json: { ok: true, key } };
 }
 
-/** 页面拉今天时的预热参数:?thread= 是页面选着的话题;同一话题 30 秒看一次 */
-function warmOpts(url: URL): { throttleMs: number; thread?: string } {
-  const thread = url.searchParams.get('thread');
-  return { throttleMs: 30_000, ...(thread ? { thread } : {}) };
-}
-
 /** 请求从哪来(createHandler 从请求头取):设备 cookie、来源地址 */
 export interface RouteClient {
   device?: string | null;
@@ -841,8 +835,6 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       // 左栏的纸:GET ?key=<话题 | new> 读;PUT {key, state} 存(清掉那几版的图只认 captures/ 里在的)。不起老师
       if (tail === 'paper') return paperRoute(ctx, tutor, date, method, url, body);
       if (tail === 'today' && method === 'GET') {
-        // 孩子点进这位老师 / 选了话题(页面轮询也走这里,同一话题 30 秒看一次):把下一轮的老师进程提前起好
-        void ctx.runner.prewarm(tutor, warmOpts(url)).catch(() => {});
         return { status: 200, json: await kidDay(ctx, tutor, date) };
       }
       // 以前的某一天(只读回放;未来的日期与坏日期 400)

@@ -22,13 +22,14 @@ import { randomUUID } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
 import { appendFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, extname, isAbsolute, join, relative, sep } from 'node:path';
-import type { AssistantPart, CliEvent, CliFinal, ToolResult } from './cli/types.ts';
-import { getRuntime, type RunPlan } from './cli/run-plan.ts';
+import type { AssistantPart, CliEvent, CliFinal, ToolResult } from './types.ts';
+import { getRuntime, type RunPlan } from './runtime.ts';
+import { parseEventLine } from './log.ts';
 import { createPartialReader } from './stream.ts';
 import { parseTranscript, toolCalls, toolSummary } from './transcript.ts';
 import { isApiRuntime, type ApiRuntime, type CotutorConfig, type Policy } from '../schema/index.ts';
 import { readOnlyTools } from './api-tools.ts';
-import type { BrainHooks, BrainRequest, BrainResult, BrainRun, WarmKey } from './index.ts';
+import type { BrainHooks, BrainRequest, BrainResult, BrainRun } from './index.ts';
 
 /** 计划里记的 cli 名:API 的轮次按它分流 */
 export const API_CLI = 'api';
@@ -42,7 +43,7 @@ export const FACTORY_API_RUNTIMES: Record<string, ApiRuntime> = {
 const DEFAULT_STEPS = 6;
 /** 想一点:没有思考档的模型思考最多多少 token(有档的发 reasoning_effort,见 effortOf) */
 const THINK_LITTLE = 1024;
-/** 有思考档的模型:同 Qwen Code 里的 qwen3.8 系列(src/brain/cli/qwen.ts 的 tiers),百炼兼容接口认 reasoning_effort */
+/** 有思考档的模型:qwen3.8 系列(2026-10-31 照当时 Qwen Code 的档对过),百炼兼容接口认 reasoning_effort */
 const TIERED = /^qwen3\.8-/;
 /** 一张照片最大多少字节(百炼按 base64 收,太大的不附,记一条提醒) */
 const IMAGE_MAX = 10 * 1024 * 1024;
@@ -52,17 +53,6 @@ const CODEC = 'ai-sdk@7';
 /** 上一轮没回完:接在下一条消息前头 */
 const UNFINISHED = '(应用注:上一轮你没有回完,上面是写出来的那部分;孩子可能听到了一些,也可能没有,别当它已经说完。)';
 
-/** .log 的一行 → 统一事件(API 轮次的日志就是一行一条统一事件);不是这种行回 [] */
-export function parseEventLine(line: string): CliEvent[] {
-  if (!line.startsWith('{"kind":')) return [];
-  try {
-    const e = JSON.parse(line) as CliEvent;
-    return typeof e.kind === 'string' ? [e] : [];
-  } catch {
-    return [];
-  }
-}
-
 /** 政策 effort → 思考开关与思考量(同 qwen:low 不想,孩子在等;带工具的轮次至少想一点,不然照片题连资料都不查) */
 export function thinkingOf(effort: Policy['effort'] | undefined, tools: BrainRequest['tools']): { enableThinking: boolean; thinkingBudget?: number } {
   if (effort === 'high') return { enableThinking: true };
@@ -71,7 +61,7 @@ export function thinkingOf(effort: Policy['effort'] | undefined, tools: BrainReq
 }
 
 /**
- * 有思考档的模型照 qwen 运行时发 reasoning_effort(src/brain/cli/qwen.ts 的 EFFORT):想一点 = low、不限 = xhigh;不想或没有档 → null,照 thinkingOf 发。
+ * 有思考档的模型发 reasoning_effort(照当时 Qwen Code 的档):想一点 = low、不限 = xhigh;不想或没有档 → null,照 thinkingOf 发。
  * low 是它自己看着想:闲聊想一两百 token,认照片题想得多;thinking_budget 是死卡,1024 时有照片的话题每轮都想满(2026-10-31)
  */
 export function effortOf(model: string, effort: Policy['effort'] | undefined, tools: BrainRequest['tools']): 'low' | 'xhigh' | null {
@@ -233,7 +223,7 @@ export class ApiBrain {
     return { runtime: name, cli: API_CLI, tools: req.tools, argv: [], resume: session !== null, session, env: {} };
   }
 
-  start(req: BrainRequest, plan: RunPlan, ctx: { tutor: string; key: WarmKey; files: { log: string; err: string; history: string }; stall: Policy['stall'] }, hooks: BrainHooks): BrainRun {
+  start(req: BrainRequest, plan: RunPlan, ctx: { tutor: string; files: { log: string; err: string; history: string }; stall: Policy['stall'] }, hooks: BrainHooks): BrainRun {
     const reader = createPartialReader(parseEventLine);
     const go = async (): Promise<BrainResult> => {
       const { config, root } = this.workspace();
@@ -298,7 +288,7 @@ export class ApiBrain {
         try {
           const result = streamText({
             model: alibaba(runtime.model),
-            ...(req.systemBody ?? req.agentBody ? { system: req.systemBody ?? req.agentBody } : {}),
+            ...(req.systemBody ? { system: req.systemBody } : {}),
             messages: [...past, user],
             ...(req.tools !== 'off' ? { tools: readOnlyTools(req.readDirs, { images }) } : {}),
             stopWhen: isStepCount(runtime.maxSteps ?? DEFAULT_STEPS),
@@ -384,6 +374,6 @@ export class ApiBrain {
       const tools = toolCalls(logText, parseEventLine).slice(0, 200);
       return { transcript: { ...transcript, final: transcript.final ?? final }, tools, warnings };
     };
-    return { warm: false, text: () => reader.text(), done: go() };
+    return { text: () => reader.text(), done: go() };
   }
 }

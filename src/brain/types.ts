@@ -1,13 +1,18 @@
 /**
- * CLI 适配器:一个 agent CLI 一个文件,写「这个 CLI 怎么说话」——
- * 输出流怎么读、消息怎么写进 stdin、工具叫什么怎么关、思考量怎么调、起进程要什么环境、出厂模板长什么样。
- * 选哪个模型、预算、时限还在 cotutor.json 的运行时模板里(数据);应用的其余部分只认这里的统一事件,不认哪家的 JSON。
- * 接一个新 CLI:照 qwen.ts 写一个文件,在 index.ts 的 ADAPTERS 里登记。
+ * 脑的统一事件与工具:API 脑(./api.ts)写进 .log、孩子端的流式板书、家长端看原文、转录都只认这些。
+ * 名字里的 Cli 是 2026-11-02 以前起 Qwen Code 时留下的;那时的 .log 是 stream-json,由 ./stream-json.ts 读成同样的事件。
  */
-import type { CliRuntime, Policy } from '../../schema/index.ts';
 
 /** 工具的类别:应用要知道「读了哪个文件」「是不是用技能回读板书写法」时按类别认,不比工具名 */
 export type ToolKind = 'read' | 'shell' | 'search' | 'edit' | 'skill' | 'other';
+
+/** 工具名 → 类别:API 脑的三样(./api-tools.ts)与旧轮次里 Qwen Code、Claude Code 的工具名;不认识的是 other */
+const TOOL_KINDS: Record<string, ToolKind> = {
+  read_file: 'read', read_many_files: 'read', zoom_image: 'read', list_directory: 'read', glob: 'search', grep_search: 'search',
+  run_shell_command: 'shell', edit: 'edit', write_file: 'edit', notebook_edit: 'edit', skill: 'skill',
+  Read: 'read', Bash: 'shell', Grep: 'search', Glob: 'search', Edit: 'edit', Write: 'edit', NotebookEdit: 'edit', MultiEdit: 'edit', Skill: 'skill',
+};
+export const toolKind = (name: string): ToolKind => TOOL_KINDS[name] ?? 'other';
 
 /**
  * 这轮带不带工具(政策 tools 与消息种类定):off 一个不带;read 只读(看照片、读 vault、查教材);
@@ -82,38 +87,3 @@ export type CliEvent =
   | { kind: 'assistant'; parts: AssistantPart[]; sub: boolean; usage?: RequestUsage }
   | { kind: 'results'; results: ToolResult[]; sub: boolean }
   | { kind: 'result'; final: CliFinal };
-
-/** 运行时模板里与适配器有关的占位能拿到的值 */
-export interface PlanContext {
-  /** workspace 根(适配器的私有文件放在它的 .cotutor/ 下);测试与不关心的调用可以不给 */
-  root?: string;
-  effort: Policy['effort'];
-  /** 这轮带不带工具 */
-  tools: ToolSet;
-}
-
-export interface CliAdapter {
-  /** 适配器名:运行时的 cli 字段,或 run[0] 的文件名 */
-  name: string;
-  /** 一行原始输出 → 统一事件;读不懂的行返回 [] */
-  parse(line: string): CliEvent[];
-  /** stdin 模式(运行时 stdin: "stream-json")下写进 stdin 的那一行用户消息,带换行 */
-  stdinMessage(prompt: string): string;
-  /** 模板里 `{tools}` 填什么(一个参数里的文字) */
-  toolList(set: ToolSet): string;
-  /** 模板里独占一个参数的 `{toolArgs}` 展开成哪几个参数(可以是零个);readDirs = 这轮该读得到的目录(workspace 根、vault),会话 cwd 是老师目录,它们在 cwd 外面 */
-  toolArgs(set: ToolSet, ctx: { readDirs: readonly string[] }): string[];
-  toolKind(name: string): ToolKind;
-  /** 这轮带或不带工具时,进程起来报的工具表(init 事件)应该正好是哪几样;多出来的记提醒(CLI 升版本会带进新工具)。不给 = 不核对 */
-  expectedTools?(set: ToolSet): readonly string[];
-  /** 起进程前把这个 CLI 在 workspace 里要的机器文件备好(幂等,内容一样就不写) */
-  prepare?(root: string): Promise<void>;
-  /** 由这轮的计划定下来的环境变量(进预热的比对:变了的备用进程不能用);没有就不写 */
-  planEnv?(ctx: PlanContext): Record<string, string>;
-  /** 起进程前最后过一遍环境(认证等);不改就原样返回 */
-  env(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv;
-  /** cotutor doctor 查这个 CLI 时多看几样(version 是 `--version` 的第一行);不给就只查装没装 */
-  check?(ctx: { version: string; env: NodeJS.ProcessEnv }): { name: string; ok: boolean; detail: string; fix?: string }[];
-  /** 出厂运行时模板:键是运行时名 */
-  runtimes(): Record<string, CliRuntime>;
-}

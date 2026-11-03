@@ -2,7 +2,7 @@
  * 家长端「首页」:改首页原文的纯函数(切块、按老师换按钮、听写的词、先后)→
  * 接口(读、换按钮带讲法与留到、这周的词、调先后、开关与几项设置)→ 每改一次就发布、留历史 → 孩子端首页跟着变 → 页面能解析。
  */
-import { mkdtempSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { check, done } from './_check.ts';
@@ -160,12 +160,25 @@ try {
   // 一直听不再是常驻入口:孩子端没有入口,家长端也开不了
   check('一直听不是常驻入口:extras 写 listen 回 400', (await call('PATCH', '/api/parent/settings', { tutors: { 'chinese-tutor': { extras: ['dictation', 'listen'] } } })).status === 400);
 
+  // 孩子的平板怎么打开:服务没在听 → ready false;听着 → 两张码、HTTPS 与否、设备几台
+  check('二维码:测试走 route 没起端口 → ready false', ((await call('GET', '/api/parent/qr')).json as { ready: boolean }).ready === false);
+  ctx.listen = () => ({ name: 'https://ming.local:5180/', ip: 'https://192.168.1.23:5180/', https: false });
+  type QR = { ready: boolean; https: boolean; url: string; svg: string; ip: string | null; svgIp: string | null; parent: { url: string; svg: string; ip: string | null; svgIp: string | null }; notes: string[]; devices: number; last: string | null };
+  const q0 = (await call('GET', '/api/parent/qr')).json as QR;
+  check('二维码:主机名一张、IP 一张;HTTP 时带一句按住说话用不了;还没有设备', q0.ready && q0.url === 'https://ming.local:5180/' && q0.svg.startsWith('<svg') && q0.svgIp?.startsWith('<svg') === true && !q0.https && q0.notes[0].includes('cotutor cert') && q0.devices === 0 && q0.last === null, JSON.stringify({ ...q0, svg: q0.svg.slice(0, 20), svgIp: null }));
+  check('二维码:家长自己的手机另有一张,编的是家长端 /parent(主机名、IP 各一张)', q0.parent.url === 'https://ming.local:5180/parent' && q0.parent.ip === 'https://192.168.1.23:5180/parent' && q0.parent.svg.startsWith('<svg') && q0.parent.svg !== q0.svg && q0.parent.svgIp?.startsWith('<svg') === true, JSON.stringify({ url: q0.parent.url, ip: q0.parent.ip }));
+  mkdirSync(join(root, '.cotutor'), { recursive: true });
+  writeFileSync(join(root, '.cotutor', 'devices.json'), JSON.stringify({ aaaaaaaaaaaa: { first: '2026-10-01T01:00:00.000Z', last: '2026-10-20T01:00:00.000Z', opens: 3 }, bbbbbbbbbbbb: { first: '2026-10-02T01:00:00.000Z', last: '2026-10-22T09:12:00.000Z', opens: 1 } }));
+  const q1 = (await call('GET', '/api/parent/qr')).json as QR;
+  check('二维码:连过的设备几台、最近一次', q1.devices === 2 && q1.last === '2026-10-22T09:12:00.000Z', JSON.stringify({ devices: q1.devices, last: q1.last }));
+  ctx.listen = null;
+
   // 页面
   const page = (await call('GET', '/parent/home')).html ?? '';
   const js = page.slice(page.indexOf('<script>') + 8, page.lastIndexOf('</script>'));
   let parses = true;
   try { new Function(js); } catch (e) { parses = false; console.error(String(e)); }
-  check('家长端「首页」页:两个标签、内联脚本能解析、placeholder 的换行是真换行', page.includes('href="/parent/home">首页') && page.includes('href="/parent">记录') && parses && js.includes("'春天\\n鼓励"), String(page.length));
+  check('家长端「首页」页:两个标签、去工作台的链接、内联脚本能解析、placeholder 的换行是真换行', page.includes('href="/parent/home">首页') && page.includes('href="/parent">记录') && page.includes('href="/dev" target="_blank"') && parses && js.includes("'春天\\n鼓励"), String(page.length));
   const kidPage = (await call('GET', '/')).html ?? '';
   check('孩子端页面里还是没有家长端的路径', !kidPage.includes('/parent'));
   writeFileSync(join(home, 'ok'), '');

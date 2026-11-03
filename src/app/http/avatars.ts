@@ -21,6 +21,15 @@ type AvatarOf = { avatar?: string; subject?: string };
 /** 用出厂头像的话是哪张(文件名);家长自己定了、或不是三门主科 → null */
 const factoryName = (t: AvatarOf): string | null => (t.avatar && !OLD_FACTORY_EMOJI.has(t.avatar) ? null : SUBJECT_AVATARS[canonicalSubject(t.subject) ?? ''] ?? null);
 
+/** 这门学科的出厂头像在包里的文件(不管这位老师现在用不用);不是三门主科 → null */
+export function subjectAvatarFile(subject: string | undefined): string | null {
+  const f = SUBJECT_AVATARS[canonicalSubject(subject) ?? ''];
+  return f ? join(PACKAGE_AVATARS_DIR, f) : null;
+}
+
+/** cotutor.json 里家长定的头像:没写或还是旧版出厂的 emoji → null(用出厂的) */
+export const ownAvatar = (t: AvatarOf): string | null => (t.avatar && !OLD_FACTORY_EMOJI.has(t.avatar) ? t.avatar : null);
+
 /** 出厂头像在包里的文件;不用出厂的 → null */
 export function factoryAvatarFile(t: AvatarOf): string | null {
   const f = factoryName(t);

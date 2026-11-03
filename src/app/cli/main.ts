@@ -73,14 +73,15 @@ function parseArgs(argv: string[], valued: string[]): Parsed {
   return { cmd, positionals, flags };
 }
 
-/** 扫码页那一行(地址独占行尾:后面紧跟全角括号的话,终端不把它认成链接);--open-qr 顺手用默认浏览器打开(各系统各自的打开命令,失败不吭声) */
-async function printQr(page: string, open: boolean): Promise<void> {
-  process.stdout.write(`  扫码页 ${page}\n         在这台电脑上打开,iPad / iPhone 用相机扫;--open-qr 顺手打开\n`);
+/** 打开哪一页的那一行(地址独占行尾:后面紧跟全角括号的话,终端不把它认成链接);--open(旧名 --open-qr)顺手用默认浏览器打开(各系统各自的打开命令,失败不吭声) */
+async function printOpen(label: string, page: string, hint: string, open: boolean): Promise<void> {
+  process.stdout.write(`  ${label} ${page}\n${' '.repeat(label.length * 2 + 3)}${hint}\n`);
   if (!open) return;
   const { spawn } = await import('node:child_process');
   const [cmd, args] = process.platform === 'darwin' ? ['open', [page]] : process.platform === 'win32' ? ['cmd', ['/c', 'start', '', page]] : ['xdg-open', [page]];
   spawn(cmd, args, { stdio: 'ignore', detached: true }).on('error', () => {}).unref();
 }
+const wantsOpen = (flags: Record<string, string | true>): boolean => flags.open === true || flags['open-qr'] === true;
 
 export async function main(argv: string[]): Promise<void> {
   let json = false;
@@ -142,9 +143,8 @@ export async function main(argv: string[]): Promise<void> {
         process.stdout.write(`cotutor serve ${JSON.stringify(workspaceReport(r.ws))}\n`);
         for (const w of r.warnings) process.stdout.write(`  ! ${w}\n`);
         if (!r.https) process.stdout.write('  ! HTTP:平板、手机上按住说话要 HTTPS;cotutor cert 建证书后重启即走 HTTPS\n');
-        for (const u of r.urls) process.stdout.write(`  ${u}\n`);
-        process.stdout.write(`  孩子端 /,家长端 /parent,工作台 /dev(设置、老师团、看原文)\n`);
-        await printQr(r.qrPage, flags['open-qr'] === true);
+        // 只给家长端一个入口:孩子的平板扫码、排首页、记录都在里面,工作台从它的右上角进
+        await printOpen('家长端', r.parentPage, '在这台电脑上打开:孩子的平板扫码、排首页、看记录都在里面;--open 顺手打开', wantsOpen(flags));
         return;
       }
       case 'mock': {
@@ -161,7 +161,7 @@ export async function main(argv: string[]): Promise<void> {
         if (!r.https) process.stdout.write('  ! HTTP:平板、手机上按住说话要 HTTPS;cotutor cert 建证书后重启即走 HTTPS\n');
         for (const u of r.urls) process.stdout.write(`  ${u}\n`);
         process.stdout.write('  孩子端 /,家长端 /parent;直接开某位老师:/?tutor=chinese-tutor\n');
-        await printQr(r.qrPage, flags['open-qr'] === true);
+        await printOpen('扫码页', r.qrPage, '在这台电脑上打开,平板、手机用相机扫;--open 顺手打开', wantsOpen(flags));
         return;
       }
       case 'add': {

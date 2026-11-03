@@ -214,6 +214,15 @@ export type LiveConfig = z.infer<typeof LiveSchema>;
 /** 这位老师的嘴用哪个音色 */
 export const mouthVoice = (live: Pick<LiveConfig, 'voices'>, tutor: string): string => live.voices[tutor] ?? SHIPPED_MOUTHS[tutor] ?? MOUTH_VOICE;
 
+/** 卡的配音(点读、单词卡、听写念词)的缺省:出厂三位各一个(2026-11-03 照 Ray 那里用着的),不写进 cotutor.json;别的老师没配就不配音 */
+export const SHIPPED_CARD_VOICES: Readonly<Record<string, string>> = {
+  'chinese-tutor': 'qwen-audio-3.0-tts-plus-longfengyutong',
+  'math-tutor': 'qwen-audio-3.0-tts-plus-longyingsongliu',
+  'english-tutor': 'qwen-audio-3.0-tts-plus-loongnorahu',
+};
+/** 这位老师卡的配音用哪个音色:家长挑的,没挑用出厂的;都没有 undefined(不配音) */
+export const cardVoice = (tutors: Readonly<Record<string, { voice?: string }>>, tutor: string): string | undefined => tutors[tutor]?.voice ?? SHIPPED_CARD_VOICES[tutor];
+
 /**
  * 听写:拍照认词表用哪个模型。挑词的要求在听写 activity 文件「认字收到什么」;
  * 下面两份是出厂那节的原文,workspace 里没有听写 activity 文件时照它。回什么格式(一行一段 JSON)由应用填(src/scenes/dictation/recognize.ts 的 FORMAT)。
@@ -362,7 +371,7 @@ export function listTutors(config: CotutorConfig, opts: { kidOnly?: boolean } = 
       subject: t.subject,
       avatar: t.avatar,
       color: t.color,
-      voice: t.voice,
+      voice: cardVoice(config.tutors, name),
       enabled: t.enabled,
       hidden: t.hidden,
       policy: resolvePolicy(config, name),

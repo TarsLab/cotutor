@@ -16,7 +16,7 @@ import { isAbsolute, join, relative, sep } from 'node:path';
 import { buildContextPack } from './context/context-pack.ts';
 import { addMessage, applyRun, changedCards, jobId, sameRuntime, sessionFor } from './journal/conversation.ts';
 import { localDate, localMinute } from '../shared/time.ts';
-import { cardId, conversationFiles, threads } from '../schema/index.ts';
+import { cardVoice, cardId, conversationFiles, threads } from '../schema/index.ts';
 import { bookkeepingPrompt, kidQuestions, textbookHeadings } from '../memory/diary.ts';
 import { cardAssets, cardLabel, describeCard, tutorCardKinds } from '../board/cards/index.ts';
 import { boardGuideFor, cardGuidesFor } from '../board/cards/docs.ts';
@@ -641,8 +641,8 @@ export class Runner {
       }
     };
     // 讲稿不配音(嘴照念):拍关就就绪;卡自己的声音(点读段、单词)照配
-    const cardVoice = ws.config.tutors[tutor]?.voice;
-    const queue = cardVoice ? new DubQueue(cardVoice, files.err(job), { cacheDir: ws.dirs.tts, env: this.opts.env }) : null;
+    const voice = cardVoice(ws.config.tutors, tutor);
+    const queue = voice ? new DubQueue(voice, files.err(job), { cacheDir: ws.dirs.tts, env: this.opts.env }) : null;
     if (queue) queue.report = (e) => emit(e.kind === 'queued' ? { lane: 'tts', kind: 'queued', label: e.label } : e.kind === 'done' ? { lane: 'tts', kind: 'done', label: e.label, ms: e.ms, file: e.file ?? '' } : { lane: 'tts', kind: 'failed', label: e.label, ms: e.ms, error: e.error ?? '?' });
     let cardsSeen = 0;
     let linesSeen = 0;

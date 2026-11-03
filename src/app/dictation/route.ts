@@ -25,6 +25,7 @@
 import { join } from 'node:path';
 import { DICTATION_SAY_MAX, DICTATION_WORD_MAX, DICTATION_WORDS_MAX, DictationPropsSchema, dictationEmoji, dictationWordLang, type DictationLang, type DictationProps, type DictationWord } from '../../board/cards/index.ts';
 import { localDate } from '../../shared/time.ts';
+import { cardVoice } from '../../schema/index.ts';
 import type { AppContext, RouteResult } from '../http/app.ts';
 import { readPublished } from '../../runtime/home/store.ts';
 import { tianzigeData } from '../../ui/kid/tianzige.ts';
@@ -66,7 +67,7 @@ export interface DictationDeps {
 /** 真服务的依赖:首页从 home/published.json 读,音色从 cotutor.json,配音缓存在 .cotutor/tts/(和卡的配音同一份) */
 export function dictationDeps(ctx: AppContext): DictationDeps {
   const ws = (): AppContext['ws'] => ctx.ws;
-  const voiced = (t: string): boolean => Boolean(ws().config.tutors[t]?.voice);
+  const voiced = (t: string): boolean => Boolean(cardVoice(ws().config.tutors, t));
   return {
     root: ctx.ws.root,
     now: ctx.now,
@@ -93,7 +94,7 @@ export function dictationDeps(ctx: AppContext): DictationDeps {
       return Boolean(tutor && voiced(tutor));
     },
     async say(text, tutor) {
-      const voice = tutor ? ws().config.tutors[tutor]?.voice : undefined;
+      const voice = tutor ? cardVoice(ws().config.tutors, tutor) : undefined;
       if (!voice) return null;
       const r = await synthesize({ text, voice }, { cacheDir: ws().dirs.tts, env: process.env });
       // 孩子端只说「叫爸爸妈妈来看一下」;原因只在这里说

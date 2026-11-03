@@ -8,17 +8,22 @@
  *   PUT   /api/parent/home/tutors/<老师>/dictation   {words: [{chars, say?}]} 这周的词;[] = 删掉
  *   PUT   /api/parent/home/order                    {tutors: [老师…]} 老师的先后(排第一的进首页时在最前)
  *   PATCH /api/parent/settings                      {tutors?: {<老师>: {extras?: [..] | null, hidden?}}, talk?: {note?, minutes?}}
+ *   GET   /api/parent/qr                            孩子端与家长端地址的二维码(各有主机名一张、局域网 IP 一张)、是不是 HTTPS、孩子的设备连过几台、上次什么时候;服务没在听(测试走 route)→ {ready: false}
  */
 import { DICTATION_EN_MAX, DICTATION_WORD_MAX, DICTATION_WORDS_MAX, TUTOR_BUTTONS_MAX, TutorButtonSchema, dictationWordLang, type DictationLang, type TutorButton } from '../../board/cards/index.ts';
 import { localDate } from '../../shared/time.ts';
 import { orderTutors, setTutorButtons, setTutorDictation } from '../../runtime/home/edit.ts';
-import { AGENT_NAME_RE, TUTOR_EXTRAS, subjectLang, tutorExtras, type CotutorConfig } from '../../schema/index.ts';
+import { AGENT_NAME_RE, TUTOR_EXTRAS, cardVoice, mouthVoice, subjectLang, tutorExtras, type CotutorConfig } from '../../schema/index.ts';
+import { REALTIME_VOICES } from '../../realtime/voices.ts';
+import { TTS_VOICES } from '../../media/tts.ts';
 import type { AppContext, RouteResult } from './app.ts';
 import { editPublished, readPublished, type PublishResult } from '../../runtime/home/store.ts';
 import { patchConfig } from '../workspace.ts';
 import { tutorColors } from '../../ui/shared/tutor-color.ts';
 import { wordEmoji } from '../../ui/kid/word-emoji.ts';
 import { shownAvatar } from './avatars.ts';
+import { qrNotes, qrSvg } from '../../ui/shared/qr-svg.ts';
+import { readDevices } from '../../runtime/journal/kid-log.ts';
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const bad = (message: string): RouteResult => ({ status: 400, json: { error: 'bad_request', message } });
@@ -43,6 +48,15 @@ export interface ParentHomeTutor {
   lang: DictationLang;
   /** 学科色(src/ui/shared/tutor-color.ts) */
   color: string;
+  /** 「样子与声音」那一行:说话的声音、点读的声音叫什么(点开见 ./parent-look.ts);点读没配 = null */
+  voices: { mouth: string; card: string | null };
+}
+
+/** 音色 id → 官方的中文名(没在表里的照写 id) */
+function voiceNames(c: CotutorConfig, name: string): { mouth: string; card: string | null } {
+  const mouth = mouthVoice(c.live, name);
+  const card = cardVoice(c.tutors, name);
+  return { mouth: REALTIME_VOICES.find((v) => v.voice === mouth)?.name ?? mouth, card: card ? (TTS_VOICES.find((v) => v.voice === card)?.name ?? card) : null };
 }
 
 export async function parentHome(ctx: AppContext): Promise<Record<string, unknown>> {
@@ -70,6 +84,7 @@ export async function parentHome(ctx: AppContext): Promise<Record<string, unknow
       dictation: dict ? ((dict.props.words ?? []) as { chars: string; say?: string; emoji?: string }[]) : null,
       lang: subjectLang(t.subject),
       color: colors[name],
+      voices: voiceNames(c, name),
     };
   });
   return {
@@ -132,8 +147,23 @@ function published(r: PublishResult | null): RouteResult {
   return { status: 200, json: { ok: true, home: r?.home ? { id: r.home.id, publishedAt: r.home.publishedAt } : null, changed: Boolean(r) } };
 }
 
+/** 首页上「扫码打开」那块:孩子的平板一张(孩子端 /)、家长自己的手机一张(家长端 /parent);编什么地址由服务端定(同 /dev/qr,不看请求的 Host);连过的设备拿来定这块缺省开着还是收着 */
+async function kidQr(ctx: AppContext): Promise<Record<string, unknown>> {
+  const info = ctx.listen?.() ?? null;
+  if (!info) return { ready: false };
+  const devices = Object.values(await readDevices(ctx.ws));
+  const last = devices.map((d) => d.last).sort().at(-1) ?? null;
+  const parent = { url: `${info.name}parent`, ip: info.ip ? `${info.ip}parent` : null };
+  return {
+    ready: true, https: info.https, url: info.name, svg: qrSvg(info.name), ip: info.ip, svgIp: info.ip ? qrSvg(info.ip) : null,
+    parent: { ...parent, svg: qrSvg(parent.url), svgIp: parent.ip ? qrSvg(parent.ip) : null },
+    notes: qrNotes(info.https).slice(1), devices: devices.length, last,
+  };
+}
+
 export async function parentHomeRoute(method: string, p: string, ctx: AppContext, body: unknown): Promise<RouteResult | null> {
   if (p === '/api/parent/home' && method === 'GET') return { status: 200, json: await parentHome(ctx) };
+  if (p === '/api/parent/qr' && method === 'GET') return { status: 200, json: await kidQr(ctx) };
   const names = faceTutors(ctx.ws.config);
   const tb = /^\/api\/parent\/home\/tutors\/([^/]+)\/(buttons|dictation)$/.exec(p);
   if (tb) {

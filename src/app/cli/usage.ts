@@ -7,7 +7,7 @@ export const USAGE = `用法:
   cotutor upgrade --config [--dry-run] [--workspace <dir>]              cotutor.json 补缺:新出厂老师 / 运行时 / 命令模板旗标(只加缺的,你改过的值不动)
   cotutor add <老师名> --display <显示名> [--subject <学科>] [--avatar <emoji|图片相对路径>] [--hidden]   加一位自家的老师:出模板文件、进 cotutor.json、建目录(名字以 -tutor 结尾的是老师,figshot 给它做头像)
   cotutor add-theme <主题名> [--from <主题>] [--workspace <dir>]       加一个自家的主题:拷一份(缺省出厂的 default)到 themes/<主题名>/,改 cotutor.json 的 kid.theme 换过去
-  cotutor serve [--workspace <dir>] [--port <n>] [--http] [--trace] [--open-qr]   起服务(一 workspace 一进程;~/.config/cotutor/certs/ 有证书就走 HTTPS;--trace 每一轮的事件按道打印;/dev/qr 是扫码页,--open-qr 顺手打开)
+  cotutor serve [--workspace <dir>] [--port <n>] [--http] [--trace] [--open]   起服务(一 workspace 一进程;~/.config/cotutor/certs/ 有证书就走 HTTPS;--trace 每一轮的事件按道打印;只打印家长端首页的地址,孩子的平板在那里扫码;--open 顺手打开,旧名 --open-qr 照样认)
   cotutor pin [off | status] [--pin <数字>] [--json]                       家长端 /parent 与工作台 /dev 的锁:机器级 PIN(所有 workspace 共用),iPad 上输一次、这台电脑免密;没设就全开(家长在旁边可以不设);off 撤掉
   cotutor cert [--host <名或IP>]...                                      用 mkcert 建这台机器的自签证书到 ~/.config/cotutor/certs/(平板、手机上录音要 HTTPS;所有 workspace 共用)
   cotutor send <老师> [<消息>] [--from kid|system] [--runtime <名>] [--new] [--photo a.jpg,b.png] [--activity <名> [--param '名=值;名=值']] [--lane main,tts] [--quiet]   终端里发一条,现场按道打印每道工序的事件,说完打印结果(与页面同一条路;--new 开新话题;--photo 带作业照片,拷进 captures/,有照片时消息可以空;--activity 像孩子点了首页的 activity 按钮,新开话题,参数同按钮下面那几行;--quiet 只要结果)

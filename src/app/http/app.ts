@@ -5,9 +5,8 @@
  * R3 加:孩子端 `/`(kidPage)与 /api/kid/*(首页:课程表 + 老师卡 + 家长发布的首页卡;对话:服务端过滤后的孩子视图;发消息:from 固定 kid)、配音文件 /api/audio。
  * 配置热重载:每个请求先读一遍 cotutor.json,原文变了就重读(不比修改时间,Windows 上连写两次常常一样);改坏了留旧配置并把错误挂在 /api/health 上。
  */
-import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { appendFile, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, readdir, stat } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { join } from 'node:path';
 import { foldRuns, type TranscriptRow } from '../../brain/transcript.ts';
@@ -23,9 +22,9 @@ import { NEUTRAL_COLOR, SUBJECT_COLORS, TUTOR_PALETTE, tutorColors } from '../..
 import { boardMarkOf, type BoardMarkId } from '../../ui/kid/board-mark.ts';
 import { buildReel, playRecordOk, reelCardTook, reelHolds, reelMissRuns, type PlayRecord, type Reel, type ReelCall } from '../../ui/kid/reel.ts';
 import type { CallReel } from '../../runtime/journal/recorder.ts';
-import { isRealtimeVoice, REALTIME_VOICES } from '../../realtime/voices.ts';
-import { previewVoice } from '../../realtime/preview.ts';
-import { DATE_RE, FocusSchema, MESSAGE_FROM, MOUTH_VOICE, listTutors, mouthVoice, subjectLang, type ConversationIndex, type ConversationMessage, type MemoryLine, type TutorExtra } from '../../schema/index.ts';
+import { REALTIME_VOICES } from '../../realtime/voices.ts';
+import { PREVIEW_TEXT, cardPreview, mouthPreview } from './voice-preview.ts';
+import { DATE_RE, FocusSchema, MESSAGE_FROM, MOUTH_VOICE, cardVoice, listTutors, mouthVoice, subjectLang, type ConversationIndex, type ConversationMessage, type MemoryLine, type TutorExtra } from '../../schema/index.ts';
 import type { BoardCard, Device } from '../../board/presentation.ts';
 import { ConfigError, patchConfig, reloadIfChanged, workspaceReport } from '../workspace.ts';
 import { UsageError } from '../../shared/errors.ts';
@@ -55,6 +54,7 @@ import { BusyError, Runner, type SendInput } from '../../runtime/runner.ts';
 import { sendFile } from './send-file.ts';
 import { talkRoute } from '../talk/route.ts';
 import { parentHomeRoute } from './parent-home.ts';
+import { parentLookRoute } from './parent-look.ts';
 import { bailianRoute, createBailian, type Bailian } from '../machine/bailian.ts';
 import { PARENT_HOME_PAGE } from '../../ui/parent/parent-home-page.ts';
 import { dictationRoute } from '../dictation/route.ts';
@@ -74,7 +74,7 @@ import { fixtureOf, rawView } from './raw-view.ts';
 import { DeviceSchema } from '../../schema/index.ts';
 import { CanvasStateSchema } from '../../board/cards/canvas.ts';
 import { PAPER_KEY_RE, adoptPaper, dropPaper, readPaper, writePaper } from '../../board/paper.ts';
-import { synthesize, TTS_VOICES } from '../../media/tts.ts';
+import { TTS_VOICES } from '../../media/tts.ts';
 import { addTutorFile, readTutorFile, removeTutorFile, writeTutorFile } from '../cli/tutors.ts';
 import type { MouthIndex } from '../../runtime/journal/mouth-index.ts';
 
@@ -575,9 +575,6 @@ const IMAGE_TYPES: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg
 
 /** 作业照片一张最多这么大(解码后;页面先缩到长边 PHOTO_MAX_SIDE 的 jpeg,通常几百 KB) */
 export const PHOTO_MAX_BYTES = 3_000_000;
-/** 音色页的试听句;与 tutors.*.voice 里合法的 id 形状(qwen-audio-3.0-tts-plus-xxx) */
-const PREVIEW_TEXT = '你好呀,我是你的老师。今天我们一起来学一个新东西,准备好了吗?';
-const VOICE_ID_RE = /^[A-Za-z0-9._:-]{1,120}$/;
 
 /**
  * 上传作业照片(R5):body {image: "data:image/jpeg;base64,…"}(也认 png)→ 落 captures/<日期>/<HHMM>-<n>.jpg → {path}。
@@ -947,7 +944,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     // 音色页(2026-09-17):卡的配音认的全部音色(src/media/tts-voices.ts),家长挑之前先听
     if (p === '/api/tts/voices' && method === 'GET') {
       const inUse: Record<string, string[]> = {};
-      for (const [name, t] of Object.entries(ws.config.tutors)) if (t.voice) (inUse[t.voice] ??= []).push(name);
+      for (const name of Object.keys(ws.config.tutors)) { const v = cardVoice(ws.config.tutors, name); if (v) (inUse[v] ??= []).push(name); }
       return { status: 200, json: { ok: true, count: TTS_VOICES.length, voices: TTS_VOICES, inUse, sample: PREVIEW_TEXT } };
     }
     // 嘴的音色(工作台音色页「实时的嘴」):这个 realtime 模型认的 56 个(src/realtime/voices.ts)、谁在用(没挑的用缺省)
@@ -956,31 +953,12 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       for (const t of listTutors(ws.config, { kidOnly: true })) (inUse[mouthVoice(ws.config.live, t.name)] ??= []).push(t.name);
       return { status: 200, json: { voices: REALTIME_VOICES, inUse, fallback: MOUTH_VOICE, model: ws.config.live.model, sample: PREVIEW_TEXT } };
     }
-    // 试听嘴的一个音色:真连一次 realtime 照念这一句(几分钱),存在 .cotutor/live-preview/,同一句同一音色以后直接给文件
-    if (p === '/api/tts/realtime/preview' && method === 'GET') {
+    // 试听:嘴真连一次 realtime、卡的配音合成一句,都有缓存(./voice-preview.ts)
+    if ((p === '/api/tts/realtime/preview' || p === '/api/tts/preview') && method === 'GET') {
       const voice = url.searchParams.get('voice')?.trim() ?? '';
-      if (!isRealtimeVoice(voice)) return { status: 400, json: { error: 'bad_voice', message: `这个模型不认「${voice}」这个音色` } };
       const text = url.searchParams.get('text')?.trim().slice(0, 200) || PREVIEW_TEXT;
-      const dir = join(ws.root, '.cotutor', 'live-preview');
-      const file = join(dir, `${createHash('sha1').update(`${ws.config.live.model}\n${voice}\n${text}`).digest('hex').slice(0, 20)}.wav`);
-      if (!(await stat(file).catch(() => null))?.isFile()) {
-        const r = await previewVoice({ voice, text, model: ws.config.live.model, env: process.env, endpoint: process.env.COTUTOR_LIVE_ENDPOINT });
-        if ('error' in r) return { status: 502, json: { error: 'realtime_failed', voice, message: r.error } };
-        await mkdir(dir, { recursive: true });
-        await writeFile(file, r.wav);
-      }
-      return { status: 200, file, contentType: 'audio/wav' };
+      return p === '/api/tts/preview' ? cardPreview(ws, voice, text) : mouthPreview(ws, voice, text);
     }
-    // 试听一个音色:同一句同一音色合成一次就在配音缓存里(.cotutor/tts/),之后直接给文件;失败回 JSON 说原因(页面拿 message 显示)
-    if (p === '/api/tts/preview' && method === 'GET') {
-      const voice = url.searchParams.get('voice')?.trim() ?? '';
-      if (!VOICE_ID_RE.test(voice)) return { status: 400, json: { error: 'bad_voice', message: '音色 id 只能是字母数字与 . _ : -' } };
-      const text = url.searchParams.get('text')?.trim().slice(0, 200) || PREVIEW_TEXT;
-      const r = await synthesize({ text, voice }, { cacheDir: ws.dirs.tts, env: process.env });
-      if (!r.file) return { status: 502, json: { error: 'tts_failed', voice, message: r.error } };
-      return { status: 200, file: r.file, contentType: 'audio/mpeg' };
-    }
-
 
     // 话题打星(《obsidian仓库设计.md》§4):PUT {rating: 1–5 | null};记账:POST {threads?: [..]} → 每个话题一轮记账任务,老师回「## 记账」段,应用写日记
     const rate = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2})\/threads\/([^/]+)\/rating$/.exec(p);
@@ -1137,6 +1115,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     }
     // 家长端「首页」的接口(/api/parent/*)
     const phr = await parentHomeRoute(method, p, ctx, body); if (phr) return phr;
+    const plr = await parentLookRoute(method, p, url, ctx, body); if (plr) return plr;
     const blr = await bailianRoute(method, p, ctx, body, who); if (blr) return blr;
     // 口语课(路由 src/app/talk/,页面 src/ui/talk/,规则与存取 src/scenes/talk/):/talk 与 /api/talk/* 交给它;上课在英语老师的实时页(talk-run.ts)
     const tk = await talkRoute(method, url, ctx, body); if (tk) return tk;

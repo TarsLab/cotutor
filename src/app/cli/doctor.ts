@@ -17,7 +17,7 @@ import { parseAgentFile } from '../../runtime/agent-file.ts';
 import { localDate } from '../../shared/time.ts';
 import { MIN_CONTRAST, contrastWithWhite } from '../../ui/shared/tutor-color.ts';
 import { memoryPath, missingEntry, pickNotes } from '../../memory/vault-notes.ts';
-import { SKILLS_DIR, isApiRuntime, listTutors, mouthVoice, resolvePolicy, tutorFilePath } from '../../schema/index.ts';
+import { SKILLS_DIR, cardVoice, isApiRuntime, listTutors, mouthVoice, resolvePolicy, tutorFilePath } from '../../schema/index.ts';
 import { kindsFor, tutorCardKinds } from '../../board/cards/index.ts';
 import { scanVault } from '../../memory/vault.ts';
 import { parseArtifactEvents } from '../../runtime/journal/ledger.ts';
@@ -240,7 +240,7 @@ export async function doctorWorkspace(
       push({ name: `tutor.${name}.home`, ok: there, required: true, detail: there ? `agents/${name}/ 在(会话 cwd)` : `agents/${name}/ 不在`, fix: there ? undefined : 'cotutor init 补建' });
       // 音色:一老师一音色走 API 是正路;没配的孩子端只剩浏览器合成声(只该在测试里);hidden 的老师不对孩子说话,不用音色
       const tc = ws.config.tutors[name];
-      if (tc.enabled && !tc.hidden && !tc.voice) push({ name: `tutor.${name}.voice`, ok: false, required: false, detail: `${tc.display} 没配音色(cotutor.json tutors.${name}.voice),卡上的声音(点读卡、单词卡)配不了——只适合测试`, fix: '工作台 /dev 的「音色」页「卡的配音」能听着挑(挑中直接写进去)' });
+      if (tc.enabled && !tc.hidden && !cardVoice(ws.config.tutors, name)) push({ name: `tutor.${name}.voice`, ok: false, required: false, detail: `${tc.display} 没配音色(cotutor.json tutors.${name}.voice),卡上的声音(点读卡、单词卡)配不了——只适合测试`, fix: '家长端「首页」点这位老师的「样子与声音」挑一个(工作台「音色」页有全部)' });
       // 卡的清单(《卡片协议.md》「谁拿到哪些卡」):有脸的老师才递板书写法;只是报一声讲哪几种
       if (takesTutorRules(name)) {
         const kinds = tutorCardKinds(tc.cards);

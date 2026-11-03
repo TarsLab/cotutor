@@ -74,7 +74,9 @@ ${BRAND_CSS}
   #phead { display:flex; flex-wrap:wrap; align-items:center; gap:12px 20px; }
   #pnokey { display:block; padding:12px 16px; border-radius:14px; background:#fff3e8; color:#b4531f; font-size:15px; text-decoration:none; }
   #pnokey[hidden] { display:none; }
-  #phead #ttl { flex:1 0 100%; }
+  #phead #ttl { flex:1 1 0; }
+  /* 去工作台:次要的小链接,不和首页 / 记录并列 */
+  .devl { flex:none; display:inline-flex; align-items:center; gap:4px; height:32px; padding:0 10px; border:1px solid #e2dfd6; border-radius:10px; background:#fff; color:var(--dim); font-size:13px; text-decoration:none; }
   #phead .ptabs { flex:1 0 100%; }
   /* 七天日期条:每天下面学科色的点 = 那天有动静的老师 */
   #pweek { display:flex; align-items:center; gap:2px; padding:4px; border-radius:16px; background:var(--card); border:1px solid var(--line); }
@@ -173,6 +175,7 @@ ${BRAND_CSS}
     #home { max-width:1180px; }
     #phead #ttl { flex:0 0 auto; }
     #phead .ptabs { flex:0 0 260px; }
+    #phead .devl { order:1; margin-left:auto; height:34px; padding:0 12px; font-size:14px; }
     #pcols { display:grid; grid-template-columns:minmax(0,640px) minmax(0,1fr); gap:20px; align-items:start; }
     #pday { position:sticky; top:16px; max-height:calc(100vh - 32px); overflow:auto; }
   }
@@ -187,6 +190,7 @@ ${REEL_DOCK_CSS}
 <div id="home">
   <div id="phead">
     <div id="ttl"><span id="ct-mark" class="ct-draw ct-hover">${titleLogo(true)}</span><h1 id="title">${title}</h1></div>
+    <a class="devl" href="/dev" target="_blank" title="工作台:细调老师文件、activity、全部音色(新窗口)">工作台<svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4 2h6v6"/><path d="M10 2 3 9"/></svg></a>
     <nav id="ptabs" class="ptabs"><a href="/parent/home">首页</a><a class="on" href="/parent">记录</a></nav>
   </div>
   <a id="pnokey" href="/parent/home" hidden>孩子那边现在打不开:还没配百炼的 key。去「首页」配好就能用 ›</a>

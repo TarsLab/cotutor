@@ -92,10 +92,10 @@ try {
   const nested = await doctorWorkspace(root, { probeEnv: false, env: { CLAUDECODE: '1' } });
   check('Qwen 不受 Claude 的嵌套环境影响', !nested.checks.some((c) => c.name === 'env.nested' || c.name === 'env.userSettings' || c.name === 'proxy'));
   check('没有百炼的 key → tts 报出来(不是必需,卡只是不配音)', nested.checks.some((c) => c.name === 'tts' && !c.ok && !c.required && c.detail.includes('没有百炼的 key') && c.fix), JSON.stringify(nested.checks.find((c) => c.name === 'tts')));
-  // --live:缺省运行时是 API 的,不起老师(真跑一轮用 cotutor send);没人配 voice 就不探配音
+  // --live:缺省运行时是 API 的,不起老师(真跑一轮用 cotutor send);配音照真合成一句
   const live = await doctorWorkspace(root, { probeEnv: false, env: {}, live: true });
   check('--live:API 运行时说用 cotutor send 真跑', live.checks.some((c) => c.name === 'live.api' && c.ok && c.detail.includes('cotutor send')), JSON.stringify(live.checks.filter((c) => c.name.startsWith('live'))));
-  check('没人配 voice → live.tts 跳过', live.checks.some((c) => c.name === 'live.tts' && c.ok && c.detail.includes('不探')));
+  check('出厂老师有出厂的点读声音 → live.tts 真合成一句;没有 key 就报没合成(不是必需项)', live.checks.some((c) => c.name === 'live.tts' && !c.ok && !c.required && c.detail.includes('没合成')), JSON.stringify(live.checks.find((c) => c.name === 'live.tts')));
 } finally {
   rmSync(home, { recursive: true, force: true });
 }

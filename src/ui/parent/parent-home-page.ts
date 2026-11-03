@@ -31,6 +31,9 @@ ${faviconLinks()}
   #ct-mark { display:flex; }
 ${BRAND_CSS}
   .top small { color:var(--mute); font-size:13px; }
+  /* 去工作台:次要的小链接,不和首页 / 记录并列 */
+  .devl { flex:none; display:inline-flex; align-items:center; gap:4px; height:32px; padding:0 10px; border:1px solid #e2dfd6; border-radius:10px; background:#fff; color:var(--dim); font-size:13px; text-decoration:none; }
+  .top .devl { margin-left:auto; }
   .top .seg { order:3; flex:1 0 100%; }
   .seg { display:flex; padding:3px; border-radius:12px; background:#e9e6de; }
   .seg > * { flex:1; height:36px; border:0; border-radius:9px; background:transparent; font-size:15px; color:var(--dim); display:flex; align-items:center; justify-content:center; text-decoration:none; cursor:pointer; }
@@ -105,6 +108,100 @@ ${BRAND_CSS}
   #toast { position:fixed; left:50%; bottom:calc(env(safe-area-inset-bottom) + 24px); transform:translateX(-50%); max-width:min(560px,calc(100% - 32px)); padding:12px 18px; border-radius:16px; background:#2b2b2bee; color:#fff; font-size:15px; display:none; z-index:20; white-space:pre-line; }
   #toast.on { display:block; }
   .main { display:flex; flex-direction:column; gap:18px; }
+  /* 孩子的平板怎么打开:二维码(服务端现画);宽屏在右栏最上面,窄屏在预览上面 */
+  #qrtop:empty { display:none; }
+  .qrrow { display:flex; flex-direction:column; gap:10px; align-items:center; text-align:center; }
+  .qrimg { flex:none; width:220px; height:220px; max-width:100%; border-radius:8px; box-shadow:0 0 0 1px var(--line); overflow:hidden; background:#fff; }
+  .qrimg svg { display:block; width:100%; height:100%; }
+  .qrurl { font:13px/1.4 ui-monospace,Menlo,monospace; background:#faf9f4; border-radius:8px; padding:8px 10px; overflow-wrap:anywhere; }
+  .qrwarn { font-size:13px; color:var(--accent); line-height:1.5; }
+  .gh .x { height:auto; padding:2px 0; font-size:13px; }
+  /* 样子与声音:头像一格格点;两种声音各一行(现在用的),「换一个」开弹窗;宽屏在右栏,窄屏整屏 */
+  .lk { display:flex; flex-direction:column; gap:16px; }
+  .lk .nav b { font-size:16px; text-align:center; }
+  .lksaved { min-width:56px; text-align:right; font-size:13px; color:var(--ok); }
+  .lkbig { align-self:center; width:104px; height:104px; border-radius:50%; overflow:hidden; background:#fff3e8; box-shadow:0 0 0 4px #fff, 0 6px 18px #2b2b2b1f; display:grid; place-items:center; font-size:44px; font-weight:700; color:var(--accent); }
+  .lkbig img { width:100%; height:100%; object-fit:cover; }
+  .lkgrid { background:var(--card); border-radius:14px; padding:12px; display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:8px; }
+  .lkopt { display:flex; flex-direction:column; align-items:center; gap:3px; min-height:44px; padding:8px 0 6px; border:2px solid transparent; border-radius:14px; background:transparent; cursor:pointer; }
+  .lkopt.on { border-color:var(--ink); background:#fff; }
+  .lkf { width:52px; height:52px; border-radius:50%; overflow:hidden; background:#faf9f4; display:grid; place-items:center; font-size:26px; font-weight:700; color:var(--dim); }
+  .lkf img { width:100%; height:100%; object-fit:cover; }
+  .lkopt small { font-size:11px; color:var(--mute); line-height:1.3; }
+  /* 一个声音:圆里「女 / 男」,底色也分(不只靠颜色);标签:普通话 / 中文灰,方言橙,英文青,童声紫,场景描边 */
+  .vface { flex:none; width:44px; height:44px; border-radius:50%; display:grid; place-items:center; font-size:16px; font-weight:700; background:#efece5; color:#5f5b54; }
+  .vface.g-f { background:#fbe4e8; color:#9e2f4a; }
+  .vface.g-m { background:#dfe9f6; color:#285a96; }
+  .vtx { flex:1; min-width:0; display:flex; flex-direction:column; gap:4px; text-align:left; }
+  .vnm { display:flex; align-items:baseline; gap:6px; flex-wrap:wrap; }
+  .vnm b { font-size:16px; font-weight:600; }
+  .vnm small, .vtr { font-size:13px; color:#5f5b54; }
+  .vtags { display:flex; gap:5px; flex-wrap:wrap; }
+  .vt { font-size:12px; line-height:20px; padding:0 7px; border-radius:6px; border:1px solid transparent; }
+  .t-lang { background:#f1eee7; color:#5f5b54; }
+  .t-dia { background:#fdecd3; color:#8a4b0b; }
+  .t-en { background:#dcefee; color:#0f5f5c; }
+  .t-kid { background:#ece6f8; color:#5b3fa0; }
+  .t-line { background:#fff; color:#5f5b54; border-color:#e3dfd6; }
+  .t-warn { background:#fff; color:#8a4b0b; border-color:#e2b877; }
+  .vplay { flex:none; width:44px; height:44px; border-radius:50%; border:0; background:#f3efe6; color:var(--ink); display:grid; place-items:center; cursor:pointer; }
+  .vplay.on { background:var(--accent); color:#fff; }
+  .vcur { padding:12px 12px 12px 14px; display:flex; flex-direction:column; gap:8px; }
+  .vcur + .vcur { border-top:1px solid var(--line); }
+  .vcur > .lbl { font-size:13px; color:#5f5b54; }
+  .vrow2 { display:flex; align-items:center; gap:12px; }
+  .vchg { align-self:flex-end; display:inline-flex; align-items:center; gap:2px; min-height:44px; padding:0 10px 0 16px; border:0; border-radius:22px; background:#f3efe6; color:var(--ink); font-size:15px; cursor:pointer; }
+  .vchg span { display:flex; }
+  .vchg svg { width:16px; height:16px; }
+  /* 选声音的弹窗:宽屏居中,窄屏从底下升起占满 */
+  .vp { position:fixed; inset:0; z-index:30; background:rgba(30,28,25,.46); display:flex; align-items:center; justify-content:center; padding:24px; }
+  .vpbox { width:100%; max-width:840px; height:min(788px, 100%); background:#fff; border-radius:20px; box-shadow:0 24px 60px rgba(20,18,15,.28); display:flex; flex-direction:column; overflow:hidden; outline:none; }
+  .vphd { padding:18px 16px 0 24px; display:flex; align-items:flex-start; gap:12px; }
+  .vphd .tx { flex:1; min-width:0; display:flex; flex-direction:column; }
+  .vphd b { font-size:20px; font-weight:600; }
+  .vphd small { font-size:13px; color:#5f5b54; }
+  .vpx { flex:none; width:44px; height:44px; border-radius:50%; border:0; background:#f3efe6; color:var(--ink); display:grid; place-items:center; cursor:pointer; }
+  .vpctl { padding:14px 24px 12px; display:flex; flex-direction:column; gap:10px; border-bottom:1px solid var(--line); }
+  .vpctl .fld { padding:10px 14px; }
+  #vp-f { display:flex; flex-direction:column; gap:8px; }
+  .vpg { display:flex; align-items:flex-start; gap:10px; }
+  .vpg .lbl { flex:none; width:36px; padding-top:6px; font-size:13px; color:#5f5b54; }
+  .vpg .chips { flex:1; min-width:0; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; }
+  .chip { display:inline-flex; align-items:center; gap:4px; min-height:34px; padding:0 12px; border:1px solid #e3dfd6; border-radius:17px; background:#fff; color:var(--ink); font-size:14px; cursor:pointer; }
+  .chip small { font-size:12px; color:#6b675f; }
+  .chip.on { background:var(--ink); border-color:var(--ink); color:#fff; }
+  .chip.on small { color:#e8e4dc; }
+  .chip.more { color:var(--accent); border-style:dashed; }
+  .vplist { flex:1; min-height:0; overflow-y:auto; padding:12px 24px 16px; background:#faf9f6; -webkit-overflow-scrolling:touch; }
+  .vpgrid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px; }
+  .vcard { display:flex; align-items:flex-start; gap:8px; padding:12px 10px 12px 12px; border-radius:14px; background:#fff; border:2px solid #ece8df; }
+  .vcard.on { background:#fffaf3; border-color:var(--accent); }
+  .vcard .vpick { flex:1; min-width:0; display:flex; align-items:flex-start; gap:12px; border:0; background:transparent; padding:0; font:inherit; color:inherit; cursor:pointer; }
+  .vpnone { padding:60px 0; display:flex; flex-direction:column; align-items:center; gap:10px; color:#5f5b54; }
+  .vpft { padding:12px 16px 12px 24px; border-top:1px solid var(--line); display:flex; align-items:center; gap:10px; }
+  #vp-st { flex:1; min-width:0; font-size:13px; color:#5f5b54; }
+  .vpno { min-height:44px; padding:0 18px; border:0; border-radius:22px; background:#f3efe6; color:var(--ink); font-size:15px; cursor:pointer; }
+  .vpgo { min-height:44px; padding:0 22px; border:0; border-radius:22px; background:var(--accent); color:#fff; font-size:15px; font-weight:600; cursor:pointer; }
+  .vpgo:disabled { background:#ece8df; color:#6b675f; cursor:default; }
+  @media (max-width:700px) {
+    .vp { padding:40px 0 0; align-items:stretch; }
+    .vpbox { max-width:none; height:100%; border-radius:20px 20px 0 0; }
+    .vphd { padding:14px 8px 0 16px; }
+    .vphd b { font-size:18px; }
+    .vpctl { padding:10px 16px; }
+    #vp-f { gap:6px; }
+    .vpg { align-items:center; gap:8px; }
+    .vpg .lbl { padding-top:0; width:28px; }
+    .vpg .chips { flex-wrap:nowrap; overflow-x:auto; margin-right:-16px; padding:0 16px 2px 0; }
+    .chip { flex:none; }
+    .vplist { padding:10px 12px 14px; }
+    .vpgrid { grid-template-columns:minmax(0, 1fr); gap:8px; }
+    .vpft { flex-wrap:wrap; padding:10px 16px calc(14px + env(safe-area-inset-bottom)); }
+    #vp-st { flex:1 0 100%; text-align:center; font-size:12px; }
+    .vpno { flex:1; }
+    .vpgo { flex:2; min-height:48px; }
+  }
   /* 百炼没配:孩子那边打不开,这块放在右栏最上面 */
   .grp.warn { background:#fff3e8; }
   .grp.warn .it, .grp.warn .box { background:transparent; }
@@ -116,12 +213,14 @@ ${BRAND_CSS}
     .top { align-items:center; justify-content:flex-start; }
     .top .seg { order:0; flex:0 0 260px; }
     .top small { margin-left:auto; }
+    .top .devl { margin-left:0; height:34px; padding:0 12px; font-size:14px; }
     .main { display:grid; grid-template-columns:minmax(0,1fr) 380px; gap:22px; align-items:start; }
     .gh { padding:0 6px 6px; }
   }
 </style></head><body>
 <div class="wrap" id="main">
-  <div class="top"><span class="ttl"><span id="ct-mark" class="ct-draw ct-hover">${titleLogo(true)}</span><b id="title">家长</b></span><nav class="seg"><a class="on" href="/parent/home">首页</a><a href="/parent">记录</a></nav><small id="pub"></small></div>
+  <div class="top"><span class="ttl"><span id="ct-mark" class="ct-draw ct-hover">${titleLogo(true)}</span><b id="title">家长</b></span><nav class="seg"><a class="on" href="/parent/home">首页</a><a href="/parent">记录</a></nav><small id="pub"></small><a class="devl" href="/dev" target="_blank" title="工作台:细调老师文件、activity、全部音色(新窗口)">工作台<svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4 2h6v6"/><path d="M10 2 3 9"/></svg></a></div>
+  <div id="qrtop"></div>
   <div class="main">
     <section id="pv" aria-label="孩子看到的首页">
       <div class="pvh"><span>孩子看到的首页 · 点牌上的按钮改它,点后面那张换老师</span><span class="seg" id="pvdev"><button type="button" data-d="tablet">iPad</button><button type="button" data-d="phone">手机</button></span></div>
@@ -223,9 +322,49 @@ ${pageDomJs(3200)}
     blEl.replaceChildren(h('div', { class: 'gh' }, h('span', {}, '百炼 · 老师开口用的')), h('div', { class: 'grp' + (st.ready ? '' : ' warn') }, ...rows));
   };
 
+  // ---- 扫码打开:孩子的平板一张(孩子端)、家长自己的手机一张(家长端);服务端现画,地址同 /dev/qr。还没有孩子的设备连过就开着,连过收起;家长开合过就记住 ----
+  const QR = { d: null, ip: false, open: null, to: 'kid' };
+  try { const v = localStorage.getItem('parent-home-qr'); if (v === 'open' || v === 'closed') QR.open = v === 'open'; } catch (e) {}
+  const qrEl = h('div', { id: 'kidqr' });
+  const qrToggle = (open) => { QR.open = open; try { localStorage.setItem('parent-home-qr', open ? 'open' : 'closed'); } catch (e) {} qrDraw(); };
+  const qrWhen = (iso) => { const t = new Date(iso); if (Number.isNaN(t.getTime())) return ''; const day = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0'); return (D && day === D.today ? '今天 ' : md(day) + ' ') + t.toTimeString().slice(0, 5); };
+  const QR_ICON = '<svg width="30" height="30" viewBox="0 0 30 30" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="3" width="9" height="9" rx="1.5"></rect><rect x="18" y="3" width="9" height="9" rx="1.5"></rect><rect x="3" y="18" width="9" height="9" rx="1.5"></rect><path d="M18 18h3v3h-3zM24 24h3v3h-3zM24 18h3M18 24v3" stroke-linecap="round"></path></svg>';
+  const host = (u) => u.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+  const qrDraw = () => {
+    const d = QR.d;
+    if (!d || !d.ready) { qrEl.replaceChildren(); return; }
+    const open = QR.open === null ? d.devices === 0 : QR.open;
+    const seen = d.devices ? '孩子的平板 ' + d.devices + ' 台连过 · 上次' + qrWhen(d.last) : '还没有平板连过';
+    if (!open) {
+      qrEl.replaceChildren(h('div', { class: 'grp' }, h('button', { type: 'button', class: 'it', 'aria-expanded': 'false', on: { click: () => qrToggle(true) } },
+        h('span', { style: 'flex:none;display:flex', html: QR_ICON }), h('span', { class: 'tx' }, h('b', {}, '扫码打开'), h('small', {}, seen)), h('span', { class: 'lnk', style: 'font-size:14px' }, '展开'))));
+      return;
+    }
+    const kid = QR.to === 'kid', c = kid ? d : (d.parent || d);
+    const useIp = QR.ip && c.ip;
+    const seg = h('div', { class: 'seg', role: 'group', 'aria-label': '给谁扫' }, ...[['kid', '孩子的平板'], ['parent', '我的手机']].map(([k, l]) =>
+      h('button', { type: 'button', class: QR.to === k ? 'on' : '', 'aria-pressed': QR.to === k ? 'true' : 'false', on: { click: () => { QR.to = k; qrDraw(); } } }, l)));
+    const print = '/dev/qr?' + new URLSearchParams(Object.assign({}, useIp ? { via: 'ip' } : {}, kid ? {} : { to: 'parent' })).toString();
+    qrEl.replaceChildren(
+      h('div', { class: 'gh' }, h('span', {}, '扫码打开'), h('button', { type: 'button', class: 'x', 'aria-expanded': 'true', on: { click: () => qrToggle(false) } }, '收起')),
+      h('div', { class: 'grp' }, h('div', { class: 'box' }, seg,
+        h('div', { class: 'qrrow' }, h('div', { class: 'qrimg', html: (useIp ? c.svgIp : c.svg) || '' }),
+          h('b', { style: 'font-weight:600' }, kid ? '用孩子平板的相机扫一下' : '用你自己的手机扫一下'),
+          h('span', { class: 'lbl', style: 'line-height:1.5' }, kid ? '打开的就是孩子的首页。在 Safari 里「添加到主屏幕」,以后点图标就进来。' : '打开的是家长端:看记录、排首页。也可以添加到主屏幕。')),
+        h('div', { class: 'qrurl' }, useIp ? c.ip : c.url),
+        d.https ? null : h('div', { class: 'qrwarn' }, d.notes[0] || ''),
+        h('div', { class: 'row2', style: 'font-size:14px' },
+          c.ip ? h('button', { type: 'button', class: 'x', style: 'height:auto;padding:0;font-size:14px;text-align:left', on: { click: () => { QR.ip = !QR.ip; qrDraw(); } } }, useIp ? '换回 ' + host(c.url) : '扫了打不开?换成 ' + host(c.ip)) : h('span'),
+          h('span', { style: 'display:flex;gap:14px;flex:none' },
+            h('a', { class: 'lnk kidl', style: 'font-size:14px', href: '/', target: '_blank' }, '孩子端 ↗'),
+            h('a', { class: 'lnk', style: 'font-size:14px', href: print, target: '_blank' }, '打印 ›'))))),
+      h('div', { class: 'note' }, d.https ? (d.notes[0] || '') : '', d.devices ? '' : (d.https ? ' ' : '') + '还没有平板连进来过,所以这块先开着;连过以后自动收起。'));
+  };
+
   const load = async () => {
     try { D = await api('GET', '/api/parent/home'); } catch (e) { toast('读不到:' + e.message); return; }
     BL.st = await api('GET', '/api/parent/bailian').catch(() => null);
+    QR.d = await api('GET', '/api/parent/qr').catch(() => null);
     document.title = D.title + ' · 家长';
     $('#title').textContent = D.title;
     $('#pub').textContent = D.home ? md(D.home.publishedAt.slice(0, 10)) + ' ' + new Date(D.home.publishedAt).toTimeString().slice(0, 5) + ' 发布 · 改了马上到孩子的首页' : '还没发布过';
@@ -240,12 +379,12 @@ ${pageDomJs(3200)}
   };
   const tutorOf = () => D.tutors.find((t) => t.name === cur);
   /** 看哪位老师;fromPreview = 预览里换过去的,不用再告诉它 */
-  const choose = (name, fromPreview) => { if (name === cur) return; cur = name; sel = null; dirty = false; draft = { edit: null, add: null }; render(); if (!fromPreview) pvSync(); };
+  const choose = (name, fromPreview) => { if (name === cur) return; cur = name; sel = null; lookStop(); LOOK.open = null; dirty = false; draft = { edit: null, add: null }; render(); if (!fromPreview) pvSync(); };
   /** 改第 k 颗(-1 = 加一个):宽屏在右栏,窄屏整屏的表单 */
   const pick = (k) => {
     const t = tutorOf(); if (!t) return;
     if (!WIDE.matches) { editButton(t, k); return; }
-    sel = k; dirty = false; draft = { edit: null, add: null }; render();
+    sel = k; lookStop(); LOOK.open = null; dirty = false; draft = { edit: null, add: null }; render();
     setTimeout(() => { const el = $('#b-label'); if (el) el.focus(); }, 50);
   };
   const setExtras = (t, kind, on) => {
@@ -329,14 +468,17 @@ ${pageDomJs(3200)}
         h('div', { class: 'row2' }, h('a', { class: 'lnk', href: '/parent' }, '看回放 ›'), h('button', { type: 'button', class: 'step', style: 'border:0;background:transparent;color:var(--accent);cursor:pointer', on: { click: () => save('PATCH', '/api/parent/settings', { talk: { note: note.value } }, '存好了') } }, '存给老师的话'))));
     }
     const extras = h('div', {}, h('div', { class: 'gh' }, h('span', {}, '每天都在 · ' + t.display)), h('div', { class: 'grp' }, ...daily));
-    const self = h('div', {}, h('div', { class: 'gh' }, h('span', {}, '这位老师')), h('div', { class: 'grp' },
+    const self = h('div', {}, h('div', { class: 'gh' }, h('span', {}, '这位老师 · ' + t.display)), h('div', { class: 'grp' },
+      h('button', { type: 'button', class: 'it', on: { click: () => openLook(t) } }, avatar(t), h('span', { class: 'tx' }, h('b', {}, '样子与声音'), h('small', {}, '说话:' + t.voices.mouth + ' · 点读:' + (t.voices.card || '没配'))), h('span', { class: 'chev', html: CHEV })),
       h('div', { class: 'it' }, h('span', { class: 'tx' }, h('b', {}, '在孩子的首页上')), sw(!t.hidden, '在首页上', () => save('PATCH', '/api/parent/settings', { tutors: { [t.name]: { hidden: !t.hidden } } })))));
-    const pane = !wide ? null : sel === null || (sel >= 0 && !t.buttons[sel])
+    const pane = !wide ? null : LOOK.open === t.name ? lookPanel() : sel === null || (sel >= 0 && !t.buttons[sel])
       ? h('div', { class: 'grp hint' }, '点左边牌上的按钮,在这里改它的字和讲法;', h('br'), '改的时候牌上跟着变,点「发布」才到孩子那边。')
       : inlineForm(t, sel);
     blDraw();
+    qrDraw();
     const blTop = BL.st && !BL.st.ready;
-    $('#body').replaceChildren(h('div', {}, blTop ? blEl : null, pane, extras, self, blTop ? null : blEl));
+    if (wide) $('#qrtop').replaceChildren(); else $('#qrtop').replaceChildren(qrEl);
+    $('#body').replaceChildren(h('div', {}, blTop ? blEl : null, wide ? qrEl : null, pane, extras, self, blTop ? null : blEl));
   };
 
   // ---- 改一个按钮的表单(k = -1 是新加的开场按钮):窄屏整屏盖上,宽屏在右栏;预览里那颗跟着变 ----
@@ -383,6 +525,167 @@ ${pageDomJs(3200)}
   };
   const openSheet = (...kids) => { $('#sheet-in').replaceChildren(...kids); $('#sheet').classList.add('on'); window.scrollTo(0, 0); };
   const closeSheet = () => $('#sheet').classList.remove('on');
+
+  // ---- 样子与声音:头像点了就存;两种声音各一行(现在用的那个、试听),「换一个」开弹窗挑(src/app/http/parent-look.ts)。宽屏在右栏,窄屏整屏 ----
+  const LOOK = { open: null, d: null, playing: null, audio: null, saved: false };
+  const lookUrl = (name) => '/api/parent/tutors/' + encodeURIComponent(name) + '/look';
+  const LK_PLAY = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M4 2.5v9l7.5-4.5z" fill="currentColor"></path></svg>';
+  const LK_PAUSE = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><rect x="3" y="2.5" width="3" height="9" rx="1" fill="currentColor"></rect><rect x="8" y="2.5" width="3" height="9" rx="1" fill="currentColor"></rect></svg>';
+  const LK_X = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9"></path></svg>';
+  function lookStop() { if (LOOK.audio) { LOOK.audio.pause(); URL.revokeObjectURL(LOOK.audio.src); } LOOK.audio = null; LOOK.playing = null; }
+  const lookDraw = () => { const el = $('#look'); if (el) el.replaceWith(lookPanel()); if (VP.kind) vpPaint(); };
+  const openLook = async (t) => {
+    lookStop(); vpClose(); LOOK.open = t.name; LOOK.d = null; LOOK.saved = false;
+    if (WIDE.matches) { sel = null; render(); } else openSheet(lookPanel());
+    try { LOOK.d = await api('GET', lookUrl(t.name)); } catch (e) { toast('读不到:' + e.message); }
+    lookDraw();
+  };
+  const closeLook = () => { lookStop(); vpClose(); LOOK.open = null; if (WIDE.matches) render(); else closeSheet(); };
+  let savedTimer = 0;
+  const lookSave = async (patch) => {
+    try { LOOK.d = await api('PUT', lookUrl(LOOK.open), patch); } catch (e) { toast('没存上:' + e.message); return false; }
+    LOOK.saved = true; lookDraw(); clearTimeout(savedTimer); savedTimer = setTimeout(() => { LOOK.saved = false; lookDraw(); }, 1600);
+    // 头像变了预览里的牌、先后那排跟着变
+    await load(); pvSync(true);
+    return true;
+  };
+  // 试听:服务端念它定的那句(有缓存);同时只放一个,再点一下停
+  const lookPlay = async (kind, voice) => {
+    const key = kind + ' ' + voice;
+    if (LOOK.playing === key) { lookStop(); lookDraw(); return; }
+    lookStop(); LOOK.playing = key; lookDraw();
+    try {
+      const r = await fetch(lookUrl(LOOK.open) + '/preview?kind=' + kind + '&voice=' + encodeURIComponent(voice), { cache: 'no-store' });
+      if (!r.ok) { const j = await r.json().catch(() => null); throw new Error((j && j.message) || 'HTTP ' + r.status); }
+      const blob = await r.blob();
+      if (LOOK.playing !== key) return;
+      const a = new Audio(URL.createObjectURL(blob)); LOOK.audio = a;
+      a.onended = () => { if (LOOK.playing === key) { lookStop(); lookDraw(); } };
+      await a.play();
+    } catch (e) { if (LOOK.playing === key) { lookStop(); lookDraw(); } toast('试听不了:' + e.message); }
+  };
+  const lookFace = (o) => o.img ? h('img', { src: o.img, alt: '' }) : (o.text || '?');
+
+  // 一个声音长什么样:圆里一个「女 / 男」(底色也分),名字、年纪,标签(语言口音、童声、场景、提醒、现在用的 / 出厂),特点
+  const ageOf = (a) => (a <= 12 ? '童声' : a <= 19 ? '少年' : a <= 35 ? '青年' : '成熟');
+  const vFace = (v) => h('span', { class: 'vface' + (v.gender === '女' ? ' g-f' : v.gender === '男' ? ' g-m' : '') }, v.gender || '?');
+  const vTags = (kind, v, current) => {
+    const out = [];
+    const plain = kind === 'mouth' ? v.lang === '普通话' : v.lang === '中文';
+    out.push(h('span', { class: 'vt ' + (plain ? 't-lang' : kind === 'mouth' ? 't-dia' : 't-en') }, v.lang));
+    if (v.age && v.age <= 12) out.push(h('span', { class: 'vt t-kid' }, '童声'));
+    if (v.scene) out.push(h('span', { class: 'vt t-line' }, v.scene));
+    if (v.warn) out.push(h('span', { class: 'vt t-warn' }, v.warn));
+    if (v.voice === current) out.push(h('span', { class: 'vt t-line' }, '现在用的'));
+    else if (v.shipped) out.push(h('span', { class: 'vt t-line' }, '出厂'));
+    return out;
+  };
+  const vPlayBtn = (kind, v) => { const playing = LOOK.playing === kind + ' ' + v.voice; return h('button', { type: 'button', class: 'vplay' + (playing ? ' on' : ''), 'aria-label': (playing ? '停 ' : '试听 ') + v.name, html: playing ? LK_PAUSE : LK_PLAY, on: { click: (e) => { e.stopPropagation(); if (VP.kind) { VP.sel = v.voice; } lookPlay(kind, v.voice); } } }); };
+  const vBody = (kind, v, current) => h('span', { class: 'vtx' },
+    h('span', { class: 'vnm' }, h('b', {}, v.name), v.age ? h('small', {}, v.age + ' 岁') : null),
+    h('span', { class: 'vtags' }, ...vTags(kind, v, current)),
+    v.trait ? h('small', { class: 'vtr' }, v.trait) : null);
+
+  // ---- 选声音的弹窗:宽屏居中,窄屏从底下升起;搜、筛(每个选项后面是筛出来几个,跟着别的条件变)、试听、选中,按「用」才存 ----
+  const VP_STEP = 60;
+  const VP = { kind: null, sel: null, q: '', f: {}, n: VP_STEP, more: false };
+  const VP_DIMS = {
+    mouth: [['g', '性别', (v) => v.gender], ['lang', '口音', (v) => v.lang]],
+    card: [['g', '性别', (v) => v.gender], ['lang', '语言', (v) => v.lang], ['age', '年纪', (v) => (v.age ? ageOf(v.age) : '')], ['scene', '场景', (v) => v.scene || '']],
+  };
+  const VP_ORDER = { g: ['女', '男'], age: ['童声', '少年', '青年', '成熟'] };
+  const SCENE_SHOWN = 7;
+  const vpPass = (v, skip) => {
+    const q = VP.q.trim().toLowerCase();
+    if (q && ![v.name, v.trait, v.scene || '', v.lang, v.voice].some((x) => x.toLowerCase().includes(q))) return false;
+    return VP_DIMS[VP.kind].every(([k, , of]) => k === skip || !VP.f[k] || of(v) === VP.f[k]);
+  };
+  const vpOpen = (kind) => {
+    if (!LOOK.d) return;
+    VP.kind = kind; VP.sel = LOOK.d[kind].current; VP.q = ''; VP.f = {}; VP.n = VP_STEP; VP.more = false;
+    const t = D && D.tutors.find((x) => x.name === LOOK.open);
+    const q = h('input', { class: 'fld', type: 'search', placeholder: kind === 'mouth' ? '搜名字或特点,比如 温柔、沉稳' : '搜名字或特点,比如 温柔、沉稳、播音', 'aria-label': '搜声音', on: { input: (e) => { VP.q = e.target.value; VP.n = VP_STEP; vpPaint(); } } });
+    const box = h('div', { class: 'vpbox', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'vp-t', tabindex: '-1' },
+      h('div', { class: 'vphd' },
+        h('div', { class: 'tx' }, h('b', { id: 'vp-t' }, (t ? t.display : '') + ' · ' + (kind === 'mouth' ? '说话的声音' : '点读的声音')),
+          h('small', {}, (kind === 'mouth' ? '孩子听到老师开口就是它' : '点读卡、单词卡、听写念词都用它') + ' · 一共 ' + LOOK.d[kind].options.length + ' 个')),
+        h('button', { type: 'button', class: 'vpx', 'aria-label': '关掉', html: LK_X, on: { click: vpClose } })),
+      h('div', { class: 'vpctl' }, q, h('div', { id: 'vp-f' })),
+      h('div', { class: 'vplist', id: 'vp-list' }),
+      h('div', { class: 'vpft' }, h('span', { id: 'vp-st' }), h('button', { type: 'button', class: 'vpno', on: { click: vpClose } }, '取消'), h('button', { type: 'button', id: 'vp-use', class: 'vpgo', on: { click: vpUse } })));
+    const el = h('div', { id: 'vp', class: 'vp', on: { click: (e) => { if (e.target === el) vpClose(); }, keydown: (e) => { if (e.key === 'Escape') vpClose(); } } }, box);
+    document.body.append(el); document.body.style.overflow = 'hidden';
+    vpPaint(); box.focus();
+  };
+  function vpClose() {
+    if (!VP.kind) return;
+    if (LOOK.playing && LOOK.playing.startsWith(VP.kind + ' ')) lookStop();
+    VP.kind = null; const el = $('#vp'); if (el) el.remove(); document.body.style.overflow = '';
+    const p = $('#look'); if (p) lookDraw();
+  }
+  async function vpUse() {
+    const kind = VP.kind, voice = VP.sel;
+    if (!kind || !voice || voice === LOOK.d[kind].current) return;
+    if (await lookSave(kind === 'mouth' ? { mouth: voice } : { voice })) { vpClose(); toast(kind === 'mouth' ? '存好了,下次开口就换' : '存好了,配过音的卡下次点开才换'); }
+  }
+  function vpPaint() {
+    const kind = VP.kind; if (!kind || !LOOK.d) return;
+    const block = LOOK.d[kind], all = block.options;
+    // 筛选:一组一排,选项后面是「别的条件不变、换成它」筛出来几个
+    const groups = VP_DIMS[kind].map(([k, label, of]) => {
+      const vals = [];
+      all.forEach((v) => { const x = of(v); if (x && !vals.includes(x)) vals.push(x); });
+      const n = (x) => all.filter((v) => vpPass(v, k) && (!x || of(v) === x)).length;
+      let list = VP_ORDER[k] ? VP_ORDER[k].filter((x) => vals.includes(x)) : vals.slice().sort((a, b) => all.filter((v) => of(v) === b).length - all.filter((v) => of(v) === a).length);
+      if (k === 'lang' && kind === 'mouth') list = ['普通话'].concat(list.filter((x) => x !== '普通话'));
+      const cut = k === 'scene' && !VP.more && list.length > SCENE_SHOWN + 1;
+      const shown = cut ? list.slice(0, SCENE_SHOWN).concat(VP.f.scene && list.indexOf(VP.f.scene) >= SCENE_SHOWN ? [VP.f.scene] : []) : list;
+      const chips = [''].concat(shown).map((x) => { const on = (VP.f[k] || '') === x; return h('button', { type: 'button', class: 'chip' + (on ? ' on' : ''), 'aria-pressed': on ? 'true' : 'false', on: { click: () => { VP.f[k] = x; VP.n = VP_STEP; vpPaint(); } } }, x || '全部', h('small', {}, String(n(x)))); });
+      if (cut) chips.push(h('button', { type: 'button', class: 'chip more', on: { click: () => { VP.more = true; vpPaint(); } } }, '更多 ' + (list.length - SCENE_SHOWN) + ' 种'));
+      return h('div', { class: 'vpg' }, h('span', { class: 'lbl' }, label), h('div', { class: 'chips' }, ...chips));
+    });
+    $('#vp-f').replaceChildren(...groups);
+    const hits = all.filter((v) => vpPass(v, ''));
+    const shown = hits.slice(0, VP.n);
+    const cards = shown.map((v) => {
+      const on = v.voice === VP.sel;
+      return h('div', { class: 'vcard' + (on ? ' on' : '') },
+        h('button', { type: 'button', class: 'vpick', role: 'radio', 'aria-checked': on ? 'true' : 'false', on: { click: () => { VP.sel = v.voice; vpPaint(); } } }, vFace(v), vBody(kind, v, block.current)),
+        vPlayBtn(kind, v));
+    });
+    const left = hits.length - shown.length;
+    const list = $('#vp-list'), top = list.scrollTop;
+    list.replaceChildren(
+      hits.length ? h('div', { class: 'vpgrid', role: 'radiogroup', 'aria-label': kind === 'mouth' ? '说话的声音' : '点读的声音' }, ...cards)
+        : h('div', { class: 'vpnone' }, '没有这样的声音', h('button', { type: 'button', class: 'vpno', on: { click: () => { VP.q = ''; VP.f = {}; const i = $('#vp .vpctl input'); if (i) i.value = ''; vpPaint(); } } }, '清掉筛选')),
+      left > 0 ? h('button', { type: 'button', class: 'addb', style: 'width:100%;margin-top:12px', on: { click: () => { VP.n += VP_STEP; vpPaint(); } } }, '再看 ' + Math.min(VP_STEP, left) + ' 个(还有 ' + left + ' 个)') : null);
+    list.scrollTop = top;
+    const picked = all.find((v) => v.voice === VP.sel), same = VP.sel === block.current;
+    $('#vp-st').textContent = '筛出 ' + hits.length + ' 个 · 试听念服务端定的一句';
+    const go = $('#vp-use'); go.textContent = same ? '现在就是它' : '用「' + (picked ? picked.name : '') + '」'; go.disabled = same;
+  }
+
+  function lookPanel() {
+    const t = D && D.tutors.find((x) => x.name === LOOK.open), d = LOOK.d;
+    const head = h('div', { class: 'nav' }, h('button', { type: 'button', on: { click: closeLook } }, '‹ 返回'), h('b', {}, (t ? t.display : '') + ' · 样子与声音'), h('span', { class: 'lksaved', 'aria-live': 'polite' }, LOOK.saved ? '存好了' : ''));
+    if (!t || !d) return h('div', { id: 'look', class: 'lk' }, head, h('div', { class: 'grp hint' }, '在读…'));
+    const curA = d.avatar.options.find((o) => o.value === d.avatar.current);
+    const big = h('div', { class: 'lkbig' }, curA ? lookFace(curA) : avatar(t));
+    const grid = h('div', { class: 'lkgrid' }, ...d.avatar.options.map((o) => h('button', { type: 'button', class: 'lkopt' + (o.value === d.avatar.current ? ' on' : ''), 'aria-pressed': o.value === d.avatar.current ? 'true' : 'false', 'aria-label': o.label || o.text, on: { click: () => { if (o.value !== d.avatar.current) lookSave({ avatar: o.value }); } } },
+      h('span', { class: 'lkf' }, lookFace(o)), o.label ? h('small', {}, o.label) : null)));
+    const cur = (kind, label) => {
+      const block = d[kind], v = block.options.find((o) => o.voice === block.current);
+      return h('div', { class: 'vcur', id: 'lk-' + kind },
+        h('div', { class: 'lbl' }, label),
+        v ? h('div', { class: 'vrow2' }, vFace(v), vBody(kind, v, null), vPlayBtn(kind, v)) : h('div', { class: 'lbl' }, '还没配'),
+        h('button', { type: 'button', class: 'vchg', on: { click: () => vpOpen(kind) } }, '换一个 · ' + block.options.length + ' 个可选', h('span', { html: CHEV })));
+    };
+    return h('div', { id: 'look', class: 'lk' }, head, big,
+      h('div', {}, h('div', { class: 'gh' }, h('span', {}, '头像 · 孩子的首页、老师页上都是这张')), grid),
+      h('div', {}, h('div', { class: 'gh' }, h('span', {}, '声音')),
+        h('div', { class: 'grp' }, cur('mouth', '说话的声音 · 老师开口说话'), cur('card', '点读的声音 · 点读卡、单词卡、听写念词')),
+        h('div', { class: 'note' }, '改了说话的声音,下次开口就换;已经配好音的卡,下次点开才换。')));
+  }
   const editButton = (t, k) => {
     const f = buttonForm(t, k, () => closeSheet());
     openSheet(h('div', { class: 'nav' }, h('button', { type: 'button', on: { click: () => { dirty = false; draft = { edit: null, add: null }; closeSheet(); pvSync(); } } }, '取消'), h('b', {}, f.title), f.go), ...f.fields, f.del ? h('button', { type: 'button', class: 'danger', on: { click: () => f.del.click() } }, '删掉这个按钮') : null);

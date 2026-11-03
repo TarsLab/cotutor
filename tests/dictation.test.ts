@@ -224,10 +224,13 @@ try {
   const home2 = await publish(DRAFT.replace('雪\n', '雪花\n'));
   check('首页换过了:旧首页的卡 404(页面叫孩子回首页)', home2 !== homeId && (await call('POST', '/api/dictation', { home: homeId, n: 0 })).status === 404 && (await call('POST', '/api/dictation', { home: home2, n: 0 })).status === 201);
 
-  // ---- 没有音色 ----
+  // ---- 没有音色:出厂三位不配也有出厂的点读声音(SHIPPED_CARD_VOICES);别的老师才会没有,这里摘掉语文的出厂那项来模拟 ----
   cfg.tutors['chinese-tutor'].voice = undefined;
   writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
   await ctx.reload();
+  check('出厂老师没配音色:用出厂的点读声音,照样念', (await call('GET', `/api/dictation/${id}/kid`)).json.voice === true);
+  const { SHIPPED_CARD_VOICES } = await import('../src/schema/index.ts');
+  delete (SHIPPED_CARD_VOICES as Record<string, string>)['chinese-tutor'];
   check('没配音色:音频 404;会话带 voice: false(孩子端不开始、直接提示叫家长,不念浏览器合成声)', (await call('GET', `/api/dictation/${id}/say/3`)).status === 404 && (await call('GET', `/api/dictation/${id}/kid`)).json.voice === false);
 
   {

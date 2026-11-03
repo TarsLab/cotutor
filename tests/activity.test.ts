@@ -253,7 +253,7 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
     check('activity check:workspace 里出厂的都对得上(例子文件不当 activity)', ok.length === (await shippedActivities()).filter((x) => !x.name.endsWith('.例子')).length && ok.every((x) => x.issues.length === 0), JSON.stringify(ok.map((x) => x.issues)));
     const orphan = await checkActivities(root, {});
     check('activity check:老师不在 cotutor.json 里报一条', has(orphan[0].issues, '没有 chinese-tutor 这位老师'));
-    check('activity check:按老师、按名字筛', (await checkActivities(root, {}, { tutor: 'math-tutor' })).map((x) => x.name).sort().join() === ['小课堂', '预习', '批改', '复习'].sort().join() && (await checkActivities(root, {}, { tutor: 'nobody-tutor' })).length === 0 && (await checkActivities(root, {}, { tutor: 'chinese-tutor', name: '别的' })).length === 0);
+    check('activity check:按老师、按名字筛', (await checkActivities(root, {}, { tutor: 'math-tutor' })).map((x) => x.name).sort().join() === ['小课堂', '预习', '检查作业', '复习'].sort().join() && (await checkActivities(root, {}, { tutor: 'nobody-tutor' })).length === 0 && (await checkActivities(root, {}, { tutor: 'chinese-tutor', name: '别的' })).length === 0);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

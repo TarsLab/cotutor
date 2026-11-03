@@ -21,7 +21,7 @@ import { bookkeepingPrompt, kidQuestions, textbookHeadings } from '../memory/dia
 import { cardAssets, cardLabel, describeCard, tutorCardKinds } from '../board/cards/index.ts';
 import { boardGuideFor, cardGuidesFor } from '../board/cards/docs.ts';
 import { activityCards, parseActivity, renderTutorSection } from './activity.ts';
-import { activityFile } from './activities.ts';
+import { findActivityFile } from './activities.ts';
 import { activityState, paintGate, paintTool, readActivity, threadActivity } from './activity-state.ts';
 import { createBrain, getRuntime, type BrainExecutor, type BrainRequest, type RunPlan, type ToolSet } from '../brain/index.ts';
 import { lineFlags, parseBoard } from '../board/parse.ts';
@@ -186,7 +186,7 @@ export async function gatherContext(ws: Workspace, tutor: string, input: { from:
  */
 export async function attachActivity(ws: Workspace, tutor: string, pack: ContextPack, run: ActivityRun, where: { date: string; messages: readonly ConversationMessage[]; thread: string; now: number }, inSystem = false): Promise<string[]> {
   pack.activity = { name: run.name, params: run.params, state: {} };
-  const path = relative(ws.root, activityFile(ws.root, tutor, run.name)).split(sep).join('/');
+  const path = relative(ws.root, findActivityFile(ws.root, tutor, run.name)).split(sep).join('/');
   const text = await readFile(join(ws.root, path), 'utf8').catch(() => null);
   if (text === null) {
     pack.activityGuide = `缺:${path} 不在,照你老师文件里的做`;

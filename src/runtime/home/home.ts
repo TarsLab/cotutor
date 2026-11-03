@@ -3,7 +3,7 @@
  * 解析走板书同一个解析器(place = home);永不抛错,问题都带行号(1 起)与修法。要读盘的引用(话题在不在)由调用方查好传进来。
  */
 import type { TutorButton } from '../../board/cards/index.ts';
-import { LECTURE_ACTIVITY, type Activity } from '../../schema/index.ts';
+import { HOME_TILES, LECTURE_ACTIVITY, type Activity, type HomeTileId } from '../../schema/index.ts';
 import { resolveParams } from '../activity.ts';
 import { parseBoard } from '../../board/parse.ts';
 import type { BoardCard } from '../../board/presentation.ts';
@@ -270,6 +270,21 @@ export type KidHomeButton =
   | { id: number; kind: 'continue'; label: string; date: string; thread: string; brief?: string }
   /** 小课堂:title / ms(课名、课长)由服务端读课包后补 */
   | { id: number; kind: 'lecture'; label: string; bundle: string; brief?: string; title?: string; ms?: number; video?: true; resume?: Resume };
+
+/** 孩子端老师卡上常驻的一块方砖(HOME_TILES):label = activity 的名字;resume = 今天从这个 activity 进去的话题(和 activity 按钮同一个入口) */
+export interface KidHomeTile {
+  id: HomeTileId;
+  label: string;
+  resume?: Resume;
+}
+
+/** 这位老师牌上的方砖:开着的(on,牌上的先后)里,家里那个 activity 用得了的才出 */
+export function kidTiles(on: readonly HomeTileId[], opts: { usable: (activity: string) => boolean; resumes?: ReadonlyMap<string, Resume> }): KidHomeTile[] {
+  return HOME_TILES.filter((t) => on.includes(t.id) && opts.usable(t.activity)).map((t) => {
+    const r = opts.resumes?.get(`activity:${t.activity}`);
+    return { id: t.id, label: t.activity, ...(r ? { resume: r } : {}) };
+  });
+}
 
 export const NEW_THREAD_LABEL = '新话题';
 const RESUME_MAX = 10;

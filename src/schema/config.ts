@@ -71,6 +71,19 @@ export const AGENT_NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
 export const TUTOR_EXTRAS = ['dictation', 'talk'] as const;
 export type TutorExtra = (typeof TUTOR_EXTRAS)[number];
 
+/**
+ * 老师卡上常驻的三块方砖(设计稿 https://claude.ai/artifact/NpPFoyvuF17dbRSEUuRJfW):先后就是牌上的先后。
+ * id 记在消息的 via.button;activity 是老师家里同名的文件(agents/<老师>/activities/<名>.md),孩子看到的字也是它。
+ * 家里有那个文件才出那一块(三门主科出厂都有);cotutor.json 的 tiles 只记关掉的,升级来的老 workspace 自动就有
+ */
+export const HOME_TILES = [
+  { id: 'preview', activity: '预习' },
+  { id: 'check', activity: '检查作业' },
+  { id: 'review', activity: '复习' },
+] as const;
+export type HomeTileId = (typeof HOME_TILES)[number]['id'];
+export const HOME_TILE_IDS = HOME_TILES.map((t) => t.id) as [HomeTileId, ...HomeTileId[]];
+
 export const TutorSchema = z.object({
   /** 显示名(孩子端头像下的字、计划文件的 H2 标题) */
   display: z.string().min(1).describe('显示名:孩子端头像下的字,计划文件的 H2 标题'),
@@ -90,6 +103,8 @@ export const TutorSchema = z.object({
   /** 这位老师用哪个运行时(runtimes 里的键);不配用 runtimes.default。要更大预算与时限的老师配一个自己的 */
   runtime: z.string().optional().describe('这位老师用的运行时(runtimes 里的键;不配用 default)——预算、时限不同的老师配自己的'),
   extras: z.array(z.enum(TUTOR_EXTRAS)).optional().describe('老师卡上的常驻入口:dictation 听写(含拍照听写)、talk 口语课(要 talk.enabled);不写按学科给缺省:语文有听写,其余没有;[] = 都不要'),
+  /** 三块方砖(HOME_TILES)哪块关掉:只记 false;没写 = 开着(家里有那个 activity 文件才出) */
+  tiles: z.object(Object.fromEntries(HOME_TILE_IDS.map((id) => [id, z.boolean().optional()])) as Record<HomeTileId, z.ZodOptional<z.ZodBoolean>>).strict().optional().describe('老师卡上常驻的方砖:preview 预习、check 检查作业、review 复习;写 false 关掉,没写 = 开着(老师家里有那个 activity 文件才出)'),
 });
 export type Tutor = z.infer<typeof TutorSchema>;
 
@@ -117,6 +132,11 @@ export function tutorExtras(t: Pick<Tutor, 'extras' | 'subject'>, talkOn = false
   if (t.extras) return [...new Set(t.extras)];
   const s = canonicalSubject(t.subject);
   return s === '语文' ? ['dictation'] : s === '英语' && talkOn ? ['talk'] : [];
+}
+
+/** 这位老师开着的方砖(牌上的先后);家里有没有那个 activity 文件不在这里管 */
+export function tutorTiles(t: Pick<Tutor, 'tiles'>): HomeTileId[] {
+  return HOME_TILE_IDS.filter((id) => t.tiles?.[id] !== false);
 }
 
 /**
@@ -359,6 +379,8 @@ export interface TutorView {
   policy: Policy;
   /** 老师卡上的常驻入口(已按学科补缺省) */
   extras: TutorExtra[];
+  /** 开着的方砖(没管家里有没有那个文件) */
+  tiles: HomeTileId[];
 }
 
 /** 老师列表(带有效政策);kidOnly = 只要孩子端能看到的(enabled 且不 hidden) */
@@ -376,6 +398,7 @@ export function listTutors(config: CotutorConfig, opts: { kidOnly?: boolean } = 
       hidden: t.hidden,
       policy: resolvePolicy(config, name),
       extras: tutorExtras(t, config.talk.enabled),
+      tiles: tutorTiles(t),
     }));
 }
 

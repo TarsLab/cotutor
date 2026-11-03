@@ -155,6 +155,17 @@ try {
   await call('PATCH', '/api/parent/settings', { tutors: { 'english-tutor': { extras: null }, 'math-tutor': { hidden: false } }, talk: { note: '' } });
   const c2 = JSON.parse(readFileSync(cfgFile, 'utf8')) as { tutors: Record<string, { extras?: string[] }>; talk: { note?: string } };
   check('extras null = 回到按学科的缺省(字段删掉);给老师的话清空 = 删掉', !('extras' in c2.tutors['english-tutor']) && !('note' in c2.talk));
+  // 方砖:家长端列着三块(老师家里有那个 activity 文件的),开关写回 cotutor.json 的 tiles(只记关掉的)
+  type TL = { id: string; label: string; on: boolean; usable: boolean };
+  const tilesP = (g: PH, n: string): TL[] => (g.tutors.find((t) => t.name === n) as unknown as { tiles: TL[] }).tiles;
+  check('家长端列着方砖:三位老师都是预习、检查作业、复习,都开着、都用得了', ['chinese-tutor', 'math-tutor', 'english-tutor'].every((n) => tilesP(g3, n).map((x) => `${x.id}:${x.label}:${x.on}:${x.usable}`).join() === 'preview:预习:true:true,check:检查作业:true:true,review:复习:true:true'), JSON.stringify(tilesP(g3, 'math-tutor')));
+  const t1 = await call('PATCH', '/api/parent/settings', { tutors: { 'math-tutor': { tiles: { review: false } } } });
+  const ct1 = JSON.parse(readFileSync(cfgFile, 'utf8')) as { tutors: Record<string, { tiles?: Record<string, boolean> }> };
+  check('关掉一块:cotutor.json 记 false,家长端那块 off', t1.status === 200 && JSON.stringify(ct1.tutors['math-tutor'].tiles) === '{"review":false}' && tilesP(t1.json as PH, 'math-tutor').find((x) => x.id === 'review')?.on === false);
+  await call('PATCH', '/api/parent/settings', { tutors: { 'math-tutor': { tiles: { review: true } } } });
+  const ct2 = JSON.parse(readFileSync(cfgFile, 'utf8')) as { tutors: Record<string, { tiles?: Record<string, boolean> }> };
+  check('再打开:那一项删掉(只记关掉的),空了整个 tiles 也不留', !('tiles' in ct2.tutors['math-tutor']), JSON.stringify(ct2.tutors['math-tutor']));
+  check('方砖设置不对 400:不认识的方砖、不是开关', (await call('PATCH', '/api/parent/settings', { tutors: { 'math-tutor': { tiles: { painting: false } } } })).status === 400 && (await call('PATCH', '/api/parent/settings', { tutors: { 'math-tutor': { tiles: { review: 'no' } } } })).status === 400);
   check('设置不对 400:不认识的常驻、老师', (await call('PATCH', '/api/parent/settings', { tutors: { 'english-tutor': { extras: ['x'] } } })).status === 400 && (await call('PATCH', '/api/parent/settings', { tutors: { 'nobody-tutor': {} } })).status === 400);
 
   // 一直听不再是常驻入口:孩子端没有入口,家长端也开不了

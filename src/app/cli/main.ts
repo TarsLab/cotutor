@@ -223,7 +223,7 @@ export async function main(argv: string[]): Promise<void> {
         else {
           for (const s of layoutSteps) process.stdout.write(`${s.action === 'kept' ? '!' : '✓'} ${s.item.padEnd(24)} ${s.note ?? ''}\n`);
           if (link.action !== 'exists') process.stdout.write(`${link.action === 'kept' ? '!' : '✓'} ${link.item.padEnd(24)} ${link.note ?? ''}\n`);
-          const word: Record<string, string> = { upgraded: '已换新', latest: '已是最新', 'kept-custom': '自定义,保留', forced: '已覆盖(原文 .bak)', installed: '补上了', retired: '不再出厂,删了' };
+          const word: Record<string, string> = { upgraded: '已换新', latest: '已是最新', 'kept-custom': '自定义,保留', forced: '已覆盖(原文 .bak)', installed: '补上了', retired: '不再出厂,删了', renamed: '改了名' };
           for (const s of skillSteps) process.stdout.write(`${s.action === 'kept-custom' ? '!' : '✓'} skill ${s.name.padEnd(18)} ${word[s.action]}${s.basedOn && s.action !== 'latest' ? `(基于 ${s.basedOn})` : ''}${s.machine ? '(机器件)' : ''}\n`);
           for (const s of themeSteps) process.stdout.write(`${s.action === 'kept-custom' ? '!' : '✓'} theme ${s.name.padEnd(18)} ${word[s.action]}${s.basedOn && s.action !== 'latest' ? `(基于 ${s.basedOn})` : ''}${s.action === 'kept-custom' ? '(themes/ 里改过的主题不动)' : ''}\n`);
           for (const s of steps) {
@@ -235,7 +235,7 @@ export async function main(argv: string[]): Promise<void> {
             }
           }
           for (const s of activitySteps) {
-            process.stdout.write(`${s.action === 'kept-custom' ? '!' : '✓'} activity ${s.key.padEnd(18)} ${word[s.action]}${s.basedOn && s.action !== 'latest' ? `(基于 ${s.basedOn})` : ''}\n`);
+            process.stdout.write(`${s.action === 'kept-custom' ? '!' : '✓'} activity ${s.key.padEnd(18)} ${word[s.action]}${s.from ? `(原来叫「${s.from}」)` : ''}${s.basedOn && s.action !== 'latest' ? `(基于 ${s.basedOn})` : ''}\n`);
             if (s.diff?.length) {
               process.stdout.write(`    你的 vs 新版(- 你的 / + 新版),想用新版:cotutor upgrade --force ${s.key}\n`);
               for (const l of s.diff.slice(0, 40)) process.stdout.write(`    ${l}\n`);

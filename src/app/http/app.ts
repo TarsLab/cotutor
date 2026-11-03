@@ -24,7 +24,7 @@ import { buildReel, playRecordOk, reelCardTook, reelHolds, reelMissRuns, type Pl
 import type { CallReel } from '../../runtime/journal/recorder.ts';
 import { REALTIME_VOICES } from '../../realtime/voices.ts';
 import { PREVIEW_TEXT, cardPreview, mouthPreview } from './voice-preview.ts';
-import { DATE_RE, FocusSchema, MESSAGE_FROM, MOUTH_VOICE, cardVoice, listTutors, mouthVoice, subjectLang, type ConversationIndex, type ConversationMessage, type MemoryLine, type TutorExtra } from '../../schema/index.ts';
+import { DATE_RE, FocusSchema, MESSAGE_FROM, MOUTH_VOICE, cardVoice, listTutors, mouthVoice, subjectLang, viaSendsLabel, type ConversationIndex, type ConversationMessage, type MemoryLine, type TutorExtra } from '../../schema/index.ts';
 import type { BoardCard, Device } from '../../board/presentation.ts';
 import { ConfigError, patchConfig, reloadIfChanged, workspaceReport } from '../workspace.ts';
 import { UsageError } from '../../shared/errors.ts';
@@ -488,7 +488,7 @@ export async function overview(ctx: AppContext, date: string): Promise<Overview>
       }
       if (m.lecture && !th.lecture) th.lecture = { bundle: m.lecture.bundle, title: m.lecture.title, ...(m.lecture.video ? { video: true as const } : {}), watchedMs: m.lecture.watchedMs, finished: m.lecture.finished, marks: (m.lecture.marks ?? []).length };
       // 孩子自己说的第一句:首页开场 / 接着按钮发出去的那句(正文就是按钮上的字)不算
-      if (th.said === null && m.from === 'kid' && m.text.trim() && !(typeof m.via?.button === 'number' && m.via.label === m.text)) th.said = Array.from(m.text.trim()).slice(0, 30).join('');
+      if (th.said === null && m.from === 'kid' && m.text.trim() && !(m.via && viaSendsLabel(m.via) && m.via.label === m.text)) th.said = Array.from(m.text.trim()).slice(0, 30).join('');
       const t0 = Date.parse(m.timing?.startedAt ?? '');
       const dt = m.timing?.doneMs;
       if (Number.isFinite(t0) && dt !== undefined) th.endAt = new Date(t0 + dt).toISOString();

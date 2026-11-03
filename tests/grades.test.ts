@@ -18,6 +18,7 @@ const { parseExamples } = await import('../src/app/activity-eval-rules.ts');
 const { doctorWorkspace } = await import('../src/app/cli/doctor.ts');
 const { loadWorkspace } = await import('../src/app/workspace.ts');
 const { packDryRun } = await import('../src/runtime/runner.ts');
+const { findActivityFile } = await import('../src/runtime/activities.ts');
 
 async function rejects(label: string, fn: () => Promise<unknown>, pattern: RegExp): Promise<void> {
   try { await fn(); check(label, false, '没有拒绝'); }
@@ -44,7 +45,7 @@ try {
   const first = await initWorkspace({ slug: 'kid', dir: root, grade: 2 });
   check('显式安装来源写入清单', (await readManifest(root)).teachingPack?.grade === 2 && first.steps.some((s) => s.item === 'teachingPack'));
   const teacher = join(root, 'agents/math-tutor.md');
-  const activity = join(root, 'agents/math-tutor/activities/批改.md');
+  const activity = join(root, 'agents/math-tutor/activities/检查作业.md');
   const factoryTeacher = readFileSync(teacher, 'utf8');
   const factoryActivity = readFileSync(activity, 'utf8');
   const mine = factoryTeacher + '\n家长的话:先摆小棒。\n';
@@ -69,19 +70,19 @@ try {
   const upgrade = await upgradeTutors(root);
   const acts = await upgradeActivities(root);
   check('旧版未改文件按原 hash 更新', upgrade.find((s) => s.name === 'english-tutor')?.action === 'upgraded' && !readFileSync(enFile, 'utf8').includes('旧版出厂教学说明'));
-  check('旧版自定义老师和 activity 保留', upgrade.find((s) => s.name === 'math-tutor')?.action === 'kept-custom' && acts.find((s) => s.key === 'math-tutor/批改')?.action === 'kept-custom' && readFileSync(teacher, 'utf8') === mine && readFileSync(activity, 'utf8') === mineActivity);
+  check('旧版自定义老师和 activity 保留', upgrade.find((s) => s.name === 'math-tutor')?.action === 'kept-custom' && acts.find((s) => s.key === 'math-tutor/检查作业')?.action === 'kept-custom' && readFileSync(teacher, 'utf8') === mine && readFileSync(activity, 'utf8') === mineActivity);
   check('迁移补来源但不重置自定义 hash', (await readManifest(root)).teachingPack?.grade === 2 && (await readManifest(root)).tutors['math-tutor'].hash === customHash);
   await initWorkspace({ slug: 'kid', dir: root });
   check('重复 init 保留自定义、档案和配置', readFileSync(teacher, 'utf8') === mine && readFileSync(activity, 'utf8') === mineActivity && readFileSync(profile, 'utf8') === profileText && readFileSync(join(root, 'cotutor.json'), 'utf8') === configText);
   await restoreTutor(root, 'math-tutor');
-  await restoreActivity(root, 'math-tutor', '批改');
+  await restoreActivity(root, 'math-tutor', '检查作业');
   check('恢复正确包的出厂件并备份', readFileSync(teacher, 'utf8') === factoryTeacher && readFileSync(teacher + '.bak', 'utf8') === mine && readFileSync(activity, 'utf8') === factoryActivity && readFileSync(activity + '.bak', 'utf8') === mineActivity);
   const report = await doctorWorkspace(root, { probeEnv: false, now: new Date('2026-10-27T00:00:00Z') });
   check('doctor 提醒年级不匹配但不自动换包', report.checks.some((c) => c.name === 'teachingPack.grade' && !c.ok && !c.required) && (await readManifest(root)).teachingPack?.grade === 2);
 
   // 每个新 activity 都能检查、解析例子、填参数并进入独立提示词。
   const refs = await shippedActivities(root);
-  const common = ['预习', '批改', '复习'];
+  const common = ['预习', '检查作业', '复习'];
   for (const tutor of ['chinese-tutor', 'math-tutor', 'english-tutor']) {
     for (const name of [...common, ...(tutor === 'chinese-tutor' ? ['写话'] : [])]) {
       const file = refs.find((r) => r.tutor === tutor && r.name === name)!.file;
@@ -92,8 +93,41 @@ try {
     }
   }
   const ws = loadWorkspace(root);
-  const dry = await packDryRun(ws, 'math-tutor', { from: 'kid', at: new Date('2026-10-27T00:00:00Z'), text: '帮我检查', activity: { name: '批改', params: { 范围: '23 + 18 = 31' } } });
-  check('pack 里活动参数与孩子学期都在,不会伪改孩子年级', dry.prompt.includes('23 + 18 = 31') && dry.prompt.includes('三年级上') && dry.pack.activity?.name === '批改');
+  const dry = await packDryRun(ws, 'math-tutor', { from: 'kid', at: new Date('2026-10-27T00:00:00Z'), text: '帮我检查', activity: { name: '检查作业', params: { 范围: '23 + 18 = 31' } } });
+  check('pack 里活动参数与孩子学期都在,不会伪改孩子年级', dry.prompt.includes('23 + 18 = 31') && dry.prompt.includes('三年级上') && dry.pack.activity?.name === '检查作业');
+
+  // 2026-11-03「批改」改名「检查作业」:老 workspace 里旧名的文件 upgrade 时挪成新名;没改过的照旧换新,改过的只改头上的名字
+  {
+    const old = join(testHome, 'renamed');
+    await initWorkspace({ slug: 'kid', dir: old, grade: 2 });
+    const dir = (t: string): string => join(old, 'agents', t, 'activities');
+    const om = await readManifest(old);
+    const toOld = (t: string, extra: string): void => {
+      // 旧版的样子:头上叫批改,正文那句也是「带孩子批改」(新版改了这一句,没改过的升级后要换成新版)
+      const shipped = readFileSync(join(dir(t), '检查作业.md'), 'utf8').replace(/^name: 检查作业$/m, 'name: 批改').replace('带孩子检查作业', '带孩子批改');
+      writeFileSync(join(dir(t), '批改.md'), shipped + extra);
+      rmSync(join(dir(t), '检查作业.md'));
+      const ex = readFileSync(join(dir(t), '检查作业.例子.md'), 'utf8').replace(/^activity: 检查作业$/m, 'activity: 批改');
+      writeFileSync(join(dir(t), '批改.例子.md'), ex);
+      rmSync(join(dir(t), '检查作业.例子.md'));
+      delete om.activities![`${t}/检查作业`];
+      delete om.activities![`${t}/检查作业.例子`];
+      om.activities![`${t}/批改`] = { hash: sha256(shipped), version: '0.1.0' };
+      om.activities![`${t}/批改.例子`] = { hash: sha256(ex), version: '0.1.0' };
+    };
+    toOld('math-tutor', '');
+    toOld('chinese-tutor', '\n家长的话:只看第一题。\n');
+    await writeManifest(old, om);
+    check('没 upgrade 的老 workspace:方砖要的「检查作业」读旧名的文件,旧名照样认', findActivityFile(old, 'math-tutor', '检查作业').endsWith('批改.md') && findActivityFile(old, 'math-tutor', '批改').endsWith('批改.md'));
+    const steps = await upgradeActivities(old);
+    const shippedText = readFileSync((await shippedActivities(old)).find((r) => r.tutor === 'math-tutor' && r.name === '检查作业')!.file, 'utf8');
+    const mineNow = readFileSync(join(dir('chinese-tutor'), '检查作业.md'), 'utf8');
+    check('upgrade 把旧名挪成新名(文件与例子),没有旧名留下', steps.filter((s) => s.action === 'renamed').map((s) => `${s.key}<${s.from}`).sort().join() === ['chinese-tutor/检查作业.例子<批改.例子', 'chinese-tutor/检查作业<批改', 'math-tutor/检查作业.例子<批改.例子', 'math-tutor/检查作业<批改'].sort().join() && !existsSync(join(dir('math-tutor'), '批改.md')) && !existsSync(join(dir('chinese-tutor'), '批改.例子.md')), JSON.stringify(steps.filter((s) => s.action === 'renamed')));
+    const after = (key: string): string | undefined => steps.find((s) => s.key === key && s.action !== 'renamed')?.action;
+    check('没改过的换成新版;改过的留着家长的话、头上改了名、算自定义', readFileSync(join(dir('math-tutor'), '检查作业.md'), 'utf8') === shippedText && mineNow.includes('家长的话:只看第一题') && /^name: 检查作业$/m.test(mineNow) && after('chinese-tutor/检查作业') === 'kept-custom' && after('math-tutor/检查作业') === 'upgraded');
+    check('挪完以后旧草稿里的「批改」认到新文件', findActivityFile(old, 'chinese-tutor', '批改').endsWith('检查作业.md') && !('chinese-tutor/批改' in (await readManifest(old)).activities!));
+    check('再 upgrade 一次不再挪', !(await upgradeActivities(old)).some((s) => s.action === 'renamed'));
+  }
 
   const { readLecture } = await import('../src/runtime/lecture.ts');
   const { default: sample } = await import('../grades/grade-2/examples/2026-10-27-pingjunfen.ts');
@@ -110,8 +144,8 @@ try {
   writeFileSync(join(root, '.cotutor/shipped.json'), JSON.stringify(broken));
   for (const [label, op] of [
     ['升级老师', () => upgradeTutors(root)], ['升级 activity', () => upgradeActivities(root)],
-    ['恢复老师', () => restoreTutor(root, 'math-tutor')], ['恢复 activity', () => restoreActivity(root, 'math-tutor', '批改')],
-    ['查看老师出厂差异', () => shippedTutorText('math-tutor', root)], ['查看 activity 出厂差异', () => shippedActivityText('math-tutor', '批改', root)],
+    ['恢复老师', () => restoreTutor(root, 'math-tutor')], ['恢复 activity', () => restoreActivity(root, 'math-tutor', '检查作业')],
+    ['查看老师出厂差异', () => shippedTutorText('math-tutor', root)], ['查看 activity 出厂差异', () => shippedActivityText('math-tutor', '检查作业', root)],
   ] as const) await rejects(`${label} 不回退到二年级`, op, /没有完整的 3/);
   const missing = await doctorWorkspace(root, { probeEnv: false });
   check('doctor 报缺失包而不崩溃', missing.checks.some((c) => c.name === 'teachingPack' && !c.ok && c.required));

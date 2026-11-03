@@ -3,7 +3,7 @@
  * 首页的手动验收(不进 pnpm test,要本机 Chrome;老师是假 CLI,不花钱):
  * 临时 workspace + HTTP serve → 语文老师先讲一轮(给「接着」一个话题)→ 写草稿、cotutor home publish →
  * Chrome 开孩子端(牌堆,一位老师一张牌):叠的顺序、最前那张在最上层、卡的归属、橙点;手机竖着叠、平板横着叠;点后面那张抽出换到最前;手机与平板各截一张 →
- * 点「新话题」是空白老师页 → 回首页点开场按钮:老师页打开、按钮上的字发出去、索引里那条带 via →
+ * 点「新话题」是空白老师页 → 回首页点开场按钮:老师页打开、按钮上的字发出去、索引里那条带 via → 回首页点方砖「检查作业」:照那个 activity 起新话题 →
  *
  * 用法:node scripts/probe-home.mjs [--out <截图目录>] [--keep](留下临时 workspace 与 serve)
  */
@@ -105,7 +105,7 @@ for: ${day}
   // 手指点:CDP 鼠标事件走命中判定(后面的牌只露出头那一行 / 左边一格,点到的是谁由页面说了算);点的是牌角的头像
   const tapAt = async (x, y) => { for (const type of ['mousePressed', 'mouseReleased']) await send('Input.dispatchMouseEvent', { type, x, y, button: 'left', clickCount: 1 }); };
   const tapAvatar = async (name) => { const r = await evaluate(`(() => { const b = document.querySelector('#deck .pc[data-tutor="${name}"] .pc-hd .av').getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; })()`); await tapAt(r.x, r.y); };
-  const stack = () => evaluate(`(() => { const els = [...document.querySelectorAll('#deck .pc')].sort((a, b) => a.style.zIndex - b.style.zIndex); const f = document.querySelector('#deck .pc.front'); const r = (e) => e.getBoundingClientRect(); return { order: els.map((e) => e.dataset.tutor), front: els.filter((e) => e.classList.contains('front')).map((e) => e.dataset.tutor), dots: els.filter((e) => e.querySelector('.dot')).map((e) => e.dataset.tutor), card: f.dataset.tutor, name: f.querySelector('.pc-hd .nm').textContent, buttons: [...f.querySelectorAll('.bt:not(.bt-extra)')].map((b) => b.querySelector('.btx').textContent), extras: [...f.querySelectorAll('.bt-extra')].map((b) => b.getAttribute('href')), owned: [...f.querySelectorAll('.kcards > *')].map((c) => c.className), shared: [...document.querySelectorAll('#hcards > *')].map((c) => c.className), brief: document.body.innerHTML.includes('重点字'), rects: els.map((e) => [Math.round(r(e).left), Math.round(r(e).top), Math.round(r(e).bottom)]), heights: [...new Set(els.map((e) => e.offsetHeight))] }; })()`);
+  const stack = () => evaluate(`(() => { const els = [...document.querySelectorAll('#deck .pc')].sort((a, b) => a.style.zIndex - b.style.zIndex); const f = document.querySelector('#deck .pc.front'); const r = (e) => e.getBoundingClientRect(); return { order: els.map((e) => e.dataset.tutor), front: els.filter((e) => e.classList.contains('front')).map((e) => e.dataset.tutor), dots: els.filter((e) => e.querySelector('.dot')).map((e) => e.dataset.tutor), card: f.dataset.tutor, name: f.querySelector('.pc-hd .nm').textContent, buttons: [...f.querySelectorAll('.bt:not(.bt-extra):not(.bt-tile)')].map((b) => b.querySelector('.btx').textContent), tiles: [...f.querySelectorAll('.tls .bt-tile')].map((b) => b.dataset.tile + ':' + b.querySelector('.btx').textContent + ':' + Boolean(b.querySelector('.ta svg text, .ta svg path'))), extras: [...f.querySelectorAll('.bt-extra')].map((b) => b.getAttribute('href')), owned: [...f.querySelectorAll('.kcards > *')].map((c) => c.className), shared: [...document.querySelectorAll('#hcards > *')].map((c) => c.className), brief: document.body.innerHTML.includes('重点字'), rects: els.map((e) => [Math.round(r(e).left), Math.round(r(e).top), Math.round(r(e).bottom)]), heights: [...new Set(els.map((e) => e.offsetHeight))] }; })()`);
   await send('Runtime.enable');
   await send('Page.enable');
 
@@ -115,6 +115,7 @@ for: ${day}
   const v0 = await stack();
   ok('叠的顺序:家长排第一的(语文)在最前(最上层),排第二的(数学)紧挨在后面,补的英语在最底下', v0.order.join() === 'english-tutor,math-tutor,chinese-tutor' && v0.front.join() === 'chinese-tutor' && v0.card === 'chinese-tutor' && v0.name === '语文老师', JSON.stringify(v0));
   ok('语文的卡:按钮齐(接着的就是今天那个话题,不再加「接着刚才的」);「每天都在」有拍照听写;讲法不在页面里', v0.buttons.join('|') === '新话题|我要预习小蝌蚪找妈妈|接着讲刚才的板书' && v0.extras.join() === '/dictation?tutor=chinese-tutor' && !v0.brief, JSON.stringify(v0.buttons));
+  ok('方砖:新话题下面一行三块,预习、检查作业、复习,都有图', v0.tiles.join() === 'preview:预习:true,check:检查作业:true,review:复习:true', JSON.stringify(v0.tiles));
   ok('手机竖着叠:后面的牌在上面、一张比一张高,左边对齐;几张牌一样高', v0.rects[0][1] < v0.rects[1][1] && v0.rects[1][1] < v0.rects[2][1] && v0.heights.length === 1, JSON.stringify([v0.rects, v0.heights]));
   ok('卡的归属:写在老师卡前面的一段字是公共的(牌堆上面);跟在数学后面的田字格不在语文的牌里', v0.shared.length === 1 && v0.shared[0].includes('c-text') && v0.owned.length === 0, JSON.stringify([v0.shared, v0.owned]));
   ok('橙点:数学(家长排了按钮、孩子还没找过)亮;最前的语文、什么都没排的英语不亮', v0.dots.join() === 'math-tutor', JSON.stringify(v0.dots));
@@ -156,7 +157,7 @@ for: ${day}
   await sleep(900);
 
   // ---- 开场按钮:老师页打开,按钮上的字发出去 ----
-  await evaluate(`[...document.querySelectorAll('#deck .pc.front[data-tutor="chinese-tutor"] .bt')].find((b) => b.textContent.includes('预习')).click()`);
+  await evaluate(`[...document.querySelectorAll('#deck .pc.front[data-tutor="chinese-tutor"] .bt:not(.bt-tile)')].find((b) => b.textContent.includes('预习')).click()`);
   await sleep(500);
   const d = await settle('chinese-tutor');
   const idx = (await api('GET', '/api/conversations/chinese-tutor/today')).json?.index;
@@ -166,6 +167,16 @@ for: ${day}
   const page = await evaluate(`({ secs: document.querySelectorAll('#board .sec').length, blank: !!document.querySelector('#board .blank') })`);
   ok('老师页铺上了这一节', d && page.secs === 1 && !page.blank, JSON.stringify(page));
   console.log('  ', await shot('tutor-after-start.png'));
+
+  // ---- 方砖:点「检查作业」= 新话题、发方砖上的字、话题照 activity「检查作业」 ----
+  await evaluate(`document.querySelector('#back').click()`);
+  await sleep(1500);
+  await evaluate(`document.querySelector('#deck .pc.front[data-tutor="chinese-tutor"] .bt-tile[data-tile="check"]').click()`);
+  await sleep(500);
+  await settle('chinese-tutor');
+  const idx2 = (await api('GET', '/api/conversations/chinese-tutor/today')).json?.index;
+  const last2 = idx2?.messages[idx2.messages.length - 1];
+  ok('方砖:「检查作业」发给语文老师、新话题、带 via、照 activity 带', last2?.text === '检查作业' && last2?.via?.button === 'check' && last2?.activity?.name === '检查作业' && last2.thread === last2.job, JSON.stringify({ text: last2?.text, via: last2?.via, activity: last2?.activity, thread: last2?.thread }));
 
   ws.close();
 } finally {

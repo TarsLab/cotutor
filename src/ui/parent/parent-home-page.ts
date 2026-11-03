@@ -244,6 +244,8 @@ ${pageDomJs(3200)}
   const AGAIN = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7"></path><path d="M20 4v5h-5"></path></svg>';
   // 学科色服务端定好随老师下发(src/ui/shared/tutor-color.ts)
   const avatar = (t) => { const el = h('span', { class: 'av', style: 'color:' + t.color }); el.innerHTML = '<svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="44"></circle></svg>'; const f = h('span', { class: 'face' }); if (t.avatar && /\.(png|jpe?g|webp|svg)$/i.test(t.avatar)) f.append(h('img', { src: '/api/kid/avatar/' + t.name, alt: '' })); else f.textContent = t.avatar || (t.subject || t.display || '?').slice(0, 1); el.append(f); return el; };
+  // 方砖在「每天都在」里的那句:点进去老师怎么带(参数都空着,老师先请孩子拍材料)
+  const TILE_NOTE = { preview: '孩子拍新课的那页,老师带着先读一读、问一问', check: '作业写完拍给老师,一次看一处、改一处', review: '学过的拿出来,挑一点再练一练' };
   const sw = (on, label, click, disabled) => h('button', { type: 'button', class: 'sw', role: 'switch', 'aria-checked': on ? 'true' : 'false', 'aria-label': label, disabled: disabled || null, on: { click } });
   const md = (d) => Number(d.slice(5, 7)) + '/' + Number(d.slice(8, 10));
   // 留多久:只今天 = 今天;到周日 = 这周日(今天是周日就是今天);一直 = 不写
@@ -283,6 +285,7 @@ ${pageDomJs(3200)}
     if (!t) return;
     if (t.name !== cur) choose(t.name, true);
     if (ev.act === 'button') { if (ev.id === 'new') toast('「新话题」是应用自己加的,一直在第一个,这里改不了'); else if (typeof ev.id === 'number') pick(ev.id); }
+    else if (ev.act === 'tile') { const el = $('#daily-tile-' + ev.id); if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
     else if (ev.act === 'extra') { if (ev.kind === 'dictation') editWords(t); else { const el = $('#daily-talk'); if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } }
   };
   for (const b of document.querySelectorAll('#pvdev button')) b.addEventListener('click', () => { dev = picked = b.dataset.d; try { localStorage.setItem('parent-home-dev', dev); } catch (e) {} fit(); });
@@ -456,6 +459,8 @@ ${pageDomJs(3200)}
     // 每天都在
     const has = (k) => t.extras.includes(k);
     const daily = [];
+    // 方砖:预习、检查作业、复习,老师家里有那个 activity 文件的才列;关掉就是孩子牌上不出那一块
+    for (const x of t.tiles || []) daily.push(h('div', { class: 'it', id: 'daily-tile-' + x.id }, h('span', { class: 'tx' }, h('b', {}, x.label), h('small', {}, x.usable ? TILE_NOTE[x.id] : '「' + x.label + '」那份 activity 文件写坏了,孩子那边先不出(工作台看)')), sw(x.on, x.label, () => save('PATCH', '/api/parent/settings', { tutors: { [t.name]: { tiles: { [x.id]: !x.on } } } }))));
     daily.push(h('div', { class: 'it' }, h('span', { class: 'tx' }, h('b', {}, '听写'), h('small', {}, '拍照听写一直在;设了这周的词,孩子点「听写」直接写')), sw(has('dictation'), '听写', () => setExtras(t, 'dictation', !has('dictation')))));
     if (has('dictation') || t.dictation) daily.push(h('button', { type: 'button', class: 'it', on: { click: () => editWords(t) } }, h('span', { class: 'tx' }, h('b', {}, '这周的词'), h('small', {}, t.dictation && t.dictation.length ? t.dictation.length + ' 个词:' + t.dictation.map((w) => w.chars).join('、') : '还没设')), h('span', { class: 'chev', html: CHEV })));
     daily.push(h('div', { class: 'it', id: 'daily-talk' }, h('span', { class: 'tx' }, h('b', {}, '口语课'), h('small', {}, D.talk.enabled ? '孩子自己拍今天学的那页,先跟读再打电话' : '口语课没开(cotutor.json 的 talk.enabled)')), sw(has('talk'), '口语课', () => setExtras(t, 'talk', !has('talk')), !D.talk.enabled && !has('talk'))));

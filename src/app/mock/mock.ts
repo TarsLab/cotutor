@@ -21,7 +21,7 @@ import { cardAssets, parseCardState, stripSecrets, DictationPropsSchema } from '
 import { fileURLToPath } from 'node:url';
 import { bundleAsset, stageAsset, stageIndex, stageVersion } from '../http/stage.ts';
 import { sendFile } from '../http/send-file.ts';
-import { subjectLang, tutorExtras, type ConversationMessage } from '../../schema/index.ts';
+import { HOME_TILES, HOME_TILE_IDS, canonicalSubject, subjectLang, tutorExtras, type ConversationMessage } from '../../schema/index.ts';
 import { NEUTRAL_COLOR, tutorColors } from '../../ui/shared/tutor-color.ts';
 import { boardMarkOf } from '../../ui/kid/board-mark.ts';
 import { backTutorOf } from '../../ui/kid/tutor-face.ts';
@@ -80,7 +80,7 @@ import { ICON_SIZES, appIconPng, webManifest } from '../../ui/shared/icon.ts';
 import { faviconResponse } from '../../ui/shared/favicon.ts';
 import { kidPage } from '../../ui/kid/kid-page.ts';
 import { parentPage } from '../../ui/parent/parent-page.ts';
-import { arrangeHome, homeOwners, kidButtons, parseHome } from '../../runtime/home/home.ts';
+import { arrangeHome, homeOwners, kidButtons, kidTiles, parseHome } from '../../runtime/home/home.ts';
 import type { TutorButton } from '../../board/cards/index.ts';
 import { packageTheme } from '../cli/themes.ts';
 import { cardsCss } from '../../board/cards/docs.ts';
@@ -605,7 +605,9 @@ export function createMock(opts: MockOptions = {}): Mock {
       // mock 的话题都是新话题进去的:今天孩子问过的那个,挂在新话题按钮上(空白板上的胶囊)
       const resumes = asked ? new Map([['free', { thread: asked.thread, title: (asked.question ?? '').slice(0, 10), at: list[list.length - 1]?.at ?? '' }]]) : undefined;
       const alive = (date: string, thread: string): boolean => (date === yesterday() && (past.get(name) ?? []).some((m) => m.thread === thread)) || (date === localDate(d) && list.some((m) => m.thread === thread));
-      return { kind: 'tutor', props: { tutor: name, buttons: kidButtons((c.props.buttons ?? []) as TutorButton[], { resumes, alive, lecture: (id) => Boolean(mockLecture(id)), today: localDate(d) }).map((b) => { const l = b.kind === 'lecture' ? mockLecture(b.bundle) : null; return l ? { ...b, title: l.title, ms: l.ms, ...(l.video ? { video: true as const } : {}) } : b; }) } };
+      // 方砖:三门主科出厂都有预习、检查作业、复习(真服务看老师家里有没有那个 activity 文件)
+      const main = ['语文', '数学', '英语'].includes(canonicalSubject(MOCK_TUTORS.find((t) => t.name === name)?.subject) ?? '');
+      return { kind: 'tutor', props: { tutor: name, tiles: main ? kidTiles(HOME_TILE_IDS, { usable: () => true }) : [], buttons: kidButtons((c.props.buttons ?? []) as TutorButton[], { resumes, alive, lecture: (id) => Boolean(mockLecture(id)), today: localDate(d) }).map((b) => { const l = b.kind === 'lecture' ? mockLecture(b.bundle) : null; return l ? { ...b, title: l.title, ms: l.ms, ...(l.video ? { video: true as const } : {}) } : b; }) } };
     });
     // figshot:和配了 figshot 的 workspace 一样给端口;这台电脑上 figshot 没开着,页面照样藏着这张卡
     return { title, date: localDate(d), tutors: tutorsJson(), home: mockHomeId(), cards, figshot: { port: 8477 }, hand: 'right', ready: scenario !== 'nokey' };
@@ -646,6 +648,8 @@ export function createMock(opts: MockOptions = {}): Mock {
   const mockButton = (name: string, via: unknown): TutorButton | 'new' | 'recent' | null => {
     if (!isObj(via)) return null;
     if (via.button === 'new' || via.button === 'recent') return via.button;
+    const tile = HOME_TILES.find((t) => t.id === via.button);
+    if (tile) return { kind: 'activity', label: tile.activity, activity: tile.activity, params: {} };
     if (via.home !== mockHomeId() || typeof via.button !== 'number') return null;
     const card = parseHome(mockHomeMd(localDate(now()), yesterday())).cards.find((c) => c.kind === 'tutor' && c.props.tutor === name);
     return ((card?.props.buttons ?? []) as TutorButton[])[via.button] ?? null;

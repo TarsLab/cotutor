@@ -4,6 +4,7 @@
  */
 import { z } from 'zod';
 import { BoardCardSchema } from './board.ts';
+import { HOME_TILE_IDS } from './config.ts';
 
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 /** 发布的 id:发布时刻 YYYY-MM-DD-HHMM,同一分钟再发加 -2、-3 */
@@ -25,11 +26,16 @@ export const PublishedHomeSchema = z.object({
 });
 export type PublishedHome = z.infer<typeof PublishedHomeSchema>;
 
-/** 孩子从首页哪个按钮进来的:home = 发布的 id(没发布过的缺省首页是 null),button = 老师卡上文件里的第几个按钮,或应用加的 new / recent */
+/** 孩子从首页哪个按钮进来的:home = 发布的 id(没发布过的缺省首页是 null),button = 老师卡上文件里的第几个按钮,或应用加的 new / recent,或常驻的方砖(HOME_TILES 的 id) */
 export const HomeViaSchema = z.object({
   home: z.string().regex(HOME_ID_RE).nullable(),
-  button: z.union([z.number().int().nonnegative(), z.enum(['new', 'recent'])]),
+  button: z.union([z.number().int().nonnegative(), z.enum(['new', 'recent', ...HOME_TILE_IDS])]),
 });
+
+/** 这一下发出去的字是按钮上的字、不是孩子说的(家长排的按钮、方砖);新话题、接着刚才的不算 */
+export function viaSendsLabel(via: { button: number | string }): boolean {
+  return typeof via.button === 'number' || (HOME_TILE_IDS as readonly string[]).includes(via.button);
+}
 export type HomeVia = z.infer<typeof HomeViaSchema>;
 
 /** 消息里记的 via:再带上按钮上的字(发布的首页以后会换,记下来 home show 才说得清) */

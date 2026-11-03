@@ -3,7 +3,8 @@
  * 包里的 grades/grade-<n>/agents/<老师>/activities/<名>.md 是出厂件;init 拷进 workspace 同一个位置(老师的家里,会话 cwd 下),这份是家长的;
  * 出厂 hash 记 .cotutor/shipped.json 的 activities(键「老师/名」),据此分 latest / upgradable / custom / untracked / missing,意思同 tutors.ts。
  */
-import { readFile, mkdir, writeFile, lstat } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { readFile, readdir, mkdir, writeFile, lstat, unlink } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { lintActivity, type ActivityIssue } from '../../runtime/activity.ts';
 import type { Activity } from '../../schema/index.ts';
@@ -11,7 +12,7 @@ import { PACKAGE_AGENTS_DIR, PACKAGE_VERSION } from './skeleton.ts';
 import { lineDiff, readManifest, sha256, writeManifest, type ShippedManifest, type TutorState } from './tutors.ts';
 import { UsageError } from '../workspace.ts';
 import { workspaceGradePack } from './grades.ts';
-import { ACTIVITIES_DIR, EXAMPLES_SUFFIX, activityFile, activityRunFor, listActivities, type ActivityRef } from '../../runtime/activities.ts';
+import { ACTIVITIES_DIR, ACTIVITY_RENAMES, EXAMPLES_SUFFIX, activityFile, activityRunFor, listActivities, type ActivityRef } from '../../runtime/activities.ts';
 
 // 读的那一半在 src/runtime/activities.ts;照旧从这里转出
 export { ACTIVITIES_DIR, EXAMPLES_SUFFIX, activityFile, activityRunFor, listActivities, type ActivityRef };
@@ -60,6 +61,46 @@ async function installOne(root: string, a: ActivityRef, manifest: ShippedManifes
   manifest.activities[keyOf(a)] = { hash: sha256(text), version: PACKAGE_VERSION };
 }
 
+/** 头上的 name(activity 文件)/ activity(例子文件)从旧名改成新名;别处不动 */
+function renameHead(text: string, from: string, to: string): string {
+  return text.replace(/^---\n[\s\S]*?\n---/, (fm) => fm.replace(new RegExp(`^(name|activity):[ \t]*${from}[ \t]*$`, 'm'), `$1: ${to}`));
+}
+
+export interface ActivityRename {
+  /** 新的键「老师/新名」 */
+  key: string;
+  from: string;
+}
+
+/**
+ * 改过名的出厂 activity(ACTIVITY_RENAMES):workspace 里旧名的文件与例子挪成新名,头上的名字跟着改;出厂记录跟着挪——
+ * 没改过的照旧算没改过(下面比新旧时换成新版),家长改过的照旧算自定义(内容不动,只改头上的名字)。新名已经有了就不动旧的
+ */
+async function migrateRenames(root: string, manifest: ShippedManifest): Promise<ActivityRename[]> {
+  const out: ActivityRename[] = [];
+  const tutors = (await readdir(join(root, 'agents'), { withFileTypes: true }).catch(() => [])).filter((d) => d.isDirectory()).map((d) => d.name).sort();
+  for (const t of tutors) {
+    for (const [from, to] of Object.entries(ACTIVITY_RENAMES)) {
+      for (const [a, b] of [[from, to], [from + EXAMPLES_SUFFIX, to + EXAMPLES_SUFFIX]]) {
+        const src = activityFile(root, t, a);
+        const dst = activityFile(root, t, b);
+        const text = await readFile(src, 'utf8').catch(() => null);
+        if (text === null || existsSync(dst)) continue;
+        const next = renameHead(text, from, to);
+        await writeFile(dst, next);
+        await unlink(src);
+        const rec = manifest.activities?.[`${t}/${a}`];
+        if (rec && manifest.activities) {
+          delete manifest.activities[`${t}/${a}`];
+          manifest.activities[`${t}/${b}`] = { ...rec, hash: rec.hash === sha256(text) ? sha256(next) : rec.hash };
+        }
+        out.push({ key: `${t}/${b}`, from: a });
+      }
+    }
+  }
+  return out;
+}
+
 export interface ActivityInstallStep {
   item: string;
   action: 'created' | 'exists' | 'kept' | 'replaced';
@@ -70,8 +111,11 @@ export interface ActivityInstallStep {
 export async function installActivities(root: string): Promise<ActivityInstallStep[]> {
   const steps: ActivityInstallStep[] = [];
   const manifest = await readManifest(root);
-  let touched = !manifest.teachingPack;
+  // 改过名的先挪:不然 init 会在旧名旁边再拷一份新名的
+  const renamed = await migrateRenames(root, manifest);
+  let touched = !manifest.teachingPack || renamed.length > 0;
   manifest.teachingPack ??= { grade: (await workspaceGradePack(root)).grade };
+  for (const r of renamed) steps.push({ item: `agents/${r.key.replace('/', `/${ACTIVITIES_DIR}/`)}.md`, action: 'replaced', note: `改了名(原来叫「${r.from}」)` });
   for (const a of await shippedActivities(root)) {
     const s = await readState(root, a, manifest);
     const item = `agents/${a.tutor}/${ACTIVITIES_DIR}/${a.name}.md`;
@@ -87,16 +131,18 @@ export async function installActivities(root: string): Promise<ActivityInstallSt
 
 export interface ActivityUpgradeStep {
   key: string;
-  action: 'upgraded' | 'latest' | 'kept-custom' | 'forced' | 'installed';
+  action: 'upgraded' | 'latest' | 'kept-custom' | 'forced' | 'installed' | 'renamed';
   basedOn?: string;
   diff?: string[];
+  /** renamed:原来的名字 */
+  from?: string;
 }
 
 /** upgrade 用:同 upgradeTutors;force 里写「老师/名」才覆盖(原文留 .bak) */
 export async function upgradeActivities(root: string, opts: { force?: string[] } = {}): Promise<ActivityUpgradeStep[]> {
   const manifest = await readManifest(root);
   manifest.teachingPack ??= { grade: (await workspaceGradePack(root)).grade };
-  const steps: ActivityUpgradeStep[] = [];
+  const steps: ActivityUpgradeStep[] = (await migrateRenames(root, manifest)).map((r) => ({ key: r.key, action: 'renamed', from: r.from }));
   for (const a of await shippedActivities(root)) {
     const s = await readState(root, a, manifest);
     if (s.state === 'latest') steps.push({ key: s.key, action: 'latest', basedOn: s.basedOn });

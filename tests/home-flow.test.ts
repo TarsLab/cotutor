@@ -213,6 +213,23 @@ for: 2026-09-18
   const m3 = (await readIndex(ctx.ws, 'chinese-tutor', '2026-09-17')).messages.find((m) => m.job === (s3.json as { job: string }).job)!;
   check('老页面的「接着刚才的」(via recent)服务端照旧认:接今天那个话题,孩子自己的话', m3.thread === j1 && m3.text === '小蝌蚪后来呢' && m3.via?.button === 'recent');
 
+  // 方砖(预习、检查作业、复习):出厂的老师家里都有,不经发布常驻;点了 = 那个 activity、发方砖上的字;关掉的不出、点了 400
+  type Tile = { id: string; label: string; resume?: { thread: string } };
+  const tilesOf = (h: KidHome, tutor: string): Tile[] => (h.cards.find((c) => c.kind === 'tutor' && c.props.tutor === tutor)?.props as { tiles?: Tile[] } | undefined)?.tiles ?? [];
+  const ht = await kidHome();
+  check('方砖:三位老师都有预习、检查作业、复习(牌上的先后)', ['chinese-tutor', 'math-tutor', 'english-tutor'].every((n) => tilesOf(ht, n).map((x) => `${x.id}:${x.label}`).join() === 'preview:预习,check:检查作业,review:复习'), JSON.stringify(tilesOf(ht, 'english-tutor')));
+  const sTile = await kidSend('english-tutor', { text: '', via: { home: h1.home, button: 'check' } });
+  await wait('english-tutor');
+  const mt = (await readIndex(ctx.ws, 'english-tutor', '2026-09-17')).messages.find((m) => m.job === (sTile.json as { job: string }).job);
+  check('点方砖:新话题、发方砖上的字、记 via、话题照 activity「检查作业」(参数缺省)', sTile.status < 300 && mt?.text === '检查作业' && mt.via?.button === 'check' && mt.activity?.name === '检查作业' && mt.thread === mt.job, JSON.stringify([sTile.status, sTile.json, mt]));
+  check('今天点过的方砖带 resume(先问接着还是重新开始);别的方砖不带', tilesOf(await kidHome(), 'english-tutor').map((x) => x.resume?.thread ?? '-').join() === `-,${mt?.thread},-`);
+  withTutor('english-tutor', { tiles: { check: false } });
+  check('关掉的方砖不出', tilesOf(await kidHome(), 'english-tutor').map((x) => x.id).join() === 'preview,review');
+  check('关掉的方砖点了 400(孩子端刷新首页)', (await kidSend('english-tutor', { text: '', via: { home: h1.home, button: 'check' } })).status === 400);
+  withTutor('english-tutor', { tiles: undefined });
+  const themeCss = await route('GET', '/kid/theme.css', ctx);
+  check('孩子端页面带方砖的图,theme.css 带样式', ((await route('GET', '/', ctx)).html ?? '').includes('TILE_ART') && JSON.stringify(themeCss).includes('.bt.bt-tile'), JSON.stringify(themeCss).slice(0, 200));
+
   // ---- 点击统计 ----
   const st = await homeStats(ctx.ws, now);
   const uses = (tutor: string, button: string | number): number => st.clicks.find((c) => c.tutor === tutor && c.button === button)?.uses.length ?? -1;

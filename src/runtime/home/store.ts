@@ -11,11 +11,11 @@ import type { Workspace } from '../../schema/index.ts';
 import { localDate } from '../../shared/time.ts';
 import { conversationFiles, threads } from '../../schema/index.ts';
 import { kidQuestions } from '../../memory/diary.ts';
-import { activityFile } from '../activities.ts';
+import { activityName, findActivityFile } from '../activities.ts';
 import { lintActivity, parseActivity, resolveParams } from '../activity.ts';
-import { arrangeHome, dropFixes, homeActivities, homeOwners, faceTutor, homeId, homeIssues, homeLectures, homeRefs, homeTutors, kidButtons, parseHome, threadKey, todayResumes, type Resume, type HomeCheckContext, type HomeDoc, type HomeIssue, type HomeTutorInfo, type KidHomeButton } from './home.ts';
+import { arrangeHome, dropFixes, homeActivities, homeOwners, faceTutor, homeId, homeIssues, homeLectures, homeRefs, homeTutors, kidButtons, kidTiles, parseHome, threadKey, todayResumes, type Resume, type HomeCheckContext, type HomeDoc, type HomeIssue, type HomeTutorInfo, type KidHomeButton } from './home.ts';
 import type { BoardCard } from '../../board/presentation.ts';
-import { HOME_ID_RE, LECTURE_ACTIVITY, PublishedHomeSchema, type Activity, type ActivityRun, type ActivityValue, type ContextPack, type ConversationIndex, type HomeVia, type MessageVia, type PublishedHome } from '../../schema/index.ts';
+import { HOME_ID_RE, HOME_TILES, LECTURE_ACTIVITY, PublishedHomeSchema, tutorTiles, type Activity, type ActivityRun, type ActivityValue, type ContextPack, type ConversationIndex, type HomeTileId, type HomeVia, type MessageVia, type PublishedHome } from '../../schema/index.ts';
 import { listDates, readCardStates, readIndex } from '../journal/store.ts';
 import { bakeSoon, inspectLecture, readLecture, type Lecture } from '../lecture.ts';
 
@@ -74,9 +74,9 @@ async function checkContext(ws: Workspace, doc: Pick<HomeDoc, 'cards'>, now: Dat
   }
   const activities = new Map<string, { activity: Activity; fixes: number }>();
   for (const r of homeActivities(doc)) {
-    const text = await readFile(activityFile(ws.root, r.tutor, r.name), 'utf8').catch(() => null);
+    const text = await readFile(findActivityFile(ws.root, r.tutor, r.name), 'utf8').catch(() => null);
     if (text === null) continue;
-    const { activity, issues } = lintActivity(text, { fileName: r.name, tutorCards: ws.config.tutors[r.tutor]?.cards });
+    const { activity, issues } = lintActivity(text, { fileName: activityName(ws.root, r.tutor, r.name), tutorCards: ws.config.tutors[r.tutor]?.cards });
     activities.set(`${r.tutor}/${r.name}`, { activity, fixes: issues.filter((i) => i.level === 'fix').length });
   }
   return { tutors: tutorInfos(ws), threads: await liveThreads(ws, homeRefs(doc)), lectures, lectureProblems, unbaked, today: localDate(now), activities };
@@ -96,9 +96,9 @@ export async function checkHome(ws: Workspace, md: string, now: Date): Promise<H
 
 /** 孩子端能不能用这个 activity:文件在、检查没有「要改」(提醒不算);用不了 → null */
 export async function usableActivity(ws: Workspace, tutor: string, name: string): Promise<Activity | null> {
-  const text = await readFile(activityFile(ws.root, tutor, name), 'utf8').catch(() => null);
+  const text = await readFile(findActivityFile(ws.root, tutor, name), 'utf8').catch(() => null);
   if (text === null) return null;
-  const { activity, issues } = lintActivity(text, { fileName: name, tutorCards: ws.config.tutors[tutor]?.cards });
+  const { activity, issues } = lintActivity(text, { fileName: activityName(ws.root, tutor, name), tutorCards: ws.config.tutors[tutor]?.cards });
   return issues.some((i) => i.level === 'fix') ? null : activity;
 }
 
@@ -255,8 +255,9 @@ export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'pu
       continue;
     }
     const name = String(c.props.tutor);
+    const resumes = await resumesOf(ws, name, today);
     const buttons = kidButtons((c.props.buttons ?? []) as TutorButton[], {
-      resumes: await resumesOf(ws, name, today),
+      resumes,
       alive: (date, thread) => alive.has(threadKey(name, date, thread)),
       lecture: (bundle) => Boolean(lectures.get(bundle)),
       activity: (a, params) => { const act = usable.get(`${name}/${a}`); return Boolean(act) && resolveParams(act!, params).issues.length === 0; },
@@ -266,7 +267,10 @@ export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'pu
     // 橙点:这份首页给他排了按钮或卡,而发布以来孩子还没找过他
     const arranged = buttons.some((b) => typeof b.id === 'number') || cards.some((x) => x.kind !== 'tutor' && owners.get(x) === name);
     const news = Boolean(publishedAt && arranged && !(await talkedSince(ws, name, publishedAt, now)));
-    out.push({ kind: 'tutor', props: { tutor: name, buttons, ...(news ? { news: true } : {}) } });
+    // 常驻的方砖(预习、检查作业、复习):不经发布,家里有那个 activity、没关掉就在
+    const tiles: HomeTileId[] = [];
+    for (const t of HOME_TILES) if (tutorTiles(ws.config.tutors[name] ?? {}).includes(t.id) && (await usableActivity(ws, name, t.activity))) tiles.push(t.id);
+    out.push({ kind: 'tutor', props: { tutor: name, buttons, tiles: kidTiles(tiles, { usable: () => true, resumes }), ...(news ? { news: true } : {}) } });
   }
   return { home: id, cards: out };
 }
@@ -289,7 +293,21 @@ export async function resolveVia(ws: Workspace, tutor: string, via: HomeVia): Pr
   if (!faceTutor(tutor, tutorInfos(ws)[tutor])) return null;
   if (via.button === 'new') return { kind: 'new', label: '新话题' };
   if (via.button === 'recent') return { kind: 'recent', label: '接着刚才的' };
-  if (via.home === null) return null;
+  // activity 的参数在点的那一刻按 activity 文件解析、补缺省,跟着话题走(家长后来改了只管以后的话题);文件不在、参数不对 → null
+  const runOf = async (name: string, params: Record<string, string>): Promise<ActivityRun | null> => {
+    const text = await readFile(findActivityFile(ws.root, tutor, name), 'utf8').catch(() => null);
+    if (text === null) return null;
+    const r = resolveParams(parseActivity(text).activity, params);
+    return r.issues.length ? null : { name, params: r.values };
+  };
+  // 方砖:不看是哪份首页(缺省首页也有);关掉了、家里那个 activity 用不了 → null。参数全用缺省(三份都可空,老师先请孩子拍材料)
+  const tile = HOME_TILES.find((t) => t.id === via.button);
+  if (tile) {
+    if (!tutorTiles(ws.config.tutors[tutor] ?? {}).includes(tile.id) || !(await usableActivity(ws, tutor, tile.activity))) return null;
+    const run = await runOf(tile.activity, {});
+    return run ? { kind: 'activity', label: tile.activity, activity: tile.activity, params: run.params } : null;
+  }
+  if (via.home === null || typeof via.button !== 'number') return null;
   const { home } = await readPublished(ws);
   if (!home || home.id !== via.home) return null;
   const card = home.cards.find((c) => c.kind === 'tutor' && c.props.tutor === tutor);
@@ -297,13 +315,6 @@ export async function resolveVia(ws: Workspace, tutor: string, via: HomeVia): Pr
   if (!b) return null;
   const brief = b.brief ? { brief: b.brief } : {};
   if (b.kind === 'start') return { kind: 'start', label: b.label, ...brief };
-  // activity 的参数在点的那一刻按 activity 文件解析、补缺省,跟着话题走(家长后来改了只管以后的话题);文件不在、参数不对 → null
-  const runOf = async (name: string, params: Record<string, string>): Promise<ActivityRun | null> => {
-    const text = await readFile(activityFile(ws.root, tutor, name), 'utf8').catch(() => null);
-    if (text === null) return null;
-    const r = resolveParams(parseActivity(text).activity, params);
-    return r.issues.length ? null : { name, params: r.values };
-  };
   // 小课堂看完照哪个 activity 聊:写了 activity: 是它,没写是这位老师的「小课堂」;文件不在 → null
   if (b.kind === 'lecture') {
     const run = await runOf(b.activity ?? LECTURE_ACTIVITY, {});
@@ -365,7 +376,7 @@ export async function continueContext(ws: Workspace, tutor: string, date: string
 
 export interface HomeClick {
   tutor: string;
-  button: number | 'new' | 'recent';
+  button: HomeVia['button'];
   label: string;
   uses: { date: string; job: string; thread: string }[];
 }
@@ -432,7 +443,8 @@ export function formatCheck(ws: Workspace, check: HomeCheck, title: string, kid:
       const ref = b.kind === 'continue' ? ` → ${b.date} ${b.thread}` : b.kind === 'lecture' ? ` → 小课堂 ${b.bundle}` : act?.kind === 'activity' ? ` → activity ${act.activity}${Object.keys(act.params).length ? `(${Object.entries(act.params).map(([k, v]) => `${k}: ${v}`).join(';')})` : ''}` : '';
       return `${BUTTON_ICON[b.kind]} ${b.label}${ref}${brief}`;
     });
-    out.push(`  ${display(name)} ${name}${written.has(name) ? '' : '(没写,应用补)'}:${buttons.join(' | ')}`);
+    const tiles = ((c.props.tiles ?? []) as { label: string }[]).map((x) => `▦ ${x.label}`);
+    out.push(`  ${display(name)} ${name}${written.has(name) ? '' : '(没写,应用补)'}:${[...buttons.slice(0, 1), ...tiles, ...buttons.slice(1)].join(' | ')}${tiles.length ? '(▦ 是常驻的方砖,不用写)' : ''}`);
   }
   const rest = kid.cards.filter((x) => x.kind !== 'tutor');
   if (rest.length) {
@@ -459,7 +471,7 @@ export function formatStats(ws: Workspace, s: HomeStats): string {
   const h = s.home;
   const tutorsN = h.cards.filter((c) => c.kind === 'tutor').length;
   const out = [`已发布 ${h.id}(${s.days === 0 ? '今天' : `${s.days} 天前`}${h.for ? `,for ${h.for}` : ''})· ${tutorsN} 张老师卡 · ${h.cards.length - tutorsN} 张别的卡 · 原文 ${h.source}`];
-  const icon = (b: HomeClick['button']): string => (b === 'new' ? '✨' : b === 'recent' ? '↻' : '·');
+  const icon = (b: HomeClick['button']): string => (b === 'new' ? '✨' : b === 'recent' ? '↻' : typeof b === 'string' ? '▦' : '·');
   for (const c of s.clicks) {
     const who = ws.config.tutors[c.tutor]?.display ?? c.tutor;
     out.push(`  ${who} ${icon(c.button)} ${c.label}:${c.uses.length ? `点了 ${c.uses.length} 次(${c.uses.map((u) => `${u.date} ${u.thread}`).join('、')})` : '没点过'}`);

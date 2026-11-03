@@ -13,7 +13,7 @@ import { cardLabel } from '../board/cards/index.ts';
 import { parseLogLine } from '../brain/index.ts';
 import { UsageError } from '../shared/errors.ts';
 import type { Workspace } from '../schema/index.ts';
-import { conversationFiles, threads } from '../schema/index.ts';
+import { conversationFiles, threads, viaSendsLabel } from '../schema/index.ts';
 import { compactDiff, diffLines, type DiffRow } from './diff.ts';
 import { tokenText, type Tokens } from '../shared/tokens.ts';
 import { toolCalls, type ToolCall } from '../brain/transcript.ts';
@@ -80,7 +80,7 @@ export async function startReplay(ws: Workspace, tutor: string, date: string, jo
     replayOf: job,
     runtime: opts.runtime,
     ...(m.via ? { via: m.via } : {}),
-    ...(m.via && typeof m.via.button === 'number' ? { home: { button: m.via.label, ...(button?.brief ? { brief: button.brief } : {}) } } : {}),
+    ...(m.via && viaSendsLabel(m.via) ? { home: { button: m.via.label, ...(button?.brief ? { brief: button.brief } : {}) } } : {}),
     ...(m.continues && continued ? { continues: { ...m.continues, pack: continued } } : {}),
     ...(activity ? { activity } : {}),
     // 原轮是实时的:回放也按实时写(上下文包带 live:、不补提问卡);嘴不在,接住与打断的 caught / cut 不带

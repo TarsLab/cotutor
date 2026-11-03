@@ -45,6 +45,7 @@ import { pageDomJs } from '../shared/page-dom.ts';
 import { KID_LOG_JS } from './kid-log.ts';
 import { BACK_TINT_CSS, BACK_TINT_JS } from './tutor-face.ts';
 import { BOARD_MARK_CSS, BOARD_MARK_HAND_LEFT_CSS, BOARD_MARK_JS } from './board-mark.ts';
+import { HOME_TILES_JS } from './home-tiles.ts';
 
 /** 内联进页面的那几份纯文件(仓库里是 .ts,npm 包里是 dist 的 .js;inline-lib 剥类型、去 export,变成能内联的普通脚本) */
 const INLINE = {
@@ -830,6 +831,11 @@ ${BOARD_MARK_JS}
       h('span', { class: 'lm' }, h('small', { class: 'tg' }, '小课堂'), h('span', { class: 'btx' }, b.label), b.ms ? h('small', { class: 'ln' }, lcLen(b.ms)) : null));
     return h('button', { type: 'button', class: 'bt bt-' + b.kind, 'data-bid': String(b.id), on }, h('span', { class: 'bi', html: ICON[BUTTON_ICON[b.kind]] || ICON.start }), h('span', { class: 'btx' }, b.label));
   };
+  // ---- 常驻的三块方砖(预习、检查作业、复习;服务端照老师家里的 activity 文件给,src/ui/kid/home-tiles.ts):新话题下面一行;点了和 activity 按钮一样 ----
+${HOME_TILES_JS}
+  const tileButton = (t, x) => h('button', { type: 'button', class: 'bt bt-tile', 'data-tile': x.id, style: '--sc:' + colorOf(t), on: { click: () => pickButton(t, { id: x.id, kind: 'start', label: x.label, resume: x.resume }) } },
+    h('span', { class: 'ta', html: tileArt(t.mark, x.id) }), h('span', { class: 'btx' }, x.label));
+  const tilesRow = (t, tiles) => (Array.isArray(tiles) && tiles.length ? h('div', { class: 'tls' }, ...tiles.map((x) => tileButton(t, x))) : null);
   /** 挨着的几个小课堂收进一格(平板上两张海报并排,手机上一张一行) */
   const buttonRuns = (t, buttons) => {
     const out = [];
@@ -942,7 +948,8 @@ ${BOARD_MARK_JS}
       const bt = pc ? e.target.closest('.bt') : null;
       if (!bt) return;
       const bid = bt.dataset.bid;
-      if (bid !== undefined) pvTell({ act: 'button', tutor: pc.dataset.tutor, id: bid === 'new' || bid === 'draft' ? bid : Number(bid) });
+      if (bt.dataset.tile) pvTell({ act: 'tile', tutor: pc.dataset.tutor, id: bt.dataset.tile });
+      else if (bid !== undefined) pvTell({ act: 'button', tutor: pc.dataset.tutor, id: bid === 'new' || bid === 'draft' ? bid : Number(bid) });
       else pvTell({ act: 'extra', tutor: pc.dataset.tutor, kind: bt.classList.contains('bt-x-talk') ? 'talk' : 'dictation' });
     }, true);
   }
@@ -956,7 +963,8 @@ ${BOARD_MARK_JS}
       const { t, card } = list.find((x) => x.t.name === n);
       const buttons = pvButtons(n, Array.isArray(card.props.buttons) ? card.props.buttons : []);
       const owned = (Array.isArray(H.cards) ? H.cards : []).filter((c) => c.kind !== 'tutor' && c.owner === n);
-      const sig = JSON.stringify([t.avatar, t.subject, t.display, buttons, owned, t.extras, S.talkLast && (S.talkLast.last ? S.talkLast.last.id : 'on'), H.home]);
+      const tiles = Array.isArray(card.props.tiles) ? card.props.tiles : [];
+      const sig = JSON.stringify([t.avatar, t.subject, t.display, buttons, tiles, owned, t.extras, S.talkLast && (S.talkLast.last ? S.talkLast.last.id : 'on'), H.home]);
       let el = K.els.get(n);
       if (!el) {
         const pc = h('div', { class: 'c c-tutor pc', 'data-tutor': n, on: { click: (e) => { if (e.target.closest && e.target.closest('a[href]')) stashFront(pc); if (!pc.classList.contains('front')) pickTutor(n); } } });
@@ -969,7 +977,8 @@ ${BOARD_MARK_JS}
         const others = owned.filter((c) => c.kind !== 'dictation');
         el.replaceChildren(...[
           h('div', { class: 'pc-hd' }, deal ? avatarEl(t, 'draw', 0.1 + slot * 0.12) : avatarEl(t), h('span', { class: 'nm' }, t.display)),
-          h('div', { class: 'kc' }, h('div', { class: 'bts' }, ...buttonRuns(t, buttons)), extras.length ? h('div', { class: 'bts extras' }, ...extras) : null),
+          // 新话题(第一颗)、方砖一行、家长排的按钮
+          h('div', { class: 'kc' }, h('div', { class: 'bts' }, ...((runs) => [runs[0], tilesRow(t, tiles), ...runs.slice(1)])(buttonRuns(t, buttons))), extras.length ? h('div', { class: 'bts extras' }, ...extras) : null),
           others.length ? h('div', { class: 'hcards kcards' }, ...others.map((c, i) => renderCard(c, i, null, false))) : null,
           h('span', { class: 'pc-ix' }, avatarEl(t)),
           h('span', { class: 'veil' }),

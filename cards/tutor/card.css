@@ -29,6 +29,19 @@
 .c-tutor.off .nm, .c-tutor.off .bt { color:var(--dim); }
 .c-tutor.off .bt .bi { color:var(--dim); }
 .c-tutor.off .bt-new { background:var(--grey); }
+/* 常驻的三块方砖(预习、检查作业、复习;src/ui/kid/home-tiles.ts):新话题下面一行三块,白底学科色细边,图在上字在下;三科同一个样子,分辨全靠图 */
+.c-tutor .tls { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px; }
+.c-tutor .bt.bt-tile { flex-direction:column; justify-content:center; gap:8px; min-height:132px; padding:14px 8px; border-radius:20px; border-color:color-mix(in srgb, var(--sc) 32%, #fff); text-align:center; }
+.c-tutor .bt-tile .ta { display:grid; place-items:center; color:var(--sc); }
+.c-tutor .bt-tile .ta svg { width:100px; height:68px; display:block; }
+.c-tutor .bt-tile .btx { font-size:20px; font-weight:700; letter-spacing:.5px; line-height:1.2; }
+@media (max-width:560px) {
+  .c-tutor .tls { gap:8px; }
+  .c-tutor .bt.bt-tile { min-height:100px; padding:10px 4px; gap:6px; border-radius:16px; }
+  .c-tutor .bt-tile .ta svg { width:72px; height:49px; }
+  .c-tutor .bt-tile .btx { font-size:17px; }
+}
+.c-tutor.off .bt-tile .ta, body.offline .c-tutor .bt-tile .ta, body.gated .c-tutor .bt-tile .ta { filter:grayscale(1); opacity:.5; }
 /* 小课堂:带预览图的海报,图上一个播放键,下面「小课堂 · 课名 · 课长」;挨着的几张收在 .lcs 里,够宽就并排 */
 .c-tutor .lcs { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; }
 .c-tutor .bt-lecture { flex-direction:column; align-items:stretch; gap:0; min-height:0; padding:0; border-radius:20px; overflow:hidden; }

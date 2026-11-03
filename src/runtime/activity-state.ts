@@ -4,7 +4,7 @@
  */
 import { readFile } from 'node:fs/promises';
 import type { Workspace } from '../schema/index.ts';
-import { activityFile } from './activities.ts';
+import { findActivityFile } from './activities.ts';
 import { failingGate, parseActivity } from './activity.ts';
 import { threads } from '../schema/index.ts';
 import { type Activity, type ActivityRun, type ActivityValue, type ConversationMessage } from '../schema/index.ts';
@@ -18,7 +18,7 @@ export function threadActivity(messages: readonly ConversationMessage[], thread:
 
 /** 读 workspace 里那份 activity 文件;不在 → null */
 export async function readActivity(ws: Workspace, tutor: string, name: string): Promise<Activity | null> {
-  const text = await readFile(activityFile(ws.root, tutor, name), 'utf8').catch(() => null);
+  const text = await readFile(findActivityFile(ws.root, tutor, name), 'utf8').catch(() => null);
   return text === null ? null : parseActivity(text).activity;
 }
 

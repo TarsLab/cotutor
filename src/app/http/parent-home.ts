@@ -11,13 +11,15 @@
  *   GET   /api/parent/qr                            孩子端与家长端地址的二维码(各有主机名一张、局域网 IP 一张)、是不是 HTTPS、孩子的设备连过几台、上次什么时候;服务没在听(测试走 route)→ {ready: false}
  */
 import { DICTATION_EN_MAX, DICTATION_WORD_MAX, DICTATION_WORDS_MAX, TUTOR_BUTTONS_MAX, TutorButtonSchema, dictationWordLang, type DictationLang, type TutorButton } from '../../board/cards/index.ts';
+import { existsSync } from 'node:fs';
 import { localDate } from '../../shared/time.ts';
 import { orderTutors, setTutorButtons, setTutorDictation } from '../../runtime/home/edit.ts';
-import { AGENT_NAME_RE, TUTOR_EXTRAS, cardVoice, mouthVoice, subjectLang, tutorExtras, type CotutorConfig } from '../../schema/index.ts';
+import { AGENT_NAME_RE, HOME_TILES, HOME_TILE_IDS, TUTOR_EXTRAS, cardVoice, mouthVoice, subjectLang, tutorExtras, tutorTiles, type CotutorConfig, type HomeTileId } from '../../schema/index.ts';
+import { findActivityFile } from '../../runtime/activities.ts';
 import { REALTIME_VOICES } from '../../realtime/voices.ts';
 import { TTS_VOICES } from '../../media/tts.ts';
 import type { AppContext, RouteResult } from './app.ts';
-import { editPublished, readPublished, type PublishResult } from '../../runtime/home/store.ts';
+import { editPublished, readPublished, usableActivity, type PublishResult } from '../../runtime/home/store.ts';
 import { patchConfig } from '../workspace.ts';
 import { tutorColors } from '../../ui/shared/tutor-color.ts';
 import { wordEmoji } from '../../ui/kid/word-emoji.ts';
@@ -40,6 +42,8 @@ export interface ParentHomeTutor {
   /** 卡上的常驻入口(按学科补过缺省的);extrasSet = cotutor.json 里写的(没写 = null,走缺省) */
   extras: string[];
   extrasSet: string[] | null;
+  /** 常驻的方砖(HOME_TILES 的先后):家里有那个 activity 文件的才列;on = 没关掉,usable = 文件检查过得去(写坏了孩子端不出) */
+  tiles: { id: HomeTileId; label: string; on: boolean; usable: boolean }[];
   /** 首页里这位老师的按钮(文件里的,带讲法与留到) */
   buttons: TutorButton[];
   /** 这周的词:写了这位老师的听写卡;没有 = null */
@@ -68,6 +72,17 @@ export async function parentHome(ctx: AppContext): Promise<Record<string, unknow
   // 先后 = 首页里老师卡的先后,没写卡的照 cotutor.json 的顺序排在后面
   const written = cards.filter((x) => x.kind === 'tutor').map((x) => String(x.props.tutor)).filter((n, i, a) => names.includes(n) && a.indexOf(n) === i);
   const order = [...written, ...names.filter((n) => !written.includes(n))];
+  const tilesOf = async (name: string): Promise<ParentHomeTutor['tiles']> => {
+    const on = tutorTiles(c.tutors[name]);
+    const out: ParentHomeTutor['tiles'] = [];
+    for (const t of HOME_TILES) {
+      if (!existsSync(findActivityFile(ctx.ws.root, name, t.activity))) continue;
+      out.push({ id: t.id, label: t.activity, on: on.includes(t.id), usable: Boolean(await usableActivity(ctx.ws, name, t.activity)) });
+    }
+    return out;
+  };
+  const tiles = new Map<string, ParentHomeTutor['tiles']>();
+  for (const name of order) tiles.set(name, await tilesOf(name));
   const tutors: ParentHomeTutor[] = order.map((name) => {
     const t = c.tutors[name];
     const card = cards.find((x) => x.kind === 'tutor' && x.props.tutor === name);
@@ -80,6 +95,7 @@ export async function parentHome(ctx: AppContext): Promise<Record<string, unknow
       hidden: t.hidden,
       extras: tutorExtras(t, c.talk.enabled),
       extrasSet: t.extras ?? null,
+      tiles: tiles.get(name) ?? [],
       buttons: ((card?.props.buttons ?? []) as TutorButton[]),
       dictation: dict ? ((dict.props.words ?? []) as { chars: string; say?: string; emoji?: string }[]) : null,
       lang: subjectLang(t.subject),
@@ -193,7 +209,7 @@ export async function parentHomeRoute(method: string, p: string, ctx: AppContext
     if (!isObj(body)) return bad('要一个 JSON 对象');
     const patch: Record<string, unknown> = {};
     if (body.tutors !== undefined) {
-      if (!isObj(body.tutors)) return bad('tutors 要 {<老师>: {extras?, hidden?}}');
+      if (!isObj(body.tutors)) return bad('tutors 要 {<老师>: {extras?, hidden?, tiles?}}');
       const tp: Record<string, unknown> = {};
       for (const [name, v] of Object.entries(body.tutors)) {
         if (!names.includes(name) || !AGENT_NAME_RE.test(name) || !isObj(v)) return bad(`没有这位老师:${name}`);
@@ -205,6 +221,14 @@ export async function parentHomeRoute(method: string, p: string, ctx: AppContext
         if (v.hidden !== undefined) {
           if (typeof v.hidden !== 'boolean') return bad('hidden 要 true / false');
           one.hidden = v.hidden;
+        }
+        // 方砖:{preview?: true/false, …};cotutor.json 只记关掉的(开 = 删掉那一项)
+        if (v.tiles !== undefined) {
+          if (!isObj(v.tiles) || Object.entries(v.tiles).some(([k, x]) => !(HOME_TILE_IDS as readonly string[]).includes(k) || typeof x !== 'boolean')) return bad(`tiles 要 {${HOME_TILE_IDS.join(' / ')}: true / false}`);
+          const off = { ...(ctx.ws.config.tutors[name].tiles ?? {}), ...Object.fromEntries(Object.entries(v.tiles).map(([k, x]) => [k, x ? undefined : false])) };
+          const left = Object.entries(off).filter(([, x]) => x === false);
+          // 全开着 = 整个 tiles 删掉(null);不然只留关掉的那几项(开了的写 null 删掉)
+          one.tiles = left.length ? Object.fromEntries(Object.keys(off).map((k) => [k, off[k as HomeTileId] === false ? false : null])) : null;
         }
         tp[name] = one;
       }

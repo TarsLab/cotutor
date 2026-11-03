@@ -7,7 +7,7 @@
  *  - 老师(LLM)不直接写 vault 文件;`bookkeepingPrompt` 是记账任务的消息正文,教材目录(册#节)列在里面让它原样挑。
  */
 import type { Bookkeeping, BookkeepingEntry, ConversationMessage } from '../schema/index.ts';
-import { threads } from '../schema/index.ts';
+import { threads, viaSendsLabel } from '../schema/index.ts';
 
 export interface DiaryTopic {
   /** H2 的前半:学科(老师没配学科就用显示名) */
@@ -32,8 +32,8 @@ export function kidQuestions(messages: readonly Pick<ConversationMessage, 'job' 
   const ths = threads(messages);
   const out: string[] = [];
   messages.forEach((m, i) => {
-    // 首页的开场 / 接着按钮发的是按钮上的字,不是孩子说的
-    if (ths[i] !== thread || m.from !== 'kid' || m.action || (m.via && typeof m.via.button === 'number')) return;
+    // 首页的开场 / 接着按钮、方砖发的是按钮上的字,不是孩子说的
+    if (ths[i] !== thread || m.from !== 'kid' || m.action || (m.via && viaSendsLabel(m.via))) return;
     const text = m.text.replace(/\s+/g, ' ').trim();
     if (text && text !== '继续') out.push(text);
   });

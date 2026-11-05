@@ -1,5 +1,5 @@
 /**
- * cotutor CLI 入口。命令:init / doctor / serve;全局 --workspace <dir>、--json。
+ * cotutor CLI 入口。命令:init / doctor / serve;全局 --workspace <dir>、--sandbox [--fresh]、--json。
  * exit:0 通过 / 1 体检不过 / 2 用法错误 / 4 内部错误。
  */
 import { createInterface } from 'node:readline/promises';
@@ -21,6 +21,7 @@ import { addTheme, upgradeThemes } from './themes.ts';
 import { patchConfig } from '../workspace.ts';
 import { resolveRoot } from '../workspace.ts';
 import { serveWorkspace } from './serve.ts';
+import { openSandbox } from './sandbox.ts';
 import { serveMock, type MockScenario } from '../mock/mock.ts';
 import { UsageError, loadWorkspace, redactDeep, redactHome, workspaceReport } from '../workspace.ts';
 import { USAGE } from './usage.ts';
@@ -82,13 +83,15 @@ async function printOpen(label: string, page: string, hint: string, open: boolea
   spawn(cmd, args, { stdio: 'ignore', detached: true }).on('error', () => {}).unref();
 }
 const wantsOpen = (flags: Record<string, string | true>): boolean => flags.open === true || flags['open-qr'] === true;
+/** 不用 workspace 的命令:--sandbox 对它们没有意义 */
+const NO_WORKSPACE = ['grades', 'init', 'mock', 'pin', 'cert'];
 
 export async function main(argv: string[]): Promise<void> {
   let json = false;
   try {
     const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'name', 'grade', 'port', 'from', 'runtime', 'force', 'display', 'subject', 'avatar', 'description', 'scenario', 'delay', 'lane', 'job', 'date', 'thread', 'at', 'photo', 'activity', 'param', 'runs', 'only', 'kid-model', 'pin', 'out', 'bundles', 'step', 'voice', 'tutor', 'instruction']);
     json = flags.json === true;
-    const workspace = typeof flags.workspace === 'string' ? flags.workspace : undefined;
+    let workspace = typeof flags.workspace === 'string' ? flags.workspace : undefined;
     // --version / --help 是旗标不是命令,parseArgs 把它们收进 flags,cmd 拿不到,所以在 switch 前处理
     if (flags.version === true || cmd === '-v') {
       process.stdout.write(`${version()}\n`);
@@ -97,6 +100,17 @@ export async function main(argv: string[]): Promise<void> {
     if (flags.help === true || cmd === undefined || cmd === '-h') {
       process.stdout.write(USAGE);
       return;
+    }
+    // --sandbox:要 workspace 的命令都换到它的试用副本(src/app/cli/sandbox.ts),下面照常把它当 --workspace
+    if (flags.fresh === true && flags.sandbox !== true) throw new UsageError('--fresh 只跟 --sandbox 一起用:cotutor serve --sandbox --fresh 重新分出试用 workspace');
+    if (flags.sandbox === true) {
+      if (NO_WORKSPACE.includes(cmd)) throw new UsageError(`${cmd} 不用 workspace,--sandbox 没有意义`);
+      const sb = await openSandbox(workspace, { fresh: flags.fresh === true });
+      workspace = sb.root;
+      if (!json) {
+        process.stderr.write(sb.created ? `分出试用 workspace → ${redactHome(sb.root)}(从 ${redactHome(sb.from)};设置照拷,对话与照片不带,vault 拷了一份)\n` : `试用 workspace ${redactHome(sb.root)}\n`);
+        for (const n of sb.notes) process.stderr.write(`  ${n}\n`);
+      }
     }
     switch (cmd) {
       case 'grades': {
@@ -141,6 +155,7 @@ export async function main(argv: string[]): Promise<void> {
           r.ctx.runner.onEvent((e) => { if (keep(e.event)) process.stdout.write(`${e.tutor} ${e.job} ${formatEvent(e.event)}\n`); });
         }
         process.stdout.write(`cotutor serve ${JSON.stringify(workspaceReport(r.ws))}\n`);
+        if (r.ws.sandbox) process.stdout.write(`  试用:从 ${redactHome(r.ws.sandbox.from)} 分出来,对话、照片、vault 的写入都留在这里,不进孩子的记录;--sandbox --fresh 重新分\n`);
         for (const w of r.warnings) process.stdout.write(`  ! ${w}\n`);
         if (!r.https) process.stdout.write('  ! HTTP:平板、手机上按住说话要 HTTPS;cotutor cert 建证书后重启即走 HTTPS\n');
         // 只给家长端一个入口:孩子的平板扫码、排首页、记录都在里面,工作台从它的右上角进

@@ -27,4 +27,5 @@ export const USAGE = `用法:
   cotutor mock [--port <n>] [--scenario normal|nokey] [--delay <ms>] [--http]   不经真实老师与百炼,用固定的板书 JSON 起孩子端,测前端交互与渲染(不需要 workspace;老师都走实时老师页,假嘴照脚本念静音的声音;nokey = 没配百炼,孩子端只出「老师们还没到」)
   cotutor --version | --help
 workspace解析:--workspace > COTUTOR_WORKSPACE > cwd 或祖先有 cotutor.json > ~/.config/cotutor/config.json > ~/cotutor/ 下唯一的孩子目录
+试用:要 workspace 的命令加 --sandbox,换到真 workspace 旁边的 .sandbox/<目录名>/,试的对话与 vault 的写入不进孩子的记录(第一次自动分:设置照拷,对话与照片不带,vault 拷一份;标题前加「试用」、端口 +1、自动记账关掉);--sandbox --fresh 重新分
 `;

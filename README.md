@@ -103,6 +103,16 @@ cotutor doctor
 
 2026-11-02 起不再起命令行(Qwen Code;Claude CLI 更早就去掉了),老师只走应用直连百炼。2026-10-31 之前建的 workspace 缺省走 Qwen Code,doctor 会报「命令行运行时不再支持」:先 `cotutor upgrade --config` 补上出厂的 `api` / `api-flash`,把 `runtimes.default` 和 `tutors.*.runtime` 改成 `api`,在家长端「首页」填好百炼,再删掉 `qwen`、`qwen-flash`(或更早的 Claude)条目。换之前聊的话题照上面「配置模型」说的办:记录照样能看,不导入、不记账。旧 `proxy` 字段可删除,对应命令已移除。
 
+### 试用不进孩子的记录
+
+自己手动试功能时,命令加 `--sandbox`:第一次从真 workspace 分出一份到旁边的 `.sandbox/<目录名>/`(`~/cotutor/ray` → `~/cotutor/.sandbox/ray`)。老师、activity、首页、主题、课包照拷,对话、照片、听写、账本不带,vault 拷一份;试的对话、记忆、日记都写在这份里。页面标题前带「试用」,端口是真的那个 +1,可以同时开;自动记账关着(要试记账,家长端点「记账」)。
+
+```sh
+cotutor serve --sandbox               # 试用的那份;没有就先分出来
+cotutor send math-tutor 你好 --sandbox
+cotutor serve --sandbox --fresh       # 丢掉试过的,从真 workspace 重新分(真的那边改了老师文件、vault 也用这个带过来)
+```
+
 ## 开发
 
 ```sh

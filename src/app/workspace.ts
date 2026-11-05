@@ -10,7 +10,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { readFile, writeFile, rename } from 'node:fs/promises';
 import { ConfigError, UsageError } from '../shared/errors.ts';
 import { redactDeep, redactHome } from '../shared/home.ts';
-import { SKILLS_DIR, type RootSource, type Workspace } from '../schema/workspace.ts';
+import { SANDBOX_MARK, SKILLS_DIR, SandboxMarkSchema, type RootSource, type SandboxMark, type Workspace } from '../schema/workspace.ts';
 
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
@@ -160,11 +160,23 @@ export function resolvePaths(root: string, paths: Record<string, string>): Works
   return out as Workspace['paths'];
 }
 
+/** 根下的 sandbox 标记(.cotutor/sandbox.json):没有 → null;坏了响亮报错(不当成真 workspace 静默往下跑) */
+export function readSandboxMark(root: string): SandboxMark | null {
+  const file = join(root, SANDBOX_MARK);
+  const raw = readJson(file);
+  if (raw === null) return null;
+  const r = SandboxMarkSchema.safeParse(raw);
+  if (!r.success) throw new ConfigError(file, explainIssues(r.error.issues).map((l) => `  - ${l}`).join('\n'));
+  return r.data;
+}
+
 export function assembleWorkspace(root: string, source: RootSource, config: CotutorConfig): Workspace {
+  const sandbox = readSandboxMark(root);
   return {
     root,
     source,
     config,
+    ...(sandbox ? { sandbox } : {}),
     paths: resolvePaths(root, config.paths),
     dirs: {
       agents: join(root, 'agents'),
@@ -203,6 +215,7 @@ export function workspaceReport(ws: Workspace): Record<string, unknown> {
     vault: ws.paths.vault,
     tutors: Object.keys(ws.config.tutors),
     runtime: ws.config.runtimes.default,
+    ...(ws.sandbox ? { sandbox: { from: ws.sandbox.from, forkedAt: ws.sandbox.forkedAt } } : {}),
   });
 }
 

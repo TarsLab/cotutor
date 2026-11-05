@@ -518,8 +518,12 @@ export async function doctorWorkspace(
     push({ name: 'user-config', ok: true, required: false, detail: `未配置(可选):{"workspace": "…"} 写进 ${redactHome(USER_CONFIG)};cotutor init 会代劳` });
   }
 
-  const gitThere = (await statOrNull(join(root, '.git'))) !== null;
-  push({ name: 'git', ok: gitThere, required: false, detail: gitThere ? 'workspace是 git 仓' : 'workspace不在 git 里', fix: gitThere ? undefined : '建议 git init:老师记忆、账本、政策都是不可再生状态' });
+  // sandbox(--sandbox 分出来的试用 workspace)随时能重新分,不要 git;说一句它是从哪分出来的
+  if (ws?.sandbox) push({ name: 'sandbox', ok: true, required: false, detail: `试用 workspace:${ws.sandbox.forkedAt.slice(0, 10)} 从 ${redactHome(ws.sandbox.from)} 分出来;--sandbox --fresh 重新分` });
+  else {
+    const gitThere = (await statOrNull(join(root, '.git'))) !== null;
+    push({ name: 'git', ok: gitThere, required: false, detail: gitThere ? 'workspace是 git 仓' : 'workspace不在 git 里', fix: gitThere ? undefined : '建议 git init:老师记忆、账本、政策都是不可再生状态' });
+  }
 
   return { ok: checks.filter((c) => c.required).every((c) => c.ok), root, source, checks };
 }

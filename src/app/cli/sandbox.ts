@@ -1,0 +1,149 @@
+/**
+ * --sandbox:命令换到真 workspace 旁边的试用 workspace(位置、拷什么、cotutor.json 改哪几处见 src/schema/workspace.ts 的 SANDBOX_*)。
+ * 没有就分一个;有了就接着用(试过的对话留着,能接着聊、能试记账);--fresh 重新分。
+ * 重新分先分到临时目录,成了才换掉旧的:中途断了旧的还在,半截的不会被当成分好的(标记最后写)。
+ * 已经在 sandbox 里(cwd 在里面、--workspace 指过来)就用它;--fresh 从它记着的真 workspace 重新分,不套娃。
+ */
+import { copyFile, cp, mkdir, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path';
+import { PATH_ROLES, ROLE_DEFAULTS, WORKSPACE_ROLES, type PathRole } from '../../schema/index.ts';
+import { SANDBOX_DIR, SANDBOX_KEEP_MACHINE, SANDBOX_MARK, SANDBOX_SKIP, SANDBOX_TITLE, SANDBOX_VAULT, type SandboxMark, type Workspace } from '../../schema/workspace.ts';
+import { CONFIG_FILE, UsageError, expandPath, loadWorkspace, parseConfig, readJson, readSandboxMark, redactHome, resolveRoot, type ResolveOptions } from '../workspace.ts';
+import { DIRS, LEDGER_FILES } from './skeleton.ts';
+
+export interface SandboxResult {
+  /** sandbox 的根:后面的命令都当 --workspace 用它 */
+  root: string;
+  /** 从哪个真 workspace 分出来的 */
+  from: string;
+  /** 这次新分的(第一次,或 --fresh) */
+  created: boolean;
+  /** 分的时候 paths 怎么处理的(指在外面、只读照旧用的那几个) */
+  notes: string[];
+}
+
+export interface SandboxOptions extends ResolveOptions {
+  fresh?: boolean;
+  now?: Date;
+}
+
+/** vault 侧指在外面也不怕的角色:只读的材料,老师不往里写 */
+const READ_ONLY_ROLES: readonly string[] = ['textbooks', 'reference'];
+
+/** ~/cotutor/ray → ~/cotutor/.sandbox/ray */
+export const sandboxRootOf = (real: string): string => join(dirname(real), SANDBOX_DIR, basename(real));
+
+/** p 是 dir 本身或在它里面 */
+function inside(p: string, dir: string): boolean {
+  const r = relative(dir, p);
+  return r === '' || (r !== '..' && !r.startsWith(`..${sep}`) && !isAbsolute(r));
+}
+
+async function exists(p: string): Promise<boolean> {
+  return stat(p).then(() => true, () => false);
+}
+
+export async function openSandbox(override: string | undefined, opts: SandboxOptions = {}): Promise<SandboxResult> {
+  const { root } = resolveRoot(override, opts);
+  const here = readSandboxMark(root);
+  const real = here ? here.from : root;
+  const box = here ? root : sandboxRootOf(real);
+  const existing = here ?? ((await exists(box)) ? readSandboxMark(box) : null);
+  if (!existing && (await exists(box))) throw new UsageError(`${redactHome(box)} 已经有了,但不是 sandbox(没有 ${SANDBOX_MARK}),不动它;挪走再试`);
+  if (existing && !opts.fresh) return { root: box, from: existing.from, created: false, notes: [] };
+  if (!(await exists(join(real, CONFIG_FILE)))) throw new UsageError(`这个 sandbox 是从 ${redactHome(real)} 分出来的,那里已经没有 workspace 了,重新分不了`);
+  const notes = await fork(real, box, opts);
+  return { root: box, from: real, created: true, notes };
+}
+
+/** 真 workspace → box:根下照拷(跳过状态),外面的 vault 拷进来,补骨架,写改过的 cotutor.json,最后写标记再换上 */
+async function fork(real: string, box: string, opts: SandboxOptions): Promise<string[]> {
+  const ws = loadWorkspace(real, opts);
+  if (ws.sandbox) throw new UsageError(`${redactHome(real)} 本身就是 sandbox,不从它再分`);
+  const vault = ws.paths.vault;
+  if (!(await stat(vault).then((s) => s.isDirectory(), () => false))) throw new UsageError(`vault 不在:${redactHome(vault)}(cotutor.json 的 paths.vault);先修好真 workspace(cotutor doctor)再分`);
+  const notes: string[] = [];
+  const config = sandboxConfig(readJson(ws.files.config) as Record<string, unknown>, ws, box, notes);
+  parseConfig(config, join(box, CONFIG_FILE));
+
+  const skip = new Set(SANDBOX_SKIP.map((n) => join(real, n)));
+  if (inside(ws.paths.captures, real)) skip.add(ws.paths.captures);
+  const keep = (src: string): boolean => basename(src) !== '.git' && !skip.has(src);
+  const tmp = `${box}.tmp-${process.pid}`;
+  await rm(tmp, { recursive: true, force: true });
+  await mkdir(tmp, { recursive: true });
+  try {
+    for (const name of await readdir(real)) {
+      const src = join(real, name);
+      if (name === CONFIG_FILE || !keep(src)) continue;
+      // 链照原样拷(.claude/skills → ../.agents/skills 在 sandbox 里还是指自己那份)
+      await cp(src, join(tmp, name), { recursive: true, verbatimSymlinks: true, filter: keep });
+    }
+    await mkdir(join(tmp, '.cotutor'), { recursive: true });
+    for (const f of SANDBOX_KEEP_MACHINE) await copyFile(join(real, '.cotutor', f), join(tmp, '.cotutor', f)).catch(() => undefined);
+    if (!inside(vault, real)) {
+      if (await exists(join(tmp, SANDBOX_VAULT))) throw new UsageError(`workspace 根下已经有 ${SANDBOX_VAULT},外面的 vault 拷不进 sandbox;把它改个名再分`);
+      await cp(vault, join(tmp, SANDBOX_VAULT), { recursive: true, verbatimSymlinks: true, filter: (src) => basename(src) !== '.git' });
+    }
+    for (const d of DIRS) await mkdir(join(tmp, d), { recursive: true });
+    for (const f of LEDGER_FILES) await writeFile(join(tmp, f), '');
+    await writeFile(join(tmp, CONFIG_FILE), `${JSON.stringify(config, null, 2)}\n`);
+    const mark: SandboxMark = { from: real, vault, forkedAt: (opts.now ?? new Date()).toISOString() };
+    await writeFile(join(tmp, SANDBOX_MARK), `${JSON.stringify(mark, null, 2)}\n`);
+    // 旧的到这里才删:openSandbox 查过它带标记
+    if (await exists(box)) await rm(box, { recursive: true, force: true });
+    await rename(tmp, box);
+  } catch (err) {
+    await rm(tmp, { recursive: true, force: true });
+    throw err;
+  }
+  return notes;
+}
+
+/**
+ * sandbox 的 cotutor.json:在真的那份原文上改(_note 这些机器不认识的键照留)。
+ * 标题加「试用 · 」、端口 +1、证书改绝对路径、自动记账关掉;paths 里每个配过的角色照它在真 workspace 里落在哪,改成指 sandbox 里对应的那处(写相对的,sandbox 挪了也不断)。
+ * 落在 workspace 与 vault 外面的:只读的材料照旧指那份,captures 改回缺省,其余会写的拦下——试用写进去的会混进真的。
+ */
+export function sandboxConfig(raw: Record<string, unknown>, ws: Workspace, box: string, notes: string[]): Record<string, unknown> {
+  const real = ws.root;
+  const vault = ws.paths.vault;
+  const isObj = (v: unknown): v is Record<string, unknown> => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
+  const cfg: Record<string, unknown> = structuredClone(raw);
+  cfg.title = `${SANDBOX_TITLE} · ${ws.config.title}`;
+  const port = ws.config.server.port;
+  const server: Record<string, unknown> = { ...(isObj(raw.server) ? raw.server : {}), port: port === 65535 ? port - 1 : port + 1 };
+  const https = ws.config.server.https;
+  if (https) server.https = { cert: expandPath(https.cert, real), key: expandPath(https.key, real) };
+  cfg.server = server;
+  // 自动记账关掉:试出来的话题不值得每个花一轮老师去记;要试记账,家长端点「记账」或在 sandbox 的 cotutor.json 打开
+  if (ws.config.vault.autoBookkeep) {
+    cfg.vault = { ...(isObj(raw.vault) ? raw.vault : {}), autoBookkeep: false };
+    notes.push('自动记账在 sandbox 里关了(试出来的话题不值得花钱记);要试记账,家长端点「记账」,或在 sandbox 的 cotutor.json 打开 vault.autoBookkeep');
+  }
+
+  const paths: Record<string, string> = isObj(raw.paths) ? ({ ...raw.paths } as Record<string, string>) : {};
+  const vaultInside = inside(vault, real);
+  const newVault = vaultInside ? join(box, relative(real, vault)) : join(box, SANDBOX_VAULT);
+  if (!vaultInside) paths.vault = SANDBOX_VAULT;
+  else if ('vault' in paths) paths.vault = relative(real, vault) || '.';
+  for (const role of Object.keys(paths)) {
+    if (role === 'vault') continue;
+    const abs = ws.paths[role];
+    const workspaceSide = (PATH_ROLES as readonly string[]).includes(role) && WORKSPACE_ROLES.includes(role as PathRole);
+    const target = inside(abs, vault) ? join(newVault, relative(vault, abs)) : inside(abs, real) ? join(box, relative(real, abs)) : null;
+    if (target) {
+      paths[role] = relative(workspaceSide ? box : newVault, target) || '.';
+    } else if (READ_ONLY_ROLES.includes(role)) {
+      paths[role] = abs;
+      notes.push(`paths.${role} 在 workspace 与 vault 外面(${redactHome(abs)}):只读,照旧用那份`);
+    } else if (workspaceSide) {
+      delete paths[role];
+      notes.push(`paths.${role} 在 workspace 外面(${redactHome(abs)}):sandbox 里改用缺省的 ${ROLE_DEFAULTS[role as PathRole]}`);
+    } else {
+      throw new UsageError(`paths.${role} 指到 workspace 与 vault 外面(${redactHome(abs)}),试用时写进去的会混进真的。改成 vault 里的路径再分,或者另建一个试用 workspace(cotutor init <slug> --dir <dir>)`);
+    }
+  }
+  cfg.paths = paths;
+  return cfg;
+}

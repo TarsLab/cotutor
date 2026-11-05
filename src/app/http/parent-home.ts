@@ -163,7 +163,7 @@ function published(r: PublishResult | null): RouteResult {
   return { status: 200, json: { ok: true, home: r?.home ? { id: r.home.id, publishedAt: r.home.publishedAt } : null, changed: Boolean(r) } };
 }
 
-/** 首页上「扫码打开」那块:孩子的平板一张(孩子端 /)、家长自己的手机一张(家长端 /parent);编什么地址由服务端定(同 /dev/qr,不看请求的 Host);连过的设备拿来定这块缺省开着还是收着 */
+/** 首页上「扫码打开」那块:孩子的平板一张(孩子端 /)、家长自己的手机一张(家长端 /parent);编什么地址由服务端定(同 /parent/qr,不看请求的 Host);连过的设备拿来定这块缺省开着还是收着 */
 async function kidQr(ctx: AppContext): Promise<Record<string, unknown>> {
   const info = ctx.listen?.() ?? null;
   if (!info) return { ready: false };
@@ -205,6 +205,8 @@ export async function parentHomeRoute(method: string, p: string, ctx: AppContext
     return published(await editPublished(ctx.ws, (md) => orderTutors(md, list as string[]), ctx.now()));
   }
   if (p === '/api/parent/settings') {
+    // 设置页(/parent/settings)读的:孩子的平板上按住说话那一栏放哪边(kid.hand;缺省 right = 栏在左边)
+    if (method === 'GET') return { status: 200, json: { title: ctx.ws.config.title, hand: ctx.ws.config.kid.hand ?? 'right' } };
     if (method !== 'PATCH') return { status: 405, json: { error: 'method_not_allowed' } };
     if (!isObj(body)) return bad('要一个 JSON 对象');
     const patch: Record<string, unknown> = {};
@@ -244,8 +246,13 @@ export async function parentHomeRoute(method: string, p: string, ctx: AppContext
       if (body.talk.minutes !== undefined) t.minutes = body.talk.minutes;
       patch.talk = t;
     }
+    // 孩子的平板(设置页):只收 kid.hand;缺省的 right 不写进文件
+    if (body.kid !== undefined) {
+      if (!isObj(body.kid) || Object.keys(body.kid).some((k) => k !== 'hand') || (body.kid.hand !== 'left' && body.kid.hand !== 'right')) return bad('kid 只收 {hand: left / right}');
+      patch.kid = { hand: body.kid.hand === 'left' ? 'left' : null };
+    }
     try {
-      await patchConfig(ctx.ws, patch, { also: ['talk'] });
+      await patchConfig(ctx.ws, patch, { also: ['talk', 'kid'] });
     } catch (err) {
       return bad(err instanceof Error ? err.message : String(err));
     }

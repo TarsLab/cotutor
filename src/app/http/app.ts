@@ -22,9 +22,7 @@ import { NEUTRAL_COLOR, SUBJECT_COLORS, TUTOR_PALETTE, tutorColors } from '../..
 import { boardMarkOf, type BoardMarkId } from '../../ui/kid/board-mark.ts';
 import { buildReel, playRecordOk, reelCardTook, reelHolds, reelMissRuns, type PlayRecord, type Reel, type ReelCall } from '../../ui/kid/reel.ts';
 import type { CallReel } from '../../runtime/journal/recorder.ts';
-import { REALTIME_VOICES } from '../../realtime/voices.ts';
-import { PREVIEW_TEXT, cardPreview, mouthPreview } from './voice-preview.ts';
-import { DATE_RE, FocusSchema, MESSAGE_FROM, MOUTH_VOICE, cardVoice, listTutors, mouthVoice, subjectLang, viaSendsLabel, type ConversationIndex, type ConversationMessage, type MemoryLine, type TutorExtra } from '../../schema/index.ts';
+import { DATE_RE, FocusSchema, MESSAGE_FROM, listTutors, subjectLang, viaSendsLabel, type ConversationIndex, type ConversationMessage, type MemoryLine, type TutorExtra } from '../../schema/index.ts';
 import type { BoardCard, Device } from '../../board/presentation.ts';
 import { ConfigError, patchConfig, reloadIfChanged, workspaceReport } from '../workspace.ts';
 import { UsageError } from '../../shared/errors.ts';
@@ -39,7 +37,7 @@ import { factoryAvatarFile, shownAvatar } from './avatars.ts';
 import { deviceCookie, newDeviceId, parseKidLog, readDevices, recordKidLog, renameDevice, validDevice } from '../../runtime/journal/kid-log.ts';
 import { DEVICE_COOKIE } from '../../schema/kid-device.ts';
 import { BUILD, codeChanged, headNow, shortCommit } from '../build.ts';
-import { qrPage, type ListenInfo } from '../../ui/dev/qr-page.ts';
+import { qrPage, type ListenInfo } from '../../ui/parent/qr-page.ts';
 import { kidPage } from '../../ui/kid/kid-page.ts';
 import { parentPage } from '../../ui/parent/parent-page.ts';
 import { kidHomeView } from '../../runtime/home/store.ts';
@@ -57,6 +55,7 @@ import { parentHomeRoute } from './parent-home.ts';
 import { parentLookRoute } from './parent-look.ts';
 import { bailianRoute, createBailian, type Bailian } from '../machine/bailian.ts';
 import { PARENT_HOME_PAGE } from '../../ui/parent/parent-home-page.ts';
+import { PARENT_SETTINGS_PAGE } from '../../ui/parent/parent-settings-page.ts';
 import { dictationRoute } from '../dictation/route.ts';
 import { IndexError, capturePathOk, deleteThread, listDates, rateThread, readErrLog, readIndex, readTranscript, scanCards, undoVaultWrite, writeCapture, writeCardImage, writeCardState, type VaultWrite } from '../../runtime/journal/store.ts';
 import { memoryLineText } from '../../memory/vault-notes.ts';
@@ -74,7 +73,6 @@ import { fixtureOf, rawView } from './raw-view.ts';
 import { DeviceSchema } from '../../schema/index.ts';
 import { CanvasStateSchema } from '../../board/cards/canvas.ts';
 import { PAPER_KEY_RE, dropPaper, readPaper, writePaper } from '../../board/paper.ts';
-import { TTS_VOICES } from '../../media/tts.ts';
 import { addTutorFile, readTutorFile, removeTutorFile, writeTutorFile } from '../cli/tutors.ts';
 import type { MouthIndex } from '../../runtime/journal/mouth-index.ts';
 
@@ -202,7 +200,7 @@ export interface KidHome {
   cards: BoardCard[];
   /** 「给老师们换个样子」的入口(figshot pick 在这台电脑的哪个端口);cotutor.json 没配 figshot 就是 null */
   figshot: { port: number } | null;
-  /** 孩子的惯用手(cotutor.json 的 kid.hand,缺省 right):left = 平板横屏实时老师页的浮层挪到右边 */
+  /** 按住说话那一栏在哪边(cotutor.json 的 kid.hand,家长端设置页改;缺省 right = 在左边):left = 平板横屏实时老师页的那一栏挪到右边 */
   hand: 'right' | 'left';
   /** 百炼配好了:没配孩子端只出「老师们还没到」,家长端配 */
   ready: boolean;
@@ -710,7 +708,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
             policyDefaults: ws.config.policyDefaults,
             paths: ws.config.paths,
             resolvedPaths: Object.fromEntries(Object.entries(ws.paths).map(([k, v]) => [k, redactHome(v)])),
-            /** 实时老师:总开关、嘴的模型、哪几位老师走实时用哪个音色(工作台音色页「实时的嘴」改) */
+            /** 实时老师:总开关、嘴的模型、哪几位老师走实时用哪个音色(家长端「样子与声音」改) */
             live: ws.config.live,
             theme: ws.config.kid.theme,
             https: ws.config.server.https ?? null,
@@ -728,9 +726,8 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       }
       if (method === 'PATCH') {
         if (!isObj(body)) return { status: 400, json: { error: 'bad_request', message: '要一个 JSON 对象' } };
-        // 工作台能改孩子那段的只有 kid.hand(左撇子镜像);kid 的别的字段照旧直接编辑文件
-        const handOnly = isObj(body.kid) && Object.keys(body.kid).length > 0 && Object.keys(body.kid).every((k) => k === 'hand');
-        await patchConfig(ws, body, handOnly ? { also: ['kid'] } : {});
+        // 孩子那段(kid)工作台不改:按住说话在哪边在家长端设置页(/api/parent/settings),别的直接编辑文件
+        await patchConfig(ws, body);
         await ctx.reload();
         return { status: 200, json: { ok: true, tutors: listTutors(ctx.ws.config), runtime: ctx.ws.config.runtimes.default } };
       }
@@ -929,24 +926,6 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       if (!view) return { status: 404, json: { error: 'not_found', message: `${d} 没有 ${job} 这一轮` } };
       return { status: 200, json: fixture ? fixtureOf(view) : view };
     }
-    // 音色页(2026-09-17):卡的配音认的全部音色(src/media/tts-voices.ts),家长挑之前先听
-    if (p === '/api/tts/voices' && method === 'GET') {
-      const inUse: Record<string, string[]> = {};
-      for (const name of Object.keys(ws.config.tutors)) { const v = cardVoice(ws.config.tutors, name); if (v) (inUse[v] ??= []).push(name); }
-      return { status: 200, json: { ok: true, count: TTS_VOICES.length, voices: TTS_VOICES, inUse, sample: PREVIEW_TEXT } };
-    }
-    // 嘴的音色(工作台音色页「实时的嘴」):这个 realtime 模型认的 56 个(src/realtime/voices.ts)、谁在用(没挑的用缺省)
-    if (p === '/api/tts/realtime' && method === 'GET') {
-      const inUse: Record<string, string[]> = {};
-      for (const t of listTutors(ws.config, { kidOnly: true })) (inUse[mouthVoice(ws.config.live, t.name)] ??= []).push(t.name);
-      return { status: 200, json: { voices: REALTIME_VOICES, inUse, fallback: MOUTH_VOICE, model: ws.config.live.model, sample: PREVIEW_TEXT } };
-    }
-    // 试听:嘴真连一次 realtime、卡的配音合成一句,都有缓存(./voice-preview.ts)
-    if ((p === '/api/tts/realtime/preview' || p === '/api/tts/preview') && method === 'GET') {
-      const voice = url.searchParams.get('voice')?.trim() ?? '';
-      const text = url.searchParams.get('text')?.trim().slice(0, 200) || PREVIEW_TEXT;
-      return p === '/api/tts/preview' ? cardPreview(ws, voice, text) : mouthPreview(ws, voice, text);
-    }
 
     // 话题打星(《obsidian仓库设计.md》§4):PUT {rating: 1–5 | null};记账:POST {threads?: [..]} → 每个话题一轮记账任务,老师回「## 记账」段,应用写日记
     const rate = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2})\/threads\/([^/]+)\/rating$/.exec(p);
@@ -1112,10 +1091,8 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     // 听写(路由 src/app/dictation/,页面 src/ui/dictation/,规则与存取 src/scenes/dictation/):/dictation 与 /api/dictation/* 交给它;首页的听写卡在 kid-page 画
     const tx = await dictationRoute(method, url, ctx, body); if (tx) return tx;
     if (method !== 'GET') return { status: 405, json: { error: 'method_not_allowed' } };
-    // 工作台:对话原始视图、看原文、老师团、音色、设置、首页排版——给有技术背景的家长与开发者;家长端在 /parent
+    // 工作台:对话原始视图、看原文、老师团、activity、设置——给有技术背景的家长与开发者;家长端在 /parent
     if (p === '/dev') return { status: 200, html: DEV_PAGE };
-    // 扫码页:在电脑上打开,iPad 用相机扫(不在孩子端的入口里)
-    if (p === '/dev/qr') return ctx.listen ? { status: 200, html: qrPage(ws.config.title, ctx.listen(), url.searchParams.get('via') === 'ip' ? 'ip' : 'name', url.searchParams.get('to') === 'parent' ? 'parent' : 'kid') } : { status: 404, json: { error: 'not_listening' } };
     // 按住说话的试验页(真机上比策略用;不在孩子端与家长端的入口里)
     // 按钮样张:老师页那颗「头像 + 按住说话」的每一种样子,调动画时看这一页
     if (p === '/dev/voice') return { status: 200, html: VOICE_GALLERY_PAGE };
@@ -1135,6 +1112,10 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     if (p === '/parent') return { status: 200, html: parentPage(esc(ws.config.title)) };
     // 家长端「首页」(设孩子的首页与几项常改的设置)
     if (p === '/parent/home') return { status: 200, html: PARENT_HOME_PAGE };
+    // 家长端「设置」(设一次就不常动的:孩子的平板上按住说话那一栏放哪边)
+    if (p === '/parent/settings') return { status: 200, html: PARENT_SETTINGS_PAGE };
+    // 二维码的打印页:家长端「扫码打开」的「打印 ›」开它(不在孩子端的入口里)
+    if (p === '/parent/qr') return ctx.listen ? { status: 200, html: qrPage(ws.config.title, ctx.listen(), url.searchParams.get('via') === 'ip' ? 'ip' : 'name', url.searchParams.get('to') === 'parent' ? 'parent' : 'kid') } : { status: 404, json: { error: 'not_listening' } };
     // 录像里孩子的屏幕:家长端录像时开在 iframe 里;直接打开也能看(调试),?tutor=&date=&thread=[&at=时:分:秒]
     if (p === '/reel') return { status: 200, html: kidPage(esc(ws.config.title), { reel: true }, await stageVersion()) };
     if (p === '/preview') return { status: 200, html: kidPage(esc(ws.config.title), { preview: true }, await stageVersion()) };

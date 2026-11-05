@@ -1,6 +1,6 @@
 /**
  * cotutor 的品牌标记(LICENSE 附加条件第 2 条):logo、名字、仓库链接,只在这里定义一份。
- * 家长端各页的页脚用 BRAND_FOOTER,工作台的页头用 brandLogo + BRAND_CSS;「XX的老师们」前面的那颗用 titleLogo(孩子端首页、家长端记录与首页,
+ * 家长端各页的页脚用 BRAND_FOOTER,工作台的页头用 brandLogo + BRAND_CSS(logo 点了回概览,仓库链接是它下面那条「GitHub · 好用就点个 ★」);「XX的老师们」前面的那颗用 titleLogo(孩子端首页、家长端记录与首页,
  * ):家长端彩色;孩子端跟标题同色、不带链接(首页的颜色是分给老师的,孩子端也没有外链)。
  * 孩子端回首页的胶囊「‹ logo」用 BACK_LOGO:单色、不带链接、不动。
  * 听写的录像页(/parent/dictation/reel)是全屏播放器,不放。
@@ -14,6 +14,9 @@ import { LOGO_CLAY, LOGO_INK, logoBody, logoGeom } from './logo.ts';
 
 export const BRAND_NAME = 'cotutor';
 export const BRAND_URL = 'https://github.com/TarsLab/cotutor';
+
+/** GitHub 的标(Octicons mark-github,16×16):工作台页头「GitHub · 好用就点个 ★」那条仓库链接用 */
+export const GITHUB_MARK = '<svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>';
 
 export interface BrandLogoOpts {
   /** 边长(px) */

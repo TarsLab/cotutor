@@ -549,7 +549,7 @@ __VOICE_CSS__
     body.live #cam, body.live #plus, body.live #lv-mic { display:none !important; }
     /* 按着时按钮自己变蓝(voice-view 的 hold),不再盖一块 #hold 上去 */
     body.live #hold { display:none !important; }
-    /* 左撇子镜像(cotutor.json 的 kid.hand: left,工作台切):白纸挪到右边、板在左边、按钮里头像在右头;回首页、「更多」的位置同右手(回首页浮在板的左上) */
+    /* 按住说话在右边(cotutor.json 的 kid.hand: left,家长端设置页切):白纸挪到右边、板在左边、按钮里头像在右头;回首页、「更多」的位置同右手(回首页浮在板的左上) */
     body.live.hand-left #board { padding-left:calc(env(safe-area-inset-left) + 48px); padding-right:calc(env(safe-area-inset-right) + 400px); }
     body.live.hand-left #stage { left:calc(env(safe-area-inset-left) + 16px); right:calc(env(safe-area-inset-right) + 376px); }
     body.live.hand-left #lv { left:auto; right:0; width:calc(env(safe-area-inset-right) + 360px); padding-top:calc(env(safe-area-inset-top) + 80px); padding-left:24px; padding-right:calc(env(safe-area-inset-right) + 24px); box-shadow:-1px 0 0 #efece4, -6px 0 24px #46371e0d; }

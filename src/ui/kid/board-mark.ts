@@ -19,7 +19,7 @@ export function boardMarkOf(subject: string | null | undefined): BoardMarkId | n
 
 /**
  * 怎么摆:right = 外框右沿离板右沿多远(乘 s;负数出纸边),top = 离板顶多少 px(加安全区),o = 不透明度。
- * top 从两角按钮下面起(实时页回首页胶囊下沿 64、「更多」54,再空出十几 px),右手不让「更多」压着、左撇子不让胶囊压着;
+ * top 从两角按钮下面起(实时页回首页胶囊下沿 64、「更多」54,再空出十几 px),那一栏在左边时不让「更多」压着、在右边时不让胶囊压着;
  * 三种字墨量差得多(粗宋最重、ENGLISH 最轻),浓淡分开压到看着一样淡;ENGLISH 是孩子认得的词,字母不切边
  */
 export const BOARD_MARK_PLACE: Readonly<Record<BoardMarkId, { right: number; top: number; o: number }>> = {
@@ -42,7 +42,7 @@ export const BOARD_MARK_CSS = `
   @supports (width:1cqh) { #bmark svg { --s:min(48cqh, 72cqw, (100cqh - env(safe-area-inset-top) - var(--bm-top) * 1px - ${BOARD_MARK_BOTTOM}px) / var(--bm-h)); } }
 `;
 
-/** 平板横屏实时、左撇子:白纸在右边,字挪到左边(插进老师页那段横屏媒体查询里) */
+/** 平板横屏实时、按住说话在右边(kid.hand: left):白纸在右边,字挪到左边(插进老师页那段横屏媒体查询里) */
 export const BOARD_MARK_HAND_LEFT_CSS = `body.live.hand-left #bmark svg { right:auto; left:calc(var(--s) * var(--bm-right)); }`;
 
 const MARKS_JSON = JSON.stringify(

@@ -3,7 +3,7 @@ import { certCovers, listenInfo, localName } from '../src/app/cli/serve.ts';
 import { encodeQR } from '../src/ui/shared/qr.ts';
 import { qrNotes, qrSvg } from '../src/ui/shared/qr-svg.ts';
 import { createMock } from '../src/app/mock/mock.ts';
-import { qrPage } from '../src/ui/dev/qr-page.ts';
+import { qrPage } from '../src/ui/parent/qr-page.ts';
 import { check, done } from './_check.ts';
 
 /** node-qrcode 1.5(字节模式、纠错 M、自动掩码)的输出,每行按位打成十六进制 */
@@ -43,25 +43,26 @@ const info = { name: 'https://ae86s-Mac.local:5180/', ip: 'https://192.168.1.9:5
 const page = qrPage('小明 & <老师团>', info);
 check('标题转义', page.includes('小明 &amp; &lt;老师团&gt;') && !page.includes('<老师团>'));
 check('默认编主机名那条,地址印在码下面', page.includes('>https://ae86s-Mac.local:5180/</p>') && page.includes(svg));
-check('留一条换数字地址的退路', page.includes('href="/dev/qr?via=ip"'));
+check('留一条换数字地址的退路', page.includes('href="/parent/qr?via=ip"'));
 const byIp = qrPage('t', info, 'ip');
-check('?via=ip 编 IP,能换回来', byIp.includes('>https://192.168.1.9:5180/</p>') && byIp.includes(qrSvg(info.ip) as string) && byIp.includes('href="/dev/qr"'));
+check('?via=ip 编 IP,能换回来', byIp.includes('>https://192.168.1.9:5180/</p>') && byIp.includes(qrSvg(info.ip) as string) && byIp.includes('href="/parent/qr"'));
 const offline = qrPage('t', { ...info, ip: null }, 'ip');
 check('没有局域网地址:仍编主机名,不给退路', offline.includes('>https://ae86s-Mac.local:5180/</p>') && !offline.includes('via=ip'));
 // 家长那张:编家长端 /parent,标「家长看」,能换回孩子那张;孩子那张页脚有去家长那张的链接;两张互换时带着现在的地址种类
 const parent = qrPage('t', info, 'name', 'parent');
-check('?to=parent 编家长端,能换回孩子那张', parent.includes('>https://ae86s-Mac.local:5180/parent</p>') && parent.includes(qrSvg('https://ae86s-Mac.local:5180/parent') as string) && parent.includes('家长看') && parent.includes('href="/dev/qr"') && parent.includes('href="/dev/qr?via=ip&to=parent"'));
-check('孩子那张页脚有家长那张;IP 那张换过去仍是 IP', qrPage('t', info).includes('href="/dev/qr?to=parent"') && byIp.includes('href="/dev/qr?via=ip&to=parent"') && !offline.includes('via=ip'));
+check('?to=parent 编家长端,能换回孩子那张', parent.includes('>https://ae86s-Mac.local:5180/parent</p>') && parent.includes(qrSvg('https://ae86s-Mac.local:5180/parent') as string) && parent.includes('家长看') && parent.includes('href="/parent/qr"') && parent.includes('href="/parent/qr?via=ip&to=parent"'));
+check('孩子那张页脚有家长那张;IP 那张换过去仍是 IP', qrPage('t', info).includes('href="/parent/qr?to=parent"') && byIp.includes('href="/parent/qr?via=ip&to=parent"') && !offline.includes('via=ip'));
 check('HTTP 的说明', qrPage('t', { ...info, name: 'http://a.local:80/', https: false }).includes('cotutor cert'));
 check('没有脚本,打印只留卡面', !page.includes('<script') && page.includes('@media print'));
+check('在 /parent 下:页脚带品牌标记(LICENSE 附加条件第 2 条)', page.includes('data-cotutor-brand') && parent.includes('data-cotutor-brand'));
 
 // 路由:编什么由服务端定,不看请求的 Host(家长是从 localhost 打开这一页的)
 const mock = createMock({ title: '小明的老师们' });
-check('没起端口 → 404', (await mock.route('GET', '/dev/qr')).status === 404);
+check('没起端口 → 404', (await mock.route('GET', '/parent/qr')).status === 404);
 mock.listen = () => info;
-const r = await mock.route('GET', '/dev/qr');
-check('/dev/qr 200', r.status === 200 && (r.html ?? '').includes('>https://ae86s-Mac.local:5180/</p>') && !(r.html ?? '').includes('localhost'));
-check('/dev/qr?via=ip', ((await mock.route('GET', '/dev/qr?via=ip')).html ?? '').includes('>https://192.168.1.9:5180/</p>'));
+const r = await mock.route('GET', '/parent/qr');
+check('/parent/qr 200', r.status === 200 && (r.html ?? '').includes('>https://ae86s-Mac.local:5180/</p>') && !(r.html ?? '').includes('localhost'));
+check('/parent/qr?via=ip', ((await mock.route('GET', '/parent/qr?via=ip')).html ?? '').includes('>https://192.168.1.9:5180/</p>'));
 const li = listenInfo(true, 5180);
 check('listenInfo:主机名那条带 .local 与真端口', li.name === `https://${localName()}:5180/` && (li.ip === null || /^https:\/\/\d+\.\d+\.\d+\.\d+:5180\/$/.test(li.ip)), JSON.stringify(li));
 check('孩子端不露扫码页的入口', !((await mock.route('GET', '/')).html ?? '').includes('/qr'));

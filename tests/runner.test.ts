@@ -186,17 +186,18 @@ try {
   const fx = (await route('GET', `/api/conversations/math-tutor/2026-09-08/raw/${job1}/fixture`, ctx)).json as { name: string; text: string };
   check('看原文:fixture 是原文原样一份', fx.name === `math-tutor-2026-09-08-${job1}.md` && fx.text.includes('第一次说') && fx.text.endsWith('\n'), JSON.stringify(fx));
   check('看原文:没有这一轮 → 404', (await route('GET', '/api/conversations/math-tutor/2026-09-08/raw/9999-9', ctx)).status === 404);
-  // 音色页:列表是 src/media/tts-voices.ts 那张表;试听同句同音色只合成一次;坏 id 400、合成失败 502 带原因
-  const vl = (await route('GET', '/api/tts/voices', ctx)).json as { ok: boolean; count: number; voices: { voice: string; name: string; gender?: string; age?: number }[]; inUse: Record<string, string[]>; sample: string };
-  check('音色列表:整张表、字段齐、谁在用谁', vl.ok && vl.count === TTS_VOICES.length && vl.count > 500 && vl.voices.every((v) => v.voice.startsWith('qwen-audio-3.0-tts-plus-') && v.name && v.gender && typeof v.age === 'number') && vl.inUse['v-math']?.[0] === 'math-tutor' && vl.inUse.fail?.[0] === 'english-tutor' && vl.sample.length > 5, JSON.stringify({ count: vl.count, inUse: vl.inUse }));
+  // 试听(src/app/http/voice-preview.ts,家长端「样子与声音」用):音色表字段齐;同句同音色只合成一次;坏 id 400、合成失败 502 带原因
+  const { cardPreview } = await import('../src/app/http/voice-preview.ts');
+  check('音色表:整张、字段齐', TTS_VOICES.length > 500 && TTS_VOICES.every((v) => v.voice.startsWith('qwen-audio-3.0-tts-plus-') && v.name && v.gender && typeof v.age === 'number'));
   const asked = tts.requests.length;
-  const pv = await route('GET', '/api/tts/preview?voice=v-kid', ctx);
-  check('试听:合成到配音缓存 .cotutor/tts/ 并给 mp3 文件;没前缀的音色走 plus 模型', pv.status === 200 && pv.contentType === 'audio/mpeg' && typeof pv.file === 'string' && pv.file.includes(`${sep}.cotutor${sep}tts${sep}`) && readFileSync(pv.file, 'utf8') === 'fake-mp3:v-kid:你好呀,我是你的老师。今天我们一起来学一个新东西,准备好了吗?' && tts.requests.at(-1)?.model === 'qwen-audio-3.0-tts-plus', JSON.stringify(pv));
-  const pvAgain = await route('GET', '/api/tts/preview?voice=v-kid', ctx);
+  const SAY = '你好呀,我是你的老师。';
+  const pv = await cardPreview(ctx.ws, 'v-kid', SAY);
+  check('试听:合成到配音缓存 .cotutor/tts/ 并给 mp3 文件;没前缀的音色走 plus 模型', pv.status === 200 && pv.contentType === 'audio/mpeg' && typeof pv.file === 'string' && pv.file.includes(`${sep}.cotutor${sep}tts${sep}`) && readFileSync(pv.file, 'utf8') === `fake-mp3:v-kid:${SAY}` && tts.requests.at(-1)?.model === 'qwen-audio-3.0-tts-plus', JSON.stringify(pv));
+  const pvAgain = await cardPreview(ctx.ws, 'v-kid', SAY);
   check('试听:同句同音色不重合成(同一个文件,只请求了一次)', pvAgain.file === pv.file && tts.requests.length === asked + 1);
-  check('试听:自定义句子进文件名', (await route('GET', '/api/tts/preview?voice=v-kid&text=' + encodeURIComponent('另一句'), ctx)).file !== pv.file);
-  check('试听:坏 id 400', (await route('GET', '/api/tts/preview?voice=' + encodeURIComponent('a b/c'), ctx)).status === 400);
-  const pvBad = await route('GET', '/api/tts/preview?voice=fail', ctx);
+  check('试听:换一句是另一个文件', (await cardPreview(ctx.ws, 'v-kid', '另一句')).file !== pv.file);
+  check('试听:坏 id 400', (await cardPreview(ctx.ws, 'a b/c', SAY)).status === 400);
+  const pvBad = await cardPreview(ctx.ws, 'fail', SAY);
   check('试听:合成失败 502 带原因', pvBad.status === 502 && String((pvBad.json as { message: string }).message).includes('音色不存在'), JSON.stringify(pvBad.json));
 
   // ---- 第二、三轮:resume 同会话 ----
@@ -723,12 +724,14 @@ try {
   check('不合契约的补丁 422 且不落盘', p2.status === 422 && (JSON.parse(readFileSync(cfgFile, 'utf8')) as typeof raw).tutors['math-tutor'].display === '数学老师', JSON.stringify(p2.json));
   check('改运行时模板被拒', (await route('PATCH', '/api/config', ctx, { runtimes: { fake: { run: ['x'], resume: ['x'] } } })).status === 422);
   check('改 kid 被拒', (await route('PATCH', '/api/config', ctx, { kid: { slug: 'x' } })).status === 422);
-  // 工作台能改孩子那段的只有惯用手(kid.hand,左撇子镜像):写进文件、孩子端首页接口带出去;null 删键回到缺省右手
-  const ph = await route('PATCH', '/api/config', ctx, { kid: { hand: 'left' } });
-  check('工作台改 kid.hand:写进文件、首页接口带 hand', ph.status === 200 && (JSON.parse(readFileSync(cfgFile, 'utf8')) as { kid: { hand?: string } }).kid.hand === 'left' && ((await route('GET', '/api/kid/home', ctx)).json as { hand: string }).hand === 'left', JSON.stringify(ph.json));
-  check('kid.hand 和别的 kid 字段一起改照旧被拒', (await route('PATCH', '/api/config', ctx, { kid: { hand: 'right', slug: 'x' } })).status === 422);
-  const ph2 = await route('PATCH', '/api/config', ctx, { kid: { hand: null } });
-  check('kid.hand 删掉回到缺省右手、文件里不留', ph2.status === 200 && !('hand' in (JSON.parse(readFileSync(cfgFile, 'utf8')) as { kid: object }).kid) && ((await route('GET', '/api/kid/home', ctx)).json as { hand: string }).hand === 'right');
+  // 按住说话在哪边(kid.hand):家长端设置页改(/api/parent/settings),写进文件、孩子端首页接口带出去;选回缺省的 right 删键;工作台的 /api/config 不改 kid
+  check('设置页读:缺省 right', ((await route('GET', '/api/parent/settings', ctx)).json as { hand: string }).hand === 'right');
+  const ph = await route('PATCH', '/api/parent/settings', ctx, { kid: { hand: 'left' } });
+  check('设置页改 kid.hand:写进文件、首页接口带 hand', ph.status === 200 && (JSON.parse(readFileSync(cfgFile, 'utf8')) as { kid: { hand?: string } }).kid.hand === 'left' && ((await route('GET', '/api/kid/home', ctx)).json as { hand: string }).hand === 'left' && ((await route('GET', '/api/parent/settings', ctx)).json as { hand: string }).hand === 'left', JSON.stringify(ph.json));
+  check('设置页只收 kid.hand:别的 kid 字段、不认的值 400', (await route('PATCH', '/api/parent/settings', ctx, { kid: { hand: 'right', slug: 'x' } })).status === 400 && (await route('PATCH', '/api/parent/settings', ctx, { kid: { hand: 'up' } })).status === 400);
+  check('工作台的 /api/config 不改 kid', (await route('PATCH', '/api/config', ctx, { kid: { hand: 'right' } })).status === 422);
+  const ph2 = await route('PATCH', '/api/parent/settings', ctx, { kid: { hand: 'right' } });
+  check('选回 right:文件里不留、回到缺省', ph2.status === 200 && !('hand' in (JSON.parse(readFileSync(cfgFile, 'utf8')) as { kid: object }).kid) && ((await route('GET', '/api/kid/home', ctx)).json as { hand: string }).hand === 'right');
   const p3 = await route('PATCH', '/api/config', ctx, { tutors: { 'math-tutor': { enabled: true, policy: { replyMaxChars: null } } } });
   check('null 删键:政策覆盖撤掉回到继承', p3.status === 200 && ctx.ws.config.tutors['math-tutor'].policy?.replyMaxChars === undefined && ctx.ws.config.tutors['math-tutor'].enabled === true);
 

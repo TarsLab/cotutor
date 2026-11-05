@@ -67,7 +67,7 @@ const html = typeof page.html === 'string' ? page.html : '';
 check('老师页有垫底的 #bmark', html.includes('<div id="bmark" hidden></div>'));
 check('板不铺纸纹:平的纸色,没有 SVG 噪声', !html.includes('feTurbulence') && !html.includes('--paper-tex'));
 check('换老师的两处都跟着换字(开老师、录像;家长端 10-28 拆成自己的一页)', (html.match(/markBoard\(\$\('#bmark'\), /g) ?? []).length === 2, String((html.match(/markBoard\(\$\('#bmark'\), /g) ?? []).length));
-check('左撇子横屏字挪到左边', html.includes('body.live.hand-left #bmark svg'));
+check('按住说话在右边时横屏字挪到左边', html.includes('body.live.hand-left #bmark svg'));
 const kh = (await route('GET', '/api/kid/home', ctx)).json as { tutors: { name: string; mark: string | null }[] };
 const marks = Object.fromEntries(kh.tutors.map((t) => [t.name, t.mark]));
 check('首页数据:三门主科带 mark', marks['chinese-tutor'] === 'yuwen' && marks['math-tutor'] === 'shuxue' && marks['english-tutor'] === 'english', JSON.stringify(marks));

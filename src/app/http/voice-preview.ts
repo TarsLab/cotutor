@@ -1,5 +1,5 @@
 /**
- * 试听一个音色(工作台音色页、家长端「样子与声音」共用):
+ * 试听一个音色(家长端「样子与声音」):
  * 嘴(realtime)真连一次照念这一句(几分钱),存在 .cotutor/live-preview/,同一句同一音色以后直接给文件;
  * 卡的配音合成一句,在配音缓存里(.cotutor/tts/),之后直接给文件。失败回 JSON 说原因(页面拿 message 显示)。
  */
@@ -12,8 +12,6 @@ import { isRealtimeVoice } from '../../realtime/voices.ts';
 import type { Workspace } from '../../schema/index.ts';
 import type { RouteResult } from './app.ts';
 
-/** 没给试听句时念这句 */
-export const PREVIEW_TEXT = '你好呀,我是你的老师。今天我们一起来学一个新东西,准备好了吗?';
 const VOICE_ID_RE = /^[A-Za-z0-9._:-]{1,120}$/;
 
 export async function mouthPreview(ws: Workspace, voice: string, text: string): Promise<RouteResult> {

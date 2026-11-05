@@ -34,7 +34,7 @@ try {
   check('没设 PIN:谁都是 anon 或 local', (await access.whoOf(fakeReq('192.168.1.5'))) === 'anon' && (await access.whoOf(fakeReq('127.0.0.1'))) === 'local' && (await access.whoOf(fakeReq('::1'))) === 'local' && (await access.whoOf(fakeReq('::ffff:127.0.0.1'))) === 'local');
   const d0 = await doctorWorkspace(root, { probeEnv: false });
   const a0 = d0.checks.find((c) => c.name === 'server.access');
-  check('doctor:没设 PIN 提一句,不算错(required false),fix 是 cotutor pin', a0?.ok === false && a0.required === false && a0.fix?.startsWith('cotutor pin') === true && a0.detail.includes('全开'), JSON.stringify(a0));
+  check('doctor:没设 PIN 提一句,不算错(required false),fix 是 cotutor pin', a0?.ok === false && a0.required === false && a0.fix === 'cotutor pin' && a0.detail.includes('没上锁'), JSON.stringify(a0));
 
   // ---- 设了 PIN ----
   let threw = '';

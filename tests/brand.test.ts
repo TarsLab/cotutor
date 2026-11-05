@@ -20,7 +20,7 @@ const { BRAND_FOOTER, BRAND_NAME, BRAND_URL } = await import('../src/ui/shared/b
 const { LOGO_CLAY } = await import('../src/ui/shared/logo.ts');
 
 const MARK = 'data-cotutor-brand';
-const BRANDED = ['/parent', '/parent/home', '/parent/dictation', '/dev'];
+const BRANDED = ['/parent', '/parent/home', '/parent/settings', '/parent/dictation', '/dev'];
 const KID = ['/', '/reel', '/preview', '/dictation', '/dictation?lang=en', '/talk'];
 const PLAYERS = ['/parent/dictation/reel'];
 

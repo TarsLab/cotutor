@@ -310,8 +310,8 @@ export const CotutorConfigSchema = z
       grade: z.string().optional(),
       /** 孩子端用哪个主题(themes/<name>/);缺省 default(出厂主题,init 拷进 workspace) */
       theme: z.string().regex(AGENT_NAME_RE).default('default').describe('孩子端的主题:themes/<名字>/(theme.json + kid.css);cotutor add-theme <名字> 拷一份出厂的来改'),
-      /** 孩子的惯用手:left = 左撇子,平板横屏实时老师页的左栏浮层挪到右边(写字的手空着,另一只手按住说话);缺省右手,不写进文件 */
-      hand: z.enum(['right', 'left']).optional().describe('孩子的惯用手:left = 左撇子,平板横屏实时老师页的浮层(按住说话)挪到右边;缺省右手(浮层在左边)。工作台设置页能切'),
+      /** 按住说话那一栏放哪边:left = 平板横屏实时老师页的那一栏(与画板那列工具)挪到右边,写字的在左边;缺省 right(那一栏在左边),不写进文件 */
+      hand: z.enum(['right', 'left']).optional().describe('按住说话那一栏放哪边:left = 平板横屏实时老师页的那一栏挪到右边;缺省 right(在左边)。家长端设置页能切'),
     }),
     server: z
       .object({

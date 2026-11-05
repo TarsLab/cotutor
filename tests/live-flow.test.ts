@@ -739,20 +739,21 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
 }
 
 {
-  // 工作台音色页「实时的嘴」:列 56 个、谁在用;试听真连一次(这里是假百炼)照念这一句,存着第二次不再连;不认的音色 400;挑 / 清掉走 PATCH /api/config 的 live
+  // 家长端「样子与声音」里说话的声音:列 56 个、现在用的;试听真连一次(这里是假百炼)照念学科那句,存着第二次不再连;不认的音色 400;挑 / 清掉走 PATCH /api/config 的 live
   const http = (path: string, init?: RequestInit) => fetch(`http://127.0.0.1:${port}${path}`, init);
-  const list = (await (await http('/api/tts/realtime')).json()) as { voices: { voice: string }[]; inUse: Record<string, string[]>; fallback: string; enabled?: boolean };
-  check('实时的嘴:列 56 个音色、谁在用(没挑的算出厂的)、缺省音色;没有总开关', list.voices.length === 56 && list.voices.some((x) => x.voice === 'Liora Mira') && list.inUse.Serena?.join() === 'chinese-tutor' && list.inUse.Andre?.join() === 'math-tutor' && list.fallback === 'Serena' && list.enabled === undefined, JSON.stringify({ n: list.voices.length, inUse: list.inUse }));
+  const look = (await (await http('/api/parent/tutors/math-tutor/look')).json()) as { mouth: { current: string; options: { voice: string; shipped: boolean }[] } };
+  check('说话的声音:列 56 个,数学老师现在用出厂的', look.mouth.options.length === 56 && look.mouth.options.some((x) => x.voice === 'Liora Mira') && look.mouth.current === 'Andre' && look.mouth.options.find((x) => x.shipped)?.voice === 'Andre', JSON.stringify({ n: look.mouth.options.length, current: look.mouth.current }));
   process.env.COTUTOR_LIVE_ENDPOINT = fake.endpoint;
   const n0 = fake.conns.length;
-  const p1 = await http(`/api/tts/realtime/preview?voice=${encodeURIComponent('Theo Calm')}&text=${encodeURIComponent('你好呀')}`);
+  const pvUrl = `/api/parent/tutors/math-tutor/look/preview?kind=mouth&voice=${encodeURIComponent('Theo Calm')}`;
+  const p1 = await http(pvUrl);
   const wav = Buffer.from(await p1.arrayBuffer());
   const n1 = fake.conns.length;
-  const p2 = await http(`/api/tts/realtime/preview?voice=${encodeURIComponent('Theo Calm')}&text=${encodeURIComponent('你好呀')}`);
-  const bad = await http('/api/tts/realtime/preview?voice=Bella');
+  const p2 = await http(pvUrl);
+  const bad = await http('/api/parent/tutors/math-tutor/look/preview?kind=mouth&voice=Bella');
   delete process.env.COTUTOR_LIVE_ENDPOINT;
   const said = fake.conns[n0]?.responses[0]?.instructions ?? '';
-  check('试听:真连一次照念这一句(音色带上)、回 wav;同一句同一音色第二次不再连;不认的音色 400', p1.status === 200 && p1.headers.get('content-type') === 'audio/wav' && wav.subarray(0, 4).toString() === 'RIFF' && n1 === n0 + 1 && fake.conns[n0].session?.voice === 'Theo Calm' && said.endsWith('「你好呀」') && p2.status === 200 && fake.conns.length === n1 && bad.status === 400, JSON.stringify({ s1: p1.status, s2: p2.status, bad: bad.status, conns: [n0, n1, fake.conns.length], voice: fake.conns[n0]?.session?.voice }));
+  check('试听:真连一次照念这一句(音色带上)、回 wav;同一句同一音色第二次不再连;不认的音色 400', p1.status === 200 && p1.headers.get('content-type') === 'audio/wav' && wav.subarray(0, 4).toString() === 'RIFF' && n1 === n0 + 1 && fake.conns[n0].session?.voice === 'Theo Calm' && said.endsWith('「你好呀,今天想算点什么?」') && p2.status === 200 && fake.conns.length === n1 && bad.status === 400, JSON.stringify({ s1: p1.status, s2: p2.status, bad: bad.status, conns: [n0, n1, fake.conns.length], voice: fake.conns[n0]?.session?.voice, said }));
   const patch = (body: unknown) => http('/api/config', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   const r1 = await patch({ live: { voices: { 'math-tutor': 'Maia' } } });
   const c1 = (await (await http('/api/config')).json()) as { live: { voices: Record<string, string> } };

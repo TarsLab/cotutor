@@ -1,6 +1,6 @@
 /**
  * 家长端「样子与声音」(家长端首页点一位老师的那一行):头像、说话的声音(嘴,全部 56 个)、点读的声音(卡的配音,全部 597 个),点了就存。
- * 声音全给,页面上点「换一个」开弹窗挑:搜、按男女 / 口音 / 中英 / 年纪 / 场景筛;现在用的排最前、出厂的那个标出来。手填头像路径在工作台。
+ * 声音全给,页面上点「换一个」开弹窗挑:搜、按男女 / 口音 / 中英 / 年纪 / 场景筛;现在用的排最前、出厂的那个标出来。头像与声音只在这里改(工作台不重复);别的头像直接写 cotutor.json。
  *
  *   GET  /api/parent/tutors/<老师>/look                          现在用的与可选的(头像、嘴、卡的配音)
  *   PUT  /api/parent/tutors/<老师>/look                          {avatar?: string | null, mouth?: string, voice?: string};回 GET 那份
@@ -93,7 +93,7 @@ function look(ctx: AppContext, name: string): Record<string, unknown> {
   const own = ownAvatar(t);
   return {
     tutor: { name, display: t.display },
-    // 没写的、写的值不在选项里(工作台手填的)都照实给,页面只是哪格都不亮
+    // 没写的、写的值不在选项里(cotutor.json 里手填的)都照实给,页面只是哪格都不亮
     avatar: { current: own, options: avatarOptions(ctx, name) },
     mouth: { current: mouthVoice(c.live, name), options: mouthOptions(c, name) },
     card: { current: cardVoice(c.tutors, name) ?? null, options: cardOptions(c, name) },
@@ -131,7 +131,7 @@ export async function parentLookRoute(method: string, p: string, url: URL, ctx: 
   const patch: Record<string, unknown> = { tutors: { [name]: tutor } };
   if ('avatar' in body) {
     const ok = avatarOptions(ctx, name).some((o) => o.value === body.avatar);
-    if (!ok) return bad('头像只能从给的几个里挑;别的(图片路径、别的 emoji)到工作台的「老师团」改');
+    if (!ok) return bad('头像只能从给的几个里挑;别的(图片路径、别的 emoji)直接写 cotutor.json');
     tutor.avatar = body.avatar;
   }
   if (body.mouth !== undefined) {

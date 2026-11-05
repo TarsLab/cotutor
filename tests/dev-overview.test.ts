@@ -16,7 +16,6 @@ const { ConversationIndexSchema } = await import('../src/schema/conversation.ts'
 const { devOverview, SLOW_FIRST_MS } = await import('../src/app/http/dev-overview.ts');
 const { localDate } = await import('../src/shared/time.ts');
 const { DEV_PAGE } = await import('../src/ui/dev/dev-page.ts');
-const { qrPage } = await import('../src/ui/dev/qr-page.ts');
 const { DEV_CSS } = await import('../src/ui/dev/dev-theme.ts');
 const { recordKidLog } = await import('../src/runtime/journal/kid-log.ts');
 const { codeChanged } = await import('../src/app/build.ts');
@@ -115,12 +114,13 @@ try {
   const dr = await route('POST', '/api/dev/doctor', ctx, {});
   check('POST /api/dev/doctor:不带 --live 的体检', dr.status === 200 && (dr.json as { checks: { name: string }[] }).checks.some((k) => k.name === 'workspace'));
 
-  check('页面:侧栏五个标签,概览打头', ['overview', 'chat', 'team', 'voices', 'settings'].every((t) => DEV_PAGE.includes(`data-tab="${t}"`)) && DEV_PAGE.indexOf('data-tab="overview"') < DEV_PAGE.indexOf('data-tab="chat"') && DEV_PAGE.includes('<aside id="side">'));
+  check('页面:侧栏的标签,概览打头;音色、扫码打开不在工作台(在家长端首页)', ['overview', 'chat', 'team', 'activity', 'settings'].every((t) => DEV_PAGE.includes(`data-tab="${t}"`)) && !DEV_PAGE.includes('data-tab="voices"') && !DEV_PAGE.includes('扫码打开') && DEV_PAGE.indexOf('data-tab="overview"') < DEV_PAGE.indexOf('data-tab="chat"') && DEV_PAGE.includes('<aside id="side">'));
+  check('页头:logo 回概览,仓库链接是另一条「GitHub · 好用就点个 ★」', /<a class="brand[^"]*" href="#overview"/.test(DEV_PAGE) && /<a class="star" href="https:\/\/github\.com\/[^"]+" target="_blank"/.test(DEV_PAGE) && DEV_PAGE.includes('点个 ★'));
   const devScript = DEV_PAGE.slice(DEV_PAGE.indexOf('<script>') + 8, DEV_PAGE.lastIndexOf('</script>'));
   let parsed = '';
   try { new Function(devScript); } catch (e) { parsed = String(e); }
   check('工作台页面的内联脚本能解析', devScript.length > 1000 && parsed === '', parsed);
-  check('工作台两页共用一份色板', [DEV_PAGE, qrPage('t', { name: 'https://m.local:5180/', ip: 'https://192.168.1.9:5180/', https: true })].every((p) => p.includes(DEV_CSS)));
+  check('工作台用 dev-theme 的色板', DEV_PAGE.includes(DEV_CSS));
 } finally {
   rmSync(home, { recursive: true, force: true });
 }

@@ -94,7 +94,7 @@ async function probeLive(ws: Workspace, push: (c: DoctorCheck) => number, env: N
   const r = await synthesize({ text: '你好', voice: voiced.voice as string }, { cacheDir: dir, env });
   const size = r.file ? ((await stat(r.file).catch(() => null))?.size ?? 0) : 0;
   await rm(dir, { recursive: true, force: true });
-  push({ name: 'live.tts', ok: Boolean(r.file), required: false, detail: r.file ? `${voiced.display} 的音色 ${voiced.voice} 能合成(${size} 字节)` : `${voiced.display} 的音色 ${voiced.voice} 没合成:${r.error}`, fix: r.file ? undefined : '家长端「首页」里填百炼的 key 与业务空间 id;音色到工作台音色页「卡的配音」重挑' });
+  push({ name: 'live.tts', ok: Boolean(r.file), required: false, detail: r.file ? `${voiced.display} 的音色 ${voiced.voice} 能合成(${size} 字节)` : `${voiced.display} 的音色 ${voiced.voice} 没合成:${r.error}`, fix: r.file ? undefined : '家长端「首页」里填百炼的 key 与业务空间 id;音色到家长端首页的「样子与声音」重挑' });
 }
 
 export async function doctorWorkspace(
@@ -240,7 +240,7 @@ export async function doctorWorkspace(
       push({ name: `tutor.${name}.home`, ok: there, required: true, detail: there ? `agents/${name}/ 在(会话 cwd)` : `agents/${name}/ 不在`, fix: there ? undefined : 'cotutor init 补建' });
       // 音色:一老师一音色走 API 是正路;没配的孩子端只剩浏览器合成声(只该在测试里);hidden 的老师不对孩子说话,不用音色
       const tc = ws.config.tutors[name];
-      if (tc.enabled && !tc.hidden && !cardVoice(ws.config.tutors, name)) push({ name: `tutor.${name}.voice`, ok: false, required: false, detail: `${tc.display} 没配音色(cotutor.json tutors.${name}.voice),卡上的声音(点读卡、单词卡)配不了——只适合测试`, fix: '家长端「首页」点这位老师的「样子与声音」挑一个(工作台「音色」页有全部)' });
+      if (tc.enabled && !tc.hidden && !cardVoice(ws.config.tutors, name)) push({ name: `tutor.${name}.voice`, ok: false, required: false, detail: `${tc.display} 没配音色(cotutor.json tutors.${name}.voice),卡上的声音(点读卡、单词卡)配不了——只适合测试`, fix: '家长端「首页」点这位老师的「样子与声音」挑一个' });
       // 卡的清单(《卡片协议.md》「谁拿到哪些卡」):有脸的老师才递板书写法;只是报一声讲哪几种
       if (takesTutorRules(name)) {
         const kinds = tutorCardKinds(tc.cards);
@@ -451,7 +451,7 @@ export async function doctorWorkspace(
 
     // ---- 家长端与工作台的锁(src/app/http/access.ts):机器级 PIN;没设不算错,提一句 ----
     const pin = await readPin();
-    push({ name: 'server.access', ok: pin !== null, required: false, detail: pin ? '设了 PIN:家长端 /parent 与工作台 /dev 要输一次,本机免密' : 'serve 对局域网全开,家长端 /parent 与工作台 /dev 没有锁:孩子在 iPad 上输 /parent 能看到答案,输 /dev 能改配置。家长在旁边、用完收回 iPad 的可以不设', fix: pin ? undefined : 'cotutor pin(机器级,所有 workspace 共用;cotutor pin off 撤掉)' });
+    push({ name: 'server.access', ok: pin !== null, required: false, detail: pin ? '已设 PIN' : '家长端、工作台没上锁', fix: pin ? undefined : 'cotutor pin' });
 
     // ---- HTTPS:iPad 上录音要;没有只提醒 ----
     const tls = httpsFiles(ws);
@@ -482,7 +482,7 @@ export async function doctorWorkspace(
     {
       const bad = Object.entries(lv.voices).filter(([, v]) => !isRealtimeVoice(v));
       const who = listTutors(ws.config, { kidOnly: true }).map((t) => `${t.name} 用 ${mouthVoice(lv, t.name)}`).join('、') || '没有有脸的老师';
-      push({ name: 'live.voices', ok: !bad.length, required: false, detail: bad.length ? `${bad.map(([t, v]) => `${t} 的「${v}」`).join('、')}:这个模型不认,嘴会一直不出声` : `嘴的音色:${who}`, fix: bad.length ? '工作台「音色」页「实时的嘴」里换一个(这个模型认的 56 个在 src/realtime/voices.ts),或改 cotutor.json 的 live.voices' : undefined });
+      push({ name: 'live.voices', ok: !bad.length, required: false, detail: bad.length ? `${bad.map(([t, v]) => `${t} 的「${v}」`).join('、')}:这个模型不认,嘴会一直不出声` : `嘴的音色:${who}`, fix: bad.length ? '家长端首页的「样子与声音」里换一个说话的声音,或改 cotutor.json 的 live.voices' : undefined });
     }
 
     // 旧配置里的命令行运行时(Qwen Code 等)读得进来,用不了:用到它的老师发不出去

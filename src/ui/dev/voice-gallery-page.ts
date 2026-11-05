@@ -44,7 +44,7 @@ __VOICE_CSS__
 <header>
   <h1>按钮样张</h1>
   <p>孩子端老师页那颗「头像 + 按住说话」的每一种样子,声音是模拟的。要改动画:改 src/ui/kid/voice-ui.ts 开头的调参表;样子的种类在 src/ui/kid/voice-view.ts,场景表在 src/ui/dev/voice-scenes.ts。</p>
-  <label class="sw"><input type="checkbox" id="mirror">左撇子镜像</label>
+  <label class="sw"><input type="checkbox" id="mirror">按住说话在右边</label>
 </header>
 <main id="main"></main>
 <script>

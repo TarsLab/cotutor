@@ -73,7 +73,7 @@ import { buildReel, playRecordOk, reelHolds, reelMissRuns, type PlayRecord } fro
 import { weekOf } from '../../shared/time.ts';
 import { type CardStates } from '../../schema/index.ts';
 import { lanAddresses, listenInfo } from '../cli/serve.ts';
-import { qrPage, type ListenInfo } from '../../ui/dev/qr-page.ts';
+import { qrPage, type ListenInfo } from '../../ui/parent/qr-page.ts';
 import { USER_CERT_DIR } from '../workspace.ts';
 import { kidThreads, type KidMessage } from '../../runtime/kid-view.ts';
 import { ICON_SIZES, appIconPng, webManifest } from '../../ui/shared/icon.ts';
@@ -516,7 +516,7 @@ export interface Mock {
   /** 等这一轮的老师答完(mock 的假嘴等它写完再「念」) */
   settleJob(job: string): Promise<void>;
   handler(req: IncomingMessage, res: ServerResponse): void;
-  /** 在哪个地址上听着(serveMock 在 listen 之后填;扫码页 /dev/qr 每次现问) */
+  /** 在哪个地址上听着(serveMock 在 listen 之后填;扫码页 /parent/qr 每次现问) */
   listen: (() => ListenInfo) | null;
 }
 
@@ -701,7 +701,7 @@ export function createMock(opts: MockOptions = {}): Mock {
     const url = new URL(path, 'http://x');
     const p = url.pathname;
     if (p === '/') return { status: 200, html: kidPage(title, {}, await stageVersion()) };
-    if (p === '/dev/qr') return mock.listen ? { status: 200, html: qrPage(title, mock.listen(), url.searchParams.get('via') === 'ip' ? 'ip' : 'name', url.searchParams.get('to') === 'parent' ? 'parent' : 'kid') } : { status: 404, json: { error: 'not_listening' } };
+    if (p === '/parent/qr') return mock.listen ? { status: 200, html: qrPage(title, mock.listen(), url.searchParams.get('via') === 'ip' ? 'ip' : 'name', url.searchParams.get('to') === 'parent' ? 'parent' : 'kid') } : { status: 404, json: { error: 'not_listening' } };
     if (p === '/dev/voice') return { status: 200, html: VOICE_GALLERY_PAGE };
     if (p === '/manifest.webmanifest') return { status: 200, json: webManifest(title), contentType: 'application/manifest+json; charset=utf-8' };
     // 家长端「记录」:自己的一页(parent-page.ts);清单接口照真服务(答案不剥,第一节带一条给家长的尾巴与记忆)。mock 没有工作台 /dev
@@ -1093,5 +1093,5 @@ export async function serveMock(opts: ServeMockOptions = {}): Promise<ServeMockR
   const scheme = tls ? 'https' : 'http';
   const urls = [hostname(), ...lanAddresses()].map((h) => `${scheme}://${h}:${port}/`);
   mock.listen = () => listenInfo(Boolean(tls), port);
-  return { server, mock, port, https: Boolean(tls), urls, qrPage: `${scheme}://localhost:${port}/dev/qr` };
+  return { server, mock, port, https: Boolean(tls), urls, qrPage: `${scheme}://localhost:${port}/parent/qr` };
 }

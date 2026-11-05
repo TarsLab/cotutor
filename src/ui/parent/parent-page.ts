@@ -190,8 +190,8 @@ ${REEL_DOCK_CSS}
 <div id="home">
   <div id="phead">
     <div id="ttl"><span id="ct-mark" class="ct-draw ct-hover">${titleLogo(true)}</span><h1 id="title">${title}</h1></div>
-    <a class="devl" href="/dev" target="_blank" title="工作台:细调老师文件、activity、全部音色(新窗口)">工作台<svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4 2h6v6"/><path d="M10 2 3 9"/></svg></a>
-    <nav id="ptabs" class="ptabs"><a href="/parent/home">首页</a><a class="on" href="/parent">记录</a></nav>
+    <a class="devl" href="/dev" target="_blank" title="工作台:细调老师文件、activity(新窗口)">工作台<svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4 2h6v6"/><path d="M10 2 3 9"/></svg></a>
+    <nav id="ptabs" class="ptabs"><a href="/parent/home">首页</a><a class="on" href="/parent">记录</a><a href="/parent/settings">设置</a></nav>
   </div>
   <a id="pnokey" href="/parent/home" hidden>孩子那边现在打不开:还没配百炼的 key。去「首页」配好就能用 ›</a>
   <div id="pweek"></div>

@@ -157,7 +157,7 @@ export async function chalkCommand(args: string[], flags: Flags, opts: { workspa
         const bundlesDir = str(flags.bundles) ? resolve(str(flags.bundles)!) : ws.dirs.bundles;
         const tutor = str(flags.tutor) ?? 'math-tutor';
         const voice = str(flags.voice) ?? cardVoice(ws.config.tutors, tutor);
-        if (!voice) throw new UsageError(`没有音色:--voice <音色>,或 --tutor <老师>(缺省 math-tutor)在 cotutor.json 里配了卡的音色(工作台「音色」页挑)`);
+        if (!voice) throw new UsageError(`没有音色:--voice <音色>,或 --tutor <老师>(缺省 math-tutor)在 cotutor.json 里配了卡的音色(家长端首页「样子与声音」挑)`);
         const s = await sceneOrBundle('dub', file, bundlesDir, json);
         if (!s) return;
         const { dubBundle } = await import('./dub.ts');

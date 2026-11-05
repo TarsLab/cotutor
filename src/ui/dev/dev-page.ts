@@ -11,7 +11,7 @@
 import { faviconLinks } from '../shared/favicon.ts';
 import { DEV_CSS } from './dev-theme.ts';
 import { pageDomJs } from '../shared/page-dom.ts';
-import { BRAND_CSS, BRAND_NAME, BRAND_URL, brandLogo } from '../shared/brand.ts';
+import { BRAND_CSS, BRAND_NAME, BRAND_URL, GITHUB_MARK, brandLogo } from '../shared/brand.ts';
 
 export const DEV_PAGE = `<!doctype html>
 <html lang="zh-CN">
@@ -30,6 +30,13 @@ ${BRAND_CSS}
   #side .brand .logo { width:30px; height:30px; border-radius:9px; background:var(--accent); display:grid; place-items:center; flex:none; }
   #side .brand b { font-size:17px; font-weight:700; letter-spacing:-.01em; }
   #side .brand small { font-size:13px; color:var(--muted); }
+  #side .brand-w { display:flex; flex-direction:column; gap:8px; }
+  #side .star { display:flex; align-items:center; gap:7px; margin:0 2px; padding:7px 10px; border-radius:var(--r-ctl); color:var(--ink-2); font-size:12.5px; white-space:nowrap; box-shadow:0 0 0 1px var(--line); }
+  #side .star:hover { background:var(--surface); color:var(--ink); }
+  #side .star svg { flex:none; }
+  #side .star b { font-weight:600; }
+  #side .star span { color:var(--muted); }
+  #side .star .out { margin-left:auto; font-style:normal; color:var(--muted); }
   #side .ws { display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:var(--r-item); background:var(--surface); box-shadow:0 0 0 1px var(--line); min-width:0; }
   #side .ws .ini { width:28px; height:28px; border-radius:50%; background:var(--sunk); display:grid; place-items:center; font-size:13px; font-weight:600; color:var(--ink-2); flex:none; }
   #side .ws span { display:flex; flex-direction:column; min-width:0; }
@@ -395,33 +402,6 @@ ${BRAND_CSS}
   .gaps li .plus { font:600 13px/1 var(--mono); color:var(--ok); }
   .gaps li .minus { color:var(--muted); }
 
-  .field .withbtn { display:flex; gap:6px; align-items:center; }
-  .field .withbtn input { flex:1; min-width:0; }
-  .field .withbtn .btn { flex:none; height:36px; }
-  .voices header .for { display:flex; align-items:center; gap:6px; font-size:13px; color:var(--muted); white-space:nowrap; }
-  .voices header .for select { font-size:13.5px; height:34px; padding:0 8px; border:0; box-shadow:0 0 0 1px var(--line); border-radius:9px; background:var(--surface); max-width:180px; }
-  .voices .now { display:flex; align-items:center; gap:10px; padding:12px 20px; border-bottom:1px solid var(--line-soft); flex-wrap:wrap; }
-  .voices .now small { font:400 12px/1.4 var(--mono); color:var(--muted); }
-  .voices .now .muted { color:var(--muted); }
-  .handrow { display:flex; align-items:center; gap:10px; padding:12px 20px; flex-wrap:wrap; }
-  .handrow .muted { color:var(--muted); }
-  .voices .filters { display:flex; gap:8px; padding:12px 20px; border-bottom:1px solid var(--line-soft); flex-wrap:wrap; background:var(--surface-2); }
-  .voices .filters input, .voices .filters select { height:34px; font-size:13.5px; padding:0 10px; border:0; box-shadow:0 0 0 1px var(--line); border-radius:9px; background:var(--surface); }
-  .voices .filters input[type=search] { flex:1 1 220px; min-width:0; }
-  .voices .filters .sample { flex:1 1 100%; }
-  .voices .vlist { max-height:calc(100vh - 360px); overflow:auto; }
-  .vrow { display:grid; grid-template-columns:auto minmax(150px,1.3fr) 76px minmax(90px,1fr) minmax(80px,1fr) auto auto; align-items:center; gap:12px; padding:9px 20px; border-top:1px solid var(--line-soft); }
-  .vrow:first-child { border-top:0; }
-  .vrow.mine { background:var(--accent-soft); }
-  .vrow .play { min-width:78px; font:500 12.5px/1 var(--mono); }
-  .vrow .play.on { box-shadow:0 0 0 1px var(--accent); color:var(--accent); background:var(--accent-soft); }
-  .vrow .vname { min-width:0; }
-  .vrow .vname b { display:block; font-size:14.5px; font-weight:600; }
-  .vrow .vname span { display:block; font:400 11.5px/1.5 var(--mono); color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .vrow .vmeta, .vrow .vtrait, .vrow .vscene { font-size:13px; color:var(--muted); }
-  .vrow .vtrait { color:var(--ink); }
-  .vrow .tags { display:flex; gap:6px; flex-wrap:wrap; }
-  .vrow .pick { font-size:12.5px; height:30px; padding:0 10px; }
 
   /* ---------- activity:列表(每位老师先是新话题 = 老师文件)/ 原文 / 检查·预览·和出厂比 ---------- */
   .act-wrap { max-width:none; }
@@ -532,7 +512,9 @@ ${BRAND_CSS}
   @media (max-width:760px) {
     body { grid-template-columns:1fr; grid-template-rows:auto minmax(0,1fr); }
     #side { flex-direction:row; align-items:center; padding:10px 12px; gap:10px; overflow-x:auto; overflow-y:hidden; border-bottom:1px solid var(--line); }
-    #side .ws, #side .health, #side nav .grp, #side nav hr, #side .brand small { display:none; }
+    #side .ws, #side .health, #side nav .grp, #side nav hr, #side .brand small, #side .star b, #side .star span, #side .star .out { display:none; }
+    #side .brand-w { flex-direction:row; align-items:center; flex:none; }
+    #side .star { padding:8px; margin:0; }
     #side nav { flex-direction:row; }
     #side nav a { height:34px; padding:0 10px; }
     main.on { height:auto; }
@@ -547,19 +529,16 @@ ${BRAND_CSS}
     .rl { grid-template-columns:34px minmax(0,1fr); }
     .rl .a { display:none; }
     .pathrow { grid-template-columns:1fr; gap:6px; }
-    .vrow { grid-template-columns:auto minmax(0,1fr) auto; row-gap:4px; }
-    .vrow .vmeta, .vrow .vscene { display:none; }
-    .vrow .vtrait { grid-column:2; }
-    .vrow .tags { grid-column:2; }
-    .voices .vlist { max-height:none; }
     #composer .row .hint { display:none; }
     .act { grid-template-columns:1fr; }
     .alist { position:static; }
-    .voices header .sub .cmd { display:none; }
   }
 </style>
 <aside id="side">
-  <a class="brand ct-hover" href="${BRAND_URL}" target="_blank" rel="noopener" data-cotutor-brand><span class="logo ct-draw">${brandLogo({ size: 18, outer: '#fff', innerOpacity: 0.75 })}</span><b>${BRAND_NAME}</b><small>工作台</small></a>
+  <div class="brand-w" data-cotutor-brand>
+    <a class="brand ct-hover" href="#overview" data-tab="overview" title="回概览"><span class="logo ct-draw">${brandLogo({ size: 18, outer: '#fff', innerOpacity: 0.75 })}</span><b>${BRAND_NAME}</b><small>工作台</small></a>
+    <a class="star" href="${BRAND_URL}" target="_blank" rel="noopener" title="cotutor 的源码在 GitHub">${GITHUB_MARK}<b>GitHub</b><span>好用就点个 ★</span><i class="out">↗</i></a>
+  </div>
   <div class="ws"><span class="ini" id="ws-ini">·</span><span><b id="title">cotutor</b><small id="ws-root"></small></span></div>
   <nav>
     <a href="#overview" data-tab="overview"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 10.5 12 3.5l8.5 7V20a1 1 0 0 1-1 1h-4.5v-6h-6v6H4.5a1 1 0 0 1-1-1z"/></svg>概览</a>
@@ -567,9 +546,7 @@ ${BRAND_CSS}
     <span class="grp">老师</span>
     <a href="#team" data-tab="team"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.8c1.8.7 3 2.4 3.5 5.2"/></svg>老师团</a>
     <a href="#activity" data-tab="activity" title="孩子从首页一个按钮进去的一种做法:看、改、检查、看老师收到什么"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5h8.5L19 8v12.5H6z"/><path d="M14 3.5V8h5M9.5 12.5h6M9.5 16h4"/></svg>activity<span class="badge err" id="act-bad" hidden></span></a>
-    <a href="#voices" data-tab="voices"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h1.5M7 8.5v7M11 5v14M15 8v8M19 10.5v3"/></svg>音色</a>
     <span class="grp">工具</span>
-    <a href="/parent/home" target="_blank" title="在家长端首页:孩子的平板、家长的手机用相机扫,不用输地址"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="6.5" height="6.5" rx="1"/><rect x="14" y="3.5" width="6.5" height="6.5" rx="1"/><rect x="3.5" y="14" width="6.5" height="6.5" rx="1"/><path d="M14 14h3v3h-3zM20.5 14v.5M17 20.5h3.5V17"/></svg>扫码打开<span class="out">↗</span></a>
     <a href="/dev/voice" target="_blank" title="老师页那颗「头像 + 按住说话」的每一种样子(声音是模拟的);调动画时看这一页"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="12" r="4.5"/><path d="M15 9.5a4 4 0 0 1 0 5M18 7a7.5 7.5 0 0 1 0 10"/></svg>按钮样张<span class="out">↗</span></a>
     <span class="grp">去看</span>
     <a href="/" target="_blank" title="孩子端:孩子在 iPad 上看到的"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2.5"/><path d="M10.5 18h3"/></svg>孩子端<span class="out">↗</span></a>
@@ -607,7 +584,6 @@ ${BRAND_CSS}
 </main>
 <main id="team"></main>
 <main id="activity"></main>
-<main id="voices"></main>
 <main id="settings"></main>
 <div id="drawer"></div>
 <script>
@@ -626,7 +602,7 @@ ${pageDomJs(4000)}
     a.remove();
   };
 
-  const TABS = ['overview', 'chat', 'team', 'activity', 'voices', 'settings'];
+  const TABS = ['overview', 'chat', 'team', 'activity', 'settings'];
   const hashState = () => {
     // #chat?raw=<job> 开某一轮的看原文;#activity?a=<老师>/<名> 开某个 activity
     const parts = location.hash.slice(1).split('?');
@@ -644,9 +620,7 @@ ${pageDomJs(4000)}
     if (tab === 'overview') renderOverview();
     if (tab === 'activity') renderActivities();
     if (tab === 'team') renderTeam();
-    if (tab === 'voices') renderVoices();
     if (tab === 'settings') renderSettings();
-    if (tab !== 'voices') stopPreview();
   };
   for (const a of document.querySelectorAll('#side a[data-tab]')) a.addEventListener('click', (e) => { e.preventDefault(); location.hash = '#' + a.dataset.tab; showTab(a.dataset.tab); });
 
@@ -1250,8 +1224,6 @@ ${pageDomJs(4000)}
       h('div', { class: 'field' }, h('label', {}, '老师名(英文键)'), h('input', { type: 'text', id: 'n-name', placeholder: 'science-tutor' })),
       h('div', { class: 'field' }, h('label', {}, '显示名'), h('input', { type: 'text', id: 'n-display', placeholder: '科学老师' })),
       h('div', { class: 'field' }, h('label', {}, '学科(可空)'), h('input', { type: 'text', id: 'n-subject', placeholder: '科学' })),
-      h('div', { class: 'field' }, h('label', {}, '头像(emoji,或图片路径)'), h('input', { type: 'text', id: 'n-avatar', value: '🔬', list: 'n-avatar-list', placeholder: '🔬 或 avatars/science-tutor.png' }),
-        h('datalist', { id: 'n-avatar-list' }, ...['🧮', '📚', '📖', '🔬', '🎨', '🎵', '🌍', '💻', '🏃', '🧩', '📷', '🗓'].map((a) => h('option', { value: a })))),
       h('div', { class: 'field chk' }, h('input', { type: 'checkbox', id: 'n-hidden' }), h('label', { for: 'n-hidden' }, '孩子端不露')),
       h('div', { class: 'full' },
         h('button', { class: 'btn primary', type: 'button', on: { click: async () => {
@@ -1259,7 +1231,7 @@ ${pageDomJs(4000)}
           const display = $('#n-display').value.trim();
           if (!/^[a-z0-9][a-z0-9-]*$/.test(name)) return feedback(roster, false, '老师名要小写字母数字连字符');
           if (!display) return feedback(roster, false, '显示名不能空');
-          try { await api('POST', '/api/tutors', { name, display, subject: $('#n-subject').value.trim(), avatar: $('#n-avatar').value.trim(), hidden: $('#n-hidden').checked }); await loadConfig(); renderTeam(); }
+          try { await api('POST', '/api/tutors', { name, display, subject: $('#n-subject').value.trim(), hidden: $('#n-hidden').checked }); await loadConfig(); renderTeam(); }
           catch (e) { feedback(roster, false, e.message); }
         } } }, '加进来'),
         h('span', { class: 'hint', style: 'padding:0' }, '会写一份带全部约定的老师文件、进 cotutor.json、建目录;之后点开这位老师改「老师文件」把性子填上。与终端 cotutor add 同一条路。')));
@@ -1276,9 +1248,7 @@ ${pageDomJs(4000)}
         h('div', { class: 'field' }, h('label', {}, '显示名'), h('input', { type: 'text', 'data-f': 'display', value: t.display })),
         h('div', { class: 'field' }, h('label', {}, '学科'), h('input', { type: 'text', 'data-f': 'subject', value: t.subject || '' })),
         colorField(t, c),
-        h('div', { class: 'field' }, h('label', {}, '头像(emoji,或图片路径如 avatars/' + t.name + '.png)'), h('input', { type: 'text', 'data-f': 'avatar', value: t.avatar || '' })),
-        h('div', { class: 'field' }, h('label', {}, '卡的配音音色'), h('div', { class: 'withbtn' }, h('input', { type: 'text', 'data-f': 'voice', value: t.voice || '' }),
-          h('button', { class: 'btn', type: 'button', title: '到音色页听着挑', on: { click: () => { voiceState.for = t.name; voiceState.kind = 'tts'; location.hash = '#voices'; showTab('voices'); } } }, '去挑'))),
+        h('div', { class: 'field' }, h('label', {}, '头像与声音'), h('a', { href: '/parent/home', target: '_blank', style: 'line-height:36px' }, '在家长端首页「样子与声音」改 ↗')),
         h('div', { class: 'field chk' }, h('input', { type: 'checkbox', 'data-f': 'enabled', checked: t.enabled }), h('label', {}, '开启')),
         h('div', { class: 'field chk' }, h('input', { type: 'checkbox', 'data-f': 'hidden', checked: t.hidden }), h('label', {}, '孩子端不露')),
         ...policyFields(patch, t.policy, { inherit: true }));
@@ -1294,7 +1264,7 @@ ${pageDomJs(4000)}
       saveBtn.addEventListener('click', () => {
         try {
           const f = (name) => $('[data-f=' + name + ']', body);
-          patchAndReload(card, { tutors: { [t.name]: { display: f('display').value.trim(), subject: f('subject').value.trim() || null, color: f('color').dataset.v || null, avatar: f('avatar').value.trim() || null, voice: f('voice').value.trim() || null, enabled: f('enabled').checked, hidden: f('hidden').checked, policy: readPolicy(body) } } }, renderTeam);
+          patchAndReload(card, { tutors: { [t.name]: { display: f('display').value.trim(), subject: f('subject').value.trim() || null, color: f('color').dataset.v || null, enabled: f('enabled').checked, hidden: f('hidden').checked, policy: readPolicy(body) } } }, renderTeam);
         } catch (e) { feedback(card, false, e.message); }
       });
       const caret = h('span', { class: 'caret', 'aria-hidden': 'true' });
@@ -1313,188 +1283,6 @@ ${pageDomJs(4000)}
     }
     roster.append(list);
     $('#team').replaceChildren(h('div', { class: 'wrap' }, h('header', { class: 'ph' }, h('h1', {}, '老师团'), h('span', { class: 'sub' }, '按 cotutor.json 里有谁走;键以 -tutor 结尾的是有脸的老师')), top, roster));
-  };
-
-  // ---- 音色:两样声音,页头切——卡的配音(百炼 Qwen-Audio-TTS 的 597 个,src/media/tts-voices.ts;挑中的写进 tutors.<名>.voice;点读、单词卡的声音)、
-  //      实时的嘴(百炼 realtime 认的 56 个,挑中的写进 live.voices.<名>,见下面 renderLiveVoices)。都是先听再挑 ----
-  const AGE_BANDS = [['', '全部年龄'], ['kid', '12 岁以下'], ['young', '13–25 岁'], ['adult', '26–40 岁'], ['senior', '41 岁以上']];
-  const inBand = (age, band) => !band || (typeof age === 'number' && (band === 'kid' ? age <= 12 : band === 'young' ? age >= 13 && age <= 25 : band === 'adult' ? age >= 26 && age <= 40 : age >= 41));
-  const voiceState = { kind: 'tts', list: null, error: null, sample: '', inUse: {}, q: '', gender: '', band: '', text: '', for: null, playing: null, audio: null, loading: false };
-  /** 页头的切换:卡的配音 / 实时的嘴 */
-  const kindSeg = () => h('span', { class: 'seg', role: 'tablist' }, ...[['tts', '卡的配音'], ['live', '实时的嘴']].map(([k, label]) => h('button', { type: 'button', role: 'tab', 'aria-selected': String(voiceState.kind === k), class: voiceState.kind === k ? 'on' : '', on: { click: () => { if (voiceState.kind === k) return; stopPreview(); voiceState.kind = k; renderVoices(); } } }, label)));
-  const stopPreview = () => {
-    if (voiceState.audio) { voiceState.audio.pause(); voiceState.audio = null; }
-    const b = voiceState.playing;
-    voiceState.playing = null;
-    if (b) { b.textContent = '▶ 试听'; b.classList.remove('on'); b.disabled = false; }
-  };
-  /** 点一下合成(服务端同句同音色只合成一次)并播;再点停;换一个点就切过去。base = 卡的配音 / 实时的嘴各自的试听接口 */
-  const preview = async (btn, voice, panel, base = '/api/tts/preview') => {
-    if (voiceState.playing === btn) return stopPreview();
-    stopPreview();
-    voiceState.playing = btn;
-    btn.textContent = '合成中…';
-    btn.classList.add('on');
-    try {
-      const r = await fetch(base + '?voice=' + encodeURIComponent(voice) + (voiceState.text ? '&text=' + encodeURIComponent(voiceState.text) : ''));
-      if (!r.ok) { const j = await r.json().catch(() => null); throw new Error((j && j.message) || (r.status + ' ' + r.statusText)); }
-      const url = URL.createObjectURL(await r.blob());
-      if (voiceState.playing !== btn) { URL.revokeObjectURL(url); return; }
-      const a = new Audio(url);
-      voiceState.audio = a;
-      btn.textContent = '■ 停';
-      a.addEventListener('ended', () => { URL.revokeObjectURL(url); if (voiceState.audio === a) stopPreview(); });
-      await a.play();
-      feedback(panel, true, '');
-    } catch (e) {
-      if (voiceState.playing === btn) stopPreview();
-      feedback(panel, false, '没成:' + e.message);
-    }
-  };
-  const loadVoices = async () => {
-    voiceState.loading = true;
-    try {
-      const r = await api('GET', '/api/tts/voices');
-      voiceState.list = r.voices;
-      voiceState.error = r.error;
-      voiceState.sample = r.sample;
-      voiceState.inUse = r.inUse || {};
-    } catch (e) {
-      voiceState.list = [];
-      voiceState.error = e.message;
-    }
-    voiceState.loading = false;
-  };
-  const voiceTutor = () => {
-    const c = state.config;
-    return c.tutors.find((t) => t.name === voiceState.for) || c.tutors.find((t) => t.enabled && !t.hidden) || c.tutors[0] || null;
-  };
-  const renderVoices = async () => {
-    const c = state.config;
-    if (!c) return;
-    if (voiceState.kind === 'live') return renderLiveVoices();
-    if (!voiceState.list && !voiceState.loading) {
-      $('#voices').replaceChildren(h('div', { class: 'wrap' }, h('header', { class: 'ph' }, h('h1', {}, '音色'), kindSeg()), h('div', { class: 'panel' }, h('p', { class: 'hint', style: 'padding:16px 20px' }, '在列音色……'))));
-      await loadVoices();
-      if (state.tab !== 'voices' || voiceState.kind !== 'tts') return;
-    }
-    if (voiceState.loading) return;
-    const who = voiceTutor();
-    if (who) voiceState.for = who.name;
-    const panel = h('div', { class: 'panel voices' });
-    const fb = h('span', { class: 'fb' });
-    const forSel = h('select', { id: 'v-for', title: '挑中的音色给谁', on: { change: (e) => { voiceState.for = e.target.value; renderVoices(); } } },
-      ...c.tutors.map((t) => h('option', { value: t.name, selected: who && t.name === who.name }, t.display + (t.enabled ? '' : '(已关闭)'))));
-    panel.append(h('header', {}, h('h4', {}, '音色'), h('span', { class: 'sub' }, (voiceState.list || []).length + ' 个', h('span', { class: 'cmd' }, '百炼 Qwen-Audio-TTS')),
-      h('span', { class: 'right' }, fb, h('label', { class: 'for' }, '给谁挑', forSel))));
-    if (who) {
-      const cur = (voiceState.list || []).find((v) => v.voice === who.voice);
-      panel.append(h('div', { class: 'now' }, avatarEl(who), h('b', {}, who.display),
-        who.voice ? h('span', {}, '现在用 ', h('b', {}, cur ? cur.name : who.voice), cur ? h('small', {}, ' ' + who.voice) : h('small', {}, '(列表里没有这个 id)')) : h('span', { class: 'muted' }, '还没配音色,点读、单词卡没有声音'),
-        who.voice ? h('button', { class: 'btn', type: 'button', on: { click: () => patchAndReload(panel, { tutors: { [who.name]: { voice: null } } }, renderVoices) } }, '清掉') : null));
-    }
-    if (voiceState.error) panel.append(h('p', { class: 'fb bad', style: 'padding:12px 16px 0' }, '列不出音色:' + voiceState.error));
-
-    const genders = [...new Set((voiceState.list || []).map((v) => v.gender).filter(Boolean))];
-    const filters = h('div', { class: 'filters' },
-      h('input', { type: 'search', placeholder: '搜名字 / 特质 / 场景,比如 少年、温柔、故事', value: voiceState.q, on: { input: (e) => { voiceState.q = e.target.value.trim().toLowerCase(); renderVoiceList(); } } }),
-      genders.length ? h('select', { on: { change: (e) => { voiceState.gender = e.target.value; renderVoiceList(); } } }, h('option', { value: '', selected: !voiceState.gender }, '全部性别'), ...genders.map((g) => h('option', { value: g, selected: voiceState.gender === g }, g))) : null,
-      h('select', { on: { change: (e) => { voiceState.band = e.target.value; renderVoiceList(); } } }, ...AGE_BANDS.map(([k, label]) => h('option', { value: k, selected: voiceState.band === k }, label))),
-      h('input', { type: 'text', class: 'sample', placeholder: '试听句:' + voiceState.sample, value: voiceState.text, title: '空 = 用缺省那句;每句每个音色只合成一次', on: { change: (e) => { voiceState.text = e.target.value.trim().slice(0, 200); stopPreview(); } } }));
-    const list = h('div', { class: 'vlist' });
-    const renderVoiceList = () => {
-      const rows = [];
-      const q = voiceState.q;
-      for (const v of voiceState.list || []) {
-        if (voiceState.gender && v.gender !== voiceState.gender) continue;
-        if (!inBand(v.age, voiceState.band)) continue;
-        if (q && ![v.name, v.voice, v.trait, v.scene, v.lang].some((x) => x && x.toLowerCase().includes(q))) continue;
-        const mine = who && who.voice === v.voice;
-        const users = (voiceState.inUse[v.voice] || []).map((n) => (c.tutors.find((t) => t.name === n) || { display: n }).display);
-        const play = h('button', { class: 'btn play', type: 'button', on: { click: () => preview(play, v.voice, panel) } }, '▶ 试听');
-        rows.push(h('div', { class: 'vrow' + (mine ? ' mine' : '') }, play,
-          h('span', { class: 'vname' }, h('b', {}, v.name), h('span', {}, v.voice)),
-          h('span', { class: 'vmeta' }, [v.gender, typeof v.age === 'number' ? v.age + ' 岁' : null].filter(Boolean).join(' · ')),
-          h('span', { class: 'vtrait' }, v.trait || ''),
-          h('span', { class: 'vscene' }, v.scene || ''),
-          h('span', { class: 'tags' }, ...users.map((d) => h('span', { class: 'tag' + (mine ? ' tuned' : '') }, d + ' 在用'))),
-          who ? (mine ? h('span', { class: 'tag tuned' }, '就是这个') : h('button', { class: 'btn primary pick', type: 'button', on: { click: () => { stopPreview(); patchAndReload(panel, { tutors: { [who.name]: { voice: v.voice } } }, renderVoices); } } }, '给' + who.display + '用')) : null));
-      }
-      list.replaceChildren(...(rows.length ? rows : [h('p', { class: 'hint', style: 'padding:14px 16px' }, voiceState.list && voiceState.list.length ? '没有匹配的音色,换个词' : '没有音色')]));
-    };
-    renderVoiceList();
-    panel.append(filters, list);
-    panel.append(h('p', { class: 'hint' }, '试听是真合成一次(合成过的存着,同一句同一个音色以后不再花钱;要百炼的 key,家长端「首页」里填);挑中就写进 cotutor.json,卡点了就用新声音。只管卡自己的声音(点读卡、单词卡、听写念的词);老师开口的声音在「实时的嘴」那半。'));
-    $('#voices').replaceChildren(h('div', { class: 'wrap' }, h('header', { class: 'ph' }, h('h1', {}, '音色'), kindSeg(), h('span', { class: 'sub' }, '先听再挑,挑中的写进 cotutor.json')), panel));
-  };
-  // ---- 实时的嘴:百炼 realtime 认的 56 个音色(src/realtime/voices.ts);试听是真连一次照念这一句(几分钱,存着)。
-  //      挑中的写进 live.voices.<老师>;有脸的老师都走实时,没挑的用缺省音色;清掉 = 回到缺省 ----
-  const liveVoiceState = { data: null, error: null, q: '', lang: '', loading: false };
-  const loadLiveVoices = async () => {
-    liveVoiceState.loading = true;
-    try { liveVoiceState.data = await api('GET', '/api/tts/realtime'); liveVoiceState.error = null; } catch (e) { liveVoiceState.error = e.message; }
-    liveVoiceState.loading = false;
-  };
-  const renderLiveVoices = async () => {
-    const c = state.config;
-    const page = (panel) => $('#voices').replaceChildren(h('div', { class: 'wrap' }, h('header', { class: 'ph' }, h('h1', {}, '音色'), kindSeg(), h('span', { class: 'sub' }, '实时的老师开口用的声音,挑中的写进 cotutor.json 的 live.voices')), panel));
-    if (!liveVoiceState.data && !liveVoiceState.loading) {
-      page(h('div', { class: 'panel' }, h('p', { class: 'hint', style: 'padding:16px 20px' }, '在列音色……')));
-      await loadLiveVoices();
-      if (state.tab !== 'voices' || voiceState.kind !== 'live') return;
-    }
-    if (liveVoiceState.loading) return;
-    const L = c.live || { voices: {} };
-    const fallback = (liveVoiceState.data && liveVoiceState.data.fallback) || '';
-    const list = (liveVoiceState.data && liveVoiceState.data.voices) || [];
-    // 实时只给有脸的老师(live.voices 的键要是 -tutor 结尾的老师)
-    const faces = c.tutors.filter((t) => t.name.endsWith('-tutor'));
-    const who = faces.find((t) => t.name === voiceState.for) || faces.find((t) => t.enabled && !t.hidden) || faces[0] || null;
-    if (who) voiceState.for = who.name;
-    const panel = h('div', { class: 'panel voices' });
-    const fb = h('span', { class: 'fb' });
-    const forSel = h('select', { id: 'v-for', title: '挑中的音色给谁', on: { change: (e) => { voiceState.for = e.target.value; renderVoices(); } } },
-      ...faces.map((t) => h('option', { value: t.name, selected: who && t.name === who.name }, t.display + (t.enabled ? '' : '(已关闭)'))));
-    panel.append(h('header', {}, h('h4', {}, '实时的嘴'), h('span', { class: 'sub' }, list.length + ' 个', h('span', { class: 'cmd' }, ' · ' + (L.model || ''))),
-      h('span', { class: 'right' }, fb, h('label', { class: 'for' }, '给谁挑', forSel))));
-    if (liveVoiceState.error) panel.append(h('p', { class: 'fb bad', style: 'padding:12px 16px 0' }, '列不出音色:' + liveVoiceState.error));
-    if (who) {
-      const own = L.voices[who.name];
-      const curV = own || fallback;
-      const cur = list.find((x) => x.voice === curV);
-      panel.append(h('div', { class: 'now' }, avatarEl(who), h('b', {}, who.display),
-        curV ? h('span', {}, '嘴用 ', h('b', {}, cur ? cur.name : curV), h('small', {}, ' ' + curV + (own ? '' : '(缺省的,还没挑)')), cur ? null : h('span', { class: 'fb bad' }, ' 这个模型不认这个音色,嘴会不出声,换一个')) : null,
-        own ? h('button', { class: 'btn', type: 'button', on: { click: () => { stopPreview(); patchAndReload(panel, { live: { voices: { [who.name]: null } } }, renderVoices); } } }, '清掉(用缺省的)') : null));
-    }
-    const langs = [...new Set(list.map((x) => x.lang))];
-    const filters = h('div', { class: 'filters' },
-      h('input', { type: 'search', placeholder: '搜名字 / 特质,比如 温柔、知性、少年', value: liveVoiceState.q, on: { input: (e) => { liveVoiceState.q = e.target.value.trim().toLowerCase(); renderList(); } } }),
-      h('select', { on: { change: (e) => { liveVoiceState.lang = e.target.value; renderList(); } } }, h('option', { value: '', selected: !liveVoiceState.lang }, '普通话与方言都列'), ...langs.map((g) => h('option', { value: g, selected: liveVoiceState.lang === g }, g))),
-      h('input', { type: 'text', class: 'sample', placeholder: '试听句:' + ((liveVoiceState.data && liveVoiceState.data.sample) || ''), value: voiceState.text, title: '空 = 用缺省那句;每句每个音色只念一次', on: { change: (e) => { voiceState.text = e.target.value.trim().slice(0, 200); stopPreview(); } } }));
-    const box = h('div', { class: 'vlist' });
-    const renderList = () => {
-      const rows = [];
-      const q = liveVoiceState.q;
-      for (const x of list) {
-        if (liveVoiceState.lang && x.lang !== liveVoiceState.lang) continue;
-        if (q && ![x.name, x.voice, x.trait, x.lang].some((y) => y && y.toLowerCase().includes(q))) continue;
-        const mine = who && (L.voices[who.name] || fallback) === x.voice;
-        const users = ((liveVoiceState.data && liveVoiceState.data.inUse) || {})[x.voice] ? liveVoiceState.data.inUse[x.voice].map((n) => (c.tutors.find((t) => t.name === n) || { display: n }).display) : [];
-        const play = h('button', { class: 'btn play', type: 'button', on: { click: () => preview(play, x.voice, panel, '/api/tts/realtime/preview') } }, '▶ 试听');
-        rows.push(h('div', { class: 'vrow' + (mine ? ' mine' : '') }, play,
-          h('span', { class: 'vname' }, h('b', {}, x.name), h('span', {}, x.voice)),
-          h('span', { class: 'vmeta' }, x.lang),
-          h('span', { class: 'vtrait' }, x.trait),
-          h('span', { class: 'vscene' }, ''),
-          h('span', { class: 'tags' }, ...users.map((d) => h('span', { class: 'tag' + (mine ? ' tuned' : '') }, d + ' 在用'))),
-          who ? (mine ? h('span', { class: 'tag tuned' }, '就是这个') : h('button', { class: 'btn primary pick', type: 'button', on: { click: () => { stopPreview(); patchAndReload(panel, { live: { voices: { [who.name]: x.voice } } }, renderVoices); } } }, '给' + who.display + '用')) : null));
-      }
-      box.replaceChildren(...(rows.length ? rows : [h('p', { class: 'hint', style: 'padding:14px 16px' }, '没有匹配的音色,换个词')]));
-    };
-    renderList();
-    panel.append(filters, box);
-    panel.append(h('p', { class: 'hint' }, '试听是真连一次百炼的实时模型照念这一句(几分钱;同一句同一个音色只念一次,存在 .cotutor/live-preview/)。挑中就写进 cotutor.json 的 live.voices,孩子下一个新话题起用。这个模型没有童声;方言、外国口音的不适合教课。'));
-    page(panel);
   };
 
   // ---- 设置:路径 / 服务 / 配音;文件仍是真相 ----
@@ -1550,21 +1338,8 @@ ${pageDomJs(4000)}
       h('div', { class: 'field' }, h('label', {}, 'HTTPS 证书(相对 workspace)'), h('input', { type: 'text', id: 's-cert', value: c.https ? c.https.cert : '', placeholder: '空 = 机器级 ~/.config/cotutor/certs/' })),
       h('div', { class: 'field' }, h('label', {}, 'HTTPS 私钥'), h('input', { type: 'text', id: 's-key', value: c.https ? c.https.key : '', placeholder: '空 = 机器级' }))));
 
-    // 孩子端:惯用手(kid.hand)——左撇子时平板横屏实时老师页的浮层(按住说话)挪到右边;孩子端下次进老师页生效
-    const kid = h('div', { class: 'panel' });
-    const left = (c.kid && c.kid.hand) === 'left';
-    const handBtn = (v, label) => h('button', { type: 'button', class: left === (v === 'left') ? 'on' : '', 'aria-pressed': String(left === (v === 'left')), on: { click: async () => {
-      if (left === (v === 'left')) return;
-      try { await api('PATCH', '/api/config', { kid: { hand: v === 'left' ? 'left' : null } }); await loadConfig(); renderSettings(); }
-      catch (e) { feedback(kid, false, e.message); }
-    } } }, label);
-    kid.append(h('header', {}, h('h4', {}, '孩子端'), h('span', { class: 'sub' }, 'kid.hand · 孩子下次进老师页生效'), h('span', { class: 'right' }, h('span', { class: 'fb' }))),
-      h('div', { class: 'handrow' }, h('b', {}, '惯用手'), h('span', { class: 'seg' }, handBtn('right', '右手'), handBtn('left', '左撇子')),
-        h('span', { class: 'muted' }, left ? '平板横屏的实时老师页:按住说话那一栏在右边,左手写字' : '平板横屏的实时老师页:按住说话那一栏在左边,右手写字')),
-      h('p', { class: 'hint' }, 'kid 的别的字段、version、运行时模板请直接编辑 cotutor.json。'));
-
     const mig = migratePanel();
-    $('#settings').replaceChildren(h('div', { class: 'wrap' }, h('header', { class: 'ph' }, h('h1', {}, '设置'), h('span', { class: 'sub' }, '路径、服务、孩子端;文件仍是真相,这页只是改它的一个口子')), ...(mig ? [mig] : []), paths, server, kid));
+    $('#settings').replaceChildren(h('div', { class: 'wrap' }, h('header', { class: 'ph' }, h('h1', {}, '设置'), h('span', { class: 'sub' }, '路径、服务;文件仍是真相,这页只是改它的一个口子')), ...(mig ? [mig] : []), paths, server));
   };
 
   // ---- 概览:近七天的数字、今天各老师、要看一眼的轮次、体检(doctor 不带 --live) ----
@@ -1615,8 +1390,6 @@ ${pageDomJs(4000)}
       h('button', { type: 'button', on: { click: () => { location.hash = '#chat'; showTab('chat'); $('#text').focus(); } } }, icon('<path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5H9l-5 4z"/><path d="M8 9h8M8 12h5"/>', 'hot'), h('b', {}, '发一句试试'), h('small', {}, '以孩子的身份跑一轮')),
       h('button', { type: 'button', disabled: !d.last, on: { click: () => d.last && goChat(d.last.tutor, d.last.date, d.last.job) } }, icon('<path d="M8 7 3 12l5 5M16 7l5 5-5 5M13.5 4.5l-3 15"/>'), h('b', {}, '看原文'), h('small', { class: 'num' }, d.last ? '最近一轮 ' + (d.last.date === d.today ? '' : d.last.date.slice(5) + ' ') + d.last.at.slice(11, 16) : '七天里没有')),
       h('button', { type: 'button', on: { click: () => { location.hash = '#team'; showTab('team'); } } }, icon('<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.8c1.8.7 3 2.4 3.5 5.2"/>'), h('b', {}, '老师团'), h('small', {}, (c ? c.tutors.filter((t) => t.enabled).length : 0) + ' 位开着')),
-      h('button', { type: 'button', on: { click: () => { location.hash = '#voices'; showTab('voices'); } } }, icon('<path d="M3 12h1.5M7 8.5v7M11 5v14M15 8v8M19 10.5v3"/>'), h('b', {}, '音色'), h('small', {}, '试听、换声')),
-      h('a', { href: '/parent/home', target: '_blank' }, icon('<rect x="3.5" y="3.5" width="6.5" height="6.5" rx="1"/><rect x="14" y="3.5" width="6.5" height="6.5" rx="1"/><rect x="3.5" y="14" width="6.5" height="6.5" rx="1"/><path d="M14 14h3v3h-3zM20.5 14v.5M17 20.5h3.5V17"/>'), h('b', {}, '扫码打开'), h('small', {}, '在家长端首页')),
       h('button', { type: 'button', disabled: ov.doctorBusy, on: { click: runDoctor } }, icon('<path d="M3 12h4l2.5-6 5 12 2.5-6h4"/>'), h('b', {}, '体检一次'), h('small', { class: 'num' }, ov.doctorBusy ? '在跑……' : 'doctor')));
 
     const slowEl = d.slow ? h('span', { class: 'st warn' }, d.slow + ' 轮') : h('span', { class: 'st ok' }, '没有');

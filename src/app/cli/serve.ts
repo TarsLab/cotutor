@@ -11,7 +11,7 @@ import { createServer as createHttps } from 'node:https';
 import { hostname, networkInterfaces } from 'node:os';
 import { join } from 'node:path';
 import { doctorWorkspace } from './doctor.ts';
-import type { ListenInfo } from '../../ui/dev/qr-page.ts';
+import type { ListenInfo } from '../../ui/parent/qr-page.ts';
 import { createContext, createHandler, type AppContext } from '../http/app.ts';
 import { liveUpgrade } from '../ws/route.ts';
 import { AUTO_BOOKKEEP_EVERY_MS, autoBookkeep } from '../../runtime/auto-bookkeep.ts';

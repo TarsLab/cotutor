@@ -56,7 +56,7 @@ try {
   const s2 = (await call('PUT', '/api/parent/tutors/chinese-tutor/look', { mouth: 'Serena', voice: 'qwen-audio-3.0-tts-plus-longfengyutong', avatar: null })).json as Look;
   check('挑回出厂的:那几项从 cotutor.json 删掉,不留和缺省一样的值', s2.mouth.current === 'Serena' && s2.avatar.current === null && !('chinese-tutor' in (cfg().live?.voices ?? {})) && !('voice' in cfg().tutors['chinese-tutor']) && !('avatar' in cfg().tutors['chinese-tutor']), JSON.stringify({ live: cfg().live, t: cfg().tutors['chinese-tutor'] }));
   const badA = await call('PUT', '/api/parent/tutors/chinese-tutor/look', { avatar: '../../etc/x.png' });
-  check('头像只收选项里的值:别的 400,说去工作台', badA.status === 400 && String((badA.json as { message: string }).message).includes('工作台'));
+  check('头像只收选项里的值:别的 400,说直接写 cotutor.json', badA.status === 400 && String((badA.json as { message: string }).message).includes('cotutor.json'));
   check('不认的声音 400', (await call('PUT', '/api/parent/tutors/chinese-tutor/look', { mouth: 'Bella' })).status === 400 && (await call('PUT', '/api/parent/tutors/chinese-tutor/look', { voice: 'qwen-audio-3.0-tts-plus-nope' })).status === 400);
   const cindy = (await call('PUT', '/api/parent/tutors/chinese-tutor/look', { mouth: 'Cindy' })).json as Look;
   check('换了以后:现在用的排第一,出厂的苏瑶第二', cindy.mouth.options[0].voice === 'Cindy' && cindy.mouth.options[1].voice === 'Serena' && cindy.mouth.options.length === 56);

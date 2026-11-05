@@ -219,7 +219,7 @@ ${BRAND_CSS}
   }
 </style></head><body>
 <div class="wrap" id="main">
-  <div class="top"><span class="ttl"><span id="ct-mark" class="ct-draw ct-hover">${titleLogo(true)}</span><b id="title">家长</b></span><nav class="seg"><a class="on" href="/parent/home">首页</a><a href="/parent">记录</a></nav><small id="pub"></small><a class="devl" href="/dev" target="_blank" title="工作台:细调老师文件、activity、全部音色(新窗口)">工作台<svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4 2h6v6"/><path d="M10 2 3 9"/></svg></a></div>
+  <div class="top"><span class="ttl"><span id="ct-mark" class="ct-draw ct-hover">${titleLogo(true)}</span><b id="title">家长</b></span><nav class="seg"><a class="on" href="/parent/home">首页</a><a href="/parent">记录</a><a href="/parent/settings">设置</a></nav><small id="pub"></small><a class="devl" href="/dev" target="_blank" title="工作台:细调老师文件、activity(新窗口)">工作台<svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4 2h6v6"/><path d="M10 2 3 9"/></svg></a></div>
   <div id="qrtop"></div>
   <div class="main">
     <section id="pv" aria-label="孩子看到的首页">
@@ -325,7 +325,7 @@ ${pageDomJs(3200)}
     blEl.replaceChildren(h('div', { class: 'gh' }, h('span', {}, '百炼 · 老师开口用的')), h('div', { class: 'grp' + (st.ready ? '' : ' warn') }, ...rows));
   };
 
-  // ---- 扫码打开:孩子的平板一张(孩子端)、家长自己的手机一张(家长端);服务端现画,地址同 /dev/qr。还没有孩子的设备连过就开着,连过收起;家长开合过就记住 ----
+  // ---- 扫码打开:孩子的平板一张(孩子端)、家长自己的手机一张(家长端);服务端现画,地址同 /parent/qr。还没有孩子的设备连过就开着,连过收起;家长开合过就记住 ----
   const QR = { d: null, ip: false, open: null, to: 'kid' };
   try { const v = localStorage.getItem('parent-home-qr'); if (v === 'open' || v === 'closed') QR.open = v === 'open'; } catch (e) {}
   const qrEl = h('div', { id: 'kidqr' });
@@ -347,7 +347,7 @@ ${pageDomJs(3200)}
     const useIp = QR.ip && c.ip;
     const seg = h('div', { class: 'seg', role: 'group', 'aria-label': '给谁扫' }, ...[['kid', '孩子的平板'], ['parent', '我的手机']].map(([k, l]) =>
       h('button', { type: 'button', class: QR.to === k ? 'on' : '', 'aria-pressed': QR.to === k ? 'true' : 'false', on: { click: () => { QR.to = k; qrDraw(); } } }, l)));
-    const print = '/dev/qr?' + new URLSearchParams(Object.assign({}, useIp ? { via: 'ip' } : {}, kid ? {} : { to: 'parent' })).toString();
+    const print = '/parent/qr?' + new URLSearchParams(Object.assign({}, useIp ? { via: 'ip' } : {}, kid ? {} : { to: 'parent' })).toString();
     qrEl.replaceChildren(
       h('div', { class: 'gh' }, h('span', {}, '扫码打开'), h('button', { type: 'button', class: 'x', 'aria-expanded': 'true', on: { click: () => qrToggle(false) } }, '收起')),
       h('div', { class: 'grp' }, h('div', { class: 'box' }, seg,

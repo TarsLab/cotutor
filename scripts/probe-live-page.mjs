@@ -553,8 +553,8 @@ try {
   const firstT = idxT.messages.find((m) => m.from === 'kid' && m.talk === talkId);
   ok('那个话题跑 activity 口语课、记着口语单是哪份', firstT?.activity?.name === '口语课' && String(firstT.activity.params?.口语单 ?? '').includes('🦆 duck'), JSON.stringify(firstT?.activity ?? null).slice(0, 200));
 
-  // ---- 左撇子镜像(kid.hand: left,工作台设置页切):白纸挪到右边、板在左边、按钮里头像在右头;回首页、「更多」的位置同右手(回首页浮在板的左上,「更多」在右上点得到) ----
-  const hp = await fetch(`${base}/api/config`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kid: { hand: 'left' } }) });
+  // ---- 按住说话在右边(kid.hand: left,家长端设置页切):白纸挪到右边、板在左边、按钮里头像在右头;回首页、「更多」的位置同右手(回首页浮在板的左上,「更多」在右上点得到) ----
+  const hp = await fetch(`${base}/api/parent/settings`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kid: { hand: 'left' } }) });
   await send('Page.navigate', { url: `${base}/?tutor=chinese-tutor&new=1` });
   await until(`Boolean(document.body && document.body.classList.contains('live') && document.body.classList.contains('hand-left'))`, 40);
   await untilNode(() => Boolean(conn()?.session), 8000);
@@ -571,7 +571,7 @@ try {
   await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: pm.x, y: pm.y - 130, button: 'left', buttons: 0, clickCount: 1 });
   await sleep(500);
   console.log('  ', await shot('live-mirror-ipad.png'));
-  ok('左撇子镜像:白纸贴右边(宽 360、上下不留边)、板从左边排起、按钮里头像在右头;回首页在左上点得到、「更多」在右上点得到;开场那句跟着在右边的白纸里;按着时按钮变蓝、竖条往右头的头像走', hp.status === 200 && mir.lv[1] === 0 && mir.lv[2] === 360 && mir.lv[3] === 0 && mir.lv[4] === 0 && mir.padR >= 380 && mir.padL <= 64 && mir.back[0] <= 40 && mir.back[1] <= 30 && mir.backTop && mir.avRight && mir.moreTop && mir.moreRight <= 24 && mir.ask && mir.hold.voice === 'hold' && mir.hold.right && mir.hold.bars > 0, JSON.stringify(mir));
+  ok('按住说话在右边:白纸贴右边(宽 360、上下不留边)、板从左边排起、按钮里头像在右头;回首页在左上点得到、「更多」在右上点得到;开场那句跟着在右边的白纸里;按着时按钮变蓝、竖条往右头的头像走', hp.status === 200 && mir.lv[1] === 0 && mir.lv[2] === 360 && mir.lv[3] === 0 && mir.lv[4] === 0 && mir.padR >= 380 && mir.padL <= 64 && mir.back[0] <= 40 && mir.back[1] <= 30 && mir.backTop && mir.avRight && mir.moreTop && mir.moreRight <= 24 && mir.ask && mir.hold.voice === 'hold' && mir.hold.right && mir.hold.bars > 0, JSON.stringify(mir));
 
   ok('页面没有报错', errors.length === 0, errors.slice(0, 3).join(' | '));
 } finally {

@@ -12,10 +12,10 @@ Definitions
 
   "Household" means one family living together.
 
-  "Brand Marks" means the cotutor logo, the name "cotutor" and the link
-  to the cotutor repository, as defined in `src/server/brand.ts`, wherever
-  the Software displays them, including the footer of the parent-side
-  pages (paths under `/parent`) and the header of the workbench (`/dev`).
+  "Brand Marks" means the cotutor logo (two nested letter "C" shapes
+  opening to the right), the name "cotutor" and a link to the cotutor
+  repository (currently https://github.com/TarsLab/cotutor), as the
+  Software displays them.
 
 1. Multi-tenant service. Unless you have written permission from the
    Licensor, you may not use the Software, or any work derived from it,
@@ -27,9 +27,11 @@ Definitions
    restricted by this condition.
 
 2. Brand Marks. You may not remove, hide, alter or replace the Brand
-   Marks in the Software or in any work derived from it, and the
-   parent-side pages and the workbench must continue to display them.
-   You may change themes, tutor names and avatars, and Workspace titles.
+   Marks in the Software or in any work derived from it. The pages the
+   Software provides for parents and its workbench, however they are
+   named or arranged, must continue to display them as the Software
+   does. You may change themes, tutor names and avatars, and Workspace
+   titles.
 
 3. Contributions. By contributing to the Software, you agree that:
    (a) the Licensor may change the license of the Software, including

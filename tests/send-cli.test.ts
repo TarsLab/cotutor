@@ -61,6 +61,12 @@ const date = localDate(new Date());
   const runFile = m ? await readRunFile(ws, 'chinese-tutor', date, m.job) : null;
   // photoFiles 是本机写法的绝对路径,包里按 YAML 写(Windows 上带引号、反斜杠转义)
   check('上下文包带 photos: 与 photoFiles:', (runFile?.prompt ?? '').includes(m?.photos?.[0] ?? '?') && (runFile?.prompt ?? '').includes(yamlScalar(join(root, m?.photos?.[0] ?? '?'))));
+  // 孩子的话照实时写(同孩子端:上下文包带 live:、不补提问卡、讲稿不截;嘴不在,接住与打断不带)
+  check('cotutor send 发的孩子的话照实时写:消息记 live、上下文包带 live: true', m?.live === true && (runFile?.prompt ?? '').includes('\n  live: true\n'), JSON.stringify({ live: m?.live }));
+  const sys = await run(['send', 'chinese-tutor', '系统起的一句', '--from', 'system', '--quiet']);
+  const sm = (await readIndex(ws, 'chinese-tutor', date))?.messages.find((x) => x.text === '系统起的一句');
+  const sRun = sm ? await readRunFile(ws, 'chinese-tutor', date, sm.job) : null;
+  check('--from system 不算实时:不记 live、上下文包没有 live:', sys.code === 0 && sm?.from === 'system' && sm.live === undefined && !(sRun?.prompt ?? '').includes('\n  live:'), sys.out + sys.err + JSON.stringify(sm));
 }
 
 {

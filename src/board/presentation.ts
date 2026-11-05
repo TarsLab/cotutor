@@ -489,7 +489,7 @@ export interface BoardMessage {
   reply: string | null;
   pending: boolean;
   section?: BoardSection | null;
-  /** 孩子这条带的作业照片(相对 workspace 根;R5):节头上回显缩略图 */
+  /** 孩子这条带的作业照片(相对 workspace 根):答拍给我看卡的进那张卡;别的由老师用 image 卡放上板 */
   photos?: string[];
   /** 看完小课堂后的第一条:这一节前面是小课堂卡 */
   lecture?: KidLecture;
@@ -500,7 +500,7 @@ export interface BoardMessage {
   /** 按住说话的(索引里带 voice):板上去口头禅、一行截断 */
   /** 首页按钮发的:按钮上的字,不是孩子说的 */
   fromHome?: boolean;
-  /** 实时的一轮(讲稿嘴照念,不配音) */
+  /** 实时的一轮(讲稿嘴照念):板上不看它,一律照实时的画(2026-11-04);只给字幕重放、录像用 */
   live?: boolean;
 }
 
@@ -508,7 +508,7 @@ export interface BoardMessage {
 export interface KidSaid {
   text: string;
   full: string;
-  /** 答拍给我看卡时拍来的照片:进那张卡的答案栏,节头不再回显 */
+  /** 答拍给我看卡时拍来的照片:放大放在那张卡里(2026-11-04 之前缩在卡下沿) */
   photos?: string[];
 }
 
@@ -517,25 +517,21 @@ export interface BoardEntry extends BoardSection {
   at?: string;
   /** 老师还在说:卡只增不改;前 ready 拍就绪了就能播(2026-09-13 之前是整轮跑完才播);整轮跑完换成正式的一节 */
   partial?: boolean;
-  /** 孩子问这节时拍的照片(节头上回显) */
-  photos?: string[];
   /** 这一节答的是看完小课堂后的第一问:节前画小课堂卡 */
   lecture?: KidLecture;
   /** 这一节答的是孩子从纸上交的画:节前一张孩子的画卡 */
   drawing?: KidDrawing;
-  /** 孩子引出这一节的那句话;saidOn = 它答的是哪一节的哪张问题卡(写进那张卡的答案栏),没有 = 在这一节开头单独一行。实时的节头不是它(看 head),它只给左栏用 */
+  /** 孩子引出这一节的那句话;saidOn = 它答的是哪一节的哪张问题卡。节头不是它(看 head):它给左栏用,答拍给我看卡的还进那张卡 */
   said?: KidSaid;
   saidOn?: { job: string; card: number };
-  /** 实时的一轮:卡闭合了就铺(不按拍);不出卡的板上留讲稿的字 */
-  live?: true;
-  /** 实时:这一轮开头是脑写的节头(只有一行 # 标题的文字卡),从这里起新的一件事,head 是它的标题(liveHead) */
+  /** 这一轮开头是脑写的节头(只有一行 # 标题的文字卡),从这里起新的一件事,head 是它的标题(liveHead) */
   head?: string;
-  /** 实时:这一轮开头没写节头,接着上一节画 */
+  /** 这一轮开头没写节头,接着上一节画 */
   cont?: true;
 }
 
 /**
- * 实时的一节怎么接:新一节的开头由脑定,不再机械是孩子那句。
+ * 一节怎么接(板上只有实时一种画法,2026-11-04;以前的话题也这样画):新一节的开头由脑定,不再机械是孩子那句。
  * 这一轮第一张卡是节头 → head;没写(只有讲稿、开头是别的卡、还没写出卡)→ cont,接着上一节。一轮中间的节头卡,是从那张卡起新一节
  */
 export function liveHead(s: Pick<BoardSection, 'cards'>): { head: string } | { cont: true } {
@@ -588,16 +584,16 @@ export function kidSaid(messages: readonly BoardMessage[]): Map<string, { said: 
 
 /**
  * 孩子端条目 → 板书节(没有 section 的条目不出节);
- * 孩子的话挂在它引出的那一节上(said / saidOn,kidSaid);还在跑的只有带 partial 板书(流式,已有卡或已有配好的句;实时的有句就算)才出节且标 partial,其余不出。
+ * 孩子的话挂在它引出的那一节上(said / saidOn,kidSaid);还在跑的只有带 partial 板书(流式,已有卡或已有句)才出节且标 partial,其余不出。
  */
 export function sectionsFromMessages(messages: readonly BoardMessage[]): BoardEntry[] {
   const out: BoardEntry[] = [];
   const says = kidSaid(messages);
   for (const m of messages) {
     const k = says.get(m.job);
-    const at = { ...(m.at ? { at: m.at } : {}), ...(m.photos?.length && !k?.said.photos ? { photos: m.photos } : {}), ...(m.lecture ? { lecture: m.lecture } : {}), ...(m.drawing ? { drawing: m.drawing } : {}), ...(k ? { said: k.said, ...(k.on ? { saidOn: k.on } : {}) } : {}), ...(m.live ? { live: true as const, ...liveHead(m.section ?? { cards: [] }) } : {}) };
+    const at = { ...(m.at ? { at: m.at } : {}), ...(m.lecture ? { lecture: m.lecture } : {}), ...(m.drawing ? { drawing: m.drawing } : {}), ...(k ? { said: k.said, ...(k.on ? { saidOn: k.on } : {}) } : {}), ...liveHead(m.section ?? { cards: [] }) };
     if (m.pending) {
-      if (m.section && m.section.partial && (m.section.cards.length || (m.live && m.section.lines.length))) out.push({ job: m.job, ...at, cards: m.section.cards, lines: m.section.lines, partial: true, ready: m.section.ready ?? 0, ...(m.section.layout ? { layout: m.section.layout } : {}) });
+      if (m.section && m.section.partial && (m.section.cards.length || m.section.lines.length)) out.push({ job: m.job, ...at, cards: m.section.cards, lines: m.section.lines, partial: true, ready: m.section.ready ?? 0, ...(m.section.layout ? { layout: m.section.layout } : {}) });
       continue;
     }
     if (m.section && (m.section.cards.length || m.section.lines.length)) {
@@ -669,11 +665,10 @@ export type PlayerEvent =
   | { type: 'liveDropped' }
   | { type: 'fresh'; sections: number[] };
 
-/** stop 只停声音(卡的点读、单词);paint = 把某节的标注画齐;showNow = 选中态照现在的位置;scrollLast = 滚到最后一节 */
+/** stop 只停声音(卡的点读、单词);paint = 把某节的标注画齐;scrollLast = 滚到最后一节。板上不描「念到哪张」(卡和讲稿不同步,2026-11-04 起以前的话题也这样) */
 export type PlayerEffect =
   | { kind: 'stop' }
   | { kind: 'render' }
-  | { kind: 'showNow' }
   | { kind: 'paint'; section: number }
   | { kind: 'scrollLast' };
 
@@ -695,7 +690,7 @@ export function step(model: PlayerModel, ev: PlayerEvent, ctx: PlayerCtx): { mod
     case 'liveStart':
       fx.push({ kind: 'paint', section: ev.section });
       m = { state: { section: ev.section, line: -1, status: 'thinking' } };
-      fx.push({ kind: 'render' }, { kind: 'showNow' });
+      fx.push({ kind: 'render' });
       break;
     case 'liveBeat':
       if (m.state.section !== ev.section || m.state.status !== 'thinking') break;
@@ -704,9 +699,9 @@ export function step(model: PlayerModel, ev: PlayerEvent, ctx: PlayerCtx): { mod
     case 'liveFinal':
       fx.push({ kind: 'paint', section: ev.section });
       if (m.state.section !== ev.section) break;
-      if (m.state.status !== 'thinking') { fx.push({ kind: 'showNow' }); break; }
+      if (m.state.status !== 'thinking') break;
       m = { state: playerAtEnd(secs) };
-      fx.push({ kind: 'render' }, { kind: 'showNow' });
+      fx.push({ kind: 'render' });
       break;
     case 'liveDropped':
       fx.push({ kind: 'stop' });
@@ -717,7 +712,7 @@ export function step(model: PlayerModel, ev: PlayerEvent, ctx: PlayerCtx): { mod
       if (!ev.sections.length) break;
       for (const i of ev.sections) fx.push({ kind: 'paint', section: i });
       m = { state: playerAtEnd(secs) };
-      fx.push({ kind: 'render' }, { kind: 'showNow' }, { kind: 'scrollLast' });
+      fx.push({ kind: 'render' }, { kind: 'scrollLast' });
       break;
   }
   return { model: m, effects: fx };

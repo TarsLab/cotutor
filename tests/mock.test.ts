@@ -20,35 +20,36 @@ interface Day { messages: Msg[]; pending: string | null }
   check('英语老师还没讲过', ((await get('/api/kid/conversations/english-tutor/today')).json as Day).messages.length === 0);
   const upM = await m.route('POST', '/api/kid/conversations/english-tutor/photos', { image: 'data:image/jpeg;base64,AAAA' });
   const pathM = (upM.json as { path: string }).path;
-  const photoMsg = await m.route('POST', '/api/kid/conversations/english-tutor/messages', { text: '', photos: [pathM] });
+  const photoMsg = await m.kidSend('english-tutor', { text: '', photos: [pathM] });
   const dM = (await get('/api/kid/conversations/english-tutor/today')).json as { messages: (Msg & { photos?: string[] })[] };
   check('mock 也收照片:传图回假路径、只带照片的消息成「(拍了一张)」、条目带 photos、占位图取得到', upM.status === 201 && pathM.startsWith('captures/2026-09-10/1630-') && photoMsg.status === 202 && dM.messages[0].question === '(拍了一张)' && dM.messages[0].photos?.join() === pathM && (await get('/api/kid/image?p=' + encodeURIComponent(pathM))).status === 200, JSON.stringify({ upM: upM.json, q: dM.messages[0]?.question }));
 
-  const post = await m.route('POST', '/api/kid/conversations/chinese-tutor/messages', { text: '不画脚呢?' });
+  const post = await m.kidSend('chinese-tutor', { text: '不画脚呢?' });
   check('发消息 202', post.status === 202, JSON.stringify(post));
+  check('HTTP 上不收孩子发的(同真服务:只走实时那条连接)', (await m.route('POST', '/api/kid/conversations/chinese-tutor/messages', { text: '走 HTTP' })).status === 405);
   const d1 = (await get('/api/kid/conversations/chinese-tutor/today')).json as Day;
   check('老师在想:条目 pending,today.pending 有 job', d1.messages.length === 2 && d1.messages[1].pending && d1.pending === d1.messages[1].job);
-  check('想的时候再发 → 409', (await m.route('POST', '/api/kid/conversations/chinese-tutor/messages', { text: '再问' })).status === 409);
+  check('想的时候再发 → 409', (await m.kidSend('chinese-tutor', { text: '再问' })).status === 409);
   await m.settle();
   const d2 = (await get('/api/kid/conversations/chinese-tutor/today')).json as Day;
   check('想完 → 追加下一节(脚本第二节),孩子的话在 question 里不在卡上', d2.pending === null && d2.messages[1].section?.cards[0].kind === 'text' && d2.messages[1].section?.cards[0].props.text === '先画完的人本来就赢了' && d2.messages[1].section?.cards[2].kind === 'choice' && d2.messages[1].question === '不画脚呢?' && d2.messages[1].reply === '你来选一选:画蛇添足,就是做到了还要怎样?', JSON.stringify(d2.messages[1].section?.cards[0]));
-  await m.route('POST', '/api/kid/conversations/chinese-tutor/messages', { text: '继续' });
+  await m.kidSend('chinese-tutor', { text: '继续' });
   await m.settle();
-  await m.route('POST', '/api/kid/conversations/chinese-tutor/messages', { text: '鼓励怎么写' });
+  await m.kidSend('chinese-tutor', { text: '鼓励怎么写' });
   await m.settle();
   const dh = (await get('/api/kid/conversations/chinese-tutor/today')).json as Day;
   check('田字格卡:第四节第一张是 tianzige「鼓励」带拼音,没有状态、不剥东西', dh.messages[3].section?.cards[0].kind === 'tianzige' && dh.messages[3].section?.cards[0].props.chars === '鼓励' && JSON.stringify(dh.messages[3].section?.cards[0].props.pinyin) === '["gǔ","lì"]' && dh.messages[3].section?.cards[1].kind === 'text', JSON.stringify(dh.messages[3].section?.cards));
   const hzOk = await get('/api/kid/tianzige/' + encodeURIComponent('鼓'));
   const hzNo = await get('/api/kid/tianzige/' + encodeURIComponent('ab'));
   check('笔顺数据:鼓 13 笔、每笔轮廓与中线成对;不是汉字 404', hzOk.status === 200 && (hzOk.json as { strokes: string[]; medians: number[][][] }).strokes.length === 13 && (hzOk.json as { medians: number[][][] }).medians.length === 13 && hzNo.status === 404, JSON.stringify(hzNo));
-  await m.route('POST', '/api/kid/conversations/chinese-tutor/messages', { text: '我说完了,画吧' });
+  await m.kidSend('chinese-tutor', { text: '我说完了,画吧' });
   await m.settle();
   const dp = (await get('/api/kid/conversations/chinese-tutor/today')).json as Day;
   const pc = dp.messages[4].section?.cards.find((c) => c.kind === 'paint');
   check('画图卡:刚出来是「画家在画」,没有图、没有家长那行;角色与分幅照下发', pc?.props.drawn === 'drawing' && !pc.props.pic && !pc.props.note && (pc.props.panels as string[]).length === 4 && (pc.props.words as string[]).join() === '播种,睡大觉,满满,羞愧', JSON.stringify(pc));
   const pimg = await get('/api/kid/image?p=' + encodeURIComponent('mock-paint/x-2.png'));
   check('画图卡的占位图:方的四格 svg', pimg.status === 200 && String(pimg.html).includes('viewBox="0 0 1024 1024"'));
-  await m.route('POST', '/api/kid/conversations/chinese-tutor/messages', { text: '还有吗' });
+  await m.kidSend('chinese-tutor', { text: '还有吗' });
   await m.settle();
   const d3 = (await get('/api/kid/conversations/chinese-tutor/today')).json as Day;
   check('脚本用完 → 只有一句收尾话(一节只有讲稿;末句是问句,补了提问卡)', d3.messages.length === 6 && d3.messages[2].section?.cards[0].kind === 'text' && d3.messages[5].section?.cards.length === 1 && d3.messages[5].section?.cards[0].props.ask === true && d3.messages[5].section?.lines.length === 1 && d3.messages[5].reply === '这个我们明天接着说,好不好?');
@@ -66,16 +67,16 @@ interface Day { messages: Msg[]; pending: string | null }
   const put = await m.route('PUT', `/api/kid/conversations/math-tutor/cards/${mj}/${ci}`, { picked: [0] });
   const md3 = (await get('/api/kid/conversations/math-tutor/today')).json as Day;
   check('PUT 状态 → today 里卡上有 state,答案还是没有', put.status === 200 && JSON.stringify(md3.messages[0].section!.cards[ci].state) === '{"picked":[0]}' && !('answer' in md3.messages[0].section!.cards[ci].props), JSON.stringify(md3.messages[0].section!.cards[ci]));
-  const sub = await m.route('POST', '/api/kid/conversations/math-tutor/messages', { text: '', action: 'submit', focus: { card: `${mj}/${ci}` } });
+  const sub = await m.kidSend('math-tutor', { text: '', action: 'submit', focus: { card: `${mj}/${ci}` } });
   await m.settle();
   const md4 = (await get('/api/kid/conversations/math-tutor/today')).json as Day;
-  check('交过的卡锁住(同真服务):再交 409、再改 409、下发带 submitted', (await m.route('POST', '/api/kid/conversations/math-tutor/messages', { text: '', action: 'submit', focus: { card: `${mj}/${ci}` } })).status === 409 && (await m.route('PUT', `/api/kid/conversations/math-tutor/cards/${mj}/${ci}`, { picked: [1] })).status === 409 && (md4.messages[0].section!.cards[ci] as { submitted?: boolean }).submitted === true);
+  check('交过的卡锁住(同真服务):再交 409、再改 409、下发带 submitted', (await m.kidSend('math-tutor', { text: '', action: 'submit', focus: { card: `${mj}/${ci}` } })).status === 409 && (await m.route('PUT', `/api/kid/conversations/math-tutor/cards/${mj}/${ci}`, { picked: [1] })).status === 409 && (md4.messages[0].section!.cards[ci] as { submitted?: boolean }).submitted === true);
   check('交给老师:空文本 + action 也 202,问句是「(交了答案,没说话)」,下一节追加(反过来想 + 选择题)', sub.status === 202 && md4.messages[1].question === '(交了答案,没说话)' && md4.messages[1].reply !== null && !('action' in md4.messages[1]) && md4.messages[1].section?.cards.some((c) => c.kind === 'choice') === true, JSON.stringify(md4.messages[1]));
-  await m.route('POST', '/api/kid/conversations/math-tutor/messages', { text: '继续' });
+  await m.kidSend('math-tutor', { text: '继续' });
   await m.settle();
   const md5 = (await get('/api/kid/conversations/math-tutor/today')).json as Day;
-  check('「继续」空文本也行,空文本没 action 400;第三节有小课堂卡', md5.messages[2].question === '继续' && md5.messages[2].section?.cards.some((c) => c.kind === 'lecture') === true && (await m.route('POST', '/api/kid/conversations/math-tutor/messages', { text: '  ' })).status === 400);
-  await m.route('POST', '/api/kid/conversations/english-tutor/messages', { text: 'apple' });
+  check('「继续」空文本也行,空文本没 action 400;第三节有小课堂卡', md5.messages[2].question === '继续' && md5.messages[2].section?.cards.some((c) => c.kind === 'lecture') === true && (await m.kidSend('math-tutor', { text: '  ' })).status === 400);
+  await m.kidSend('english-tutor', { text: 'apple' });
   await m.settle();
   const rd = ((await get('/api/kid/conversations/english-tutor/today')).json as Day).messages[0];
   check('英语老师:点读卡 + 图片卡 + 末句问句', rd.section?.cards[1].kind === 'read' && rd.section?.cards[2].kind === 'image' && rd.section?.cards[2].props.src === 'captures/2026-09-10/fruits.png' && rd.reply?.includes('apple') === true && rd.section?.lines[1].marks.length === 3, JSON.stringify(rd.section?.lines));
@@ -97,7 +98,7 @@ interface Day { messages: Msg[]; pending: string | null }
   const putCh = await m.route('PUT', `/api/kid/conversations/chinese-tutor/cards/${chJob}/${chi}`, { picked: [0] });
   const dF = (await get('/api/kid/conversations/chinese-tutor/today')).json as Day;
   check('选择题状态 PUT 假存、读回,答案仍剥;坏状态 400', putCh.status === 200 && JSON.stringify(dF.messages[1].section!.cards[chi].state) === '{"picked":[0]}' && !('answer' in dF.messages[1].section!.cards[chi].props) && (await m.route('PUT', `/api/kid/conversations/chinese-tutor/cards/${chJob}/${chi}`, { picked: 'x' })).status === 400);
-  check('空消息 400;没这位老师 404;卡的配音一律是静音(不用浏览器合成声)', (await m.route('POST', '/api/kid/conversations/math-tutor/messages', { text: '  ' })).status === 400 && (await get('/api/kid/conversations/nobody/today')).status === 404 && (await get('/api/audio/math-tutor/x.mp3')).contentType === 'audio/wav');
+  check('空消息 400;没这位老师 404;卡的配音一律是静音(不用浏览器合成声)', (await m.kidSend('math-tutor', { text: '  ' })).status === 400 && (await get('/api/kid/conversations/nobody/today')).status === 404 && (await get('/api/audio/math-tutor/x.mp3')).contentType === 'audio/wav');
   const page = await get('/');
   check('孩子端页面(录像、预览也是它)不念浏览器合成声:卡没配好音就不出声,mock 的段是静音', !/speechSynthesis|SpeechSynthesisUtterance|synth/.test(page.html ?? '') && !/speechSynthesis/.test((await get('/reel')).html ?? ''));
   check('页面:标题、按住说话、内联了板书逻辑、舞台、没有家长入口、没有「错误」', page.html?.includes('小明的老师们') === true && page.html?.includes('发消息或按住说话') === true && page.html?.includes('function nowCard(') === true && page.html?.includes('id="stage"') === true && page.html?.includes('交给老师') === true && !page.html?.includes('export ') && !page.html?.includes('/parent') && !page.html?.includes('错误'), String(page.html?.length));
@@ -129,7 +130,7 @@ interface Day { messages: Msg[]; pending: string | null }
 {
   // 流式模拟:想的期间 pending 条目带 partial 板书,卡一张张增,答案照剥;想完换成正式的一节
   const m = createMock({ delayMs: 600, now: () => new Date('2026-09-10T16:30:00') });
-  await m.route('POST', '/api/kid/conversations/math-tutor/messages', { text: '一样的' });
+  await m.kidSend('math-tutor', { text: '一样的' });
   const seen: number[] = [];
   let partialOk = true;
   for (let i = 0; i < 100; i++) {
@@ -149,16 +150,16 @@ interface Day { messages: Msg[]; pending: string | null }
   type TDay = Omit<Day, 'messages'> & { thread: string | null; messages: (Msg & { thread: string })[] };
   const d0 = (await m.route('GET', '/api/kid/conversations/chinese-tutor/today')).json as TDay;
   check('today 带当前话题,消息带 thread', d0.thread === d0.messages[0].job && d0.messages[0].thread === d0.thread);
-  const r1 = await m.route('POST', '/api/kid/conversations/chinese-tutor/messages', { text: '换个', newThread: true });
+  const r1 = await m.kidSend('chinese-tutor', { text: '换个', newThread: true });
   await m.settle();
   const j1 = (r1.json as { job: string; thread: string });
-  const r2 = await m.route('POST', '/api/kid/conversations/chinese-tutor/messages', { text: '接着' });
+  const r2 = await m.kidSend('chinese-tutor', { text: '接着' });
   await m.settle();
-  const r3 = await m.route('POST', '/api/kid/conversations/chinese-tutor/messages', { text: '回旧的', thread: d0.thread });
+  const r3 = await m.kidSend('chinese-tutor', { text: '回旧的', thread: d0.thread });
   await m.settle();
   const d1 = (await m.route('GET', '/api/kid/conversations/chinese-tutor/today')).json as TDay;
   check('新话题 = 自己的 job;缺省接当前(新)话题;指定旧话题回旧话题;today.thread = 末条的', j1.thread === j1.job && (r2.json as { thread: string }).thread === j1.thread && (r3.json as { thread: string }).thread === d0.thread && d1.thread === d0.thread && d1.messages.map((x) => x.thread).join() === [d0.thread, j1.thread, j1.thread, d0.thread].join(), JSON.stringify(d1.messages.map((x) => x.thread)));
-  check('不存在的话题 400', (await m.route('POST', '/api/kid/conversations/chinese-tutor/messages', { text: 'x', thread: 'nope' })).status === 400);
+  check('不存在的话题 400', (await m.kidSend('chinese-tutor', { text: 'x', thread: 'nope' })).status === 400);
   const hist = (await m.route('GET', '/api/kid/conversations/chinese-tutor/history')).json as { today: string; days: { date: string; threads: { thread: string; title: string; sections: number }[] }[] };
   check('history:今天两个话题(新的在前)+ 昨天一个', hist.today === '2026-09-10' && hist.days.length === 2 && hist.days[0].date === '2026-09-10' && hist.days[0].threads.map((t) => t.thread).join() === [j1.thread, d0.thread].join() && hist.days[0].threads[0].title === '换个' && hist.days[1].date === '2026-09-09' && hist.days[1].threads.length === 1 && hist.days[1].threads[0].title.startsWith('昨天问的'), JSON.stringify(hist));
   const yd = (await m.route('GET', '/api/kid/conversations/chinese-tutor/2026-09-09')).json as TDay;
@@ -168,7 +169,7 @@ interface Day { messages: Msg[]; pending: string | null }
 {
   const m = createMock({ delayMs: 0, now: () => new Date('2026-09-10T16:30:00') });
   const home = ((await m.route('GET', '/api/kid/home')).json as { home: string }).home;
-  const send = (tutor: string, body: unknown) => m.route('POST', `/api/kid/conversations/${tutor}/messages`, body);
+  const send = (tutor: string, body: unknown) => m.kidSend(tutor, body);
   type D = { messages: { job: string; thread: string; question: string | null }[] };
   const last = async (tutor: string) => { await m.settle(); const d = (await m.route('GET', `/api/kid/conversations/${tutor}/today`)).json as D; return d.messages[d.messages.length - 1]; };
   check('via:不是发布的那份 / 按钮越界 → 400', (await send('chinese-tutor', { text: '', via: { home: '2020-01-01-0000', button: 0 } })).status === 400 && (await send('chinese-tutor', { text: '', via: { home, button: 9 } })).status === 400);

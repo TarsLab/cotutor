@@ -14,6 +14,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { QUIET_ARGS } from './_quiet.mjs';
+import { liveSend } from './_live-send.mjs';
 
 const keep = process.argv.includes('--keep');
 const outAt = process.argv.indexOf('--out');
@@ -63,11 +64,11 @@ try {
   const homeId = (await api('GET', '/api/kid/home')).json?.home;
 
   // ---- 今天先有两个话题:新话题进去的自由话题、你说我画 ----
-  const free = await api('POST', '/api/kid/conversations/chinese-tutor/messages', { text: '鼓励怎么写', newThread: true, via: { home: homeId, button: 'new' } });
+  const free = await liveSend(base, 'chinese-tutor', { text: '鼓励怎么写', newThread: true, via: { home: homeId, button: 'new' } });
   await settle('chinese-tutor');
-  const act = await api('POST', '/api/kid/conversations/chinese-tutor/messages', { text: '', newThread: true, via: { home: homeId, button: 0 } });
+  const act = await liveSend(base, 'chinese-tutor', { text: '', newThread: true, via: { home: homeId, button: 0 } });
   await settle('chinese-tutor');
-  await api('POST', '/api/kid/conversations/chinese-tutor/messages', { text: '小熊和小猴种西瓜', thread: act.json?.thread });
+  await liveSend(base, 'chinese-tutor', { text: '小熊和小猴种西瓜', thread: act.json?.thread });
   await settle('chinese-tutor');
   const freeThread = free.json?.thread;
   const actThread = act.json?.thread;
@@ -96,7 +97,8 @@ try {
 
   await openHome();
   const buttons = await evaluate(`[...document.querySelectorAll('#deck .pc.front .bt:not(.bt-extra)')].map((b) => b.querySelector('.btx').textContent)`);
-  ok('首页语文牌:新话题、你说我画;没有应用加的「接着刚才的」', buttons.join('|') === '新话题|你说我画', JSON.stringify(buttons));
+  // 2026-11-03 起老师牌上常驻三块方砖(预习、检查作业、复习,HOME_TILES),排在新话题后面
+  ok('首页语文牌:新话题、三块方砖、你说我画;没有应用加的「接着刚才的」', buttons.join('|') === '新话题|预习|检查作业|复习|你说我画', JSON.stringify(buttons));
 
   // ---- 新话题:左栏的「接着刚才的」→ 回到那个自由话题 ----
   await tapButton('新话题');

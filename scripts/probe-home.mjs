@@ -12,6 +12,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { QUIET_ARGS } from './_quiet.mjs';
+import { liveSend } from './_live-send.mjs';
 
 const keep = process.argv.includes('--keep');
 const outAt = process.argv.indexOf('--out');
@@ -52,7 +53,7 @@ const settle = async (tutor) => { for (let i = 0; i < 80; i++) { const d = (awai
 let browser = null;
 try {
   // ---- 语文老师先讲一轮,首页的「接着」指它 ----
-  const first = await api('POST', '/api/kid/conversations/chinese-tutor/messages', { text: '讲讲板书', newThread: true });
+  const first = await liveSend(base, 'chinese-tutor', { text: '讲讲板书', newThread: true });
   await settle('chinese-tutor');
   const thread = first.json?.thread;
   const today = new Date();

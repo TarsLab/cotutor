@@ -14,6 +14,7 @@ import { probeDir, spawn } from './_guard.mjs';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { QUIET_ARGS } from './_quiet.mjs';
+import { liveSend } from './_live-send.mjs';
 
 const args = process.argv.slice(2);
 const outAt = args.indexOf('--out');
@@ -106,10 +107,10 @@ try {
   await send('Network.enable');
 
   // ---- 一、画板卡铺满 ----
-  // mock 的语文老师第三轮回复里有画板卡:先经接口发到第三轮(每条等老师写完)
+  // mock 的语文老师第三轮回复里有画板卡:先经实时那条连接发到第三轮(每条等老师写完)
   const day = async () => (await (await fetch(`${base}/api/kid/conversations/chinese-tutor/today`)).json());
   for (let i = (await day()).messages.length; i < 3; i++) {
-    for (let k = 0; k < 60; k++) { const r = await fetch(`${base}/api/kid/conversations/chinese-tutor/messages`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: `问第 ${i + 1} 句`, live: true }) }); if (r.status === 202) break; await sleep(300); }
+    for (let k = 0; k < 60; k++) { const r = await liveSend(base, 'chinese-tutor', { text: `问第 ${i + 1} 句` }); if (r.status === 202) break; await sleep(300); }
     for (let k = 0; k < 100 && (await day()).pending; k++) await sleep(300);
   }
   await send('Page.navigate', { url: `${base}/?tutor=chinese-tutor&stage=2.1` });

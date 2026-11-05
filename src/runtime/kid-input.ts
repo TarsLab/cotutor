@@ -1,7 +1,6 @@
 /**
- * 孩子端发一条的验与拼:HTTP 的 POST /api/kid/conversations/<老师>/messages 与实时老师那条线(src/runtime/live/call.ts)共用,
- * 都经 Runner.accept 进来。验正文、话题、首页按钮、小课堂、activity、照片,拼成 Runner.send 的入参;不对回 reject(状态码 + 错误名),
- * 怎么告诉孩子端由各自的协议定(HTTP 回 JSON,WS 回 err)。不起老师。
+ * 孩子端发一条的验与拼:孩子端只走实时那条连接(src/runtime/live/turns.ts;HTTP 的发 2026-11-04 删了),经 Runner.accept 进来。
+ * 验正文、话题、首页按钮、小课堂、activity、照片,拼成 Runner.send 的入参;不对回 reject(状态码 + 错误名),连接上回 {t:'err'}。不起老师。
  */
 import { FocusSchema, HomeViaSchema, DeviceSchema, type ActivityValue, type ConversationMessage } from '../schema/index.ts';
 import { BUNDLE_ID_RE } from '../board/cards/kind.ts';

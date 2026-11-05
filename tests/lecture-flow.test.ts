@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { check, done } from './_check.ts';
+import { kidSend } from './_kid-send.ts';
 import { FAKE_RUNTIMES, startFakeTeacher } from './_fake-teacher.ts';
 
 const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-lecture-flow-')));
@@ -39,7 +40,7 @@ const now = new Date(2026, 9, 6, 19, 0);
 const ctx = createContext(loadWorkspace(root), { now: () => now });
 const wait = async (): Promise<void> => { for (let i = 0; i < 200 && ctx.runner.running('math-tutor'); i++) await new Promise((r) => setTimeout(r, 25)); };
 const draft = (md: string): string => { mkdirSync(join(root, 'home'), { recursive: true }); writeFileSync(join(root, 'home', 'draft.md'), md); return md; };
-const send = (body: unknown) => route('POST', '/api/kid/conversations/math-tutor/messages', ctx, body);
+const send = (body: unknown) => kidSend(ctx, 'math-tutor', body);
 
 try {
   const bad = await checkHome(ctx.ws, draft('```tutor math-tutor\n小课堂 2026-01-01-nope 不在的课\n```\n\n## 为什么\n\n- 测试\n'), now);

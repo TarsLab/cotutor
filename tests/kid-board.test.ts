@@ -137,7 +137,7 @@ const lectureCard: BoardCard = { kind: 'lecture', props: { bundle: '2026-09-04-g
     { job: '7', question: '还在说', reply: null, pending: true, section: { cards: [{ kind: 'text', props: { text: '先出的卡' } }], lines: [L('第一句')], partial: true } },
     { job: '8', question: '还在说但没卡', reply: null, pending: true, section: { cards: [], lines: [L('只有句')], partial: true } },
   ]);
-  check('有 section 用 section;没有 section / 还在跑 / 出错的不出节;流式已出卡的出 partial 节', entries.map((e) => e.job).join() === '1,5,6,7' && entries[0].cards.length === 6 && entries[3].partial === true && entries[3].cards.length === 1 && !entries.slice(0, 3).some((e) => e.partial), JSON.stringify(entries.map((e) => e.job)));
+  check('有 section 用 section;没有 section / 还在跑 / 出错的不出节;流式已出卡或已有句的出 partial 节(板上只有实时一种画法)', entries.map((e) => e.job).join() === '1,5,6,7,8' && entries[0].cards.length === 6 && entries[3].partial === true && entries[3].cards.length === 1 && entries[4].partial === true && entries[4].lines.length === 1 && !entries.slice(0, 3).some((e) => e.partial), JSON.stringify(entries.map((e) => e.job)));
   check('只有卡没讲稿、只有讲稿没卡都成节', entries[1].lines.length === 0 && entries[1].cards.length === 1 && entries[2].cards.length === 0 && entries[2].lines.length === 1);
   check('孩子的话不上板', !entries.some((e) => e.cards.some((c) => cardTexts(c).some((t) => t.includes('画蛇添足是什么')))));
   check('目录名:封面 > 有名字的文字卡 > 第一张有字的卡 > 第一句,截 14 字', sectionTitle(section) === '画蛇添足' && sectionTitle({ cards: [{ kind: 'text', props: { style: 'step', title: '拼', text: 'x' } }], lines: [] }) === '拼' && sectionTitle({ cards: [{ kind: 'text', props: { text: '一二三四五六七八九十一二三四五六' } }], lines: [] }) === '一二三四五六七八九十一二三四…' && sectionTitle({ cards: [], lines: [L('只有一句')] }) === '只有一句');
@@ -197,7 +197,7 @@ check('isQuestion:半角、全角问号都算;句号不算', isQuestion('每人�
   check('kidSaid:话题第一句、上一节问在填空上 → 单独一行(on = null)', lone.get('x')?.on === null && lone.get('y')?.on === null);
   const es = sectionsFromMessages(msgs);
   check('sectionsFromMessages:节带上 said / saidOn', es.find((e) => e.job === 'b')?.saidOn?.job === 'a' && es.find((e) => e.job === 'b')?.said?.text === '嗯……每个人两个吧' && es.find((e) => e.job === 'a')?.said === undefined);
-  // 拍给我看卡(cards/photo/card.md):末句问不问都是它;拍来的照片进它的答案栏,节头不再回显;只发照片时补的「(拍了一张)」不写
+  // 拍给我看卡(cards/photo/card.md):末句问不问都是它;拍来的照片放进那张卡;只发照片时补的「(拍了一张)」不写
   const snap: BoardSection = { cards: [q('看图说话'), { kind: 'photo', props: { text: '看图说话的那幅图' } }], lines: [L('把那幅图拍下来,发给我。', { anchor: 1 })] };
   const snapAsk: BoardSection = { ...snap, lines: [L('把那幅图拍下来,好吗?', { anchor: 0 })] };
   check('askCard:有拍给我看卡就是它(末句不是问句、问句锚着别的卡都算);还在写 → 没有', askCard(snap) === 1 && askCard(snapAsk) === 1 && askCard({ ...snap, partial: true }) === null);
@@ -212,10 +212,10 @@ check('isQuestion:半角、全角问号都算;句号不算', isQuestion('每人�
   const talkBack = kidSaid([pm[0], { job: 'r', question: '我找不到那幅图', reply: 'x', pending: false, section: told }]);
   check('kidSaid:没拍、直接说话,那句也进拍给我看卡的答案栏', talkBack.get('r')?.on?.card === 1 && talkBack.get('r')?.said.text === '我找不到那幅图' && !talkBack.get('r')?.said.photos);
   const pe = sectionsFromMessages(pm).find((e) => e.job === 'r');
-  check('sectionsFromMessages:照片进了答案栏,节头不再带 photos', pe?.saidOn?.card === 1 && pe.photos === undefined);
+  check('sectionsFromMessages:照片跟着孩子的话挂在那张卡上', pe?.saidOn?.card === 1 && pe.said?.photos?.length === 1 && !('photos' in (pe ?? {})));
   const notSnap = sectionsFromMessages([{ ...pm[0], section: asks }, pm[1]]).find((e) => e.job === 'r');
-  check('sectionsFromMessages:答的不是拍给我看卡,照片照旧在节头', notSnap?.photos?.length === 1 && !notSnap.said?.photos);
-  // 实时:节头是脑写的那张 # 标题卡,没写就接着上一节;孩子的话照旧挂在 said 上(给左栏),不是节头
+  check('sectionsFromMessages:答的不是拍给我看卡,照片不上节头(老师用 image 卡放上板)', notSnap !== undefined && !('photos' in notSnap) && !notSnap.said?.photos);
+  // 节头是脑写的那张 # 标题卡,没写就接着上一节;孩子的话照旧挂在 said 上(给左栏),不是节头。不是实时的轮(以前的话题、命令行发的)也这样接
   const head: BoardSection = { cards: [{ kind: 'text', props: { title: '补读音:瀑、布、穷、尽', text: '', heading: true } }, q('瀑 pù')], lines: [L('先看「瀑」。')] };
   const plain: BoardSection = { cards: [q('布 bù')], lines: [L('对,pù。')] };
   const talkOnly: BoardSection = { cards: [], lines: [L('嗯,我在。')] };
@@ -232,7 +232,7 @@ check('isQuestion:半角、全角问号都算;句号不算', isQuestion('每人�
   check('实时:没写节头 → cont,没有 head;孩子那句照旧在 said(给左栏)', by('i')?.cont === true && by('i')?.head === undefined && by('i')?.said?.text === '没见过', JSON.stringify(by('i')));
   check('实时:只有讲稿的一轮也是 cont', by('j')?.cont === true);
   check('实时:还在写的一轮,节头卡先到了就有 head', by('k')?.partial === true && by('k')?.head === '补读音:瀑、布、穷、尽');
-  check('板书模式:不带 head / cont', by('l')?.head === undefined && by('l')?.cont === undefined);
+  check('不是实时的轮也照这样接:开头是节头卡 → head', by('l')?.head === '补读音:瀑、布、穷、尽' && by('l')?.cont === undefined && !('live' in (by('l') ?? {})));
   check('liveHead:节头标题是空的不算', 'cont' in liveHead({ cards: [{ kind: 'text', props: { title: ' ', text: '', heading: true } }] }));
 }
 

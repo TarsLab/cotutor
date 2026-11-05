@@ -13,7 +13,7 @@ delete process.env.COTUTOR_WORKSPACE;
 
 const { initWorkspace } = await import('../src/app/cli/init.ts');
 const { loadWorkspace } = await import('../src/app/workspace.ts');
-const { createContext, kidSendInput, route } = await import('../src/app/http/app.ts');
+const { createContext, route } = await import('../src/app/http/app.ts');
 const { KID_LOG_JS } = await import('../src/ui/kid/kid-log.ts');
 const { readDevices, readKidLog, renameDevice } = await import('../src/runtime/journal/kid-log.ts');
 const { deviceLabel } = await import('../src/schema/kid-device.ts');
@@ -190,8 +190,8 @@ check('起名、去掉名字;没有这台 → false', (await renameDevice(ctx.ws
 check('流水文件是一行一个 JSON', readFileSync(join(root, '.cotutor', 'kid-log', '2026-10-22.jsonl'), 'utf8').trim().split('\n').every((l) => JSON.parse(l).device));
 
 // ---- 消息记设备 ----
-const s1 = await kidSendInput(ctx, 'chinese-tutor', { text: '你好' }, '2026-10-22', id);
-const s2 = await kidSendInput(ctx, 'chinese-tutor', { text: '你好' }, '2026-10-22', 'not-an-id');
+const s1 = await ctx.runner.accept('chinese-tutor', { text: '你好' }, '2026-10-22', id);
+const s2 = await ctx.runner.accept('chinese-tutor', { text: '你好' }, '2026-10-22', 'not-an-id');
 check('孩子发的一条带上设备编号;不像编号的不带', 'input' in s1 && s1.input.deviceId === id && 'input' in s2 && s2.input.deviceId === undefined);
 
 done();

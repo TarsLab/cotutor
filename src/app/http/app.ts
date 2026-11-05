@@ -50,7 +50,7 @@ import { ActivityConflict, checkDevActivity, findDevActivity, listDevActivities,
 import { checkDevTutorFile, hasDevTutorFile, listDevTutorFiles, readDevTutorFile, restoreDevTutorFile, saveDevTutorFile } from './dev-tutor-files.ts';
 import { doctorWorkspace } from '../cli/doctor.ts';
 import { VOICE_GALLERY_PAGE } from '../../ui/dev/voice-gallery-page.ts';
-import { BusyError, Runner, type SendInput } from '../../runtime/runner.ts';
+import { BusyError, Runner } from '../../runtime/runner.ts';
 import { sendFile } from './send-file.ts';
 import { talkRoute } from '../talk/route.ts';
 import { parentHomeRoute } from './parent-home.ts';
@@ -73,7 +73,7 @@ import { lettersData } from '../../ui/kid/letters.ts';
 import { fixtureOf, rawView } from './raw-view.ts';
 import { DeviceSchema } from '../../schema/index.ts';
 import { CanvasStateSchema } from '../../board/cards/canvas.ts';
-import { PAPER_KEY_RE, adoptPaper, dropPaper, readPaper, writePaper } from '../../board/paper.ts';
+import { PAPER_KEY_RE, dropPaper, readPaper, writePaper } from '../../board/paper.ts';
 import { TTS_VOICES } from '../../media/tts.ts';
 import { addTutorFile, readTutorFile, removeTutorFile, writeTutorFile } from '../cli/tutors.ts';
 import type { MouthIndex } from '../../runtime/journal/mouth-index.ts';
@@ -260,12 +260,6 @@ export async function kidDay(ctx: AppContext, tutor: string, date: string): Prom
   // 小课堂卡:课读不读得出、那一段的起止,每次现读
   for (const m of messages) if (m.section) { bakeSectionSoon(ctx.ws.dirs.bundles, m.section); m.section = await enrichPaints(ctx.ws, tutor, date, m.job, m.at, await enrichLectures(ctx.ws, m.section)); }
   return { tutor, date, messages, pending: active && active.date === date ? active.job : null, thread: currentThread(index) };
-}
-
-/** 孩子端发一条的验与拼(旧入口,测试用):Runner.accept(./kid-input.ts)的结果换成路由的形状 */
-export async function kidSendInput(ctx: AppContext, tutor: string, body: unknown, date: string, deviceId?: string | null): Promise<{ input: SendInput } | { error: RouteResult }> {
-  const r = await ctx.runner.accept(tutor, body, date, deviceId);
-  return 'reject' in r ? { error: { status: r.reject.status, json: { error: r.reject.error, ...(r.reject.message ? { message: r.reject.message } : {}) } } } : r;
 }
 
 /** 家长板书页的一天:形状同 KidDay;答案不剥,系统发的也在 */
@@ -843,13 +837,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         const days = Math.min(365, Math.max(1, Number(url.searchParams.get('days') ?? 30) || 30));
         return { status: 200, json: await kidHistory(ctx, tutor, days) };
       }
-      if (tail === 'messages' && method === 'POST') {
-        const r = await kidSendInput(ctx, tutor, body, date, client.device);
-        if ('error' in r) return r.error;
-        const started = await ctx.runner.send(tutor, r.input);
-        if (started.thread === started.job) void adoptPaper(ws, tutor, started.date, started.thread);
-        return { status: 202, json: { tutor, date: started.date, job: started.job, thread: started.thread } };
-      }
+      // 孩子端发一条只走实时那条连接(/api/live/<老师>/ws,src/runtime/live/turns.ts);2026-11-04 删了 HTTP 的发
       return { status: 405, json: { error: 'method_not_allowed' } };
     }
     // 字幕重放:实时那一轮嘴照念的声音在哪、多长、讲稿每句从哪开始(毫秒);只给实时的轮,没落过声音 404
@@ -1080,6 +1068,8 @@ export async function route(method: string, path: string, ctx: AppContext, body?
           thread: typeof body.thread === 'string' ? body.thread : undefined,
           photos,
           device: device?.data,
+          // 孩子的话照实时写(同孩子端、同 replay:上下文包带 live:、不补提问卡、讲稿不截);嘴不在,接住与打断不带。系统发的不算(2026-11-04)
+          ...(from === 'kid' ? { live: {} } : {}),
         });
         return { status: 202, json: { tutor, date: started.date, job: started.job, thread: started.thread, runtime: started.plan.runtime, resume: started.plan.resume } };
       }

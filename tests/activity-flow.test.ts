@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { check, done } from './_check.ts';
+import { kidSend as liveSend } from './_kid-send.ts';
 import { FAKE_RUNTIMES, startFakeTeacher } from './_fake-teacher.ts';
 
 const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-activity-flow-')));
@@ -63,7 +64,7 @@ const ctx = createContext(loadWorkspace(root), { now: () => now, draw: async ({ 
 const wait = async (tutor: string): Promise<void> => {
   for (let i = 0; i < 200 && ctx.runner.running(tutor); i++) await new Promise((r) => setTimeout(r, 25));
 };
-const kidSend = (tutor: string, body: unknown) => route('POST', `/api/kid/conversations/${tutor}/messages`, ctx, body);
+const kidSend = (tutor: string, body: unknown) => liveSend(ctx, tutor, body);
 const draft = (text: string): void => {
   mkdirSync(join(root, 'home'), { recursive: true });
   writeFileSync(join(root, 'home', 'draft.md'), text);
@@ -229,6 +230,7 @@ try {
     check('eval:模拟的那个,孩子的话来自模拟孩子,画了 → 「不出画图卡」不过,报出来', b.name === '模拟的' && !b.pass && b.runs[0].grades[0].why?.includes('画图卡') === true && said[0].includes('小熊种瓜'), JSON.stringify(b.runs[0]));
     const evalMsgs = (await readIndex({ ...ctx.ws, dirs: { ...ctx.ws.dirs, conversations: join(root, 'evals') } }, 'chinese-tutor', a.runs[0].date)).messages.filter((m) => m.thread === a.runs[0].thread);
     check('eval:每轮记着 eval,不写记忆', evalMsgs.length === 3 && evalMsgs.every((m) => m.eval === true));
+    check('eval:每轮照实时写(真孩子都是实时的:消息记 live)', evalMsgs.every((m) => m.live === true), JSON.stringify(evalMsgs.map((m) => m.live)));
     check('eval:每轮回调,画图卡那轮标出来', lines[0] === '写死的#1:1:你说我画' && lines.includes('写死的#1:3:画图:画'), lines.join(' '));
     check('eval:落在 evals/,不进孩子的对话;报告写了', readFileSync(join(root, r.file), 'utf8').includes('"activity": "你说我画"') && !(await readIndex(ctx.ws, 'chinese-tutor', DATE)).messages.some((m) => m.thread === a.runs[0].thread && m.text === '整段' && m.job === a.runs[0].thread));
     writeFileSync(exFile, '---\nactivity: 你说我画\n---\n\n## 记\n孩子: 记住它\n最多轮: 2\n判:\n- 不出画图卡\n');

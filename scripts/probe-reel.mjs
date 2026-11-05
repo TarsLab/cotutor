@@ -2,8 +2,8 @@
 /**
  * 看录像(录像 = 孩子的屏幕 + 录像栏)的手动验收(不进 pnpm test,要本机 Chrome;走 mock,不花钱):
  * 起 cotutor mock,孩子端再发一条「继续」(话题里两轮)→ Chrome 开 /parent,点语文老师的话题 → 顶上「看录像」→
- * 上半是 iframe 里的孩子端(/reel,按 iPad 横屏开、等比缩)、下半是录像栏;孩子屏幕上是孩子端的样子(孩子的话当节头、输入条在、没有旁注);
- * 一开始孩子刚开口:实时老师页的样子(左栏 + 白板,不是实时的轮也一样)、话挂在板尾、头像在想(没有占位卡)、录像栏写「等老师」;播着往前走(不是实时的轮写完整节铺上、不念);拖到头两节都在;拖回开头又空了;
+ * 上半是 iframe 里的孩子端(/reel,按 iPad 横屏开、等比缩)、下半是录像栏;孩子屏幕上是孩子端的样子(板上只有实时一种画法:孩子的话在左栏、不当节头;输入条在、没有旁注);
+ * 一开始孩子刚开口:实时老师页的样子(左栏 + 白板)、那句在左栏、头像在想(没有占位卡)、录像栏写「等老师」;播着往前走(写完整节铺上、不念);拖到头两节都在;拖回开头又空了;
  * 关掉「跳过空白」变长;倍速;点进度条上的点跳过去;录像里的弹窗(注入一段实录);退出后原样重开这个话题。iPad 横屏与手机各截一张。
  *
  * 用法:node scripts/probe-reel.mjs [--out <截图目录>] [--keep](留下 mock)
@@ -13,6 +13,7 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { QUIET_ARGS } from './_quiet.mjs';
+import { liveSend } from './_live-send.mjs';
 
 const keep = process.argv.includes('--keep');
 const outAt = process.argv.indexOf('--out');
@@ -35,7 +36,7 @@ for (let i = 0; i < 40; i++) { try { if ((await fetch(`${base}/api/health`)).ok)
 let browser = null;
 try {
   // 孩子再说一句,话题里两轮
-  await fetch(`${base}/api/kid/conversations/chinese-tutor/messages`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: '继续' }) });
+  await liveSend(base, 'chinese-tutor', { text: '继续' });
   for (let i = 0; i < 40; i++) { const d = await (await fetch(`${base}/api/kid/conversations/chinese-tutor/today`)).json(); if (!d.pending && d.messages.length >= 2) break; await sleep(250); }
 
   browser = spawn(chrome, [...QUIET_ARGS, '--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', '--autoplay-policy=no-user-gesture-required', `--remote-debugging-port=${cdp}`, '--window-size=1180,820', `--user-data-dir=${join(tmp, 'chrome')}`, `${base}/parent`], { stdio: 'ignore' });
@@ -101,14 +102,14 @@ try {
   const s0 = await evaluate(`({ board: document.querySelector('#board') ? 'shown' : 'none', screen: !document.querySelector('#rl-screen').hidden, src: document.querySelector('#rl-frame').getAttribute('src'), fw: document.querySelector('#rl-frame').style.width, scale: document.querySelector('#rl-frame').style.transform, max: Number(document.querySelector('#rl-seek').max), marks: [...document.querySelectorAll('#rl-marks i')].map((i) => i.className), cap: document.querySelector('#rl-cap').textContent, clock: document.querySelector('#rl-clock').textContent, sub: document.querySelector('#rl-sub').textContent, fill: (() => { const a = document.querySelector('#rl-screen').getBoundingClientRect(), b = document.querySelector('#rl-frame').getBoundingClientRect(); return Math.abs(a.width - b.width) < 2 || Math.abs(a.height - b.height) < 2; })() })`);
   ok('进录像:整页盖一层(家长页上没有板书),上半是孩子的屏幕(/reel,按 iPad 横屏 1180 宽开、等比缩到铺满),下半录像栏;时间是「放到哪 / 一共多久」、下面小字当时几点', s0.board === 'none' && s0.screen && s0.src.startsWith('/reel?') && s0.fw === '1180px' && /scale\(0\.\d+\)/.test(s0.scale) && /^\d+:\d\d \/ \d+:\d\d$/.test(s0.clock) && /^当时 \d\d:\d\d:\d\d$/.test(s0.sub) && s0.fill, JSON.stringify(s0));
   ok('进度条上的点:两次开口、停下等孩子', s0.marks.filter((c) => c === 'said').length === 2 && s0.marks.includes('ask') && s0.max > 0, JSON.stringify(s0.marks));
-  const k0 = await kid(`({ rlk: document.body.classList.contains('rlk'), pill: !document.querySelector('#pill').hidden, bar: getComputedStyle(document.querySelector('#bar')).pointerEvents, secs: document.querySelectorAll('#board .sec').length, pend: document.querySelectorAll('#board > .sh.said.pend').length, wait: document.querySelectorAll('#board > .wait-card').length, live: document.body.classList.contains('live'), think: document.body.classList.contains('pending'), notes: document.querySelectorAll('.notes').length, reelUi: !document.querySelector('#reel').hidden, mo: document.querySelector('#c-mo').hidden, back: document.querySelector('#back-today').hidden })`);
+  const k0 = await kid(`({ rlk: document.body.classList.contains('rlk'), pill: !document.querySelector('#pill').hidden, bar: getComputedStyle(document.querySelector('#bar')).pointerEvents, secs: document.querySelectorAll('#board .sec').length, kidCol: document.querySelector('#lv-kid').textContent, saidHeads: document.querySelectorAll('#board .sh.said').length, wait: document.querySelectorAll('#board > .wait-card').length, live: document.body.classList.contains('live'), think: document.body.classList.contains('pending'), notes: document.querySelectorAll('.notes').length, reelUi: !document.querySelector('#reel').hidden, mo: document.querySelector('#c-mo').hidden, back: document.querySelector('#back-today').hidden })`);
   ok('孩子的屏幕:孩子端的样子——输入条露着(点不动)、没有旁注、没有录像栏、没有「以前的」「回到今天」', k0.rlk && k0.pill && k0.bar === 'none' && k0.notes === 0 && !k0.reelUi && k0.mo && k0.back, JSON.stringify(k0));
-  ok('一开始:孩子刚开口——实时老师页的样子、话挂在板尾、头像在想(没有占位卡)、板上没有节;录像栏写「等老师」', k0.live && k0.secs === 0 && k0.pend === 1 && k0.wait === 0 && k0.think && s0.cap.startsWith('⏳ 等老师'), JSON.stringify({ k0, cap: s0.cap }));
+  ok('一开始:孩子刚开口——实时老师页的样子、那句在左栏(板上不挂)、头像在想(没有占位卡)、板上没有节;录像栏写「等老师」', k0.live && k0.secs === 0 && k0.kidCol.length > 0 && k0.saidHeads === 0 && k0.wait === 0 && k0.think && s0.cap.startsWith('⏳ 等老师'), JSON.stringify({ k0, cap: s0.cap }));
   await until(`(() => { const d = document.querySelector('#rl-frame').contentDocument; return d.querySelectorAll('#board .sec .c:not(.pend)').length > 0; })()`, 60);
   const s1 = await evaluate(`({ v: Number(document.querySelector('#rl-seek').value), cap: document.querySelector('#rl-cap').textContent })`);
-  const k1 = await kid(`({ secs: document.querySelectorAll('#board .sec').length, head: (document.querySelector('#board .sec .sh.said .ka-t') || {}).textContent || '', pend: document.querySelectorAll('#board > .sh.said.pend').length, shown: document.querySelectorAll('#board .sec .c:not(.pend)').length, now: document.querySelectorAll('#board .c.now').length })`);
+  const k1 = await kid(`({ secs: document.querySelectorAll('#board .sec').length, saidHeads: document.querySelectorAll('#board .sh.said').length, kidCol: document.querySelector('#lv-kid').textContent, shown: document.querySelectorAll('#board .sec .c:not(.pend)').length, now: document.querySelectorAll('#board .c.now').length })`);
   // 不是实时的轮(mock 从接口发的):写完那一刻整节铺上、不念
-  ok('播着:进度往前走;第一节写完整节出来,节头是孩子的话(挂在板尾的那句收了);不念', s1.v > 0 && k1.secs === 1 && k1.head.length > 0 && k1.pend === 0 && k1.shown >= 1 && s1.cap !== '🔊 老师在念', JSON.stringify({ s1, k1 }));
+  ok('播着:进度往前走;第一节写完整节出来,孩子的话还在左栏、不当节头;不描「念到哪张」;不念', s1.v > 0 && k1.secs === 1 && k1.saidHeads === 0 && k1.kidCol.length > 0 && k1.shown >= 1 && k1.now === 0 && s1.cap !== '🔊 老师在念', JSON.stringify({ s1, k1 }));
   console.log('  ', await shot('reel-ipad.png'));
 
   // ---- 拖到头 / 拖回开头 ----
@@ -125,8 +126,8 @@ try {
   ok('拖到头:两节的标注都画上了;停着一秒板没重画', mk.marks.length === 2 && mk.marks.every((n) => n > 0) && mk.rebuilt === 0, JSON.stringify(mk));
   await seek(0);
   await sleep(300);
-  const s3 = await kid(`({ secs: document.querySelectorAll('#board .sec').length, pend: document.querySelectorAll('#board > .sh.said.pend').length })`);
-  ok('拖回开头:板上又空了,只有孩子刚说的那句', s3.secs === 0 && s3.pend === 1, JSON.stringify(s3));
+  const s3 = await kid(`({ secs: document.querySelectorAll('#board .sec').length, kidCol: document.querySelector('#lv-kid').textContent })`);
+  ok('拖回开头:板上又空了,左栏只有孩子刚说的那句', s3.secs === 0 && s3.kidCol.length > 0, JSON.stringify(s3));
 
   // ---- 跳过空白、倍速、点标记 ----
   const m0 = await evaluate(`({ max: Number(document.querySelector('#rl-seek').max), on: document.querySelector('#rl-skip').checked, label: document.querySelector('#rl-skip').closest('label').textContent, sw: document.querySelector('#rl-skip').getAttribute('role') })`);

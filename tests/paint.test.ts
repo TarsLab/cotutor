@@ -5,6 +5,7 @@ import { existsSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } fr
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { check, done } from './_check.ts';
+import { kidSend } from './_kid-send.ts';
 import { FAKE_RUNTIMES, startFakeTeacher } from './_fake-teacher.ts';
 import { keysHome } from './_keys.ts';
 
@@ -172,7 +173,7 @@ const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
   let calls = 0;
   const now = new Date('2026-10-11T02:00:00Z');
   const ctx = createContext(loadWorkspace(root), { now: () => now, draw: async ({ model }) => { calls++; return { ok: true, data: PNG, model, ms: 10 }; } });
-  const sent = await route('POST', '/api/kid/conversations/chinese-tutor/messages', ctx, { text: '我说完了,画图吧' });
+  const sent = await kidSend(ctx, 'chinese-tutor', { text: '我说完了,画图吧' });
   check('发出去', sent.status === 202, JSON.stringify(sent.json));
   for (let i = 0; i < 100 && ctx.runner.running('chinese-tutor'); i++) await new Promise((r) => setTimeout(r, 50));
   await ctx.runner.flush();
@@ -188,7 +189,7 @@ const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
   check('图经 /api/kid/image 取得到', img.status === 200 && img.contentType === 'image/png', JSON.stringify({ status: img.status }));
   const pday = (await route('GET', `/api/conversations/chinese-tutor/${date}/board`, ctx)).json as { messages: { section?: BoardSection }[] };
   check('家长端:多一行 note', (pday.messages[0].section?.cards[n]?.props as { note?: string }).note?.startsWith('画好了') === true, JSON.stringify(pday.messages[0].section?.cards[n]?.props));
-  await route('POST', '/api/kid/conversations/chinese-tutor/messages', ctx, { text: '小猴没有脸红' });
+  await kidSend(ctx, 'chinese-tutor', { text: '小猴没有脸红' });
   for (let i = 0; i < 100 && ctx.runner.running('chinese-tutor'); i++) await new Promise((r) => setTimeout(r, 50));
   await ctx.runner.flush();
   const idx2 = await readIndex(ctx.ws, 'chinese-tutor', date);

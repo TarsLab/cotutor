@@ -38,15 +38,15 @@ const THINK1: PlayerState = { section: 1, line: -1, status: 'thinking' };
 const rows: Row[] = [
   { name: '任何 + 换老师 → 回到开头', model: M(THINK1), sections: [done0, live], ev: { type: 'reset' }, want: (m, fx) => m.state.status === 'idle' && m.state.section === -1 && fx === '' },
   { name: '任何 + 停声音 → 只停卡的声音,位置不动', model: M(THINK1), sections: [done0, live], ev: { type: 'halt' }, want: (m, fx) => m.state === THINK1 && fx === 'stop' },
-  { name: '老师开始写(流式第一拍)→ 画齐、老师在写、选中态', model: M({ section: 0, line: 2, status: 'waiting' }), sections: [done0, live], ev: { type: 'liveStart', section: 1 }, want: (m, fx) => m.state.section === 1 && m.state.status === 'thinking' && fx === 'paint1,render,showNow' },
+  { name: '老师开始写(流式第一拍)→ 画齐、老师在写', model: M({ section: 0, line: 2, status: 'waiting' }), sections: [done0, live], ev: { type: 'liveStart', section: 1 }, want: (m, fx) => m.state.section === 1 && m.state.status === 'thinking' && fx === 'paint1,render' },
   { name: '老师在写这节 + 又就绪一拍 → 画齐、重画字幕', model: M(THINK1), sections: [done0, live], ev: { type: 'liveBeat', section: 1 }, want: (m, fx) => m.state === THINK1 && fx === 'paint1,render' },
   { name: '不在写这节 + 就绪一拍 → 不管', model: M({ section: 0, line: 2, status: 'waiting' }), sections: [done0, live], ev: { type: 'liveBeat', section: 1 }, want: (_m, fx) => fx === '' },
-  { name: '老师在写这节 + 写完(末句问句)→ 画齐、等孩子答', model: M(THINK1), sections: [done0, { ...done0 }], ev: { type: 'liveFinal', section: 1 }, want: (m, fx) => m.state.status === 'waiting' && m.state.section === 1 && fx === 'paint1,render,showNow' },
-  { name: '老师在写这节 + 写完(末句不是问句)→ 写完', model: M(THINK1), sections: [done0, said], ev: { type: 'liveFinal', section: 1 }, want: (m, fx) => m.state.status === 'done' && fx === 'paint1,render,showNow' },
-  { name: '这节不在写了 + 写完 → 画齐、选中态', model: M({ section: 1, line: 1, status: 'done' }), sections: [done0, said], ev: { type: 'liveFinal', section: 1 }, want: (m, fx) => m.state.status === 'done' && fx === 'paint1,showNow' },
+  { name: '老师在写这节 + 写完(末句问句)→ 画齐、等孩子答', model: M(THINK1), sections: [done0, { ...done0 }], ev: { type: 'liveFinal', section: 1 }, want: (m, fx) => m.state.status === 'waiting' && m.state.section === 1 && fx === 'paint1,render' },
+  { name: '老师在写这节 + 写完(末句不是问句)→ 写完', model: M(THINK1), sections: [done0, said], ev: { type: 'liveFinal', section: 1 }, want: (m, fx) => m.state.status === 'done' && fx === 'paint1,render' },
+  { name: '这节不在写了 + 写完 → 画齐', model: M({ section: 1, line: 1, status: 'done' }), sections: [done0, said], ev: { type: 'liveFinal', section: 1 }, want: (m, fx) => m.state.status === 'done' && fx === 'paint1' },
   { name: '别的节 + 写完 → 只画齐', model: M({ section: 0, line: 2, status: 'waiting' }), sections: [done0, said], ev: { type: 'liveFinal', section: 1 }, want: (m, fx) => m.state.section === 0 && fx === 'paint1' },
   { name: '老师出错撤掉 → 停声音、停在末尾', model: M(THINK1), sections: [done0], ev: { type: 'liveDropped' }, want: (m, fx) => m.state.status === 'waiting' && m.state.section === 0 && fx === 'stop,render' },
-  { name: '整节到了(没流过)→ 画齐、停在末尾、滚到最后一节', model: M({ section: -1, line: -1, status: 'idle' }), sections: [done0, said], ev: { type: 'fresh', sections: [0, 1] }, want: (m, fx) => m.state.status === 'done' && m.state.section === 1 && fx === 'paint0,paint1,render,showNow,scrollLast' },
+  { name: '整节到了(没流过)→ 画齐、停在末尾、滚到最后一节', model: M({ section: -1, line: -1, status: 'idle' }), sections: [done0, said], ev: { type: 'fresh', sections: [0, 1] }, want: (m, fx) => m.state.status === 'done' && m.state.section === 1 && fx === 'paint0,paint1,render,scrollLast' },
   { name: '整节到了但是空的 → 不管', model: M(THINK1), sections: [done0], ev: { type: 'fresh', sections: [] }, want: (m, fx) => m.state === THINK1 && fx === '' },
 ];
 for (const r of rows) {

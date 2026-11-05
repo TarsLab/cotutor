@@ -7,6 +7,7 @@ import { existsSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } fr
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { check, done } from './_check.ts';
+import { kidSend } from './_kid-send.ts';
 import { FAKE_RUNTIMES, startFakeTeacher } from './_fake-teacher.ts';
 
 const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-play-')));
@@ -36,7 +37,7 @@ const lines = (f: string): Record<string, unknown>[] => (existsSync(f) ? readFil
 
 // 真时钟:老师进程的 startedAt 用的是真钟,弹窗与改卡要落在两轮开口之间。精确的算术在 reel.test 里用固定时刻测
 try {
-  const r1 = await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: '讲讲板书' });
+  const r1 = await kidSend(ctx, 'math-tutor', { text: '讲讲板书' });
   const job = (r1.json as { job: string }).job;
   const date = (r1.json as { date: string }).date;
   await wait();
@@ -73,12 +74,12 @@ try {
   const think = (cards[0].at as number) - openAt - 300;
   await route('POST', '/api/kid/conversations/math-tutor/play', ctx, { thread: job, sentAt: Date.now(), records: [{ at: Date.now(), k: 'stage', job, card: 1, open: false }] });
   await sleep(50);
-  const r2 = await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: '', action: 'submit', focus: { card: `${job}/1` } });
+  const r2 = await kidSend(ctx, 'math-tutor', { text: '', action: 'submit', focus: { card: `${job}/1` } });
   const job2 = (r2.json as { job: string }).job;
   await wait();
   {
     // 交过的卡锁住(kid-view 的 submittedCards):再改、再交都 409;孩子端下发的卡带 submitted
-    const again = await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: '', action: 'submit', focus: { card: `${job}/1` } });
+    const again = await kidSend(ctx, 'math-tutor', { text: '', action: 'submit', focus: { card: `${job}/1` } });
     const edit = await route('PUT', `/api/kid/conversations/math-tutor/cards/${job}/1`, ctx, { picked: [0] });
     const kd = (await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { job: string; section?: { cards: { submitted?: boolean }[] } }[] };
     const cs = kd.messages.find((m) => m.job === job)?.section?.cards ?? [];

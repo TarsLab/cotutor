@@ -7,6 +7,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpath
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { check, done } from './_check.ts';
+import { kidSend as liveSend } from './_kid-send.ts';
 import { FAKE_RUNTIMES, startFakeTeacher } from './_fake-teacher.ts';
 
 const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-home-flow-')));
@@ -52,7 +53,7 @@ const ctx = createContext(loadWorkspace(root), { now: () => now });
 const wait = async (tutor: string): Promise<void> => {
   for (let i = 0; i < 200 && ctx.runner.running(tutor); i++) await new Promise((r) => setTimeout(r, 25));
 };
-const kidSend = (tutor: string, body: unknown) => route('POST', `/api/kid/conversations/${tutor}/messages`, ctx, body);
+const kidSend = (tutor: string, body: unknown) => liveSend(ctx, tutor, body);
 type Btn = { id: string | number; kind: string; label: string; date?: string; thread?: string; brief?: string };
 type KidHome = { home: string | null; cards: { kind: string; props: { tutor?: string; buttons?: Btn[]; chars?: string } }[]; figshot: { port: number } | null };
 const kidHome = async (): Promise<KidHome> => (await route('GET', '/api/kid/home', ctx)).json as KidHome;
@@ -177,8 +178,8 @@ for: 2026-09-18
   // ---- 按钮发来的 via ----
   const bad = await kidSend('chinese-tutor', { text: '', via: { home: '2026-09-17-2130', button: 0 } });
   const bad2 = await kidSend('chinese-tutor', { text: '', via: { home: h1.home, button: 7 } });
-  const bad3 = await kidSend('nobody-tutor', { text: '', via: { home: h1.home, button: 0 } });
-  check('via 对不上(旧的那份、越界、没有这位老师)→ 400 / 404', bad.status === 400 && bad2.status === 400 && bad3.status === 404, JSON.stringify([bad.json, bad2.json]));
+  // 没有这位老师的连不上实时(升级被拒,live-flow.test),到不了这里
+  check('via 对不上(旧的那份、越界)→ 400', bad.status === 400 && bad2.status === 400, JSON.stringify([bad.json, bad2.json]));
 
   const s0 = await kidSend('chinese-tutor', { text: '', newThread: true, via: { home: h1.home, button: 0 } });
   await wait('chinese-tutor');

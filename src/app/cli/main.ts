@@ -569,7 +569,8 @@ export async function main(argv: string[]): Promise<void> {
           ctx.runner.onEvent((e) => { if (e.tutor === tutor && keep(e.event)) process.stdout.write(`${formatEvent(e.event)}\n`); });
         }
         const activity = activityName ? await activityRunFor(ws.root, tutor, activityName, typeof flags.param === 'string' ? flags.param : '') : undefined;
-        const started = await ctx.runner.send(tutor, { from: from as MessageFrom, text, runtime: typeof flags.runtime === 'string' ? flags.runtime : undefined, newThread: flags.new === true || Boolean(activity), ...(photos.length ? { photos } : {}), ...(activity ? { activity } : {}) });
+        // 孩子的话照实时写(同孩子端:上下文包带 live:、不补提问卡、讲稿不截;嘴不在,接住与打断不带);--from system 不算
+        const started = await ctx.runner.send(tutor, { from: from as MessageFrom, text, runtime: typeof flags.runtime === 'string' ? flags.runtime : undefined, newThread: flags.new === true || Boolean(activity), ...(photos.length ? { photos } : {}), ...(activity ? { activity } : {}), ...(from === 'kid' ? { live: {} } : {}) });
         if (!json) process.stdout.write(`→ ${tutor} ${started.date} ${started.job} 话题 ${started.thread}(${started.plan.runtime}${started.plan.resume ? ',resume ' + started.plan.session : ',新会话'})…\n`);
         const index = await started.done;
         const m = index.messages.find((x) => x.job === started.job);

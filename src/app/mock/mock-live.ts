@@ -55,7 +55,7 @@ export function mockLiveUpgrade(mock: Mock) {
     const begin = async (body: Record<string, unknown>, caught: string | null): Promise<void> => {
       const my = turn;
       if (caught) say('catch', caught);
-      const r = await mock.route('POST', `/api/kid/conversations/${tutor}/messages`, { ...body, live: true });
+      const r = await mock.kidSend(tutor, body);
       if (my !== turn) return;
       if (r.status !== 202) { send({ t: 'err', status: r.status, error: (r.json as { error?: string } | undefined)?.error ?? 'error' }); return; }
       const { job, thread } = r.json as { job: string; thread: string };

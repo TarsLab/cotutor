@@ -3,10 +3,10 @@
  * 作业照片线(R5)的手动验收(不进 pnpm test,要本机 Chrome;老师是假 CLI,不花钱):
  * 自己起一个临时 workspace(运行时指假老师 tests/_fake-teacher.ts)+ 一个 HTTP 的 serve →
  * 把服务自己画的 /icon-192.png 当「照片」传上去(POST …/photos)→ 只带照片发一条 → 假老师「看图」:Read 那张、板书出 image 卡 + canvas 卡照片做底 →
- * 用 Chrome DevTools 协议开孩子端:节头有缩略图、直开画板舞台、iframe 里 excalidraw 的场景有一个 image 元素(底图)与一份 files →
+ * 用 Chrome DevTools 协议开孩子端:老师的图片卡放着那张照片(节头不挂)、直开画板舞台、iframe 里 excalidraw 的场景有一个 image 元素(底图)与一份 files →
  * 画一笔「给老师看」→ .cards/<n>.png 落盘;家长端那轮的问句下有缩略图。
- * 再走发照片屏:相册选 2 张 → 裁一张、画一笔(没有配一句话那条了)→ 一条消息两张 jpg;点节头小图看大图。
- * 老师都走实时:嘴是假百炼;发照片屏发的那轮是实时的,节头是老师写的、不挂照片。
+ * 再走发照片屏:相册选 2 张 → 裁一张、画一笔(没有配一句话那条了)→ 一条消息两张 jpg;板上哪一节的节头都不挂照片。
+ * 老师都走实时:嘴是假百炼;发消息都经实时那条连接(_live-send.mjs),板上只有实时一种画法(节头是老师写的,孩子的照片由老师的图片卡放上板;答拍给我看卡的见 probe-photo-card)。
  *
  * 用法:node scripts/probe-photo.mjs [--keep](留下临时 workspace 与 serve 不杀,自己再看)[--shots <目录>](发照片屏:刚打开 / 裁剪中 / 编辑完 三张截图)
  */
@@ -15,6 +15,7 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { QUIET_ARGS } from './_quiet.mjs';
+import { liveSend } from './_live-send.mjs';
 
 const keep = process.argv.includes('--keep');
 const shotsAt = process.argv.indexOf('--shots');
@@ -58,7 +59,7 @@ try {
   const up = await api('POST', '/api/kid/conversations/math-tutor/photos', { image: `data:image/png;base64,${png.toString('base64')}` });
   const photo = up.json?.path;
   ok('传图:201、落 captures/<日期>/<HHMM>-1.png、文件在', up.status === 201 && /^captures\/\d{4}-\d{2}-\d{2}\/\d{4}-1\.png$/.test(photo ?? '') && existsSync(join(root, photo ?? 'x')), JSON.stringify(up.json));
-  const sent = await api('POST', '/api/kid/conversations/math-tutor/messages', { text: '', photos: [photo], device: 'tablet-landscape' });
+  const sent = await liveSend(base, 'math-tutor', { text: '', photos: [photo], device: 'tablet-landscape' });
   ok('只带照片发一条 → 202', sent.status === 202, JSON.stringify(sent.json));
   let today = null;
   for (let i = 0; i < 80; i++) { today = (await api('GET', '/api/kid/conversations/math-tutor/today')).json; if (today && !today.pending && today.messages.every((m) => !m.pending)) break; await sleep(250); }
@@ -70,7 +71,7 @@ try {
   const pm = parentDay?.index?.messages.find((m) => m.job === sent.json?.job);
   ok('家长端索引:消息带 photos、转录里 Read 了那张', pm?.photos?.[0] === photo && JSON.stringify(parentDay?.runs?.[pm?.job] ?? []).includes(photo), JSON.stringify(pm?.photos));
 
-  // ---- Chrome:孩子端节头缩略图 → 直开画板舞台 → excalidraw 场景里有底图 → 画一笔给老师看 ----
+  // ---- Chrome:老师的图片卡放着那张照片 → 直开画板舞台 → excalidraw 场景里有底图 → 画一笔给老师看 ----
   const secIdx = 0;
   const url = `${base}/?tutor=math-tutor&stage=${secIdx}.${canvasIdx}`;
   browser = spawn(chrome, [...QUIET_ARGS, '--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', `--remote-debugging-port=${cdp}`, '--window-size=1180,820', `--user-data-dir=${join(home, 'chrome')}`, url], { stdio: 'ignore' });
@@ -87,8 +88,8 @@ try {
   let scene = null;
   for (let i = 0; i < 80 && !scene; i++) { scene = await evaluate(`(() => { const w = document.querySelector('#st-frame')?.contentWindow; const a = w && w.__excalidraw; if (!a) return null; const els = a.getSceneElements(); const img = els.filter((e) => e.type === 'image'); return img.length ? { images: img.length, files: Object.keys(a.getFiles()).length, locked: img[0].locked, opacity: img[0].opacity, layer: img[0].customData?.layer, w: img[0].width, h: img[0].height } : null; })()`); if (!scene) await sleep(250); }
   ok('画板舞台:excalidraw 场景里有一个 image 元素做底(锁定、灰一档、layer base)、files 里一份', scene && scene.images === 1 && scene.files === 1 && scene.locked === true && scene.opacity === 45 && scene.layer === 'base' && scene.w > 0, JSON.stringify(scene));
-  const head = await evaluate(`(() => { const im = document.querySelector('#board .sh img.ph'); return im ? { src: im.getAttribute('src'), h: im.getBoundingClientRect().height } : null; })()`);
-  ok('孩子端节头有照片缩略图(经 /api/kid/image 取)', head && head.src.includes('/api/kid/image?p=') && head.h > 0, JSON.stringify(head));
+  const shown = await evaluate(`(() => { const im = document.querySelector('#board .c-image img'); return { src: im ? im.getAttribute('src') : null, head: document.querySelectorAll('#board .sh img').length }; })()`);
+  ok('孩子端:老师的图片卡放着那张照片(经 /api/kid/image 取),节头不挂照片', typeof shown.src === 'string' && shown.src.includes('/api/kid/image?p=') && shown.src.includes(encodeURIComponent(photo)) && shown.head === 0, JSON.stringify(shown));
   const compact = await evaluate(`(() => { const th = document.querySelector('#board .c-canvas .th.base img'); return th ? th.getAttribute('src') : null; })()`);
   ok('紧凑态画板卡上先是那张照片', typeof compact === 'string' && compact.includes('/api/kid/image?p=') && compact.includes(encodeURIComponent(photo)), String(compact));
   const drew = await evaluate(`(async () => {
@@ -151,14 +152,9 @@ try {
   ok('发出去:屏关、一条消息、只有照片(问句是「拍了 2 张」)、两张照片都是 jpg', closed && mine?.question === '(拍了 2 张)' && mine?.photos?.length === 2 && mine.photos.every((p) => /^captures\/\d{4}-\d{2}-\d{2}\/\d{4}-\d+\.jpg$/.test(p)), JSON.stringify({ closed, q: mine?.question, photos: mine?.photos }));
   const sizes = await evaluate(`Promise.all(${JSON.stringify(mine?.photos ?? [])}.map((p) => new Promise((r) => { const im = new Image(); im.onload = () => r([im.naturalWidth, im.naturalHeight]); im.onerror = () => r(null); im.src = '/api/kid/image?p=' + encodeURIComponent(p); })))`);
   ok('第一张是裁过的(宽 < 高)、第二张没改(512 见方,不放大)', sizes?.[0] && sizes[0][0] < sizes[0][1] && sizes[0][1] === 192 && sizes?.[1]?.[0] === 512 && sizes[1][1] === 512, JSON.stringify(sizes));
-  // 实时的轮节头是老师写的,孩子发的照片不挂节头;从接口发的那轮(第一节)还挂着小图
-  const lb = await evaluate(`(async () => {
-    const live = document.querySelectorAll('#board .sec .sh.lh img.ph').length;
-    const ph = document.querySelector('#board .sec .sh img.ph');
-    ph.click(); await new Promise((r) => setTimeout(r, 300));
-    return { live, on: document.querySelector('#lb').classList.contains('on'), n: document.querySelector('#lb-n').textContent, img: document.querySelector('#lb .zoom img').getAttribute('src') };
-  })()`);
-  ok('点节头的小图 → 看大图(一张不写张数);实时那轮的节头不挂照片', lb?.on && lb.n === '' && lb.live === 0 && lb.img.includes(encodeURIComponent('captures/')), JSON.stringify(lb));
+  // 节头是老师写的,孩子发的照片哪一节都不挂节头(老师要放就用图片卡)
+  const heads = await evaluate(`document.querySelectorAll('#board .sec .sh img').length`);
+  ok('板上哪一节的节头都不挂照片', heads === 0, String(heads));
   ws.close();
 } catch (err) {
   console.error('✗ 探针出错:', err instanceof Error ? err.message : err);

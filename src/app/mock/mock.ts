@@ -509,6 +509,8 @@ export interface MockOptions {
 
 export interface Mock {
   route(method: string, path: string, body?: unknown): Promise<MockRouteResult>;
+  /** 孩子端发一条(同真服务只走实时那条连接:mock-live.ts 收到了交给它,测试也用它);回的形状同路由,收下 202 + {job, thread} */
+  kidSend(tutor: string, body: unknown): Promise<MockRouteResult>;
   /** 等所有还在「想」的老师答完(测试用) */
   settle(): Promise<void>;
   /** 等这一轮的老师答完(mock 的假嘴等它写完再「念」) */
@@ -693,7 +695,8 @@ export function createMock(opts: MockOptions = {}): Mock {
       setTimeout(reveal, tick);
     });
   };
-  const route = async (method: string, path: string, body?: unknown): Promise<MockRouteResult> => {
+  /** internal = 实时那条连接交来的孩子发的一条(kidSend);HTTP 上不收(同真服务,2026-11-04 删了 HTTP 的发) */
+  const routeIn = async (method: string, path: string, body?: unknown, internal = false): Promise<MockRouteResult> => {
     await lecturesLoaded;
     const url = new URL(path, 'http://x');
     const p = url.pathname;
@@ -898,7 +901,7 @@ export function createMock(opts: MockOptions = {}): Mock {
         const out: KidDay = { tutor: name, date: tail, messages: await Promise.all(old.map(kidMessage)), pending: null, thread: old.length ? old[old.length - 1].thread : null };
         return { status: 200, json: out };
       }
-      if (tail === 'messages' && method === 'POST') {
+      if (tail === 'messages' && method === 'POST' && internal) {
         if (!isObj(body) || typeof body.text !== 'string') return { status: 400, json: { error: 'bad_request' } };
         const action = body.action === 'submit' ? ('submit' as const) : undefined;
         const photos = Array.isArray(body.photos) ? (body.photos as unknown[]).filter((x): x is string => typeof x === 'string') : [];
@@ -1047,7 +1050,9 @@ export function createMock(opts: MockOptions = {}): Mock {
     })().catch((err) => { res.writeHead(500, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'internal', message: String(err) })); });
   };
   const settleJob = async (job: string): Promise<void> => { await inflight.get(job); };
-  const mock: Mock = { route, settle, settleJob, handler, listen: null };
+  const route = (method: string, path: string, body?: unknown): Promise<MockRouteResult> => routeIn(method, path, body);
+  const kidSend = (tutor: string, body: unknown): Promise<MockRouteResult> => routeIn('POST', `/api/kid/conversations/${tutor}/messages`, isObj(body) ? { ...body, live: true } : body, true);
+  const mock: Mock = { route, kidSend, settle, settleJob, handler, listen: null };
   return mock;
 }
 

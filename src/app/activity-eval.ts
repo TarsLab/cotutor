@@ -135,7 +135,8 @@ export async function evalActivity(ws: Workspace, tutor: string, name: string, o
       let photos: string[] = [];
       let lecture = e.lecture ? { bundle: e.lecture.bundle, watchedMs: 0, finished: true, pauses: e.lecture.pauses, marks: e.lecture.marks.map((m) => ({ atMs: m.atMs, strokes: [] as [number, number][][], hit: m.text })) } : undefined;
       while (say !== null && turns.length < e.maxTurns) {
-        const started = await runner.send(tutor, { from: 'kid', text: say, eval: true, ...(photos.length ? { photos } : {}), ...(lecture ? { lecture } : {}), ...(thread ? { thread } : { newThread: true, activity: run }) });
+        // 真孩子都是实时的:模拟孩子的每一句也照实时写(上下文包带 live:、不补提问卡、讲稿不截);嘴不在,接住与打断不带
+        const started = await runner.send(tutor, { from: 'kid', text: say, eval: true, live: {}, ...(photos.length ? { photos } : {}), ...(lecture ? { lecture } : {}), ...(thread ? { thread } : { newThread: true, activity: run }) });
         photos = [];
         lecture = undefined;
         thread = started.thread;

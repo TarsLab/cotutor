@@ -1,7 +1,8 @@
 /**
  * 实时老师整条线,假百炼(_fake-realtime.ts)+ 假老师(_fake-teacher.ts,逐行吐),不花钱:
  * 连上(手动轮次、嘴的人设)→ 按住说、松手 → 嘴先接住 → 转写交给脑(实时轮,消息记 live、上下文包带 caught)→ 一拍一拍照念(念的字就是讲稿)→
- * 念的时候按下 = 打断(清队列,下一轮上下文包带 cut)→ 挂了落录像;没开 / 不在 live.voices 拒升级;嘴连不上告诉孩子端走板书。
+ * 念的时候按下 = 打断(清队列,下一轮上下文包带 cut)→ 挂了落录像;两轮之间安静够久了录像切段(电话不挂,一段一轮,家长端的录像跨段照样拼);
+ * 没开 / 不在 live.voices 拒升级;嘴连不上告诉孩子端走板书。
  */
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -43,7 +44,7 @@ const ctx = createContext(loadWorkspace(wsRoot));
 await ctx.reload();
 const finished: [string, string][] = [];
 // 心跳缺省 30 秒,前面几段跑不到;断线那段改短
-const liveDeps: { endpoint: string; heartbeatMs?: number; keepAliveMs?: number; swapTokens?: number; idleSwapMs?: number; echoWaitMs?: number; ringMs?: number; stallMs?: number; onFinished: (tutor: string, why: string) => void } = { endpoint: fake.endpoint, onFinished: (tutor, why) => finished.push([tutor, why]) };
+const liveDeps: { endpoint: string; heartbeatMs?: number; keepAliveMs?: number; swapTokens?: number; idleSwapMs?: number; echoWaitMs?: number; ringMs?: number; stallMs?: number; idleCutMs?: number; maxTakeMs?: number; onFinished: (tutor: string, why: string) => void } = { endpoint: fake.endpoint, onFinished: (tutor, why) => finished.push([tutor, why]) };
 const liveUpgrade = makeLiveUpgrade(liveDeps);
 const server = createServer(createHandler(ctx));
 server.on('upgrade', (req, socket, head) => { void liveUpgrade(req, socket, head, ctx).then((took) => { if (!took) socket.destroy(); }); });
@@ -761,6 +762,50 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   const c2 = (await (await http('/api/config')).json()) as { live: { voices: Record<string, string> } };
   const r3 = await patch({ live: { voices: { 'not-a-tutor': 'Tina' } } });
   check('挑 / 清掉:PATCH 能改 live(给数学老师挑、清掉回出厂的);不是有脸老师的键不写', r1.status === 200 && c1.live.voices['math-tutor'] === 'Maia' && c1.live.voices['chinese-tutor'] === 'Serena' && r2.status === 200 && !('math-tutor' in c2.live.voices) && r3.status >= 400, JSON.stringify({ r: [r1.status, r2.status, r3.status], c1: c1.live, c2: c2.live }));
+}
+
+{
+  // ---- 录像切段(2026-11-06):两轮之间安静、这一段没动静够久了就收下落盘,电话不挂;一段一轮、各有各的 wav;家长端的录像跨两段照样拼 ----
+  liveDeps.heartbeatMs = 100;
+  liveDeps.idleCutMs = 1500;
+  const liveDir = join(wsRoot, 'conversations', 'math-tutor', `${localDate(ctx.now())}.live`);
+  const reelsNow = (): string[] => (existsSync(liveDir) ? readdirSync(liveDir).filter((f) => f.endsWith('.reel.json')).sort() : []);
+  const before = reelsNow();
+  const k = await connect('math-tutor');
+  await until(() => has(k, (m) => m.t === 'ready'));
+  const turn = async (text: string, body: Record<string, unknown>): Promise<Msg | undefined> => {
+    const n = k.msgs.length;
+    fake.kidText = text;
+    k.ws.send(JSON.stringify({ t: 'hold' }));
+    for (let i = 0; i < 3; i++) k.ws.send(loud());
+    k.ws.send(JSON.stringify({ t: 'release', body }));
+    await until(() => k.msgs.slice(n).some((m) => m.t === 'turn'), 10000);
+    await until(() => ctx.runner.running('math-tutor') === null, 15000);
+    const t = k.msgs.slice(n).find((m) => m.t === 'turn');
+    // 讲稿念起来了(脑写完了嘴不一定念到)
+    await until(() => k.msgs.slice(n).some((m) => m.t === 'read' && m.job === t?.job), 10000);
+    await sleep(300);
+    return t;
+  };
+  const t1 = await turn('三加四等于几', { newThread: true });
+  const okCut = await until(() => reelsNow().length === before.length + 1, 10000);
+  check('切段:一轮讲完、安静够久了,这一段落盘;电话不挂,孩子端不知道', okCut && k.closed === null && !has(k, (m) => m.t === 'end'), JSON.stringify({ reels: reelsNow(), closed: k.closed }));
+  const t2 = await turn('那五加五呢', {});
+  k.ws.send(JSON.stringify({ t: 'bye' }));
+  await until(() => k.closed !== null);
+  await sleep(300);
+  const mine = reelsNow().filter((f) => !before.includes(f));
+  const rs = mine.map((f) => JSON.parse(readFileSync(join(liveDir, f), 'utf8')) as { startedAt: string; ms: number; msgs: Msg[] });
+  const jobsOf = (r: { msgs: Msg[] }): string[] => r.msgs.filter((m) => m[1] === 'o' && m[2].t === 'turn').map((m) => m[2].job as string);
+  const wavOf = (f: string): string => f.replace(/\.reel\.json$/, '.wav');
+  check('切段:两段各一轮、各有各的 wav;第二段在第一段收尾之后开始', Boolean(t1 && t2) && mine.length === 2 && JSON.stringify(rs.map(jobsOf)) === JSON.stringify([[t1?.job], [t2?.job]]) && mine.every((f) => existsSync(join(liveDir, wavOf(f)))) && Date.parse(rs[1].startedAt) >= Date.parse(rs[0].startedAt) + rs[0].ms, JSON.stringify({ mine, jobs: rs.map(jobsOf), at: rs.map((r) => [r.startedAt, r.ms]) }));
+  const res = await fetch(`http://127.0.0.1:${port}/api/conversations/math-tutor/today/threads/${encodeURIComponent(String(t1?.thread))}/reel`);
+  const pr = (await res.json()) as { reel?: { says: { job: string; audio: string }[]; clips: { job: string; audio: string }[] } };
+  const audioOf = (job: unknown): string[] => [...(pr.reel?.says ?? []), ...(pr.reel?.clips ?? [])].filter((x) => x.job === job).map((x) => x.audio);
+  const a1 = audioOf(t1?.job), a2 = audioOf(t2?.job);
+  check('家长端的录像跨两段:两轮各照自己那一段放(声音是各自那段的 wav)', res.status === 200 && a1.length > 0 && a2.length > 0 && a1.every((a) => a.endsWith(wavOf(mine[0] ?? ''))) && a2.every((a) => a.endsWith(wavOf(mine[1] ?? ''))), JSON.stringify({ status: res.status, a1, a2 }));
+  liveDeps.heartbeatMs = undefined;
+  liveDeps.idleCutMs = undefined;
 }
 
 server.close();

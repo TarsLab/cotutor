@@ -56,29 +56,69 @@ export function playingOf(segs: { start: number; end: number }[]): [number, numb
   return out.map(([a, b]) => [Math.round(a), Math.round(b)]);
 }
 
-/** 两边混成一条(PCM16 单声道 24k,长到 ms 为止;挂断那一刻还没放完的老师的声音不要) */
-export function mixCall(o: { kid: Chunk[]; tutor: Chunk[]; flushes: number[]; ms: number }): { pcm: Buffer; playing: [number, number][]; kidVoice: [number, number][] } {
+/** 混出来的一条 + 老师出声的时段 + 孩子有声的时段 */
+export interface Mixed { pcm: Buffer; playing: [number, number][]; kidVoice: [number, number][] }
+
+/** 分片混:每混这么多个采样(10 秒)让一下事件循环——通话中切段时就在混,不能卡住正在说的那一路 */
+const SLICE_SAMPLES = MIX_RATE * 10;
+
+/**
+ * 两边混成一条(PCM16 单声道 24k,长到 ms 为止;挂断那一刻还没放完的老师的声音不要)。
+ * 直接往 Int16 里加、加一次削一次顶(两边叠着才会削,和先加完再削只差一个最低位);不另开整段的 Float32(一个钟头就是 345 MB)。
+ * 生成器:每混 SLICE_SAMPLES 个采样 yield 一次,mixCall 一口气跑完,mixCallSliced 每次 yield 让一下事件循环
+ */
+function* mixing(o: { kid: Chunk[]; tutor: Chunk[]; flushes: number[]; ms: number }): Generator<void, Mixed> {
   const n = Math.max(0, Math.round((o.ms * MIX_RATE) / 1000));
-  const acc = new Float32Array(n);
-  const put = (at: number, i16: (k: number) => number, len: number): void => {
-    const base = Math.round((at * MIX_RATE) / 1000);
-    for (let k = 0; k < len; k++) { const j = base + k; if (j >= 0 && j < n) acc[j] += i16(k); }
+  const pcm = Buffer.alloc(n * 2);
+  let work = 0;
+  const add = (j: number, v: number): void => {
+    const s = pcm.readInt16LE(j * 2) + Math.round(v);
+    pcm.writeInt16LE(s > 32767 ? 32767 : s < -32768 ? -32768 : s, j * 2);
   };
+  const voiced: { start: number; end: number }[] = [];
   for (const c of o.kid) {
     const m = samplesOf(c.pcm);
     if (!m) continue;
     const len = Math.floor((m * MIX_RATE) / KID_RATE);
     const at = c.t - (m * 1000) / KID_RATE;
-    put(at, (k) => {
+    const base = Math.round((at * MIX_RATE) / 1000);
+    for (let k = 0; k < len; k++) {
+      const j = base + k;
+      if (j < 0 || j >= n) continue;
       const x = (k * KID_RATE) / MIX_RATE, i = Math.floor(x), f = x - i;
       const a = c.pcm.readInt16LE(Math.min(i, m - 1) * 2), b = c.pcm.readInt16LE(Math.min(i + 1, m - 1) * 2);
-      return a + (b - a) * f;
-    }, len);
+      add(j, a + (b - a) * f);
+    }
+    if (rms(c.pcm) >= KID_VOICE) voiced.push({ start: at, end: c.t });
+    work += len;
+    if (work >= SLICE_SAMPLES) { work = 0; yield; }
   }
   const segs = scheduleTutor(o.tutor, o.flushes).filter((s) => s.start < o.ms);
-  for (const s of segs) put(s.start, (k) => s.pcm.readInt16LE(k * 2), samplesOf(s.pcm));
-  const pcm = Buffer.alloc(n * 2);
-  for (let j = 0; j < n; j++) pcm.writeInt16LE(Math.max(-32768, Math.min(32767, Math.round(acc[j]))), j * 2);
-  const voiced = o.kid.filter((c) => rms(c.pcm) >= KID_VOICE).map((c) => ({ start: c.t - (samplesOf(c.pcm) * 1000) / KID_RATE, end: c.t }));
+  for (const s of segs) {
+    const base = Math.round((s.start * MIX_RATE) / 1000);
+    const len = samplesOf(s.pcm);
+    for (let k = 0; k < len; k++) { const j = base + k; if (j >= 0 && j < n) add(j, s.pcm.readInt16LE(k * 2)); }
+    work += len;
+    if (work >= SLICE_SAMPLES) { work = 0; yield; }
+  }
   return { pcm, playing: playingOf(segs.map((s) => ({ start: s.start, end: Math.min(s.end, o.ms) }))), kidVoice: playingOf(voiced) };
+}
+
+/** 一口气混完(测试、短的) */
+export function mixCall(o: { kid: Chunk[]; tutor: Chunk[]; flushes: number[]; ms: number }): Mixed {
+  const g = mixing(o);
+  let r = g.next();
+  while (!r.done) r = g.next();
+  return r.value;
+}
+
+/** 分片混:结果同 mixCall,中间让出事件循环(通话里落录像走这个) */
+export async function mixCallSliced(o: { kid: Chunk[]; tutor: Chunk[]; flushes: number[]; ms: number }): Promise<Mixed> {
+  const g = mixing(o);
+  let r = g.next();
+  while (!r.done) {
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    r = g.next();
+  }
+  return r.value;
 }

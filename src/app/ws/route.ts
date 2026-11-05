@@ -22,6 +22,8 @@ export interface LiveRouteDeps {
   echoWaitMs?: number;
   ringMs?: number;
   stallMs?: number;
+  idleCutMs?: number;
+  maxTakeMs?: number;
   onFinished?(tutor: string, why: string): void;
 }
 
@@ -41,7 +43,7 @@ export function makeLiveUpgrade(deps: LiveRouteDeps = {}) {
       onClose: () => call?.onSocketClose(),
     });
     const listen = new URL(req.url ?? '', 'http://x').searchParams.get('listen') === 'open' ? 'open' : 'hold';
-    call = new LiveCall(sock, { ctx, tutor, deviceId: cookieOf(req.headers.cookie, DEVICE_COOKIE), listen, endpoint: deps.endpoint, env: deps.env, heartbeatMs: deps.heartbeatMs, keepAliveMs: deps.keepAliveMs, swapTokens: deps.swapTokens, idleSwapMs: deps.idleSwapMs, echoWaitMs: deps.echoWaitMs, ringMs: deps.ringMs, stallMs: deps.stallMs, onFinished: (why) => deps.onFinished?.(tutor, why) });
+    call = new LiveCall(sock, { ctx, tutor, deviceId: cookieOf(req.headers.cookie, DEVICE_COOKIE), listen, endpoint: deps.endpoint, env: deps.env, heartbeatMs: deps.heartbeatMs, keepAliveMs: deps.keepAliveMs, swapTokens: deps.swapTokens, idleSwapMs: deps.idleSwapMs, echoWaitMs: deps.echoWaitMs, ringMs: deps.ringMs, stallMs: deps.stallMs, idleCutMs: deps.idleCutMs, maxTakeMs: deps.maxTakeMs, onFinished: (why) => deps.onFinished?.(tutor, why) });
     void call.start();
     return true;
   };

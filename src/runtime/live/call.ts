@@ -31,12 +31,15 @@
  *   孩子说完(像跟读,src/scenes/talk/warmup.ts)开闸下一拍,不接住、不交脑;对老师说的照收下办(打断、接住、交脑);ECHO_WAIT_MS 没开口接着走,连着两拍没开口停下交脑(app: quiet)。
  *   每拍记进摸底(录像 {t:'echo'},只记不发),交脑时带上(live.warmup)。[[call]] 那句念完孩子端响铃,这里马上交脑一轮(app: call,不接住),
  *   之后的接住换英文(cue.ts 的 CATCH_EN),交脑带打电话几分钟(live.phone)。孩子端连上发来的第一条带 talk(口语单)时嘴先说「好,我们先热热身!」。
- * 录像:进出的消息、两边的声音都记(CallRecorder),挂了落在 conversations/<老师>/<日期>.live/<时分秒>.reel.json / .wav。
+ * 录像:进出的消息、两边的声音都记(CallRecorder),落在 conversations/<老师>/<日期>.live/<时分秒>.reel.json / .wav(时分秒 = 这一段开始的时刻)。
+ *   按段落(2026-11-06):两轮之间安静着(心跳时看),这一段 IDLE_CUT_MS 没动静、或录了 MAX_TAKE_MS,就收下这一段落盘、接着录新的一段;挂了落最后一段。
+ *   一段一轮都不会切开(录像按轮在一段里找按下、松手、turn、read);没动静的一段不落。
  * 字幕重放:嘴照念的声音按轮另留一份,出了的都留(孩子按下时清掉、没放出来的也在),
  *   一段出完(或被掐、断了)就落 <日期>.<job>.mouth.wav 与每句的起点 .mouth.json(src/runtime/journal/mouth-index.ts);接住那句不在里面。孩子端从 /api/kid/conversations/<老师>/mouth/<日期>/<job> 取。
  * 事件:嘴这一道(mouth:按下、松手 / 发了、接住开始放、第几句开始放、打断)补进那一轮的 events.jsonl(Runner.noteEvent),工作台的时间线上看;
  * 按下、松手、接住在脑起来之前,先攒着,等那一轮的老师进程起来(main:start)再按它的起点换成相对毫秒(负的)。
  */
+import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Runner } from '../runner.ts';
@@ -52,7 +55,7 @@ import { wavOfPcm } from '../../shared/wav.ts';
 import { mouthInstructions } from '../../realtime/prompt.ts';
 import { mouthVoice, type ContextPack } from '../../schema/index.ts';
 import { INPUT_RATE, MAX_IMAGE_B64, OUTPUT_RATE, RealtimeSession } from '../../realtime/bailian.ts';
-import { CallRecorder } from '../journal/recorder.ts';
+import { CallRecorder, renderTake, type RawTake } from '../journal/recorder.ts';
 import { MouthEvents, MouthTakes, type MouthEvent } from '../journal/mouth.ts';
 import { Turns } from './turns.ts';
 
@@ -89,6 +92,9 @@ export interface LiveDeps {
   ringMs?: number;
   /** 测试:要嘴说了多久一个字没出算卡住 */
   stallMs?: number;
+  /** 测试:录像这一段多久没动静、录了多久就切(心跳时看) */
+  idleCutMs?: number;
+  maxTakeMs?: number;
   onFinished?(why: string): void;
 }
 
@@ -116,6 +122,12 @@ const IDLE_SWAP_MS = 240_000;
 /** 热身:[[echo]] / [[say]] 那句在孩子端放完,这么久没开口就接着下一拍(不催);连着这么多拍没开口就停下交脑 */
 const ECHO_WAIT_MS = 8000;
 const QUIET_BEATS = 2;
+/**
+ * 录像切段:这一段这么久没动静、或录了这么久(两轮之间安静着才切),就收下落盘、接着录新的一段。
+ * 页面开着不关能挂几个钟头(2026-10-25 一段 2 小时、361 MB 的 wav,几乎没说话):不切的话声音全攒在内存里,挂断时一起混
+ */
+const IDLE_CUT_MS = 5 * 60_000;
+const MAX_TAKE_MS = 30 * 60_000;
 /** 打电话:[[call]] 那句放完先响这么久的铃,脑的英文开场来得再早也等它(孩子听得到在打电话) */
 const RING_MS = 3000;
 /**
@@ -214,6 +226,8 @@ export class LiveCall {
   private chatQuiet = 0;
   private chatQuietUntil = 0;
   private offEvents: (() => void) | null = null;
+  /** 录像一段一段排着落盘(按顺序、一次混一段);挂了等它们都落完 */
+  private saving: Promise<void> = Promise.resolve();
   private ended = false;
   private readonly sock: KidSocket;
   private readonly deps: LiveDeps;
@@ -492,6 +506,7 @@ export class LiveCall {
   private keepAlive(): void {
     const s = this.session;
     this.maybeSwap();
+    this.maybeCut();
     if (!s?.isReady || this.holding || this.vadOn || s.responding || Date.now() - this.lastActive > (this.deps.keepAliveMs ?? KEEP_ALIVE_MS)) return;
     // 一直听、声音一直在推:本来就有输入,不用跳
     if (this.mouthOpen && Date.now() - this.lastAudioAt < 5000) return;
@@ -522,6 +537,31 @@ export class LiveCall {
     if (this.session?.responding) this.session.cancel();
     else if (this.said) this.cancelOnCreate = true;
     if (playing) { this.d.flush(now); this.send({ t: 'flush' }); }
+  }
+
+  /**
+   * 录像切段:两轮之间安静着(孩子没在说、嘴没在说也没在放、脑没在写、没在等转写),这一段没动静够久了或录得够长了,就收下落盘。
+   * 一轮不会被切开:录像按轮在一段里找按下、松手、turn 和 read
+   */
+  private maybeCut(): void {
+    if (this.ended || !this.quiet() || this.playing() || this.pendingVoice || this.draft || this.echoing || this.chatHeard !== null) return;
+    const idle = this.rec.quietMs() >= (this.deps.idleCutMs ?? IDLE_CUT_MS);
+    const long = this.rec.stirred && this.rec.takeMs() >= (this.deps.maxTakeMs ?? MAX_TAKE_MS);
+    if (idle || long) this.saveTake(this.rec.cut());
+  }
+
+  /** 落一段录像(排在前面那几段后面):没动静的、只有连上那两条的不落 */
+  private saveTake(raw: RawTake): void {
+    if (!raw.stirred || raw.msgs.length <= 2) return;
+    const { ctx, tutor } = this.deps;
+    this.saving = this.saving.then(async () => {
+      const take = await renderTake(raw);
+      const dir = join(ctx.runner.ws.dirs.conversations, tutor, `${localDate(raw.startedAt)}.live`);
+      await mkdir(dir, { recursive: true });
+      const name = takeName(dir, raw.startedAt);
+      await writeFile(join(dir, `${name}.wav`), wavOfPcm(take.callPcm, MIX_RATE));
+      await writeFile(join(dir, `${name}.reel.json`), JSON.stringify(take.reel));
+    }).catch((err) => { console.error('live: 录像落盘失败', err); });
   }
 
   /** 孩子的一条文本消息 */
@@ -991,20 +1031,8 @@ export class LiveCall {
     // 字幕重放:挂的时候嘴还在出的那段,出了的那截也落;等这几轮都落完
     if (this.said?.kind === 'read') this.mouthEnd(this.said, false);
     await this.takes.flush();
-    try {
-      const take = this.rec.finish();
-      if (take.reel.msgs.length > 2) {
-        const { ctx, tutor } = this.deps;
-        const at = this.rec.startedAt;
-        const dir = join(ctx.runner.ws.dirs.conversations, tutor, `${localDate(at)}.live`);
-        const name = [at.getHours(), at.getMinutes(), at.getSeconds()].map((n) => String(n).padStart(2, '0')).join('');
-        await mkdir(dir, { recursive: true });
-        await writeFile(join(dir, `${name}.wav`), wavOfPcm(take.callPcm, MIX_RATE));
-        await writeFile(join(dir, `${name}.reel.json`), JSON.stringify(take.reel));
-      }
-    } catch (err) {
-      console.error('live: 录像落盘失败', err);
-    }
+    this.saveTake(this.rec.finish());
+    await this.saving;
     this.sock.close(1000, why);
     this.deps.onFinished?.(why);
   }
@@ -1014,6 +1042,13 @@ export class LiveCall {
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+/** 一段录像的文件名:开始的时分秒;这一秒已经有一段了(同一位老师两次通话、切段撞在同一秒)往后挪一秒,不盖掉 */
+const takeName = (dir: string, at: Date): string => {
+  const hms = (d: Date): string => [d.getHours(), d.getMinutes(), d.getSeconds()].map((n) => String(n).padStart(2, '0')).join('');
+  let name = hms(at);
+  for (let k = 1; k < 60 && existsSync(join(dir, `${name}.reel.json`)); k++) name = hms(new Date(at.getTime() + k * 1000));
+  return name;
+};
 /** 孩子端发来的图(data:image/jpeg;base64,…)→ 字节;不是 jpeg、太大(百炼一帧上限)回 null */
 const jpegOf = (v: unknown): Buffer | null => {
   const m = typeof v === 'string' ? /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(v) : null;

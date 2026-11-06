@@ -16,7 +16,7 @@ import { request as httpsRequest } from 'node:https';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { UsageError } from '../workspace.ts';
+import { UsageError } from '../../shared/errors.ts';
 import { logFileFor } from './serve-log.ts';
 import { RUN_KEY, STARTUP_APPROVED_KEY, decodeServiceFile, encodeLauncher, findProcsScript, launcherArgs, parseProcs, psArgs, runValue, startupDisabled, windowsLauncher, type WinProc } from './service-windows.ts';
 
@@ -129,7 +129,7 @@ export async function runKeeper(o: { root: string; logDir: string; label: string
   }
 }
 
-const wscriptPath = (host: ServiceHost): string => join(host.env.SystemRoot || 'C:\\Windows', 'System32', 'wscript.exe');
+export const wscriptPath = (host: ServiceHost): string => join(host.env.SystemRoot || 'C:\\Windows', 'System32', 'wscript.exe');
 
 /** 这个 workspace 的看护进程与 serve 现在的进程 */
 async function windowsProcs(host: ServiceHost, root: string): Promise<WinProc[]> {
@@ -159,7 +159,7 @@ export interface ServiceSpec {
   path: string;
 }
 
-const xml = (s: string): string => s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
+export const xml = (s: string): string => s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
 const unxml = (s: string): string => s.replaceAll('&lt;', '<').replaceAll('&gt;', '>').replaceAll('&quot;', '"').replaceAll('&apos;', "'").replaceAll('&amp;', '&');
 
 /** macOS 的 LaunchAgent */
@@ -370,7 +370,20 @@ export function parseSystemctlShow(text: string): { running: boolean; pid: numbe
 }
 
 /** /api/health 回的(只取要的) */
-export interface Health { version: string | null; started: string; pid?: number; mode?: string; vault?: string }
+export interface Health {
+  version: string | null;
+  started: string;
+  pid?: number;
+  mode?: string;
+  vault?: string;
+  /** 现在开着几通电话(托盘:退出前要不要问一声) */
+  calls?: number;
+  /** 百炼配了没有(托盘:没配算有事要处理) */
+  bailian?: boolean;
+  configError?: string | null;
+  /** 问到的是 https 还是 http(这边加的,不是服务回的) */
+  scheme?: 'https' | 'http';
+}
 
 /** 本机问一下 serve 起来没有(自签证书不验);先 https 再 http */
 export async function probeHealth(port: number, timeoutMs = 1500): Promise<Health | null> {
@@ -379,7 +392,7 @@ export async function probeHealth(port: number, timeoutMs = 1500): Promise<Healt
       let body = '';
       res.setEncoding('utf8');
       res.on('data', (c: string) => { body += c; });
-      res.on('end', () => { try { const j = JSON.parse(body) as Health & { ok?: boolean }; resolve(j.ok ? j : null); } catch { resolve(null); } });
+      res.on('end', () => { try { const j = JSON.parse(body) as Health & { ok?: boolean }; resolve(j.ok ? { ...j, scheme: secure ? 'https' : 'http' } : null); } catch { resolve(null); } });
     });
     req.on('timeout', () => req.destroy());
     req.on('error', () => resolve(null));

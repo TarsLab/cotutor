@@ -43,6 +43,7 @@
 - 改 `src/scenes/paint/`、`src/media/draw.ts` 或画图卡先过 `tests/paint.test.ts`(假百炼、假老师全流程),页面走 `scripts/probe-paint.mjs`;真画按张计费
 - 改孩子端播放(嘴、卡的声音、孩子谁打断谁)先在 `tests/live-player.test.ts` 明确预期,再改 `runtime/delivery/player.ts` 的 `liveStep`;页面只 `liveDispatch`。板上的节(铺、写完、撤掉)是 `board/presentation.ts` 的 `step`,对 `tests/player.test.ts`,页面只 `dispatch`
 - 后台服务 `cotutor service`(`src/app/cli/service.ts`):macOS launchd、Linux systemd 用户服务,Windows 是 Run 注册表项 + wscript 跑的隐藏启动器 + 看护进程(`service-windows.ts`,为什么不用计划任务、`conhost --headless` 写在它开头);服务里的 serve 带 `--log-dir`,输出按天落文件(`serve-log.ts`);有通话或老师在写时拦闲置睡眠(`serve.ts` 的 `holdAwake`)。改了先过 `tests/service.test.ts`(假 launchctl / systemctl / reg);真装拿临时 workspace 换个端口试,试完 uninstall,别给真孩子的 workspace 装
+- 托盘图标 `cotutor tray`(`src/app/cli/tray.ts`):node 进程(`cotutor tray run`,bin 直接走轻入口 `tray-run.ts`,不带 zod,`tests/tray.test.ts` 盯着)判断状态、发通知;显示脚本(`tray-mac.ts` 的 JXA、`tray-windows.ts` 的 PowerShell)只管画和回报点击,协议一行一条 JSON。改了先过 `tests/tray.test.ts`,显示脚本要在真系统里看;真装服务时不想带图标加 `--no-tray`
 - 端口(`src/app/cli/port.ts`)与地址(`serve.ts` 的 `computerName`、`siteUrl`):改了先过 `tests/port.test.ts`
 - 冒烟:`init <slug> --dir <tmp>` → `doctor --workspace <tmp> --live` → `serve`;真跑老师 `cotutor send`;不花钱看前端 `cotutor mock`(老师都走实时老师页,假嘴念静音的声音;`--scenario nokey` 看没配百炼)
 - 页面里的 JS 有两个 CDP 探针进了 `pnpm test`(`tests/probe.test.ts` 起 `probe-layout`、`probe-play`,走 mock;要本机 Chrome,没有就跳过;`COTUTOR_SKIP_PROBES=1` 跳过),改 `kid-page.ts` 先看它们红不红;其余手动验收走 `scripts/probe-*.mjs`(CDP);舞台里的东西用 CDP 驱动;截图也走 CDP(`Page.captureScreenshot`),孩子端、工作台在轮询,无头 Chrome 的 `--screenshot` 会挂;手机尺寸要 `--force-device-scale-factor=2 --window-size=780,1688`;探针不出声:起 Chrome 加 `QUIET_ARGS`(`scripts/_quiet.mjs`,`--mute-audio`;页面不用浏览器合成声,mock 里卡的配音也是静音),要听加 `COTUTOR_PROBE_SOUND=1`
@@ -55,6 +56,7 @@
 - 舞台页(`/stage/`)也装孩子端的 `theme.css`:舞台里自己的类名要带前缀(`lc-` 这种),撞上 `.pen` `.c` 之类会被那边的样式改掉(`.pen` 关着 pointer-events,圈不上)
 - Windows 上 `os.homedir()` 读 `USERPROFILE`,只设 `HOME` 隔离不住,测试会写进真的用户目录。`tests/_check.ts` 让它跟着 `HOME` 走,所有测试都要经过它;在别的机器上跑测试、脚本前先确认写到哪
 - 别的程序只占着 `127.0.0.1:<端口>` 时,绑 `0.0.0.0:<端口>` 照样成功(macOS、Windows 都这样),光试绑看不出被占,要先连一下(`port.ts` 的 `answersLocally`)
+- JXA(macOS 的显示脚本):`$.NSAttributedString.alloc.initWithStringAttributes` 不存在,要 `NSMutableAttributedString.alloc.init` 再填;枚举常量取不到值,写数字;返回整数的方法给的是字符串(`a.runModal` 是 `"1001"`),比较前要 `Number()`;回调里的异常被吞掉,不报错也不动作;菜单项标号别用 0(别的行缺省是 0)
 - 探针模拟手指用 CDP `Input.dispatchMouseEvent`,别用 `dispatchEvent`:后者直接派到元素上,不走命中判定,盖住了、pointer-events 关了都照样过
 - 课包的画面是 build 后烤好的(`bake.json`),孩子端不跑 excalidraw 也没有 SMIL;改了画面要重烤(`cotutor chalk bake`,snap 顺手烤,要本机的 Chrome),不然孩子端在浏览器里现烤、服务端后台补烤
 - Safari 才有的毛病拿 Playwright 的 WebKit 复现(`scripts/probe-lecture-webkit.mjs`,本仓不装 playwright,借一份)

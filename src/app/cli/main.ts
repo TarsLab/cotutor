@@ -23,8 +23,9 @@ import { resolveRoot } from '../workspace.ts';
 import { bindFailure, portHolder, whoHolds } from './port.ts';
 import { httpsFiles, serveWorkspace, siteUrl } from './serve.ts';
 import { teeLogs } from './serve-log.ts';
-import { controlService, earlyLogHint, findService, installService, probeHealth, realHost, runKeeper, servicePlatform, serviceStatus, tailLog, uninstallService, waitHealthy, type Health } from './service.ts';
+import { controlService, earlyLogHint, findService, installService, listServices, probeHealth, realHost, runKeeper, servicePlatform, serviceStatus, tailLog, uninstallService, waitHealthy, type Health } from './service.ts';
 import { openSandbox } from './sandbox.ts';
+import { dropTrayIfNoServices, ensureTray, installTray, removeTray, trayDir, trayStatus, traySupported } from './tray.ts';
 import { serveMock, type MockScenario } from '../mock/mock.ts';
 import { UsageError, loadWorkspace, redactDeep, redactHome, workspaceReport } from '../workspace.ts';
 import { USAGE } from './usage.ts';
@@ -90,7 +91,7 @@ async function printOpen(label: string, page: string, hint: string, open: boolea
 }
 const wantsOpen = (flags: Record<string, string | true>): boolean => flags.open === true || flags['open-qr'] === true;
 /** 不用 workspace 的命令:--sandbox 对它们没有意义 */
-const NO_WORKSPACE = ['grades', 'init', 'mock', 'pin', 'cert'];
+const NO_WORKSPACE = ['grades', 'init', 'mock', 'pin', 'cert', 'tray'];
 
 export async function main(argv: string[]): Promise<void> {
   let json = false;
@@ -205,6 +206,33 @@ export async function main(argv: string[]): Promise<void> {
         if (!json && flags.print !== true) await openInBrowser(page);
         return;
       }
+      case 'tray': {
+        // 菜单栏 / 任务栏图标(tray.ts);tray run 由 bin/cotutor.js 直接走轻入口,不到这里
+        const sub = positionals[0];
+        if (sub !== 'on' && sub !== 'off' && sub !== 'status') throw new UsageError(`tray 后面跟 on / off / status 之一。\n${USAGE}`);
+        const host = realHost();
+        if (!traySupported(host.platform)) throw new UsageError(`${host.platform} 上没做托盘图标(GNOME 缺省不显示托盘):cotutor service status 看服务状态`);
+        const word = host.platform === 'darwin' ? '菜单栏图标' : '任务栏图标';
+        if (sub === 'on') {
+          if (!(await listServices(host)).length) throw new UsageError('还没装后台服务,图标没东西可看:cotutor service install 会一起装上图标');
+          const r = await installTray(host);
+          if (json) process.stdout.write(`${JSON.stringify(redactDeep(r), null, 2)}\n`);
+          else process.stdout.write(r.started ? `${word}起来了:登录后自己出现,点它看状态、打开家长端${host.platform === 'win32' ? '(新图标先收在任务栏右下角的 ^ 里)' : ''}\n` : `${word}的登录项写好了,这个会话里没起来,下次登录出现\n`);
+          return;
+        }
+        if (sub === 'off') {
+          const had = await removeTray(host, { remember: true });
+          if (json) process.stdout.write(`${JSON.stringify({ removed: had })}\n`);
+          else process.stdout.write(`${had ? `关了${word}` : `${word}本来就没开`};后台服务不受影响,以后 service install 也不再带上。要回来:cotutor tray on\n`);
+          return;
+        }
+        const st = await trayStatus(host);
+        if (json) { process.stdout.write(`${JSON.stringify(redactDeep({ ...st, dir: trayDir(host) }), null, 2)}\n`); return; }
+        process.stdout.write(!st.installed ? `${word}:没开${st.off ? '(家长关掉的)' : ''};cotutor tray on\n` : `${word}:${st.running ? `在跑,pid ${st.pid ?? '?'}` : '没在跑(点过退出就是这样,下次登录回来)'}\n`);
+        if (st.autostart === false) process.stdout.write('  ! 下次登录不会自己起来:登录项被关掉或删掉了(任务管理器的「启动应用」、杀毒软件)。要它:cotutor tray on\n');
+        if (st.installed) process.stdout.write(`  日志 ${redactHome(join(trayDir(host), 'tray.log'))}\n`);
+        return;
+      }
       case 'service': {
         const sub = positionals[0];
         // 看护进程(Windows 的启动器起的,不是给人敲的):起 serve,崩了再起
@@ -246,7 +274,12 @@ export async function main(argv: string[]): Promise<void> {
           if (before && !had) throw new UsageError(`端口 ${port} 上已经是另一个 workspace 的后台服务:两个孩子各用各的端口(cotutor.json 的 server.port)`);
           const r = await installService(host, root);
           const h = await waitHealthy(port, 20_000, before?.started);
-          if (json) { process.stdout.write(`${JSON.stringify(redactDeep({ ...r, healthy: Boolean(h), health: h }), null, 2)}\n`); return; }
+          // 菜单栏图标一起装:它出问题不能让服务也算没装好
+          let tray: Awaited<ReturnType<typeof ensureTray>> | 'skipped' | 'failed' = 'skipped';
+          if (flags['no-tray'] !== true) {
+            try { tray = await ensureTray(host); } catch { tray = 'failed'; }
+          }
+          if (json) { process.stdout.write(`${JSON.stringify(redactDeep({ ...r, healthy: Boolean(h), health: h, tray }), null, 2)}\n`); return; }
           process.stdout.write(`${r.replaced ? '重装了' : '装好了'}后台服务 ${r.spec.label}(${redactHome(r.file)})\n`);
           process.stdout.write(`  登录这台电脑后自己起来,崩了隔 10 秒再起;关了终端照样跑。日志 ${redactHome(join(r.spec.logDir, '<日期>.log'))},留 14 天\n`);
           if (platform !== 'linux') process.stdout.write(`  电脑睡着时平板连不上:有通话时 cotutor 拦着它闲置睡眠,别的时候看系统设置(cotutor doctor 会提);合盖照样睡\n`);
@@ -262,13 +295,17 @@ export async function main(argv: string[]): Promise<void> {
             const lg = await host.run('loginctl', ['show-user', process.env.USER ?? '', '-p', 'Linger']);
             if (/Linger=no/.test(lg.stdout)) process.stdout.write(`  ! 现在只在你登录着时跑;不登录也要跑:sudo loginctl enable-linger ${process.env.USER ?? '<用户名>'}\n`);
           }
+          if (tray === 'started' || tray === 'later') process.stdout.write(`  ${platform === 'darwin' ? '菜单栏' : '任务栏'}多了 cotutor 图标:不用开终端就能看状态、打开家长端${tray === 'later' ? '(这个会话里没起来,下次登录出现)' : platform === 'win32' ? '(新图标先收在右下角的 ^ 里)' : ''};不要它:cotutor tray off\n`);
+          else if (tray === 'failed') process.stdout.write('  ! 图标没装上,服务不受影响;cotutor tray on 再试\n');
           if (h) { await printOpen('家长端', parentPage, '孩子的平板扫码、排首页、看记录都在里面', wantsOpen(flags)); for (const n of notes(h)) process.stdout.write(`${n}\n`); }
           else { process.stdout.write(`! 装上了,但 20 秒内没答应(端口 ${port})。cotutor service logs 看看:\n`); await tellLog(r.spec.logDir); process.exitCode = 1; }
           return;
         }
         if (sub === 'uninstall') {
           const s = await uninstallService(host, root);
-          if (json) { process.stdout.write(`${JSON.stringify(redactDeep({ removed: s }), null, 2)}\n`); return; }
+          // 这是最后一个服务:图标也没事可做了
+          const trayGone = s ? await dropTrayIfNoServices(host).catch(() => false) : false;
+          if (json) { process.stdout.write(`${JSON.stringify(redactDeep({ removed: s, trayRemoved: trayGone }), null, 2)}\n`); return; }
           process.stdout.write(s ? `卸了后台服务 ${s.label};日志留在 ${redactHome(s.logDir ?? '')},不要了自己删\n要在终端里跑:cotutor serve\n` : '这个 workspace 没装后台服务\n');
           return;
         }

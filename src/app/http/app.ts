@@ -100,6 +100,8 @@ export interface AppContext {
   configError: string | null;
   /** 在哪个地址上听着(serve 在 listen 之后填;扫码页 /qr 每次现问——局域网 IP 会在服务跑着的时候变)。没起端口(测试走 route)→ null */
   listen: (() => ListenInfo) | null;
+  /** 现在开着几通电话(serve 接 ws 那边的数;没起端口 → null) */
+  openCalls: (() => number) | null;
   /** 重读 cotutor.json(改了才读) */
   reload(): Promise<void>;
   /** 家长端与工作台的锁(access.ts):机器级 PIN,没设就全开;测试可注入 */
@@ -116,6 +118,7 @@ export function createContext(ws: Workspace, opts: { now?: () => Date; env?: Nod
     now: opts.now ?? (() => new Date()),
     configError: null,
     listen: null,
+    openCalls: null,
     access: opts.access ?? createAccess({ now: () => ctx.now() }),
     bailian: opts.bailian ?? createBailian({ env: opts.env }),
     async reload() {
@@ -617,7 +620,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     if (p === '/api/health') {
       const head = await headNow();
       const vault = await readdir(ws.paths.vault).then(() => 'ok', (err: NodeJS.ErrnoException) => (err.code === 'EPERM' || err.code === 'EACCES' ? 'denied' : 'missing'));
-      return { status: 200, json: { ok: true, configError: ctx.configError, started: BUILD.started, version: BUILD.version, commit: shortCommit(BUILD.commit), dirty: BUILD.dirty, head: shortCommit(head), changed: codeChanged(BUILD.commit, head), pid: process.pid, mode: process.env.COTUTOR_SERVICE ? 'service' : 'foreground', vault } };
+      return { status: 200, json: { ok: true, configError: ctx.configError, started: BUILD.started, version: BUILD.version, commit: shortCommit(BUILD.commit), dirty: BUILD.dirty, head: shortCommit(head), changed: codeChanged(BUILD.commit, head), pid: process.pid, mode: process.env.COTUTOR_SERVICE ? 'service' : 'foreground', vault, calls: ctx.openCalls?.() ?? 0, bailian: ctx.bailian.status().ready } };
     }
     // 家长端与工作台的锁(access.ts):对 PIN 换 cookie;设了 PIN、没凭证的设备,孩子端以外的页面回输 PIN 的页、接口回 401。没设 PIN 什么都不拦
     if (p === '/api/auth') {

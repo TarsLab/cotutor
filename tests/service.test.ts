@@ -230,7 +230,7 @@ await initWorkspace({ slug: 'kid', dir: wsRoot });
   process.env.COTUTOR_SERVICE = 'com.tarslab.cotutor.kid';
   const r2 = (await route('GET', '/api/health', ctx)).json as Record<string, unknown>;
   delete process.env.COTUTOR_SERVICE;
-  check('/api/health:pid、mode(终端 / 后台服务)、vault 读不读得到', r1.pid === process.pid && r1.mode === 'foreground' && r2.mode === 'service' && ['ok', 'missing'].includes(String(r1.vault)), JSON.stringify([r1.mode, r2.mode, r1.vault]));
+  check('/api/health:pid、mode(终端 / 后台服务)、vault 读不读得到', r1.pid === process.pid && r1.mode === 'foreground' && r2.mode === 'service' && ['ok', 'missing'].includes(String(r1.vault)) && r1.calls === 0 && typeof r1.bailian === 'boolean', JSON.stringify([r1.mode, r2.mode, r1.vault]));
 }
 
 const bin = join(import.meta.dirname, '..', 'bin', 'cotutor.js');

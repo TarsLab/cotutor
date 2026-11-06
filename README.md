@@ -17,6 +17,8 @@ cotutor open                               # 打开家长端,不用记地址
 
 后台服务登录后自己起来、崩了自己再起、关了终端照样跑,日志按天落文件:`cotutor service status` 看在不在跑,`cotutor service logs` 看日志,`cotutor service restart` 重起。Mac 上用 launchd,Linux 上用 systemd 用户服务,Windows 上是一条用户自己的登录项(不用管理员、没有黑窗口);第一次起来 Windows 可能弹窗问「允许访问」,点允许,平板才连得进来。要在终端里调试用 `cotutor serve`,先 `cotutor service stop` 让出端口。
 
+Mac 和 Windows 上,`service install` 会一起装一个菜单栏(任务栏)图标,不用开终端就能看状态:正常时就是 logo;有事要处理出橙点;后台服务没在跑时 logo 变淡并出红点。状态变差时通知一次。点开图标能看原因、打开家长端、重启服务、看日志。「退出 cotutor」会停掉这台电脑上所有孩子的后台服务,平板打不开,下次登录自动恢复。Windows 的新图标先收在任务栏右下角的 `^` 里。不要图标就 `cotutor tray off`,装服务时加 `--no-tray` 也行。Linux 上没做,用 `cotutor service status` 看。
+
 地址认电脑名,换 Wi-Fi、路由器换 IP 都不用重签证书、不用重扫。端口在 `init` 时选一次写进 `cotutor.json`,以后不变:优先 443,地址里不用写端口(`https://<电脑名>.local/`);443 被占着或系统不让用(Linux 默认不让)就用 8443,再往后 8445、8447;几个孩子各用各的,自动让开。运行时被占只报错说明是谁占着,不会自己换,因为换了端口平板要重新扫码、重加图标。试用(`--sandbox`)的端口永远是真 workspace 的 +1,`cotutor open --sandbox` 打开。
 
 接着三件事:

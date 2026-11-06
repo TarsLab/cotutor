@@ -9,7 +9,8 @@ export const USAGE = `用法:
   cotutor add-theme <主题名> [--from <主题>] [--workspace <dir>]       加一个自家的主题:拷一份(缺省出厂的 default)到 themes/<主题名>/,改 cotutor.json 的 kid.theme 换过去
   cotutor serve [--workspace <dir>] [--port <n>] [--http] [--trace] [--open] [--log-dir <目录>]   在终端里起服务(一 workspace 一进程;~/.config/cotutor/certs/ 有证书就走 HTTPS;--trace 每一轮的事件按道打印;只打印家长端首页的地址,孩子的平板在那里扫码;--open 顺手打开,旧名 --open-qr 照样认;--log-dir 输出按天落文件,后台服务用;关了终端就停,一直开着用 cotutor service)
   cotutor open [--workspace <dir>] [--sandbox] [--print] [--json]        打开家长端(读 cotutor.json,不用记端口);--sandbox 开试用的那个(端口永远是真的 +1);--print 只打印地址;没在跑就说怎么起,以 1 退
-  cotutor service install | uninstall | start | stop | restart [--workspace <dir>]   把 serve 装成这台电脑的后台服务(macOS launchd、Linux systemd 用户服务、Windows 用户的登录项,都不要管理员):登录后自己起来、崩了 10 秒后再起、日志按天落文件留 14 天;一个 workspace 一个;换了 node 版本或包挪了地方再 install 一次
+  cotutor service install | uninstall | start | stop | restart [--workspace <dir>] [--no-tray]   把 serve 装成这台电脑的后台服务(macOS launchd、Linux systemd 用户服务、Windows 用户的登录项,都不要管理员):登录后自己起来、崩了 10 秒后再起、日志按天落文件留 14 天;一个 workspace 一个;换了 node 版本或包挪了地方再 install 一次
+  cotutor tray on | off | status [--json]                             菜单栏 / 任务栏图标(macOS、Windows;service install 时一起装,--no-tray 不带):正常时只有 logo,有事出橙点,没在跑时变淡加红点并通知一次;点它看状态、打开家长端、重启、看日志、退出;off 关掉并记住
   cotutor service status [--json] | logs [--lines <n>] [--follow]      后台服务在不在跑、端口答不答应、跑的哪个版本、vault 读不读得到、日志在哪;logs 看最近的日志
   cotutor pin [off | status] [--pin <数字>] [--json]                       家长端 /parent 与工作台 /dev 的锁:机器级 PIN(所有 workspace 共用),iPad 上输一次、这台电脑免密;没设就全开(家长在旁边可以不设);off 撤掉
   cotutor cert [--host <名或IP>]...                                      用 mkcert 建这台机器的自签证书到 ~/.config/cotutor/certs/(平板、手机上录音要 HTTPS;所有 workspace 共用)

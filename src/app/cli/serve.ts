@@ -12,6 +12,7 @@ import { createServer as createHttp, type Server } from 'node:http';
 import { createServer as createHttps } from 'node:https';
 import { hostname, networkInterfaces } from 'node:os';
 import { join } from 'node:path';
+import { siteUrl } from '../../shared/site-url.ts';
 import { doctorWorkspace } from './doctor.ts';
 import { answersLocally } from './port.ts';
 import { awakeScript, psArgs } from './service-windows.ts';
@@ -20,6 +21,8 @@ import { createContext, createHandler, type AppContext } from '../http/app.ts';
 import { liveUpgrade } from '../ws/route.ts';
 import { AUTO_BOOKKEEP_EVERY_MS, autoBookkeep } from '../../runtime/auto-bookkeep.ts';
 import { USER_CERT_DIR, expandPath, loadWorkspace, type ResolveOptions, type Workspace } from '../workspace.ts';
+
+export { siteUrl };
 
 export interface ServeOptions extends ResolveOptions {
   workspace?: string;
@@ -93,12 +96,6 @@ export function localName(name: string = currentName()): string {
   return name.endsWith('.local') ? name : `${name}.local`;
 }
 
-/** 地址:默认端口不写(https 的 443、http 的 80) */
-export function siteUrl(scheme: 'http' | 'https', host: string, port: number, path = '/'): string {
-  const isDefault = (scheme === 'https' && port === 443) || (scheme === 'http' && port === 80);
-  return `${scheme}://${host}${isDefault ? '' : `:${port}`}${path}`;
-}
-
 /** 证书认不认这个主机名;读不了当作不认 */
 export function certCovers(certFile: string, host: string): boolean {
   try {
@@ -122,6 +119,7 @@ export async function serveWorkspace(opts: ServeOptions = {}): Promise<ServeResu
   const warnings = report.checks.filter((c) => !c.ok).map((c) => `${c.name}:${c.detail}${c.fix ? `(${c.fix})` : ''}`);
   const port = opts.port ?? ws.config.server.port;
   const ctx = createContext(ws);
+  ctx.openCalls = () => liveUpgrade.openCalls();
   const handler = createHandler(ctx);
   const tls = opts.http ? null : httpsFiles(ws);
   const server = tls ? createHttps({ cert: readFileSync(tls.cert), key: readFileSync(tls.key) }, handler) : createHttp(handler);

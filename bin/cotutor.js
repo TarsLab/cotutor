@@ -13,11 +13,14 @@ if (major < 22 || (major === 22 && minor < 18)) {
   process.exit(2);
 }
 
-const src = new URL('../src/app/cli/main.ts', import.meta.url);
-const entry = existsSync(fileURLToPath(src)) ? src : new URL('../dist/app/cli/main.js', import.meta.url);
+// 托盘进程一直开着,走轻入口:不把所有命令都加载进来(src/app/cli/tray-run.ts)
+const argv = process.argv.slice(2);
+const name = argv[0] === 'tray' && argv[1] === 'run' ? 'tray-run' : 'main';
+const src = new URL(`../src/app/cli/${name}.ts`, import.meta.url);
+const entry = existsSync(fileURLToPath(src)) ? src : new URL(`../dist/app/cli/${name}.js`, import.meta.url);
 try {
   const { main } = await import(entry.href);
-  await main(process.argv.slice(2));
+  await main(argv);
 } catch (err) {
   console.error(`cotutor: 内部错误:${err?.stack ?? err}`);
   process.exitCode = 4;

@@ -527,6 +527,14 @@ export async function doctorWorkspace(
   if (probeEnv && root && (process.platform === 'darwin' || process.platform === 'linux' || process.platform === 'win32')) {
     const { findService, realHost } = await import('./service.ts');
     const s = await findService({ ...realHost(), env }, root).catch(() => null);
+    if (s) {
+      // 菜单栏 / 任务栏图标:家长不开终端看状态靠它;家长自己关掉的不提
+      const { trayStatus, traySupported } = await import('./tray.ts');
+      if (traySupported(process.platform)) {
+        const t = await trayStatus({ ...realHost(), env }).catch(() => null);
+        if (t && !t.off) push({ name: 'tray', ok: t.installed, required: false, detail: t.installed ? `托盘图标装了${t.running ? ',在跑' : ',现在没在跑(点过退出,下次登录回来)'}` : '没装托盘图标:看状态只能开终端', fix: t.installed ? undefined : 'cotutor tray on' });
+      }
+    }
     if (!s) push({ name: 'service', ok: false, required: false, detail: '没装后台服务:在终端里跑的 cotutor serve,关了终端就停', fix: 'cotutor service install(登录后自己起来、崩了自己再起)' });
     else {
       const gone = s.args.slice(0, 2).filter((f) => !existsSync(f));

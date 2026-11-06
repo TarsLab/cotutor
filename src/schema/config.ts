@@ -5,9 +5,9 @@
  * 人设(display / avatar / voice)、政策、开关全在这里。
  */
 import { z } from 'zod';
+import { DEFAULT_PORT } from '../shared/default-port.ts';
 
-/** cotutor.json 没写端口时用的,只给旧配置:改了它们的地址就变了,平板要重新扫码。新 workspace 的端口 init 选好写进文件(src/app/cli/port.ts) */
-export const DEFAULT_PORT = 5180;
+export { DEFAULT_PORT };
 
 export const PolicySchema = z.object({
   /** 老师说给孩子听的每一句的字数上限;超出在句末截断(板书后按句算) */

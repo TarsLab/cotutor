@@ -20,7 +20,9 @@ import { linkClaudeSkills, upgradeSkills } from './skills.ts';
 import { addTheme, upgradeThemes } from './themes.ts';
 import { patchConfig } from '../workspace.ts';
 import { resolveRoot } from '../workspace.ts';
-import { serveWorkspace } from './serve.ts';
+import { httpsFiles, serveWorkspace } from './serve.ts';
+import { teeLogs } from './serve-log.ts';
+import { controlService, findService, installService, probeHealth, realHost, servicePlatform, serviceStatus, tailLog, uninstallService, waitHealthy, type Health } from './service.ts';
 import { openSandbox } from './sandbox.ts';
 import { serveMock, type MockScenario } from '../mock/mock.ts';
 import { UsageError, loadWorkspace, redactDeep, redactHome, workspaceReport } from '../workspace.ts';
@@ -89,7 +91,7 @@ const NO_WORKSPACE = ['grades', 'init', 'mock', 'pin', 'cert'];
 export async function main(argv: string[]): Promise<void> {
   let json = false;
   try {
-    const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'name', 'grade', 'port', 'from', 'runtime', 'force', 'display', 'subject', 'avatar', 'description', 'scenario', 'delay', 'lane', 'job', 'date', 'thread', 'at', 'photo', 'activity', 'param', 'runs', 'only', 'kid-model', 'pin', 'out', 'bundles', 'step', 'voice', 'tutor', 'instruction']);
+    const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'name', 'grade', 'port', 'from', 'runtime', 'force', 'display', 'subject', 'avatar', 'description', 'scenario', 'delay', 'lane', 'job', 'date', 'thread', 'at', 'photo', 'activity', 'param', 'runs', 'only', 'kid-model', 'pin', 'out', 'bundles', 'step', 'voice', 'tutor', 'instruction', 'log-dir', 'lines']);
     json = flags.json === true;
     let workspace = typeof flags.workspace === 'string' ? flags.workspace : undefined;
     // --version / --help 是旗标不是命令,parseArgs 把它们收进 flags,cmd 拿不到,所以在 switch 前处理
@@ -105,6 +107,7 @@ export async function main(argv: string[]): Promise<void> {
     if (flags.fresh === true && flags.sandbox !== true) throw new UsageError('--fresh 只跟 --sandbox 一起用:cotutor serve --sandbox --fresh 重新分出试用 workspace');
     if (flags.sandbox === true) {
       if (NO_WORKSPACE.includes(cmd)) throw new UsageError(`${cmd} 不用 workspace,--sandbox 没有意义`);
+      if (cmd === 'service') throw new UsageError('试用 workspace 不装后台服务:试的时候 cotutor serve --sandbox 在前台跑');
       const sb = await openSandbox(workspace, { fresh: flags.fresh === true });
       workspace = sb.root;
       if (!json) {
@@ -149,7 +152,32 @@ export async function main(argv: string[]): Promise<void> {
       }
       case 'serve': {
         const port = typeof flags.port === 'string' ? Number(flags.port) : undefined;
-        const r = await serveWorkspace({ workspace, port, http: flags.http === true });
+        // 后台服务(cotutor service 装的)带 --log-dir:输出按天落文件
+        const logDir = typeof flags['log-dir'] === 'string' ? flags['log-dir'] : undefined;
+        if (logDir) teeLogs(logDir);
+        // 没接住的错误:记一笔再以非 0 退(后台服务隔 10 秒再起);和 Node 缺省一样会退,只是日志里有时刻和这句
+        const fatal = (what: string) => (err: unknown): void => {
+          process.stderr.write(`cotutor serve: ${what},退出${process.env.COTUTOR_SERVICE ? '(后台服务十秒后自己再起)' : ''}\n${err instanceof Error ? err.stack : String(err)}\n`);
+          process.exit(1);
+        };
+        process.on('uncaughtException', fatal('没接住的错误'));
+        process.on('unhandledRejection', fatal('没接住的 Promise 错误'));
+        let r: Awaited<ReturnType<typeof serveWorkspace>>;
+        try {
+          r = await serveWorkspace({ workspace, port, http: flags.http === true });
+        } catch (err) {
+          if ((err as NodeJS.ErrnoException).code !== 'EADDRINUSE') throw err;
+          const busy = (err as { port?: number }).port ?? port;
+          // 后台服务以 0 退:launchd / systemd 只在崩了时拉起,不一直重试抢端口
+          if (process.env.COTUTOR_SERVICE) {
+            process.stderr.write(`cotutor serve: 端口 ${busy} 被占着(终端里开着一个 cotutor serve?),后台服务先不起;关掉它以后 cotutor service start\n`);
+            process.exitCode = 0;
+          } else {
+            process.stderr.write(`cotutor serve: 端口 ${busy} 被占着。多半是这个 workspace 的后台服务在跑(cotutor service status 看;要在终端里调试先 cotutor service stop),或者另一个终端里开着 cotutor serve;也可以 --port 换一个\n`);
+            process.exitCode = 1;
+          }
+          return;
+        }
         if (flags.trace === true) {
           const keep = laneFilter(typeof flags.lane === 'string' ? flags.lane : undefined);
           r.ctx.runner.onEvent((e) => { if (keep(e.event)) process.stdout.write(`${e.tutor} ${e.job} ${formatEvent(e.event)}\n`); });
@@ -160,6 +188,110 @@ export async function main(argv: string[]): Promise<void> {
         if (!r.https) process.stdout.write('  ! HTTP:平板、手机上按住说话要 HTTPS;cotutor cert 建证书后重启即走 HTTPS\n');
         // 只给家长端一个入口:孩子的平板扫码、排首页、记录都在里面,工作台从它的右上角进
         await printOpen('家长端', r.parentPage, '在这台电脑上打开:孩子的平板扫码、排首页、看记录都在里面;--open 顺手打开', wantsOpen(flags));
+        return;
+      }
+      case 'service': {
+        const sub = positionals[0];
+        const SUBS = ['install', 'uninstall', 'start', 'stop', 'restart', 'status', 'logs'];
+        if (!sub || !SUBS.includes(sub)) throw new UsageError(`service 后面跟 ${SUBS.join(' / ')} 之一。\n${USAGE}`);
+        const host = realHost();
+        servicePlatform(host.platform);
+        const ws = loadWorkspace(workspace);
+        if (ws.sandbox) throw new UsageError('试用 workspace 不装后台服务:试的时候 cotutor serve --sandbox 在前台跑');
+        const root = ws.root;
+        const port = ws.config.server.port;
+        const scheme = httpsFiles(ws) ? 'https' : 'http';
+        const parentPage = `${scheme}://localhost:${port}/parent/home`;
+        const when = (iso: string): string => { const d = new Date(iso); const ago = Math.round((Date.now() - d.getTime()) / 60_000); return `${localDate(d)} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}(${ago < 60 ? `${ago} 分钟` : ago < 2880 ? `${Math.round(ago / 60)} 小时` : `${Math.round(ago / 1440)} 天`}前)`; };
+        // 后台读不到 vault(macOS 拦着后台进程读「文稿」、iCloud 云盘)、版本对不上:装完、起完、看状态都提
+        const notes = (h: Health | null): string[] => {
+          const out: string[] = [];
+          if (h?.vault === 'denied') out.push(`! 后台服务读不到 vault(${redactHome(ws.paths.vault)}):macOS 不让后台进程读「文稿」「桌面」和 iCloud 云盘,也不弹窗问。系统设置 › 隐私与安全性 › 完全磁盘访问权限,点 + 加上 ${process.execPath}(或把 vault 挪出这几处),然后 cotutor service restart`);
+          if (h?.version && h.version !== version()) out.push(`! 在跑的是 ${h.version},装的是 ${version()}:cotutor service restart 换上新的`);
+          return out;
+        };
+        const tellLog = async (dir: string | null): Promise<void> => {
+          const t = dir ? await tailLog(dir, 15) : null;
+          if (t) { process.stdout.write(`  ${redactHome(t.file)} 最后几行:\n`); for (const l of t.lines) process.stdout.write(`    ${l}\n`); }
+          else if (dir) process.stdout.write(`  日志还没有;launchd 自己的输出在 ${redactHome(dir)}/launchd.log\n`);
+        };
+        if (sub === 'install') {
+          const before = await probeHealth(port);
+          const had = await findService(host, root);
+          if (before && before.mode !== 'service') throw new UsageError(`端口 ${port} 上有一个 cotutor serve 在终端里跑着${before.pid ? `(pid ${before.pid})` : ''}:先关掉它(那个终端里 Ctrl-C),再 cotutor service install`);
+          if (before && !had) throw new UsageError(`端口 ${port} 上已经是另一个 workspace 的后台服务:两个孩子各用各的端口(cotutor.json 的 server.port)`);
+          const r = await installService(host, root);
+          const h = await waitHealthy(port, 20_000, before?.started);
+          if (json) { process.stdout.write(`${JSON.stringify(redactDeep({ ...r, healthy: Boolean(h), health: h }), null, 2)}\n`); return; }
+          process.stdout.write(`${r.replaced ? '重装了' : '装好了'}后台服务 ${r.spec.label}(${redactHome(r.file)})\n`);
+          process.stdout.write(`  登录这台电脑后自己起来,崩了隔 10 秒再起;关了终端照样跑。日志 ${redactHome(r.spec.logDir)}/<日期>.log,留 14 天\n`);
+          if (host.platform === 'darwin') process.stdout.write('  Mac 睡着时平板连不上:有通话时 cotutor 拦着它闲置睡眠,别的时候看系统设置(cotutor doctor 会提);合盖照样睡\n');
+          if (host.platform === 'linux') {
+            const lg = await host.run('loginctl', ['show-user', process.env.USER ?? '', '-p', 'Linger']);
+            if (/Linger=no/.test(lg.stdout)) process.stdout.write(`  ! 现在只在你登录着时跑;不登录也要跑:sudo loginctl enable-linger ${process.env.USER ?? '<用户名>'}\n`);
+          }
+          if (h) { await printOpen('家长端', parentPage, '孩子的平板扫码、排首页、看记录都在里面', wantsOpen(flags)); for (const n of notes(h)) process.stdout.write(`${n}\n`); }
+          else { process.stdout.write(`! 装上了,但 20 秒内没答应(端口 ${port})。cotutor service logs 看看:\n`); await tellLog(r.spec.logDir); process.exitCode = 1; }
+          return;
+        }
+        if (sub === 'uninstall') {
+          const s = await uninstallService(host, root);
+          if (json) { process.stdout.write(`${JSON.stringify(redactDeep({ removed: s }), null, 2)}\n`); return; }
+          process.stdout.write(s ? `卸了后台服务 ${s.label};日志留在 ${redactHome(s.logDir ?? '')},不要了自己删\n要在终端里跑:cotutor serve\n` : '这个 workspace 没装后台服务\n');
+          return;
+        }
+        if (sub === 'start' || sub === 'stop' || sub === 'restart') {
+          const before = sub === 'stop' ? null : await probeHealth(port);
+          if (sub === 'start' && before?.mode === 'service') { process.stdout.write(`后台服务已经在跑了(pid ${before.pid ?? '?'})\n`); return; }
+          if (sub !== 'stop' && before && before.mode !== 'service') throw new UsageError(`端口 ${port} 上有一个 cotutor serve 在终端里跑着:先关掉它(Ctrl-C)`);
+          const s = await controlService(host, root, sub);
+          if (sub === 'stop') { process.stdout.write(host.platform === 'darwin' ? `停了 ${s.label}(下次登录又会自己起来;一直不要它:cotutor service uninstall)\n` : `停了 ${s.label}(下次开机又会起来;一直不要它:cotutor service uninstall)\n`); return; }
+          const h = await waitHealthy(port, 20_000, before?.started);
+          if (h) { process.stdout.write(`${sub === 'start' ? '起来了' : '重起了'}:pid ${h.pid ?? '?'},版本 ${h.version ?? '?'}\n`); for (const n of notes(h)) process.stdout.write(`${n}\n`); }
+          else { process.stdout.write(`! 20 秒内没答应(端口 ${port}):\n`); await tellLog(s.logDir); process.exitCode = 1; }
+          return;
+        }
+        if (sub === 'status') {
+          const st = await serviceStatus(host, root, port);
+          if (json) { process.stdout.write(`${JSON.stringify(redactDeep({ ...st, version: version(), parentPage }), null, 2)}\n`); return; }
+          if (!st.installed) process.stdout.write('后台服务:没装(cotutor service install)\n');
+          else process.stdout.write(`后台服务:装了 ${st.installed.label}(${redactHome(st.installed.file)})\n  ${st.running ? `在跑:pid ${st.pid ?? '?'}` : `没在跑${st.lastExit ? `(上次退出:${st.lastExit})` : ''};cotutor service start`}\n`);
+          const h = st.health;
+          if (h) process.stdout.write(`  端口 ${port} 答应:${h.mode === 'service' ? '后台服务' : `终端里的 cotutor serve(pid ${h.pid ?? '?'})`},版本 ${h.version ?? '?'},起来于 ${when(h.started)}\n  家长端 ${parentPage}\n`);
+          else process.stdout.write(`  端口 ${port} 没答应\n`);
+          for (const n of notes(h)) process.stdout.write(`${n}\n`);
+          if (st.installed?.logDir) process.stdout.write(`  日志 ${redactHome(st.installed.logDir)}/(cotutor service logs)\n`);
+          if (st.installed && !h) await tellLog(st.installed.logDir);
+          return;
+        }
+        // logs
+        const s = await findService(host, root);
+        if (!s?.logDir) throw new UsageError('这个 workspace 没装后台服务,没有日志;终端里跑的 cotutor serve 输出就在那个终端里');
+        const n = typeof flags.lines === 'string' ? Number(flags.lines) : 50;
+        if (!(Number.isInteger(n) && n > 0)) throw new UsageError('--lines 要是正整数');
+        const t = await tailLog(s.logDir, n);
+        if (t) for (const l of t.lines) process.stdout.write(`${l}\n`);
+        else process.stdout.write(`还没有日志(${redactHome(s.logDir)});launchd 自己的输出在 launchd.log\n`);
+        if (flags.follow === true) {
+          const { open: openFile, stat: statFile } = await import('node:fs/promises');
+          const { logFileFor } = await import('./serve-log.ts');
+          let file = t?.file ?? logFileFor(s.logDir, new Date());
+          let pos = (await statFile(file).catch(() => null))?.size ?? 0;
+          setInterval(() => {
+            void (async () => {
+              const today = logFileFor(s.logDir as string, new Date());
+              if (today !== file && (await statFile(today).catch(() => null))) { file = today; pos = 0; }
+              const st = await statFile(file).catch(() => null);
+              if (!st || st.size <= pos) return;
+              const fh = await openFile(file, 'r');
+              const buf = Buffer.alloc(st.size - pos);
+              await fh.read(buf, 0, buf.length, pos);
+              await fh.close();
+              pos = st.size;
+              process.stdout.write(buf);
+            })();
+          }, 500);
+        }
         return;
       }
       case 'mock': {

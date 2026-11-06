@@ -163,7 +163,9 @@ export async function initWorkspace(opts: InitOptions): Promise<InitResult> {
   const suggestions: string[] = [];
   if (!(await exists(join(root, '.git')))) suggestions.push('git init(建议:老师记忆、账本、政策都是不可再生状态,git 是破坏后的兜底)');
   suggestions.push('档案里填 school_start(读一年级的年月,如 2025-09),老师才知道现在是几年级哪个学期;想用自己的 Obsidian 库,改 cotutor.json 的 paths.vault');
-  suggestions.push('cotutor serve 起服务,在这台电脑上打开家长端 /parent 的「首页」,填百炼的按量 API Key 与业务空间 ID(老师的嘴和脑都用它;没填孩子端只出「老师们还没到」)');
+  suggestions.push(process.platform === 'win32'
+    ? 'cotutor serve 起服务(终端开着别关),在这台电脑上打开家长端 /parent 的「首页」,填百炼的按量 API Key 与业务空间 ID(老师的嘴和脑都用它;没填孩子端只出「老师们还没到」)'
+    : 'cotutor service install 装成后台服务(登录后自己起来、关了终端照样跑;在终端里调试用 cotutor serve),在这台电脑上打开家长端 /parent 的「首页」,填百炼的按量 API Key 与业务空间 ID(老师的嘴和脑都用它;没填孩子端只出「老师们还没到」)');
   suggestions.push('在平板、手机上用:cotutor cert 签证书(要 mkcert),根证书装到设备上并打开信任,iPad / iPhone 的步骤见 README 里的《iPad 与 iPhone》');
   suggestions.push('可选:点读、单词卡的配音用百炼(和老师的嘴同一把 key),到家长端首页点老师的「样子与声音」挑声音;cotutor pin 给家长端与工作台加锁');
   suggestions.push('cotutor doctor 逐项体检');

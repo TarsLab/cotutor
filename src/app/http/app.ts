@@ -612,10 +612,12 @@ export async function route(method: string, path: string, ctx: AppContext, body?
   const url = new URL(path, 'http://x');
   const p = url.pathname;
   try {
-    // 服务起来的时刻、版本、跑的是哪个提交;仓里的提交变了 = 代码更新了,重起才用上(build.ts)
+    // 服务起来的时刻、版本、跑的是哪个提交;仓里的提交变了 = 代码更新了,重起才用上(build.ts)。
+    // pid、mode(后台服务 service / 终端里 foreground)、vault 读不读得到(macOS 上后台服务读「文稿」、iCloud 云盘里的 vault 会被系统拦,没有弹窗):cotutor service status 看
     if (p === '/api/health') {
       const head = await headNow();
-      return { status: 200, json: { ok: true, configError: ctx.configError, started: BUILD.started, version: BUILD.version, commit: shortCommit(BUILD.commit), dirty: BUILD.dirty, head: shortCommit(head), changed: codeChanged(BUILD.commit, head) } };
+      const vault = await readdir(ws.paths.vault).then(() => 'ok', (err: NodeJS.ErrnoException) => (err.code === 'EPERM' || err.code === 'EACCES' ? 'denied' : 'missing'));
+      return { status: 200, json: { ok: true, configError: ctx.configError, started: BUILD.started, version: BUILD.version, commit: shortCommit(BUILD.commit), dirty: BUILD.dirty, head: shortCommit(head), changed: codeChanged(BUILD.commit, head), pid: process.pid, mode: process.env.COTUTOR_SERVICE ? 'service' : 'foreground', vault } };
     }
     // 家长端与工作台的锁(access.ts):对 PIN 换 cookie;设了 PIN、没凭证的设备,孩子端以外的页面回输 PIN 的页、接口回 401。没设 PIN 什么都不拦
     if (p === '/api/auth') {

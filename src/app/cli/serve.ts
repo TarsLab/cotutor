@@ -3,7 +3,9 @@
  * 启动打印解析结果与体检警告(配置坏了直接不起,骨架缺失只警告)。
  * 扫码页:/qr 现画一张二维码(编 <本机名>.local 那条,不随 Wi-Fi 变),iPad 用相机扫;listen 之后把真端口交给 ctx.listen。
  * HTTPS(iPad 上录音要):server.https 指了证书就用它(单个 workspace 的例外);没指就看机器级 ~/.config/cotutor/certs/(cotutor cert 用 mkcert 建);都没有走 HTTP。
+ * macOS:有通话开着、或有老师在写,就拦着这台电脑闲置睡眠(caffeinate -i);闲着不拦(家长定)。网络流量挡不住闲置睡眠,上着课没人碰 Mac 也会睡过去。
  */
+import { spawn, type ChildProcess } from 'node:child_process';
 import { X509Certificate } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createServer as createHttp, type Server } from 'node:http';
@@ -23,6 +25,8 @@ export interface ServeOptions extends ResolveOptions {
   host?: string;
   /** 强制走 HTTP(哪怕证书在) */
   http?: boolean;
+  /** macOS 上有事时拦着睡眠;缺省开 */
+  awake?: boolean;
 }
 
 export interface ServeResult {
@@ -113,6 +117,37 @@ export async function serveWorkspace(opts: ServeOptions = {}): Promise<ServeResu
   }, AUTO_BOOKKEEP_EVERY_MS);
   timer.unref();
   server.once('close', () => clearInterval(timer));
+  if (opts.awake !== false) {
+    const stop = holdAwake(() => liveUpgrade.openCalls() > 0 || Object.keys(ctx.ws.config.tutors).some((t) => ctx.runner.running(t) !== null));
+    server.once('close', stop);
+  }
   if (tls && !certCovers(tls.cert, localName())) warnings.push(`证书不含 ${localName()}:扫码打开会报「不安全」(重跑 cotutor cert,再重启 serve)`);
   return { server, ctx, ws, port: actual, https: Boolean(tls), urls, parentPage: `${scheme}://localhost:${actual}/parent/home`, warnings };
+}
+
+/** 多久看一次有没有事 */
+const AWAKE_CHECK_MS = 15_000;
+
+/**
+ * macOS:busy() 为真就起一个 caffeinate -i(拦闲置睡眠;-w 跟着这个进程,serve 没了它自己退),为假就停;别的系统什么都不做。
+ * 合盖照样睡(那是家长的事,iPad 那篇写着);返回停掉的函数
+ */
+export function holdAwake(busy: () => boolean, platform: NodeJS.Platform = process.platform, everyMs = AWAKE_CHECK_MS): () => void {
+  if (platform !== 'darwin') return () => {};
+  let child: ChildProcess | null = null;
+  const tick = (): void => {
+    const b = busy();
+    if (b && !child) {
+      const c = spawn('/usr/bin/caffeinate', ['-i', '-w', String(process.pid)], { stdio: 'ignore' });
+      c.on('error', () => { if (child === c) child = null; });
+      c.on('exit', () => { if (child === c) child = null; });
+      child = c;
+    } else if (!b && child) {
+      child.kill();
+      child = null;
+    }
+  };
+  const timer = setInterval(tick, everyMs);
+  timer.unref();
+  return () => { clearInterval(timer); child?.kill(); child = null; };
 }

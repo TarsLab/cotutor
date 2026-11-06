@@ -42,13 +42,14 @@
 - 改画面引擎 `src/chalk/` 先过 `tests/chalk-*.test.ts`(烤好的画面、圈住了什么、擦掉与换画板、字母笔顺),改做课包的命令 `src/app/cli/chalk/` 或舞台的 `src/ui/stage/chalk/` 再拿年级包的例子真跑一遍 `cotutor chalk build / bake / snap`(要本机的 Chrome;烤出的 bake.json 和入库的那份该一字不差)
 - 改 `src/scenes/paint/`、`src/media/draw.ts` 或画图卡先过 `tests/paint.test.ts`(假百炼、假老师全流程),页面走 `scripts/probe-paint.mjs`;真画按张计费
 - 改孩子端播放(嘴、卡的声音、孩子谁打断谁)先在 `tests/live-player.test.ts` 明确预期,再改 `runtime/delivery/player.ts` 的 `liveStep`;页面只 `liveDispatch`。板上的节(铺、写完、撤掉)是 `board/presentation.ts` 的 `step`,对 `tests/player.test.ts`,页面只 `dispatch`
+- 后台服务 `cotutor service`(`src/app/cli/service.ts`):macOS launchd、Linux systemd 用户服务,Windows 还没做;服务里的 serve 带 `--log-dir`,输出按天落文件(`serve-log.ts`);macOS 上有通话或老师在写时 `caffeinate -i`(`serve.ts` 的 `holdAwake`)。改了先过 `tests/service.test.ts`(假 launchctl / systemctl);真装拿临时 workspace 换个端口试,试完 uninstall,别给真孩子的 workspace 装
 - 冒烟:`init <slug> --dir <tmp>` → `doctor --workspace <tmp> --live` → `serve`;真跑老师 `cotutor send`;不花钱看前端 `cotutor mock`(老师都走实时老师页,假嘴念静音的声音;`--scenario nokey` 看没配百炼)
 - 页面里的 JS 有两个 CDP 探针进了 `pnpm test`(`tests/probe.test.ts` 起 `probe-layout`、`probe-play`,走 mock;要本机 Chrome,没有就跳过;`COTUTOR_SKIP_PROBES=1` 跳过),改 `kid-page.ts` 先看它们红不红;其余手动验收走 `scripts/probe-*.mjs`(CDP);舞台里的东西用 CDP 驱动;截图也走 CDP(`Page.captureScreenshot`),孩子端、工作台在轮询,无头 Chrome 的 `--screenshot` 会挂;手机尺寸要 `--force-device-scale-factor=2 --window-size=780,1688`;探针不出声:起 Chrome 加 `QUIET_ARGS`(`scripts/_quiet.mjs`,`--mute-audio`;页面不用浏览器合成声,mock 里卡的配音也是静音),要听加 `COTUTOR_PROBE_SOUND=1`
 
 ## 坑(不可推导的)
 
 - 页面模板是模板字符串:反斜杠写 `\\n`,正则里 `\/` 写 `\\/`,吃掉一层那行就成了注释而脚本照样能解析
-- serve 只热重载 cotutor.json;改 `src/` 要重起
+- serve 只热重载 cotutor.json;改 `src/` 要重起。装成后台服务的(`cotutor service`)用 `cotutor service restart`:它跑的是 install 那一刻写死的 node 与 bin,换了 Node 版本要再 install
 - 提交按文件名 stage,仓里常有并行的未提交改动
 - 舞台页(`/stage/`)也装孩子端的 `theme.css`:舞台里自己的类名要带前缀(`lc-` 这种),撞上 `.pen` `.c` 之类会被那边的样式改掉(`.pen` 关着 pointer-events,圈不上)
 - 探针模拟手指用 CDP `Input.dispatchMouseEvent`,别用 `dispatchEvent`:后者直接派到元素上,不走命中判定,盖住了、pointer-events 关了都照样过

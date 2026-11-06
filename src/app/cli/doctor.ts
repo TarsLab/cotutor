@@ -10,7 +10,7 @@ import { compatibleLine, isPlanKey, tokenPlanKey } from '../../shared/qianwen.ts
 import { runtimeIssue } from '../../brain/index.ts';
 import { homedir } from 'node:os';
 import { access, lstat, readFile, readdir, stat } from 'node:fs/promises';
-import { constants as fsConstants } from 'node:fs';
+import { constants as fsConstants, existsSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { takesTutorRules } from '../../runtime/context/tutor-rules.ts';
 import { parseAgentFile } from '../../runtime/agent-file.ts';
@@ -504,6 +504,24 @@ export async function doctorWorkspace(
   }
 
   if (ws && opts.live) await probeLive(ws, push, env);
+
+  // ---- 后台服务(cotutor service):装了没有、写死的 node 与 bin 还在不在;macOS 接着电源会不会闲置睡眠(睡着时平板连不上) ----
+  if (probeEnv && root && (process.platform === 'darwin' || process.platform === 'linux')) {
+    const { findService, realHost } = await import('./service.ts');
+    const s = await findService({ ...realHost(), env }, root).catch(() => null);
+    if (!s) push({ name: 'service', ok: false, required: false, detail: '没装后台服务:在终端里跑的 cotutor serve,关了终端就停', fix: 'cotutor service install(登录后自己起来、崩了自己再起)' });
+    else {
+      const gone = s.args.slice(0, 2).filter((f) => !existsSync(f));
+      push({ name: 'service', ok: !gone.length, required: false, detail: gone.length ? `后台服务 ${s.label} 指的 ${gone.map((f) => redactHome(f)).join('、')} 不在了(换了 node 版本、包挪了地方)` : `后台服务 ${s.label}(cotutor service status 看在不在跑)`, fix: gone.length ? 'cotutor service install(照现在的 node 与包重写一遍)' : undefined });
+    }
+  }
+  if (probeEnv && process.platform === 'darwin') {
+    const { acSleepMinutes } = await import('./service.ts');
+    const { execFile } = await import('node:child_process');
+    const text = await new Promise<string>((resolve) => execFile('/usr/bin/pmset', ['-g', 'custom'], { timeout: 5000, encoding: 'utf8' }, (_e, out) => resolve(String(out ?? ''))));
+    const min = acSleepMinutes(text);
+    if (min !== null) push({ name: 'mac.sleep', ok: min === 0, required: false, detail: min === 0 ? '接着电源时不闲置睡眠' : `接着电源 ${min} 分钟没人碰就睡,睡着时平板连不上(有通话时 cotutor 拦着它睡,别的时候拦不了)`, fix: min === 0 ? undefined : '系统设置 › 电池 › 选项,打开「显示器关闭时,防止接通电源的 Mac 自动进入睡眠」(台式 Mac 在 系统设置 › 节能);合盖照样睡' });
+  }
 
   // ---- 用户配置 ----
   try {

@@ -27,8 +27,12 @@ export interface LiveRouteDeps {
   onFinished?(tutor: string, why: string): void;
 }
 
-export function makeLiveUpgrade(deps: LiveRouteDeps = {}) {
-  return async function liveUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer, ctx: LiveApp): Promise<boolean> {
+/** 接升级的函数;openCalls = 现在开着几通(serve 看它定这台电脑能不能睡) */
+export type LiveUpgrade = ((req: IncomingMessage, socket: Duplex, head: Buffer, ctx: LiveApp) => Promise<boolean>) & { openCalls(): number };
+
+export function makeLiveUpgrade(deps: LiveRouteDeps = {}): LiveUpgrade {
+  const open = new Set<LiveCall>();
+  const liveUpgrade = async function liveUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer, ctx: LiveApp): Promise<boolean> {
     const m = /^\/api\/live\/([a-z0-9][a-z0-9-]*)\/ws(?:\?.*)?$/.exec(req.url ?? '');
     if (!m || !isUpgrade(req)) return false;
     const tutor = m[1];
@@ -43,10 +47,12 @@ export function makeLiveUpgrade(deps: LiveRouteDeps = {}) {
       onClose: () => call?.onSocketClose(),
     });
     const listen = new URL(req.url ?? '', 'http://x').searchParams.get('listen') === 'open' ? 'open' : 'hold';
-    call = new LiveCall(sock, { ctx, tutor, deviceId: cookieOf(req.headers.cookie, DEVICE_COOKIE), listen, endpoint: deps.endpoint, env: deps.env, heartbeatMs: deps.heartbeatMs, keepAliveMs: deps.keepAliveMs, swapTokens: deps.swapTokens, idleSwapMs: deps.idleSwapMs, echoWaitMs: deps.echoWaitMs, ringMs: deps.ringMs, stallMs: deps.stallMs, idleCutMs: deps.idleCutMs, maxTakeMs: deps.maxTakeMs, onFinished: (why) => deps.onFinished?.(tutor, why) });
+    call = new LiveCall(sock, { ctx, tutor, deviceId: cookieOf(req.headers.cookie, DEVICE_COOKIE), listen, endpoint: deps.endpoint, env: deps.env, heartbeatMs: deps.heartbeatMs, keepAliveMs: deps.keepAliveMs, swapTokens: deps.swapTokens, idleSwapMs: deps.idleSwapMs, echoWaitMs: deps.echoWaitMs, ringMs: deps.ringMs, stallMs: deps.stallMs, idleCutMs: deps.idleCutMs, maxTakeMs: deps.maxTakeMs, onFinished: (why) => { if (call) open.delete(call); deps.onFinished?.(tutor, why); } });
+    open.add(call);
     void call.start();
     return true;
   };
+  return Object.assign(liveUpgrade, { openCalls: () => open.size });
 }
 
 /** 探针:COTUTOR_LIVE_ENDPOINT 指到假百炼 */

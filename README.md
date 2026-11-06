@@ -11,8 +11,10 @@
 ```sh
 npm i -g cotutor
 cotutor init ming --name 小明 --grade 2     # 建 ~/cotutor/ming/:三位老师、技能、账本、对话目录、cotutor.json
-cotutor serve                              # 只打印家长端首页 https://localhost:5180/parent/home,孩子的平板在那里扫码
+cotutor service install                    # 装成这台电脑的后台服务,打印家长端首页 https://localhost:5180/parent/home,孩子的平板在那里扫码
 ```
+
+后台服务登录后自己起来、崩了自己再起、关了终端照样跑,日志按天落文件:`cotutor service status` 看在不在跑,`cotutor service logs` 看日志,`cotutor service restart` 重起。Mac 上用 launchd,Linux 上用 systemd 用户服务;Windows 上还没有后台服务,用 `cotutor serve` 在终端里跑(关了终端就停)。调试时也用 `cotutor serve`,先 `cotutor service stop` 让出端口。
 
 接着三件事:
 
@@ -22,7 +24,7 @@ cotutor serve                              # 只打印家长端首页 https://lo
 
 `init` 把出厂老师拷进 `agents/<老师>.md`,把做课包用的四个技能 chalk-* 和五个机器件 cotutor-tutor / cotutor-board / cotutor-analyze / cotutor-tune / cotutor-home 拷进 `.agents/skills/`(Codex、Qwen Code 直接读;Claude Code 读的 `.claude/skills` 是链到它的);
 做小课堂的课包用 `cotutor chalk`(check / build / bake / snap / dub),烤画面与截图用本机的 Chrome(Windows 上没有 Chrome 就用 Edge)。要在平板上用(按住说话要 HTTPS):`cotutor cert` 签一张
-自签证书(要 mkcert:Mac 上 `brew install mkcert && mkcert -install`;Windows 上 `winget install FiloSottile.mkcert`,重开终端再 `mkcert -install`),把根证书装到平板并打开信任,重启 `serve`,扫码打开。iPad 的步骤见 [iPad 与 iPhone](docs/iPad与iPhone.md)。
+自签证书(要 mkcert:Mac 上 `brew install mkcert && mkcert -install`;Windows 上 `winget install FiloSottile.mkcert`,重开终端再 `mkcert -install`),把根证书装到平板并打开信任,`cotutor service restart`(在终端里跑的就重开 `cotutor serve`),扫码打开。iPad 的步骤见 [iPad 与 iPhone](docs/iPad与iPhone.md)。
 
 然后在浏览器里:
 
@@ -95,7 +97,7 @@ cotutor upgrade --config              # 执行配置迁移
 cotutor doctor
 ```
 
-家长改过的老师与主题保留并显示差异;机器技能会随版本覆盖。配置迁移补缺,并更新未自定义的旧命令模板,保留自定义配置。升级程序后重新启动 `serve`。
+家长改过的老师与主题保留并显示差异;机器技能会随版本覆盖。配置迁移补缺,并更新未自定义的旧命令模板,保留自定义配置。升级程序后 `cotutor service restart`(在终端里跑的就重开 `serve`);换了 Node 版本、或包装到了别处,再 `cotutor service install` 一次。
 
 2026-10-30 之前建的 workspace,老师在 `.claude/agents/`、技能在 `.claude/skills/`。`cotutor upgrade`(或 `init`)先把它们原样挪到新位置,再照常升级;新位置已有同名的不挪,会点名。`.claude/` 里别的文件不动。
 

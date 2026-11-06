@@ -1,6 +1,6 @@
 {
   "name": "cotutor",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "AI tutors that co-teach with parents at home: real-time voice, an interactive whiteboard, and learning memory in your own Obsidian vault. Self-hosted; built for China's elementary curriculum.",
   "type": "module",
   "license": "SEE LICENSE IN LICENSE",

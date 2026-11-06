@@ -246,7 +246,7 @@ const cli = (args: string[], env: NodeJS.ProcessEnv = {}): Promise<{ code: numbe
   check('不认的子命令:用法错', bad.code === 2, bad.out);
 }
 {
-  // 端口被占:终端里以 1 退、说可能是后台服务;后台服务以 0 退(launchd / systemd 不拉起)
+  // 端口被占:终端里以 1 退、说怎么办;后台服务以 0 退(launchd / systemd 不拉起)。那句话的各种情况在 port.test
   const blocker = createServer(() => {});
   await new Promise<void>((r) => blocker.listen(0, '0.0.0.0', r));
   const port = String((blocker.address() as { port: number }).port);
@@ -255,7 +255,7 @@ const cli = (args: string[], env: NodeJS.ProcessEnv = {}): Promise<{ code: numbe
   const bg = await cli(['serve', '--workspace', wsRoot, '--port', port, '--http', '--log-dir', logDir], { COTUTOR_SERVICE: 'com.tarslab.cotutor.kid' });
   blocker.close();
   const logged = existsSync(logDir) ? readdirSync(logDir).filter((f) => f.endsWith('.log')).map((f) => readFileSync(join(logDir, f), 'utf8')).join('') : '';
-  check('端口被占:终端里以 1 退,说怎么办', fg.code === 1 && fg.out.includes(`端口 ${port} 被占着`) && fg.out.includes('cotutor service'), fg.out.slice(-400));
+  check('端口被占:终端里以 1 退,说怎么办', fg.code === 1 && fg.out.includes(`端口 ${port} 被占着`) && fg.out.includes('--port'), fg.out.slice(-400));
   check('端口被占:后台服务以 0 退(不一直重试),那句进了日志文件', bg.code === 0 && logged.includes(`端口 ${port} 被占着`) && /^\d\d:\d\d:\d\d /m.test(logged), JSON.stringify({ code: bg.code, logged: logged.slice(-300) }));
 }
 

@@ -12,6 +12,7 @@ import { DEFAULT_GRADE, LEGACY_GRADE, requireGradePack } from './grades.ts';
 import { installActivities } from './activities.ts';
 import { installSkills, linkClaudeSkills } from './skills.ts';
 import { migrateLayout } from './migrate.ts';
+import { choiceNote, choosePort, knownPorts } from './port.ts';
 import { installThemes } from './themes.ts';
 import { scanVault } from '../../memory/vault.ts';
 import { CONFIG_FILE, ConfigError, UsageError, HOME_ROOT, USER_CONFIG, expandPath, loadWorkspace, parseConfig, readJson, redactHome } from '../workspace.ts';
@@ -75,8 +76,10 @@ export async function initWorkspace(opts: InitOptions): Promise<InitResult> {
   const config = join(root, CONFIG_FILE);
   if (await exists(config)) steps.push({ item: CONFIG_FILE, action: 'kept', note: '政策文件不覆盖(家长的决定)' });
   else {
-    await writeFile(config, configTemplate({ slug: opts.slug, name: opts.name, port: opts.port, tutors: agents }));
-    steps.push({ item: CONFIG_FILE, action: 'created' });
+    // 端口只在这里选一次,写进文件以后不变(port.ts);--port 给了就听它的
+    const chosen = opts.port === undefined ? await choosePort(knownPorts()) : null;
+    await writeFile(config, configTemplate({ slug: opts.slug, name: opts.name, port: opts.port ?? chosen?.port, tutors: agents }));
+    steps.push({ item: CONFIG_FILE, action: 'created', ...(chosen ? { note: choiceNote(chosen) } : {}) });
   }
   // 老师按 cotutor.json 里有谁走(家长自己加的也补目录与链);配置坏了就只管出厂的,doctor 去报
   let tutorNames: string[] = [];
@@ -163,7 +166,7 @@ export async function initWorkspace(opts: InitOptions): Promise<InitResult> {
   const suggestions: string[] = [];
   if (!(await exists(join(root, '.git')))) suggestions.push('git init(建议:老师记忆、账本、政策都是不可再生状态,git 是破坏后的兜底)');
   suggestions.push('档案里填 school_start(读一年级的年月,如 2025-09),老师才知道现在是几年级哪个学期;想用自己的 Obsidian 库,改 cotutor.json 的 paths.vault');
-  suggestions.push('cotutor service install 装成后台服务(登录后自己起来、关了终端照样跑;在终端里调试用 cotutor serve),在这台电脑上打开家长端 /parent 的「首页」,填百炼的按量 API Key 与业务空间 ID(老师的嘴和脑都用它;没填孩子端只出「老师们还没到」)');
+  suggestions.push('cotutor service install 装成后台服务(登录后自己起来、关了终端照样跑;在终端里调试用 cotutor serve),cotutor open 打开家长端,在「首页」填百炼的按量 API Key 与业务空间 ID(老师的嘴和脑都用它;没填孩子端只出「老师们还没到」)');
   suggestions.push('在平板、手机上用:cotutor cert 签证书(要 mkcert),根证书装到设备上并打开信任,iPad / iPhone 的步骤见 README 里的《iPad 与 iPhone》');
   suggestions.push('可选:点读、单词卡的配音用百炼(和老师的嘴同一把 key),到家长端首页点老师的「样子与声音」挑声音;cotutor pin 给家长端与工作台加锁');
   suggestions.push('cotutor doctor 逐项体检');

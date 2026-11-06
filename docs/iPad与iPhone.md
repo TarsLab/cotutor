@@ -12,18 +12,19 @@
 
 不配证书也能用,只是孩子只能打字,不能按住说话。
 
-## 1. 先把两个信息记下来
+## 1. 先看一眼电脑名和端口
 
-在 Mac 上:
+孩子的平板认的是这台 Mac 的**电脑名**,换 Wi-Fi、路由器换 IP 它都不变:
 
 ```sh
-hostname                 # 主机名,形如 <主机名>.local
-ipconfig getifaddr en0   # 局域网 IP,形如 192.168.x.x
+scutil --get LocalHostName   # 电脑名,地址里写成 <电脑名>.local
 ```
 
-端口在 workspace 的 `cotutor.json` 里(`server.port`),出厂是 **5180**。
+它就是 系统设置 › 通用 › 共享 最下面的「本地主机名」,在那里能改。改名要重签证书、重新扫码(第 8 节),想改趁现在。
 
-下面统一写成 `<局域网 IP>` 和 `<端口>`。
+端口在 workspace 的 `cotutor.json` 里(`server.port`)。`cotutor init` 选一次写进去,以后不变:优先 443,这时地址里不用写端口,就是 `https://<电脑名>.local/`;443 被占着或系统不让用,就是 8443,地址是 `https://<电脑名>.local:8443/`。以前建的 workspace 写着什么就还是什么(多半是 5180)。
+
+下面的地址按 443 写;你的端口不是 443 的话,在主机名后面带上 `:<端口>`。
 
 ## 2. 在 Mac 上签证书(只做一次)
 
@@ -33,7 +34,7 @@ mkcert -install
 cotutor cert
 ```
 
-`cotutor cert` 会打印证书位置、覆盖的主机名,以及根证书 `rootCA.pem` 的路径。它签的是**这台机器**:主机名、`<主机名>.local`、当前所有局域网 IP、`localhost`、`127.0.0.1`。证书是机器级的,放在 `~/.config/cotutor/certs/`,几个孩子的 workspace 共用同一张。
+`cotutor cert` 会打印证书位置、覆盖的主机名,以及根证书 `rootCA.pem` 的路径。它签的是**这台机器**:电脑名、`<电脑名>.local`、当前所有局域网 IP(只给手输数字地址的退路用)、`localhost`、`127.0.0.1`。证书是机器级的,放在 `~/.config/cotutor/certs/`,几个孩子的 workspace 共用同一张。
 
 想直接在访达里定位根证书:
 
@@ -49,7 +50,7 @@ open "$(mkcert -CAROOT)"
 cotutor service restart     # 在终端里跑的:关掉重开 cotutor serve
 ```
 
-它会打印家长端的 `https://…` 地址,后面要用。
+之后跑 `cotutor open` 就能打开家长端,不用记地址。
 
 ## 3. 把根证书装到设备上
 
@@ -77,17 +78,17 @@ cotutor service restart     # 在终端里跑的:关掉重开 cotutor serve
 
 > 家长端 `/parent` 与工作台 `/dev` 缺省没有密码。电脑上跑过 `cotutor pin` 的家,第一次在这台设备上开它们会先看到一页输 PIN,输一次 90 天内不再问;孩子端不受影响。
 
-服务起来后(`cotutor service install`、`restart`,或终端里的 `cotutor serve`)只打印一行「家长端」:`https://localhost:<端口>/parent/home`。在这台电脑的浏览器里打开它(`cotutor serve --open` 顺手打开),「扫码打开」那块有两张码:「孩子的平板」编的是孩子端 `https://<主机名>.local:<端口>/`,用平板的相机对着屏幕扫,点弹出来的链接就进了 Safari;「我的手机」编的是家长端 `/parent`,家长自己在手机或 iPad 上看记录、排首页用,加到主屏幕是另一个图标。主机名和端口不变,码就一直有效。要贴在书桌上就点「打印 ›」:打开的打印页(`/parent/qr`)⌘P 只留卡面。孩子的平板连过以后这块自动收起,点一下再展开。
+服务起来后(`cotutor service install`、`restart`,或终端里的 `cotutor serve`)只打印一行「家长端」:`https://localhost/parent/home`。在这台电脑上跑 `cotutor open` 打开它,「扫码打开」那块有两张码:「孩子的平板」编的是孩子端 `https://<电脑名>.local/`,用平板的相机对着屏幕扫,点弹出来的链接就进了 Safari;「我的手机」编的是家长端 `/parent`,家长自己在手机或 iPad 上看记录、排首页用,加到主屏幕是另一个图标。电脑名和端口不变,码就一直有效。要贴在书桌上就点「打印 ›」:打开的打印页(`/parent/qr`)⌘P 只留卡面。孩子的平板连过以后这块自动收起,点一下再展开。
 
 地址栏没有警告、显示锁头,就对了。
 
 **扫完一直转圈,最后报「服务器停止响应」**:点二维码下面的「扫了打不开?换成 <数字地址>」再扫一次,或者在 Safari 里手输那条数字地址:
 
 ```
-https://<局域网 IP>:<端口>/
+https://<局域网 IP>/
 ```
 
-原因:主机名走 mDNS 解析,同一个名字会同时解析出 IPv4 和 IPv6 好几个地址,有些设备优先挑了 IPv6 那条,而那条路在家用路由器下不一定通。同一个 Wi-Fi 里,iPad 挑中了能通的、iPhone 挑中了不通的,是很常见的事。证书里 IP 也签了,用 IP 一样是锁头。
+可能的原因:电脑名走 mDNS 解析,同一个名字可能解析出 IPv4 和 IPv6 好几个地址,有些设备优先挑了 IPv6 那条,而那条路在家用路由器下不一定通。证书里 IP 也签了,用 IP 一样是锁头。数字地址会变,走这条退路的话,在路由器里给电脑固定一个 IP(DHCP 保留)。
 
 ## 6. 加到主屏幕:全屏
 
@@ -117,8 +118,9 @@ https://<局域网 IP>:<端口>/
 
 | 发生了什么 | 要做什么 |
 |---|---|
-| 路由器给 Mac 换了局域网 IP | Mac 上重跑 `cotutor cert`,`cotutor service restart`,设备上把主屏幕图标删掉按新地址重加。**根证书不用重装** |
-| 换了 Wi-Fi / 家里换了路由器 | 同上 |
+| 路由器给 Mac 换了局域网 IP、换了 Wi-Fi、家里换了路由器 | 用电脑名打开的**不用管**,设备和电脑在同一个网络里就行。只有手输数字地址的受影响:Mac 上重跑 `cotutor cert`,`cotutor service restart`,设备上按新地址重加图标;不想再来一次就在路由器里固定 IP |
+| 改了电脑名 | Mac 上重跑 `cotutor cert`,`cotutor service restart`,设备上重新扫码、重加主屏幕图标。局域网里有同名设备时 macOS 会自动在名字后面加 `-2`,也算改了名。**根证书不用重装** |
+| 改了端口(`server.port`) | `cotutor service restart`,设备上重新扫码、重加主屏幕图标。证书不用重签 |
 | 多了一台 iPad / iPhone | 只做第 3、4、5、6 步(证书不用重签) |
 | 换了一台 Mac | 从第 2 步全部重来,设备上要装新 Mac 的根证书 |
 | 改了 `cotutor.json` 的 `title` | 删掉主屏幕图标重加一次 |
@@ -131,6 +133,7 @@ https://<局域网 IP>:<端口>/
 | 「不安全」「此连接非私人连接」 | 网络**是通的**,TCP 已经连上,只是根证书在这台设备上没被信任 | 回第 4 步,把信任开关打开。开关不存在就回第 3 步重装描述文件 |
 | 转圈很久 → 「服务器停止响应」 | 连不上 | 换成 IP 地址(第 5 步);确认设备和 Mac 在同一个 Wi-Fi(2.4G / 5G 分成两个名字时也要对上,别连访客网络);确认 Mac 上服务还在跑(`cotutor service status`) |
 | 「找不到服务器」 | 名字解析不到 | 换成 IP 地址 |
+| `cotutor service status` 说端口被占着 | 别的软件占了这个端口,后台服务没起来(它会说是谁) | 关掉那个软件,`cotutor service start`;或者改 `server.port`(第 8 节) |
 | 「证书信任设置」里找不到那一项 | 描述文件没装到这台设备上 | 回第 3 步,重新传一次再装 |
 | 锁头是绿的,但首页老师头像全是灰的 | 后端不通 | Mac 上 `cotutor service status`、`cotutor service logs` 看有没有报错(在终端里跑的看那个终端) |
 | 首页灰着写「老师们还没到」 | 这台电脑没配百炼 | 家长端「首页」右栏最上面配;配置说明见 [README](../README.md#配置模型) |

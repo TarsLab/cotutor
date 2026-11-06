@@ -6,6 +6,9 @@
  */
 import { z } from 'zod';
 
+/** cotutor.json 没写端口时用的,只给旧配置:改了它们的地址就变了,平板要重新扫码。新 workspace 的端口 init 选好写进文件(src/app/cli/port.ts) */
+export const DEFAULT_PORT = 5180;
+
 export const PolicySchema = z.object({
   /** 老师说给孩子听的每一句的字数上限;超出在句末截断(板书后按句算) */
   replyMaxChars: z.number().int().positive().describe('老师说给孩子听的每一句的字数上限(板书讲稿一行一句,按句截);超出在句末截断'),
@@ -315,11 +318,11 @@ export const CotutorConfigSchema = z
     }),
     server: z
       .object({
-        port: z.number().int().min(1).max(65535).default(5180),
+        port: z.number().int().min(1).max(65535).default(DEFAULT_PORT).describe('端口。cotutor init 选一次写在这里(443 优先);改了平板要重新扫码、重加主屏幕图标'),
         /** 只给这个 workspace 用的证书(相对 workspace 根),是例外;不配则用机器级 ~/.config/cotutor/certs/(cotutor cert 会建,所有 workspace 共用;iPad 上录音要 HTTPS) */
         https: z.object({ cert: z.string().min(1), key: z.string().min(1) }).optional(),
       })
-      .default({ port: 5180 }),
+      .default({ port: DEFAULT_PORT }),
     paths: z.record(z.string(), z.string()).default({}).describe('角色 → 目录:vault 指 Obsidian vault 根;diary / plans / profile / timetable / textbooks / reference 相对 vault(缺省 日记 / 计划 / 孩子.md / 课程表.md / 教材 / 参考),不配 vault 就相对 workspace 根;profile 只是 init 新建档案的位置,老师按 cotutor: profile 属性找;captures(作业照片)相对 workspace 根'),
     vault: VaultPolicySchema.default({ keepScore: 4, autoBookkeep: false }).describe('vault 的写入政策:keepScore 话题打几星起才把摘要沉淀进日记(缺省 4);autoBookkeep 自动记账(缺省关)'),
     policyDefaults: PolicyPatchSchema.default({}).describe('所有老师的政策缺省;没写的用出厂缺省(60 字 / 板书 auto / 观察 10 条、计划 10 行、原文 4000 字)'),

@@ -1321,7 +1321,7 @@ ${pageDomJs(4000)}
     }
 
     const server = h('div', { class: 'panel' });
-    server.append(h('header', {}, h('h4', {}, '服务'), h('span', { class: 'sub' }, '改端口要重启 serve'),
+    server.append(h('header', {}, h('h4', {}, '服务'), h('span', { class: 'sub' }, '改端口要重启服务,平板要重新扫码、重加主屏幕图标'),
       h('span', { class: 'right' }, h('span', { class: 'fb' }), h('button', { class: 'btn primary', type: 'button', on: { click: async () => {
         try {
           const port = Number($('#s-port').value);
@@ -1330,7 +1330,7 @@ ${pageDomJs(4000)}
           const key = $('#s-key').value.trim();
           await api('PATCH', '/api/config', { server: { port, https: cert && key ? { cert, key } : null } });
           await loadConfig();
-          feedback(server, true, '已写入' + (port !== c.server.port ? ';端口改了,重启 serve 才生效' : ''));
+          feedback(server, true, '已写入' + (port !== c.server.port ? ';端口改了,重启服务才生效;平板要重新扫码、重加主屏幕图标' : ''));
         } catch (e) { feedback(server, false, e.message); }
       } } }, '保存服务'))));
     server.append(h('div', { class: 'grid' },

@@ -1,11 +1,11 @@
 /**
  * cotutor serve:一 workspace 一进程,端口读 cotutor.json(--port 覆盖)。
  * 启动打印解析结果与体检警告(配置坏了直接不起,骨架缺失只警告)。
- * 扫码页:/qr 现画一张二维码(编 <本机名>.local 那条,不随 Wi-Fi 变),iPad 用相机扫;listen 之后把真端口交给 ctx.listen。
+ * 扫码页:/qr 现画一张二维码(编 <电脑名>.local 那条,不随 Wi-Fi 变),iPad 用相机扫;listen 之后把真端口交给 ctx.listen。端口是 443 时地址里不写端口(siteUrl)。
  * HTTPS(iPad 上录音要):server.https 指了证书就用它(单个 workspace 的例外);没指就看机器级 ~/.config/cotutor/certs/(cotutor cert 用 mkcert 建);都没有走 HTTP。
  * 有通话开着、或有老师在写,就拦着这台电脑闲置睡眠(macOS caffeinate -i,Windows SetThreadExecutionState);闲着不拦(家长定)。网络流量挡不住闲置睡眠,上着课没人碰电脑也会睡过去。
  */
-import { spawn, type ChildProcess } from 'node:child_process';
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { X509Certificate } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createServer as createHttp, type Server } from 'node:http';
@@ -13,6 +13,7 @@ import { createServer as createHttps } from 'node:https';
 import { hostname, networkInterfaces } from 'node:os';
 import { join } from 'node:path';
 import { doctorWorkspace } from './doctor.ts';
+import { answersLocally } from './port.ts';
 import { awakeScript, psArgs } from './service-windows.ts';
 import type { ListenInfo } from '../../ui/parent/qr-page.ts';
 import { createContext, createHandler, type AppContext } from '../http/app.ts';
@@ -65,9 +66,37 @@ export function lanAddresses(): string[] {
   return out;
 }
 
+/**
+ * 这台电脑在局域网里的名字(不带 .local)。macOS 读「本地主机名」(系统设置 › 通用 › 共享 里那个,就是 Bonjour 名,改了系统才变);
+ * 别的系统用 os.hostname()。读不到退回 os.hostname()。serve、证书、二维码都从这里拿
+ */
+export function computerName(platform: NodeJS.Platform = process.platform, read: () => string = () => execFileSync('/usr/sbin/scutil', ['--get', 'LocalHostName'], { encoding: 'utf8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'] }), fallback: string = hostname()): string {
+  if (platform === 'darwin') {
+    try {
+      const name = read().trim();
+      if (name) return name;
+    } catch { /* 没设过本地主机名 */ }
+  }
+  return fallback.replace(/\.local$/i, '');
+}
+
+/** 读 scutil 要起一个进程,登录、发一条这些请求里都会问到:记一分钟 */
+let nameCache: { at: number; name: string } | null = null;
+function currentName(): string {
+  const now = Date.now();
+  if (!nameCache || now - nameCache.at > 60_000) nameCache = { at: now, name: computerName() };
+  return nameCache.name;
+}
+
 /** 本机的 mDNS 名(与 cotutor cert 签的那条同一个写法) */
-export function localName(host: string = hostname()): string {
-  return host.endsWith('.local') ? host : `${host}.local`;
+export function localName(name: string = currentName()): string {
+  return name.endsWith('.local') ? name : `${name}.local`;
+}
+
+/** 地址:默认端口不写(https 的 443、http 的 80) */
+export function siteUrl(scheme: 'http' | 'https', host: string, port: number, path = '/'): string {
+  const isDefault = (scheme === 'https' && port === 443) || (scheme === 'http' && port === 80);
+  return `${scheme}://${host}${isDefault ? '' : `:${port}`}${path}`;
 }
 
 /** 证书认不认这个主机名;读不了当作不认 */
@@ -83,7 +112,7 @@ export function certCovers(certFile: string, host: string): boolean {
 export function listenInfo(https: boolean, port: number): ListenInfo {
   const scheme = https ? 'https' : 'http';
   const ip = lanAddresses()[0];
-  return { name: `${scheme}://${localName()}:${port}/`, ip: ip ? `${scheme}://${ip}:${port}/` : null, https };
+  return { name: siteUrl(scheme, localName(), port), ip: ip ? siteUrl(scheme, ip, port) : null, https };
 }
 
 export async function serveWorkspace(opts: ServeOptions = {}): Promise<ServeResult> {
@@ -98,13 +127,15 @@ export async function serveWorkspace(opts: ServeOptions = {}): Promise<ServeResu
   const server = tls ? createHttps({ cert: readFileSync(tls.cert), key: readFileSync(tls.key) }, handler) : createHttp(handler);
   // WebSocket:实时老师的那条线(src/app/ws/);不认就关掉
   server.on('upgrade', (req, socket, head) => { void liveUpgrade(req, socket, head, ctx).then((took) => { if (!took) socket.destroy(); }, () => socket.destroy()); });
+  // 别的程序只占着 127.0.0.1 时,绑通配地址照样成功:平板连到这边,这台电脑上开 localhost 却到了别的程序。先问一声,当被占处理(main.ts 接)
+  if (port !== 0 && (await answersLocally(port))) throw Object.assign(new Error(`port ${port} answers on 127.0.0.1`), { code: 'EADDRINUSE', port });
   await new Promise<void>((resolveListen, reject) => {
     server.once('error', reject);
     server.listen(port, opts.host ?? '0.0.0.0', () => resolveListen());
   });
   const actual = (server.address() as { port: number }).port;
   const scheme = tls ? 'https' : 'http';
-  const urls = [hostname(), ...lanAddresses()].map((h) => `${scheme}://${h}:${actual}/`);
+  const urls = [localName(), ...lanAddresses()].map((h) => siteUrl(scheme, h, actual));
   ctx.listen = () => listenInfo(Boolean(tls), actual);
   // 自动记账(cotutor.json vault.autoBookkeep,缺省关;src/runtime/auto-bookkeep.ts):隔一阵看一次,开关跟着 cotutor.json 热重载;上一次没跑完不叠
   let booking = false;
@@ -122,8 +153,8 @@ export async function serveWorkspace(opts: ServeOptions = {}): Promise<ServeResu
     const stop = holdAwake(() => liveUpgrade.openCalls() > 0 || Object.keys(ctx.ws.config.tutors).some((t) => ctx.runner.running(t) !== null));
     server.once('close', stop);
   }
-  if (tls && !certCovers(tls.cert, localName())) warnings.push(`证书不含 ${localName()}:扫码打开会报「不安全」(重跑 cotutor cert,再重启 serve)`);
-  return { server, ctx, ws, port: actual, https: Boolean(tls), urls, parentPage: `${scheme}://localhost:${actual}/parent/home`, warnings };
+  if (tls && !certCovers(tls.cert, localName())) warnings.push(`证书不含 ${localName()}:多半是电脑名变了(改过名,或局域网里有同名设备时 macOS 会自动加 -2),扫码打开会报「不安全」。重跑 cotutor cert 再重启服务,平板重新扫码`);
+  return { server, ctx, ws, port: actual, https: Boolean(tls), urls, parentPage: siteUrl(scheme, 'localhost', actual, '/parent/home'), warnings };
 }
 
 /** 多久看一次有没有事 */

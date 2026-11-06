@@ -147,6 +147,24 @@ async function run(argv: string[]): Promise<{ out: string; err: string; code: nu
   process.exitCode = 0;
   return { out, err, code };
 }
+// 真的搬了端口,试用下次打开跟过去:规矩只有一条「+1」
+{
+  const { root: moved } = await initWorkspace({ slug: 'mover', dir: join(home, 'kids', 'mover'), port: 5180 });
+  const fork1 = await openSandbox(moved);
+  const portOf = (r: string): number => (JSON.parse(readFileSync(join(r, 'cotutor.json'), 'utf8')) as { server: { port: number } }).server.port;
+  check('分出来是 +1', portOf(fork1.root) === 5181);
+  write(join(fork1.root, 'conversations', 'math-tutor', '2026-11-06.json'), '{}');
+  patchConfig(moved, (c) => { c.server = { port: 443 }; });
+  const fork2 = await openSandbox(moved);
+  check('真的搬到 443:试用跟到 444,说一句', portOf(fork2.root) === 444 && !fork2.created && fork2.notes.some((n) => n.includes('444')), JSON.stringify(fork2.notes));
+  check('跟端口不动试用里的东西', existsSync(join(fork2.root, 'conversations', 'math-tutor', '2026-11-06.json')));
+  const fork3 = await openSandbox(moved);
+  check('没再变:不说话', fork3.notes.length === 0 && portOf(fork3.root) === 444);
+  patchConfig(moved, (c) => { c.server = 'bad'; });
+  const fork4 = await openSandbox(moved);
+  check('真的那份坏了:试用照旧', portOf(fork4.root) === 444 && fork4.notes.length === 0);
+}
+
 const { root: lan } = await initWorkspace({ slug: 'lan', dir: join(home, 'kids', 'lan') });
 const pack = await run(['pack', 'math-tutor', '你好', '--sandbox', '--workspace', lan]);
 check('cotutor pack --sandbox:分出来并在 sandbox 里跑', pack.code === 0 && pack.err.includes('分出试用 workspace') && existsSync(join(home, 'kids', '.sandbox', 'lan', '.cotutor', 'sandbox.json')), pack.err + pack.out.slice(0, 300));

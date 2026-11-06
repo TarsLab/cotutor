@@ -11,7 +11,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseAgentFile } from '../../runtime/agent-file.ts';
-import { CONFIG_SCHEMA_FILE, DICTATION_DEFAULT, cotutorJsonSchema, type BoardCardKind } from '../../schema/index.ts';
+import { CONFIG_SCHEMA_FILE, DEFAULT_PORT, DICTATION_DEFAULT, cotutorJsonSchema, type BoardCardKind } from '../../schema/index.ts';
 import { FACTORY_API_RUNTIMES } from '../../brain/index.ts';
 import { DEFAULT_GRADE, PACKAGE_GRADES_DIR } from './grades.ts';
 
@@ -169,7 +169,7 @@ export function configTemplate(input: ConfigTemplateInput): string {
     version: 1,
     title: input.name ? `${input.name}的老师们` : 'cotutor',
     kid: { slug: input.slug, ...(input.name ? { name: input.name } : {}) },
-    server: { port: input.port ?? 5180 },
+    server: { port: input.port ?? DEFAULT_PORT },
     paths: {},
     policyDefaults: {},
     tutors,

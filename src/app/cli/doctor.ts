@@ -266,6 +266,24 @@ export async function doctorWorkspace(
       }
     }
 
+    if (probeEnv) {
+      // 端口起不起得来:被别的程序占了,后台服务只在日志里写一句就不起了(serve 自己要绑,它起来时不查这项)
+      const { probeHealth, realHost } = await import('./service.ts');
+      const { portHolder, portState } = await import('./port.ts');
+      const port = opts.port ?? ws.config.server.port;
+      const fix = '腾出这个端口;或改 cotutor.json 的 server.port,平板要重新扫码、重加主屏幕图标';
+      if (await probeHealth(port)) push({ name: 'server.port', ok: true, required: false, detail: `端口 ${port} 上 cotutor 在答应` });
+      else {
+        const state = await portState(port);
+        if (state === 'free') push({ name: 'server.port', ok: true, required: false, detail: `端口 ${port} 空着,起得来` });
+        else if (state === 'denied') push({ name: 'server.port', ok: false, required: false, detail: `系统不让这个用户监听端口 ${port},服务起不来`, fix });
+        else {
+          const p = await portHolder(realHost(), port);
+          push({ name: 'server.port', ok: false, required: false, detail: `端口 ${port} 被占着${p ? `:${p.name}(pid ${p.pid})在用` : ''},服务起不来`, fix });
+        }
+      }
+    }
+
     {
       // 舞台包:小课堂 / 画板卡要它;没有只是重卡打不开,轻卡与对话照常。做课包(cotutor chalk bake / snap)与服务端烤画面也开它,在本机的 Chrome 里
       const { stageBuilt } = await import('../http/stage.ts');

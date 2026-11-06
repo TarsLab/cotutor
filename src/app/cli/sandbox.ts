@@ -9,6 +9,7 @@ import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { PATH_ROLES, ROLE_DEFAULTS, WORKSPACE_ROLES, type PathRole } from '../../schema/index.ts';
 import { SANDBOX_DIR, SANDBOX_KEEP_MACHINE, SANDBOX_MARK, SANDBOX_SKIP, SANDBOX_TITLE, SANDBOX_VAULT, type SandboxMark, type Workspace } from '../../schema/workspace.ts';
 import { CONFIG_FILE, UsageError, expandPath, loadWorkspace, parseConfig, readJson, readSandboxMark, redactHome, resolveRoot, type ResolveOptions } from '../workspace.ts';
+import { sandboxPort } from './port.ts';
 import { DIRS, LEDGER_FILES } from './skeleton.ts';
 
 export interface SandboxResult {
@@ -50,10 +51,30 @@ export async function openSandbox(override: string | undefined, opts: SandboxOpt
   const box = here ? root : sandboxRootOf(real);
   const existing = here ?? ((await exists(box)) ? readSandboxMark(box) : null);
   if (!existing && (await exists(box))) throw new UsageError(`${redactHome(box)} 已经有了,但不是 sandbox(没有 ${SANDBOX_MARK}),不动它;挪走再试`);
-  if (existing && !opts.fresh) return { root: box, from: existing.from, created: false, notes: [] };
+  if (existing && !opts.fresh) {
+    const moved = await followPort(box, existing.from);
+    return { root: box, from: existing.from, created: false, notes: moved ? [moved] : [] };
+  }
   if (!(await exists(join(real, CONFIG_FILE)))) throw new UsageError(`这个 sandbox 是从 ${redactHome(real)} 分出来的,那里已经没有 workspace 了,重新分不了`);
   const notes = await fork(real, box, opts);
   return { root: box, from: real, created: true, notes };
+}
+
+/** 试用的端口永远是真 workspace 的 +1:真的搬了端口,试用下次打开跟过去,不用记两套规矩;返回说明,没动 → null */
+async function followPort(box: string, real: string): Promise<string | null> {
+  const file = join(box, CONFIG_FILE);
+  try {
+    const realRaw = readJson(join(real, CONFIG_FILE));
+    const raw = readJson(file) as Record<string, unknown> | null;
+    if (realRaw === null || raw === null) return null;
+    const want = sandboxPort(parseConfig(realRaw, join(real, CONFIG_FILE)).server.port);
+    const server = (raw.server && typeof raw.server === 'object' ? raw.server : {}) as Record<string, unknown>;
+    if (server.port === want) return null;
+    await writeFile(file, `${JSON.stringify({ ...raw, server: { ...server, port: want } }, null, 2)}\n`);
+    return `真 workspace 换了端口,试用跟着改成 ${want}`;
+  } catch {
+    return null; // 真的那份坏了或没了:试用照旧
+  }
 }
 
 /** 真 workspace → box:根下照拷(跳过状态),外面的 vault 拷进来,补骨架,写改过的 cotutor.json,最后写标记再换上 */
@@ -112,7 +133,7 @@ export function sandboxConfig(raw: Record<string, unknown>, ws: Workspace, box: 
   const cfg: Record<string, unknown> = structuredClone(raw);
   cfg.title = `${SANDBOX_TITLE} · ${ws.config.title}`;
   const port = ws.config.server.port;
-  const server: Record<string, unknown> = { ...(isObj(raw.server) ? raw.server : {}), port: port === 65535 ? port - 1 : port + 1 };
+  const server: Record<string, unknown> = { ...(isObj(raw.server) ? raw.server : {}), port: sandboxPort(port) };
   const https = ws.config.server.https;
   if (https) server.https = { cert: expandPath(https.cert, real), key: expandPath(https.key, real) };
   cfg.server = server;

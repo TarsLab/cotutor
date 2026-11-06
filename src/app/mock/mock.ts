@@ -14,7 +14,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { readdir } from 'node:fs/promises';
 import { createServer as createHttp, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { createServer as createHttps } from 'node:https';
-import { hostname, tmpdir } from 'node:os';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseBoard } from '../../board/parse.ts';
 import { cardAssets, parseCardState, stripSecrets, DictationPropsSchema } from '../../board/cards/index.ts';
@@ -72,7 +72,7 @@ import { wavOfPcm } from '../../shared/wav.ts';
 import { buildReel, playRecordOk, reelHolds, reelMissRuns, type PlayRecord } from '../../ui/kid/reel.ts';
 import { weekOf } from '../../shared/time.ts';
 import { type CardStates } from '../../schema/index.ts';
-import { lanAddresses, listenInfo } from '../cli/serve.ts';
+import { lanAddresses, listenInfo, localName, siteUrl } from '../cli/serve.ts';
 import { qrPage, type ListenInfo } from '../../ui/parent/qr-page.ts';
 import { USER_CERT_DIR } from '../workspace.ts';
 import { kidThreads, type KidMessage } from '../../runtime/kid-view.ts';
@@ -1091,7 +1091,7 @@ export async function serveMock(opts: ServeMockOptions = {}): Promise<ServeMockR
   });
   const port = (server.address() as { port: number }).port;
   const scheme = tls ? 'https' : 'http';
-  const urls = [hostname(), ...lanAddresses()].map((h) => `${scheme}://${h}:${port}/`);
+  const urls = [localName(), ...lanAddresses()].map((h) => siteUrl(scheme, h, port));
   mock.listen = () => listenInfo(Boolean(tls), port);
-  return { server, mock, port, https: Boolean(tls), urls, qrPage: `${scheme}://localhost:${port}/parent/qr` };
+  return { server, mock, port, https: Boolean(tls), urls, qrPage: siteUrl(scheme, 'localhost', port, '/parent/qr') };
 }

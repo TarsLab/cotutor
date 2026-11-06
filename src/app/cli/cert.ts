@@ -1,15 +1,16 @@
 /**
  * cotutor cert:用 mkcert 给这台机器签一张证书到 ~/.config/cotutor/certs/(cert.pem + key.pem),serve 看到就走 HTTPS。
  * 为什么要:平板、手机浏览器的录音 / 语音识别只在安全上下文里给;局域网 IP 不是 localhost,得自签。
- * 为什么放机器级而不是 workspace:签的是本机名与局域网 IP,与孩子无关;多个 workspace 共用一张,IP 变了只重签一次。
- * 主机名 = 本机名、本机名.local、所有局域网 IPv4、localhost、127.0.0.1,再加 --host 给的。已有证书就覆盖(证书可再生)。不需要 workspace。
+ * 为什么放机器级而不是 workspace:签的是电脑名与局域网 IP,与孩子无关;多个 workspace 共用一张。
+ * 主机名 = 电脑名、电脑名.local、所有局域网 IPv4、localhost、127.0.0.1,再加 --host 给的。已有证书就覆盖(证书可再生)。不需要 workspace。
+ * 地址认电脑名,IP 变了不用重签;证书里的 IP 只给手输数字地址的退路用。改了电脑名才要重签。
  */
 import { execFile } from 'node:child_process';
 import { mkdir } from 'node:fs/promises';
 import { hostname } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { lanAddresses } from './serve.ts';
+import { computerName, lanAddresses } from './serve.ts';
 import { USER_CERT_DIR, UsageError } from '../workspace.ts';
 
 const execFileP = promisify(execFile);
@@ -38,8 +39,9 @@ export async function makeCert(extraHosts: string[] = []): Promise<CertResult> {
   } catch {
     throw new UsageError(`PATH 里没有 mkcert。装:${mkcertHint()}(这台电脑信任一次根证书);平板、手机端见 cert 命令输出的提示与 docs/iPad与iPhone.md。`);
   }
-  const host = hostname();
-  const hosts = [...new Set([host, host.endsWith('.local') ? host : `${host}.local`, ...lanAddresses(), 'localhost', '127.0.0.1', ...extraHosts])];
+  const name = computerName();
+  // os.hostname() 也带上:和电脑名不一样时(macOS 上可能跟着网络变),以前能开的地址别丢
+  const hosts = [...new Set([name, `${name}.local`, hostname(), ...lanAddresses(), 'localhost', '127.0.0.1', ...extraHosts])];
   const dir = USER_CERT_DIR;
   await mkdir(dir, { recursive: true });
   const cert = join(dir, 'cert.pem');

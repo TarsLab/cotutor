@@ -20,7 +20,8 @@ import { linkClaudeSkills, upgradeSkills } from './skills.ts';
 import { addTheme, upgradeThemes } from './themes.ts';
 import { patchConfig } from '../workspace.ts';
 import { resolveRoot } from '../workspace.ts';
-import { httpsFiles, serveWorkspace } from './serve.ts';
+import { bindFailure, portHolder, whoHolds } from './port.ts';
+import { httpsFiles, serveWorkspace, siteUrl } from './serve.ts';
 import { teeLogs } from './serve-log.ts';
 import { controlService, earlyLogHint, findService, installService, probeHealth, realHost, runKeeper, servicePlatform, serviceStatus, tailLog, uninstallService, waitHealthy, type Health } from './service.ts';
 import { openSandbox } from './sandbox.ts';
@@ -76,13 +77,16 @@ function parseArgs(argv: string[], valued: string[]): Parsed {
   return { cmd, positionals, flags };
 }
 
-/** 打开哪一页的那一行(地址独占行尾:后面紧跟全角括号的话,终端不把它认成链接);--open(旧名 --open-qr)顺手用默认浏览器打开(各系统各自的打开命令,失败不吭声) */
-async function printOpen(label: string, page: string, hint: string, open: boolean): Promise<void> {
-  process.stdout.write(`  ${label} ${page}\n${' '.repeat(label.length * 2 + 3)}${hint}\n`);
-  if (!open) return;
+/** 用默认浏览器打开(各系统各自的打开命令,失败不吭声) */
+async function openInBrowser(page: string): Promise<void> {
   const { spawn } = await import('node:child_process');
   const [cmd, args] = process.platform === 'darwin' ? ['open', [page]] : process.platform === 'win32' ? ['cmd', ['/c', 'start', '', page]] : ['xdg-open', [page]];
   spawn(cmd, args, { stdio: 'ignore', detached: true }).on('error', () => {}).unref();
+}
+/** 打开哪一页的那一行(地址独占行尾:后面紧跟全角括号的话,终端不把它认成链接);--open(旧名 --open-qr)顺手打开 */
+async function printOpen(label: string, page: string, hint: string, open: boolean): Promise<void> {
+  process.stdout.write(`  ${label} ${page}\n${' '.repeat(label.length * 2 + 3)}${hint}\n`);
+  if (open) await openInBrowser(page);
 }
 const wantsOpen = (flags: Record<string, string | true>): boolean => flags.open === true || flags['open-qr'] === true;
 /** 不用 workspace 的命令:--sandbox 对它们没有意义 */
@@ -166,16 +170,14 @@ export async function main(argv: string[]): Promise<void> {
         try {
           r = await serveWorkspace({ workspace, port, http: flags.http === true });
         } catch (err) {
-          if ((err as NodeJS.ErrnoException).code !== 'EADDRINUSE') throw err;
-          const busy = (err as { port?: number }).port ?? port;
-          // 后台服务以 0 退:launchd / systemd 只在崩了时拉起,不一直重试抢端口
-          if (process.env.COTUTOR_SERVICE) {
-            process.stderr.write(`cotutor serve: 端口 ${busy} 被占着(终端里开着一个 cotutor serve?),后台服务先不起;关掉它以后 cotutor service start\n`);
-            process.exitCode = 0;
-          } else {
-            process.stderr.write(`cotutor serve: 端口 ${busy} 被占着。多半是这个 workspace 的后台服务在跑(cotutor service status 看;要在终端里调试先 cotutor service stop),或者另一个终端里开着 cotutor serve;也可以 --port 换一个\n`);
-            process.exitCode = 1;
-          }
+          const code = (err as NodeJS.ErrnoException).code;
+          if (code !== 'EADDRINUSE' && code !== 'EACCES') throw err;
+          const busy = (err as { port?: number }).port ?? port ?? 0;
+          // 后台服务以 0 退:launchd / systemd 只在崩了时拉起,不一直重试抢端口;系统不让绑的,重试也没用
+          const service = Boolean(process.env.COTUTOR_SERVICE);
+          const who = code === 'EADDRINUSE' ? await whoHolds(realHost(), busy) : null;
+          process.stderr.write(`cotutor serve: ${bindFailure(code, busy, who, service)}\n`);
+          process.exitCode = service ? 0 : 1;
           return;
         }
         if (flags.trace === true) {
@@ -188,6 +190,19 @@ export async function main(argv: string[]): Promise<void> {
         if (!r.https) process.stdout.write('  ! HTTP:平板、手机上按住说话要 HTTPS;cotutor cert 建证书后重启即走 HTTPS\n');
         // 只给家长端一个入口:孩子的平板扫码、排首页、记录都在里面,工作台从它的右上角进
         await printOpen('家长端', r.parentPage, '在这台电脑上打开:孩子的平板扫码、排首页、看记录都在里面;--open 顺手打开', wantsOpen(flags));
+        return;
+      }
+      case 'open': {
+        // 不用记端口:读 cotutor.json 打开家长端;--sandbox 开试用的那个(上面已经换了 workspace),--print 只打印不开
+        const ws = loadWorkspace(workspace);
+        const port = ws.config.server.port;
+        const page = siteUrl(httpsFiles(ws) ? 'https' : 'http', 'localhost', port, '/parent/home');
+        const running = Boolean(await probeHealth(port));
+        if (json) process.stdout.write(`${JSON.stringify({ url: page, running }, null, 2)}\n`);
+        else if (running) process.stdout.write(`${page}\n`);
+        else process.stderr.write(`${page} 没在跑(端口 ${port}):${ws.sandbox ? 'cotutor serve --sandbox 起试用的' : 'cotutor service start,或在终端里 cotutor serve'}\n`);
+        if (!running) { process.exitCode = 1; return; }
+        if (!json && flags.print !== true) await openInBrowser(page);
         return;
       }
       case 'service': {
@@ -208,7 +223,7 @@ export async function main(argv: string[]): Promise<void> {
         const root = ws.root;
         const port = ws.config.server.port;
         const scheme = httpsFiles(ws) ? 'https' : 'http';
-        const parentPage = `${scheme}://localhost:${port}/parent/home`;
+        const parentPage = siteUrl(scheme, 'localhost', port, '/parent/home');
         const when = (iso: string): string => { const d = new Date(iso); const ago = Math.round((Date.now() - d.getTime()) / 60_000); return `${localDate(d)} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}(${ago < 60 ? `${ago} 分钟` : ago < 2880 ? `${Math.round(ago / 60)} 小时` : `${Math.round(ago / 1440)} 天`}前)`; };
         // 后台读不到 vault(macOS 拦着后台进程读「文稿」、iCloud 云盘)、版本对不上:装完、起完、看状态都提
         const notes = (h: Health | null): string[] => {
@@ -270,12 +285,14 @@ export async function main(argv: string[]): Promise<void> {
         }
         if (sub === 'status') {
           const st = await serviceStatus(host, root, port);
-          if (json) { process.stdout.write(`${JSON.stringify(redactDeep({ ...st, version: version(), parentPage }), null, 2)}\n`); return; }
+          // 没答应时看看是不是别的程序占着:后台服务遇到这种情况只写一句日志就不起了,这里要说得出来
+          const holder = st.health ? null : await portHolder(host, port);
+          if (json) { process.stdout.write(`${JSON.stringify(redactDeep({ ...st, portHolder: holder, version: version(), parentPage }), null, 2)}\n`); return; }
           if (!st.installed) process.stdout.write('后台服务:没装(cotutor service install)\n');
           else process.stdout.write(`后台服务:装了 ${st.installed.label}(${redactHome(st.installed.file)})\n  ${st.running ? `在跑:pid ${st.pid ?? '?'}` : `没在跑${st.lastExit ? `(上次退出:${st.lastExit})` : ''};cotutor service start`}\n`);
           const h = st.health;
           if (h) process.stdout.write(`  端口 ${port} 答应:${h.mode === 'service' ? '后台服务' : `终端里的 cotutor serve(pid ${h.pid ?? '?'})`},版本 ${h.version ?? '?'},起来于 ${when(h.started)}\n  家长端 ${parentPage}\n`);
-          else process.stdout.write(`  端口 ${port} 没答应\n`);
+          else process.stdout.write(holder ? `  端口 ${port} 没答应,被占着:${holder.name}(pid ${holder.pid})在用。腾出来以后 cotutor service start;或改 cotutor.json 的 server.port,平板要重新扫码、重加主屏幕图标\n` : `  端口 ${port} 没答应\n`);
           for (const n of notes(h)) process.stdout.write(`${n}\n`);
           if (st.autostart === false) process.stdout.write('  ! 下次登录不会自己起来:登录项被关掉或删掉了(任务管理器的「启动应用」、杀毒软件)。要它:cotutor service install 再装一次\n');
           if (st.installed?.logDir) process.stdout.write(`  日志 ${redactHome(st.installed.logDir)}(cotutor service logs)\n`);
@@ -490,7 +507,7 @@ export async function main(argv: string[]): Promise<void> {
           process.stdout.write(`平板、手机要先信任这台机器的根证书 ${rootCa}(每台设备各做一次):\n`);
           process.stdout.write(`  iPad / iPhone:${send} → 设置里安装描述文件 → 通用 › 关于本机 › 证书信任设置里**把开关打开**(装了不等于信任)\n`);
           process.stdout.write(`  安卓:${process.platform === 'darwin' ? '传到设备上' : send} → 设置里搜「CA 证书」,按提示安装(各家菜单不一样,会提示「网络可能受到监控」)\n`);
-          process.stdout.write(`然后重启 cotutor serve,在这台电脑上打开它打印的扫码页,用相机扫(个别设备扫完一直转圈,就改手输打印的 https://<局域网 IP>:<端口>/)。详见 docs/iPad与iPhone.md\n`);
+          process.stdout.write(`然后 cotutor service restart(在终端里跑的就重开 cotutor serve),cotutor open 打开家长端,用相机扫「扫码打开」那张。地址认电脑名,换 Wi-Fi、IP 变了都不用重签;改了电脑名才要重跑这条。详见 docs/iPad与iPhone.md\n`);
         }
         return;
       }

@@ -10,9 +10,9 @@ import { faviconLinks } from '../shared/favicon.ts';
 import { BRAND_FOOTER } from '../shared/brand.ts';
 
 export interface ListenInfo {
-  /** https://<本机名>.local:<端口>/ */
+  /** https://<电脑名>.local/(端口不是 443 时带端口) */
   name: string;
-  /** https://<局域网 IPv4>:<端口>/;没连网 → null */
+  /** https://<局域网 IPv4>/(同上);没连网 → null */
   ip: string | null;
   https: boolean;
 }

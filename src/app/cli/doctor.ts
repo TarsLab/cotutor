@@ -505,8 +505,8 @@ export async function doctorWorkspace(
 
   if (ws && opts.live) await probeLive(ws, push, env);
 
-  // ---- 后台服务(cotutor service):装了没有、写死的 node 与 bin 还在不在;macOS 接着电源会不会闲置睡眠(睡着时平板连不上) ----
-  if (probeEnv && root && (process.platform === 'darwin' || process.platform === 'linux')) {
+  // ---- 后台服务(cotutor service):装了没有、写死的 node 与 bin 还在不在;接着电源会不会闲置睡眠(睡着时平板连不上) ----
+  if (probeEnv && root && (process.platform === 'darwin' || process.platform === 'linux' || process.platform === 'win32')) {
     const { findService, realHost } = await import('./service.ts');
     const s = await findService({ ...realHost(), env }, root).catch(() => null);
     if (!s) push({ name: 'service', ok: false, required: false, detail: '没装后台服务:在终端里跑的 cotutor serve,关了终端就停', fix: 'cotutor service install(登录后自己起来、崩了自己再起)' });
@@ -521,6 +521,13 @@ export async function doctorWorkspace(
     const text = await new Promise<string>((resolve) => execFile('/usr/bin/pmset', ['-g', 'custom'], { timeout: 5000, encoding: 'utf8' }, (_e, out) => resolve(String(out ?? ''))));
     const min = acSleepMinutes(text);
     if (min !== null) push({ name: 'mac.sleep', ok: min === 0, required: false, detail: min === 0 ? '接着电源时不闲置睡眠' : `接着电源 ${min} 分钟没人碰就睡,睡着时平板连不上(有通话时 cotutor 拦着它睡,别的时候拦不了)`, fix: min === 0 ? undefined : '系统设置 › 电池 › 选项,打开「显示器关闭时,防止接通电源的 Mac 自动进入睡眠」(台式 Mac 在 系统设置 › 节能);合盖照样睡' });
+  }
+  if (probeEnv && process.platform === 'win32') {
+    const { winAcSleepSeconds } = await import('./service-windows.ts');
+    const { execFile } = await import('node:child_process');
+    const text = await new Promise<string>((resolve) => execFile('powercfg.exe', ['/query', 'SCHEME_CURRENT', 'SUB_SLEEP', 'STANDBYIDLE'], { timeout: 5000, encoding: 'latin1', windowsHide: true }, (_e, out) => resolve(String(out ?? ''))));
+    const sec = winAcSleepSeconds(text);
+    if (sec !== null) push({ name: 'windows.sleep', ok: sec === 0, required: false, detail: sec === 0 ? '接着电源时不闲置睡眠' : `接着电源 ${Math.round(sec / 60)} 分钟没人碰就睡,睡着时平板连不上(有通话时 cotutor 拦着它睡,别的时候拦不了)`, fix: sec === 0 ? undefined : '设置 › 系统 › 电源和电池 › 屏幕、睡眠和休眠超时,「插入电源时,使设备在以下时间后进入睡眠状态」选「从不」;合盖看「电源按钮和盖子」那一项' });
   }
 
   // ---- 用户配置 ----

@@ -2,23 +2,25 @@
  * cotutor service:把一个 workspace 的 serve 装成这台电脑的后台服务——登录后自己起来、崩了自己拉起、日志按天落文件(serve-log.ts)。
  *   macOS:用户级 LaunchAgent ~/Library/LaunchAgents/com.tarslab.cotutor.<名>.plist(launchctl bootstrap gui/<uid>);日志 ~/Library/Logs/cotutor/<名>/
  *   Linux:systemd 用户服务 ~/.config/systemd/user/cotutor-<名>.service(systemctl --user);日志 ~/.local/state/cotutor/logs/<名>/;不登录也要跑要 loginctl enable-linger
- *   Windows:还没做(计划任务 + 藏控制台窗口,要在真机上试),先 cotutor serve 在前台跑。
+ *   Windows:用户的 Run 注册表项 + wscript 跑的隐藏启动器 %LOCALAPPDATA%\cotutor\service\cotutor-<名>.js + 看护进程 cotutor service run(runKeeper);为什么这样见 service-windows.ts;日志 %LOCALAPPDATA%\cotutor\logs\<名>\
  * 一个 workspace 一个服务;找服务按文件里写的 --workspace 找,不按名字推(两个同名目录的 workspace 不会认错)。
  * 装的那一刻把 node、bin、PATH 写死:launchd 的 PATH 里没有 Homebrew 和 nvm;换了 node 版本、包挪了地方,再 install 一次(幂等)。
  * 退出码 0 不拉起(端口被别人占着时 serve 以 0 退,不一直重试);崩了(非 0、被杀)隔 10 秒拉起。
  */
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, realpathSync } from 'node:fs';
+import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, realpathSync, renameSync, statSync } from 'node:fs';
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
+import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { UsageError } from '../workspace.ts';
 import { logFileFor } from './serve-log.ts';
+import { RUN_KEY, STARTUP_APPROVED_KEY, decodeServiceFile, encodeLauncher, findProcsScript, launcherArgs, parseProcs, psArgs, runValue, startupDisabled, windowsLauncher, type WinProc } from './service-windows.ts';
 
-export type ServicePlatform = 'darwin' | 'linux';
+export type ServicePlatform = 'darwin' | 'linux' | 'win32';
 
 /** 跑命令、读写文件之外要的:系统、家目录、uid;run 测试换假的 */
 export interface ServiceHost {
@@ -29,15 +31,25 @@ export interface ServiceHost {
   run(cmd: string, args: string[]): Promise<{ code: number; stdout: string; stderr: string }>;
 }
 
+/** 命令的输出:先按 UTF-8;中文 Windows 上 reg、taskkill 这些回的是 GBK */
+function decodeOutput(buf: Buffer): string {
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(buf);
+  } catch {
+    return new TextDecoder('gbk').decode(buf);
+  }
+}
+
 export const realHost = (): ServiceHost => ({
   platform: process.platform,
-  home: process.env.HOME ?? '',
+  home: homedir(),
   uid: process.getuid?.() ?? 0,
   env: process.env,
   run: (cmd, args) => new Promise((resolve) => {
-    execFile(cmd, args, { timeout: 20_000, encoding: 'utf8' }, (err, stdout, stderr) => {
+    execFile(cmd, args, { timeout: 30_000, encoding: 'buffer', windowsHide: true }, (err, stdout, stderr) => {
       const code = err ? (typeof (err as { code?: unknown }).code === 'number' ? (err as { code: number }).code : 1) : 0;
-      resolve({ code, stdout: String(stdout ?? ''), stderr: String(stderr ?? (err ? err.message : '')) });
+      const errText = decodeOutput(stderr ?? Buffer.alloc(0));
+      resolve({ code, stdout: decodeOutput(stdout ?? Buffer.alloc(0)), stderr: errText || (err ? err.message : '') });
     });
   }),
 });
@@ -47,11 +59,12 @@ const UNIT_PREFIX = 'cotutor-';
 
 /** 这个系统做没做 */
 export function servicePlatform(platform: NodeJS.Platform): ServicePlatform {
-  if (platform === 'darwin' || platform === 'linux') return platform;
-  throw new UsageError(platform === 'win32'
-    ? 'Windows 上还没做后台服务(计划任务 + 藏控制台窗口,还没在真机上试过)。先用 cotutor serve 在前台跑,终端开着别关。'
-    : `${platform} 上没做后台服务,用 cotutor serve 在前台跑`);
+  if (platform === 'darwin' || platform === 'linux' || platform === 'win32') return platform;
+  throw new UsageError(`${platform} 上没做后台服务,用 cotutor serve 在前台跑`);
 }
+
+type HostPaths = Pick<ServiceHost, 'platform' | 'home' | 'env'>;
+const winLocal = (host: HostPaths): string => host.env.LOCALAPPDATA || join(host.home, 'AppData', 'Local');
 
 /** 服务名:workspace 目录名的小写字母数字连字符;撞了别的 workspace 加路径的短 hash */
 export function serviceName(root: string, taken = false): string {
@@ -60,17 +73,80 @@ export function serviceName(root: string, taken = false): string {
 }
 
 /** 服务文件放哪 */
-export function serviceDir(host: Pick<ServiceHost, 'platform' | 'home' | 'env'>): string {
-  return servicePlatform(host.platform) === 'darwin' ? join(host.home, 'Library', 'LaunchAgents') : join(host.env.XDG_CONFIG_HOME || join(host.home, '.config'), 'systemd', 'user');
+export function serviceDir(host: HostPaths): string {
+  const p = servicePlatform(host.platform);
+  if (p === 'darwin') return join(host.home, 'Library', 'LaunchAgents');
+  if (p === 'win32') return join(winLocal(host), 'cotutor', 'service');
+  return join(host.env.XDG_CONFIG_HOME || join(host.home, '.config'), 'systemd', 'user');
 }
 
 /** 日志放哪(一个服务一个目录) */
-export function serviceLogDir(host: Pick<ServiceHost, 'platform' | 'home' | 'env'>, name: string): string {
-  return servicePlatform(host.platform) === 'darwin' ? join(host.home, 'Library', 'Logs', 'cotutor', name) : join(host.env.XDG_STATE_HOME || join(host.home, '.local', 'state'), 'cotutor', 'logs', name);
+export function serviceLogDir(host: HostPaths, name: string): string {
+  const p = servicePlatform(host.platform);
+  if (p === 'darwin') return join(host.home, 'Library', 'Logs', 'cotutor', name);
+  if (p === 'win32') return join(winLocal(host), 'cotutor', 'logs', name);
+  return join(host.env.XDG_STATE_HOME || join(host.home, '.local', 'state'), 'cotutor', 'logs', name);
 }
 
-const fileOf = (host: Pick<ServiceHost, 'platform' | 'home' | 'env'>, name: string): string =>
-  join(serviceDir(host), servicePlatform(host.platform) === 'darwin' ? `${LABEL_PREFIX}${name}.plist` : `${UNIT_PREFIX}${name}.service`);
+const fileOf = (host: HostPaths, name: string): string => {
+  const p = servicePlatform(host.platform);
+  return join(serviceDir(host), p === 'darwin' ? `${LABEL_PREFIX}${name}.plist` : p === 'win32' ? `${UNIT_PREFIX}${name}.js` : `${UNIT_PREFIX}${name}.service`);
+};
+
+const labelOf = (platform: ServicePlatform, name: string): string => (platform === 'darwin' ? `${LABEL_PREFIX}${name}` : `${UNIT_PREFIX}${name}`);
+
+/** serve 起来之前的输出(node 自己报的、模块没加载上)去哪:给人看的一句 */
+export function earlyLogHint(platform: ServicePlatform, s: { label: string; logDir: string | null }): string {
+  if (platform === 'linux') return `journalctl --user -u ${s.label}.service`;
+  return join(s.logDir ?? '', platform === 'win32' ? KEEPER_LOG : 'launchd.log');
+}
+
+/** 看护进程的日志(Windows):serve 退了几次、起来之前的输出 */
+export const KEEPER_LOG = 'keeper.log';
+const KEEPER_LOG_MAX = 5 * 1024 * 1024;
+const KEEPER_RESTART_MS = 10_000;
+
+/**
+ * 看护进程(Windows;cotutor service run):起 serve,非 0 隔 10 秒再起,0 不起(端口被占着);同 launchd 的 KeepAlive、systemd 的 Restart=on-failure。
+ * 给 serve 带上 COTUTOR_SERVICE(mode 算后台服务、端口被占以 0 退);返回退出码
+ */
+export async function runKeeper(o: { root: string; logDir: string; label: string; node?: string; bin?: string; restartMs?: number }): Promise<number> {
+  mkdirSync(o.logDir, { recursive: true });
+  const logFile = join(o.logDir, KEEPER_LOG);
+  const note = (text: string): void => { try { appendFileSync(logFile, `${new Date().toISOString()} ${text}\n`); } catch { /* 写不了日志不能把看护带倒 */ } };
+  for (;;) {
+    try { if (statSync(logFile).size > KEEPER_LOG_MAX) renameSync(logFile, `${logFile}.1`); } catch { /* 还没有 */ }
+    const fd = openSync(logFile, 'a');
+    const child = spawn(o.node ?? process.execPath, [o.bin ?? binPath(), 'serve', '--workspace', o.root, '--log-dir', o.logDir], { stdio: ['ignore', fd, fd], windowsHide: true, env: { ...process.env, COTUTOR_SERVICE: o.label } });
+    const code = await new Promise<number | null>((resolve) => {
+      child.once('error', (err) => { note(`serve 起不来:${err.message}`); resolve(null); });
+      child.once('exit', (c) => resolve(c));
+    });
+    closeSync(fd);
+    if (code === 0) { note('serve 以 0 退(端口被占着?),不再起;cotutor service start 再起'); return 0; }
+    note(`serve 退了(${code ?? '没起来'}),${Math.round((o.restartMs ?? KEEPER_RESTART_MS) / 1000)} 秒后再起`);
+    await new Promise((r) => setTimeout(r, o.restartMs ?? KEEPER_RESTART_MS));
+  }
+}
+
+const wscriptPath = (host: ServiceHost): string => join(host.env.SystemRoot || 'C:\\Windows', 'System32', 'wscript.exe');
+
+/** 这个 workspace 的看护进程与 serve 现在的进程 */
+async function windowsProcs(host: ServiceHost, root: string): Promise<WinProc[]> {
+  return parseProcs((await host.run('powershell.exe', psArgs(findProcsScript(root)))).stdout);
+}
+
+/** 停:看护进程连着子进程一起杀;看护没了留下的 serve 也杀 */
+async function stopWindows(host: ServiceHost, root: string): Promise<void> {
+  const procs = await windowsProcs(host, root);
+  for (const p of [...procs].sort((a, b) => Number(b.keeper) - Number(a.keeper))) await host.run('taskkill.exe', ['/PID', String(p.pid), '/T', '/F']);
+}
+
+/** 起:wscript 跑启动器,藏着窗口起看护进程,马上回来 */
+async function startWindows(host: ServiceHost, file: string): Promise<void> {
+  const r = await host.run(wscriptPath(host), ['//B', '//Nologo', file]);
+  if (r.code !== 0) throw new UsageError(`wscript 没成(系统可能关了 Windows Script Host):${(r.stderr || r.stdout).trim()}`);
+}
 
 export interface ServiceSpec {
   name: string;
@@ -144,6 +220,8 @@ WantedBy=default.target
 
 /** 从服务文件里读回跑的参数(找它是哪个 workspace 的) */
 export function serviceArgs(text: string): string[] {
+  const js = launcherArgs(text);
+  if (js) return js;
   const plist = /<key>ProgramArguments<\/key>\s*<array>([\s\S]*?)<\/array>/.exec(text);
   if (plist) return [...plist[1].matchAll(/<string>([\s\S]*?)<\/string>/g)].map((m) => unxml(m[1]));
   const line = /^ExecStart=(.*)$/m.exec(text)?.[1];
@@ -168,24 +246,26 @@ export interface InstalledService {
 /** 这台电脑上 cotutor 装的服务(各是哪个 workspace 的) */
 export async function listServices(host: ServiceHost): Promise<InstalledService[]> {
   const dir = serviceDir(host);
-  const mac = servicePlatform(host.platform) === 'darwin';
+  const platform = servicePlatform(host.platform);
+  const pattern = platform === 'darwin' ? /^com\.tarslab\.cotutor\.(.+)\.plist$/ : platform === 'win32' ? /^cotutor-(.+)\.js$/ : /^cotutor-(.+)\.service$/;
   const out: InstalledService[] = [];
   for (const f of (await readdir(dir).catch(() => [] as string[])).sort()) {
-    const m = mac ? /^com\.tarslab\.cotutor\.(.+)\.plist$/.exec(f) : /^cotutor-(.+)\.service$/.exec(f);
+    const m = pattern.exec(f);
     if (!m) continue;
-    const args = serviceArgs(await readFile(join(dir, f), 'utf8').catch(() => ''));
+    const args = serviceArgs(decodeServiceFile(await readFile(join(dir, f)).catch(() => Buffer.alloc(0))));
     const root = workspaceOf(args);
     if (!root) continue;
     const li = args.indexOf('--log-dir');
-    out.push({ name: m[1], label: mac ? `${LABEL_PREFIX}${m[1]}` : `${UNIT_PREFIX}${m[1]}`, file: join(dir, f), args, root, logDir: li >= 0 ? args[li + 1] ?? null : null });
+    out.push({ name: m[1], label: labelOf(platform, m[1]), file: join(dir, f), args, root, logDir: li >= 0 ? args[li + 1] ?? null : null });
   }
   return out;
 }
 
-/** 这个 workspace 的服务;没装 → null */
+/** 这个 workspace 的服务;没装 → null(Windows 上路径不分大小写) */
 export async function findService(host: ServiceHost, root: string): Promise<InstalledService | null> {
-  const want = real(root);
-  return (await listServices(host)).find((s) => real(s.root) === want) ?? null;
+  const norm = (p: string): string => (host.platform === 'win32' ? real(p).toLowerCase() : real(p));
+  const want = norm(root);
+  return (await listServices(host)).find((s) => norm(s.root) === want) ?? null;
 }
 
 /** cotutor 的 bin(npm 装的是 dist/app/cli → 包根;仓里直跑是 src/app/cli → 仓根,一样往上三层) */
@@ -197,13 +277,23 @@ export async function installService(host: ServiceHost, root: string, opts: { no
   const had = await findService(host, root);
   let name = had?.name ?? serviceName(root);
   if (!had && existsSync(fileOf(host, name))) name = serviceName(root, true);
-  const label = platform === 'darwin' ? `${LABEL_PREFIX}${name}` : `${UNIT_PREFIX}${name}`;
+  const label = labelOf(platform, name);
   const logDir = serviceLogDir(host, name);
-  const spec: ServiceSpec = { name, label, root, logDir, path: host.env.PATH ?? '/usr/bin:/bin', args: [opts.node ?? process.execPath, opts.bin ?? binPath(), 'serve', '--workspace', root, '--log-dir', logDir] };
+  // Windows 上跑的是看护进程,它再起 serve(那边没有 launchd / systemd 替你拉起)
+  const run = platform === 'win32' ? ['service', 'run'] : ['serve'];
+  const spec: ServiceSpec = { name, label, root, logDir, path: host.env.PATH ?? '/usr/bin:/bin', args: [opts.node ?? process.execPath, opts.bin ?? binPath(), ...run, '--workspace', root, '--log-dir', logDir] };
   const file = fileOf(host, name);
   await mkdir(serviceDir(host), { recursive: true });
   await mkdir(logDir, { recursive: true });
-  if (platform === 'darwin') {
+  if (platform === 'win32') {
+    if (had) await stopWindows(host, root);
+    await writeFile(file, encodeLauncher(windowsLauncher(spec.args, root)));
+    const reg = await host.run('reg.exe', ['add', RUN_KEY, '/v', label, '/t', 'REG_SZ', '/d', runValue(wscriptPath(host), file), '/f']);
+    if (reg.code !== 0) throw new UsageError(`写登录项没成:${(reg.stderr || reg.stdout).trim()}`);
+    // 再装一次 = 要它:以前在任务管理器里关掉的记录也去掉(没有这一笔时报错,不管)
+    await host.run('reg.exe', ['delete', STARTUP_APPROVED_KEY, '/v', label, '/f']);
+    await startWindows(host, file);
+  } else if (platform === 'darwin') {
     // 先卸下旧的(没装过会报错,不管),再装上;bootstrap 会按 RunAtLoad 马上起
     await host.run('launchctl', ['bootout', `gui/${host.uid}/${label}`]);
     await writeFile(file, launchdPlist(spec));
@@ -223,7 +313,12 @@ export async function installService(host: ServiceHost, root: string, opts: { no
 export async function uninstallService(host: ServiceHost, root: string): Promise<InstalledService | null> {
   const s = await findService(host, root);
   if (!s) return null;
-  if (servicePlatform(host.platform) === 'darwin') await host.run('launchctl', ['bootout', `gui/${host.uid}/${s.label}`]);
+  const platform = servicePlatform(host.platform);
+  if (platform === 'win32') {
+    await stopWindows(host, s.root);
+    await host.run('reg.exe', ['delete', RUN_KEY, '/v', s.label, '/f']);
+    await host.run('reg.exe', ['delete', STARTUP_APPROVED_KEY, '/v', s.label, '/f']);
+  } else if (platform === 'darwin') await host.run('launchctl', ['bootout', `gui/${host.uid}/${s.label}`]);
   else await host.run('systemctl', ['--user', 'disable', '--now', `${s.label}.service`]);
   await rm(s.file, { force: true });
   if (host.platform === 'linux') await host.run('systemctl', ['--user', 'daemon-reload']);
@@ -236,10 +331,18 @@ const need = async (host: ServiceHost, root: string): Promise<InstalledService> 
   return s;
 };
 
-/** 起 / 停 / 重起。macOS 的停是从 launchd 卸下(服务文件还在,下次登录又会起;要一直不起用 uninstall) */
+/** 起 / 停 / 重起。macOS 的停是从 launchd 卸下、Windows 的停是杀进程(服务文件都还在,下次登录又会起;要一直不起用 uninstall) */
 export async function controlService(host: ServiceHost, root: string, what: 'start' | 'stop' | 'restart'): Promise<InstalledService> {
   const s = await need(host, root);
-  if (servicePlatform(host.platform) === 'darwin') {
+  const platform = servicePlatform(host.platform);
+  if (platform === 'win32') {
+    if (what !== 'start') await stopWindows(host, s.root);
+    if (what === 'stop') return s;
+    // 已经在跑就不再起一个(再起一个也会因为端口被占以 0 退,只是多转一圈)
+    if (!(await windowsProcs(host, s.root)).some((p) => p.keeper)) await startWindows(host, s.file);
+    return s;
+  }
+  if (platform === 'darwin') {
     const target = `gui/${host.uid}/${s.label}`;
     const loaded = (await host.run('launchctl', ['print', target])).code === 0;
     if (what === 'stop') { if (loaded) await host.run('launchctl', ['bootout', target]); return s; }
@@ -292,20 +395,27 @@ export interface ServiceStatus {
   lastExit: string | null;
   health: Health | null;
   logFile: string | null;
+  /** Windows:下次登录还会不会自己起来(Run 项被删了、任务管理器里关掉了都算不会);别的系统 null */
+  autostart: boolean | null;
 }
 
 /** 装没装、在不在跑、问得到不(端口来自 cotutor.json 或 --port) */
 export async function serviceStatus(host: ServiceHost, root: string, port: number): Promise<ServiceStatus> {
   const s = await findService(host, root);
   let st = { running: false, pid: null as number | null, lastExit: null as string | null };
-  if (s) {
-    const r = servicePlatform(host.platform) === 'darwin'
+  let autostart: boolean | null = null;
+  if (s && host.platform === 'win32') {
+    const procs = await windowsProcs(host, s.root);
+    st = { running: procs.some((p) => p.keeper), pid: (procs.find((p) => !p.keeper) ?? procs[0])?.pid ?? null, lastExit: null };
+    autostart = (await host.run('reg.exe', ['query', RUN_KEY, '/v', s.label])).code === 0 && !startupDisabled((await host.run('reg.exe', ['query', STARTUP_APPROVED_KEY, '/v', s.label])).stdout);
+  } else if (s) {
+    const r = host.platform === 'darwin'
       ? await host.run('launchctl', ['print', `gui/${host.uid}/${s.label}`])
       : await host.run('systemctl', ['--user', 'show', '-p', 'ActiveState,MainPID,ExecMainStatus', `${s.label}.service`]);
     if (r.code === 0) st = host.platform === 'darwin' ? parseLaunchctlPrint(r.stdout) : parseSystemctlShow(r.stdout);
   }
   const health = await probeHealth(port);
-  return { installed: s, ...st, health, logFile: s?.logDir ? logFileFor(s.logDir, new Date()) : null };
+  return { installed: s, ...st, health, logFile: s?.logDir ? logFileFor(s.logDir, new Date()) : null, autostart };
 }
 
 /** 起来以后等它答应(装完、重起完);等不到 → null */

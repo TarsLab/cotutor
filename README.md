@@ -14,7 +14,7 @@ cotutor init ming --name 小明 --grade 2     # 建 ~/cotutor/ming/:三位老师
 cotutor service install                    # 装成这台电脑的后台服务,打印家长端首页 https://localhost:5180/parent/home,孩子的平板在那里扫码
 ```
 
-后台服务登录后自己起来、崩了自己再起、关了终端照样跑,日志按天落文件:`cotutor service status` 看在不在跑,`cotutor service logs` 看日志,`cotutor service restart` 重起。Mac 上用 launchd,Linux 上用 systemd 用户服务;Windows 上还没有后台服务,用 `cotutor serve` 在终端里跑(关了终端就停)。调试时也用 `cotutor serve`,先 `cotutor service stop` 让出端口。
+后台服务登录后自己起来、崩了自己再起、关了终端照样跑,日志按天落文件:`cotutor service status` 看在不在跑,`cotutor service logs` 看日志,`cotutor service restart` 重起。Mac 上用 launchd,Linux 上用 systemd 用户服务,Windows 上是一条用户自己的登录项(不用管理员、没有黑窗口);第一次起来 Windows 可能弹窗问「允许访问」,点允许,平板才连得进来。要在终端里调试用 `cotutor serve`,先 `cotutor service stop` 让出端口。
 
 接着三件事:
 

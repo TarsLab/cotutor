@@ -1,7 +1,7 @@
 /**
- * 后台服务(src/app/cli/service.ts)与 serve 的日志(serve-log.ts):不真装,launchctl / systemctl 换成记账的假命令。
- * 服务文件写出来再读回参数一字不差(带空格、引号、&、%);按 --workspace 找服务、同名目录加 hash、重装同名;装 / 卸 / 起停各跑什么命令;
- * launchctl print、systemctl show、pmset 的解析;日志按天落、每行带时刻、留 14 天;/api/health 带 pid、mode、vault;
+ * 后台服务(src/app/cli/service.ts、service-windows.ts)与 serve 的日志(serve-log.ts):不真装,launchctl / systemctl / reg 换成记账的假命令。
+ * 服务文件写出来再读回参数一字不差(带空格、引号、&、%、中文);按 --workspace 找服务、同名目录加 hash、重装同名;装 / 卸 / 起停各跑什么命令;
+ * launchctl print、systemctl show、pmset、powercfg 的解析;Windows 的命令行转义、启动器 UTF-16、看护进程(非 0 再起、0 不起);日志按天落、每行带时刻、留 14 天;/api/health 带 pid、mode、vault;
  * 命令行:没装说没装、试用 workspace 不让装、端口被占时终端里以 1 退、后台服务以 0 退(不一直重试)。
  */
 import { execFile } from 'node:child_process';
@@ -17,6 +17,7 @@ delete process.env.COTUTOR_WORKSPACE;
 delete process.env.COTUTOR_SERVICE;
 
 const svc = await import('../src/app/cli/service.ts');
+const win = await import('../src/app/cli/service-windows.ts');
 const { teeLogs, pruneLogs } = await import('../src/app/cli/serve-log.ts');
 const { UsageError } = await import('../src/app/workspace.ts');
 
@@ -25,24 +26,63 @@ const { UsageError } = await import('../src/app/workspace.ts');
   const spec = { name: 'ray', label: 'com.tarslab.cotutor.ray', root: '/Users/a b/cotutor/ray & co', logDir: '/L/ray', path: '/opt/homebrew/bin:/usr/bin', args: ['/n o/node', '/p/bin/cotutor.js', 'serve', '--workspace', '/Users/a b/cotutor/ray & co', '--log-dir', '/L/<ray>'] };
   const plist = svc.launchdPlist(spec);
   check('plist:参数读回来一字不差(空格、&、<)', JSON.stringify(svc.serviceArgs(plist)) === JSON.stringify(spec.args), JSON.stringify(svc.serviceArgs(plist)));
-  check('plist:登录就起、只在崩了时拉起(退出码 0 不拉)、PATH 写死、带 COTUTOR_SERVICE、launchd 的输出进日志目录', plist.includes('<key>RunAtLoad</key><true/>') && /<key>SuccessfulExit<\/key><false\/>/.test(plist) && plist.includes('<string>/opt/homebrew/bin:/usr/bin</string>') && plist.includes('<key>COTUTOR_SERVICE</key><string>com.tarslab.cotutor.ray</string>') && plist.includes('<string>/L/ray/launchd.log</string>'));
+  check('plist:登录就起、只在崩了时拉起(退出码 0 不拉)、PATH 写死、带 COTUTOR_SERVICE、launchd 的输出进日志目录', plist.includes('<key>RunAtLoad</key><true/>') && /<key>SuccessfulExit<\/key><false\/>/.test(plist) && plist.includes('<string>/opt/homebrew/bin:/usr/bin</string>') && plist.includes('<key>COTUTOR_SERVICE</key><string>com.tarslab.cotutor.ray</string>') && plist.includes(`<string>${join('/L/ray', 'launchd.log')}</string>`));
   const unit = svc.systemdUnit({ ...spec, label: 'cotutor-ray', args: ['/n o/node', '/p/bin/cotutor.js', 'serve', '--workspace', '/w/"q"\\x 100%'] });
   check('systemd:参数读回来一字不差(空格、引号、反斜杠、%)', JSON.stringify(svc.serviceArgs(unit)) === JSON.stringify(['/n o/node', '/p/bin/cotutor.js', 'serve', '--workspace', '/w/"q"\\x 100%']) && unit.includes('Restart=on-failure') && unit.includes('100%%'), JSON.stringify(svc.serviceArgs(unit)));
   const h = { platform: 'linux' as const, home: '/h', env: { XDG_STATE_HOME: '/s' } };
-  check('放哪:macOS LaunchAgents / Library/Logs;Linux systemd/user / XDG_STATE_HOME', svc.serviceDir({ platform: 'darwin', home: '/h', env: {} }) === '/h/Library/LaunchAgents' && svc.serviceLogDir({ platform: 'darwin', home: '/h', env: {} }, 'ray') === '/h/Library/Logs/cotutor/ray' && svc.serviceDir(h) === '/h/.config/systemd/user' && svc.serviceLogDir(h, 'ray') === '/s/cotutor/logs/ray');
-  let win = '';
-  try { svc.servicePlatform('win32'); } catch (err) { win = err instanceof UsageError ? err.message : ''; }
-  check('Windows:还没做,说清楚、指 cotutor serve', win.includes('Windows') && win.includes('cotutor serve'), win);
+  const wh = { platform: 'win32' as const, home: '/h', env: { LOCALAPPDATA: '/local' } };
+  check('放哪:macOS LaunchAgents / Library/Logs;Linux systemd/user / XDG_STATE_HOME;Windows LOCALAPPDATA', svc.serviceDir({ platform: 'darwin', home: '/h', env: {} }) === join('/h', 'Library', 'LaunchAgents') && svc.serviceLogDir({ platform: 'darwin', home: '/h', env: {} }, 'ray') === join('/h', 'Library', 'Logs', 'cotutor', 'ray') && svc.serviceDir(h) === join('/h', '.config', 'systemd', 'user') && svc.serviceLogDir(h, 'ray') === join('/s', 'cotutor', 'logs', 'ray') && svc.serviceDir(wh) === join('/local', 'cotutor', 'service') && svc.serviceLogDir(wh, 'ray') === join('/local', 'cotutor', 'logs', 'ray') && svc.serviceDir({ ...wh, env: {} }) === join('/h', 'AppData', 'Local', 'cotutor', 'service'));
+  let other = '';
+  try { svc.servicePlatform('freebsd'); } catch (err) { other = err instanceof UsageError ? err.message : ''; }
+  check('三个系统都做了;别的说清楚、指 cotutor serve', svc.servicePlatform('win32') === 'win32' && other.includes('cotutor serve'), other);
 }
 
-/** 假的系统:记下跑了什么;launchctl print 按 loaded 回 */
-const fakeHost = (platform: 'darwin' | 'linux', root: string) => {
+{
+  // Windows 的命令行转义(CommandLineToArgvW 的规矩;真机上跑过:带空格、中文、结尾反斜杠、引号,node 收到的一字不差)
+  check('转义:普通的不加引号;空格加引号;引号转义;引号前、结尾的反斜杠翻倍;中间的反斜杠不动', win.winQuote('serve') === 'serve' && win.winQuote('C:\\a\\b') === 'C:\\a\\b' && win.winQuote('C:\\a b') === '"C:\\a b"' && win.winQuote('q"r') === '"q\\"r"' && win.winQuote('C:\\x y\\') === '"C:\\x y\\\\"' && win.winQuote('a\\"b') === '"a\\\\\\"b"' && win.winQuote('') === '""', JSON.stringify([win.winQuote('C:\\x y\\'), win.winQuote('a\\"b')]));
+  const args = ['C:\\Program Files\\nodejs\\node.exe', 'C:\\Users\\张 三\\bin\\cotutor.js', 'service', 'run', '--workspace', 'C:\\Users\\张 三\\cotutor\\ray', '--log-dir', 'C:\\L\\ray'];
+  const js = win.windowsLauncher(args, args[5]);
+  check('启动器:藏着窗口(Run 的第二个参数 0)、不等它(false),命令行转义过', js.includes(`Run(${JSON.stringify(win.winCommandLine(args))}, 0, false)`) && js.includes('ActiveXObject("WScript.Shell")'), js);
+  const encoded = win.encodeLauncher(js);
+  check('启动器存成 UTF-16 带 BOM(wscript 按这个读中文),读回来一样', encoded[0] === 0xff && encoded[1] === 0xfe && win.decodeServiceFile(encoded) === js && win.decodeServiceFile(Buffer.from('普通的', 'utf8')) === '普通的');
+  check('启动器:参数读回来一字不差;不是启动器的回 null', JSON.stringify(svc.serviceArgs(js)) === JSON.stringify(args) && win.launcherArgs('// args: [1]') === null && win.launcherArgs('别的') === null);
+  check('找进程的输出:一个、几个、没有、坏的', JSON.stringify(win.parseProcs('{"pid":7,"keeper":true}')) === '[{"pid":7,"keeper":true}]' && win.parseProcs('[{"pid":7,"keeper":true},{"pid":8,"keeper":false}]').length === 2 && win.parseProcs('').length === 0 && win.parseProcs('[]').length === 0 && win.parseProcs('啊').length === 0);
+  const script = win.findProcsScript("C:\\it's");
+  check('找进程:路径里的单引号写两个;只认看护进程与带 --log-dir 的 serve(终端里的不算)', script.includes("'C:\\it''s'") && script.includes("' service run '") && script.includes("'--log-dir'"));
+  const decoded = Buffer.from(win.psArgs('echo 1').at(-1) as string, 'base64').toString('utf16le');
+  check('PowerShell:编码传、输出定成 UTF-8、关进度', decoded.includes('UTF8') && decoded.includes("$ProgressPreference='SilentlyContinue'") && decoded.endsWith('echo 1'));
+  const pc = (ac: string, dc: string, words: string[]) => `${words[0]}: 0x00000000\n${words[1]}: 0xffffffff\n${words[2]}: 0x00000001\n${words[3]}: Seconds\n${words[4]}: 0x${ac}\n${words[5]}: 0x${dc}\n`;
+  const en = ['Minimum Possible Setting', 'Maximum Possible Setting', 'Possible Settings increment', 'Possible Settings units', 'Current AC Power Setting Index', 'Current DC Power Setting Index'];
+  const zh = ['最小可能的设置', '最大可能的设置', '可能的设置增量', '可能的设置单位', '当前交流电源设置索引', '当前直流电源设置索引'];
+  check('powercfg:接着电源的秒数,认顺序不认字(中文系统一样);读不出 null', win.winAcSleepSeconds(pc('00001c20', '000005dc', en)) === 7200 && win.winAcSleepSeconds(pc('00000000', '000005dc', zh)) === 0 && win.winAcSleepSeconds('没有') === null);
+  check('拦睡眠:ES_CONTINUOUS | ES_SYSTEM_REQUIRED,等 serve 退出', win.awakeScript(42).includes('2147483649') && win.awakeScript(42).includes('Wait-Process -Id 42') && 0x80000001 === 2147483649);
+  check('早期输出去哪:macOS launchd.log、Linux journal、Windows keeper.log', svc.earlyLogHint('darwin', { label: 'x', logDir: '/L' }) === join('/L', 'launchd.log') && svc.earlyLogHint('linux', { label: 'cotutor-x', logDir: '/L' }).includes('journalctl --user -u cotutor-x.service') && svc.earlyLogHint('win32', { label: 'x', logDir: '/L' }) === join('/L', 'keeper.log'));
+}
+
+/** 假的系统:记下跑了什么;launchctl print 按 loaded 回;Windows 上 wscript 算起了看护进程,taskkill 算杀了 */
+const fakeHost = (platform: 'darwin' | 'linux' | 'win32', root: string) => {
   const calls: string[] = [];
   const loaded = new Set<string>();
+  let keepers = 0;
+  let regValue: string | null = null;
+  let approved = '';
   const host = {
-    platform, home: root, uid: 501, env: { PATH: '/opt/homebrew/bin:/usr/bin' } as NodeJS.ProcessEnv, calls, loaded,
+    platform, home: root, uid: 501, env: { PATH: '/opt/homebrew/bin:/usr/bin', LOCALAPPDATA: join(root, 'local'), SystemRoot: 'C:\\Windows' } as NodeJS.ProcessEnv, calls, loaded,
+    get regValue() { return regValue; },
+    get approved() { return approved; },
+    set approved(v: string) { approved = v; },
     run: async (cmd: string, args: string[]) => {
+      if (cmd === 'powershell.exe') { calls.push('powershell'); return { code: 0, stdout: keepers ? JSON.stringify([{ pid: 900, keeper: true }, { pid: 901, keeper: false }]) : '[]', stderr: '' }; }
       calls.push(`${cmd} ${args.join(' ')}`);
+      if (cmd.endsWith('wscript.exe')) keepers = 1;
+      if (cmd === 'taskkill.exe') keepers = 0;
+      if (cmd === 'reg.exe' && args[1] === win.STARTUP_APPROVED_KEY) {
+        if (args[0] === 'delete') approved = '';
+        return { code: approved ? 0 : 1, stdout: approved, stderr: '' };
+      }
+      if (cmd === 'reg.exe' && args[0] === 'add') regValue = args[args.indexOf('/d') + 1];
+      if (cmd === 'reg.exe' && args[0] === 'delete') regValue = null;
+      if (cmd === 'reg.exe' && args[0] === 'query') return { code: regValue ? 0 : 1, stdout: '', stderr: '' };
       if (cmd === 'launchctl' && args[0] === 'bootstrap') loaded.add(svc.serviceArgs(readFileSync(args[2], 'utf8')).length ? args[2] : '');
       if (cmd === 'launchctl' && args[0] === 'print') return loaded.size ? { code: 0, stdout: '\tstate = running\n\tpid = 4242\n\tlast exit code = (never exited)\n\t\tstate = active\n', stderr: '' } : { code: 113, stdout: '', stderr: 'Could not find service' };
       if (cmd === 'launchctl' && args[0] === 'bootout') loaded.clear();
@@ -95,6 +135,60 @@ const fakeHost = (platform: 'darwin' | 'linux', root: string) => {
 }
 
 {
+  const fh = join(home, 'win');
+  const host = fakeHost('win32', fh);
+  const ws = join(home, 'kids', 'tian');
+  mkdirSync(ws, { recursive: true });
+  const a = await svc.installService(host, ws, { node: 'C:\\Program Files\\nodejs\\node.exe', bin: 'C:\\pkg\\bin\\cotutor.js' });
+  const file = join(fh, 'local', 'cotutor', 'service', 'cotutor-tian.js');
+  const logDir = join(fh, 'local', 'cotutor', 'logs', 'tian');
+  const wscript = join('C:\\Windows', 'System32', 'wscript.exe');
+  check('Windows 装:写启动器、写用户的 Run 项、起看护进程(service run,不是 serve)', existsSync(file) && JSON.stringify(a.spec.args) === JSON.stringify(['C:\\Program Files\\nodejs\\node.exe', 'C:\\pkg\\bin\\cotutor.js', 'service', 'run', '--workspace', ws, '--log-dir', logDir]) && host.calls.join('|') === `reg.exe add ${win.RUN_KEY} /v cotutor-tian /t REG_SZ /d "${wscript}" //B //Nologo "${file}" /f|reg.exe delete ${win.STARTUP_APPROVED_KEY} /v cotutor-tian /f|${wscript} //B //Nologo ${file}` && existsSync(logDir), host.calls.join(' | '));
+  check('Windows:Run 项里 wscript 带 //B,路径带引号', host.regValue === `"${wscript}" //B //Nologo "${file}"`, String(host.regValue));
+  check('Windows:按启动器里的 --workspace 找服务(不分大小写)', (await svc.findService(host, ws))?.label === 'cotutor-tian' && (await svc.findService({ ...host, run: host.run }, ws.toUpperCase()))?.label === 'cotutor-tian');
+  const st = await svc.serviceStatus(host, ws, 9);
+  check('Windows 状态:看护进程在就是在跑;pid 是 serve 的;登录项在', st.running && st.pid === 901 && st.autostart === true, JSON.stringify(st));
+  // 任务管理器里关掉:Run 项还在,StartupApproved 第一个字节变单数(真机上 reg query 的样子)
+  const line = (hex: string): string => `\r\nHKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run\r\n    cotutor-tian    REG_BINARY    ${hex}\r\n\r\n`;
+  check('StartupApproved:02 开、03 关、06 开、07 关;没这个值不算关', !win.startupDisabled(line('020000000000000000000000')) && win.startupDisabled(line('030000000000000000000000')) && !win.startupDisabled(line('060000000000000000000000')) && win.startupDisabled(line('07000000D0A9B1F2')) && !win.startupDisabled('ERROR: The system was unable to find the specified registry key or value.'));
+  host.approved = line('020000000000000000000000');
+  check('Windows 状态:任务管理器里开着,算会自己起来', (await svc.serviceStatus(host, ws, 9)).autostart === true);
+  host.approved = line('030000000000000000000000');
+  check('Windows 状态:任务管理器里关掉了,Run 项还在也算不会自己起来', (await svc.serviceStatus(host, ws, 9)).autostart === false && host.regValue !== null);
+  const fixed = await svc.installService(host, ws, { node: 'C:\\Program Files\\nodejs\\node.exe', bin: 'C:\\pkg\\bin\\cotutor.js' });
+  check('Windows 再装一次:关掉的记录去掉,又会自己起来', fixed.replaced && host.approved === '' && (await svc.serviceStatus(host, ws, 9)).autostart === true);
+  host.calls.length = 0;
+  await svc.controlService(host, ws, 'start');
+  check('Windows 起:已经在跑就不再起一个', !host.calls.some((c) => c.includes('wscript')), host.calls.join(' | '));
+  await svc.controlService(host, ws, 'restart');
+  check('Windows 重起:杀进程树(看护进程先)、再起', host.calls.includes('taskkill.exe /PID 900 /T /F') && host.calls.indexOf('taskkill.exe /PID 900 /T /F') < host.calls.findIndex((c) => c.includes('wscript')), host.calls.join(' | '));
+  host.calls.length = 0;
+  await svc.controlService(host, ws, 'stop');
+  check('Windows 停:杀进程树,文件和 Run 项还在', host.calls.includes('taskkill.exe /PID 900 /T /F') && existsSync(file) && host.regValue !== null && !(await svc.serviceStatus(host, ws, 9)).running, host.calls.join(' | '));
+  const again = await svc.installService(host, ws, { node: 'C:\\nodejs22\\node.exe', bin: 'C:\\pkg\\bin\\cotutor.js' });
+  check('Windows 再装一次:同一个名字、照新的 node 重写', again.replaced && again.spec.name === 'tian' && svc.serviceArgs(win.decodeServiceFile(readFileSync(file)))[0] === 'C:\\nodejs22\\node.exe');
+  host.approved = line('030000000000000000000000');
+  await svc.uninstallService(host, ws);
+  check('Windows 卸:杀进程、删 Run 项、删启动器、关掉的记录也不留', !existsSync(file) && host.regValue === null && host.approved === '' && host.calls.some((c) => c.startsWith('reg.exe delete')) && host.calls.includes('taskkill.exe /PID 900 /T /F'), host.calls.join(' | '));
+}
+
+{
+  // 看护进程:真起子进程。假的 bin:按次数退(1、1、0),记下收到的参数与 COTUTOR_SERVICE
+  const dir = join(home, 'keeper');
+  mkdirSync(dir, { recursive: true });
+  const fakeBin = join(dir, 'fake-bin.mjs');
+  const seen = join(dir, 'seen.log');
+  writeFileSync(fakeBin, `import { appendFileSync, readFileSync } from 'node:fs';\nappendFileSync(${JSON.stringify(seen)}, JSON.stringify({ argv: process.argv.slice(2), svc: process.env.COTUTOR_SERVICE }) + '\\n');\nconst n = readFileSync(${JSON.stringify(seen)}, 'utf8').trim().split('\\n').length;\nprocess.exit(n < 3 ? 1 : 0);\n`);
+  const logDir = join(dir, 'logs');
+  const code = await svc.runKeeper({ root: join(dir, 'ws'), logDir, label: 'cotutor-x', bin: fakeBin, restartMs: 20 });
+  const lines = readFileSync(seen, 'utf8').trim().split('\n').map((l) => JSON.parse(l) as { argv: string[]; svc: string });
+  const keeperLog = readFileSync(join(logDir, svc.KEEPER_LOG), 'utf8');
+  check('看护进程:非 0 再起,0 不起,自己以 0 退', code === 0 && lines.length === 3, JSON.stringify({ code, n: lines.length }));
+  check('看护进程:起的是 serve,带 --workspace、--log-dir、COTUTOR_SERVICE', JSON.stringify(lines[0].argv) === JSON.stringify(['serve', '--workspace', join(dir, 'ws'), '--log-dir', logDir]) && lines[0].svc === 'cotutor-x', JSON.stringify(lines[0]));
+  check('看护进程:每次退了记一笔', (keeperLog.match(/serve 退了\(1\)/g) ?? []).length === 2 && keeperLog.includes('不再起'), keeperLog);
+}
+
+{
   check('launchctl print:一层缩进的 state / pid / last exit code', JSON.stringify(svc.parseLaunchctlPrint('gui/501/x = {\n\tpath = /p\n\tstate = running\n\tpid = 1295\n\tlast exit code = (never exited)\n\t\tstate = active\n}')) === '{"running":true,"pid":1295,"lastExit":"(never exited)"}' && svc.parseLaunchctlPrint('\tstate = not running\n\tlast exit code = 1\n').running === false);
   check('systemctl show', JSON.stringify(svc.parseSystemctlShow('ActiveState=active\nMainPID=77\nExecMainStatus=0\n')) === '{"running":true,"pid":77,"lastExit":"0"}' && svc.parseSystemctlShow('ActiveState=failed\nMainPID=0\n').pid === null);
   const pm = 'Battery Power:\n Sleep On Power Button 1\n sleep                1\nAC Power:\n Sleep On Power Button 1\n displaysleep         10\n sleep                0\n tcpkeepalive         1\n';
@@ -143,7 +237,7 @@ const bin = join(import.meta.dirname, '..', 'bin', 'cotutor.js');
 const cli = (args: string[], env: NodeJS.ProcessEnv = {}): Promise<{ code: number; out: string }> => new Promise((resolve) => {
   execFile(process.execPath, [bin, ...args], { env: { ...process.env, HOME: home, ...env }, timeout: 30_000 }, (err, stdout, stderr) => resolve({ code: err ? Number((err as { code?: number }).code ?? 1) : 0, out: `${stdout}${stderr}` }));
 });
-if (process.platform === 'darwin' || process.platform === 'linux') {
+{
   const st = await cli(['service', 'status', '--workspace', wsRoot]);
   check('service status:没装说没装', st.code === 0 && st.out.includes('没装'), st.out);
   const sb = await cli(['service', 'install', '--workspace', wsRoot, '--sandbox']);

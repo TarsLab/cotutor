@@ -1,6 +1,8 @@
 /**
  * Windows 防火墙放没放行 cotutor:平板连不上多半是它。Windows 只在第一次监听时弹一次「允许访问」,家长点了取消(或没看见)就再也连不上,
  * cotutor 什么都不说(2026-10-31 实测:服务在本机回 200,从局域网超时;网络是「专用」,没有 node 的规则,也没有端口的规则)。
+ * 2026-11-06 实测(Windows 11 build 26300,普通权限的账户):node 第一次监听的同一秒,防火墙服务自己建好两条 Block 规则(名字带 Query User)再弹窗问;点「允许」才改成 Allow。
+ * 所以刚起来时查到「拦着」,可能只是弹窗还没回答,不一定点了取消。
  * 用 PowerShell 的 NetSecurity 命令查(输出与系统语言无关;netsh 的输出是本地化的,中文 Windows 上解析不了);查不了(没有 PowerShell、超时)就不报,不瞎猜。
  */
 import { execFile } from 'node:child_process';
@@ -69,8 +71,8 @@ export function judgeFirewall(s: FirewallState, port: number, node: string): Fir
   if (guarded.some((n) => covers(s.blocked, n))) {
     return {
       ok: false,
-      detail: '防火墙拦着这个 node(多半是第一次起服务时「允许访问」点了取消):平板连不上,这台电脑上照常',
-      fix: `管理员终端里先删拦截规则:netsh advfirewall firewall delete rule name=all dir=in program="${node}";再放行:${allowCmd}`,
+      detail: '防火墙拦着这个 node(第一次起服务时 Windows 先拦着、再弹窗问「允许访问」:还没回答,或者点了取消):平板连不上,这台电脑上照常',
+      fix: `屏幕上有「允许访问」的窗口就点「允许」;没有窗口(点过取消了):管理员终端里先删拦截规则:netsh advfirewall firewall delete rule name=all dir=in program="${node}";再放行:${allowCmd}`,
     };
   }
   if (guarded.every((n) => covers(s.allowed, n))) return { ok: true, detail: `防火墙放行了(端口 ${port} 或这个 node)` };

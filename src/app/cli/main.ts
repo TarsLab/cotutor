@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { constants as osConstants } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { doctorWorkspace } from './doctor.ts';
 import { initWorkspace } from './init.ts';
 import { gradePacks } from './grades.ts';
@@ -22,7 +22,7 @@ import { patchConfig } from '../workspace.ts';
 import { resolveRoot } from '../workspace.ts';
 import { httpsFiles, serveWorkspace } from './serve.ts';
 import { teeLogs } from './serve-log.ts';
-import { controlService, findService, installService, probeHealth, realHost, servicePlatform, serviceStatus, tailLog, uninstallService, waitHealthy, type Health } from './service.ts';
+import { controlService, earlyLogHint, findService, installService, probeHealth, realHost, runKeeper, servicePlatform, serviceStatus, tailLog, uninstallService, waitHealthy, type Health } from './service.ts';
 import { openSandbox } from './sandbox.ts';
 import { serveMock, type MockScenario } from '../mock/mock.ts';
 import { UsageError, loadWorkspace, redactDeep, redactHome, workspaceReport } from '../workspace.ts';
@@ -192,10 +192,17 @@ export async function main(argv: string[]): Promise<void> {
       }
       case 'service': {
         const sub = positionals[0];
+        // 看护进程(Windows 的启动器起的,不是给人敲的):起 serve,崩了再起
+        if (sub === 'run') {
+          const logDir = flags['log-dir'];
+          if (typeof workspace !== 'string' || typeof logDir !== 'string') throw new UsageError('service run 要 --workspace 与 --log-dir');
+          process.exitCode = await runKeeper({ root: workspace, logDir, label: `cotutor-${basename(logDir)}` });
+          return;
+        }
         const SUBS = ['install', 'uninstall', 'start', 'stop', 'restart', 'status', 'logs'];
         if (!sub || !SUBS.includes(sub)) throw new UsageError(`service 后面跟 ${SUBS.join(' / ')} 之一。\n${USAGE}`);
         const host = realHost();
-        servicePlatform(host.platform);
+        const platform = servicePlatform(host.platform);
         const ws = loadWorkspace(workspace);
         if (ws.sandbox) throw new UsageError('试用 workspace 不装后台服务:试的时候 cotutor serve --sandbox 在前台跑');
         const root = ws.root;
@@ -206,14 +213,16 @@ export async function main(argv: string[]): Promise<void> {
         // 后台读不到 vault(macOS 拦着后台进程读「文稿」、iCloud 云盘)、版本对不上:装完、起完、看状态都提
         const notes = (h: Health | null): string[] => {
           const out: string[] = [];
-          if (h?.vault === 'denied') out.push(`! 后台服务读不到 vault(${redactHome(ws.paths.vault)}):macOS 不让后台进程读「文稿」「桌面」和 iCloud 云盘,也不弹窗问。系统设置 › 隐私与安全性 › 完全磁盘访问权限,点 + 加上 ${process.execPath}(或把 vault 挪出这几处),然后 cotutor service restart`);
+          if (h?.vault === 'denied') out.push(platform === 'darwin'
+            ? `! 后台服务读不到 vault(${redactHome(ws.paths.vault)}):macOS 不让后台进程读「文稿」「桌面」和 iCloud 云盘,也不弹窗问。系统设置 › 隐私与安全性 › 完全磁盘访问权限,点 + 加上 ${process.execPath}(或把 vault 挪出这几处),然后 cotutor service restart`
+            : `! 后台服务读不到 vault(${redactHome(ws.paths.vault)}):看看这个目录的权限,然后 cotutor service restart`);
           if (h?.version && h.version !== version()) out.push(`! 在跑的是 ${h.version},装的是 ${version()}:cotutor service restart 换上新的`);
           return out;
         };
         const tellLog = async (dir: string | null): Promise<void> => {
           const t = dir ? await tailLog(dir, 15) : null;
           if (t) { process.stdout.write(`  ${redactHome(t.file)} 最后几行:\n`); for (const l of t.lines) process.stdout.write(`    ${l}\n`); }
-          else if (dir) process.stdout.write(`  日志还没有;launchd 自己的输出在 ${redactHome(dir)}/launchd.log\n`);
+          else if (dir) process.stdout.write(`  日志还没有;起来之前的输出看 ${redactHome(earlyLogHint(platform, { label: `cotutor-${basename(dir)}`, logDir: dir }))}\n`);
         };
         if (sub === 'install') {
           const before = await probeHealth(port);
@@ -224,9 +233,17 @@ export async function main(argv: string[]): Promise<void> {
           const h = await waitHealthy(port, 20_000, before?.started);
           if (json) { process.stdout.write(`${JSON.stringify(redactDeep({ ...r, healthy: Boolean(h), health: h }), null, 2)}\n`); return; }
           process.stdout.write(`${r.replaced ? '重装了' : '装好了'}后台服务 ${r.spec.label}(${redactHome(r.file)})\n`);
-          process.stdout.write(`  登录这台电脑后自己起来,崩了隔 10 秒再起;关了终端照样跑。日志 ${redactHome(r.spec.logDir)}/<日期>.log,留 14 天\n`);
-          if (host.platform === 'darwin') process.stdout.write('  Mac 睡着时平板连不上:有通话时 cotutor 拦着它闲置睡眠,别的时候看系统设置(cotutor doctor 会提);合盖照样睡\n');
-          if (host.platform === 'linux') {
+          process.stdout.write(`  登录这台电脑后自己起来,崩了隔 10 秒再起;关了终端照样跑。日志 ${redactHome(join(r.spec.logDir, '<日期>.log'))},留 14 天\n`);
+          if (platform !== 'linux') process.stdout.write(`  电脑睡着时平板连不上:有通话时 cotutor 拦着它闲置睡眠,别的时候看系统设置(cotutor doctor 会提);合盖照样睡\n`);
+          if (platform === 'win32') {
+            process.stdout.write('  没有黑窗口。任务管理器的「启动应用」里看不到 cotutor 这个名字,显示的是 Windows Based Script Host;登录后约一分钟起来,在不在跑看 cotutor service status\n');
+            // 平板连不连得进来:Windows 第一次监听时弹一次「允许访问」,点了取消(或没看见)就再也连不上;不在终端里跑了,这里不说就没地方说了
+            const { judgeFirewall, probeFirewall } = await import('./firewall.ts');
+            const state = await probeFirewall(port);
+            const v = state && judgeFirewall(state, port, process.execPath);
+            if (v && !v.ok) process.stdout.write(`  ! ${v.detail}\n    修复:${v.fix ?? ''}\n    弄好以后 cotutor doctor 再查一次\n`);
+          }
+          if (platform === 'linux') {
             const lg = await host.run('loginctl', ['show-user', process.env.USER ?? '', '-p', 'Linger']);
             if (/Linger=no/.test(lg.stdout)) process.stdout.write(`  ! 现在只在你登录着时跑;不登录也要跑:sudo loginctl enable-linger ${process.env.USER ?? '<用户名>'}\n`);
           }
@@ -245,7 +262,7 @@ export async function main(argv: string[]): Promise<void> {
           if (sub === 'start' && before?.mode === 'service') { process.stdout.write(`后台服务已经在跑了(pid ${before.pid ?? '?'})\n`); return; }
           if (sub !== 'stop' && before && before.mode !== 'service') throw new UsageError(`端口 ${port} 上有一个 cotutor serve 在终端里跑着:先关掉它(Ctrl-C)`);
           const s = await controlService(host, root, sub);
-          if (sub === 'stop') { process.stdout.write(host.platform === 'darwin' ? `停了 ${s.label}(下次登录又会自己起来;一直不要它:cotutor service uninstall)\n` : `停了 ${s.label}(下次开机又会起来;一直不要它:cotutor service uninstall)\n`); return; }
+          if (sub === 'stop') { process.stdout.write(`停了 ${s.label}(下次${platform === 'linux' ? '开机' : '登录'}又会自己起来;一直不要它:cotutor service uninstall)\n`); return; }
           const h = await waitHealthy(port, 20_000, before?.started);
           if (h) { process.stdout.write(`${sub === 'start' ? '起来了' : '重起了'}:pid ${h.pid ?? '?'},版本 ${h.version ?? '?'}\n`); for (const n of notes(h)) process.stdout.write(`${n}\n`); }
           else { process.stdout.write(`! 20 秒内没答应(端口 ${port}):\n`); await tellLog(s.logDir); process.exitCode = 1; }
@@ -260,7 +277,8 @@ export async function main(argv: string[]): Promise<void> {
           if (h) process.stdout.write(`  端口 ${port} 答应:${h.mode === 'service' ? '后台服务' : `终端里的 cotutor serve(pid ${h.pid ?? '?'})`},版本 ${h.version ?? '?'},起来于 ${when(h.started)}\n  家长端 ${parentPage}\n`);
           else process.stdout.write(`  端口 ${port} 没答应\n`);
           for (const n of notes(h)) process.stdout.write(`${n}\n`);
-          if (st.installed?.logDir) process.stdout.write(`  日志 ${redactHome(st.installed.logDir)}/(cotutor service logs)\n`);
+          if (st.autostart === false) process.stdout.write('  ! 下次登录不会自己起来:登录项被关掉或删掉了(任务管理器的「启动应用」、杀毒软件)。要它:cotutor service install 再装一次\n');
+          if (st.installed?.logDir) process.stdout.write(`  日志 ${redactHome(st.installed.logDir)}(cotutor service logs)\n`);
           if (st.installed && !h) await tellLog(st.installed.logDir);
           return;
         }
@@ -271,7 +289,7 @@ export async function main(argv: string[]): Promise<void> {
         if (!(Number.isInteger(n) && n > 0)) throw new UsageError('--lines 要是正整数');
         const t = await tailLog(s.logDir, n);
         if (t) for (const l of t.lines) process.stdout.write(`${l}\n`);
-        else process.stdout.write(`还没有日志(${redactHome(s.logDir)});launchd 自己的输出在 launchd.log\n`);
+        else process.stdout.write(`还没有日志;起来之前的输出看 ${redactHome(earlyLogHint(platform, s))}\n`);
         if (flags.follow === true) {
           const { open: openFile, stat: statFile } = await import('node:fs/promises');
           const { logFileFor } = await import('./serve-log.ts');

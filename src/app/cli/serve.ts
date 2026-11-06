@@ -3,7 +3,7 @@
  * 启动打印解析结果与体检警告(配置坏了直接不起,骨架缺失只警告)。
  * 扫码页:/qr 现画一张二维码(编 <本机名>.local 那条,不随 Wi-Fi 变),iPad 用相机扫;listen 之后把真端口交给 ctx.listen。
  * HTTPS(iPad 上录音要):server.https 指了证书就用它(单个 workspace 的例外);没指就看机器级 ~/.config/cotutor/certs/(cotutor cert 用 mkcert 建);都没有走 HTTP。
- * macOS:有通话开着、或有老师在写,就拦着这台电脑闲置睡眠(caffeinate -i);闲着不拦(家长定)。网络流量挡不住闲置睡眠,上着课没人碰 Mac 也会睡过去。
+ * 有通话开着、或有老师在写,就拦着这台电脑闲置睡眠(macOS caffeinate -i,Windows SetThreadExecutionState);闲着不拦(家长定)。网络流量挡不住闲置睡眠,上着课没人碰电脑也会睡过去。
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { X509Certificate } from 'node:crypto';
@@ -13,6 +13,7 @@ import { createServer as createHttps } from 'node:https';
 import { hostname, networkInterfaces } from 'node:os';
 import { join } from 'node:path';
 import { doctorWorkspace } from './doctor.ts';
+import { awakeScript, psArgs } from './service-windows.ts';
 import type { ListenInfo } from '../../ui/parent/qr-page.ts';
 import { createContext, createHandler, type AppContext } from '../http/app.ts';
 import { liveUpgrade } from '../ws/route.ts';
@@ -25,7 +26,7 @@ export interface ServeOptions extends ResolveOptions {
   host?: string;
   /** 强制走 HTTP(哪怕证书在) */
   http?: boolean;
-  /** macOS 上有事时拦着睡眠;缺省开 */
+  /** 有事时拦着睡眠;缺省开 */
   awake?: boolean;
 }
 
@@ -129,16 +130,19 @@ export async function serveWorkspace(opts: ServeOptions = {}): Promise<ServeResu
 const AWAKE_CHECK_MS = 15_000;
 
 /**
- * macOS:busy() 为真就起一个 caffeinate -i(拦闲置睡眠;-w 跟着这个进程,serve 没了它自己退),为假就停;别的系统什么都不做。
+ * busy() 为真就起一个拦闲置睡眠的子进程,为假就停;serve 没了它自己退:macOS 是 caffeinate -i -w <pid>,Windows 是一段 PowerShell(service-windows.ts 的 awakeScript);Linux 什么都不做。
  * 合盖照样睡(那是家长的事,iPad 那篇写着);返回停掉的函数
  */
 export function holdAwake(busy: () => boolean, platform: NodeJS.Platform = process.platform, everyMs = AWAKE_CHECK_MS): () => void {
-  if (platform !== 'darwin') return () => {};
+  if (platform !== 'darwin' && platform !== 'win32') return () => {};
+  const start = (): ChildProcess => (platform === 'darwin'
+    ? spawn('/usr/bin/caffeinate', ['-i', '-w', String(process.pid)], { stdio: 'ignore' })
+    : spawn('powershell.exe', psArgs(awakeScript(process.pid)), { stdio: 'ignore', windowsHide: true }));
   let child: ChildProcess | null = null;
   const tick = (): void => {
     const b = busy();
     if (b && !child) {
-      const c = spawn('/usr/bin/caffeinate', ['-i', '-w', String(process.pid)], { stdio: 'ignore' });
+      const c = start();
       c.on('error', () => { if (child === c) child = null; });
       c.on('exit', () => { if (child === c) child = null; });
       child = c;

@@ -3677,6 +3677,8 @@ __REEL_DOCK_JS__
     location.reload();
   };
   setInterval(() => { staleReload(); if (S.tutor) { if (!S.pending) loadDay(true); } else loadHome(); }, 5000);
+  // 离线页(offline-sw.ts):电脑关了、睡着了时,点开主屏幕图标看到「老师们还没到」,不是浏览器的报错。只在 https(或 localhost)上有;回放、预览里不装
+  if (!REEL && !PREVIEW && window.isSecureContext && 'serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
   document.addEventListener('visibilitychange', () => { if (!document.hidden) (S.tutor ? loadDay(true) : loadHome()); });
   // 孩子端刷新(手动的、Safari 自己重载的)回到手上这位老师;在首页刷新就回首页。只读回放不记(重载回来是今天的)
   if (!REEL && !PREVIEW) window.addEventListener('pagehide', () => { try { if (S.tutor && !S.readonly) sessionStorage.setItem('kid-resume', S.tutor.name); else sessionStorage.removeItem('kid-resume'); } catch {} });

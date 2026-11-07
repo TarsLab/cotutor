@@ -7,9 +7,11 @@
  */
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { X509Certificate } from 'node:crypto';
-import { readFileSync } from 'node:fs';
-import { createServer as createHttp, type Server } from 'node:http';
+import { createReadStream, existsSync, readFileSync } from 'node:fs';
+import { createServer as createHttp, type RequestListener, type Server } from 'node:http';
 import { createServer as createHttps } from 'node:https';
+import { createServer as createNetServer, type Server as NetServer } from 'node:net';
+import { rootCaFile } from './root-ca.ts';
 import { hostname, networkInterfaces } from 'node:os';
 import { join } from 'node:path';
 import { siteUrl } from '../../shared/site-url.ts';
@@ -37,7 +39,8 @@ export interface ServeOptions extends ResolveOptions {
 }
 
 export interface ServeResult {
-  server: Server;
+  /** 用 https 时是前面那层(同一个端口分给 https 和 http);不用 https 就是 http 服务本身 */
+  server: NetServer;
   ctx: AppContext;
   ws: Workspace;
   port: number;
@@ -116,6 +119,46 @@ export function listenInfo(https: boolean, port: number): ListenInfo {
   return { name: siteUrl(scheme, localName(), port), ip: ip ? siteUrl(scheme, ip, port) : null, https };
 }
 
+/**
+ * 用 https 时 http 那一面只做两件事:给根证书(平板扫码装证书,这时还不信任 https,所以走 http)、别的都跳到 https
+ * (切到 https 以前开着的页面、旧书签、手输的 http 地址)。只给 rootCA.pem,私钥永远不给;找不到就说怎么弄。
+ */
+export function plainHandler(caFile: () => string | null): RequestListener {
+  return (req, res) => {
+    const path = (req.url ?? '/').split('?')[0];
+    if (req.method === 'GET' && (path === '/ca.crt' || path === '/ca')) {
+      const file = caFile();
+      if (file && existsSync(file)) {
+        res.writeHead(200, { 'content-type': 'application/x-x509-ca-cert', 'content-disposition': 'attachment; filename="cotutor-ca.crt"', 'cache-control': 'no-store' });
+        createReadStream(file).pipe(res);
+        return;
+      }
+      res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+      res.end('这台电脑上没找到根证书:先在电脑上跑 mkcert -install 和 cotutor cert');
+      return;
+    }
+    res.writeHead(301, { location: `https://${req.headers.host ?? 'localhost'}${req.url ?? '/'}`, 'cache-control': 'no-store' });
+    res.end();
+  };
+}
+
+/** 同一个端口既认 https 又认 http:看第一个字节,TLS 握手(0x16)交给 https,别的交给 http 那一面 */
+export function httpAndHttps(secure: Server, plain: Server): NetServer {
+  const front = createNetServer((sock) => {
+    sock.on('error', () => undefined);
+    sock.once('data', (first: Buffer) => {
+      sock.pause();
+      sock.unshift(first);
+      (first[0] === 0x16 ? secure : plain).emit('connection', sock);
+      process.nextTick(() => sock.resume());
+    });
+  });
+  front.once('close', () => {
+    for (const s of [secure, plain]) { s.close(); s.closeAllConnections(); }
+  });
+  return front;
+}
+
 export async function serveWorkspace(opts: ServeOptions = {}): Promise<ServeResult> {
   const ws = loadWorkspace(opts.workspace, opts);
   // 不探 CLI(起服务不用等它);防火墙要查:平板连不上时这里是家长唯一看得到提醒的地方
@@ -126,9 +169,12 @@ export async function serveWorkspace(opts: ServeOptions = {}): Promise<ServeResu
   ctx.openCalls = () => liveUpgrade.openCalls();
   const handler = createHandler(ctx);
   const tls = opts.http ? null : httpsFiles(ws);
-  const server = tls ? createHttps({ cert: readFileSync(tls.cert), key: readFileSync(tls.key) }, handler) : createHttp(handler);
+  const app = tls ? createHttps({ cert: readFileSync(tls.cert), key: readFileSync(tls.key) }, handler) : createHttp(handler);
   // WebSocket:实时老师的那条线(src/app/ws/);不认就关掉
-  server.on('upgrade', (req, socket, head) => { void liveUpgrade(req, socket, head, ctx).then((took) => { if (!took) socket.destroy(); }, () => socket.destroy()); });
+  app.on('upgrade', (req, socket, head) => { void liveUpgrade(req, socket, head, ctx).then((took) => { if (!took) socket.destroy(); }, () => socket.destroy()); });
+  // 用 https 时同一个端口也认 http(给平板装根证书、把 http 的跳过去)
+  const caFile = tls ? await rootCaFile() : null;
+  const server: NetServer = tls ? httpAndHttps(app, createHttp(plainHandler(() => caFile))) : app;
   // 别的程序只占着 127.0.0.1 时,绑通配地址照样成功:平板连到这边,这台电脑上开 localhost 却到了别的程序。先问一声,当被占处理(main.ts 接)
   if (port !== 0 && (await answersLocally(port))) throw Object.assign(new Error(`port ${port} answers on 127.0.0.1`), { code: 'EADDRINUSE', port });
   await new Promise<void>((resolveListen, reject) => {

@@ -1,6 +1,6 @@
 /**
- * 舞台包的静态文件:dist/stage/(esbuild 打的 stage.js / stage.css / index.html)+ /stage/fonts/(excalidraw 的字体:dist/stage/fonts/ 在就给它,
- * 不在从 node_modules 现取;部署包把字体拷进 dist/stage/fonts/、去掉 excalidraw 依赖,见 docs/wip/deploy/)。
+ * 舞台包的静态文件:dist/stage/(esbuild 打的 stage.js / stage.css / index.html)+ /stage/fonts/(excalidraw 的字体)。
+ * 字体由 build:stage 拷进 dist/stage/fonts/,npm 装的包里没有 excalidraw(它只在打包时用);开发时没打包就从 node_modules 现取。
  * serve 与 mock 共用;没打包(开发时没跑 pnpm run build:stage)→ null,页面开重卡舞台时什么都不出现,doctor 点名。
  */
 import { existsSync } from 'node:fs';

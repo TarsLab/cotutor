@@ -171,6 +171,8 @@ await initWorkspace({ slug: 'kid', dir: wsRoot });
   const entry = at < 0 ? '' : log.slice(at, log.indexOf('\n## ', at + 1) < 0 ? undefined : log.indexOf('\n## ', at + 1));
   check(`这个版本写了更新说明(package.json 的 releaseNotes、CHANGELOG 的 ## ${pkg.version})`, Boolean(pkg.releaseNotes?.length) && at >= 0);
   check('releaseNotes 经得起 cleanNotes(不会被丢掉)', update.cleanNotes(pkg.releaseNotes).length === pkg.releaseNotes?.length);
+  // 提示条按纯文本显示:0.4.3 写了反引号,家长看到的是 `cotutor init --grade` 原样(2026-11-07)
+  check('releaseNotes 写纯文本:不用反引号、星号这些 Markdown 记号', (pkg.releaseNotes ?? []).every((n) => !/[`*_#]/.test(n)), JSON.stringify(pkg.releaseNotes));
   check('releaseNotes 每条都在 CHANGELOG 这个版本下面', (pkg.releaseNotes ?? []).every((n) => entry.includes(n)), entry);
   check('README 说了怎么关、只发普通请求、不自动升级', section.includes('"off": true') && section.includes('不带孩子') && section.includes('不会自动升级'));
 }

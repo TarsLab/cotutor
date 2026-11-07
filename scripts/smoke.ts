@@ -4,7 +4,7 @@
  * 跑法:pnpm build && node --experimental-strip-types scripts/smoke.ts
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -75,13 +75,17 @@ const stageKb = Math.round(stageJs.reduce((n, f) => n + statSync(join(STAGE_DIR,
 need(stageJs.length > 10, `dist/stage 里只有 ${stageJs.length} 个 js,拆包后应该有上百个 chunk(pnpm run build:stage)`);
 need(stageKb > 3000, `dist/stage 的 js 合计只有 ${stageKb} KB,不像打全了`);
 
-// 5. 出厂技能都在包里;运行期要的 excalidraw 字体(/stage/fonts/ 现取,不进包)
+// 5. 出厂技能都在包里;舞台的字体在包里
 const { SHIPPED_SKILLS, skillSourceDir } = await import(new URL('../dist/app/cli/skills.js', import.meta.url).href) as {
   SHIPPED_SKILLS: readonly { name: string }[];
   skillSourceDir: (s: { name: string }) => string;
 };
 for (const s of SHIPPED_SKILLS) need(existsSync(join(skillSourceDir(s), 'SKILL.md')), `包里没有 skills/${s.name}/SKILL.md`);
-need(existsSync(FONTS_DIR), `dist/stage/fonts/ 与 node_modules 的 excalidraw 里都没有字体目录(${FONTS_DIR});/stage/fonts/ 会 404,舞台里中文字形回退`);
+// 字体要在包里:npm 装的没有 excalidraw(只在打包时用),dist/stage/fonts/ 缺了 /stage/fonts/ 就 404,舞台里中文字形回退
+need(FONTS_DIR === join(STAGE_DIR, 'fonts') + sep && existsSync(FONTS_DIR) && readdirSync(FONTS_DIR).length > 3, `字体不在舞台包里(${FONTS_DIR});pnpm run build:stage 会拷进 dist/stage/fonts/`);
+// 运行时依赖里不能有只在打包时用的:装出来会多 260 个包、220 MB
+const runtimeDeps = Object.keys((pkg as { dependencies?: Record<string, string> }).dependencies ?? {});
+for (const d of ['@excalidraw/excalidraw', 'react', 'react-dom']) need(!runtimeDeps.includes(d), `${d} 在 dependencies 里:它只在打包舞台时用,放 devDependencies`);
 
 // 5b. cotutor chalk check 的类型层:场景里的 import type … from 'cotutor/chalk' 映射到包内的 dist/chalk/types.d.ts(src/app/cli/chalk/typecheck.ts)
 need(existsSync(join(root, 'dist', 'chalk', 'types.d.ts')), 'dist/chalk/types.d.ts 不在,chalk check 的类型层不跑');

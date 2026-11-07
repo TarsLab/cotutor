@@ -124,7 +124,7 @@ cotutor service status --json
 - 说 PATH 里没有 mkcert：重开终端再试。
 - 说要先跑 `mkcert -install`（包括 `cotutor cert` 输出里以 `!` 开头的那行，这时证书签好了，但这台电脑的浏览器会报警告）：回到上面，交给家长。做完不用重签。
 
-**【交给家长】** 把根证书装到每台平板上，并打开信任开关，步骤见 [iPad 与 iPhone](https://github.com/TarsLab/cotutor/blob/main/docs/iPad与iPhone.md) 的第 3、4 节。`cotutor cert` 的输出写了根证书的位置，安卓怎么装也写在那里。
+**【交给家长】** 把根证书装到每台平板上，并打开信任开关：最省事是在家长端「扫码打开」点「装证书」，用平板的相机扫；步骤见 [iPad 与 iPhone](https://github.com/TarsLab/cotutor/blob/main/docs/iPad与iPhone.md) 的第 3、4 节。`cotutor cert` 的输出写了根证书的位置，安卓怎么装也写在那里。
 
 ## 7. 告诉家长
 

@@ -27,6 +27,7 @@ import { shownAvatar } from './avatars.ts';
 import { qrNotes, qrSvg } from '../../ui/shared/qr-svg.ts';
 import { readDevices } from '../../runtime/journal/kid-log.ts';
 import { parentSetupRoute } from './parent-setup.ts';
+import { rootCaFile } from '../cli/root-ca.ts';
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const bad = (message: string): RouteResult => ({ status: 400, json: { error: 'bad_request', message } });
@@ -171,9 +172,13 @@ async function kidQr(ctx: AppContext): Promise<Record<string, unknown>> {
   const devices = Object.values(await readDevices(ctx.ws));
   const last = devices.map((d) => d.last).sort().at(-1) ?? null;
   const parent = { url: `${info.name}parent`, ip: info.ip ? `${info.ip}parent` : null };
+  // 装根证书:走同一个端口的 http 那一面(serve.ts 的 plainHandler),平板这时还不信任 https;端口照写,http 缺省是 80
+  const caUrl = (u: string): string => { const x = new URL(u); return `http://${x.hostname}:${x.port || '443'}/ca.crt`; };
+  const ca = info.https && (await rootCaFile()) ? { url: caUrl(info.name), ip: info.ip ? caUrl(info.ip) : null } : null;
   return {
     ready: true, https: info.https, url: info.name, svg: qrSvg(info.name), ip: info.ip, svgIp: info.ip ? qrSvg(info.ip) : null,
     parent: { ...parent, svg: qrSvg(parent.url), svgIp: parent.ip ? qrSvg(parent.ip) : null },
+    ca: ca ? { ...ca, svg: qrSvg(ca.url), svgIp: ca.ip ? qrSvg(ca.ip) : null } : null,
     notes: qrNotes(info.https).slice(1), devices: devices.length, last,
   };
 }

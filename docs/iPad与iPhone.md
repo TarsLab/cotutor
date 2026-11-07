@@ -54,7 +54,9 @@ cotutor service restart     # 在终端里跑的:关掉重开 cotutor serve
 
 ## 3. 把根证书装到设备上
 
-把 `rootCA.pem` 传到 iPad / iPhone——隔空投送最快,用邮件、"文件"App、iCloud 云盘也行。
+最省事:在电脑上打开家长端,「扫码打开」那块点 **装证书**,用平板的相机扫那张码,点「允许」下载描述文件。这张码走的是同一个端口的 http(平板这时还不信任 https),只给根证书,别的都跳到 https。
+
+扫不了也可以把 `rootCA.pem` 传到 iPad / iPhone——隔空投送最快,用邮件、"文件"App、iCloud 云盘也行。
 
 设备上收到后:
 

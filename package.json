@@ -1,11 +1,11 @@
 {
   "name": "cotutor",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "releaseNotes": [
-    "自动备份:服务开着时每天一份,升级前一份,可以恢复;录音占地方,不在备份里",
-    "家长端首页多了「还差几步」,第一次打开就知道接下来做什么;选一下年级老师就知道孩子上几年级",
-    "遇到问题时,家长端「设置」能生成诊断信息,不含孩子的对话和 key,先看再发",
-    "`cotutor init --grade` 自动算好学期,`cotutor doctor --fix` 一次修掉能自动修的"
+    "装得快多了:安装从 275 个包变成 15 个,Windows 上第一次装从 3 分钟左右变成 1 分钟左右",
+    "平板第一次用:在家长端「扫码打开」点「装证书」,用平板相机扫一下就能装根证书",
+    "电脑关了或睡着时,孩子在平板上打开看到「老师们还没到」,不再是浏览器的报错;电脑好了自己回来",
+    "有了一行安装命令(Mac、Windows 都有),README 里也写了怎么卸载"
   ],
   "description": "AI tutors that co-teach with parents at home: real-time voice, an interactive whiteboard, and learning memory in your own Obsidian vault. Self-hosted; built for China's elementary curriculum.",
   "type": "module",
@@ -59,7 +59,10 @@
     "skills",
     "README.md",
     "LICENSE",
-    "NOTICE"
+    "NOTICE",
+    "install.sh",
+    "install.ps1",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "gen:skills": "node --experimental-strip-types scripts/gen-skills.ts",
@@ -75,18 +78,18 @@
   },
   "dependencies": {
     "@ai-sdk/alibaba": "2.0.78",
-    "@excalidraw/excalidraw": "0.18.1",
     "ai": "7.0.155",
     "hanzi-writer-data": "2.0.1",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
     "typescript": "^5.6.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@excalidraw/excalidraw": "0.18.1",
     "@types/node": "^22.20.1",
     "@types/react": "^18.3.31",
     "@types/react-dom": "^18.3.7",
-    "esbuild": "^0.28.2"
+    "esbuild": "^0.28.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   }
 }

@@ -1,6 +1,8 @@
 /**
  * 舞台包:src/ui/stage/(React + 课包的画面 src/ui/stage/chalk/ + excalidraw)→ dist/stage/stage.js + chunk-*.js + stage.css + index.html(esbuild)。
- * 字体不进包:index.html 把 EXCALIDRAW_ASSET_PATH 指到 /stage/,serve 从 node_modules 的 excalidraw 里提供 /stage/fonts/。
+ * 字体进包(2026-11-07 起):excalidraw 的字体拷到 dist/stage/fonts/,index.html 把 EXCALIDRAW_ASSET_PATH 指到 /stage/。
+ * 这样运行时不要 excalidraw、react、react-dom 这几个包(它们只在打包时用,在 devDependencies):装 cotutor 从 275 个包变 15 个、346 MB 变 123 MB,
+ * Windows 上第一次装从 3 分钟变 1 分钟;画板、小课堂、做课包在两种装法下逐项一样(实测过,见 docs/wip/长期运行方案.md)。
  * react / react-dom / excalidraw 强制解析到本包的 node_modules(不钉住的话,link 进来的包会打进两份 React)。
  * src/chalk 的模块没有副作用(package.json 的 sideEffects 只认 css):舞台只用 assembleBundle,zod 与场景契约整个摇掉,首屏不带。
  *
@@ -13,7 +15,7 @@
  * 跑法:pnpm run build:stage(prepublishOnly 也跑);开发时缺了 doctor 点名。
  */
 import { build } from 'esbuild';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { cp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -55,6 +57,9 @@ await writeFile(
 </html>
 `,
 );
+// 字体:运行时从这里给(src/app/http/stage.ts 的 fontsDir),不再找 node_modules 里的 excalidraw
+await rm(join(out, 'fonts'), { recursive: true, force: true });
+await cp(join(pkgDir('@excalidraw/excalidraw'), 'dist', 'prod', 'fonts'), join(out, 'fonts'), { recursive: true });
 // 打开舞台立刻要下的 = 入口 + 它的静态 import 链(其余 chunk 由 excalidraw / 画板的 import() 按需取)
 const outs = r.metafile.outputs;
 const entry = Object.keys(outs).find((f) => outs[f].entryPoint?.endsWith('main.tsx'));

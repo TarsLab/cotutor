@@ -366,24 +366,27 @@ ${pageDomJs(3200)}
         h('span', { style: 'flex:none;display:flex', html: QR_ICON }), h('span', { class: 'tx' }, h('b', {}, '扫码打开'), h('small', {}, seen)), h('span', { class: 'lnk', style: 'font-size:14px' }, '展开'))));
       return;
     }
-    const kid = QR.to === 'kid', c = kid ? d : (d.parent || d);
+    if (QR.to === 'ca' && !d.ca) QR.to = 'kid';
+    const kid = QR.to === 'kid', ca = QR.to === 'ca', c = kid ? d : ca ? d.ca : (d.parent || d);
     const useIp = QR.ip && c.ip;
-    const seg = h('div', { class: 'seg', role: 'group', 'aria-label': '给谁扫' }, ...[['kid', '孩子的平板'], ['parent', '我的手机']].map(([k, l]) =>
+    // 装证书(serve.ts 的 http 那一面给根证书):平板第一次用之前扫一次;有证书、找得到根证书才有这一格
+    const tabs = [['kid', '孩子的平板'], ['parent', '我的手机']].concat(d.ca ? [['ca', '装证书']] : []);
+    const seg = h('div', { class: 'seg', role: 'group', 'aria-label': '给谁扫' }, ...tabs.map(([k, l]) =>
       h('button', { type: 'button', class: QR.to === k ? 'on' : '', 'aria-pressed': QR.to === k ? 'true' : 'false', on: { click: () => { QR.to = k; qrDraw(); } } }, l)));
     const print = '/parent/qr?' + new URLSearchParams(Object.assign({}, useIp ? { via: 'ip' } : {}, kid ? {} : { to: 'parent' })).toString();
     qrEl.replaceChildren(
       h('div', { class: 'gh' }, h('span', {}, '扫码打开'), h('button', { type: 'button', class: 'x', 'aria-expanded': 'true', on: { click: () => qrToggle(false) } }, '收起')),
       h('div', { class: 'grp' }, h('div', { class: 'box' }, seg,
         h('div', { class: 'qrrow' }, h('div', { class: 'qrimg', html: (useIp ? c.svgIp : c.svg) || '' }),
-          h('b', { style: 'font-weight:600' }, kid ? '用孩子平板的相机扫一下' : '用你自己的手机扫一下'),
-          h('span', { class: 'lbl', style: 'line-height:1.5' }, kid ? '打开的就是孩子的首页。在 Safari 里「添加到主屏幕」,以后点图标就进来。' : '打开的是家长端:看记录、排首页。也可以添加到主屏幕。')),
+          h('b', { style: 'font-weight:600' }, kid ? '用孩子平板的相机扫一下' : ca ? '平板第一次用:先扫这张装证书' : '用你自己的手机扫一下'),
+          h('span', { class: 'lbl', style: 'line-height:1.5' }, kid ? '打开的就是孩子的首页。在 Safari 里「添加到主屏幕」,以后点图标就进来。' : ca ? '扫了点「允许」下载描述文件;到「设置」最上面点「已下载描述文件」装上;再到「设置 › 通用 › 关于本机 › 证书信任设置」把开关打开。装好再扫「孩子的平板」那张。每台平板做一次。' : '打开的是家长端:看记录、排首页。也可以添加到主屏幕。')),
         h('div', { class: 'qrurl' }, useIp ? c.ip : c.url),
         d.https ? null : h('div', { class: 'qrwarn' }, d.notes[0] || ''),
         h('div', { class: 'row2', style: 'font-size:14px' },
           c.ip ? h('button', { type: 'button', class: 'x', style: 'height:auto;padding:0;font-size:14px;text-align:left', on: { click: () => { QR.ip = !QR.ip; qrDraw(); } } }, useIp ? '换回 ' + host(c.url) : '扫了打不开?换成 ' + host(c.ip)) : h('span'),
           h('span', { style: 'display:flex;gap:14px;flex:none' },
             h('a', { class: 'lnk kidl', style: 'font-size:14px', href: '/', target: '_blank' }, '孩子端 ↗'),
-            h('a', { class: 'lnk', style: 'font-size:14px', href: print, target: '_blank' }, '打印 ›'))))),
+            ca ? null : h('a', { class: 'lnk', style: 'font-size:14px', href: print, target: '_blank' }, '打印 ›'))))),
       h('div', { class: 'note' }, d.https ? (d.notes[0] || '') : '', d.devices ? '' : (d.https ? ' ' : '') + '还没有平板连进来过,所以这块先开着;连过以后自动收起。'));
   };
 

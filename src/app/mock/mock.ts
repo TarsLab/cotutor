@@ -79,6 +79,7 @@ import { kidThreads, type KidMessage } from '../../runtime/kid-view.ts';
 import { ICON_SIZES, appIconPng, webManifest } from '../../ui/shared/icon.ts';
 import { faviconResponse } from '../../ui/shared/favicon.ts';
 import { kidPage } from '../../ui/kid/kid-page.ts';
+import { KID_SW_JS } from '../../ui/kid/offline-sw.ts';
 import { parentPage } from '../../ui/parent/parent-page.ts';
 import { arrangeHome, homeOwners, kidButtons, kidTiles, parseHome } from '../../runtime/home/home.ts';
 import type { TutorButton } from '../../board/cards/index.ts';
@@ -704,6 +705,7 @@ export function createMock(opts: MockOptions = {}): Mock {
     if (p === '/parent/qr') return mock.listen ? { status: 200, html: qrPage(title, mock.listen(), url.searchParams.get('via') === 'ip' ? 'ip' : 'name', url.searchParams.get('to') === 'parent' ? 'parent' : 'kid') } : { status: 404, json: { error: 'not_listening' } };
     if (p === '/dev/voice') return { status: 200, html: VOICE_GALLERY_PAGE };
     if (p === '/manifest.webmanifest') return { status: 200, json: webManifest(title), contentType: 'application/manifest+json; charset=utf-8' };
+    if (p === '/sw.js') return { status: 200, body: Buffer.from(KID_SW_JS), contentType: 'text/javascript; charset=utf-8', cacheControl: 'no-cache' };
     // 家长端「记录」:自己的一页(parent-page.ts);清单接口照真服务(答案不剥,第一节带一条给家长的尾巴与记忆)。mock 没有工作台 /dev
     if (p === '/parent') return { status: 200, html: parentPage(title) };
     if (p === '/reel') return { status: 200, html: kidPage(title, { reel: true }, await stageVersion()) };

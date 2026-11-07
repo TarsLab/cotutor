@@ -41,6 +41,7 @@ import { knownLatest, knownNotes } from '../machine/update.ts';
 import { isNewer } from '../../shared/upgrade.ts';
 import { qrPage, type ListenInfo } from '../../ui/parent/qr-page.ts';
 import { kidPage } from '../../ui/kid/kid-page.ts';
+import { KID_SW_JS } from '../../ui/kid/offline-sw.ts';
 import { parentPage } from '../../ui/parent/parent-page.ts';
 import { kidHomeView } from '../../runtime/home/store.ts';
 import { photosOf } from '../../runtime/kid-input.ts';
@@ -1117,6 +1118,8 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     if (p === '/dev/voice') return { status: 200, html: VOICE_GALLERY_PAGE };
     // 主屏幕(iPad「添加到主屏幕」):清单与图标都按标题现生成,没有静态资源
     if (p === '/manifest.webmanifest') return { status: 200, json: webManifest(ws.config.title), contentType: 'application/manifest+json; charset=utf-8' };
+    // 孩子端的离线页(offline-sw.ts):平板打开时电脑关了、睡着了,给「老师们还没到」,不给浏览器的报错
+    if (p === '/sw.js') return { status: 200, body: Buffer.from(KID_SW_JS), contentType: 'text/javascript; charset=utf-8', cacheControl: 'no-cache' };
     const icon = /^\/icon-(\d{2,4})\.png$/.exec(p);
     if (icon) {
       const n = Number(icon[1]);

@@ -71,6 +71,7 @@
 - 别的程序只占着 `127.0.0.1:<端口>` 时,绑 `0.0.0.0:<端口>` 照样成功(macOS、Windows 都这样),光试绑看不出被占,要先连一下(`port.ts` 的 `answersLocally`)
 - JXA(macOS 的显示脚本):`$.NSAttributedString.alloc.initWithStringAttributes` 不存在,要 `NSMutableAttributedString.alloc.init` 再填;枚举常量取不到值,写数字;返回整数的方法给的是字符串(`a.runModal` 是 `"1001"`),比较前要 `Number()`;回调里的异常被吞掉,不报错也不动作;菜单项标号别用 0(别的行缺省是 0)
 - 探针模拟手指用 CDP `Input.dispatchMouseEvent`,别用 `dispatchEvent`:后者直接派到元素上,不走命中判定,盖住了、pointer-events 关了都照样过
+- 舞台包(`dist/stage/`)打包时把 excalidraw 编进去、字体拷进 `dist/stage/fonts/`;excalidraw、react、react-dom 在 devDependencies,运行时不要(smoke 盯着)。新加只在打包时用的依赖也放 devDependencies
 - 课包的画面是 build 后烤好的(`bake.json`),孩子端不跑 excalidraw 也没有 SMIL;改了画面要重烤(`cotutor chalk bake`,snap 顺手烤,要本机的 Chrome),不然孩子端在浏览器里现烤、服务端后台补烤
 - Safari 才有的毛病拿 Playwright 的 WebKit 复现(`scripts/probe-lecture-webkit.mjs`,本仓不装 playwright,借一份)
 - 百炼 realtime:`turn_detection.silence_duration_ms` 喂过音频就改不了(切 null 再切回也回缺省 800),要不同的 silence 就另开会话;端点用业务空间 id 的域名,公网域名连上 1 秒就断;300 秒没输入就关,只 append 不 clear 会报 `response_idle_timeout` 而连接不断(死会话),心跳要 append 完马上 clear(`scripts/probe-live-idle.mjs`);`semantic_vad` 听不见一两个词的回答(好的、Yes,问过也一样),`server_vad` 听得见但「嗯」、笑声也算开口(`scripts/probe-live-vad.mjs context / noise`);Node 的 WebSocket 客户端握手被拒只发 error 不发 close,`close()` 后服务端那头要 5–10 秒才回;CDP 的鼠标事件派不到视口外的元素,先 `scrollIntoView`
@@ -88,7 +89,9 @@
 - 历史不迁移:话题只能在开它的那种运行时下接着聊、记账;换过运行时就当那个话题已经结束——接着说开新话题、不记账(家长端说为什么),记录照样能看,不导入、不转换(`sameRuntime`)。以后换脑、换 SDK 编码同此
 - workspace 解析链 `--workspace` > `COTUTOR_WORKSPACE` > cwd 祖先 > `~/.config/cotutor/config.json` > `~/cotutor/` 唯一目录;init 幂等补缺,已有文件不动
 - 手动试功能用 sandbox(`--sandbox`,`src/app/cli/sandbox.ts`):从真 workspace 分到旁边的 `.sandbox/<目录名>/`,设置照拷、状态不带(`SANDBOX_SKIP`)、外面的 vault 拷一份,标题带「试用」、端口 +1;写数据的代码不认 sandbox,它就是另一个 workspace。新加孩子的状态目录要进 `SANDBOX_SKIP`,不然会被拷进 sandbox
-- 证书是机器级的,`~/.config/cotutor/certs/`
+- 证书是机器级的,`~/.config/cotutor/certs/`。用 https 时同一个端口也认 http(`serve.ts` 的 `httpAndHttps`、`plainHandler`):http 那一面只给根证书 `GET /ca.crt`(平板扫码装证书,`root-ca.ts` 只认 `rootCA.pem`,私钥永远不给)、别的都 301 到 https;改了先过 `tests/https-plain.test.ts`
+- 孩子端的离线页是 Service Worker(`src/ui/kid/offline-sw.ts`,`GET /sw.js`):只接管孩子端那几页的打开,不缓存;只在安全上下文里有。改了就改里面的 VERSION,先过 `tests/offline.test.ts`
+- 一行安装脚本 `install.sh`、`install.ps1` 在仓库根、随 npm 包发(jsDelivr 从包里取):不用 sudo、不改执行策略、Windows 用 `.cmd`;Node 版本跟 engines 走。改了先过 `tests/install-script.test.ts`,真跑在发版验证里
 - 端口只在 `cotutor init` 选一次写进 cotutor.json,以后不变:443 优先,再 8443、8445…,系统不让用或被占就看下一个,别的孩子的连同 sandbox 都让开;sandbox 恒为 +1。运行时被占只报错说是谁占着,不自动换:平板的主屏幕图标和本地设置都绑在「协议 + 主机 + 端口」上。schema 的 `DEFAULT_PORT`(5180)只给没写端口的旧配置,不跟着改。地址认电脑名(macOS 的本地主机名),IP 变了不用重签;二维码、证书、serve 都从 `computerName` 拿
 - 千问 key 是机器级的,只认 `~/.config/cotutor/bailian.json`(百炼按量 + 业务空间 id,家长端写)与 `token-plan.json`(开发机才有);环境变量、qwen、voxtell 的配置都不读(`src/shared/qianwen.ts`)。测试要 key 往临时 HOME 写假文件(`tests/_keys.ts`),要真效果就用真的家
 

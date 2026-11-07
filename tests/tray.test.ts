@@ -536,7 +536,7 @@ const fakeHost = (platform: NodeJS.Platform, h: string, fail: Record<string, num
   let after = -1;
   for (let i = 0; i < 100 && after !== 0; i++) { after = (await svc.probeHealth(port))?.calls ?? -1; if (after !== 0) await wait(50); }
   check('挂了:回到 0', after === 0, String(after));
-  r.server.closeAllConnections?.();
+  (r.server as import('node:http').Server).closeAllConnections?.();
   r.server.close();
   delete process.env.COTUTOR_LIVE_ENDPOINT;
 }

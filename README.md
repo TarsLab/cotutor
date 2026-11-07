@@ -12,7 +12,21 @@
 请阅读 https://raw.githubusercontent.com/TarsLab/cotutor/main/INSTALL.md ,照着在这台电脑上安装 cotutor
 ```
 
-**自己装:** 需要一台电脑(Mac 最省事)、Node ≥ 22.18,和一个百炼账号(北京地域,按量付费)。老师的嘴和脑都走百炼,由应用直接调用,不用另装模型客户端:嘴是 `qwen3.8-omni-flash-realtime`,听孩子说、照着讲稿念;脑是 `qwen3.8-max`,写讲稿和板书。
+**自己装:** 需要一台电脑(Mac 最省事)、[Node.js](https://nodejs.org) ≥ 22.18(装 LTS 版),和一个百炼账号(北京地域,按量付费)。老师的嘴和脑都走百炼,由应用直接调用,不用另装模型客户端:嘴是 `qwen3.8-omni-flash-realtime`,听孩子说、照着讲稿念;脑是 `qwen3.8-max`,写讲稿和板书。
+
+一行装好(会查 Node 的版本、连不上 npm 就用国内镜像;不用 sudo、不改系统设置)。最后那三个是孩子的短名(小写字母,不用真名)、称呼、年级,不写就只装程序:
+
+```sh
+# Mac(终端里)
+curl -fsSL https://raw.githubusercontent.com/TarsLab/cotutor/main/install.sh | sh -s -- ming 小明 2
+```
+
+```powershell
+# Windows(PowerShell 里)
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/TarsLab/cotutor/main/install.ps1))) ming 小明 2
+```
+
+连不上 GitHub 就把地址换成 `https://cdn.jsdelivr.net/npm/cotutor@latest/install.sh`(Windows 是 `install.ps1`)。也可以一条条自己来:
 
 ```sh
 npm i -g cotutor
@@ -161,6 +175,23 @@ cotutor serve --sandbox               # 试用的那份;没有就先分出来
 cotutor send math-tutor 你好 --sandbox
 cotutor serve --sandbox --fresh       # 丢掉试过的,从真 workspace 重新分(真的那边改了老师文件、vault 也用这个带过来)
 ```
+
+## 卸载
+
+孩子的文件夹(`~/cotutor/<孩子>/`)和备份(`~/cotutor/.backups/`)是家里的记录,删了找不回来,卸载程序不会碰它们;真不要了自己删。Windows 上命令写成 `cotutor.cmd`、`npm.cmd`。
+
+```sh
+cotutor service uninstall --workspace ~/cotutor/<孩子>   # 每个孩子一次;最后一个卸掉时,菜单栏(任务栏)图标也一起卸
+npm rm -g cotutor
+```
+
+还留在电脑上的,不要了可以删:
+
+- `~/.config/cotutor/`:百炼的 key、证书、家长端密码、几项设置
+- 日志:Mac 在 `~/Library/Logs/cotutor/`,Windows 在 `%LOCALAPPDATA%\cotutor\`(里面还有图标的文件),Linux 在 `~/.local/state/cotutor/`;Mac 的图标文件在 `~/Library/Application Support/cotutor/`
+- 签证书时装的根证书:跑 `mkcert -uninstall` 从这台电脑的信任里拿掉,再删 `mkcert -CAROOT` 说的那个目录
+- 平板上:设置 › 通用 › VPN 与设备管理里删掉那个描述文件,主屏幕上的图标长按删掉
+- Windows 防火墙里给 Node.js 开的「允许」:Windows 安全中心 › 防火墙和网络保护 › 允许应用通过防火墙,别的程序也用 Node.js 时留着
 
 ## 开发
 

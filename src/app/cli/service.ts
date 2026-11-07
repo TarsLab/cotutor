@@ -105,6 +105,38 @@ export function earlyLogHint(platform: ServicePlatform, s: { label: string; logD
 export const KEEPER_LOG = 'keeper.log';
 const KEEPER_LOG_MAX = 5 * 1024 * 1024;
 const KEEPER_RESTART_MS = 10_000;
+const sleep = (ms: number): Promise<void> => new Promise((r) => { setTimeout(r, ms); });
+
+/**
+ * launchctl bootout 发完信号就回,进程还没退;这时 bootstrap 报 5: Input/output error,服务就停在那儿了(2026-11-07 实测重装 12 次失败 10 次)。
+ * 等它真的卸下来再往下走。launchd 最多等进程 20 秒(ExitTimeOut 缺省),再不走它自己会杀。
+ */
+export async function launchdUnload(host: Pick<ServiceHost, 'run'>, target: string, waitMs = 25_000): Promise<void> {
+  await host.run('launchctl', ['bootout', target]);
+  const until = Date.now() + waitMs;
+  while ((await host.run('launchctl', ['print', target])).code === 0 && Date.now() < until) await sleep(200);
+}
+
+/** 装上;刚卸下的那一下还可能报错,隔一秒再试几次,真的不行才算不行 */
+export async function launchdLoad(host: Pick<ServiceHost, 'run' | 'uid'>, file: string, tries = 5): Promise<{ code: number; stdout: string; stderr: string }> {
+  let r = await host.run('launchctl', ['bootstrap', `gui/${host.uid}`, file]);
+  for (let i = 1; i < tries && r.code !== 0; i++) {
+    await sleep(1000);
+    r = await host.run('launchctl', ['bootstrap', `gui/${host.uid}`, file]);
+  }
+  return r;
+}
+
+/**
+ * 写进服务文件、登录项的 node。Homebrew 的 process.execPath 是带版本号的路径(实测 /opt/homebrew/Cellar/node/26.12.1_1/bin/node),
+ * brew upgrade 清掉旧版后,服务和图标下次登录都起不来,连报警的都没了;opt/<formula> 这个链接 brew 一直维护。别的管理器(nvm、asdf)不会自己删旧版,不动。
+ */
+export function stableNode(execPath: string, exists: (p: string) => boolean = existsSync): string {
+  const m = /^(.*)\/Cellar\/(node(?:@\d+)?)\/[^/]+\/bin\/node$/.exec(execPath);
+  if (!m) return execPath;
+  const opt = `${m[1]}/opt/${m[2]}/bin/node`;
+  return exists(opt) ? opt : execPath;
+}
 
 /**
  * service install 之后开不开家长端:只有这个孩子第一次装时开,下一步就是填百炼、扫码。
@@ -293,7 +325,7 @@ export async function installService(host: ServiceHost, root: string, opts: { no
   const logDir = serviceLogDir(host, name);
   // Windows 上跑的是看护进程,它再起 serve(那边没有 launchd / systemd 替你拉起)
   const run = platform === 'win32' ? ['service', 'run'] : ['serve'];
-  const spec: ServiceSpec = { name, label, root, logDir, path: host.env.PATH ?? '/usr/bin:/bin', args: [opts.node ?? process.execPath, opts.bin ?? binPath(), ...run, '--workspace', root, '--log-dir', logDir] };
+  const spec: ServiceSpec = { name, label, root, logDir, path: host.env.PATH ?? '/usr/bin:/bin', args: [opts.node ?? stableNode(process.execPath), opts.bin ?? binPath(), ...run, '--workspace', root, '--log-dir', logDir] };
   const file = fileOf(host, name);
   await mkdir(serviceDir(host), { recursive: true });
   await mkdir(logDir, { recursive: true });
@@ -307,9 +339,9 @@ export async function installService(host: ServiceHost, root: string, opts: { no
     await startWindows(host, file);
   } else if (platform === 'darwin') {
     // 先卸下旧的(没装过会报错,不管),再装上;bootstrap 会按 RunAtLoad 马上起
-    await host.run('launchctl', ['bootout', `gui/${host.uid}/${label}`]);
+    await launchdUnload(host, `gui/${host.uid}/${label}`);
     await writeFile(file, launchdPlist(spec));
-    const r = await host.run('launchctl', ['bootstrap', `gui/${host.uid}`, file]);
+    const r = await launchdLoad(host, file);
     if (r.code !== 0) throw new UsageError(`launchctl bootstrap 没成:${(r.stderr || r.stdout).trim()}`);
   } else {
     await writeFile(file, systemdUnit(spec));
@@ -357,8 +389,8 @@ export async function controlService(host: ServiceHost, root: string, what: 'sta
   if (platform === 'darwin') {
     const target = `gui/${host.uid}/${s.label}`;
     const loaded = (await host.run('launchctl', ['print', target])).code === 0;
-    if (what === 'stop') { if (loaded) await host.run('launchctl', ['bootout', target]); return s; }
-    const r = loaded ? await host.run('launchctl', what === 'restart' ? ['kickstart', '-k', target] : ['kickstart', target]) : await host.run('launchctl', ['bootstrap', `gui/${host.uid}`, s.file]);
+    if (what === 'stop') { if (loaded) await launchdUnload(host, target); return s; }
+    const r = loaded ? await host.run('launchctl', what === 'restart' ? ['kickstart', '-k', target] : ['kickstart', target]) : await launchdLoad(host, s.file);
     if (r.code !== 0) throw new UsageError(`launchctl 没成:${(r.stderr || r.stdout).trim()}`);
     return s;
   }
@@ -392,8 +424,12 @@ export interface Health {
   calls?: number;
   /** 百炼配了没有(托盘:没配算有事要处理) */
   bailian?: boolean;
+  /** 跑起来以后百炼出的问题(欠费、key 失效、连不上);没有 → null(machine/bailian.ts) */
+  bailianTrouble?: { kind: string; message: string; fix: string; why?: string; blocked?: boolean } | null;
   /** npm 上比在跑的这份新的版本;没有 → null(machine/update.ts) */
   latest?: string | null;
+  /** 那个版本写的更新说明 */
+  latestNotes?: string[];
   configError?: string | null;
   /** 问到的是 https 还是 http(这边加的,不是服务回的) */
   scheme?: 'https' | 'http';

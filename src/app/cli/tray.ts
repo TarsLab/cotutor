@@ -20,7 +20,7 @@ import { siteUrl } from '../../shared/site-url.ts';
 import { isNewer } from '../../shared/upgrade.ts';
 import { portHolder } from './port-holder.ts';
 import { RUN_KEY, STARTUP_APPROVED_KEY, encodeLauncher, parseProcs, psArgs, runValue, startupDisabled, winCommandLine } from './service-windows.ts';
-import { binPath, controlService, listServices, parseLaunchctlPrint, probeHealth, wscriptPath, xml, type Health, type InstalledService, type ServiceHost } from './service.ts';
+import { binPath, controlService, listServices, parseLaunchctlPrint, probeHealth, wscriptPath, xml, type Health, type InstalledService, type ServiceHost, launchdLoad, launchdUnload, stableNode } from './service.ts';
 import { macTrayIcons, windowsTrayIcons } from './tray-icons.ts';
 import { HELPER_NO_SESSION, TRAY_AUMID, TRAY_LABEL, TRAY_RUN_VALUE } from './tray-ids.ts';
 import { MAC_TRAY_SCRIPT } from './tray-mac.ts';
@@ -112,6 +112,7 @@ export function issuesOf(p: TrayProbe, o: { platform: NodeJS.Platform; version: 
   if (h.vault === 'denied') out.push(o.platform === 'darwin' ? { text: '读不到 vault:要给 node 开磁盘权限', fix: { kind: 'open', target: MAC_FULL_DISK } } : { text: '读不到 vault:看看这个目录的权限', fix: { kind: 'open', target: p.root } });
   else if (h.vault === 'missing') out.push({ text: 'vault 不在了:看看 cotutor.json 的 paths.vault', fix: { kind: 'open', target: p.root } });
   if (h.bailian === false) out.push({ text: '还没填百炼:老师们到不了', fix: { kind: 'open', target: url } });
+  else if (h.bailianTrouble) out.push({ text: h.bailianTrouble.message, fix: { kind: 'open', target: url } });
   if (h.version && h.version !== o.version) out.push({ text: `在跑的是 ${h.version},装的是 ${o.version}:重启一下`, fix: { kind: 'restart' } });
   return out;
 }
@@ -548,7 +549,7 @@ export function realTrayDeps(host: ServiceHost, dir: string, file: string, versi
 }
 
 /** 登录项跑的命令 */
-export const trayArgs = (host: HostPaths, o: { node?: string; bin?: string } = {}): string[] => [o.node ?? process.execPath, o.bin ?? binPath(), 'tray', 'run', '--dir', trayDir(host)];
+export const trayArgs = (host: HostPaths, o: { node?: string; bin?: string } = {}): string[] => [o.node ?? stableNode(process.execPath), o.bin ?? binPath(), 'tray', 'run', '--dir', trayDir(host)];
 
 /** macOS 的 LaunchAgent:登录就起,崩了拉起,以 0 退(点了退出)不拉 */
 export function trayPlist(args: string[], dir: string, path: string): string {
@@ -606,9 +607,9 @@ export async function installTray(host: ServiceHost, o: { node?: string; bin?: s
   }
   const file = plistFile(host);
   await mkdir(join(host.home, 'Library', 'LaunchAgents'), { recursive: true });
-  await host.run('launchctl', ['bootout', `gui/${host.uid}/${TRAY_LABEL}`]);
+  await launchdUnload(host, `gui/${host.uid}/${TRAY_LABEL}`);
   await writeFile(file, trayPlist(args, dir, host.env.PATH ?? '/usr/bin:/bin'));
-  const r = await host.run('launchctl', ['bootstrap', `gui/${host.uid}`, file]);
+  const r = await launchdLoad(host, file);
   return { file, started: r.code === 0 };
 }
 

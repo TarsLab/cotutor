@@ -37,7 +37,7 @@ import { factoryAvatarFile, shownAvatar } from './avatars.ts';
 import { deviceCookie, newDeviceId, parseKidLog, readDevices, recordKidLog, renameDevice, validDevice } from '../../runtime/journal/kid-log.ts';
 import { DEVICE_COOKIE } from '../../schema/kid-device.ts';
 import { BUILD, codeChanged, headNow, shortCommit } from '../build.ts';
-import { knownLatest } from '../machine/update.ts';
+import { knownLatest, knownNotes } from '../machine/update.ts';
 import { isNewer } from '../../shared/upgrade.ts';
 import { qrPage, type ListenInfo } from '../../ui/parent/qr-page.ts';
 import { kidPage } from '../../ui/kid/kid-page.ts';
@@ -110,6 +110,8 @@ export interface AppContext {
   access: Access;
   /** 百炼(bailian.ts):孩子端要它才打得开,家长端配;测试可注入 */
   bailian: Bailian;
+  /** 嘴的连接好了 / 坏了(call.ts 报上来) */
+  mouthHealth(why: string | null, midCall?: boolean): Promise<void>;
 }
 
 export function createContext(ws: Workspace, opts: { now?: () => Date; env?: NodeJS.ProcessEnv; draw?: Draw; access?: Access; bailian?: Bailian } = {}): AppContext {
@@ -123,6 +125,10 @@ export function createContext(ws: Workspace, opts: { now?: () => Date; env?: Nod
     openCalls: null,
     access: opts.access ?? createAccess({ now: () => ctx.now() }),
     bailian: opts.bailian ?? createBailian({ env: opts.env }),
+    async mouthHealth(why, midCall) {
+      if (why === null) ctx.bailian.fine('mouth');
+      else await ctx.bailian.note(midCall ? 'call' : 'mouth', why);
+    },
     async reload() {
       try {
         const r = await reloadIfChanged(ctx.ws, configText);
@@ -135,6 +141,12 @@ export function createContext(ws: Workspace, opts: { now?: () => Date; env?: Nod
       }
     },
   };
+  // 脑的结果:请求失败(欠费、key 失效)记下给家长看;成功了就算好了。不是请求的错(比如卡住)不算百炼的事
+  ctx.runner.onEvent((e) => {
+    if (e.event.lane !== 'main' || e.event.kind !== 'exit') return;
+    if (e.event.ok) ctx.bailian.fine('brain');
+    else if (e.event.reason?.startsWith('api:')) void ctx.bailian.note('brain', e.event.reason);
+  });
   return ctx;
 }
 
@@ -216,7 +228,7 @@ export async function kidHome(ctx: AppContext, now: Date): Promise<KidHome> {
   const date = localDate(now);
   const view = await kidHomeView(ws, now);
   const figshot = ws.config.figshot ? { port: ws.config.figshot.port } : null;
-  return { title: ws.config.title, date, tutors: await kidTutors(ctx), home: view.home, cards: view.cards, figshot, hand: ws.config.kid.hand ?? 'right', ready: ctx.bailian.status().ready };
+  return { title: ws.config.title, date, tutors: await kidTutors(ctx), home: view.home, cards: view.cards, figshot, hand: ws.config.kid.hand ?? 'right', ready: ctx.bailian.status().ready && !ctx.bailian.blocked() };
 }
 
 export interface KidDay {
@@ -622,7 +634,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     if (p === '/api/health') {
       const head = await headNow();
       const vault = await readdir(ws.paths.vault).then(() => 'ok', (err: NodeJS.ErrnoException) => (err.code === 'EPERM' || err.code === 'EACCES' ? 'denied' : 'missing'));
-      return { status: 200, json: { ok: true, configError: ctx.configError, started: BUILD.started, version: BUILD.version, commit: shortCommit(BUILD.commit), dirty: BUILD.dirty, head: shortCommit(head), changed: codeChanged(BUILD.commit, head), pid: process.pid, mode: process.env.COTUTOR_SERVICE ? 'service' : 'foreground', vault, calls: ctx.openCalls?.() ?? 0, bailian: ctx.bailian.status().ready, latest: isNewer(knownLatest(), BUILD.version) ? knownLatest() : null } };
+      return { status: 200, json: { ok: true, configError: ctx.configError, started: BUILD.started, version: BUILD.version, commit: shortCommit(BUILD.commit), dirty: BUILD.dirty, head: shortCommit(head), changed: codeChanged(BUILD.commit, head), pid: process.pid, mode: process.env.COTUTOR_SERVICE ? 'service' : 'foreground', vault, calls: ctx.openCalls?.() ?? 0, bailian: ctx.bailian.status().ready, bailianTrouble: ctx.bailian.trouble(), latest: isNewer(knownLatest(), BUILD.version) ? knownLatest() : null, latestNotes: isNewer(knownLatest(), BUILD.version) ? knownNotes() : [] } };
     }
     // 家长端与工作台的锁(access.ts):对 PIN 换 cookie;设了 PIN、没凭证的设备,孩子端以外的页面回输 PIN 的页、接口回 401。没设 PIN 什么都不拦
     if (p === '/api/auth') {

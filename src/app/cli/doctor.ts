@@ -304,8 +304,12 @@ export async function doctorWorkspace(
       const { portHolder, portState } = await import('./port.ts');
       const port = opts.port ?? ws.config.server.port;
       const fix = '腾出这个端口;或改 cotutor.json 的 server.port,平板要重新扫码、重加主屏幕图标';
-      if (await probeHealth(port)) push({ name: 'server.port', ok: true, required: false, detail: `端口 ${port} 上 cotutor 在答应` });
-      else {
+      const running = await probeHealth(port);
+      if (running) {
+        push({ name: 'server.port', ok: true, required: false, detail: `端口 ${port} 上 cotutor 在答应` });
+        // 配好了不等于用得了:欠费、key 失效是跑起来才知道的,问在跑的那个服务
+        if (running.bailianTrouble) push({ name: 'bailian.runtime', ok: false, required: false, detail: `${running.bailianTrouble.message}(${running.bailianTrouble.why ?? ''})`, fix: running.bailianTrouble.fix });
+      } else {
         const state = await portState(port);
         if (state === 'free') push({ name: 'server.port', ok: true, required: false, detail: `端口 ${port} 空着,起得来` });
         else if (state === 'denied') push({ name: 'server.port', ok: false, required: false, detail: `系统不让这个用户监听端口 ${port},服务起不来`, fix });
@@ -572,7 +576,10 @@ export async function doctorWorkspace(
     }
     if (!s) push({ name: 'service', ok: false, required: false, detail: '没装后台服务:在终端里跑的 cotutor serve,关了终端就停', fix: 'cotutor service install(登录后自己起来、崩了自己再起)', cmd: `cotutor service install --no-open${flag}` });
     else {
+      const { stableNode } = await import('./service.ts');
       const gone = s.args.slice(0, 2).filter((f) => !existsSync(f));
+      // 还没坏,但 brew upgrade 以后就坏了,而且坏的时候图标也起不来,没人报警
+      if (!gone.length && stableNode(s.args[0]) !== s.args[0]) push({ name: 'service.node', ok: false, required: false, detail: `后台服务写死了带版本号的 node(${redactHome(s.args[0])}),brew upgrade 以后服务和图标都起不来`, fix: 'cotutor service install(换成不带版本号的路径)', cmd: `cotutor service install --no-open${flag}` });
       push({ name: 'service', ok: !gone.length, required: false, detail: gone.length ? `后台服务 ${s.label} 指的 ${gone.map((f) => redactHome(f)).join('、')} 不在了(换了 node 版本、包挪了地方)` : `后台服务 ${s.label}(cotutor service status 看在不在跑)`, fix: gone.length ? 'cotutor service install(照现在的 node 与包重写一遍)' : undefined, cmd: gone.length ? `cotutor service install${flag}` : undefined });
     }
   }
@@ -595,7 +602,7 @@ export async function doctorWorkspace(
   {
     const { readUpdateRecord } = await import('../machine/update.ts');
     const u = await readUpdateRecord();
-    if (!u.off && isNewer(u.latest, BUILD.version)) push({ name: 'update', ok: false, required: false, detail: `有新版本 ${u.latest}(现在是 ${BUILD.version})`, fix: `挑孩子不用的时候,依次运行:${upgradeSteps().join(' ; ')}` });
+    if (!u.off && isNewer(u.latest, BUILD.version)) push({ name: 'update', ok: false, required: false, detail: `有新版本 ${u.latest}(现在是 ${BUILD.version})`, fix: `挑孩子不用的时候,运行:${upgradeSteps().join(' ; ')}` });
   }
 
   // ---- 用户配置 ----

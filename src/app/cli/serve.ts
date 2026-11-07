@@ -48,6 +48,8 @@ export interface ServeResult {
 }
 
 /** 证书路径:cotutor.json 的 server.https 优先(相对 workspace 根),否则机器级 ~/.config/cotutor/certs/;都没有 → null */
+const BAILIAN_RECHECK_MS = 120_000;
+
 export function httpsFiles(ws: Workspace): { cert: string; key: string } | null {
   const h = ws.config.server.https;
   if (h) return { cert: expandPath(h.cert, ws.root), key: expandPath(h.key, ws.root) };
@@ -147,6 +149,10 @@ export async function serveWorkspace(opts: ServeOptions = {}): Promise<ServeResu
   }, AUTO_BOOKKEEP_EVERY_MS);
   timer.unref();
   server.once('close', () => clearInterval(timer));
+  // 嘴连不上时隔一阵再试:充上钱、网回来了,没人点也会恢复,孩子端和图标跟着好
+  const recheck = setInterval(() => { void ctx.bailian.recheck().catch(() => undefined); }, BAILIAN_RECHECK_MS);
+  recheck.unref();
+  server.once('close', () => clearInterval(recheck));
   if (opts.awake !== false) {
     const stop = holdAwake(() => liveUpgrade.openCalls() > 0 || Object.keys(ctx.ws.config.tutors).some((t) => ctx.runner.running(t) !== null));
     server.once('close', stop);

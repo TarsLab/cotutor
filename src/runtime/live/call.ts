@@ -70,6 +70,8 @@ export interface KidSocket {
 export interface LiveApp {
   readonly runner: Runner;
   now(): Date;
+  /** 嘴连上了(null)、连不上(原因)、通话中百炼报错(midCall):app 那层记下,给家长看 */
+  mouthHealth?(why: string | null, midCall?: boolean): Promise<void>;
 }
 
 export interface LiveDeps {
@@ -403,6 +405,7 @@ export class LiveCall {
       onError: (m) => {
         if (this.session !== s) return;
         this.send({ t: 'err', status: 502, error: m });
+        void this.deps.ctx.mouthHealth?.(m, true);
         // commit 没收下(声音太少):这一句不会有转写,照转写是空的办
         if ((this.pendingVoice || this.echoHeld) && /committing input audio buffer/i.test(m)) this.heard('');
       },
@@ -417,7 +420,10 @@ export class LiveCall {
   /** 开一条嘴的会话并换上(第一次、断了以后现连) */
   private async connectMouth(): Promise<string | null> {
     const { why, s, open } = await this.openMouth();
-    if (why === null) this.mounted(s, open);
+    if (why === null) {
+      this.mounted(s, open);
+      void this.deps.ctx.mouthHealth?.(null);
+    } else await this.deps.ctx.mouthHealth?.(why);
     return why;
   }
 

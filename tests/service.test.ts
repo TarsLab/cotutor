@@ -21,6 +21,41 @@ const win = await import('../src/app/cli/service-windows.ts');
 const { teeLogs, pruneLogs } = await import('../src/app/cli/serve-log.ts');
 const { UsageError } = await import('../src/app/workspace.ts');
 
+// ---- 重装:bootout 发完信号就回,进程还没退时 bootstrap 报 5(2026-11-07 真机:重装 12 次失败 10 次,失败后服务就停了) ----
+{
+  const seen: string[] = [];
+  let dying = 3;
+  const host = { uid: 501, run: async (_c: string, a: string[]) => {
+    seen.push(a[0]);
+    if (a[0] === 'print') return dying-- > 0 ? { code: 0, stdout: '', stderr: '' } : { code: 1, stdout: '', stderr: '' };
+    if (a[0] === 'bootstrap') return dying > 0 ? { code: 5, stdout: '', stderr: 'Bootstrap failed: 5: Input/output error' } : { code: 0, stdout: '', stderr: '' };
+    return { code: 0, stdout: '', stderr: '' };
+  } };
+  await svc.launchdUnload(host, 'gui/501/x');
+  const r = await svc.launchdLoad(host, '/f.plist');
+  check('进程还没退:等真的卸下了才 bootstrap,一次就成', r.code === 0 && seen.join() === 'bootout,print,print,print,print,bootstrap', seen.join());
+  let tries = 0;
+  const flaky = { uid: 501, run: async () => (++tries < 3 ? { code: 5, stdout: '', stderr: 'Bootstrap failed: 5' } : { code: 0, stdout: '', stderr: '' }) };
+  check('刚卸下还报错:隔一会儿再试', (await svc.launchdLoad(flaky, '/f.plist')).code === 0 && tries === 3, String(tries));
+  let n = 0;
+  const dead = { uid: 501, run: async () => { n++; return { code: 5, stdout: '', stderr: 'Bootstrap failed: 5' }; } };
+  const bad = await svc.launchdLoad(dead, '/f.plist', 2);
+  check('一直不行:试够了回错误(install 报给人看)', bad.code === 5 && n === 2);
+  const stuck = { run: async (_c: string, a: string[]) => ({ code: a[0] === 'print' ? 0 : 0, stdout: '', stderr: '' }) };
+  const t0 = Date.now();
+  await svc.launchdUnload(stuck, 'gui/501/x', 300);
+  check('一直卸不下:不死等', Date.now() - t0 < 2000);
+}
+
+// ---- 写进服务文件的 node:不能带版本号;2026-11-07 这台 Mac 上 Homebrew 的 execPath 实测带版本号 ----
+{
+  const all = (): boolean => true;
+  check('Homebrew:换成 opt 下面不带版本号的', svc.stableNode('/opt/homebrew/Cellar/node/26.12.1_1/bin/node', all) === '/opt/homebrew/opt/node/bin/node');
+  check('Homebrew 的 node@22、Intel Mac 的路径', svc.stableNode('/opt/homebrew/Cellar/node@22/22.18.0/bin/node', all) === '/opt/homebrew/opt/node@22/bin/node' && svc.stableNode('/usr/local/Cellar/node/24.1.0/bin/node', all) === '/usr/local/opt/node/bin/node');
+  check('opt 那个链接不在:不换,宁可用真的路径', svc.stableNode('/opt/homebrew/Cellar/node/26.12.1_1/bin/node', () => false) === '/opt/homebrew/Cellar/node/26.12.1_1/bin/node');
+  check('别的安装方式不动', ['/usr/local/bin/node', '/Users/a/.nvm/versions/node/v22.18.0/bin/node', '/Users/a/.asdf/installs/nodejs/22.22.1/bin/node', 'C:\\Program Files\\nodejs\\node.exe'].every((p) => svc.stableNode(p, all) === p));
+}
+
 // ---- 装完开不开家长端:只有第一次;2026-11-07 用户定的,别的启动都不是人要看页面 ----
 {
   const opens = (o: Partial<Parameters<typeof svc.opensAfterInstall>[0]> = {}): boolean => svc.opensAfterInstall({ firstTime: true, open: false, noOpen: false, platform: 'darwin', env: {}, ...o });
@@ -113,7 +148,7 @@ const fakeHost = (platform: 'darwin' | 'linux' | 'win32', root: string) => {
   mkdirSync(ws2, { recursive: true });
   const a = await svc.installService(host, ws1, { node: '/usr/local/bin/node', bin: '/pkg/bin/cotutor.js' });
   const plistFile = join(fh, 'Library', 'LaunchAgents', 'com.tarslab.cotutor.ray.plist');
-  check('macOS 装:写 LaunchAgent、先 bootout 再 bootstrap gui/<uid>、建日志目录', existsSync(plistFile) && host.calls.join('|') === `launchctl bootout gui/501/com.tarslab.cotutor.ray|launchctl bootstrap gui/501 ${plistFile}` && existsSync(join(fh, 'Library', 'Logs', 'cotutor', 'ray')) && !a.replaced, host.calls.join(' | '));
+  check('macOS 装:写 LaunchAgent、先 bootout 再 bootstrap gui/<uid>、建日志目录', existsSync(plistFile) && host.calls.join('|') === `launchctl bootout gui/501/com.tarslab.cotutor.ray|launchctl print gui/501/com.tarslab.cotutor.ray|launchctl bootstrap gui/501 ${plistFile}` && existsSync(join(fh, 'Library', 'Logs', 'cotutor', 'ray')) && !a.replaced, host.calls.join(' | '));
   check('跑的是 node bin serve --workspace <root> --log-dir <日志目录>(写死装的那一刻的)', JSON.stringify(a.spec.args) === JSON.stringify(['/usr/local/bin/node', '/pkg/bin/cotutor.js', 'serve', '--workspace', ws1, '--log-dir', join(fh, 'Library', 'Logs', 'cotutor', 'ray')]));
   const again = await svc.installService(host, ws1, { node: '/opt/node22/bin/node', bin: '/pkg/bin/cotutor.js' });
   check('再装一次:同一个名字、照新的 node 重写', again.replaced && again.spec.name === 'ray' && svc.serviceArgs(readFileSync(plistFile, 'utf8'))[0] === '/opt/node22/bin/node');
@@ -124,7 +159,7 @@ const fakeHost = (platform: 'darwin' | 'linux' | 'win32', root: string) => {
   await svc.controlService(host, ws1, 'restart');
   check('重起:装着的 kickstart -k', host.calls.at(-1) === 'launchctl kickstart -k gui/501/com.tarslab.cotutor.ray', host.calls.join(' | '));
   await svc.controlService(host, ws1, 'stop');
-  check('停:bootout(文件还在)', host.calls.at(-1) === 'launchctl bootout gui/501/com.tarslab.cotutor.ray' && existsSync(plistFile));
+  check('停:bootout,等它真的卸下(文件还在)', host.calls.at(-2) === 'launchctl bootout gui/501/com.tarslab.cotutor.ray' && host.calls.at(-1) === 'launchctl print gui/501/com.tarslab.cotutor.ray' && existsSync(plistFile));
   await svc.controlService(host, ws1, 'start');
   check('停了再起:没装上就 bootstrap', host.calls.at(-1) === `launchctl bootstrap gui/501 ${plistFile}`, host.calls.join(' | '));
   const gone = await svc.uninstallService(host, ws1);

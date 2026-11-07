@@ -338,6 +338,22 @@ try {
     // cmd 跟着 workspace 从哪来走:不是 --workspace 指的就不带
     const viaEnv = await doctorWorkspace(undefined, { probeEnv: true, firewall: false, env: { ...process.env, COTUTOR_WORKSPACE: ws } });
     check('workspace 从环境变量来:cmd 不带 --workspace', viaEnv.checks.find((c) => c.name === 'service')?.cmd === 'cotutor service install --no-open', viaEnv.checks.find((c) => c.name === 'service')?.cmd);
+    // 还没坏,但 brew upgrade 以后就坏了:要提醒,能自动修(只在 Mac 上写得出 plist)
+    if (process.platform === 'darwin') {
+      const { launchdPlist, serviceLogDir } = await import('../src/app/cli/service.ts');
+      const brew = join(home, 'brew');
+      const cellar = join(brew, 'Cellar', 'node', '1.2.3', 'bin', 'node');
+      for (const f of [cellar, join(brew, 'opt', 'node', 'bin', 'node')]) { mkdirSync(join(f, '..'), { recursive: true }); writeFileSync(f, ''); }
+      const bin = join(home, 'bin-cotutor.js');
+      writeFileSync(bin, '');
+      const plist = join(home, 'Library', 'LaunchAgents', 'com.tarslab.cotutor.agentcheck.plist');
+      mkdirSync(join(plist, '..'), { recursive: true });
+      const hostLike = { platform: 'darwin' as const, home, uid: 501, env: process.env, run: async () => ({ code: 0, stdout: '', stderr: '' }) };
+      writeFileSync(plist, launchdPlist({ name: 'agentcheck', label: 'com.tarslab.cotutor.agentcheck', root: ws, logDir: serviceLogDir(hostLike, 'agentcheck'), path: '/usr/bin', args: [cellar, bin, 'serve', '--workspace', ws, '--log-dir', join(home, 'L')] }));
+      const dn = (await doctorWorkspace(ws, { probeEnv: true, firewall: false })).checks.find((c) => c.name === 'service.node');
+      check('服务写死了带版本号的 node:说清楚,能自动修', dn?.ok === false && dn.required === false && dn.cmd === `cotutor service install --no-open --workspace "${join('$HOME', 'cotutor', 'agentcheck')}"`, JSON.stringify(dn));
+      rmSync(plist);
+    }
     // 不在缺省位置的,init 要写 --dir
     const elsewhere = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-agentcheck-')));
     await initWorkspace({ slug, dir: elsewhere, name: '测' });

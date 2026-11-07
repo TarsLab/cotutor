@@ -97,10 +97,12 @@ interface TurnRecord {
   compacted?: true;
 }
 
-/** 报错只说状态码:SDK 的异常里带着整个请求 */
+/** 报错只说状态码和错误码(欠费、key 失效靠它分):SDK 的异常里带着整个请求,别的都不要 */
 function failure(err: unknown): string {
-  const status = err && typeof err === 'object' && 'statusCode' in err ? (err as { statusCode?: unknown }).statusCode : undefined;
-  return typeof status === 'number' ? `api:HTTP ${status}` : 'api:请求或流断了';
+  const e = err && typeof err === 'object' ? (err as { statusCode?: unknown; responseBody?: unknown }) : {};
+  if (typeof e.statusCode !== 'number') return 'api:请求或流断了';
+  const code = typeof e.responseBody === 'string' ? /"code"\s*:\s*"([A-Za-z0-9_.-]{2,64})"/.exec(e.responseBody)?.[1] : undefined;
+  return `api:HTTP ${e.statusCode}${code ? ` ${code}` : ''}`;
 }
 
 const outputText = (o: unknown): string => (o && typeof o === 'object' && typeof (o as { text?: unknown }).text === 'string' ? (o as { text: string }).text : JSON.stringify(o) ?? '');

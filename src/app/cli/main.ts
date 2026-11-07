@@ -90,7 +90,7 @@ function printOpen(label: string, page: string, hint: string, open: boolean): vo
 }
 const wantsOpen = (flags: Record<string, string | true>): boolean => flags.open === true || flags['open-qr'] === true;
 /** 不用 workspace 的命令:--sandbox 对它们没有意义 */
-const NO_WORKSPACE = ['grades', 'init', 'mock', 'pin', 'cert', 'tray'];
+const NO_WORKSPACE = ['grades', 'init', 'mock', 'pin', 'cert', 'tray', 'update'];
 
 export async function main(argv: string[]): Promise<void> {
   let json = false;
@@ -261,8 +261,9 @@ export async function main(argv: string[]): Promise<void> {
             ? `! 后台服务读不到 vault(${redactHome(ws.paths.vault)}):macOS 不让后台进程读「文稿」「桌面」和 iCloud 云盘,也不弹窗问。系统设置 › 隐私与安全性 › 完全磁盘访问权限,点 + 加上 ${process.execPath}(或把 vault 挪出这几处),然后 cotutor service restart`
             : `! 后台服务读不到 vault(${redactHome(ws.paths.vault)}):看看这个目录的权限,然后 cotutor service restart`);
           if (h?.version && h.version !== version()) out.push(`! 在跑的是 ${h.version},装的是 ${version()}:cotutor service restart 换上新的`);
+          if (h?.bailianTrouble) out.push(`! ${h.bailianTrouble.message}:${h.bailianTrouble.fix}`);
           if (h?.scheme === 'http' && httpsFiles(ws)) out.push('! 证书有了,服务还在走 HTTP(平板上按住说话不可用):cotutor service restart');
-          if (isNewer(h?.latest, version())) out.push(`! 有新版本 ${h?.latest}(现在是 ${version()}),升级依次运行:${upgradeSteps().join(' ; ')}`);
+          if (isNewer(h?.latest, version())) out.push(`! 有新版本 ${h?.latest}(现在是 ${version()}),升级运行:${upgradeSteps().join(' ; ')}`);
           return out;
         };
         const tellLog = async (dir: string | null): Promise<void> => {
@@ -432,6 +433,11 @@ export async function main(argv: string[]): Promise<void> {
         const r = await addTheme(root, name, typeof flags.from === 'string' ? flags.from : 'default');
         if (json) process.stdout.write(`${JSON.stringify(redactDeep(r), null, 2)}\n`);
         else process.stdout.write(`加了主题 ${name}(拷自 ${r.from}):\n  ${redactHome(r.dir)}/theme.json  ← 槽的清单(名字 + 给什么用)\n  ${redactHome(r.dir)}/kid.css     ← 样式,改了刷新就有\n把 cotutor.json 的 kid.theme 改成 "${name}" 就换过去了(服务不用重启)。\n`);
+        return;
+      }
+      case 'update': {
+        const { realUpdateDeps, runUpdate } = await import('./update-cmd.ts');
+        process.exitCode = await runUpdate(realUpdateDeps(() => { try { return resolveRoot(workspace).root; } catch { return null; } }), { anyway: flags.anyway === true });
         return;
       }
       case 'upgrade': {

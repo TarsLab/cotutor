@@ -173,7 +173,7 @@ try {
   // ---- 401:收尾,err.log 只记状态码 ----
   const t9 = await send('math-tutor', { from: 'kid', text: 'ZHTTP401', newThread: true });
   const err9 = readFileSync(join(conv('math-tutor'), `${date}.${t9.started.job}.err.log`), 'utf8');
-  check('401:这轮没成,err.log 只记状态码', t9.m.result === 'error' && err9.includes('api:HTTP 401'), err9);
+  check('401:这轮没成,err.log 只记状态码和错误码(欠费、key 失效靠它分)', t9.m.result === 'error' && err9.includes('api:HTTP 401 invalid_api_key') && !err9.includes('invalid key'), err9);
 
   // ---- key 不落盘 ----
   const leaks: string[] = [];

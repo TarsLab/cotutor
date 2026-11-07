@@ -1,9 +1,9 @@
 /** 版本比较与升级步骤:服务、托盘(轻入口,不带 zod)、家长端、doctor 共用 */
 
-/** 升级程序的三步。分开写不用 &&:Windows 默认的 PowerShell 5.1 不认 &&;顺序是先换文件再重起,新代码不会读到旧文件;restart 顺手把图标也换上新代码 */
-export const UPGRADE_STEPS = ['npm i -g cotutor', 'cotutor upgrade', 'cotutor service restart'] as const;
+/** 升级要跑的命令:cotutor update 一条管到底(换程序、更新每个孩子的出厂文件、重起服务和图标,update-cmd.ts) */
+export const UPGRADE_STEPS = ['cotutor update'] as const;
 
-/** 给家长看的那份。Windows 上带 .cmd:PowerShell 缺省禁止跑脚本,不带后缀找到的是被拦的 .ps1,第一条就报错;.cmd 在 PowerShell 和 cmd.exe 里都能跑(2026-11-07 真机) */
+/** 给家长看的那份。Windows 上带 .cmd:PowerShell 缺省禁止跑脚本,不带后缀找到的是被拦的 .ps1,一跑就报错;.cmd 在 PowerShell 和 cmd.exe 里都能跑(2026-11-07 真机) */
 export function upgradeSteps(platform: NodeJS.Platform = process.platform): string[] {
   return UPGRADE_STEPS.map((s) => (platform === 'win32' ? s.replace(' ', '.cmd ') : s));
 }

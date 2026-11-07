@@ -1,6 +1,12 @@
 {
   "name": "cotutor",
-  "version": "0.4.1",
+  "version": "0.4.2",
+  "releaseNotes": [
+    "百炼欠费、key 失效或连不上时,图标和家长端会说清楚,孩子那边会请爸爸妈妈来看,不再一直转",
+    "升级只要一条命令 cotutor update,几个孩子一次升好,孩子在通话时不动",
+    "用 Homebrew 装 Node 的电脑:Node 升级后服务和图标不会再起不来",
+    "有新版本时能直接看到这次改了什么"
+  ],
   "description": "AI tutors that co-teach with parents at home: real-time voice, an interactive whiteboard, and learning memory in your own Obsidian vault. Self-hosted; built for China's elementary curriculum.",
   "type": "module",
   "license": "SEE LICENSE IN LICENSE",

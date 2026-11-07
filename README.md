@@ -100,6 +100,8 @@ import { loadWorkspace } from 'cotutor/workspace';                        // 解
 
 换了运行时,之前的话题接不上,也不导入历史:孩子接着说会开新话题;换之前聊的话题不记账,家长端卡上标「换过运行时 · 不记账」,记录照样能看。模型、预算与老师运行时都在 workspace 的 `cotutor.json` 里,编辑器按首行 `$schema` 提供字段说明。
 
+百炼欠费、key 失效或这台电脑连不上百炼时,图标出橙点并通知,家长端首页说清楚是哪一种;要家长动手的那几种,孩子端显示「老师们还没到,叫爸爸妈妈来看一下」。处理好以后几分钟内自己恢复,也可以在家长端点「试连」。
+
 `cotutor doctor` 检查缺失配置并给修复建议;`--live` 会实际连接服务。页面上的老师起不来时,先看 doctor 和 `conversations/<老师>/<日期>.<job>.err.log`。家长端与工作台需要访问锁时,运行 `cotutor pin` 设置本机 PIN。
 
 ## 数据与升级
@@ -108,7 +110,15 @@ import { loadWorkspace } from 'cotutor/workspace';                        // 解
 
 **有新版本时**,后台服务每天问一次 npm(只发一个普通请求,不带孩子或使用的任何信息),菜单栏(任务栏)图标的菜单和家长端「首页」顶部会说,通知一次,孩子端不说。不会自动升级,因为要重启服务,孩子可能正在上课。不想让它问:在 `~/.config/cotutor/update.json` 写 `{"off": true}`。
 
-升级挑孩子不用的时候,依次运行(分开写是因为 Windows 默认的 PowerShell 不认 `&&`):
+升级挑孩子不用的时候,运行一条命令就够了(Windows 上写成 `cotutor.cmd update`,因为 PowerShell 缺省禁止运行脚本,提示里给的就是这样):
+
+```sh
+cotutor update
+```
+
+它问 npm 有没有新版本,换上新程序,把每个孩子未修改的出厂老师、activity、主题与技能更新掉,再重起服务和图标。孩子正在通话时它不动;下载没成时服务也不动,还跑旧版。每个版本改了什么见 [更新说明](CHANGELOG.md)。
+
+0.4.1 及更早的版本还没有这条命令,第一次要依次运行下面三条,Windows 上同样写成 `npm.cmd`、`cotutor.cmd`。几个孩子的话,后两条每个孩子各跑一次,加 `--workspace ~/cotutor/<孩子>`:
 
 ```sh
 npm i -g cotutor                      # 换上新版程序
@@ -116,12 +126,9 @@ cotutor upgrade                       # 更新未修改的出厂老师、activit
 cotutor service restart               # 服务和图标换上新代码(在终端里跑的就重开 serve)
 ```
 
-Windows 上写成 `npm.cmd`、`cotutor.cmd`(PowerShell 缺省禁止运行脚本),提示里给的就是这样。
-
-几个孩子的话,后两条每个孩子各跑一次,加 `--workspace ~/cotutor/<孩子>`。然后看一眼体检,它提示要迁移配置时再跑后面两条:
+升完它提示要迁移配置时再跑:
 
 ```sh
-cotutor doctor
 cotutor upgrade --config --dry-run    # 预览 cotutor.json 的迁移
 cotutor upgrade --config              # 执行配置迁移
 ```

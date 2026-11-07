@@ -341,7 +341,7 @@ try {
   await post('english-tutor', { text: '会失败', runtime: 'broken' });
   await wait('english-tutor');
   const dr = (await day('english-tutor', '2026-09-09')).json as Day;
-  check('百炼报错 → error + 原因,孩子无话', dr.index.messages[0].result === 'error' && dr.index.messages[0].error === 'api:HTTP 400' && dr.index.messages[0].kidText === null, JSON.stringify(dr.index.messages[0]));
+  check('百炼报错 → error + 原因,孩子无话', dr.index.messages[0].result === 'error' && dr.index.messages[0].error === 'api:HTTP 400 fake' && dr.index.messages[0].kidText === null, JSON.stringify(dr.index.messages[0]));
   await post('english-tutor', { text: '配音会失败' });
   await wait('english-tutor');
   const dr2 = (await day('english-tutor', '2026-09-09')).json as Day & { index: { messages: { audio?: string | null }[] } };

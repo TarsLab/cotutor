@@ -1069,7 +1069,12 @@ ${HOME_TILES_JS}
     try { S.home = await api('GET', '/api/kid/home'); setOffline(false); document.body.classList.toggle('hand-left', S.home.hand === 'left'); setGated(!REEL && S.home.ready === false); renderHome(); phIdle(); }
     catch { setOffline(true); }
   };
-  /** 百炼没配:首页的老师灰着点不进去;在老师页上就回首页。家长配好了下一次读首页自己就好 */
+  /** 嘴连不上时:要家长动手的(欠费、key 失效,服务端的 ready 变 false)回首页说「叫爸爸妈妈」,别的(网络抖)留在原地接着重连 */
+  const gateCheck = async () => {
+    if (REEL) return;
+    try { const d = await api('GET', '/api/kid/home'); if (d.ready === false) { S.home = d; setGated(true); renderHome(); } } catch {}
+  };
+  /** 百炼没配、欠费、key 失效:首页的老师灰着点不进去;在老师页上就回首页。家长弄好了下一次读首页自己就好 */
   const setGated = (on) => {
     if (S.gated === on) return;
     S.gated = on;
@@ -3133,7 +3138,8 @@ __REEL_DOCK_JS__
       case 'vad': if (m.on) lvSend({ t: 'ctx', body: liveBody() }); liveDispatch({ type: 'vad', on: Boolean(m.on) }); break;
       case 'duck': liveDispatch({ type: 'duck' }); break;
       case 'unduck': liveDispatch({ type: 'unduck' }); break;
-      case 'down': case 'end': liveDispatch({ type: 'drop' }); break;
+      case 'down': liveDispatch({ type: 'drop' }); gateCheck(); break;
+      case 'end': liveDispatch({ type: 'drop' }); break;
       case 'tutor':
         // 嘴接住的字一到就上字幕;照念的字幕跟 read 走(到点才亮)
         if (m.of !== 'catch') break;

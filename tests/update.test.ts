@@ -35,12 +35,20 @@ const answers = (map: Record<string, unknown>) => {
 const [NPM, MIRROR] = update.UPDATE_URLS;
 {
   const a = answers({ [NPM]: { version: '0.5.0' } });
-  check('npm 答了:用它,不再问镜像', await update.fetchLatest(a.f) === '0.5.0' && a.asked.length === 1, a.asked.join());
+  const ra = await update.fetchRelease(a.f);
+  check('npm 答了:用它,不再问镜像,下载也走 npm', ra?.version === '0.5.0' && ra.mirror === false && a.asked.length === 1, a.asked.join());
   const b = answers({ [MIRROR]: { version: '0.5.0' } });
-  check('npm 不通(被墙):问镜像', await update.fetchLatest(b.f) === '0.5.0' && b.asked.length === 2);
+  const rb = await update.fetchRelease(b.f);
+  check('npm 不通(被墙):问镜像,下载也要走镜像', rb?.version === '0.5.0' && rb.mirror === true && b.asked.length === 2);
   const c = answers({ [NPM]: 503, [MIRROR]: { version: 'garbage' } });
-  check('都没给出能用的:null,不抛', await update.fetchLatest(c.f) === null);
-  check('都不通:null,不抛', await update.fetchLatest(answers({}).f) === null);
+  check('都没给出能用的:null,不抛', await update.fetchRelease(c.f) === null);
+  check('都不通:null,不抛', await update.fetchRelease(answers({}).f) === null);
+  const rn = await update.fetchRelease(answers({ [NPM]: { version: '0.5.0', releaseNotes: ['改了这个', '  改了那个  ', 7, '', 'x'.repeat(200), '<b>有\n换行</b>'], engines: { node: '>=24.3' } } }).f);
+  check('更新说明:只留短的纯文本(网上来的要显示给家长)', JSON.stringify(rn?.notes) === JSON.stringify(['改了这个', '改了那个', '<b>有 换行</b>']), JSON.stringify(rn?.notes));
+  check('新版本要的 Node:读得出下限', JSON.stringify(rn?.minNode) === '[24,3]');
+  const ro = await update.fetchRelease(answers({ [NPM]: { version: '0.5.0', releaseNotes: 'not array', engines: { node: '^22 || ^24' } } }).f);
+  check('没写说明、Node 范围看不懂:空的,不拦', ro?.notes.length === 0 && ro.minNode === null);
+  check('说明最多 8 行', update.cleanNotes(Array.from({ length: 20 }, (_, i) => `第 ${i} 行`)).length === 8);
   check('只问 cotutor 的 latest,URL 里不带别的', update.UPDATE_URLS.every((u) => u.endsWith('/cotutor/latest')));
 }
 
@@ -50,6 +58,13 @@ const [NPM, MIRROR] = update.UPDATE_URLS;
   const T = Date.parse('2026-11-07T00:00:00Z');
   const a = answers({ [NPM]: { version: '0.5.0' } });
   check('第一次:问了,存下', await update.refreshLatest({ file, now: T, fetch: a.f }) === '0.5.0' && a.asked.length === 1 && JSON.parse(readFileSync(file, 'utf8')).latest === '0.5.0');
+  {
+    const nf = join(home, 'u-notes.json');
+    await update.refreshLatest({ file: nf, now: T, fetch: answers({ [NPM]: { version: '0.5.0', releaseNotes: ['这次改了这个'] } }).f });
+    check('更新说明:问到就记着,也存进文件', update.knownNotes()[0] === '这次改了这个' && JSON.parse(readFileSync(nf, 'utf8')).notes[0] === '这次改了这个');
+    await update.refreshLatest({ file: nf, now: T + 3600_000, fetch: answers({}).f });
+    check('更新说明:不到一天不再问,从文件读回来', update.knownNotes()[0] === '这次改了这个');
+  }
   check('不到一天:不再问,用存的', await update.refreshLatest({ file, now: T + 23 * 3600_000, fetch: a.f }) === '0.5.0' && a.asked.length === 1);
   check('过了一天:再问', await update.refreshLatest({ file, now: T + 25 * 3600_000, fetch: a.f }) === '0.5.0' && a.asked.length === 2);
   const off = answers({});
@@ -105,13 +120,14 @@ await initWorkspace({ slug: 'kid', dir: wsRoot });
   const health = async () => (await route('GET', '/api/health', ctx)).json as { latest: string | null; version: string };
   const set = async (latest: string): Promise<void> => {
     const file = join(home, 'h.json');
-    writeFileSync(file, JSON.stringify({ checkedAt: new Date().toISOString(), latest }));
+    writeFileSync(file, JSON.stringify({ checkedAt: new Date().toISOString(), latest, notes: ['这次改了这个'] }));
     await update.refreshLatest({ file });
   };
   await set('99.0.0');
   check('health:比在跑的新才带 latest', (await health()).latest === '99.0.0', JSON.stringify(await health()));
+  check('health:带这次改了什么', ((await health()) as unknown as { latestNotes: string[] }).latestNotes[0] === '这次改了这个');
   await set(BUILD.version as string);
-  check('health:一样 → null', (await health()).latest === null);
+  check('health:一样 → null,也不带说明', (await health()).latest === null && ((await health()) as unknown as { latestNotes: string[] }).latestNotes.length === 0);
   await set('0.0.1');
   check('health:更旧(镜像还没同步)→ null', (await health()).latest === null);
 
@@ -122,6 +138,7 @@ await initWorkspace({ slug: 'kid', dir: wsRoot });
   // 2026-11-07 真机看到过:join 的换行符被当成文字,家长看到的是一行 npm i -g cotutor\ncotutor upgrade…。每条单独一行就不靠转义了
   const script = PARENT_HOME_PAGE.slice(PARENT_HOME_PAGE.indexOf('const showUpdate'), PARENT_HOME_PAGE.indexOf('const load = async'));
   check('提示条:每条命令单独一行,不靠换行符转义', script.includes('UPGRADE_STEPS.map') && !script.includes('.join('), script);
+  check('提示条:有说明就列出来,用 h 画(网上来的不当 HTML)', script.includes('hh.latestNotes.map') && !script.includes('innerHTML'));
 
   const by = async () => (await doctorWorkspace(wsRoot, { probeEnv: false })).checks.find((c) => c.name === 'update');
   check('doctor:没问过 → 不提', (await by()) === undefined);
@@ -143,9 +160,18 @@ await initWorkspace({ slug: 'kid', dir: wsRoot });
   check('cotutor 的步骤在 USAGE 里', UPGRADE_STEPS.filter((s) => s.startsWith('cotutor ')).every((s) => USAGE.includes(s.split(' ').slice(0, 2).join(' '))));
   check('步骤里没有 &&(Windows 的 PowerShell 5.1 不认)', UPGRADE_STEPS.every((s) => !s.includes('&&')));
   // 2026-11-07 真机:新电脑的 PowerShell 拦 npm.ps1、cotutor.ps1,照提示升级第一条就报错
-  check('Windows 给 .cmd:PowerShell 和 cmd.exe 都能跑', upgradeSteps('win32').join(' ; ') === 'npm.cmd i -g cotutor ; cotutor.cmd upgrade ; cotutor.cmd service restart', upgradeSteps('win32').join(' ; '));
+  check('Windows 给 .cmd:PowerShell 和 cmd.exe 都能跑', upgradeSteps('win32').join(' ; ') === 'cotutor.cmd update', upgradeSteps('win32').join(' ; '));
   check('Mac、Linux 原样', upgradeSteps('darwin').join() === UPGRADE_STEPS.join() && upgradeSteps('linux').join() === UPGRADE_STEPS.join());
-  check('README 说了 Windows 要带 .cmd', section.includes('npm.cmd') && section.includes('cotutor.cmd'));
+  check('README 说了 Windows 要带 .cmd', section.includes('cotutor.cmd update') && section.includes('npm.cmd'));
+  check('README 给了还没有 cotutor update 的旧版本怎么升', section.includes('npm i -g cotutor') && section.includes('cotutor upgrade') && section.includes('cotutor service restart'));
+  // 家长在提示条上看到的是 releaseNotes,翻历史看的是 CHANGELOG:发版时两边都要写
+  const pkg = JSON.parse(readFileSync(join(import.meta.dirname, '..', 'package.json'), 'utf8')) as { version: string; releaseNotes?: string[] };
+  const log = readFileSync(join(import.meta.dirname, '..', 'CHANGELOG.md'), 'utf8');
+  const at = log.indexOf(`## ${pkg.version}\n`);
+  const entry = at < 0 ? '' : log.slice(at, log.indexOf('\n## ', at + 1) < 0 ? undefined : log.indexOf('\n## ', at + 1));
+  check(`这个版本写了更新说明(package.json 的 releaseNotes、CHANGELOG 的 ## ${pkg.version})`, Boolean(pkg.releaseNotes?.length) && at >= 0);
+  check('releaseNotes 经得起 cleanNotes(不会被丢掉)', update.cleanNotes(pkg.releaseNotes).length === pkg.releaseNotes?.length);
+  check('releaseNotes 每条都在 CHANGELOG 这个版本下面', (pkg.releaseNotes ?? []).every((n) => entry.includes(n)), entry);
   check('README 说了怎么关、只发普通请求、不自动升级', section.includes('"off": true') && section.includes('不带孩子') && section.includes('不会自动升级'));
 }
 

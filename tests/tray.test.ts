@@ -44,6 +44,9 @@ check('跑了多久', t.uptimeText(NOW - 10 * 60_000, NOW) === '不到 1 小时'
   check('没填百炼:开家长端,地址里不写 443', texts({ bailian: false })[0].text.includes('百炼') && (texts({ bailian: false })[0].fix as { target: string }).target === 'https://localhost/parent/home');
   check('版本不对:修法是重启', texts({ version: '0.2.0' })[0].text.includes('0.2.0') && texts({ version: '0.2.0' })[0].fix.kind === 'restart');
   check('几件事一起:都算', texts({ vault: 'denied', bailian: false }).length === 2);
+  const trouble = { kind: 'money', message: '百炼欠费或没开通按量付费', fix: '到百炼控制台充值' };
+  check('配好了但跑起来坏了(欠费):有事,开家长端', texts({ bailianTrouble: trouble })[0].text === trouble.message && (texts({ bailianTrouble: trouble })[0].fix as { target: string }).target.endsWith('/parent/home'));
+  check('还没配就不说坏了:只说没配', texts({ bailian: false, bailianTrouble: trouble }).length === 1 && texts({ bailian: false, bailianTrouble: trouble })[0].text.includes('还没填'));
   check('服务没答应:不算有事(是另一种状态)', t.issuesOf(probe({ health: null }), { platform: 'darwin', version: VERSION }).length === 0);
 }
 
@@ -74,6 +77,17 @@ check('跑了多久', t.uptimeText(NOW - 10 * 60_000, NOW) === '不到 1 小时'
   const m = model();
   const a = m.update([probe({ health: healthy({ bailian: false }) })], NOW);
   check('第一眼看到就有事:不通知(每次登录都弹太烦),菜单里看得到', a.rows[0].level === 'warn' && a.notes.length === 0);
+}
+{
+  const m = model();
+  m.update([probe({ health: healthy() })], NOW);
+  const trouble = { kind: 'key', message: '百炼的 key 不对或失效了', fix: '换一把' };
+  const a = m.update([probe({ health: healthy({ bailianTrouble: trouble }) })], NOW + 5000);
+  check('用着用着百炼坏了:通知一次,说是什么事', a.rows[0].level === 'warn' && a.notes.length === 1 && a.notes[0].body.includes(trouble.message), JSON.stringify(a.notes));
+  const b = m.update([probe({ health: healthy({ bailianTrouble: trouble }) })], NOW + 10000);
+  check('还坏着:不再通知', b.notes.length === 0);
+  const c = m.update([probe({ health: healthy() })], NOW + 15000);
+  check('好了:图标回正常', c.rows[0].level === 'ok' && c.notes.length === 0);
 }
 {
   const m = model();
@@ -380,11 +394,15 @@ const shows = (r: Run) => r.sent.filter((m) => m.type === 'show');
 // ---- 登录项 ----
 const fakeHost = (platform: NodeJS.Platform, h: string, fail: Record<string, number> = {}) => {
   const calls: string[] = [];
+  let loaded = false;
   const host: import('../src/app/cli/service.ts').ServiceHost = {
     platform, home: h, uid: 501, env: { PATH: '/opt/homebrew/bin:/usr/bin', LOCALAPPDATA: join(h, 'Local'), SystemRoot: 'C:\\Windows' },
     run: async (cmd, args) => {
       calls.push(`${cmd} ${args.join(' ')}`);
-      const code = fail[cmd] ?? 0;
+      if (cmd === 'launchctl' && args[0] === 'bootstrap' && !fail[cmd]) loaded = true;
+      if (cmd === 'launchctl' && args[0] === 'bootout') loaded = false;
+      // print 跟着装没装走:卸下时等的就是它不再答应
+      const code = cmd === 'launchctl' && args[0] === 'print' && !loaded ? 1 : fail[cmd] ?? 0;
       return { code, stdout: cmd === 'powershell.exe' ? '[]' : '', stderr: code ? 'nope' : '' };
     },
   };
@@ -399,7 +417,7 @@ const fakeHost = (platform: NodeJS.Platform, h: string, fail: Record<string, num
   const plist = readFileSync(r.file, 'utf8');
   check('plist:参数读回来一字不差', JSON.stringify(svc.serviceArgs(plist)) === JSON.stringify(['/n o/node', '/p/bin/cotutor.js', 'tray', 'run', '--dir', t.trayDir(host)]), plist);
   check('plist:登录就起、崩了拉起、以 0 退不拉、只在有桌面时起', plist.includes('<key>RunAtLoad</key><true/>') && /<key>SuccessfulExit<\/key><false\/>/.test(plist) && plist.includes('<string>Aqua</string>') && plist.includes('/opt/homebrew/bin'));
-  check('装:先卸旧的再 bootstrap', calls[0] === `launchctl bootout gui/501/${t.TRAY_LABEL}` && calls[1] === `launchctl bootstrap gui/501 ${r.file}` && r.started);
+  check('装:先卸旧的再 bootstrap', calls[0] === `launchctl bootout gui/501/${t.TRAY_LABEL}` && calls.includes(`launchctl bootstrap gui/501 ${r.file}`) && calls.indexOf(`launchctl bootstrap gui/501 ${r.file}`) > 0 && r.started, calls.join(' | '));
   check('图标的登录项不会被当成后台服务', (await svc.listServices(host)).length === 0);
   const st = await t.trayStatus(host);
   check('状态:装了', st.supported && st.installed && !st.off);

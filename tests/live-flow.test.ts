@@ -602,7 +602,8 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   const nc2 = fake.conns.length;
   fake.kidTexts = [''];
   say(k2);
-  const okIdle = await until(() => fake.conns.length === nc2 + 1, 3000);
+  // 连接到了不等于配好了:session 要等 session.update 才有,只等连接数的话偶尔查得太早
+  const okIdle = await until(() => fake.conns.length === nc2 + 1 && fake.conns[nc2].session !== null, 3000);
   check('一直听:放过的句子攒着没回答,到点安静时换连接(新的还是 VAD)', okIdle && fake.conns[nc2]?.session?.turn_detection?.type === 'server_vad', JSON.stringify({ conns: fake.conns.length - nc2 }));
   liveDeps.idleSwapMs = undefined;
   liveDeps.heartbeatMs = undefined;

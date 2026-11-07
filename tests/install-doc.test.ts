@@ -60,7 +60,9 @@ check('第 7 步再开', doc.slice(doc.indexOf('## 7.')).includes('跑 `cotutor 
 
 // ---- Windows 上照做会出错的两处(2026-11-07 真机):脚本策略、cmd.exe 不认 $HOME ----
 check('说了 PowerShell 禁止运行脚本时用 .cmd,不改策略', doc.includes('`npm.cmd`') && doc.includes('`cotutor.cmd`') && doc.includes('不要改执行策略'));
-check('说了 cmd.exe 里 $HOME 要换', doc.includes('cmd.exe') && doc.includes('%USERPROFILE%'));
+check('用 doctor --fix,不叫 agent 自己抄 cmd(cmd.exe 不认里面的 $HOME;--fix 不经 shell)', doc.includes('cotutor doctor --fix') && !doc.includes('照原样跑'));
+check('恢复备份要家长说了才做', banned.includes('backup restore'));
+check('解决不了:跑 cotutor report,给家长去反馈', doc.includes('cotutor report') && doc.includes('/issues'));
 check('cotutor cert 的 ! 行有去处', doc.includes('`cotutor cert` 输出里以 `!` 开头'));
 
 // ---- 读的字段要真有:doctor 的 cmd / human,service status --json 的这些键 ----

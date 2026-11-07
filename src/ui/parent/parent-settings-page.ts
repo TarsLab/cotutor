@@ -1,5 +1,5 @@
 /**
- * 家长端「设置」(/parent/settings):设一次就不常动的。现在只有一项——孩子的平板上,按住说话那一栏放哪边(cotutor.json 的 kid.hand)。
+ * 家长端「设置」(/parent/settings):设一次就不常动的。备份和诊断信息也放这(parent-setup.ts)。孩子的平板上,按住说话那一栏放哪边(cotutor.json 的 kid.hand)。
  * 两张示意图(不是截图,页面现画的 SVG):横着的平板,窄的一栏是老师头像 + 按住说话,宽的一边是写字的白纸;点一张就存。
  * 孩子端首页的接口带着它(/api/kid/home 的 hand),孩子下次进老师页就换过来;画板那一列工具跟着一起挪。
  * 零依赖内联脚本,只走 /api/parent/settings(GET 读,PATCH {kid: {hand}} 改)。
@@ -33,6 +33,10 @@ ${BRAND_CSS}
   .seg > * { flex:1; height:36px; border-radius:9px; font-size:15px; color:var(--dim); display:flex; align-items:center; justify-content:center; text-decoration:none; }
   .seg > .on { background:#fff; color:var(--ink); font-weight:600; box-shadow:0 1px 2px rgba(0,0,0,.08); }
   .gh { font-size:13px; color:var(--mute); padding:8px 16px 6px; }
+  .acts { display:flex; flex-wrap:wrap; gap:8px; padding:0 3px 12px; }
+  .act { display:inline-flex; align-items:center; min-height:44px; padding:0 14px; border:0; border-radius:10px; background:var(--paper, transparent); box-shadow:0 0 0 1px var(--line); color:inherit; font-size:15px; text-decoration:none; cursor:pointer; }
+  .act[disabled] { opacity:.5; }
+  #rep-text { margin:0 3px 12px; padding:10px 12px; max-height:320px; overflow:auto; border-radius:10px; box-shadow:0 0 0 1px var(--line); font:12px/1.55 ui-monospace,Menlo,Consolas,monospace; white-space:pre-wrap; overflow-wrap:anywhere; }
   .grp { background:var(--card); border-radius:14px; padding:14px; display:flex; flex-direction:column; gap:12px; }
   .q { font-size:16px; font-weight:500; padding:0 2px; }
   .hands { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
@@ -62,6 +66,22 @@ ${BRAND_CSS}
       <div class="q" id="hand-q">按住说话那一栏放哪边</div>
       <div class="hands" id="hands" role="radiogroup" aria-labelledby="hand-q"></div>
       <div class="note">平板横着用的时候,老师页上那一栏(老师的头像、按住说话)放在这边,另一边留给写字;画板上那一列工具也跟着放这边。孩子下次进老师页就换过来。</div>
+    </div>
+  </div>
+  <div>
+    <div class="gh">备份</div>
+    <div class="grp">
+      <div class="note" id="bk-note">读取中……</div>
+      <div class="acts"><button type="button" class="act" id="bk-go">现在备份一份</button></div>
+    </div>
+  </div>
+  <div>
+    <div class="gh">遇到问题</div>
+    <div class="grp">
+      <div class="note">生成一份诊断信息,发给开发者或帮你的 AI 助手,不用来回问。里面没有孩子的对话、照片、录音、档案和 key,名字和 IP 已经抹掉。不会自动发出去,你可以先看一遍。</div>
+      <div class="acts"><button type="button" class="act" id="rep-go">生成诊断信息</button></div>
+      <pre id="rep-text" hidden></pre>
+      <div class="acts" id="rep-acts" hidden><button type="button" class="act" id="rep-copy">复制</button><a class="act" href="https://github.com/TarsLab/cotutor/issues/new?template=bug.yml" target="_blank" rel="noopener">到 GitHub 反馈</a></div>
     </div>
   </div>
   ${BRAND_FOOTER}
@@ -126,8 +146,52 @@ ${pageDomJs(3200)}
     if (S) { document.title = S.title + ' · 家长 · 设置'; $('#title').textContent = S.title; }
     draw();
   };
+  // 备份:只读和「现在备一份」;恢复要停服务,在终端里做,这里说怎么做
+  const bkLoad = async () => {
+    const d = await api('GET', '/api/parent/backups').catch(() => null);
+    const note = $('#bk-note');
+    if (!d) { note.textContent = '读不到备份的情况'; return; }
+    const last = d.list[0];
+    const mb = (n) => (n / 1024 / 1024).toFixed(1) + ' MB';
+    note.textContent = (last ? '最近一份 ' + new Date(last.at).toLocaleString() + ',' + last.files + ' 个文件,' + mb(last.bytes) + ';一共留着 ' + d.list.length + ' 份。' : '还没有备份。') + '放在 ' + d.dir + '。服务开着时每天自动备一份,升级前也备一份;录音占地方,不在备份里。要恢复:在这台电脑的终端里跑 ' + d.commands.list + ' 看有哪些,再 ' + d.commands.restore + '。';
+  };
+  $('#bk-go').addEventListener('click', async () => {
+    const b = $('#bk-go');
+    b.disabled = true;
+    try { await api('POST', '/api/parent/backups', {}); toast('备份好了'); } catch (e) { toast('没备份成:' + e.message); }
+    b.disabled = false;
+    bkLoad();
+  });
+  // 诊断信息:先给人看,复制是人点的;不自动发
+  $('#rep-go').addEventListener('click', async () => {
+    const b = $('#rep-go');
+    b.disabled = true;
+    try {
+      const r = await api('GET', '/api/parent/report');
+      $('#rep-text').textContent = r.text;
+      $('#rep-text').hidden = false;
+      $('#rep-acts').hidden = false;
+    } catch (e) { toast('没生成成:' + e.message); }
+    b.disabled = false;
+  });
+  $('#rep-copy').addEventListener('click', async () => {
+    const text = $('#rep-text').textContent;
+    try {
+      await navigator.clipboard.writeText(text);
+      toast('复制好了');
+    } catch {
+      // 不是 https 的地址没有剪贴板接口:选中,让人自己复制
+      const range = document.createRange();
+      range.selectNodeContents($('#rep-text'));
+      const sel = getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      toast('已选中,按复制');
+    }
+  });
   draw();
   load();
+  bkLoad();
 })();
 </script>
 </body></html>

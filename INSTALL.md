@@ -14,6 +14,7 @@
 - 不要 `git clone` 本仓库，用 npm 装。
 - 不要用 `sudo` 跑 npm。
 - 不要跑 `cotutor upgrade --force`。
+- 不要跑 `cotutor backup restore`，除非家长明确说要恢复。
 - 不要删孩子的文件夹（缺省 `~/cotutor/<slug>/`）和 vault，里面的记录删了找不回来。
 - 不要关防火墙，不要改系统安全设置或 PowerShell 执行策略。
 
@@ -42,7 +43,7 @@ cotutor --version
 - 下载慢或超时：加上 `--registry=https://registry.npmmirror.com` 再装一次。
 - 报 `EACCES`（没权限）：不要加 `sudo`。跑 `npm config set prefix ~/.npm-global`，把 `~/.npm-global/bin` 加进 PATH，再装一次。
 - 找不到 `cotutor`：重开终端再试。还不行，跑 `npm prefix -g` 看装到了哪，把那个目录下的 `bin`（Windows 上是目录本身）加进 PATH。
-- Windows 的 PowerShell 说禁止运行脚本：这篇里所有的 `npm`、`cotutor` 都改用 `npm.cmd`、`cotutor.cmd`，`doctor` 给的 `cmd` 也一样。不要改执行策略。
+- Windows 的 PowerShell 说禁止运行脚本：这篇里所有的 `npm`、`cotutor` 都改用 `npm.cmd`、`cotutor.cmd`。不要改执行策略。
 
 ## 3. 建孩子的文件夹
 
@@ -81,17 +82,16 @@ cotutor service install --no-open
 ## 5. 体检
 
 ```sh
+cotutor doctor --fix
 cotutor doctor --json
 ```
 
-输出里 `checks` 是一个列表。逐条看 `ok` 为 `false` 的：
+`--fix` 把能自动修的都修掉（幂等，不碰孩子的数据，不用人输东西）。然后看 `--json` 的输出：`checks` 是一个列表，逐条看 `ok` 为 `false` 的：
 
-- **有 `cmd`：** 照原样跑这条命令，然后再体检一次。Windows 的 cmd.exe 不认 `$HOME`，会建出一个叫 `$HOME` 的文件夹：在 cmd.exe 里要把它换成 `%USERPROFILE%`。PowerShell、Git Bash 和 Mac、Linux 的终端照原样跑就行。
 - **有 `human: true`：** 不要动手。记下 `detail` 和 `fix`，第 7 步交给家长。
+- **还有 `cmd`：** `--fix` 跑过了还在，说明修不好。停下，把 `detail` 告诉家长，不要试别的办法。
 
 **成功：** 不过的条目里已经没有 `cmd`。这时退出码可能还是 1，没关系：百炼要家长自己填，填之前 `bailian` 这条过不了。
-
-**不成功：** 同一条 `cmd` 跑过了还在：停下，把 `detail` 告诉家长，不要试别的办法。
 
 ## 6. 让平板能用
 
@@ -134,7 +134,7 @@ cotutor service status --json
 
 **成功：** `health.mode` 是 `service`，`health.version` 和 `version` 一样。
 
-**不成功：** `health` 是 `null`：看 `portHolder`（端口被谁占着）和 `cotutor service logs`，把原因告诉家长。
+**不成功：** `health` 是 `null`：看 `portHolder`（端口被谁占着）和 `cotutor service logs`，把原因告诉家长。解决不了就跑 `cotutor report`，把输出给家长，请家长到 https://github.com/TarsLab/cotutor/issues 反馈；里面没有孩子的对话和 key。
 
 确认成功后，跑 `cotutor open`，在这台电脑上打开家长端。再告诉家长这些，安装就结束了：
 

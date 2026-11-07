@@ -67,12 +67,12 @@ node_modules/
 `;
 
 /** 档案模板(paths.profile,缺了才写):cotutor: profile 的那篇,原文整篇进每个话题的第一条 */
-export function profileTemplate(name: string): string {
+export function profileTemplate(name: string, schoolStart?: string): string {
   return `---
 cotutor: profile
 nickname: ${name}
 birthday:
-school_start:
+school_start:${schoolStart ? ` ${schoolStart}` : ''}
 city:
 ---
 

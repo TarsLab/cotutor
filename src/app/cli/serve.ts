@@ -19,6 +19,8 @@ import { awakeScript, psArgs } from './service-windows.ts';
 import type { ListenInfo } from '../../ui/parent/qr-page.ts';
 import { createContext, createHandler, type AppContext } from '../http/app.ts';
 import { liveUpgrade } from '../ws/route.ts';
+import { startDailyBackups } from './backup.ts';
+import { BUILD } from '../build.ts';
 import { AUTO_BOOKKEEP_EVERY_MS, autoBookkeep } from '../../runtime/auto-bookkeep.ts';
 import { USER_CERT_DIR, expandPath, loadWorkspace, type ResolveOptions, type Workspace } from '../workspace.ts';
 
@@ -153,6 +155,13 @@ export async function serveWorkspace(opts: ServeOptions = {}): Promise<ServeResu
   const recheck = setInterval(() => { void ctx.bailian.recheck().catch(() => undefined); }, BAILIAN_RECHECK_MS);
   recheck.unref();
   server.once('close', () => clearInterval(recheck));
+  // 每天备份一份(backup.ts):试用的不备;孩子在通话时往后推
+  const stopBackups = startDailyBackups({
+    target: () => (ctx.ws.sandbox ? null : { root: ctx.ws.root, vault: ctx.ws.paths.vault }),
+    busy: () => liveUpgrade.openCalls() > 0,
+    version: BUILD.version,
+  });
+  server.once('close', stopBackups);
   if (opts.awake !== false) {
     const stop = holdAwake(() => liveUpgrade.openCalls() > 0 || Object.keys(ctx.ws.config.tutors).some((t) => ctx.runner.running(t) !== null));
     server.once('close', stop);

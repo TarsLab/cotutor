@@ -45,6 +45,9 @@
 - 改 `src/scenes/paint/`、`src/media/draw.ts` 或画图卡先过 `tests/paint.test.ts`(假百炼、假老师全流程),页面走 `scripts/probe-paint.mjs`;真画按张计费
 - 改孩子端播放(嘴、卡的声音、孩子谁打断谁)先在 `tests/live-player.test.ts` 明确预期,再改 `runtime/delivery/player.ts` 的 `liveStep`;页面只 `liveDispatch`。板上的节(铺、写完、撤掉)是 `board/presentation.ts` 的 `step`,对 `tests/player.test.ts`,页面只 `dispatch`
 - 后台服务 `cotutor service`(`src/app/cli/service.ts`):macOS launchd、Linux systemd 用户服务,Windows 是 Run 注册表项 + wscript 跑的隐藏启动器 + 看护进程(`service-windows.ts`,为什么不用计划任务、`conhost --headless` 写在它开头);服务里的 serve 带 `--log-dir`,输出按天落文件(`serve-log.ts`);有通话或老师在写时拦闲置睡眠(`serve.ts` 的 `holdAwake`)。改了先过 `tests/service.test.ts`(假 launchctl / systemctl / reg);真装拿临时 workspace 换个端口试,试完 uninstall,别给真孩子的 workspace 装
+- 备份(`src/app/cli/backup.ts`):workspace 旁边的 `.backups/<目录名>/`,一份一个普通目录,没变的文件和上一份硬链接;不含 wav、mp4、evals、缓存;每天一份(serve 的定时器)、`cotutor upgrade` 前一份;恢复先备现在的。新加孩子的状态目录默认就进备份,大文件和能重新生成的才要进跳过表。改了先过 `tests/backup.test.ts`
+- 诊断信息(`src/app/cli/report.ts`,`cotutor report`、家长端「设置」):只收版本、状态、体检、报错原因,最后整篇 `scrub`。往里加东西前想清楚有没有孩子的话;孩子端错误只取 msg、where,不取 ctx。改了先过 `tests/report.test.ts`
+- 家长端「还差几步」(`src/app/http/parent-setup.ts`):用 doctor 的结果,只挑家长要动手的项,说家长的话。`cotutor doctor --fix`(`doctor-fix.ts`)跑带 `cmd` 的项,不经 shell,只认 cotutor 和 git
 - 写进服务文件和登录项的 node 走 `stableNode`:Homebrew 的 `process.execPath` 带版本号,`brew upgrade` 后服务和图标都起不来,没人报警
 - 第一次 `service install` 打开一次家长端(`opensAfterInstall`,`--no-open` 不开),别的启动都不开:登录、崩溃重起、升级都不是人要看页面。agent 走 `--no-open`,装完再 `cotutor open`
 - 托盘图标 `cotutor tray`(`src/app/cli/tray.ts`):node 进程(`cotutor tray run`,bin 直接走轻入口 `tray-run.ts`,不带 zod,`tests/tray.test.ts` 盯着)判断状态、发通知;显示脚本(`tray-mac.ts` 的 JXA、`tray-windows.ts` 的 PowerShell)只管画和回报点击,协议一行一条 JSON。改了先过 `tests/tray.test.ts`,显示脚本要在真系统里看;真装服务时不想带图标加 `--no-tray`
@@ -62,7 +65,7 @@
 - serve 只热重载 cotutor.json;改 `src/` 要重起。装成后台服务的(`cotutor service`)用 `cotutor service restart`:它跑的是 install 那一刻写死的 node 与 bin,换了 Node 版本要再 install
 - 提交按文件名 stage,仓里常有并行的未提交改动
 - 舞台页(`/stage/`)也装孩子端的 `theme.css`:舞台里自己的类名要带前缀(`lc-` 这种),撞上 `.pen` `.c` 之类会被那边的样式改掉(`.pen` 关着 pointer-events,圈不上)
-- Windows 的 PowerShell 缺省策略拦 `npm`、`cotutor` 的 `.ps1`(开发机上的账户可能改过策略,看不出来),给家长看的命令要带 `.cmd`(`upgradeSteps`);cmd.exe 不展开 `doctor` 的 `cmd` 里的 `$HOME`,会建出一个字面叫 `$HOME` 的文件夹。在那边跑脚本:PowerShell 5.1 读无 BOM 的中文脚本会解析错;调原生程序时吃掉参数里的双引号,要试 Git Bash 就写成 `.sh` 文件
+- Windows 的 PowerShell 缺省策略拦 `npm`、`cotutor` 的 `.ps1`(开发机上的账户可能改过策略,看不出来),给家长看的命令要带 `.cmd`(`upgradeSteps`);cmd.exe 不展开 `doctor` 的 `cmd` 里的 `$HOME`,会建出一个字面叫 `$HOME` 的文件夹(所以 INSTALL 让 agent 跑 `doctor --fix`,不抄 `cmd`)。在那边跑脚本:PowerShell 5.1 读无 BOM 的中文脚本会解析错;调原生程序时吃掉参数里的双引号,要试 Git Bash 就写成 `.sh` 文件
 - Windows 上 node 的非 detached 子进程在「父进程退出就杀」的 job 里(libuv):命令行起完就退的,子进程要 `detached: true`(配 `windowsHide`,不然有窗口)。不报错,退出码也是 0;验证要看对面真收到了,常驻进程里试不出来(`openCommand`)
 - Windows 上 `os.homedir()` 读 `USERPROFILE`,只设 `HOME` 隔离不住,测试会写进真的用户目录。`tests/_check.ts` 让它跟着 `HOME` 走,所有测试都要经过它;在别的机器上跑测试、脚本前先确认写到哪
 - 别的程序只占着 `127.0.0.1:<端口>` 时,绑 `0.0.0.0:<端口>` 照样成功(macOS、Windows 都这样),光试绑看不出被占,要先连一下(`port.ts` 的 `answersLocally`)

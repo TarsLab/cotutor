@@ -102,11 +102,22 @@ import { loadWorkspace } from 'cotutor/workspace';                        // 解
 
 百炼欠费、key 失效或这台电脑连不上百炼时,图标出橙点并通知,家长端首页说清楚是哪一种;要家长动手的那几种,孩子端显示「老师们还没到,叫爸爸妈妈来看一下」。处理好以后几分钟内自己恢复,也可以在家长端点「试连」。
 
-`cotutor doctor` 检查缺失配置并给修复建议;`--live` 会实际连接服务。页面上的老师起不来时,先看 doctor 和 `conversations/<老师>/<日期>.<job>.err.log`。家长端与工作台需要访问锁时,运行 `cotutor pin` 设置本机 PIN。
+`cotutor doctor` 检查缺失配置并给修复建议;`--fix` 把能自动修的修掉,`--live` 会实际连接服务。页面上的老师起不来时,先看 doctor 和 `conversations/<老师>/<日期>.<job>.err.log`。家长端与工作台需要访问锁时,运行 `cotutor pin` 设置本机 PIN。
+
+## 遇到问题
+
+家长端「首页」顶部的「还差几步」和橙色提示会说要做什么。还解决不了,到家长端「设置」点「生成诊断信息」(或在电脑上跑 `cotutor report`),看一遍再复制,到 [GitHub Issues](https://github.com/TarsLab/cotutor/issues) 反馈,或者贴给帮你的 AI 助手。里面没有孩子的对话、照片、录音、档案和 key,名字和 IP 已经抹掉。
 
 ## 数据与升级
 
 默认 workspace 是 `~/cotutor/<孩子>/`:配置在 `cotutor.json`,老师在 `agents/<老师>.md`,activity 在 `agents/<老师>/activities/`,技能在 `.agents/skills/`,对话在 `conversations/`,账本在 `ledger/`,照片在 `captures/`,课包在 `bundles/`,首页在 `home/`。长期档案、记忆和日记在配置的 Obsidian vault,规则见 [obsidian 仓库设计](docs/obsidian仓库设计.md)。备份时保留整个 workspace 与 vault。
+
+**备份**放在孩子文件夹旁边的 `.backups/<孩子>/`,一份就是一个普通目录。服务开着时每天自动备一份(留 14 份),`cotutor upgrade` 前也备一份(留 5 份),没变的文件不占第二份地方;`cotutor backup` 随时手动备。**录音(wav)不在备份里**,它占了绝大部分地方;想留就自己拷 `conversations/`。硬盘坏了这些也跟着没了,重要的话把 `.backups` 再拷到别处。
+
+```sh
+cotutor backup list                   # 看有哪些
+cotutor backup restore <名字> --yes    # 恢复:先把现在的样子也备一份,再拷回去
+```
 
 **有新版本时**,后台服务每天问一次 npm(只发一个普通请求,不带孩子或使用的任何信息),菜单栏(任务栏)图标的菜单和家长端「首页」顶部会说,通知一次,孩子端不说。不会自动升级,因为要重启服务,孩子可能正在上课。不想让它问:在 `~/.config/cotutor/update.json` 写 `{"off": true}`。
 

@@ -2,7 +2,9 @@
 export const USAGE = `用法:
   cotutor init <slug> [--dir <path>] [--name <孩子名>] [--grade <1-6>] [--port <n>]   建 ~/cotutor/<slug>/ 骨架(幂等补缺;默认二年级教学包;端口在这里选一次写进 cotutor.json:443 优先,不行就 8443、8445…,以后不变)
   cotutor grades [--json]                                          列出本包可安装的年级教学包
-  cotutor doctor [--workspace <dir>] [--json] [--live]                 逐项体检;--live 真连一次百炼实时模型、真合成一句配音(花一分钱)把 API 层的坑摆出来(真跑老师用 cotutor send);--json 里不过的项带 cmd(能直接跑)或 human(要人来)
+  cotutor doctor [--workspace <dir>] [--json] [--live] [--fix]                 逐项体检;--live 真连一次百炼实时模型、真合成一句配音(花一分钱)把 API 层的坑摆出来(真跑老师用 cotutor send);--json 里不过的项带 cmd(能直接跑)或 human(要人来);--fix 把带 cmd 的一条条修掉,要人来的留着
+  cotutor report [--workspace <dir>]                                   诊断信息:版本、系统、服务、体检没过的、最近报错的原因;不含孩子的对话、照片、录音、档案和 key,名字和 IP 已抹掉,先看再发
+  cotutor backup [list | restore <名字> [--yes]] [--workspace <dir>]   备份到 workspace 旁边的 .backups/:不含录音;服务开着时每天一份(留 14 份),cotutor upgrade 前一份(留 5 份);没变的文件硬链接,不占第二份地方;restore 先把现在的也备一份再拷回去,不加 --yes 只说会做什么
   cotutor update [--anyway]                                            升级一条命令管到底:问 npm 有没有新版本,换程序,每个孩子更新出厂文件、重起服务和图标;孩子在通话时不动(--anyway 才动),npm 没成服务不动
   cotutor upgrade [--workspace <dir>] [--force <老师>]...                老师文件、activity 与 skill 换新版:没改过的直接换,改过的只报 diff(--force <老师> 或 --force <老师>/<名> 才覆盖,原文留 .bak)
   cotutor upgrade --config [--dry-run] [--workspace <dir>]              cotutor.json 补缺:新出厂老师 / 运行时 / 命令模板旗标(只加缺的,你改过的值不动)

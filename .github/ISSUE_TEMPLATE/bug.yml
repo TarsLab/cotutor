@@ -1,0 +1,22 @@
+name: 出问题了
+description: 装不上、打不开、老师不说话、升级失败
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **这里是公开的,任何人都看得到。** 不要贴孩子的对话、照片、真名和百炼的 key。
+        诊断信息已经把这些去掉了,贴之前还是可以先看一眼。
+  - type: textarea
+    id: what
+    attributes:
+      label: 发生了什么
+      description: 你做了什么,想要什么,实际看到了什么。有截图的话注意遮住孩子的信息。
+    validations:
+      required: true
+  - type: textarea
+    id: report
+    attributes:
+      label: 诊断信息
+      description: 家长端「设置」里点「生成诊断信息」再复制;或者在电脑上跑 `cotutor report`(Windows 上 `cotutor.cmd report`)。打不开家长端、跑不了命令就空着。
+      render: markdown

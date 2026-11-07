@@ -41,6 +41,18 @@ export function frontmatter(md: string): Record<string, string> {
 
 const CN_DIGITS = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十', '十一', '十二'];
 
+/** 现在读 grade 年级的孩子,读一年级是哪年 9 月(学年从 9 月算,同下面的 semesterAt;7、8 月算刚读完的那个年级) */
+export function schoolStartFor(grade: number, now: Date): string {
+  const year = now.getMonth() + 1 >= 9 ? now.getFullYear() : now.getFullYear() - 1;
+  return `${year - (grade - 1)}-09`;
+}
+
+/** 把 school_start 写进档案的 frontmatter:有空着的那行就填,没有就加在第一行 --- 后面;别的一个字不动 */
+export function setSchoolStart(md: string, value: string): string {
+  if (/^school_start:.*$/m.test(md)) return md.replace(/^school_start:.*$/m, `school_start: ${value}`);
+  return md.replace(/^---\r?\n/, (m) => `${m}school_start: ${value}\n`);
+}
+
 /**
  * 某天是几年级的哪个学期 / 假期:9–1 月上学期、2 月寒假、3–6 月下学期、7–8 月暑假(刚读完的那个年级的暑假)。
  * 学年从 9 月算;`school_start` 是读一年级那年的 9 月(写别的月份也按它所在学年算)。年级不在 1–12 → null。

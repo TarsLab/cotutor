@@ -598,6 +598,15 @@ export async function doctorWorkspace(
     if (sec !== null) push({ name: 'windows.sleep', ok: sec === 0, required: false, detail: sec === 0 ? '接着电源时不闲置睡眠' : `接着电源 ${Math.round(sec / 60)} 分钟没人碰就睡,睡着时平板连不上(有通话时 cotutor 拦着它睡,别的时候拦不了)`, fix: sec === 0 ? undefined : '设置 › 系统 › 电源和电池 › 屏幕、睡眠和休眠超时,「插入电源时,使设备在以下时间后进入睡眠状态」选「从不」;合盖看「电源按钮和盖子」那一项' });
   }
 
+  // ---- 备份:服务开着时每天一份;好几天没有说明服务没在跑、或者备份一直失败(磁盘满、读不了) ----
+  if (probeEnv && ws && !ws.sandbox) {
+    const { backupsOf, listBackups } = await import('./backup.ts');
+    const list = await listBackups(root).catch(() => []);
+    const last = list[0];
+    const ageMs = last ? (opts.now ?? new Date()).getTime() - Date.parse(last.at) : Number.POSITIVE_INFINITY;
+    push({ name: 'backup', ok: ageMs < 3 * 24 * 3600_000, required: false, detail: last ? `最近一份 ${last.at.slice(0, 10)},共 ${list.length} 份(${redactHome(backupsOf(root))})` : '还没有备份', fix: 'cotutor backup 备一份;服务开着时每天自己备', cmd: `cotutor backup${flag}` });
+  }
+
   // ---- 有没有新版本:只看服务问来存下的那份,体检不上网;什么时候升级家长定(要重起服务,孩子可能在上课),所以没有 cmd ----
   {
     const { readUpdateRecord } = await import('../machine/update.ts');

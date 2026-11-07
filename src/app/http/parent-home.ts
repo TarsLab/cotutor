@@ -26,6 +26,7 @@ import { wordEmoji } from '../../ui/kid/word-emoji.ts';
 import { shownAvatar } from './avatars.ts';
 import { qrNotes, qrSvg } from '../../ui/shared/qr-svg.ts';
 import { readDevices } from '../../runtime/journal/kid-log.ts';
+import { parentSetupRoute } from './parent-setup.ts';
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const bad = (message: string): RouteResult => ({ status: 400, json: { error: 'bad_request', message } });
@@ -178,6 +179,8 @@ async function kidQr(ctx: AppContext): Promise<Record<string, unknown>> {
 }
 
 export async function parentHomeRoute(method: string, p: string, ctx: AppContext, body: unknown): Promise<RouteResult | null> {
+  const care = await parentSetupRoute(method, p, ctx, body);
+  if (care) return care;
   if (p === '/api/parent/home' && method === 'GET') return { status: 200, json: await parentHome(ctx) };
   if (p === '/api/parent/qr' && method === 'GET') return { status: 200, json: await kidQr(ctx) };
   const names = faceTutors(ctx.ws.config);

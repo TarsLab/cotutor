@@ -220,6 +220,19 @@ ${BRAND_CSS}
   }
   .upd { position:relative; display:flex; flex-direction:column; gap:6px; margin:0 0 12px; padding:12px 14px; border-radius:14px; background:var(--card); box-shadow:0 0 0 1px var(--line); font-size:15px; }
   .upd.bad { box-shadow:0 0 0 1px var(--accent); }
+  .setup { position:relative; display:flex; flex-direction:column; gap:2px; margin:0 0 12px; padding:12px 14px; border-radius:14px; background:var(--card); box-shadow:0 0 0 1px var(--line); font-size:15px; }
+  .setup > b { padding-right:64px; }
+  .setup .sp { display:flex; gap:10px; padding:8px 0; border-top:1px solid var(--line); }
+  .setup .sp:first-of-type { border-top:0; }
+  .setup .mk { flex:none; width:20px; text-align:center; color:var(--dim); }
+  .setup .sp.on .mk { color:var(--accent); }
+  .setup .sp.on b { font-weight:500; color:var(--dim); }
+  .setup .tx { display:flex; flex-direction:column; gap:4px; min-width:0; flex:1; }
+  .setup small { color:var(--dim); font-size:14px; line-height:1.5; }
+  .setup pre { margin:2px 0 0; padding:10px 12px; border-radius:10px; background:var(--paper); font:13px/1.6 ui-monospace,Menlo,Consolas,monospace; white-space:pre-wrap; overflow-wrap:anywhere; user-select:all; -webkit-user-select:all; }
+  .setup .gr { display:flex; flex-wrap:wrap; gap:6px; margin-top:2px; }
+  .setup .gr button { min-height:44px; padding:0 12px; border:0; border-radius:10px; background:var(--paper); box-shadow:0 0 0 1px var(--line); color:inherit; font-size:15px; cursor:pointer; }
+  .setup .hide { position:absolute; top:6px; right:6px; min-height:44px; padding:0 10px; border:0; background:transparent; color:var(--accent); font-size:15px; cursor:pointer; }
   .upd ul { margin:0; padding-left:18px; font-size:14px; }
   .upd .sub { color:var(--dim); font-size:14px; padding-right:64px; }
   .upd pre { margin:2px 0 0; padding:10px 12px; border-radius:10px; background:var(--paper); font:13px/1.6 ui-monospace,Menlo,Consolas,monospace; white-space:pre-wrap; overflow-wrap:anywhere; user-select:all; -webkit-user-select:all; }
@@ -228,6 +241,7 @@ ${BRAND_CSS}
 <div class="wrap" id="main">
   <div class="top"><span class="ttl"><span id="ct-mark" class="ct-draw ct-hover">${titleLogo(true)}</span><b id="title">家长</b></span><nav class="seg"><a class="on" href="/parent/home">首页</a><a href="/parent">记录</a><a href="/parent/settings">设置</a></nav><small id="pub"></small><a class="devl" href="/dev" target="_blank" title="工作台:细调老师文件、activity(新窗口)">工作台<svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4 2h6v6"/><path d="M10 2 3 9"/></svg></a></div>
   <div id="troublebar"></div>
+  <div id="setupbar"></div>
   <div id="updatebar"></div>
   <div id="qrtop"></div>
   <div class="main">
@@ -375,6 +389,32 @@ ${pageDomJs(3200)}
 
   // 有新版本(服务每天问一次 npm,machine/update.ts):只在家长端说,孩子端不说;点「知道了」这个版本不再提,读不了 localStorage 就每次都说
   const UPGRADE_STEPS = ${JSON.stringify(upgradeSteps())};
+  // 还差几步(parent-setup.ts):第一次打开家长端,告诉家长接下来做什么。必需的都好了就只剩建议,「知道了」以后不再提
+  const showSetup = async () => {
+    const box = $('#setupbar');
+    const d = await api('GET', '/api/parent/setup').catch(() => null);
+    if (!d) { box.replaceChildren(); return; }
+    let hidden = false;
+    try { hidden = localStorage.getItem('cotutor.setupHidden') === '1'; } catch {}
+    const must = d.steps.filter((s) => s.required);
+    const left = must.filter((s) => !s.done);
+    const extra = d.steps.filter((s) => !s.required && !s.done);
+    if (!left.length && (hidden || !extra.length)) { box.replaceChildren(); return; }
+    const pickGrade = async (g) => {
+      try { await api('POST', '/api/parent/setup/grade', { grade: g }); toast('记下了:' + g + ' 年级'); } catch (e) { toast(e.message); }
+      showSetup();
+    };
+    const row = (s) => h('div', { class: 'sp' + (s.done ? ' on' : '') },
+      h('span', { class: 'mk' }, s.done ? '✓' : '○'),
+      h('span', { class: 'tx' }, h('b', {}, s.title),
+        s.done ? null : h('small', {}, s.detail, s.link ? ' ' : null, s.link ? h('a', { class: 'lnk', href: s.link.href, target: '_blank', rel: 'noopener' }, s.link.text) : null),
+        !s.done && s.commands ? h('pre', {}, s.commands.map((c) => h('div', {}, c))) : null,
+        !s.done && s.grades ? h('span', { class: 'gr' }, [1, 2, 3, 4, 5, 6].map((g) => h('button', { type: 'button', on: { click: () => pickGrade(g) } }, g + ' 年级'))) : null));
+    box.replaceChildren(h('div', { class: 'setup' },
+      h('b', {}, left.length ? '还差 ' + left.length + ' 步,孩子就能用了' : '都好了,还有几件可以做的'),
+      ...(left.length ? must.concat(extra) : extra).map(row),
+      left.length ? null : h('button', { type: 'button', class: 'hide', on: { click: () => { try { localStorage.setItem('cotutor.setupHidden', '1'); } catch {} box.replaceChildren(); } } }, '知道了')));
+  };
   // 跑起来以后百炼出的问题(欠费、key 失效、连不上,machine/bailian.ts):配好了不等于用得了。试连通了就没了
   const showTrouble = (hh) => {
     const box = $('#troublebar');
@@ -407,6 +447,7 @@ ${pageDomJs(3200)}
   };
   const load = async () => {
     showUpdate();
+    showSetup();
     try { D = await api('GET', '/api/parent/home'); } catch (e) { toast('读不到:' + e.message); return; }
     BL.st = await api('GET', '/api/parent/bailian').catch(() => null);
     QR.d = await api('GET', '/api/parent/qr').catch(() => null);

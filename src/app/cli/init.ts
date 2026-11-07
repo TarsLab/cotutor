@@ -9,6 +9,7 @@ import { dirname, join, resolve } from 'node:path';
 import { DIRS, GITIGNORE, LEDGER_FILES, REFERENCE_README, configTemplate, profileTemplate, shippedAgents, writeSchemaFile } from './skeleton.ts';
 import { installTutors, readManifest, writeManifest } from './tutors.ts';
 import { DEFAULT_GRADE, LEGACY_GRADE, requireGradePack } from './grades.ts';
+import { schoolStartFor } from '../../memory/vault-notes.ts';
 import { installActivities } from './activities.ts';
 import { installSkills, linkClaudeSkills } from './skills.ts';
 import { migrateLayout } from './migrate.ts';
@@ -36,6 +37,8 @@ export interface InitOptions {
   port?: number;
   /** 出厂教学包年级,不是孩子档案的覆盖值。 */
   grade?: number;
+  /** 测试:算学期用的今天 */
+  now?: Date;
 }
 
 async function exists(p: string): Promise<boolean> {
@@ -120,8 +123,10 @@ export async function initWorkspace(opts: InitOptions): Promise<InitResult> {
     else if (await exists(profile)) steps.push({ item: redactHome(profile), action: 'kept', note: '没有 cotutor: profile 属性,老师读不到;在 frontmatter 加上(cotutor doctor 有写法)' });
     else {
       await mkdir(dirname(profile), { recursive: true });
-      await writeFile(profile, profileTemplate(ws.config.kid.name ?? ws.config.kid.slug));
-      steps.push({ item: redactHome(profile), action: 'created', note: '档案:填 school_start 与孩子的情况,每个话题开头整篇进上下文包' });
+      // 给了年级就算好读一年级的年月,老师第一天就知道是几年级哪个学期;没给就不猜(教学包的缺省年级不等于孩子的年级)
+      const start = opts.grade === undefined ? undefined : schoolStartFor(opts.grade, opts.now ?? new Date());
+      await writeFile(profile, profileTemplate(ws.config.kid.name ?? ws.config.kid.slug, start));
+      steps.push({ item: redactHome(profile), action: 'created', note: start ? `档案:按 ${opts.grade} 年级算,读一年级是 ${start};孩子的情况写在正文,每个话题开头整篇进上下文包` : '档案:填 school_start 与孩子的情况,每个话题开头整篇进上下文包' });
     }
     const readme = join(ws.paths.reference, 'README.md');
     if (await exists(readme)) steps.push({ item: redactHome(readme), action: 'exists' });
@@ -165,7 +170,7 @@ export async function initWorkspace(opts: InitOptions): Promise<InitResult> {
 
   const suggestions: string[] = [];
   if (!(await exists(join(root, '.git')))) suggestions.push('git init(建议:老师记忆、账本、政策都是不可再生状态,git 是破坏后的兜底)');
-  suggestions.push('档案里填 school_start(读一年级的年月,如 2025-09),老师才知道现在是几年级哪个学期;想用自己的 Obsidian 库,改 cotutor.json 的 paths.vault');
+  suggestions.push(`${opts.grade === undefined ? '档案里填 school_start(读一年级的年月,如 2025-09),老师才知道现在是几年级哪个学期;' : ''}想用自己的 Obsidian 库,改 cotutor.json 的 paths.vault`);
   suggestions.push('cotutor service install 装成后台服务(登录后自己起来、关了终端照样跑;在终端里调试用 cotutor serve),第一次装会打开家长端(以后 cotutor open),在「首页」填百炼的按量 API Key 与业务空间 ID(老师的嘴和脑都用它;没填孩子端只出「老师们还没到」)');
   suggestions.push('在平板、手机上用:cotutor cert 签证书(要 mkcert),根证书装到设备上并打开信任,iPad / iPhone 的步骤见 README 里的《iPad 与 iPhone》');
   suggestions.push('可选:点读、单词卡的配音用百炼(和老师的嘴同一把 key),到家长端首页点老师的「样子与声音」挑声音;cotutor pin 给家长端与工作台加锁');

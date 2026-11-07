@@ -5,7 +5,12 @@ export const UPGRADE_STEPS = ['cotutor update'] as const;
 
 /** 给家长看的那份。Windows 上带 .cmd:PowerShell 缺省禁止跑脚本,不带后缀找到的是被拦的 .ps1,一跑就报错;.cmd 在 PowerShell 和 cmd.exe 里都能跑(2026-11-07 真机) */
 export function upgradeSteps(platform: NodeJS.Platform = process.platform): string[] {
-  return UPGRADE_STEPS.map((s) => (platform === 'win32' ? s.replace(' ', '.cmd ') : s));
+  return UPGRADE_STEPS.map((s) => cliLine(s, platform));
+}
+
+/** 给家长抄的一条命令:Windows 上第一个词带 .cmd,原因同上 */
+export function cliLine(cmd: string, platform: NodeJS.Platform = process.platform): string {
+  return platform === 'win32' ? cmd.replace(/^(cotutor|npm)(?= |$)/, '$1.cmd') : cmd;
 }
 
 const PLAIN = /^(\d+)\.(\d+)\.(\d+)$/;

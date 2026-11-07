@@ -1,11 +1,11 @@
 {
   "name": "cotutor",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "releaseNotes": [
-    "百炼欠费、key 失效或连不上时,图标和家长端会说清楚,孩子那边会请爸爸妈妈来看,不再一直转",
-    "升级只要一条命令 cotutor update,几个孩子一次升好,孩子在通话时不动",
-    "用 Homebrew 装 Node 的电脑:Node 升级后服务和图标不会再起不来",
-    "有新版本时能直接看到这次改了什么"
+    "自动备份:服务开着时每天一份,升级前一份,可以恢复;录音占地方,不在备份里",
+    "家长端首页多了「还差几步」,第一次打开就知道接下来做什么;选一下年级老师就知道孩子上几年级",
+    "遇到问题时,家长端「设置」能生成诊断信息,不含孩子的对话和 key,先看再发",
+    "`cotutor init --grade` 自动算好学期,`cotutor doctor --fix` 一次修掉能自动修的"
   ],
   "description": "AI tutors that co-teach with parents at home: real-time voice, an interactive whiteboard, and learning memory in your own Obsidian vault. Self-hosted; built for China's elementary curriculum.",
   "type": "module",

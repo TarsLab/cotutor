@@ -89,6 +89,22 @@ function printOpen(label: string, page: string, hint: string, open: boolean): vo
   if (open) openTarget(process.platform, page);
 }
 const wantsOpen = (flags: Record<string, string | true>): boolean => flags.open === true || flags['open-qr'] === true;
+/** 升级前的备份;试用的不备 */
+async function backupBeforeUpgrade(root: string): Promise<string | null> {
+  const { describeBackup, makeBackup } = await import('./backup.ts');
+  let vault: string | undefined;
+  try {
+    const ws = loadWorkspace(root);
+    if (ws.sandbox) return null;
+    vault = ws.paths.vault;
+  } catch { /* 配置读不了(老布局、写坏了):workspace 照样备,vault 不管 */ }
+  try {
+    return `升级前留了一份备份:${describeBackup(await makeBackup({ root, vault }, { why: 'upgrade', version: BUILD.version }))}`;
+  } catch (err) {
+    return `! 这次没备份成:${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
 /** 不用 workspace 的命令:--sandbox 对它们没有意义 */
 const NO_WORKSPACE = ['grades', 'init', 'mock', 'pin', 'cert', 'tray', 'update'];
 
@@ -141,7 +157,67 @@ export async function main(argv: string[]): Promise<void> {
         }
         return;
       }
+      case 'report': {
+        const { buildReport } = await import('./report.ts');
+        const ws = loadWorkspace(workspace);
+        process.stdout.write(await buildReport(ws, { health: await probeHealth(ws.config.server.port) }));
+        return;
+      }
+      case 'backup': {
+        const backup = await import('./backup.ts');
+        const ws = loadWorkspace(workspace);
+        if (ws.sandbox) throw new UsageError('试用的 workspace 不备份');
+        const target = { root: ws.root, vault: ws.paths.vault };
+        const [sub, name] = positionals;
+        if (!sub) {
+          const b = await backup.makeBackup(target, { why: 'manual', version: BUILD.version });
+          process.stdout.write(`备份好了:${backup.describeBackup(b)}\n  在 ${redactHome(backup.backupsOf(ws.root))}\n  不含录音(wav)和能重新生成的文件${b.audioSkipped ? `,这次跳过 ${b.audioSkipped} 个录音` : ''}\n`);
+          if (b.vault === 'unreadable') process.stdout.write(`! vault 读不了(${redactHome(ws.paths.vault)}),这份里没有它\n`);
+          return;
+        }
+        if (sub === 'list') {
+          const list = await backup.listBackups(ws.root);
+          if (json) { process.stdout.write(`${JSON.stringify(list, null, 2)}\n`); return; }
+          if (!list.length) process.stdout.write('还没有备份:cotutor backup 备一份\n');
+          for (const b of list) process.stdout.write(`${backup.describeBackup(b)}\n`);
+          return;
+        }
+        if (sub !== 'restore' || !name) throw new UsageError(`cotutor backup [list | restore <名字> [--yes]]\n${USAGE}`);
+        if (!(await backup.listBackups(ws.root)).some((b) => b.name === name)) throw new UsageError(`没有这份备份:${name}(cotutor backup list 看有哪些)`);
+        if (flags.yes !== true) {
+          process.stdout.write(`会把孩子的文件夹恢复成 ${name} 那时的样子:备份里有的文件都覆盖回去,之后新多出来的不删。\n恢复前会先把现在的样子也备份一份,恢复错了还能回来。服务会停一下。录音不在备份里,不受影响。\n确定的话加 --yes\n`);
+          process.exitCode = 1;
+          return;
+        }
+        const host = realHost();
+        const port = ws.config.server.port;
+        const health = await probeHealth(port);
+        if (health && health.mode !== 'service') throw new UsageError(`端口 ${port} 上有一个 cotutor serve 在终端里跑着:先关掉它(那个终端里 Ctrl-C),再恢复`);
+        if ((health?.calls ?? 0) > 0) throw new UsageError('孩子正在和老师通话,恢复要停服务:等下课再来');
+        const service = await findService(host, ws.root);
+        if (service && health) await controlService(host, ws.root, 'stop');
+        const r = await backup.restoreBackup(target, name, { version: BUILD.version });
+        process.stdout.write(`恢复好了:${r.files} 个文件。恢复前的样子留在 ${r.safety}\n`);
+        if (r.vaultCopy) process.stdout.write(`外面的 vault 没动;要拿回来,那一份的 md 在 ${redactHome(r.vaultCopy)}\n`);
+        if (service && health) { await controlService(host, ws.root, 'start'); process.stdout.write('服务重起了\n'); }
+        return;
+      }
       case 'doctor': {
+        if (flags.fix === true) {
+          const { runArgv, runFixes } = await import('./doctor-fix.ts');
+          const r = await runFixes({ doctor: () => doctorWorkspace(workspace, {}), run: runArgv, print: (l) => process.stdout.write(`${l}\n`) });
+          const left = r.checks.filter((c) => !c.ok);
+          const manual = left.filter((c) => c.human);
+          const stuck = left.filter((c) => c.cmd);
+          if (manual.length) {
+            process.stdout.write('还要人来的:\n');
+            for (const c of manual) process.stdout.write(`  ${c.required ? '✗' : '!'} ${c.name.padEnd(26)} ${c.detail}\n`);
+          }
+          for (const c of stuck) process.stdout.write(`修不好:${c.name} ${c.detail}\n`);
+          process.stdout.write(r.ok ? '体检通过\n' : '体检不过(✗ 是必需项)\n');
+          if (!r.ok) process.exitCode = 1;
+          return;
+        }
         const r = await doctorWorkspace(workspace, { live: flags.live === true });
         if (json) process.stdout.write(`${JSON.stringify(redactDeep(r), null, 2)}\n`);
         else {
@@ -443,6 +519,11 @@ export async function main(argv: string[]): Promise<void> {
       case 'upgrade': {
         if (flags.grade !== undefined) throw new UsageError('upgrade 只更新已安装的教学包,不能用 --grade 切换年级');
         const { root } = resolveRoot(workspace);
+        // 升级前留一份:新代码弄坏了能回来。备份不成不拦升级,说一声。--dry-run 不动文件,不用
+        if (flags['dry-run'] !== true) {
+          const said = await backupBeforeUpgrade(root);
+          if (said && !json) process.stdout.write(`${said}\n`);
+        }
         // --config 是另一件事:政策文件补缺(老师文件与 skill 不碰)
         if (flags.config === true) {
           const dryRun = flags['dry-run'] === true;

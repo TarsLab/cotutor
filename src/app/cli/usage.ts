@@ -2,16 +2,16 @@
 export const USAGE = `用法:
   cotutor init <slug> [--dir <path>] [--name <孩子名>] [--grade <1-6>] [--port <n>]   建 ~/cotutor/<slug>/ 骨架(幂等补缺;默认二年级教学包;端口在这里选一次写进 cotutor.json:443 优先,不行就 8443、8445…,以后不变)
   cotutor grades [--json]                                          列出本包可安装的年级教学包
-  cotutor doctor [--workspace <dir>] [--json] [--live]                 逐项体检;--live 真连一次百炼实时模型、真合成一句配音(花一分钱)把 API 层的坑摆出来(真跑老师用 cotutor send)
+  cotutor doctor [--workspace <dir>] [--json] [--live]                 逐项体检;--live 真连一次百炼实时模型、真合成一句配音(花一分钱)把 API 层的坑摆出来(真跑老师用 cotutor send);--json 里不过的项带 cmd(能直接跑)或 human(要人来)
   cotutor upgrade [--workspace <dir>] [--force <老师>]...                老师文件、activity 与 skill 换新版:没改过的直接换,改过的只报 diff(--force <老师> 或 --force <老师>/<名> 才覆盖,原文留 .bak)
   cotutor upgrade --config [--dry-run] [--workspace <dir>]              cotutor.json 补缺:新出厂老师 / 运行时 / 命令模板旗标(只加缺的,你改过的值不动)
   cotutor add <老师名> --display <显示名> [--subject <学科>] [--avatar <emoji|图片相对路径>] [--hidden]   加一位自家的老师:出模板文件、进 cotutor.json、建目录(名字以 -tutor 结尾的是老师,figshot 给它做头像)
   cotutor add-theme <主题名> [--from <主题>] [--workspace <dir>]       加一个自家的主题:拷一份(缺省出厂的 default)到 themes/<主题名>/,改 cotutor.json 的 kid.theme 换过去
   cotutor serve [--workspace <dir>] [--port <n>] [--http] [--trace] [--open] [--log-dir <目录>]   在终端里起服务(一 workspace 一进程;~/.config/cotutor/certs/ 有证书就走 HTTPS;--trace 每一轮的事件按道打印;只打印家长端首页的地址,孩子的平板在那里扫码;--open 顺手打开,旧名 --open-qr 照样认;--log-dir 输出按天落文件,后台服务用;关了终端就停,一直开着用 cotutor service)
   cotutor open [--workspace <dir>] [--sandbox] [--print] [--json]        打开家长端(读 cotutor.json,不用记端口);--sandbox 开试用的那个(端口永远是真的 +1);--print 只打印地址;没在跑就说怎么起,以 1 退
-  cotutor service install | uninstall | start | stop | restart [--workspace <dir>] [--no-tray]   把 serve 装成这台电脑的后台服务(macOS launchd、Linux systemd 用户服务、Windows 用户的登录项,都不要管理员):登录后自己起来、崩了 10 秒后再起、日志按天落文件留 14 天;一个 workspace 一个;换了 node 版本或包挪了地方再 install 一次
+  cotutor service install | uninstall | start | stop | restart [--workspace <dir>] [--no-tray] [--no-open]   把 serve 装成这台电脑的后台服务(macOS launchd、Linux systemd 用户服务、Windows 用户的登录项,都不要管理员):登录后自己起来、崩了 10 秒后再起、日志按天落文件留 14 天;一个 workspace 一个;第一次 install 打开一次家长端(--no-open 不开),以后的启动都不开;换了 node 版本或包挪了地方再 install 一次
   cotutor tray on | off | status [--json]                             菜单栏 / 任务栏图标(macOS、Windows;service install 时一起装,--no-tray 不带):正常时只有 logo,有事出橙点,没在跑时变淡加红点并通知一次;点它看状态、打开家长端、重启、看日志、退出;off 关掉并记住
-  cotutor service status [--json] | logs [--lines <n>] [--follow]      后台服务在不在跑、端口答不答应、跑的哪个版本、vault 读不读得到、日志在哪;logs 看最近的日志
+  cotutor service status [--json] | logs [--lines <n>] [--follow]      后台服务在不在跑、端口答不答应、跑的哪个版本、vault 读不读得到、日志在哪;--json 还答平板地址、证书、百炼配没配、图标;logs 看最近的日志
   cotutor pin [off | status] [--pin <数字>] [--json]                       家长端 /parent 与工作台 /dev 的锁:机器级 PIN(所有 workspace 共用),iPad 上输一次、这台电脑免密;没设就全开(家长在旁边可以不设);off 撤掉
   cotutor cert [--host <名或IP>]...                                      用 mkcert 建这台机器的自签证书到 ~/.config/cotutor/certs/(平板、手机上录音要 HTTPS;所有 workspace 共用)
   cotutor send <老师> [<消息>] [--from kid|system] [--runtime <名>] [--new] [--photo a.jpg,b.png] [--activity <名> [--param '名=值;名=值']] [--lane main,tts] [--quiet]   终端里发一条,现场按道打印每道工序的事件,说完打印结果(孩子的话照实时写,同孩子端:上下文包带 live:、不补提问卡,只是没有嘴;--from system 不算;--new 开新话题;--photo 带作业照片,拷进 captures/,有照片时消息可以空;--activity 像孩子点了首页的 activity 按钮,新开话题,参数同按钮下面那几行;--quiet 只要结果)

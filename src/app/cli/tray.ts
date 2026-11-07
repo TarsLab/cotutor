@@ -9,14 +9,15 @@
  * 状态:正常只有 logo(和菜单栏别的图标一样单色);有事才出状态点,橙 = 要处理,红 = 没在跑(logo 同时变淡)。正常 → 有事、→ 没在跑时通知一次,恢复不通知。
  * 「退出 cotutor」= 停掉所有后台服务并退出图标,下次登录自己回来;正开着电话时先问一声。
  */
-import { spawn, type ChildProcess } from 'node:child_process';
-import { appendFileSync, existsSync, renameSync, statSync } from 'node:fs';
+import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process';
+import { appendFileSync, existsSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { DEFAULT_PORT } from '../../shared/default-port.ts';
 import { UsageError } from '../../shared/errors.ts';
 import { siteUrl } from '../../shared/site-url.ts';
+import { isNewer } from '../../shared/upgrade.ts';
 import { portHolder } from './port-holder.ts';
 import { RUN_KEY, STARTUP_APPROVED_KEY, encodeLauncher, parseProcs, psArgs, runValue, startupDisabled, winCommandLine } from './service-windows.ts';
 import { binPath, controlService, listServices, parseLaunchctlPrint, probeHealth, wscriptPath, xml, type Health, type InstalledService, type ServiceHost } from './service.ts';
@@ -72,6 +73,8 @@ export interface TrayRow {
   issues: number;
   fix: TrayFix | null;
   calls: number;
+  /** npm 上有比装的新的版本 → 版本号;不算有事,不出状态点 */
+  update: string | null;
 }
 
 export type TrayEntry =
@@ -119,8 +122,9 @@ const rank = (l: RowLevel | undefined): number => (l === 'bad' ? 2 : l === 'warn
 export class TrayModel {
   private readonly mem = new Map<string, { row: TrayRow | null; level?: RowLevel; misses: number; graceUntil: number }>();
   private last = 0;
-  private readonly o: { platform: NodeJS.Platform; version: string };
-  constructor(o: { platform: NodeJS.Platform; version: string }) { this.o = o; }
+  // 版本每轮问:npm 升级时这个进程一直开着,记死了就把「都对了」报成「要重启」,把真要重启的放过去
+  private readonly o: { platform: NodeJS.Platform; version: () => string };
+  constructor(o: { platform: NodeJS.Platform; version: () => string }) { this.o = o; }
 
   /** 刚点了启动、重启:这一阵问不到是正常的 */
   expect(name: string, now: number): void {
@@ -168,7 +172,8 @@ export class TrayModel {
 
   private healthy(p: TrayProbe, now: number): TrayRow {
     const h = p.health as Health;
-    const issues = issuesOf(p, this.o);
+    const installed = this.o.version();
+    const issues = issuesOf(p, { platform: this.o.platform, version: installed });
     const started = Date.parse(h.started);
     const running = h.mode === 'foreground' ? '在终端里跑,关了终端就停' : `已运行 ${uptimeText(Number.isNaN(started) ? now : started, now)}`;
     return {
@@ -181,11 +186,13 @@ export class TrayModel {
       issues: issues.length,
       fix: issues[0]?.fix ?? null,
       calls: h.calls ?? 0,
+      // 和装的比,不只和在跑的比:程序已经换上新版、只差重启时,再说「有新版本」就错了
+      update: isNewer(h.latest, installed) ? (h.latest as string) : null,
     };
   }
 
   private placeholder(p: TrayProbe, level: RowLevel, detail: string): TrayRow {
-    return { name: p.name, kid: p.kid, logDir: p.logDir, level, url: null, detail, issues: 0, fix: null, calls: 0 };
+    return { name: p.name, kid: p.kid, logDir: p.logDir, level, url: null, detail, issues: 0, fix: null, calls: 0, update: null };
   }
 }
 
@@ -194,9 +201,16 @@ const titleOf = (r: TrayRow, multi: boolean): string => {
   return `${r.kid} · ${r.level === 'ok' ? '正常' : r.level === 'warn' ? `有 ${r.issues} 件事要处理` : r.level === 'bad' ? '没在跑' : '正在启动'}`;
 };
 
+// 点通知回不到这里(Mac 的来源是系统的脚本程序;Windows 的 PowerShell 5.1 接不了 WinRT 的事件),只能请家长去点图标
+const iconHint = (platform: NodeJS.Platform): string => (platform === 'darwin' ? '点菜单栏的 cotutor 图标看看' : '点任务栏的 cotutor 图标看看');
+
+/** 有新版本的通知:每个版本最多一次,记在托盘目录,重起、重新登录不再弹 */
+export function updateNote(version: string, platform: NodeJS.Platform): TrayNote {
+  return { type: 'notify', title: `cotutor 有新版本 ${version}`, body: iconHint(platform) };
+}
+
 function noteFor(r: TrayRow, multi: boolean, platform: NodeJS.Platform): TrayNote {
-  // 点通知回不到这里(Mac 的来源是系统的脚本程序;Windows 的 PowerShell 5.1 接不了 WinRT 的事件),只能请家长去点图标
-  const hint = platform === 'darwin' ? '点菜单栏的 cotutor 图标看看' : '点任务栏的 cotutor 图标看看';
+  const hint = iconHint(platform);
   const who = multi ? r.kid : 'cotutor ';
   if (r.level === 'bad') return { type: 'notify', title: `${who}${multi ? '的' : ''}后台服务没在跑`, body: `孩子的平板现在打不开,${hint}` };
   return { type: 'notify', title: `${who}有 ${r.issues} 件事要处理`, body: `${r.detail},${hint}` };
@@ -225,6 +239,12 @@ export function trayShow(rows: TrayRow[]): TrayShow {
     } else act('logs', '看日志');
     menu.push({ kind: 'sep' });
   }
+  // 版本是这台电脑的事,几个孩子也只说一行;点了去家长端,升级的命令写在那里
+  const newer = rows.find((r) => r.update);
+  if (newer) {
+    menu.push({ kind: 'action', id: `update:${newer.name}`, title: `有新版本 ${newer.update},看怎么升级` });
+    menu.push({ kind: 'sep' });
+  }
   menu.push({ kind: 'action', id: 'quit', title: '退出 cotutor' });
   return { type: 'show', icon: level === 'starting' ? 'ok' : level, tip: worst ? titleOf(worst, multi) : 'cotutor', menu };
 }
@@ -239,7 +259,11 @@ export interface TrayHelper {
 
 export interface TrayDeps {
   platform: NodeJS.Platform;
-  version: string;
+  /** 现在装的是哪个版本:每轮问,程序可能刚被 npm 换了 */
+  version(): string;
+  /** 已经通知过的新版本 */
+  updateSeen(): string | null;
+  setUpdateSeen(version: string): void;
   now(): number;
   list(): Promise<InstalledService[]>;
   /** 读 cotutor.json:孩子叫什么、哪个端口 */
@@ -317,7 +341,7 @@ export function runTray(d: TrayDeps): Promise<number> {
       const what = id.slice(0, at);
       const r = rows.find((x) => x.name === id.slice(at + 1));
       if (!r) return;
-      if (what === 'open' && r.url) d.open(r.url);
+      if ((what === 'open' || what === 'update') && r.url) d.open(r.url);
       else if (what === 'logs' && r.logDir) d.open(r.logDir);
       else if (what === 'start' || what === 'restart') control(r.name, what);
       else if (what === 'fix' && r.fix) {
@@ -383,6 +407,13 @@ export function runTray(d: TrayDeps): Promise<number> {
           d.note(`显示:${show.icon} ${show.tip}`);
         }
         for (const n of r.notes) { helper?.send(n); d.note(`通知:${n.title}`); }
+        const newer = rows.find((x) => x.update)?.update;
+        if (newer && helper && newer !== d.updateSeen()) {
+          const n = updateNote(newer, d.platform);
+          helper.send(n);
+          d.setUpdateSeen(newer);
+          d.note(`通知:${n.title}`);
+        }
       } catch (err) {
         d.note(`这一轮出错:${String(err)}`);
       } finally {
@@ -455,10 +486,19 @@ export function spawnTrayHelper(platform: NodeJS.Platform, file: string, dir: st
   };
 }
 
-/** 打开地址或目录(Windows 不弹黑窗口) */
-export function openTarget(platform: NodeJS.Platform, target: string): void {
+/**
+ * 打开地址或目录用什么命令。windowsHide 不弹黑窗口。
+ * detached 不能省:Windows 上非 detached 的子进程在「父进程退出就杀」的 job 里(libuv),cotutor open、service install 起完马上退,cmd 还没把地址交给浏览器就被一起杀了。
+ * 退出码是 0、地址也打印了,就是没打开,也不报错(2026-11-07 真机);托盘进程一直开着,所以光点图标看不出来。
+ */
+export function openCommand(platform: NodeJS.Platform, target: string): { cmd: string; args: string[]; options: SpawnOptions } {
   const [cmd, args] = platform === 'darwin' ? ['/usr/bin/open', [target]] : platform === 'win32' ? ['cmd', ['/c', 'start', '', target]] : ['xdg-open', [target]];
-  const child = spawn(cmd as string, args as string[], { stdio: 'ignore', windowsHide: true });
+  return { cmd: cmd as string, args: args as string[], options: { stdio: 'ignore', windowsHide: true, detached: true } };
+}
+
+export function openTarget(platform: NodeJS.Platform, target: string): void {
+  const { cmd, args, options } = openCommand(platform, target);
+  const child = spawn(cmd, args, options);
   child.on('error', () => undefined);
   child.unref();
 }
@@ -486,11 +526,15 @@ export async function inspectService(s: InstalledService): Promise<{ kid: string
 }
 
 /** 真的依赖,给 runTray */
-export function realTrayDeps(host: ServiceHost, dir: string, file: string, version: string): TrayDeps {
+export function realTrayDeps(host: ServiceHost, dir: string, file: string, version: () => string): TrayDeps {
   const note = trayNote(dir);
+  const seenFile = join(dir, 'update-seen');
   return {
     platform: host.platform,
     version,
+    updateSeen: () => { try { return readFileSync(seenFile, 'utf8').trim() || null; } catch { return null; } },
+    // 写不了就当没记住:最坏多弹一次
+    setUpdateSeen: (v) => { try { writeFileSync(seenFile, `${v}\n`); } catch { /* 见上 */ } },
     note,
     now: () => Date.now(),
     list: () => listServices(host),
@@ -623,6 +667,14 @@ export async function ensureTray(host: ServiceHost, o: { node?: string; bin?: st
   if (!traySupported(host.platform)) return 'unsupported';
   if (existsSync(offMark(trayDir(host)))) return 'off';
   return (await installTray(host, o)).started ? 'started' : 'later';
+}
+
+/** service restart 时:图标进程也换上新代码(升级后跑的就是这条)。没开图标的不动,不能把 --no-tray 的装回来 */
+export async function refreshTray(host: ServiceHost): Promise<boolean> {
+  if (!traySupported(host.platform)) return false;
+  if (!(await trayStatus(host)).installed) return false;
+  await installTray(host);
+  return true;
 }
 
 /** 服务卸完了:图标也撤(不算家长说不要,以后再装服务还会带上) */

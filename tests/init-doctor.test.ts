@@ -312,6 +312,57 @@ try {
   }
 }
 
+// ---- doctor --json 给 agent 用:每条不过的要么能跑(cmd),要么要人来(human),INSTALL.md 靠这个分流 ----
+{
+  const slug = 'agentcheck';
+  const ws = join(home, 'cotutor', slug);
+  await initWorkspace({ slug, name: '测' });
+  rmSync(join(ws, 'agents', 'math-tutor'), { recursive: true });
+  rmSync(join(ws, '.agents', 'skills', 'cotutor-board'), { recursive: true });
+  const bailianFile = join(home, '.config', 'cotutor', 'bailian.json');
+  const bailianText = existsSync(bailianFile) ? readFileSync(bailianFile, 'utf8') : null;
+  rmSync(bailianFile, { force: true });
+  try {
+    const r = await doctorWorkspace(ws, { probeEnv: true, firewall: false });
+    const by = (name: string) => r.checks.find((c) => c.name === name);
+    const failed = r.checks.filter((c) => !c.ok);
+    check('每条不过的:有 cmd 或 human,不会两个都有', failed.length > 0 && failed.every((c) => Boolean(c.cmd) !== Boolean(c.human)), JSON.stringify(failed.filter((c) => Boolean(c.cmd) === Boolean(c.human))));
+    check('过了的:没有 cmd 也没有 human', r.checks.filter((c) => c.ok).every((c) => !c.cmd && !c.human));
+    check('百炼要人填:human,没有 cmd(不能让 agent 碰 key)', by('bailian')?.required === true && by('bailian')?.human === true && !by('bailian')?.cmd);
+    check('PIN 家长定:human', by('server.access')?.human === true);
+    check('老师的家没了:补缺的 init,带年级,缺省位置不写 --dir', /^cotutor init agentcheck --grade \d$/.test(by('tutor.math-tutor.home')?.cmd ?? ''), by('tutor.math-tutor.home')?.cmd);
+    check('机器件技能没了:同一条 init', by('skill.cotutor-board')?.cmd === by('tutor.math-tutor.home')?.cmd, by('skill.cotutor-board')?.cmd);
+    check('没装服务:cmd 带上体检时指的 --workspace', by('service')?.cmd === `cotutor service install --no-open --workspace "${join('$HOME', 'cotutor', 'agentcheck')}"`, by('service')?.cmd);
+    check('没进 git:git init 指到 workspace', by('git')?.cmd === `git init "${join('$HOME', 'cotutor', 'agentcheck')}"`, by('git')?.cmd);
+    check('cmd 里没有真的家目录(用户名不传给 agent 的厂商)', !r.checks.some((c) => c.cmd?.includes(home)), r.checks.find((c) => c.cmd?.includes(home))?.cmd);
+    // cmd 跟着 workspace 从哪来走:不是 --workspace 指的就不带
+    const viaEnv = await doctorWorkspace(undefined, { probeEnv: true, firewall: false, env: { ...process.env, COTUTOR_WORKSPACE: ws } });
+    check('workspace 从环境变量来:cmd 不带 --workspace', viaEnv.checks.find((c) => c.name === 'service')?.cmd === 'cotutor service install --no-open', viaEnv.checks.find((c) => c.name === 'service')?.cmd);
+    // 不在缺省位置的,init 要写 --dir
+    const elsewhere = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-agentcheck-')));
+    await initWorkspace({ slug, dir: elsewhere, name: '测' });
+    rmSync(join(elsewhere, 'agents', 'math-tutor'), { recursive: true });
+    const moved = await doctorWorkspace(elsewhere, { probeEnv: false });
+    check('不在缺省位置:init 带 --dir', moved.checks.find((c) => c.name === 'tutor.math-tutor.home')?.cmd?.endsWith(`--dir "${elsewhere}"`) === true, moved.checks.find((c) => c.name === 'tutor.math-tutor.home')?.cmd);
+    rmSync(elsewhere, { recursive: true, force: true });
+  } finally {
+    if (bailianText !== null) writeFileSync(bailianFile, bailianText);
+    rmSync(ws, { recursive: true, force: true });
+  }
+  // 证书:mkcert -install 是人的事,做过了(根证书在)才能交给 agent 跑 cotutor cert
+  const { mkcertReady, mkcertUntrusted } = await import('../src/app/cli/cert.ts');
+  // mkcert 真实的 stderr。2026-11-07 Windows 上没人跑过 -install,cotutor cert 照样成功,这台电脑的浏览器却不信任
+  check('没进系统信任:看得出来', mkcertUntrusted('Note: the local CA is not installed in the system trust store.\nRun "mkcert -install" for certificates to be trusted automatically ⚠️\n'));
+  check('只差 Firefox、Java 的信任库:不算', !mkcertUntrusted('Note: the local CA is not installed in the Firefox trust store.\nRun "mkcert -install" for certificates to be trusted automatically ⚠️\n'));
+  check('都信任了:不提', !mkcertUntrusted('Created a new certificate valid for the following names 📜\n'));
+  const ca = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-caroot-')));
+  check('mkcert 在、还没建根证书:不能自己签', await mkcertReady(async () => ca) === false);
+  writeFileSync(join(ca, 'rootCA.pem'), 'x');
+  check('根证书建过了:能自己签', await mkcertReady(async () => ca) === true);
+  check('mkcert 不在:不能自己签,不抛', await mkcertReady(async () => { throw new Error('ENOENT'); }) === false);
+  rmSync(ca, { recursive: true, force: true });
+}
+
 // ---- 证书的提示按系统说装法(2026-11-02:Windows 上原来也说 brew)----
 {
   const { mkcertHint } = await import('../src/app/cli/cert.ts');

@@ -1,11 +1,13 @@
 # cotutor
 
+本文件给开发本仓库的 agent;在家长的电脑上安装 cotutor 看 `INSTALL.md`。
+
 家里的 AI 老师团,和家长一起教。应用仓,2026-09-08 起。2026-10-31 起原来的两个旁仓都并进来了:画面引擎 drawtell 成了 `src/chalk/`(命令 `cotutor chalk`),配音 voxtell 成了 `src/media/tts.ts`。
 
 本文件写仓库结构、开发方式与当前约束。历史讨论看 git log。Codex 直接读本文件,Claude Code 经 `CLAUDE.md` 的 `@AGENTS.md` 引入;改规矩只改这里。
 
 - 使用、配置与开发启动见 `README.md`;iPad 真机见 `docs/iPad与iPhone.md`。
-- `docs/` 只维护六篇:设备使用、vault、提示词、卡片协议、年级教学包和词表。契约以 `src/schema/` 为准,具体行为以实现和测试为准。
+- `docs/` 只维护六篇:设备使用、vault、提示词、卡片协议、年级教学包和词表;根目录的 `INSTALL.md` 给替家长安装的 agent 看,`tests/install-doc.test.ts` 盯着里面的命令、旗标和字段。契约以 `src/schema/` 为准,具体行为以实现和测试为准。
 - 改 `grades/`、`skills/`、`cards/` 下的 md 先看 `docs/写提示词.md`;自造的词查 `docs/词表.md`。
 - 草稿与随手记放 `docs/wip/`(gitignore)。已有的 `docs/archive/` 是本机材料;清理正式文档时不删除这些未入库文件。过时的正式文档直接删除,历史由 Git 保存。
 
@@ -43,8 +45,12 @@
 - 改 `src/scenes/paint/`、`src/media/draw.ts` 或画图卡先过 `tests/paint.test.ts`(假百炼、假老师全流程),页面走 `scripts/probe-paint.mjs`;真画按张计费
 - 改孩子端播放(嘴、卡的声音、孩子谁打断谁)先在 `tests/live-player.test.ts` 明确预期,再改 `runtime/delivery/player.ts` 的 `liveStep`;页面只 `liveDispatch`。板上的节(铺、写完、撤掉)是 `board/presentation.ts` 的 `step`,对 `tests/player.test.ts`,页面只 `dispatch`
 - 后台服务 `cotutor service`(`src/app/cli/service.ts`):macOS launchd、Linux systemd 用户服务,Windows 是 Run 注册表项 + wscript 跑的隐藏启动器 + 看护进程(`service-windows.ts`,为什么不用计划任务、`conhost --headless` 写在它开头);服务里的 serve 带 `--log-dir`,输出按天落文件(`serve-log.ts`);有通话或老师在写时拦闲置睡眠(`serve.ts` 的 `holdAwake`)。改了先过 `tests/service.test.ts`(假 launchctl / systemctl / reg);真装拿临时 workspace 换个端口试,试完 uninstall,别给真孩子的 workspace 装
+- 第一次 `service install` 打开一次家长端(`opensAfterInstall`,`--no-open` 不开),别的启动都不开:登录、崩溃重起、升级都不是人要看页面。agent 走 `--no-open`,装完再 `cotutor open`
 - 托盘图标 `cotutor tray`(`src/app/cli/tray.ts`):node 进程(`cotutor tray run`,bin 直接走轻入口 `tray-run.ts`,不带 zod,`tests/tray.test.ts` 盯着)判断状态、发通知;显示脚本(`tray-mac.ts` 的 JXA、`tray-windows.ts` 的 PowerShell)只管画和回报点击,协议一行一条 JSON。改了先过 `tests/tray.test.ts`,显示脚本要在真系统里看;真装服务时不想带图标加 `--no-tray`
 - 端口(`src/app/cli/port.ts`)与地址(`serve.ts` 的 `computerName`、`siteUrl`):改了先过 `tests/port.test.ts`
+- 新版本提醒(`src/app/machine/update.ts`、比较与升级步骤 `src/shared/upgrade.ts`):服务每天问一次 npm 的 `latest`,存 `~/.config/cotutor/update.json`,经 `/api/health` 的 `latest` 给托盘菜单、家长端首页、`service status`;从仓库跑的不问;不自动升级。改了先过 `tests/update.test.ts` 与 `tests/tray.test.ts`
+- 改 `cotutor doctor`、`service status --json` 或安装流程先过 `tests/init-doctor.test.ts`、`tests/service.test.ts` 与 `tests/install-doc.test.ts`,照着改 `INSTALL.md`。doctor 不过的项要么有 `cmd`(agent 直接跑:幂等、不碰孩子的数据、不用人输东西),要么由 `finish` 标 `human`
+- 发版:账号开了发布 2FA,验证码 30 秒失效,所以先跑完 `prepublishOnly` 里的检查,再由人在自己的终端跑 `npm publish --ignore-scripts`。npm 回 `202` 后要扫描,公开前 `npm view` 查不到这个版本(0.4.0 等了约 26 分钟),要轮询;`INSTALL.md` 里新的命令和字段等 npm 公开后再推 main,因为推上去就生效
 - 冒烟:`init <slug> --dir <tmp>` → `doctor --workspace <tmp> --live` → `serve`;真跑老师 `cotutor send`;不花钱看前端 `cotutor mock`(老师都走实时老师页,假嘴念静音的声音;`--scenario nokey` 看没配百炼)
 - 页面里的 JS 有两个 CDP 探针进了 `pnpm test`(`tests/probe.test.ts` 起 `probe-layout`、`probe-play`,走 mock;要本机 Chrome,没有就跳过;`COTUTOR_SKIP_PROBES=1` 跳过),改 `kid-page.ts` 先看它们红不红;其余手动验收走 `scripts/probe-*.mjs`(CDP);舞台里的东西用 CDP 驱动;截图也走 CDP(`Page.captureScreenshot`),孩子端、工作台在轮询,无头 Chrome 的 `--screenshot` 会挂;手机尺寸要 `--force-device-scale-factor=2 --window-size=780,1688`;探针不出声:起 Chrome 加 `QUIET_ARGS`(`scripts/_quiet.mjs`,`--mute-audio`;页面不用浏览器合成声,mock 里卡的配音也是静音),要听加 `COTUTOR_PROBE_SOUND=1`
 
@@ -54,6 +60,8 @@
 - serve 只热重载 cotutor.json;改 `src/` 要重起。装成后台服务的(`cotutor service`)用 `cotutor service restart`:它跑的是 install 那一刻写死的 node 与 bin,换了 Node 版本要再 install
 - 提交按文件名 stage,仓里常有并行的未提交改动
 - 舞台页(`/stage/`)也装孩子端的 `theme.css`:舞台里自己的类名要带前缀(`lc-` 这种),撞上 `.pen` `.c` 之类会被那边的样式改掉(`.pen` 关着 pointer-events,圈不上)
+- Windows 的 PowerShell 缺省策略拦 `npm`、`cotutor` 的 `.ps1`(开发机上的账户可能改过策略,看不出来),给家长看的命令要带 `.cmd`(`upgradeSteps`);cmd.exe 不展开 `doctor` 的 `cmd` 里的 `$HOME`,会建出一个字面叫 `$HOME` 的文件夹。在那边跑脚本:PowerShell 5.1 读无 BOM 的中文脚本会解析错;调原生程序时吃掉参数里的双引号,要试 Git Bash 就写成 `.sh` 文件
+- Windows 上 node 的非 detached 子进程在「父进程退出就杀」的 job 里(libuv):命令行起完就退的,子进程要 `detached: true`(配 `windowsHide`,不然有窗口)。不报错,退出码也是 0;验证要看对面真收到了,常驻进程里试不出来(`openCommand`)
 - Windows 上 `os.homedir()` 读 `USERPROFILE`,只设 `HOME` 隔离不住,测试会写进真的用户目录。`tests/_check.ts` 让它跟着 `HOME` 走,所有测试都要经过它;在别的机器上跑测试、脚本前先确认写到哪
 - 别的程序只占着 `127.0.0.1:<端口>` 时,绑 `0.0.0.0:<端口>` 照样成功(macOS、Windows 都这样),光试绑看不出被占,要先连一下(`port.ts` 的 `answersLocally`)
 - JXA(macOS 的显示脚本):`$.NSAttributedString.alloc.initWithStringAttributes` 不存在,要 `NSMutableAttributedString.alloc.init` 再填;枚举常量取不到值,写数字;返回整数的方法给的是字符串(`a.runModal` 是 `"1001"`),比较前要 `Number()`;回调里的异常被吞掉,不报错也不动作;菜单项标号别用 0(别的行缺省是 0)

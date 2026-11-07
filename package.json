@@ -1,10 +1,13 @@
 {
   "name": "cotutor",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "AI tutors that co-teach with parents at home: real-time voice, an interactive whiteboard, and learning memory in your own Obsidian vault. Self-hosted; built for China's elementary curriculum.",
   "type": "module",
   "license": "SEE LICENSE IN LICENSE",
-  "repository": "github:TarsLab/cotutor",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TarsLab/cotutor.git"
+  },
   "homepage": "https://github.com/TarsLab/cotutor#readme",
   "bugs": "https://github.com/TarsLab/cotutor/issues",
   "keywords": [

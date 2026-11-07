@@ -21,6 +21,18 @@ const win = await import('../src/app/cli/service-windows.ts');
 const { teeLogs, pruneLogs } = await import('../src/app/cli/serve-log.ts');
 const { UsageError } = await import('../src/app/workspace.ts');
 
+// ---- 装完开不开家长端:只有第一次;2026-11-07 用户定的,别的启动都不是人要看页面 ----
+{
+  const opens = (o: Partial<Parameters<typeof svc.opensAfterInstall>[0]> = {}): boolean => svc.opensAfterInstall({ firstTime: true, open: false, noOpen: false, platform: 'darwin', env: {}, ...o });
+  check('第一次装:开(Mac、Windows)', opens() && opens({ platform: 'win32' }));
+  check('重装(换了 Node 版本之类):不开', !opens({ firstTime: false }));
+  check('--no-open:不开,和 --open 一起也不开', !opens({ noOpen: true }) && !opens({ noOpen: true, open: true }));
+  check('--open:重装也开', opens({ firstTime: false, open: true }));
+  check('ssh 进来的:不开', !opens({ env: { SSH_CONNECTION: '1 2 3 4' } }) && !opens({ env: { SSH_TTY: '/dev/ttys001' } }) && !opens({ platform: 'win32', env: { SSH_CONNECTION: '1 2 3 4' } }));
+  check('ssh 进来但明说 --open:开', opens({ open: true, env: { SSH_CONNECTION: '1 2 3 4' } }));
+  check('Linux:有图形会话才开', !opens({ platform: 'linux' }) && opens({ platform: 'linux', env: { DISPLAY: ':0' } }) && opens({ platform: 'linux', env: { WAYLAND_DISPLAY: 'wayland-0' } }));
+}
+
 {
   check('服务名:目录名的小写字母数字连字符;撞了加路径的短 hash', svc.serviceName('/x/Ray Home') === 'ray-home' && svc.serviceName('/x/小明') === 'workspace' && /^ray-[0-9a-f]{6}$/.test(svc.serviceName('/x/ray', true)) && svc.serviceName('/x/ray', true) !== svc.serviceName('/y/ray', true));
   const spec = { name: 'ray', label: 'com.tarslab.cotutor.ray', root: '/Users/a b/cotutor/ray & co', logDir: '/L/ray', path: '/opt/homebrew/bin:/usr/bin', args: ['/n o/node', '/p/bin/cotutor.js', 'serve', '--workspace', '/Users/a b/cotutor/ray & co', '--log-dir', '/L/<ray>'] };
@@ -240,6 +252,11 @@ const cli = (args: string[], env: NodeJS.ProcessEnv = {}): Promise<{ code: numbe
 {
   const st = await cli(['service', 'status', '--workspace', wsRoot]);
   check('service status:没装说没装', st.code === 0 && st.out.includes('没装'), st.out);
+  // 一次答清「装好没有」:INSTALL.md 让 agent 只读这一份
+  const sj = await cli(['service', 'status', '--workspace', wsRoot, '--json']);
+  const facts = JSON.parse(sj.out) as { installed: unknown; health: unknown; version: string; parentPage: string; tabletUrl: string; cert: { present: boolean; coversName: boolean; serving: boolean }; bailian: boolean; tray: unknown };
+  check('service status --json:没装、没答应,地址、证书、百炼、版本都答得出', facts.installed === null && facts.health === null && /^\d+\.\d+\.\d+/.test(facts.version) && facts.parentPage.endsWith('/parent/home') && facts.parentPage.includes('localhost') && /^https?:\/\/[^/]+\.local/.test(facts.tabletUrl) && facts.cert.present === false && facts.cert.coversName === false && facts.cert.serving === false && facts.bailian === false, sj.out);
+  check('service status --json:Linux 没做图标时是 null,别的系统答得出装没装', process.platform === 'linux' ? facts.tray === null : (facts.tray as { installed: boolean }).installed === false, sj.out);
   const sb = await cli(['service', 'install', '--workspace', wsRoot, '--sandbox']);
   check('试用 workspace 不让装', sb.code === 2 && sb.out.includes('试用'), sb.out);
   const bad = await cli(['service', 'nope', '--workspace', wsRoot]);

@@ -10,6 +10,7 @@
 import { faviconLinks } from '../shared/favicon.ts';
 import { BRAND_CSS, BRAND_FOOTER, BRAND_JS, titleLogo } from '../shared/brand.ts';
 import { pageDomJs } from '../shared/page-dom.ts';
+import { upgradeSteps } from '../../shared/upgrade.ts';
 
 export const PARENT_HOME_PAGE = String.raw`<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
@@ -217,9 +218,14 @@ ${BRAND_CSS}
     .main { display:grid; grid-template-columns:minmax(0,1fr) 380px; gap:22px; align-items:start; }
     .gh { padding:0 6px 6px; }
   }
+  .upd { position:relative; display:flex; flex-direction:column; gap:6px; margin:0 0 12px; padding:12px 14px; border-radius:14px; background:var(--card); box-shadow:0 0 0 1px var(--line); font-size:15px; }
+  .upd .sub { color:var(--dim); font-size:14px; padding-right:64px; }
+  .upd pre { margin:2px 0 0; padding:10px 12px; border-radius:10px; background:var(--paper); font:13px/1.6 ui-monospace,Menlo,Consolas,monospace; white-space:pre-wrap; overflow-wrap:anywhere; user-select:all; -webkit-user-select:all; }
+  .upd button { position:absolute; top:6px; right:6px; min-height:44px; padding:0 10px; border:0; background:transparent; color:var(--accent); font-size:15px; cursor:pointer; }
 </style></head><body>
 <div class="wrap" id="main">
   <div class="top"><span class="ttl"><span id="ct-mark" class="ct-draw ct-hover">${titleLogo(true)}</span><b id="title">家长</b></span><nav class="seg"><a class="on" href="/parent/home">首页</a><a href="/parent">记录</a><a href="/parent/settings">设置</a></nav><small id="pub"></small><a class="devl" href="/dev" target="_blank" title="工作台:细调老师文件、activity(新窗口)">工作台<svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4 2h6v6"/><path d="M10 2 3 9"/></svg></a></div>
+  <div id="updatebar"></div>
   <div id="qrtop"></div>
   <div class="main">
     <section id="pv" aria-label="孩子看到的首页">
@@ -364,7 +370,23 @@ ${pageDomJs(3200)}
       h('div', { class: 'note' }, d.https ? (d.notes[0] || '') : '', d.devices ? '' : (d.https ? ' ' : '') + '还没有平板连进来过,所以这块先开着;连过以后自动收起。'));
   };
 
+  // 有新版本(服务每天问一次 npm,machine/update.ts):只在家长端说,孩子端不说;点「知道了」这个版本不再提,读不了 localStorage 就每次都说
+  const UPGRADE_STEPS = ${JSON.stringify(upgradeSteps())};
+  const showUpdate = async () => {
+    const box = $('#updatebar');
+    const hh = await api('GET', '/api/health').catch(() => null);
+    const latest = hh && hh.latest;
+    let seen = null;
+    try { seen = localStorage.getItem('cotutor.updateSeen'); } catch {}
+    if (!latest || seen === latest) { box.replaceChildren(); return; }
+    box.replaceChildren(h('div', { class: 'upd' },
+      h('b', {}, '有新版本 ' + latest),
+      h('span', { class: 'sub' }, '现在是 ' + hh.version + '。挑孩子不用的时候,在这台电脑的终端里依次运行:'),
+      h('pre', {}, UPGRADE_STEPS.map((s) => h('div', {}, s))),
+      h('button', { type: 'button', on: { click: () => { try { localStorage.setItem('cotutor.updateSeen', latest); } catch {} box.replaceChildren(); } } }, '知道了')));
+  };
   const load = async () => {
+    showUpdate();
     try { D = await api('GET', '/api/parent/home'); } catch (e) { toast('读不到:' + e.message); return; }
     BL.st = await api('GET', '/api/parent/bailian').catch(() => null);
     QR.d = await api('GET', '/api/parent/qr').catch(() => null);

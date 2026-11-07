@@ -37,6 +37,8 @@ import { factoryAvatarFile, shownAvatar } from './avatars.ts';
 import { deviceCookie, newDeviceId, parseKidLog, readDevices, recordKidLog, renameDevice, validDevice } from '../../runtime/journal/kid-log.ts';
 import { DEVICE_COOKIE } from '../../schema/kid-device.ts';
 import { BUILD, codeChanged, headNow, shortCommit } from '../build.ts';
+import { knownLatest } from '../machine/update.ts';
+import { isNewer } from '../../shared/upgrade.ts';
 import { qrPage, type ListenInfo } from '../../ui/parent/qr-page.ts';
 import { kidPage } from '../../ui/kid/kid-page.ts';
 import { parentPage } from '../../ui/parent/parent-page.ts';
@@ -620,7 +622,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     if (p === '/api/health') {
       const head = await headNow();
       const vault = await readdir(ws.paths.vault).then(() => 'ok', (err: NodeJS.ErrnoException) => (err.code === 'EPERM' || err.code === 'EACCES' ? 'denied' : 'missing'));
-      return { status: 200, json: { ok: true, configError: ctx.configError, started: BUILD.started, version: BUILD.version, commit: shortCommit(BUILD.commit), dirty: BUILD.dirty, head: shortCommit(head), changed: codeChanged(BUILD.commit, head), pid: process.pid, mode: process.env.COTUTOR_SERVICE ? 'service' : 'foreground', vault, calls: ctx.openCalls?.() ?? 0, bailian: ctx.bailian.status().ready } };
+      return { status: 200, json: { ok: true, configError: ctx.configError, started: BUILD.started, version: BUILD.version, commit: shortCommit(BUILD.commit), dirty: BUILD.dirty, head: shortCommit(head), changed: codeChanged(BUILD.commit, head), pid: process.pid, mode: process.env.COTUTOR_SERVICE ? 'service' : 'foreground', vault, calls: ctx.openCalls?.() ?? 0, bailian: ctx.bailian.status().ready, latest: isNewer(knownLatest(), BUILD.version) ? knownLatest() : null } };
     }
     // 家长端与工作台的锁(access.ts):对 PIN 换 cookie;设了 PIN、没凭证的设备,孩子端以外的页面回输 PIN 的页、接口回 401。没设 PIN 什么都不拦
     if (p === '/api/auth') {

@@ -28,7 +28,7 @@ const VERSION = '0.3.0';
 const healthy = (o: Partial<Health> = {}): Health => ({ version: VERSION, started: '2026-11-03T00:00:00Z', pid: 9, mode: 'service', vault: 'ok', bailian: true, calls: 0, configError: null, scheme: 'https', ...o });
 const probe = (o: Partial<Probe> = {}): Probe => ({ name: 'ray', kid: 'Ray', root: '/w/ray', logDir: '/L/ray', port: 443, health: healthy(), holder: null, ...o });
 const NOW = Date.parse('2026-11-06T00:00:00Z');
-const model = (platform: NodeJS.Platform = 'darwin') => new t.TrayModel({ platform, version: VERSION });
+const model = (platform: NodeJS.Platform = 'darwin') => new t.TrayModel({ platform, version: () => VERSION });
 
 // ---- 跑了多久 ----
 check('跑了多久', t.uptimeText(NOW - 10 * 60_000, NOW) === '不到 1 小时' && t.uptimeText(NOW - 5 * 3600_000, NOW) === '5 小时' && t.uptimeText(NOW - 3 * 86400_000, NOW) === '3 天');
@@ -178,6 +178,8 @@ interface Run {
   setHealth(port: number, h: Health | null): void;
   setServices(n: number): void;
   failControl: Error | null;
+  installed: string;
+  seen: string | null;
 }
 function start(o: { services?: number; health?: Health | null; pollMs?: number } = {}): Run {
   const SERVICES = [
@@ -190,7 +192,7 @@ function start(o: { services?: number; health?: Health | null; pollMs?: number }
   let spawned = 0;
   let closed = false;
   const run: Run = {
-    sent: [], controls: [], opened: [], notes: [], failControl: null,
+    sent: [], controls: [], opened: [], notes: [], failControl: null, installed: VERSION, seen: null,
     say(m) { on?.message(m as { type: string }); },
     exitHelper(code) { on?.exit(code); },
     spawned: () => spawned,
@@ -201,7 +203,9 @@ function start(o: { services?: number; health?: Health | null; pollMs?: number }
   };
   run.result = t.runTray({
     platform: 'darwin',
-    version: VERSION,
+    version: () => run.installed,
+    updateSeen: () => run.seen,
+    setUpdateSeen: (v) => { run.seen = v; },
     now: () => Date.now(),
     list: async () => SERVICES.slice(0, count),
     inspect: async (s) => ({ kid: s.name === 'ray' ? 'Ray' : '小红', port: s.name === 'ray' ? 443 : 8443 }),
@@ -316,6 +320,63 @@ const shows = (r: Run) => r.sent.filter((m) => m.type === 'show');
   await r.result;
 }
 
+// ---- 升级:图标进程一直开着,装的版本每轮重读(0.4.0 只读一次:把「都对了」报成要重启,真要重启的反而放过) ----
+{
+  let installed = '0.4.0';
+  const m = new t.TrayModel({ platform: 'darwin', version: () => installed });
+  const running = (version: string) => [probe({ health: healthy({ version }) })];
+  check('升级前:都是 0.4.0,正常', m.update(running('0.4.0'), NOW).rows[0].level === 'ok');
+  installed = '0.4.1';
+  const stale = m.update(running('0.4.0'), NOW + 5000).rows[0];
+  check('npm 换了新版、服务还跑旧的:提醒重启,版本说对', stale.level === 'warn' && stale.detail === '在跑的是 0.4.0,装的是 0.4.1:重启一下' && stale.fix?.kind === 'restart', stale.detail);
+  check('服务也重启了:正常,不误报', m.update(running('0.4.1'), NOW + 10000).rows[0].level === 'ok');
+}
+
+// ---- 有新版本:菜单多一行,不算有事;每个版本通知一次 ----
+{
+  const m = model();
+  const a = m.update([probe({ health: healthy({ latest: '9.9.9' }) })], NOW);
+  check('有新版本:不出状态点,不发「有事」通知', a.rows[0].level === 'ok' && a.rows[0].update === '9.9.9' && a.notes.length === 0);
+  const show = t.trayShow(a.rows);
+  const entry = show.menu.find((e) => e.kind === 'action' && e.id === 'update:ray');
+  check('菜单:退出前多一行,图标还是正常的', show.icon === 'ok' && entry?.kind === 'action' && entry.title === '有新版本 9.9.9,看怎么升级' && show.menu.at(-1)?.kind === 'action' && show.menu.at(-2)?.kind === 'sep' && show.menu.at(-3) === entry, JSON.stringify(show.menu));
+  const plain = t.trayShow(model().update([probe()], NOW).rows);
+  check('没有新版本:菜单和原来一样', !plain.menu.some((e) => e.kind === 'action' && e.id.startsWith('update:')));
+  const older = model().update([probe({ health: healthy({ latest: '0.0.1' }) })], NOW);
+  check('npm 上的更旧(镜像没同步):不提', older.rows[0].update === null);
+  // 程序已经换上新版、只差重启:说「要重启」,不再说「有新版本」
+  const installed = new t.TrayModel({ platform: 'darwin', version: () => '9.9.9' }).update([probe({ health: healthy({ latest: '9.9.9' }) })], NOW).rows[0];
+  check('已经装了新版、只差重启:只说重启', installed.update === null && installed.level === 'warn' && installed.detail.includes('重启'));
+  const two = model().update([probe({ health: healthy({ latest: '9.9.9' }) }), probe({ name: 'lan', kid: '小红', port: 8443, health: healthy({ latest: '9.9.9' }) })], NOW);
+  check('几个孩子:版本是这台电脑的事,只说一行', t.trayShow(two.rows).menu.filter((e) => e.kind === 'action' && e.id.startsWith('update:')).length === 1);
+  check('通知:Mac 说菜单栏,Windows 说任务栏', t.updateNote('9.9.9', 'darwin').title === 'cotutor 有新版本 9.9.9' && t.updateNote('9.9.9', 'darwin').body.includes('菜单栏') && t.updateNote('9.9.9', 'win32').body.includes('任务栏'));
+
+  const r = start({ health: healthy({ latest: '9.9.9' }) });
+  const notes = () => r.sent.filter((x) => x.type === 'notify');
+  r.say({ type: 'ready' });
+  check('第一次看到新版本:通知一次,记下', await until(() => notes().length === 1) && notes()[0].title === 'cotutor 有新版本 9.9.9' && r.seen === '9.9.9', JSON.stringify(r.sent));
+  await wait(40);
+  check('之后不再通知', notes().length === 1);
+  r.say({ type: 'click', id: 'update:ray' });
+  check('点那一行:开家长端,升级的命令写在那里', r.opened.at(-1) === 'https://localhost/parent/home', r.opened.at(-1));
+  r.setHealth(443, healthy({ latest: '9.9.10' }));
+  check('又出了更新的:再通知一次', await until(() => notes().length === 2) && r.seen === '9.9.10');
+  r.say({ type: 'click', id: 'quit' });
+  await until(() => r.closed());
+  r.exitHelper(0);
+  await r.result;
+  const again = start({ health: healthy({ latest: '9.9.9' }) });
+  again.seen = '9.9.9';
+  again.say({ type: 'ready' });
+  await until(() => shows(again).length > 0);
+  await wait(30);
+  check('重起以后:通知过的版本不再弹,菜单照样有那一行', again.sent.filter((x) => x.type === 'notify').length === 0 && JSON.stringify(shows(again).at(-1)).includes('有新版本 9.9.9'));
+  again.say({ type: 'click', id: 'quit' });
+  await until(() => again.closed());
+  again.exitHelper(0);
+  await again.result;
+}
+
 // ---- 登录项 ----
 const fakeHost = (platform: NodeJS.Platform, h: string, fail: Record<string, number> = {}) => {
   const calls: string[] = [];
@@ -342,6 +403,8 @@ const fakeHost = (platform: NodeJS.Platform, h: string, fail: Record<string, num
   check('图标的登录项不会被当成后台服务', (await svc.listServices(host)).length === 0);
   const st = await t.trayStatus(host);
   check('状态:装了', st.supported && st.installed && !st.off);
+  // 2026-11-07 真机:没有 detached 时,cotutor open 退出码 0、地址也打印了,Windows 上浏览器却收不到请求
+  for (const pf of ['win32', 'darwin', 'linux'] as const) { const c = t.openCommand(pf, 'http://x/'); check(`打开地址:${pf} 上 detached(命令马上退也打得开)、windowsHide(不弹黑窗口)`, c.options.detached === true && c.options.windowsHide === true && c.args.includes('http://x/'), JSON.stringify(c)); }
   check('service install 跟着装:起来了', (await t.ensureTray(host)) === 'started');
   check('家长没关:卸掉服务后撤掉图标,不算家长说不要', (await t.dropTrayIfNoServices(host)) === true && !existsSync(r.file) && !(await t.trayStatus(host)).off);
   await t.installTray(host);
@@ -349,6 +412,12 @@ const fakeHost = (platform: NodeJS.Platform, h: string, fail: Record<string, num
   check('记住了:service install 不再带上', (await t.ensureTray(host)) === 'off' && !existsSync(r.file));
   await t.installTray(host);
   check('tray on:清掉记号', !(await t.trayStatus(host)).off && existsSync(r.file));
+  const before = calls.length;
+  check('service restart 时:装着图标就换上新代码', (await t.refreshTray(host)) === true && calls.slice(before).includes(`launchctl bootstrap gui/501 ${r.file}`), calls.slice(before).join(' | '));
+  await t.removeTray(host);
+  const after = calls.length;
+  check('没开图标(--no-tray):不动,不装回来', (await t.refreshTray(host)) === false && !calls.slice(after).some((c) => c.includes('bootstrap')) && !existsSync(r.file));
+  await t.installTray(host);
   // 还有别的服务在:不撤
   mkdirSync(join(h, 'Library', 'LaunchAgents'), { recursive: true });
   writeFileSync(join(h, 'Library', 'LaunchAgents', 'com.tarslab.cotutor.ray.plist'), svc.launchdPlist({ name: 'ray', label: 'com.tarslab.cotutor.ray', root: '/w/ray', logDir: '/L/ray', path: '/usr/bin', args: ['/n', '/b', 'serve', '--workspace', '/w/ray', '--log-dir', '/L/ray'] }));

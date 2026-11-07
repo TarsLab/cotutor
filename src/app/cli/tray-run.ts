@@ -7,7 +7,13 @@ import { fileURLToPath } from 'node:url';
 import { realHost } from './service.ts';
 import { realTrayDeps, runTray, trayDir, trayNote, traySupported, writeTrayFiles } from './tray.ts';
 
-const version = (): string => (JSON.parse(readFileSync(fileURLToPath(new URL('../../../package.json', import.meta.url)), 'utf8')) as { version: string }).version;
+const readVersion = (): string => (JSON.parse(readFileSync(fileURLToPath(new URL('../../../package.json', import.meta.url)), 'utf8')) as { version: string }).version;
+let installed = readVersion();
+/** 每轮重读:npm 升级时这个进程一直开着,只记起来那一刻的就会误报。装到一半读不到就用上次的 */
+const version = (): string => {
+  try { installed = readVersion(); } catch { /* 下一轮再读 */ }
+  return installed;
+};
 
 export async function main(argv: string[]): Promise<void> {
   const host = realHost();
@@ -29,7 +35,7 @@ export async function main(argv: string[]): Promise<void> {
   process.on('unhandledRejection', fatal('没接住的 Promise 错误'));
   const file = await writeTrayFiles(host.platform, dir);
   note(`起来了,node ${process.versions.node},pid ${process.pid}`);
-  const code = await runTray(realTrayDeps(host, dir, file, version()));
+  const code = await runTray(realTrayDeps(host, dir, file, version));
   note(`退出 ${code}`);
   process.exit(code);
 }

@@ -21,11 +21,15 @@ import { addTheme, upgradeThemes } from './themes.ts';
 import { patchConfig } from '../workspace.ts';
 import { resolveRoot } from '../workspace.ts';
 import { bindFailure, portHolder, whoHolds } from './port.ts';
-import { httpsFiles, serveWorkspace, siteUrl } from './serve.ts';
+import { certCovers, httpsFiles, localName, serveWorkspace, siteUrl } from './serve.ts';
+import { dashscopeAuth } from '../../realtime/bailian.ts';
 import { teeLogs } from './serve-log.ts';
-import { controlService, earlyLogHint, findService, installService, listServices, probeHealth, realHost, runKeeper, servicePlatform, serviceStatus, tailLog, uninstallService, waitHealthy, type Health } from './service.ts';
+import { controlService, earlyLogHint, findService, installService, listServices, opensAfterInstall, probeHealth, realHost, runKeeper, servicePlatform, serviceStatus, tailLog, uninstallService, waitHealthy, type Health } from './service.ts';
 import { openSandbox } from './sandbox.ts';
-import { dropTrayIfNoServices, ensureTray, installTray, removeTray, trayDir, trayStatus, traySupported } from './tray.ts';
+import { dropTrayIfNoServices, ensureTray, installTray, openTarget, refreshTray, removeTray, trayDir, trayStatus, traySupported } from './tray.ts';
+import { BUILD } from '../build.ts';
+import { startUpdateChecks } from '../machine/update.ts';
+import { isNewer, upgradeSteps } from '../../shared/upgrade.ts';
 import { serveMock, type MockScenario } from '../mock/mock.ts';
 import { UsageError, loadWorkspace, redactDeep, redactHome, workspaceReport } from '../workspace.ts';
 import { USAGE } from './usage.ts';
@@ -79,15 +83,10 @@ function parseArgs(argv: string[], valued: string[]): Parsed {
 }
 
 /** 用默认浏览器打开(各系统各自的打开命令,失败不吭声) */
-async function openInBrowser(page: string): Promise<void> {
-  const { spawn } = await import('node:child_process');
-  const [cmd, args] = process.platform === 'darwin' ? ['open', [page]] : process.platform === 'win32' ? ['cmd', ['/c', 'start', '', page]] : ['xdg-open', [page]];
-  spawn(cmd, args, { stdio: 'ignore', detached: true }).on('error', () => {}).unref();
-}
 /** 打开哪一页的那一行(地址独占行尾:后面紧跟全角括号的话,终端不把它认成链接);--open(旧名 --open-qr)顺手打开 */
-async function printOpen(label: string, page: string, hint: string, open: boolean): Promise<void> {
+function printOpen(label: string, page: string, hint: string, open: boolean): void {
   process.stdout.write(`  ${label} ${page}\n${' '.repeat(label.length * 2 + 3)}${hint}\n`);
-  if (open) await openInBrowser(page);
+  if (open) openTarget(process.platform, page);
 }
 const wantsOpen = (flags: Record<string, string | true>): boolean => flags.open === true || flags['open-qr'] === true;
 /** 不用 workspace 的命令:--sandbox 对它们没有意义 */
@@ -185,12 +184,14 @@ export async function main(argv: string[]): Promise<void> {
           const keep = laneFilter(typeof flags.lane === 'string' ? flags.lane : undefined);
           r.ctx.runner.onEvent((e) => { if (keep(e.event)) process.stdout.write(`${e.tutor} ${e.job} ${formatEvent(e.event)}\n`); });
         }
+        // 有没有新版本:从仓库跑的是开发,不问(npm 的提醒对它没意义);测试起的 serve 也都在仓库里
+        if (!BUILD.commit) startUpdateChecks();
         process.stdout.write(`cotutor serve ${JSON.stringify(workspaceReport(r.ws))}\n`);
         if (r.ws.sandbox) process.stdout.write(`  试用:从 ${redactHome(r.ws.sandbox.from)} 分出来,对话、照片、vault 的写入都留在这里,不进孩子的记录;--sandbox --fresh 重新分\n`);
         for (const w of r.warnings) process.stdout.write(`  ! ${w}\n`);
         if (!r.https) process.stdout.write('  ! HTTP:平板、手机上按住说话要 HTTPS;cotutor cert 建证书后重启即走 HTTPS\n');
         // 只给家长端一个入口:孩子的平板扫码、排首页、记录都在里面,工作台从它的右上角进
-        await printOpen('家长端', r.parentPage, '在这台电脑上打开:孩子的平板扫码、排首页、看记录都在里面;--open 顺手打开', wantsOpen(flags));
+        printOpen('家长端', r.parentPage, '在这台电脑上打开:孩子的平板扫码、排首页、看记录都在里面;--open 顺手打开', wantsOpen(flags));
         return;
       }
       case 'open': {
@@ -203,7 +204,7 @@ export async function main(argv: string[]): Promise<void> {
         else if (running) process.stdout.write(`${page}\n`);
         else process.stderr.write(`${page} 没在跑(端口 ${port}):${ws.sandbox ? 'cotutor serve --sandbox 起试用的' : 'cotutor service start,或在终端里 cotutor serve'}\n`);
         if (!running) { process.exitCode = 1; return; }
-        if (!json && flags.print !== true) await openInBrowser(page);
+        if (!json && flags.print !== true) openTarget(process.platform, page);
         return;
       }
       case 'tray': {
@@ -260,6 +261,8 @@ export async function main(argv: string[]): Promise<void> {
             ? `! 后台服务读不到 vault(${redactHome(ws.paths.vault)}):macOS 不让后台进程读「文稿」「桌面」和 iCloud 云盘,也不弹窗问。系统设置 › 隐私与安全性 › 完全磁盘访问权限,点 + 加上 ${process.execPath}(或把 vault 挪出这几处),然后 cotutor service restart`
             : `! 后台服务读不到 vault(${redactHome(ws.paths.vault)}):看看这个目录的权限,然后 cotutor service restart`);
           if (h?.version && h.version !== version()) out.push(`! 在跑的是 ${h.version},装的是 ${version()}:cotutor service restart 换上新的`);
+          if (h?.scheme === 'http' && httpsFiles(ws)) out.push('! 证书有了,服务还在走 HTTP(平板上按住说话不可用):cotutor service restart');
+          if (isNewer(h?.latest, version())) out.push(`! 有新版本 ${h?.latest}(现在是 ${version()}),升级依次运行:${upgradeSteps().join(' ; ')}`);
           return out;
         };
         const tellLog = async (dir: string | null): Promise<void> => {
@@ -297,7 +300,8 @@ export async function main(argv: string[]): Promise<void> {
           }
           if (tray === 'started' || tray === 'later') process.stdout.write(`  ${platform === 'darwin' ? '菜单栏' : '任务栏'}多了 cotutor 图标:不用开终端就能看状态、打开家长端${tray === 'later' ? '(这个会话里没起来,下次登录出现)' : platform === 'win32' ? '(新图标先收在右下角的 ^ 里)' : ''};不要它:cotutor tray off\n`);
           else if (tray === 'failed') process.stdout.write('  ! 图标没装上,服务不受影响;cotutor tray on 再试\n');
-          if (h) { await printOpen('家长端', parentPage, '孩子的平板扫码、排首页、看记录都在里面', wantsOpen(flags)); for (const n of notes(h)) process.stdout.write(`${n}\n`); }
+          const opening = opensAfterInstall({ firstTime: !had, open: wantsOpen(flags), noOpen: flags['no-open'] === true, platform, env: process.env });
+          if (h) { printOpen('家长端', parentPage, `${opening ? '刚帮你打开了:' : ''}孩子的平板扫码、排首页、看记录都在里面`, opening); for (const n of notes(h)) process.stdout.write(`${n}\n`); }
           else { process.stdout.write(`! 装上了,但 20 秒内没答应(端口 ${port})。cotutor service logs 看看:\n`); await tellLog(r.spec.logDir); process.exitCode = 1; }
           return;
         }
@@ -316,6 +320,8 @@ export async function main(argv: string[]): Promise<void> {
           const s = await controlService(host, root, sub);
           if (sub === 'stop') { process.stdout.write(`停了 ${s.label}(下次${platform === 'linux' ? '开机' : '登录'}又会自己起来;一直不要它:cotutor service uninstall)\n`); return; }
           const h = await waitHealthy(port, 20_000, before?.started);
+          // 升级后跑的就是这一条:图标进程不归服务管,不换就还是旧代码,要等下次登录。它出问题不算重起失败
+          if (sub === 'restart') await refreshTray(host).catch(() => false);
           if (h) { process.stdout.write(`${sub === 'start' ? '起来了' : '重起了'}:pid ${h.pid ?? '?'},版本 ${h.version ?? '?'}\n`); for (const n of notes(h)) process.stdout.write(`${n}\n`); }
           else { process.stdout.write(`! 20 秒内没答应(端口 ${port}):\n`); await tellLog(s.logDir); process.exitCode = 1; }
           return;
@@ -324,11 +330,31 @@ export async function main(argv: string[]): Promise<void> {
           const st = await serviceStatus(host, root, port);
           // 没答应时看看是不是别的程序占着:后台服务遇到这种情况只写一句日志就不起了,这里要说得出来
           const holder = st.health ? null : await portHolder(host, port);
-          if (json) { process.stdout.write(`${JSON.stringify(redactDeep({ ...st, portHolder: holder, version: version(), parentPage }), null, 2)}\n`); return; }
+          // 地址按实际走的协议算:签了证书还没重起时仍是 http
+          const served = st.health?.scheme ?? scheme;
+          const page = siteUrl(served, 'localhost', port, '/parent/home');
+          if (json) {
+            // 一次答清「装好没有」(INSTALL.md 靠它):服务、平板地址、证书、百炼、图标、版本
+            const name = localName();
+            const tls = httpsFiles(ws);
+            const tray = traySupported(host.platform) ? await trayStatus(host) : null;
+            process.stdout.write(`${JSON.stringify(redactDeep({
+              ...st,
+              portHolder: holder,
+              version: version(),
+              parentPage: page,
+              tabletUrl: siteUrl(served, name, port),
+              cert: { present: Boolean(tls), coversName: tls ? certCovers(tls.cert, name) : false, serving: st.health?.scheme === 'https' },
+              bailian: Boolean(dashscopeAuth()),
+              tray: tray && { installed: tray.installed, running: tray.running },
+              latest: isNewer(st.health?.latest, version()) ? st.health?.latest : null,
+            }), null, 2)}\n`);
+            return;
+          }
           if (!st.installed) process.stdout.write('后台服务:没装(cotutor service install)\n');
           else process.stdout.write(`后台服务:装了 ${st.installed.label}(${redactHome(st.installed.file)})\n  ${st.running ? `在跑:pid ${st.pid ?? '?'}` : `没在跑${st.lastExit ? `(上次退出:${st.lastExit})` : ''};cotutor service start`}\n`);
           const h = st.health;
-          if (h) process.stdout.write(`  端口 ${port} 答应:${h.mode === 'service' ? '后台服务' : `终端里的 cotutor serve(pid ${h.pid ?? '?'})`},版本 ${h.version ?? '?'},起来于 ${when(h.started)}\n  家长端 ${parentPage}\n`);
+          if (h) process.stdout.write(`  端口 ${port} 答应:${h.mode === 'service' ? '后台服务' : `终端里的 cotutor serve(pid ${h.pid ?? '?'})`},版本 ${h.version ?? '?'},起来于 ${when(h.started)}\n  家长端 ${page}\n`);
           else process.stdout.write(holder ? `  端口 ${port} 没答应,被占着:${holder.name}(pid ${holder.pid})在用。腾出来以后 cotutor service start;或改 cotutor.json 的 server.port,平板要重新扫码、重加主屏幕图标\n` : `  端口 ${port} 没答应\n`);
           for (const n of notes(h)) process.stdout.write(`${n}\n`);
           if (st.autostart === false) process.stdout.write('  ! 下次登录不会自己起来:登录项被关掉或删掉了(任务管理器的「启动应用」、杀毒软件)。要它:cotutor service install 再装一次\n');
@@ -380,7 +406,7 @@ export async function main(argv: string[]): Promise<void> {
         if (!r.https) process.stdout.write('  ! HTTP:平板、手机上按住说话要 HTTPS;cotutor cert 建证书后重启即走 HTTPS\n');
         for (const u of r.urls) process.stdout.write(`  ${u}\n`);
         process.stdout.write('  孩子端 /,家长端 /parent;直接开某位老师:/?tutor=chinese-tutor\n');
-        await printOpen('扫码页', r.qrPage, '在这台电脑上打开,平板、手机用相机扫;--open 顺手打开', wantsOpen(flags));
+        printOpen('扫码页', r.qrPage, '在这台电脑上打开,平板、手机用相机扫;--open 顺手打开', wantsOpen(flags));
         return;
       }
       case 'add': {
@@ -545,6 +571,7 @@ export async function main(argv: string[]): Promise<void> {
           process.stdout.write(`  iPad / iPhone:${send} → 设置里安装描述文件 → 通用 › 关于本机 › 证书信任设置里**把开关打开**(装了不等于信任)\n`);
           process.stdout.write(`  安卓:${process.platform === 'darwin' ? '传到设备上' : send} → 设置里搜「CA 证书」,按提示安装(各家菜单不一样,会提示「网络可能受到监控」)\n`);
           process.stdout.write(`然后 cotutor service restart(在终端里跑的就重开 cotutor serve),cotutor open 打开家长端,用相机扫「扫码打开」那张。地址认电脑名,换 Wi-Fi、IP 变了都不用重签;改了电脑名才要重跑这条。详见 docs/iPad与iPhone.md\n`);
+          if (!r.trusted) process.stdout.write(`! 这台电脑还没信任根证书,浏览器打开家长端会报证书警告。请在这台电脑的终端里自己跑一次 mkcert -install(${process.platform === 'win32' ? '弹窗问时点「是」' : '要输开机密码'}),不用重签\n`);
         }
         return;
       }

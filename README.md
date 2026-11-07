@@ -6,14 +6,23 @@
 
 ## 五分钟用起来
 
-需要一台电脑(Mac 最省事)、Node ≥ 22.18,和一个百炼账号(北京地域,按量付费)。老师的嘴和脑都走百炼,由应用直接调用,不用另装模型客户端:嘴是 `qwen3.8-omni-flash-realtime`,听孩子说、照着讲稿念;脑是 `qwen3.8-max`,写讲稿和板书。
+**让 AI 助手帮你装:** 把这句话发给编程助手(Claude Code、Codex 这类能在电脑上跑命令的),或者网页版的聊天机器人,它会一步步带你做。百炼的 Key 由你自己填在页面上,不用告诉它。
+
+```text
+请阅读 https://raw.githubusercontent.com/TarsLab/cotutor/main/INSTALL.md ,照着在这台电脑上安装 cotutor
+```
+
+**自己装:** 需要一台电脑(Mac 最省事)、Node ≥ 22.18,和一个百炼账号(北京地域,按量付费)。老师的嘴和脑都走百炼,由应用直接调用,不用另装模型客户端:嘴是 `qwen3.8-omni-flash-realtime`,听孩子说、照着讲稿念;脑是 `qwen3.8-max`,写讲稿和板书。
 
 ```sh
 npm i -g cotutor
 cotutor init ming --name 小明 --grade 2     # 建 ~/cotutor/ming/:三位老师、技能、账本、对话目录、cotutor.json
-cotutor service install                    # 装成这台电脑的后台服务,打印家长端首页的地址,孩子的平板在那里扫码
-cotutor open                               # 打开家长端,不用记地址
+cotutor service install                    # 装成这台电脑的后台服务,第一次装会打开家长端,孩子的平板在那里扫码
 ```
+
+Windows 的 PowerShell 缺省禁止运行脚本,报这个错时把 `npm`、`cotutor` 写成 `npm.cmd`、`cotutor.cmd`,不用改系统设置。
+
+以后要打开家长端,点菜单栏(任务栏)的 cotutor 图标或跑 `cotutor open`,服务重启、登录电脑都不会自己弹出来。不想第一次弹,安装时加 `--no-open`。
 
 后台服务登录后自己起来、崩了自己再起、关了终端照样跑,日志按天落文件:`cotutor service status` 看在不在跑,`cotutor service logs` 看日志,`cotutor service restart` 重起。Mac 上用 launchd,Linux 上用 systemd 用户服务,Windows 上是一条用户自己的登录项(不用管理员、没有黑窗口);第一次起来 Windows 可能弹窗问「允许访问」,点允许,平板才连得进来。要在终端里调试用 `cotutor serve`,先 `cotutor service stop` 让出端口。
 
@@ -25,7 +34,9 @@ Mac 和 Windows 上,`service install` 会一起装一个菜单栏(任务栏)图�
 
 1. **填百炼**:在这台电脑上打开家长端 `/parent` 的「首页」,填百炼「按量付费」的 API Key 和业务空间 ID,保存前会先试连。API Key 在百炼控制台的「密钥管理」里创建,业务空间 ID 在控制台的业务空间详情里看,以百炼文档为准:[获取与配置 API Key](https://help.aliyun.com/zh/model-studio/get-api-key)、[首次调用千问 API](https://help.aliyun.com/zh/model-studio/first-api-call-to-qwen)(里面讲了业务空间 ID)。Key 跟地域绑定,控制台右上角先选北京。Token Plan 的 `sk-sp-` 不行。没填时孩子端只出「老师们还没到」。
 2. **填档案**:workspace 里的 `孩子.md` 填 `school_start`(读一年级的年月,如 `2025-09`),老师据此知道现在是几年级哪个学期。想用自己的 Obsidian 库,改 `cotutor.json` 的 `paths.vault`。
-3. **体检**:`cotutor doctor` 逐项检查,不过的每条都带修复命令。
+3. **体检**:`cotutor doctor` 逐项检查,不过的每条都带修法。
+
+装好以后也可以让编程助手帮你管:在孩子的文件夹(`~/cotutor/<孩子>/`)里打开 Claude Code 或 Codex,已带的技能直接能用。`cotutor-home` 排孩子的首页,`cotutor-tune` 调老师的口气和规矩,`cotutor-analyze` 分析某次对话为什么那样答。
 
 `init` 把出厂老师拷进 `agents/<老师>.md`,把做课包用的四个技能 chalk-* 和五个机器件 cotutor-tutor / cotutor-board / cotutor-analyze / cotutor-tune / cotutor-home 拷进 `.agents/skills/`(Codex、Qwen Code 直接读;Claude Code 读的 `.claude/skills` 是链到它的);
 做小课堂的课包用 `cotutor chalk`(check / build / bake / snap / dub),烤画面与截图用本机的 Chrome(Windows 上没有 Chrome 就用 Edge)。要在平板上用(按住说话要 HTTPS):`cotutor cert` 签一张
@@ -95,14 +106,27 @@ import { loadWorkspace } from 'cotutor/workspace';                        // 解
 
 默认 workspace 是 `~/cotutor/<孩子>/`:配置在 `cotutor.json`,老师在 `agents/<老师>.md`,activity 在 `agents/<老师>/activities/`,技能在 `.agents/skills/`,对话在 `conversations/`,账本在 `ledger/`,照片在 `captures/`,课包在 `bundles/`,首页在 `home/`。长期档案、记忆和日记在配置的 Obsidian vault,规则见 [obsidian 仓库设计](docs/obsidian仓库设计.md)。备份时保留整个 workspace 与 vault。
 
+**有新版本时**,后台服务每天问一次 npm(只发一个普通请求,不带孩子或使用的任何信息),菜单栏(任务栏)图标的菜单和家长端「首页」顶部会说,通知一次,孩子端不说。不会自动升级,因为要重启服务,孩子可能正在上课。不想让它问:在 `~/.config/cotutor/update.json` 写 `{"off": true}`。
+
+升级挑孩子不用的时候,依次运行(分开写是因为 Windows 默认的 PowerShell 不认 `&&`):
+
 ```sh
-cotutor upgrade                      # 更新未修改的出厂老师、activity、主题与技能
-cotutor upgrade --config --dry-run    # 预览 cotutor.json 的迁移
-cotutor upgrade --config              # 执行配置迁移
-cotutor doctor
+npm i -g cotutor                      # 换上新版程序
+cotutor upgrade                       # 更新未修改的出厂老师、activity、主题与技能
+cotutor service restart               # 服务和图标换上新代码(在终端里跑的就重开 serve)
 ```
 
-家长改过的老师与主题保留并显示差异;机器技能会随版本覆盖。配置迁移补缺,并更新未自定义的旧命令模板,保留自定义配置。升级程序后 `cotutor service restart`(在终端里跑的就重开 `serve`);换了 Node 版本、或包装到了别处,再 `cotutor service install` 一次。
+Windows 上写成 `npm.cmd`、`cotutor.cmd`(PowerShell 缺省禁止运行脚本),提示里给的就是这样。
+
+几个孩子的话,后两条每个孩子各跑一次,加 `--workspace ~/cotutor/<孩子>`。然后看一眼体检,它提示要迁移配置时再跑后面两条:
+
+```sh
+cotutor doctor
+cotutor upgrade --config --dry-run    # 预览 cotutor.json 的迁移
+cotutor upgrade --config              # 执行配置迁移
+```
+
+家长改过的老师与主题保留并显示差异;机器技能会随版本覆盖。配置迁移补缺,并更新未自定义的旧命令模板,保留自定义配置。换了 Node 版本、或包装到了别处,再 `cotutor service install` 一次。
 
 2026-10-30 之前建的 workspace,老师在 `.claude/agents/`、技能在 `.claude/skills/`。`cotutor upgrade`(或 `init`)先把它们原样挪到新位置,再照常升级;新位置已有同名的不挪,会点名。`.claude/` 里别的文件不动。
 
@@ -135,7 +159,7 @@ node bin/cotutor.js mock         # 假模型接口,查看前端
 
 改卡片文档或技能生成代码后运行 `pnpm gen:skills`。开发约定与分模块验证见 [AGENTS.md](AGENTS.md) 和 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
-正式文档只保留以下六篇,历史讨论查 Git:
+根目录的 [INSTALL.md](INSTALL.md) 给替家长安装的 AI 助手看。`docs/` 只保留以下六篇,历史讨论查 Git:
 
 - [iPad 与 iPhone](docs/iPad与iPhone.md)
 - [obsidian 仓库设计](docs/obsidian仓库设计.md)

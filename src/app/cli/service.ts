@@ -107,6 +107,18 @@ const KEEPER_LOG_MAX = 5 * 1024 * 1024;
 const KEEPER_RESTART_MS = 10_000;
 
 /**
+ * service install 之后开不开家长端:只有这个孩子第一次装时开,下一步就是填百炼、扫码。
+ * 别的启动都不开:登录、崩溃重起、升级、重启都不是人要看页面;放进 serve 的话,一直崩就隔 10 秒开一个标签页。
+ * ssh 进来的不开:没人看,macOS 的 open 还会开到那台电脑的屏幕上。Linux 要有图形会话。--open 是人明说的,重装也开;--no-open 最大
+ */
+export function opensAfterInstall(o: { firstTime: boolean; open: boolean; noOpen: boolean; platform: NodeJS.Platform; env: NodeJS.ProcessEnv }): boolean {
+  if (o.noOpen) return false;
+  if (o.open) return true;
+  if (!o.firstTime || o.env.SSH_CONNECTION || o.env.SSH_TTY) return false;
+  return o.platform !== 'linux' || Boolean(o.env.DISPLAY || o.env.WAYLAND_DISPLAY);
+}
+
+/**
  * 看护进程(Windows;cotutor service run):起 serve,非 0 隔 10 秒再起,0 不起(端口被占着);同 launchd 的 KeepAlive、systemd 的 Restart=on-failure。
  * 给 serve 带上 COTUTOR_SERVICE(mode 算后台服务、端口被占以 0 退);返回退出码
  */
@@ -380,6 +392,8 @@ export interface Health {
   calls?: number;
   /** 百炼配了没有(托盘:没配算有事要处理) */
   bailian?: boolean;
+  /** npm 上比在跑的这份新的版本;没有 → null(machine/update.ts) */
+  latest?: string | null;
   configError?: string | null;
   /** 问到的是 https 还是 http(这边加的,不是服务回的) */
   scheme?: 'https' | 'http';

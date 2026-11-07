@@ -78,7 +78,7 @@ cotutor service restart     # 在终端里跑的:关掉重开 cotutor serve
 
 > 家长端 `/parent` 与工作台 `/dev` 缺省没有密码。电脑上跑过 `cotutor pin` 的家,第一次在这台设备上开它们会先看到一页输 PIN,输一次 90 天内不再问;孩子端不受影响。
 
-服务起来后(`cotutor service install`、`restart`,或终端里的 `cotutor serve`)只打印一行「家长端」:`https://localhost/parent/home`。在这台电脑上跑 `cotutor open` 打开它,「扫码打开」那块有两张码:「孩子的平板」编的是孩子端 `https://<电脑名>.local/`,用平板的相机对着屏幕扫,点弹出来的链接就进了 Safari;「我的手机」编的是家长端 `/parent`,家长自己在手机或 iPad 上看记录、排首页用,加到主屏幕是另一个图标。电脑名和端口不变,码就一直有效。要贴在书桌上就点「打印 ›」:打开的打印页(`/parent/qr`)⌘P 只留卡面。孩子的平板连过以后这块自动收起,点一下再展开。
+服务起来后(`cotutor service install`、`restart`,或终端里的 `cotutor serve`)只打印一行「家长端」:`https://localhost/parent/home`。第一次 `service install` 会替你打开它一次,以后在这台电脑上跑 `cotutor open` 或点图标,「扫码打开」那块有两张码:「孩子的平板」编的是孩子端 `https://<电脑名>.local/`,用平板的相机对着屏幕扫,点弹出来的链接就进了 Safari;「我的手机」编的是家长端 `/parent`,家长自己在手机或 iPad 上看记录、排首页用,加到主屏幕是另一个图标。电脑名和端口不变,码就一直有效。要贴在书桌上就点「打印 ›」:打开的打印页(`/parent/qr`)⌘P 只留卡面。孩子的平板连过以后这块自动收起,点一下再展开。
 
 地址栏没有警告、显示锁头,就对了。
 

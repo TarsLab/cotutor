@@ -65,7 +65,7 @@
 - serve 只热重载 cotutor.json;改 `src/` 要重起。装成后台服务的(`cotutor service`)用 `cotutor service restart`:它跑的是 install 那一刻写死的 node 与 bin,换了 Node 版本要再 install
 - 提交按文件名 stage,仓里常有并行的未提交改动
 - 舞台页(`/stage/`)也装孩子端的 `theme.css`:舞台里自己的类名要带前缀(`lc-` 这种),撞上 `.pen` `.c` 之类会被那边的样式改掉(`.pen` 关着 pointer-events,圈不上)
-- Windows 的 PowerShell 缺省策略拦 `npm`、`cotutor` 的 `.ps1`(开发机上的账户可能改过策略,看不出来),给家长看的命令要带 `.cmd`(`upgradeSteps`);cmd.exe 不展开 `doctor` 的 `cmd` 里的 `$HOME`,会建出一个字面叫 `$HOME` 的文件夹(所以 INSTALL 让 agent 跑 `doctor --fix`,不抄 `cmd`)。在那边跑脚本:PowerShell 5.1 读无 BOM 的中文脚本会解析错;调原生程序时吃掉参数里的双引号,要试 Git Bash 就写成 `.sh` 文件
+- Windows 的 PowerShell 缺省策略拦 `npm`、`cotutor` 的 `.ps1`(开发机上的账户可能改过策略,看不出来),给家长看的命令要带 `.cmd`(`upgradeSteps`);cmd.exe 不展开 `doctor` 的 `cmd` 里的 `$HOME`,会建出一个字面叫 `$HOME` 的文件夹(所以 INSTALL 让 agent 跑 `doctor --fix`,不抄 `cmd`)。在那边跑脚本:PowerShell 5.1 读无 BOM 的中文脚本会解析错;`irm` 把没标 charset 的回应按 Latin-1 解(jsDelivr 给 `.ps1` 是 `application/octet-stream`),所以 README 里 jsDelivr 那行自己按 UTF-8 解,GitHub raw 标了 utf-8 不用;调原生程序时吃掉参数里的双引号,要试 Git Bash 就写成 `.sh` 文件
 - Windows 上 node 的非 detached 子进程在「父进程退出就杀」的 job 里(libuv):命令行起完就退的,子进程要 `detached: true`(配 `windowsHide`,不然有窗口)。不报错,退出码也是 0;验证要看对面真收到了,常驻进程里试不出来(`openCommand`)
 - Windows 上 `os.homedir()` 读 `USERPROFILE`,只设 `HOME` 隔离不住,测试会写进真的用户目录。`tests/_check.ts` 让它跟着 `HOME` 走,所有测试都要经过它;在别的机器上跑测试、脚本前先确认写到哪
 - 别的程序只占着 `127.0.0.1:<端口>` 时,绑 `0.0.0.0:<端口>` 照样成功(macOS、Windows 都这样),光试绑看不出被占,要先连一下(`port.ts` 的 `answersLocally`)
@@ -91,7 +91,7 @@
 - 手动试功能用 sandbox(`--sandbox`,`src/app/cli/sandbox.ts`):从真 workspace 分到旁边的 `.sandbox/<目录名>/`,设置照拷、状态不带(`SANDBOX_SKIP`)、外面的 vault 拷一份,标题带「试用」、端口 +1;写数据的代码不认 sandbox,它就是另一个 workspace。新加孩子的状态目录要进 `SANDBOX_SKIP`,不然会被拷进 sandbox
 - 证书是机器级的,`~/.config/cotutor/certs/`。用 https 时同一个端口也认 http(`serve.ts` 的 `httpAndHttps`、`plainHandler`):http 那一面只给根证书 `GET /ca.crt`(平板扫码装证书,`root-ca.ts` 只认 `rootCA.pem`,私钥永远不给)、别的都 301 到 https;改了先过 `tests/https-plain.test.ts`
 - 孩子端的离线页是 Service Worker(`src/ui/kid/offline-sw.ts`,`GET /sw.js`):只接管孩子端那几页的打开,不缓存;只在安全上下文里有。改了就改里面的 VERSION,先过 `tests/offline.test.ts`
-- 一行安装脚本 `install.sh`、`install.ps1` 在仓库根、随 npm 包发(jsDelivr 从包里取):不用 sudo、不改执行策略、Windows 用 `.cmd`;Node 版本跟 engines 走。改了先过 `tests/install-script.test.ts`,真跑在发版验证里
+- 一行安装脚本 `install.sh`、`install.ps1` 在仓库根、随 npm 包发(jsDelivr 从包里取):不用 sudo、不改执行策略、Windows 用 `.cmd`;Node 版本跟 engines 走。README 先给 jsDelivr、GitHub raw 是退路(国内连 GitHub raw 常超时、被重置);jsDelivr 取的是 npm 上的 `latest`,改了脚本要发版后才拿得到。改了先过 `tests/install-script.test.ts`,真跑在发版验证里
 - 端口只在 `cotutor init` 选一次写进 cotutor.json,以后不变:443 优先,再 8443、8445…,系统不让用或被占就看下一个,别的孩子的连同 sandbox 都让开;sandbox 恒为 +1。运行时被占只报错说是谁占着,不自动换:平板的主屏幕图标和本地设置都绑在「协议 + 主机 + 端口」上。schema 的 `DEFAULT_PORT`(5180)只给没写端口的旧配置,不跟着改。地址认电脑名(macOS 的本地主机名),IP 变了不用重签;二维码、证书、serve 都从 `computerName` 拿
 - 千问 key 是机器级的,只认 `~/.config/cotutor/bailian.json`(百炼按量 + 业务空间 id,家长端写)与 `token-plan.json`(开发机才有);环境变量、qwen、voxtell 的配置都不读(`src/shared/qianwen.ts`)。测试要 key 往临时 HOME 写假文件(`tests/_keys.ts`),要真效果就用真的家
 

@@ -18,15 +18,25 @@
 
 ```sh
 # Mac(终端里)
+curl -fsSL https://cdn.jsdelivr.net/npm/cotutor@latest/install.sh | sh -s -- ming 小明 2
+```
+
+```powershell
+# Windows(PowerShell 里;这行长一点:jsDelivr 不说文件是什么编码,要自己按 UTF-8 解开,不然中文是乱码)
+& ([scriptblock]::Create([Text.Encoding]::UTF8.GetString((iwr -useb https://cdn.jsdelivr.net/npm/cotutor@latest/install.ps1).Content))) ming 小明 2
+```
+
+连不上 jsDelivr 就从 GitHub 取:
+
+```sh
 curl -fsSL https://raw.githubusercontent.com/TarsLab/cotutor/main/install.sh | sh -s -- ming 小明 2
 ```
 
 ```powershell
-# Windows(PowerShell 里)
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/TarsLab/cotutor/main/install.ps1))) ming 小明 2
 ```
 
-连不上 GitHub 就把地址换成 `https://cdn.jsdelivr.net/npm/cotutor@latest/install.sh`(Windows 是 `install.ps1`)。也可以一条条自己来:
+也可以一条条自己来:
 
 ```sh
 npm i -g cotutor

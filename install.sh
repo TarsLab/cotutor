@@ -1,10 +1,10 @@
 #!/bin/sh
 # cotutor 一行安装(macOS、Linux):
-#   curl -fsSL https://raw.githubusercontent.com/TarsLab/cotutor/main/install.sh | sh
-# 连不上 GitHub 就换这个:
 #   curl -fsSL https://cdn.jsdelivr.net/npm/cotutor@latest/install.sh | sh
+# 连不上 jsDelivr 就从 GitHub 取:
+#   curl -fsSL https://raw.githubusercontent.com/TarsLab/cotutor/main/install.sh | sh
 # 顺手建好孩子的文件夹、装好后台服务(短名 称呼 年级):
-#   curl -fsSL https://raw.githubusercontent.com/TarsLab/cotutor/main/install.sh | sh -s -- ming 小明 2
+#   curl -fsSL https://cdn.jsdelivr.net/npm/cotutor@latest/install.sh | sh -s -- ming 小明 2
 #
 # 只做这几件事:查 Node 的版本;npm 连不上就用国内镜像;全局目录写不了就换到自己家目录下(不用 sudo);装 cotutor。
 # 不用 sudo,不改系统设置。Node 没装或太旧时只说怎么装,不替你装。

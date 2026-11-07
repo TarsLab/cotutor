@@ -1,9 +1,10 @@
 # cotutor 一行安装(Windows,在 PowerShell 里粘贴):
+#   & ([scriptblock]::Create([Text.Encoding]::UTF8.GetString((iwr -useb https://cdn.jsdelivr.net/npm/cotutor@latest/install.ps1).Content)))
+# (jsDelivr 不标编码,PowerShell 5.1 的 irm 会把中文按 Latin-1 读成乱码,所以自己按 UTF-8 解)
+# 连不上 jsDelivr 就从 GitHub 取(GitHub 标了 utf-8,irm 就行):
 #   irm https://raw.githubusercontent.com/TarsLab/cotutor/main/install.ps1 | iex
-# 连不上 GitHub 就换这个:
-#   irm https://cdn.jsdelivr.net/npm/cotutor@latest/install.ps1 | iex
-# 顺手建好孩子的文件夹、装好后台服务(短名 称呼 年级):
-#   & ([scriptblock]::Create((irm https://raw.githubusercontent.com/TarsLab/cotutor/main/install.ps1))) ming 小明 2
+# 顺手建好孩子的文件夹、装好后台服务(短名 称呼 年级),最后接上就行:
+#   & ([scriptblock]::Create([Text.Encoding]::UTF8.GetString((iwr -useb https://cdn.jsdelivr.net/npm/cotutor@latest/install.ps1).Content))) ming 小明 2
 #
 # 只做这几件事:查 Node 的版本;npm 连不上就用国内镜像;装 cotutor。
 # 不要管理员,不改执行策略:npm、cotutor 都用 .cmd 跑(PowerShell 缺省策略会拦 .ps1)。Node 没装或太旧时只说怎么装,不替你装。

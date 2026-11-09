@@ -57,7 +57,8 @@ try {
   const a0 = await anon('PUT', '/api/parent/bailian', { key: GOOD, workspaceId: 'llm-abcdef' });
   check('没设 PIN:别的设备不让配(403 need_pin,说怎么办)', a0.status === 403 && (a0.json as { error: string; message: string }).error === 'need_pin' && /cotutor pin/.test((a0.json as { message: string }).message));
   const tp = await local('PUT', '/api/parent/bailian', { key: 'sk-sp-0123456789abcdef', workspaceId: 'llm-abcdef' });
-  check('Token Plan 的 key 不收,说要按量的', tp.status === 400 && /Token Plan/.test((tp.json as { message: string }).message));
+  const tpMsg = (tp.json as { message: string }).message;
+  check('Token Plan 的 key 不收,说要哪一把,不提 Token Plan', tp.status === 400 && /密钥管理/.test(tpMsg) && !/Token Plan|sk-sp/.test(tpMsg), tpMsg);
   check('不像 key 的不收', (await local('PUT', '/api/parent/bailian', { key: 'abc', workspaceId: 'llm-abcdef' })).status === 400);
   check('业务空间 id 带怪字符不收', (await local('PUT', '/api/parent/bailian', { key: GOOD, workspaceId: 'llm abc/..' })).status === 400);
   check('上面这几次都没去试连', tried.length === n0);

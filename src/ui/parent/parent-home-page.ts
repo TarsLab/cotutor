@@ -317,7 +317,8 @@ ${pageDomJs(3200)}
   // ---- 百炼:老师开口靠它,没配孩子那边打不开。一块常驻的元素,重画只挪它的位置,输着的 key 不会被抹掉 ----
   const BL = { st: null, open: false, opened: false, busy: false, msg: '' };
   const blEl = h('div', { id: 'bailian' });
-  const blKey = h('input', { class: 'fld', id: 'bl-key', type: 'password', autocomplete: 'off', spellcheck: 'false', placeholder: 'sk- 开头' });
+  // 不用 type=password:Safari 把「只有一个密码框」的表单当注册页,塞自动生成的强密码、或者干脆输不进去(2026-11-10 真机);只在家长自己的电脑上填,存完就清空,不用遮
+  const blKey = h('input', { class: 'fld', id: 'bl-key', type: 'text', autocomplete: 'off', spellcheck: 'false', autocapitalize: 'off', autocorrect: 'off', placeholder: 'sk- 开头' });
   const blWs = h('input', { class: 'fld', id: 'bl-ws', autocomplete: 'off', spellcheck: 'false', autocapitalize: 'off', placeholder: '如 llm-xxxxxxxx' });
   const blSave = async () => {
     BL.busy = true; BL.msg = ''; blDraw();
@@ -338,7 +339,7 @@ ${pageDomJs(3200)}
     if (st.ready) rows.push(h('div', { class: 'it' }, h('span', { class: 'tx' }, h('b', {}, '配好了'), h('small', {}, (st.keyTail ? 'key …' + st.keyTail + ' · 业务空间 ' + st.workspaceId : '测试用的假百炼'))),
       h('button', { type: 'button', class: 'x', disabled: BL.busy || null, on: { click: blTest } }, BL.busy && !BL.open ? '在试…' : '试连'),
       st.canEdit ? h('button', { type: 'button', class: 'x', on: { click: () => { BL.open = !BL.open; BL.msg = ''; blDraw(); } } }, BL.open ? '收起' : '换一把') : null));
-    else rows.push(h('div', { class: 'box' }, h('b', {}, '还没配,孩子那边打不开'), h('div', { class: 'note', style: 'padding:0' }, '老师开口和想讲稿都走百炼,要百炼「按量付费」的 API key(控制台「密钥管理」里创建)和业务空间 id(控制台的业务空间详情里看);Token Plan 的 sk-sp- 不行。存在这台电脑上,不进孩子的 cotutor 文件夹。')));
+    else rows.push(h('div', { class: 'box' }, h('b', {}, '还没配,孩子那边打不开'), h('div', { class: 'note', style: 'padding:0' }, '老师开口和想讲稿都走百炼,要百炼「按量付费」的 API key(控制台「密钥管理」里创建)和业务空间 id(控制台的业务空间详情里看)。存在这台电脑上,不进孩子的 cotutor 文件夹。')));
     if (!st.ready || BL.open) {
       if (!st.canEdit) rows.push(h('div', { class: 'box' }, h('div', { class: 'note', style: 'padding:0' }, '先设家长密码:在电脑上跑 cotutor pin;或者在这台电脑上打开家长端来配。')));
       else rows.push(h('div', { class: 'box' }, h('label', { class: 'lbl', for: 'bl-key' }, 'API key'), blKey, h('label', { class: 'lbl', for: 'bl-ws' }, '业务空间 id'), blWs,

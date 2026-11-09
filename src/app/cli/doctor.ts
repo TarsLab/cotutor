@@ -539,7 +539,7 @@ export async function doctorWorkspace(
     // key 只认 ~/.config/cotutor/(2026-11-02 起);shell 里还 export 着旧的,说一句免得以为配了
     const bl = dashscopeAuth(env);
     const oldEnv = env.DASHSCOPE_API_KEY ? '(环境变量 DASHSCOPE_API_KEY 已经不读了)' : '';
-    push({ name: 'bailian', ok: Boolean(bl), required: true, detail: bl ? `百炼按量 key …${bl.key.slice(-4)}、业务空间 ${bl.workspaceId}` : `没有百炼按量的 key 或业务空间 id:孩子端打不开(只出「老师们还没到」)${oldEnv}`, fix: bl ? undefined : '家长端「首页」里配(在这台电脑上开,或者先 cotutor pin 设家长密码),存在 ~/.config/cotutor/bailian.json;Token Plan 的 sk-sp- 不行' });
+    push({ name: 'bailian', ok: Boolean(bl), required: true, detail: bl ? `百炼按量 key …${bl.key.slice(-4)}、业务空间 ${bl.workspaceId}` : `没有百炼按量的 key 或业务空间 id:孩子端打不开(只出「老师们还没到」)${oldEnv}`, fix: bl ? undefined : '家长端「首页」里配(在这台电脑上开,或者先 cotutor pin 设家长密码),存在 ~/.config/cotutor/bailian.json' });
     // Token Plan 只有开发机有,没有就不提
     const plan = tokenPlanKey(env.HOME || homedir());
     if (plan) push({ name: 'token-plan', ok: isPlanKey(plan), required: false, detail: isPlanKey(plan) ? `Token Plan key …${plan.slice(-4)}:Token Plan 有的模型先走它` : 'token-plan.json 里的 key 不是 sk-sp- 开头,不认', fix: isPlanKey(plan) ? undefined : '换成千问 Token Plan 的 key,或删掉 ~/.config/cotutor/token-plan.json' });

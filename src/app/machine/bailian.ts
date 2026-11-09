@@ -184,7 +184,8 @@ export async function bailianRoute(method: string, p: string, ctx: AppContext, b
   if (!isObj(body)) return bad('要 {key, workspaceId}');
   const key = typeof body.key === 'string' ? body.key.trim() : '';
   const workspaceId = typeof body.workspaceId === 'string' ? body.workspaceId.trim() : '';
-  if (key.startsWith('sk-sp-')) return bad('这是 Token Plan 的 key(sk-sp- 开头),老师开口要百炼按量的 key(sk- 开头)');
+  // sk-sp- 是 Token Plan 的 key(没有 realtime);家长用不着这个概念,只说要哪一把
+  if (key.startsWith('sk-sp-')) return bad('这把 key 用不了:要百炼控制台「密钥管理」里创建的 API key(按量付费)');
   if (!KEY_RE.test(key)) return bad('key 不像百炼的 API key(sk- 开头)');
   if (!WS_RE.test(workspaceId)) return bad('业务空间 id 不对(百炼控制台「业务空间」里那串,只有字母、数字、横线)');
   const t0 = Date.now();

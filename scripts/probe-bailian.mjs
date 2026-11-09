@@ -85,7 +85,7 @@ try {
   await typeInto('#bl-key', 'sk-sp-0123456789abcdef0123');
   await typeInto('#bl-ws', 'llm-probe');
   await tap(`document.querySelector('#bailian .go')`);
-  ok('填 Token Plan 的 key:不存,说要按量的', await until(`(document.querySelector('#bailian .err') || {}).textContent?.includes('Token Plan')`));
+  ok('填 Token Plan 的 key:不存,说要哪一把', await until(`(document.querySelector('#bailian .err') || {}).textContent?.includes('密钥管理')`));
   ok('填过的业务空间 id 还在(重画没抹掉)', await evaluate(`document.querySelector('#bl-ws').value === 'llm-probe'`));
   console.log('  ', await shot('parent-home-tokenplan.png'));
 

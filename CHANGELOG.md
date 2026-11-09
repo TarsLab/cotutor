@@ -2,6 +2,14 @@
 
 写给家长：每个版本改了什么。升级跑 `cotutor update`（Windows 上 `cotutor.cmd update`），详见 README 的「数据与升级」。
 
+## 0.4.5
+
+- 让 AI 助手帮你装更省事:不用输网址,对它说「帮我在这台电脑上装 cotutor,先跑 npx cotutor@latest guide,照它说的一步步做」
+- 孩子的笔记文件夹(档案、日记、老师的记忆)新装时放在 cotutor 文件夹旁边,也可以用你已有的 Obsidian 库;以前装的照旧能用
+- Linux 上的后台服务能起来了
+- 命令更好懂:cotutor --help 只列命令,每条的用法和例子在它自己的帮助里;写错的选项会直接说哪里不对,不再悄悄忽略
+- 换新出厂文件改叫 cotutor refresh,把改过的老师换回出厂的用 cotutor reset;升级还是 cotutor update
+
 ## 0.4.4
 
 - 装得快多了:安装从 275 个包变成 15 个,Windows 上第一次装从 3 分钟左右变成 1 分钟左右

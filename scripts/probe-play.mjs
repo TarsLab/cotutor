@@ -54,12 +54,12 @@ try {
 
   // ---- 孩子端 ----
   await send('Page.navigate', { url: `${base}/?tutor=chinese-tutor` });
-  await until(`document.querySelector('#tutor').classList.contains('on') && document.querySelectorAll('#board .c-choice').length > 0`);
+  await until(`document.querySelector('#tutor')?.classList.contains('on') && document.querySelectorAll('#board .c-choice').length > 0`);
   await sleep(1500);
   const job = await evaluate(`document.querySelector('#board .c-choice').closest('.sec').dataset.job`);
   const card = await evaluate(`Number(document.querySelector('#board .c-choice').dataset.card)`);
   await evaluate(`document.querySelector('#board .c-choice').click()`);
-  await until(`document.querySelector('#stage').classList.contains('on')`);
+  await until(`document.querySelector('#stage')?.classList.contains('on')`);
   await evaluate(`document.querySelectorAll('#st-body .so')[1].click()`);
   await sleep(300);
   await evaluate(`document.querySelector('#st-x').click()`);

@@ -64,7 +64,7 @@ Mac 和 Windows 上,`service install` 会一起装一个菜单栏(任务栏)图�
 
 `init` 把出厂老师拷进 `agents/<老师>.md`,把做课包用的四个技能 chalk-* 和五个机器件 cotutor-tutor / cotutor-board / cotutor-analyze / cotutor-tune / cotutor-home 拷进 `.agents/skills/`(Codex、Qwen Code 直接读;Claude Code 读的 `.claude/skills` 是链到它的);
 做小课堂的课包用 `cotutor chalk`(check / build / bake / snap / dub),烤画面与截图用本机的 Chrome(Windows 上没有 Chrome 就用 Edge)。要在平板上用(按住说话要 HTTPS):`cotutor cert` 签一张
-自签证书(要 mkcert:Mac 上 `brew install mkcert && mkcert -install`;Windows 上 `winget install FiloSottile.mkcert`,重开终端再 `mkcert -install`),把根证书装到平板并打开信任,`cotutor service restart`(在终端里跑的就重开 `cotutor serve`),扫码打开。iPad 的步骤见 [iPad 与 iPhone](docs/iPad与iPhone.md)。
+自签证书(要 mkcert:Mac 上 `brew install mkcert && mkcert -install`;Windows 上 `winget install FiloSottile.mkcert`,重开终端再 `mkcert -install`;Ubuntu、Debian 上 `sudo apt install mkcert libnss3-tools && mkcert -install`),把根证书装到平板并打开信任,`cotutor service restart`(在终端里跑的就重开 `cotutor serve`),扫码打开。iPad 的步骤见 [iPad 与 iPhone](docs/iPad与iPhone.md)。
 
 然后在浏览器里:
 

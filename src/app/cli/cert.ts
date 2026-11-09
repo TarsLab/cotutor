@@ -23,7 +23,8 @@ const execFileP = promisify(execFile);
 export function mkcertHint(platform: NodeJS.Platform = process.platform): string {
   if (platform === 'darwin') return 'brew install mkcert && mkcert -install';
   if (platform === 'win32') return 'winget install FiloSottile.mkcert(没有 winget 就到 https://github.com/FiloSottile/mkcert/releases 下 windows-amd64 那个,改名 mkcert.exe 放进 PATH),重开终端跑 mkcert -install(弹窗问装不装根证书,点「是」)';
-  return '用系统的包管理器装 mkcert(如 apt install mkcert),再 mkcert -install';
+  // libnss3-tools 给 mkcert 一个 certutil,这台电脑上的 Chrome、Firefox 才认证书(2026-11-09 Ubuntu 22.04 上装过)
+  return '用系统的包管理器装 mkcert(Ubuntu、Debian 上 sudo apt install mkcert libnss3-tools),再 mkcert -install(要 sudo 密码)';
 }
 
 /** mkcert 在、根证书建过了:cotutor cert 不用人就能跑。mkcert -install 要开机密码或点弹窗,那一步是人的 */

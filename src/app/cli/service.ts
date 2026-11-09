@@ -242,7 +242,10 @@ ${s.args.map((a) => `    ${str(a)}`).join('\n')}
 /** systemd 的一个参数:双引号括起来,反斜杠与引号转义,% 写两个 */
 const sd = (v: string): string => `"${v.replaceAll('\\', '\\\\').replaceAll('"', '\\"').replaceAll('%', '%%')}"`;
 
-/** Linux 的 systemd 用户服务 */
+/**
+ * Linux 的 systemd 用户服务。WorkingDirectory= 不认引号(只有 ExecStart=、Environment= 这种列表才认),
+ * 加了引号 systemd 当它是相对路径,整个服务起不来(2026-11-09 在 Ubuntu 22.04 / systemd 249 上撞到);它只要 % 写两个
+ */
 export function systemdUnit(s: ServiceSpec): string {
   return `# cotutor service install 写的;改了会被下次 install 盖掉。卸掉:cotutor service uninstall --workspace ${s.root}
 [Unit]
@@ -251,7 +254,7 @@ After=network-online.target
 
 [Service]
 ExecStart=${s.args.map(sd).join(' ')}
-WorkingDirectory=${sd(s.root)}
+WorkingDirectory=${s.root.replaceAll('%', '%%')}
 Environment=${sd(`PATH=${s.path}`)}
 Environment=${sd(`COTUTOR_SERVICE=${s.label}`)}
 Restart=on-failure

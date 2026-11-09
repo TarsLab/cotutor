@@ -26,7 +26,7 @@ node -v
 
 **成功：** `v22.18` 或更高。系统是 macOS、Windows 或 Linux。
 
-**不成功：** 没有 Node 或版本太低：**【交给家长】** 到 https://nodejs.org 装 LTS 版，装完重开终端。
+**不成功：** 没有 Node 或版本太低：**【交给家长】** 到 https://nodejs.org 装 LTS 版，装完重开终端。Linux 上不要用系统自带的 `apt install nodejs`（Ubuntu 22.04 给的是 12，太旧），照 nodejs.org 上 Linux 的装法来；已经用 nvm、asdf 装了合适版本的不用动。
 
 **已经装过：** 如果 `cotutor doctor --json` 能跑，而且 `root` 不是 `null`，这台电脑已经有孩子的 cotutor 文件夹了。问家长是要升级，还是再加一个孩子。升级看 README 的「数据与升级」，这篇不用接着做。再加一个孩子就接着做，并且从第 4 步起，除 `cotutor cert` 外，每条 cotutor 命令都加 `--workspace ~/cotutor/<slug>`。
 
@@ -42,7 +42,7 @@ cotutor --version
 **不成功：**
 - 下载慢或超时：加上 `--registry=https://registry.npmmirror.com` 再装一次。
 - 报 `EACCES`（没权限）：不要加 `sudo`。跑 `npm config set prefix ~/.npm-global`，把 `~/.npm-global/bin` 加进 PATH，再装一次。
-- 找不到 `cotutor`：重开终端再试。还不行，跑 `npm prefix -g` 看装到了哪，把那个目录下的 `bin`（Windows 上是目录本身）加进 PATH。
+- 找不到 `cotutor`：重开终端再试。Node 是 asdf 装的，跑 `asdf reshim nodejs`。还不行，跑 `npm prefix -g` 看装到了哪，把那个目录下的 `bin`（Windows 上是目录本身）加进 PATH。
 - Windows 的 PowerShell 说禁止运行脚本：这篇里所有的 `npm`、`cotutor` 都改用 `npm.cmd`、`cotutor.cmd`。不要改执行策略。
 
 ## 3. 建孩子的 cotutor 文件夹和笔记文件夹
@@ -77,7 +77,7 @@ cotutor service install --no-open
 **成功：** 退出码 0，输出里有「后台服务」和「家长端」两行。Mac 和 Windows 上还会多一个菜单栏（任务栏）图标。以 `!` 开头的行都记下来，第 7 步转告家长。
 
 **不成功：**
-- 退出码不是 0：跑 `cotutor service logs`，把原因告诉家长。
+- 退出码不是 0：先看输出里说的原因（Linux 上 systemd 报的错也在里面），再跑 `cotutor service logs`，把原因告诉家长。
 - 说端口上有一个 `cotutor serve` 在终端里跑着：请家长关掉那个终端，再装一次。
 
 **【交给家长】（只在出现时）：**
@@ -111,9 +111,10 @@ cotutor service status --json
 先装 mkcert：
 - Mac：`brew install mkcert`。
 - Windows：`winget install FiloSottile.mkcert`，然后重开终端。
-- 别的情况（Linux、没有 brew 或 winget）：**【交给家长】** 照 `cotutor doctor --json` 里 `https` 那条的 `fix` 装。
+- Linux（Ubuntu、Debian）：**【交给家长】** 请家长跑 `sudo apt install mkcert libnss3-tools`。`libnss3-tools` 让这台电脑上的 Chrome、Firefox 也认这张证书。
+- 别的情况（别的 Linux 发行版、没有 brew 或 winget）：**【交给家长】** 照 `cotutor doctor --json` 里 `https` 那条的 `fix` 装。
 
-**【交给家长】** 请家长在这台电脑的终端里自己跑 `mkcert -install`。Mac 上要输开机密码，Windows 上弹窗点「是」。密码不要说给你听。
+**【交给家长】** 请家长在这台电脑的终端里自己跑 `mkcert -install`。Mac 上要输开机密码，Windows 上弹窗点「是」，Linux 上要输 sudo 密码。密码不要说给你听。Linux 上的 `apt install` 也一样由家长自己跑；不要主动问家长要 sudo 权限，也不要自己试 `sudo`。
 
 家长做完后：
 
@@ -129,7 +130,7 @@ cotutor service status --json
 - 说 PATH 里没有 mkcert：重开终端再试。
 - 说要先跑 `mkcert -install`（包括 `cotutor cert` 输出里以 `!` 开头的那行，这时证书签好了，但这台电脑的浏览器会报警告）：回到上面，交给家长。做完不用重签。
 
-**【交给家长】** 把根证书装到每台平板上，并打开信任开关：最省事是在家长端「扫码打开」点「装证书」，用平板的相机扫；步骤见 [iPad 与 iPhone](https://github.com/TarsLab/cotutor/blob/main/docs/iPad与iPhone.md) 的第 3、4 节。`cotutor cert` 的输出写了根证书的位置，安卓怎么装也写在那里。
+平板上还要装根证书，第 7 步再交给家长：要在家长端里扫码装，家长端第 7 步才打开。
 
 ## 7. 告诉家长
 
@@ -141,14 +142,15 @@ cotutor service status --json
 
 **不成功：** `health` 是 `null`：看 `portHolder`（端口被谁占着）和 `cotutor service logs`，把原因告诉家长。解决不了就跑 `cotutor report`，把输出给家长，请家长到 https://github.com/TarsLab/cotutor/issues 反馈；里面没有孩子的对话和 key。
 
-确认成功后，跑 `cotutor open`，在这台电脑上打开家长端。再告诉家长这些，安装就结束了：
+确认成功后，跑 `cotutor open`，在这台电脑上打开家长端。你是经 SSH 装的，或者这台电脑没有图形界面时，`cotutor open` 只打印地址、开不到屏幕上：请家长在这台电脑的浏览器里打开 `parentPage`。再告诉家长这些，安装就结束了：
 
-1. **家长端地址：** `parentPage`，刚才已经打开了。以后点图标或跑 `cotutor open` 就能打开，登录电脑时不会自己弹出来。
-2. **二维码：** 在家长端「首页」的「扫码打开」，孩子的平板扫一张，家长的手机扫一张。不扫码时，平板上要输的地址是 `tabletUrl`。
+1. **家长端地址：** `parentPage`。以后 Mac、Windows 上点图标，或者跑 `cotutor open`；登录电脑时不会自己弹出来。
+2. **【交给家长】平板和手机：** 在家长端「首页」的「扫码打开」。每台设备第一次用，先扫「装证书」那张装根证书，再到设置里打开信任开关（步骤见 [iPad 与 iPhone](https://github.com/TarsLab/cotutor/blob/main/docs/iPad与iPhone.md) 的第 3、4 节；安卓的装法在 `cotutor cert` 的输出里）。然后孩子的平板扫「孩子的平板」那张，家长的手机扫「我的手机」那张。不扫码时，平板上要输的地址是 `tabletUrl`。
 3. **后台服务装好了：** 关了终端照样跑，登录这台电脑后自己起来。Mac 看菜单栏的 cotutor 图标，Windows 看任务栏右下角 `^` 里的图标；图标上出橙点是有事要处理，变淡加红点是没在跑。Linux 上没有图标，用 `cotutor service status` 看。
 4. **还要家长做的事：**
-   - **【交给家长】填百炼（必做）：** `bailian` 是 `false` 时，在这台电脑上打开家长端「首页」，填百炼「按量付费」的 API Key 和业务空间 ID，保存前会先试连。控制台右上角先选北京；`sk-sp-` 开头的 Token Plan 不行。没填时孩子端只显示「老师们还没到」。提醒家长：**直接填在页面上，不要贴到对话里。**
-   - **【交给家长】第 4 步记下的 `!` 行和第 5 步记下的 `human` 条目：** 逐条转告。通常有填孩子档案（`vault.profile`，老师靠它知道孩子几年级）、设家长端密码（`server.access`，家长在旁边可以不设）、电脑别睡（`mac.sleep`、`windows.sleep`，睡着时平板连不上）。
+   - **【交给家长】填百炼（必做）：** `bailian` 是 `false` 时，在这台电脑上打开家长端「首页」，填百炼「按量付费」的 API Key 和业务空间 ID，保存前会先试连。控制台右上角先选北京；`sk-sp-` 开头的 Token Plan 不行。没填时孩子端只显示「老师们还没到」。提醒家长：**直接填在页面上，不要贴到对话里。** 只有在这台电脑上打开的家长端才能填；家长不在这台电脑前（比如你是经 SSH 装的），请家长在自己的电脑上开一条转发 `ssh -L 18443:localhost:<parentPage 里的端口> <用户>@<这台电脑>`（`parentPage` 里没写端口就是 443），再打开 `https://localhost:18443/parent/home` 填，这样也算在这台电脑上。或者请家长先在这台电脑的终端里跑 `cotutor pin` 设家长密码，再从别的设备打开家长端填。
+   - **【交给家长】第 4 步记下的 `!` 行和第 5 步记下的 `human` 条目：** 逐条转告。常见的有：设家长端密码（`server.access`：不设的话，同一个网络里的设备都打得开家长端，孩子的平板也打得开；家长在旁边可以不设。要设，请家长自己在这台电脑的终端里跑 `cotutor pin`，密码不要说给你听）、电脑别睡（`mac.sleep`、`windows.sleep`，睡着时平板连不上）。`bailian`、`tts` 填好百炼就好了，不用另外说；档案算不出学期（`vault.profile`）只在 init 没给年级时才会有。
+   - **【交给家长】Linux 上的睡眠：** doctor 不查这一项，直接提醒家长：笔记本合盖默认会睡，要开着盖；GNOME「设置 › 电源」里的「自动挂起」，接着电源时要关。
 5. **孩子的记录在哪：** 档案、日记、老师的记忆在笔记文件夹里（第 3 步的 vault，缺省 `~/cotutor/<slug>-vault/`），用任何文本编辑器都能看能改，装了 Obsidian 就把这个文件夹当库打开。老师写进了什么，家长端「记录」右栏也列着，不要的可以一行一行撤回。档案 `孩子.md` 的正文可以写孩子的情况（性格、喜欢什么、要避开什么），每位老师每个话题开头都会读到。
 
 不用等家长填完。家长填好百炼后，`cotutor doctor --json` 的 `ok` 会变成 `true`。

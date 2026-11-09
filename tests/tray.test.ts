@@ -58,8 +58,8 @@ check('跑了多久', t.uptimeText(NOW - 10 * 60_000, NOW) === '不到 1 小时'
   const texts = (h: Partial<Health>, platform: NodeJS.Platform = 'darwin') => t.issuesOf(probe({ health: healthy(h) }), { platform, version: VERSION });
   check('都好:没事', texts({}).length === 0);
   check('读不到 vault(Mac):开隐私设置的完全磁盘访问', texts({ vault: 'denied' })[0].text.includes('磁盘权限') && JSON.stringify(texts({ vault: 'denied' })[0].fix).includes('Privacy_AllFiles'));
-  check('读不到 vault(Windows):开 vault 那个目录,不是孩子的文件夹(2026-11-09 起两边分开)', texts({ vault: 'denied' }, 'win32')[0].text.includes('权限') && (texts({ vault: 'denied' }, 'win32')[0].fix as { target: string }).target === '/w/ray-vault');
-  check('vault 不在、配置写坏了:开孩子的文件夹(改 cotutor.json 在那)', (texts({ vault: 'missing' }, 'win32')[0].fix as { target: string }).target === '/w/ray' && (texts({ configError: 'bad json' }, 'win32')[0].fix as { target: string }).target === '/w/ray');
+  check('读不到 vault(Windows):开笔记文件夹(vault),不是 cotutor 文件夹(2026-11-09 起两边分开)', texts({ vault: 'denied' }, 'win32')[0].text.includes('权限') && (texts({ vault: 'denied' }, 'win32')[0].fix as { target: string }).target === '/w/ray-vault');
+  check('vault 不在、配置写坏了:开 cotutor 文件夹(改 cotutor.json 在那)', (texts({ vault: 'missing' }, 'win32')[0].fix as { target: string }).target === '/w/ray' && (texts({ configError: 'bad json' }, 'win32')[0].fix as { target: string }).target === '/w/ray');
   check('vault 不在', texts({ vault: 'missing' })[0].text.includes('不在了'));
   check('配置写坏了', texts({ configError: 'bad json' })[0].text.includes('写坏了'));
   check('没填百炼:开家长端,地址里不写 443', texts({ bailian: false })[0].text.includes('百炼') && (texts({ bailian: false })[0].fix as { target: string }).target === 'https://localhost/parent/home');

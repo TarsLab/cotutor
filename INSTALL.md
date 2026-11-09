@@ -6,7 +6,7 @@
 - **不能跑命令的（网页聊天）：** 一次只告诉家长一步，等家长贴回结果再走下一步。
 - **【交给家长】的步骤必须停下：** 告诉家长做什么，等家长说做完了再继续。不要替家长做，也不要绕过去。
 
-跟家长说话时用家常话：`slug` 说成「孩子的短名」，workspace 说成「孩子的文件夹」，vault 说成「放档案和日记的文件夹」。
+跟家长说话时用家常话：`slug` 说成「孩子的短名」，workspace 说成「孩子的 cotutor 文件夹」（具体到人：「小明的 cotutor 文件夹」），vault 说成「孩子的笔记文件夹」。
 
 ## 不能做
 
@@ -15,7 +15,7 @@
 - 不要用 `sudo` 跑 npm。
 - 不要跑 `cotutor upgrade --force`。
 - 不要跑 `cotutor backup restore`，除非家长明确说要恢复。
-- 不要删孩子的文件夹（缺省 `~/cotutor/<slug>/`）和放档案、日记的 vault（缺省在旁边的 `~/cotutor/<slug>-vault/`），里面的记录删了找不回来。
+- 不要删孩子的 cotutor 文件夹（缺省 `~/cotutor/<slug>/`）和笔记文件夹（vault，缺省在旁边的 `~/cotutor/<slug>-vault/`），里面的记录删了找不回来。
 - 不要关防火墙，不要改系统安全设置或 PowerShell 执行策略。
 
 ## 1. 看环境
@@ -28,7 +28,7 @@ node -v
 
 **不成功：** 没有 Node 或版本太低：**【交给家长】** 到 https://nodejs.org 装 LTS 版，装完重开终端。
 
-**已经装过：** 如果 `cotutor doctor --json` 能跑，而且 `root` 不是 `null`，这台电脑已经有孩子的文件夹了。问家长是要升级，还是再加一个孩子。升级看 README 的「数据与升级」，这篇不用接着做。再加一个孩子就接着做，并且从第 4 步起，除 `cotutor cert` 外，每条 cotutor 命令都加 `--workspace ~/cotutor/<slug>`。
+**已经装过：** 如果 `cotutor doctor --json` 能跑，而且 `root` 不是 `null`，这台电脑已经有孩子的 cotutor 文件夹了。问家长是要升级，还是再加一个孩子。升级看 README 的「数据与升级」，这篇不用接着做。再加一个孩子就接着做，并且从第 4 步起，除 `cotutor cert` 外，每条 cotutor 命令都加 `--workspace ~/cotutor/<slug>`。
 
 ## 2. 装程序
 
@@ -45,7 +45,7 @@ cotutor --version
 - 找不到 `cotutor`：重开终端再试。还不行，跑 `npm prefix -g` 看装到了哪，把那个目录下的 `bin`（Windows 上是目录本身）加进 PATH。
 - Windows 的 PowerShell 说禁止运行脚本：这篇里所有的 `npm`、`cotutor` 都改用 `npm.cmd`、`cotutor.cmd`。不要改执行策略。
 
-## 3. 建孩子的文件夹
+## 3. 建孩子的 cotutor 文件夹和笔记文件夹
 
 问家长三件事：
 - **短名（slug）：** 小写字母、数字、连字符，如 `ming`。不要用真名，它会出现在路径和对话里。
@@ -59,10 +59,10 @@ cotutor init <slug> --name <称呼> --grade <年级>
 
 **成功：** 第一行是「cotutor init →」加文件夹路径，缺省是 `~/cotutor/<slug>/`。cotutor 的输出把家目录写成 `$HOME`（为了不把用户名传出去），`$HOME/cotutor/<slug>` 就是这个文件夹，不是别的地方。重复跑只补缺，已有的文件不动。
 
-**vault：** init 还在旁边建了 vault，缺省是 `~/cotutor/<slug>-vault/`，输出里括号写着「vault:」的那一行就是它。孩子的档案 `孩子.md`、日记、老师的记忆都在这里，和孩子的文件夹分开放。里面全是普通的 markdown 文件：
+**笔记文件夹（vault）：** init 还在旁边建了笔记文件夹，缺省是 `~/cotutor/<slug>-vault/`，输出里括号写着「笔记文件夹」的那一行就是它。孩子的档案 `孩子.md`、日记、老师的记忆都在这里，和 cotutor 文件夹分开放。里面全是普通的 markdown 文件：
 - **不用装 Obsidian**，也不要问家长要 Obsidian 库。不要改 `cotutor.json` 的 `paths.vault`，也不要另建 vault。
 - 家长想用 Obsidian 看：装好以后用 Obsidian 打开 `<slug>-vault` 这个文件夹就行。
-- 家长主动说要用自己已有的 Obsidian 库：要在第一次 init 时加 `--vault <库的路径>`。一个孩子一个库，不能放在孩子的文件夹里。Mac 上别用「文稿」「桌面」、iCloud 云盘里的库，后台服务读不到；家长坚持的话，第 4 步会出一行 `!`，照它转告。init 已经跑过了就不要再换（init 会报「不换 vault」），请家长用 Obsidian 打开 `<slug>-vault`。
+- 家长主动说要用自己已有的 Obsidian 库：要在第一次 init 时加 `--vault <库的路径>`。一个孩子一个库，不能放在孩子的 cotutor 文件夹里。Mac 上别用「文稿」「桌面」、iCloud 云盘里的库，后台服务读不到；家长坚持的话，第 4 步会出一行 `!`，照它转告。init 已经跑过了就不要再换（init 会报「不换笔记文件夹」），请家长用 Obsidian 打开 `<slug>-vault`。
 
 **不成功：** 家长说的年级不在 `grades` 列出的里面：这个年级还没有教学包，不要换成别的年级。告诉家长，问他们想怎么办。
 
@@ -149,6 +149,6 @@ cotutor service status --json
 4. **还要家长做的事：**
    - **【交给家长】填百炼（必做）：** `bailian` 是 `false` 时，在这台电脑上打开家长端「首页」，填百炼「按量付费」的 API Key 和业务空间 ID，保存前会先试连。控制台右上角先选北京；`sk-sp-` 开头的 Token Plan 不行。没填时孩子端只显示「老师们还没到」。提醒家长：**直接填在页面上，不要贴到对话里。**
    - **【交给家长】第 4 步记下的 `!` 行和第 5 步记下的 `human` 条目：** 逐条转告。通常有填孩子档案（`vault.profile`，老师靠它知道孩子几年级）、设家长端密码（`server.access`，家长在旁边可以不设）、电脑别睡（`mac.sleep`、`windows.sleep`，睡着时平板连不上）。
-5. **孩子的记录在哪：** 档案、日记、老师的记忆在第 3 步的 vault 里（缺省 `~/cotutor/<slug>-vault/`），用任何文本编辑器都能看能改，装了 Obsidian 就把这个文件夹当库打开。老师写进了什么，家长端「记录」右栏也列着，不要的可以一行一行撤回。档案 `孩子.md` 的正文可以写孩子的情况（性格、喜欢什么、要避开什么），每位老师每个话题开头都会读到。
+5. **孩子的记录在哪：** 档案、日记、老师的记忆在笔记文件夹里（第 3 步的 vault，缺省 `~/cotutor/<slug>-vault/`），用任何文本编辑器都能看能改，装了 Obsidian 就把这个文件夹当库打开。老师写进了什么，家长端「记录」右栏也列着，不要的可以一行一行撤回。档案 `孩子.md` 的正文可以写孩子的情况（性格、喜欢什么、要避开什么），每位老师每个话题开头都会读到。
 
 不用等家长填完。家长填好百炼后，`cotutor doctor --json` 的 `ok` 会变成 `true`。

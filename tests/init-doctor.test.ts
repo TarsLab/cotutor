@@ -131,7 +131,7 @@ try {
   const again = await initWorkspace({ slug: 'ming' });
   check('doctor:vault 分开 → vault.separate 过', dv.checks.find((c) => c.name === 'vault.separate')?.ok === true, JSON.stringify(dv.checks.find((c) => c.name === 'vault.separate')));
   {
-    // vault 放哪:不能在孩子的文件夹里、不能把孩子的文件夹装进去、不能和别的孩子共用;已有的再给 --vault 对不上就报错,不悄悄换
+    // vault 放哪:不能在孩子的 cotutor 文件夹里、不能把 cotutor 文件夹装进去、不能和别的孩子共用;已有的再给 --vault 对不上就报错,不悄悄换
     const { UsageError } = await import('../src/app/workspace.ts');
     const refused = async (o: Parameters<typeof initWorkspace>[0], re: RegExp): Promise<boolean> => {
       try {
@@ -141,12 +141,12 @@ try {
         return err instanceof UsageError && re.test(err.message);
       }
     };
-    check('--vault 在孩子的文件夹里:拒', await refused({ slug: 'lan', vault: join(home, 'cotutor', 'lan', 'notes') }, /不能放在孩子的文件夹里/) && !existsSync(join(home, 'cotutor', 'lan')));
-    check('--vault 把孩子的文件夹装进去:拒', await refused({ slug: 'lan', vault: join(home, 'cotutor') }, /不能放在 vault 里面/));
-    check('--vault 用别的孩子的 vault:拒(一孩一 vault)', await refused({ slug: 'lan', vault: vault }, /一个孩子一个 vault/));
-    check('--vault 在别的孩子的文件夹里:拒', await refused({ slug: 'lan', vault: join(ws, 'notes') }, /别的孩子的文件夹/));
-    check('短名撞上别的孩子的 vault(init ming-vault):拒,不在 vault 里建 workspace', await refused({ slug: 'ming-vault' }, /的 vault 里/) && !existsSync(join(vault, 'cotutor.json')));
-    check('已有的 workspace 再给别的 --vault:拒,不改向', await refused({ slug: 'ming', vault: join(home, 'other-vault') }, /不换 vault/));
+    check('--vault 在孩子的 cotutor 文件夹里:拒', await refused({ slug: 'lan', vault: join(home, 'cotutor', 'lan', 'notes') }, /不能放在孩子的 cotutor 文件夹里/) && !existsSync(join(home, 'cotutor', 'lan')));
+    check('--vault 把 cotutor 文件夹装进去:拒', await refused({ slug: 'lan', vault: join(home, 'cotutor') }, /不能放在笔记文件夹\(vault\)里面/));
+    check('--vault 用别的孩子的 vault:拒(一孩一 vault)', await refused({ slug: 'lan', vault: vault }, /一个孩子一个笔记文件夹/));
+    check('--vault 在别的孩子的 cotutor 文件夹里:拒', await refused({ slug: 'lan', vault: join(ws, 'notes') }, /别的孩子的 cotutor 文件夹/));
+    check('短名撞上别的孩子的 vault(init ming-vault):拒,不在 vault 里建 workspace', await refused({ slug: 'ming-vault' }, /的笔记文件夹里/) && !existsSync(join(vault, 'cotutor.json')));
+    check('已有的 workspace 再给别的 --vault:拒,不改向', await refused({ slug: 'ming', vault: join(home, 'other-vault') }, /不换笔记文件夹/));
     const lib = join(home, 'Obsidian', '家');
     mkdirSync(lib, { recursive: true });
     writeFileSync(join(lib, '读书笔记.md'), '家长自己的');

@@ -40,7 +40,7 @@ curl -fsSL https://raw.githubusercontent.com/TarsLab/cotutor/main/install.sh | s
 
 ```sh
 npm i -g cotutor
-cotutor init ming --name 小明 --grade 2     # 建 ~/cotutor/ming/(三位老师、技能、账本、对话目录、cotutor.json)和旁边的 ~/cotutor/ming-vault/(档案、日记、记忆)
+cotutor init ming --name 小明 --grade 2     # 建 cotutor 文件夹 ~/cotutor/ming/(三位老师、技能、账本、对话目录、cotutor.json)和旁边的笔记文件夹 ~/cotutor/ming-vault/(档案、日记、记忆)
 cotutor service install                    # 装成这台电脑的后台服务,第一次装会打开家长端,孩子的平板在那里扫码
 ```
 
@@ -57,10 +57,10 @@ Mac 和 Windows 上,`service install` 会一起装一个菜单栏(任务栏)图�
 接着三件事:
 
 1. **填百炼**:在这台电脑上打开家长端 `/parent` 的「首页」,填百炼「按量付费」的 API Key 和业务空间 ID,保存前会先试连。API Key 在百炼控制台的「密钥管理」里创建,业务空间 ID 在控制台的业务空间详情里看,以百炼文档为准:[获取与配置 API Key](https://help.aliyun.com/zh/model-studio/get-api-key)、[首次调用千问 API](https://help.aliyun.com/zh/model-studio/first-api-call-to-qwen)(里面讲了业务空间 ID)。Key 跟地域绑定,控制台右上角先选北京。Token Plan 的 `sk-sp-` 不行。没填时孩子端只出「老师们还没到」。
-2. **填档案**:vault(`~/cotutor/<孩子>-vault/`)里的 `孩子.md` 写 `school_start`(读一年级的年月,如 `2025-09`;`init --grade` 已经算好了),老师据此知道现在是几年级哪个学期;正文写孩子的情况。vault 里全是普通 markdown,不用装 Obsidian,想用 Obsidian 看就把这个文件夹当库打开。想用自己已有的 Obsidian 库,第一次 init 时加 `--vault <路径>`(一个孩子一个库;Mac 上别用「文稿」「桌面」和 iCloud 云盘里的,后台服务读不到)。
+2. **填档案**:笔记文件夹(vault,`~/cotutor/<孩子>-vault/`)里的 `孩子.md` 写 `school_start`(读一年级的年月,如 `2025-09`;`init --grade` 已经算好了),老师据此知道现在是几年级哪个学期;正文写孩子的情况。笔记文件夹里全是普通 markdown,不用装 Obsidian,想用 Obsidian 看就把它当库打开。想用自己已有的 Obsidian 库,第一次 init 时加 `--vault <路径>`(一个孩子一个库;Mac 上别用「文稿」「桌面」和 iCloud 云盘里的,后台服务读不到)。
 3. **体检**:`cotutor doctor` 逐项检查,不过的每条都带修法。
 
-装好以后也可以让编程助手帮你管:在孩子的文件夹(`~/cotutor/<孩子>/`)里打开 Claude Code 或 Codex,已带的技能直接能用。`cotutor-home` 排孩子的首页,`cotutor-tune` 调老师的口气和规矩,`cotutor-analyze` 分析某次对话为什么那样答。
+装好以后也可以让编程助手帮你管:在孩子的 cotutor 文件夹(`~/cotutor/<孩子>/`)里打开 Claude Code 或 Codex,已带的技能直接能用。`cotutor-home` 排孩子的首页,`cotutor-tune` 调老师的口气和规矩,`cotutor-analyze` 分析某次对话为什么那样答。
 
 `init` 把出厂老师拷进 `agents/<老师>.md`,把做课包用的四个技能 chalk-* 和五个机器件 cotutor-tutor / cotutor-board / cotutor-analyze / cotutor-tune / cotutor-home 拷进 `.agents/skills/`(Codex、Qwen Code 直接读;Claude Code 读的 `.claude/skills` 是链到它的);
 做小课堂的课包用 `cotutor chalk`(check / build / bake / snap / dub),烤画面与截图用本机的 Chrome(Windows 上没有 Chrome 就用 Edge)。要在平板上用(按住说话要 HTTPS):`cotutor cert` 签一张
@@ -134,9 +134,9 @@ import { loadWorkspace } from 'cotutor/workspace';                        // 解
 
 ## 数据与升级
 
-默认 workspace 是 `~/cotutor/<孩子>/`:配置在 `cotutor.json`,老师在 `agents/<老师>.md`,activity 在 `agents/<老师>/activities/`,技能在 `.agents/skills/`,对话在 `conversations/`,账本在 `ledger/`,照片在 `captures/`,课包在 `bundles/`,首页在 `home/`。长期档案、记忆和日记在 vault,和 workspace 分开放:缺省是旁边的 `~/cotutor/<孩子>-vault/`,位置写在 `cotutor.json` 的 `paths.vault`(0.4.4 及以前建的没写,vault 就是 workspace 本身,照旧能用,`cotutor doctor` 的 `vault.separate` 说怎么分开),规则见 [obsidian 仓库设计](docs/obsidian仓库设计.md)。workspace 与 vault 都要留着。
+默认 workspace(孩子的 cotutor 文件夹)是 `~/cotutor/<孩子>/`:配置在 `cotutor.json`,老师在 `agents/<老师>.md`,activity 在 `agents/<老师>/activities/`,技能在 `.agents/skills/`,对话在 `conversations/`,账本在 `ledger/`,照片在 `captures/`,课包在 `bundles/`,首页在 `home/`。长期档案、记忆和日记在 vault(笔记文件夹),和 workspace 分开放:缺省是旁边的 `~/cotutor/<孩子>-vault/`,位置写在 `cotutor.json` 的 `paths.vault`(0.4.4 及以前建的没写,vault 就是 workspace 本身,照旧能用,`cotutor doctor` 的 `vault.separate` 说怎么分开),规则见 [obsidian 仓库设计](docs/obsidian仓库设计.md)。workspace 与 vault 都要留着。
 
-**备份**放在孩子文件夹旁边的 `.backups/<孩子>/`,一份就是一个普通目录。服务开着时每天自动备一份(留 14 份),`cotutor upgrade` 前也备一份(留 5 份),没变的文件不占第二份地方;`cotutor backup` 随时手动备。**录音(wav)不在备份里**,它占了绝大部分地方;想留就自己拷 `conversations/`。vault 里的 md 也备一份(在那一份的 `_vault/` 里);恢复时不动 vault,只告诉你那份在哪,要不要拿回来你定。硬盘坏了这些也跟着没了,重要的话把 `.backups` 再拷到别处。
+**备份**放在 cotutor 文件夹旁边的 `.backups/<孩子>/`,一份就是一个普通目录。服务开着时每天自动备一份(留 14 份),`cotutor upgrade` 前也备一份(留 5 份),没变的文件不占第二份地方;`cotutor backup` 随时手动备。**录音(wav)不在备份里**,它占了绝大部分地方;想留就自己拷 `conversations/`。笔记文件夹里的 md 也备一份(在那一份的 `_vault/` 里);恢复时不动笔记文件夹,只告诉你那份在哪,要不要拿回来你定。硬盘坏了这些也跟着没了,重要的话把 `.backups` 再拷到别处。
 
 ```sh
 cotutor backup list                   # 看有哪些
@@ -188,7 +188,7 @@ cotutor serve --sandbox --fresh       # 丢掉试过的,从真 workspace 重新�
 
 ## 卸载
 
-孩子的文件夹(`~/cotutor/<孩子>/`)和备份(`~/cotutor/.backups/`)是家里的记录,删了找不回来,卸载程序不会碰它们;真不要了自己删。Windows 上命令写成 `cotutor.cmd`、`npm.cmd`。
+孩子的 cotutor 文件夹(`~/cotutor/<孩子>/`)、笔记文件夹(`~/cotutor/<孩子>-vault/`)和备份(`~/cotutor/.backups/`)是家里的记录,删了找不回来,卸载程序不会碰它们;真不要了自己删。Windows 上命令写成 `cotutor.cmd`、`npm.cmd`。
 
 ```sh
 cotutor service uninstall --workspace ~/cotutor/<孩子>   # 每个孩子一次;最后一个卸掉时,菜单栏(任务栏)图标也一起卸

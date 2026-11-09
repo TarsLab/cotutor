@@ -448,10 +448,10 @@ export async function doctorWorkspace(
         name: 'vault.separate',
         ok: separate,
         required: false,
-        detail: separate ? `vault 在 ${redactHome(vault)},和孩子的文件夹分开` : rootInVault ? `孩子的文件夹在 vault(${redactHome(vault)})里面` : vault === ws.root ? 'vault 就是孩子的文件夹(旧版 init 的布局):照旧能用,但用 Obsidian 打开满是程序的文件,恢复备份会连家长的笔记一起换掉' : `vault 在孩子的文件夹里(${redactHome(vault)})`,
+        detail: separate ? `笔记文件夹(vault)在 ${redactHome(vault)},和 cotutor 文件夹分开` : rootInVault ? `孩子的 cotutor 文件夹在笔记文件夹(${redactHome(vault)})里面` : vault === ws.root ? '笔记文件夹(vault)就是孩子的 cotutor 文件夹(旧版 init 的布局):照旧能用,但用 Obsidian 打开满是程序的文件,恢复备份会连家长的笔记一起换掉' : `笔记文件夹(vault)在孩子的 cotutor 文件夹里(${redactHome(vault)})`,
         fix: separate ? undefined : rootInVault
-          ? '把孩子的文件夹挪到 vault 外面(挪了要再 cotutor service install),或者 vault 换一个目录'
-          : `想分开:cotutor service stop,建 ${homePath(defaultVaultOf(ws.root))},把档案、日记/、记忆/、计划/、教材/、参考/ 和你自己的笔记挪过去,cotutor.json 的 paths.vault 写成它,再 cotutor service start`,
+          ? '把孩子的 cotutor 文件夹挪到笔记文件夹外面(挪了要再 cotutor service install),或者笔记文件夹换一个地方'
+          : `想分开:cotutor service stop,建笔记文件夹 ${homePath(defaultVaultOf(ws.root))},把档案、日记/、记忆/、计划/、教材/、参考/ 和你自己的笔记挪过去,cotutor.json 的 paths.vault 写成它,再 cotutor service start`,
       });
     }
 

@@ -172,7 +172,7 @@ export async function main(argv: string[]): Promise<void> {
         if (!sub) {
           const b = await backup.makeBackup(target, { why: 'manual', version: BUILD.version });
           process.stdout.write(`备份好了:${backup.describeBackup(b)}\n  在 ${redactHome(backup.backupsOf(ws.root))}\n  不含录音(wav)和能重新生成的文件${b.audioSkipped ? `,这次跳过 ${b.audioSkipped} 个录音` : ''}\n`);
-          if (b.vault === 'unreadable') process.stdout.write(`! vault 读不了(${redactHome(ws.paths.vault)}),这份里没有它\n`);
+          if (b.vault === 'unreadable') process.stdout.write(`! 笔记文件夹(vault)读不了(${redactHome(ws.paths.vault)}),这份里没有它\n`);
           return;
         }
         if (sub === 'list') {
@@ -185,7 +185,7 @@ export async function main(argv: string[]): Promise<void> {
         if (sub !== 'restore' || !name) throw new UsageError(`cotutor backup [list | restore <名字> [--yes]]\n${USAGE}`);
         if (!(await backup.listBackups(ws.root)).some((b) => b.name === name)) throw new UsageError(`没有这份备份:${name}(cotutor backup list 看有哪些)`);
         if (flags.yes !== true) {
-          process.stdout.write(`会把孩子的文件夹恢复成 ${name} 那时的样子:备份里有的文件都覆盖回去,之后新多出来的不删。\n恢复前会先把现在的样子也备份一份,恢复错了还能回来。服务会停一下。录音不在备份里,不受影响。\n确定的话加 --yes\n`);
+          process.stdout.write(`会把孩子的 cotutor 文件夹恢复成 ${name} 那时的样子:备份里有的文件都覆盖回去,之后新多出来的不删。\n恢复前会先把现在的样子也备份一份,恢复错了还能回来。服务会停一下。录音不在备份里,不受影响。\n确定的话加 --yes\n`);
           process.exitCode = 1;
           return;
         }
@@ -198,7 +198,7 @@ export async function main(argv: string[]): Promise<void> {
         if (service && health) await controlService(host, ws.root, 'stop');
         const r = await backup.restoreBackup(target, name, { version: BUILD.version });
         process.stdout.write(`恢复好了:${r.files} 个文件。恢复前的样子留在 ${r.safety}\n`);
-        if (r.vaultCopy) process.stdout.write(`外面的 vault 没动;要拿回来,那一份的 md 在 ${redactHome(r.vaultCopy)}\n`);
+        if (r.vaultCopy) process.stdout.write(`笔记文件夹(vault)没动;要拿回来,那一份的 md 在 ${redactHome(r.vaultCopy)}\n`);
         if (service && health) { await controlService(host, ws.root, 'start'); process.stdout.write('服务重起了\n'); }
         return;
       }

@@ -13,7 +13,7 @@ import { UNLOCK_JS } from './unlock.ts';
 import { REEL_MODE_JS } from './reel-mode.ts';
 import { SNAP_CSS, snapHtml } from '../kid/photo-ui.ts';
 import { faviconLinks } from '../shared/favicon.ts';
-import { BTN_CSS, BTN_JS, btn } from './ui.ts';
+import { BTN_CSS, BTN_JS, CHECK_FOOT_CSS, btn, checkFoot } from './ui.ts';
 
 export const DICTATION_EN_PAGE = String.raw`<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
@@ -67,8 +67,15 @@ ${BTN_CSS}
   .center { display:flex; flex-direction:column; align-items:center; gap:18px; padding-top:40px; text-align:center; }
   .center b { font-size:28px; }
   .center span { color:var(--dim); }
-  /* 对一对:不限 1000 宽,一行两格(窄了一格);格子上下留白后变高,一列只看得到一个半 */
-  #v-check { max-width:none; }
+  /* 对一对:不限 1000 宽,一行两格(窄了一格);格子上下留白后变高,一列只看得到一个半。
+     一屏高,上栏和底栏不动、只滚中间(原先「对好了」跟在最后一行后面,词多了要滑到底才找得到) */
+  #v-check { max-width:none; height:100vh; height:100dvh; gap:0; padding-bottom:0; --vx-l:20px; --vx-r:20px; }
+  #v-check > .bar { flex:none; }
+  #v-check > .muted { flex:none; padding:6px 0 10px; }
+  .cscroll { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; }
+  /* 放得下就上下居中,放不下从顶上开始滚 */
+  .cscroll .rows { margin:auto 0; padding:4px 0 16px; }
+${CHECK_FOOT_CSS}
   .rows { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%, 460px), 1fr)); gap:14px; }
   .row { background:#fff; border:1.5px solid var(--line); border-radius:18px; padding:12px; display:flex; flex-direction:column; gap:8px; }
   .row svg { width:100%; aspect-ratio:16 / 7; display:block; }
@@ -146,9 +153,9 @@ ${BTN_CSS}
 </div>
 <div class="view" id="v-check">
   <div class="bar"><span class="bk-slot"></span><span class="ttl">对一对</span>${btn('tool', 'overlay', '拿开蓝字', 'id="c-hide"')}</div>
-  <div class="muted">蓝色的是书上的单词,看看你写的一样不一样。想再写哪个就点「再写一遍」。</div>
-  <div class="rows" id="c-rows"></div>
-  <div style="display:flex;justify-content:center">${btn('main', 'done', '对好了', 'id="c-done"')}</div>
+  <div class="muted">蓝色的是书上的单词,看看你写的一样不一样</div>
+  <div class="cscroll" id="c-scroll"><div class="rows" id="c-rows"></div></div>
+  ${checkFoot('write', '想再写哪个,就点它的「再写一遍」')}
 </div>
 <div class="view" id="v-submit">
   <div class="bar"><span class="bk-slot"></span></div>

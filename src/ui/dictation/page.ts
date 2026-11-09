@@ -12,7 +12,7 @@ import { UNLOCK_JS } from './unlock.ts';
 import { REEL_MODE_JS } from './reel-mode.ts';
 import { SNAP_CSS, snapHtml } from '../kid/photo-ui.ts';
 import { faviconLinks } from '../shared/favicon.ts';
-import { BTN_CSS, BTN_JS, btn } from './ui.ts';
+import { BTN_CSS, BTN_JS, CHECK_FOOT_CSS, btn, checkFoot } from './ui.ts';
 
 /** 写字格三档的按钮:档、图标边长、读屏的名字;越下越大 */
 const PAD_SIZES: [string, number, string][] = [['s', 14, '小'], ['m', 20, '中'], ['l', 28, '大']];
@@ -134,15 +134,25 @@ ${BTN_CSS}
   #v-start .hd { font-size:30px; font-weight:700; }
   #v-start .sub { color:var(--dim); font-size:18px; }
   #v-start .acts { display:flex; flex-direction:column; gap:14px; align-items:center; }
-  /* 对答案 */
-  .cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(var(--card, 320px), 1fr)); gap:18px; align-content:start; }
-  .wc { display:flex; flex-direction:column; align-items:center; gap:12px; padding:16px; background:var(--card); border:1px solid var(--line); border-radius:20px; }
+  /* 对答案:上栏和底栏不动,只滚中间;「对好了」一直在手边(原先跟在卡片后面,两排卡就挤出屏幕,返回胶囊还压在滚上来的卡上) */
+  #v-check { height:100vh; height:100dvh; min-height:0; padding-bottom:0; gap:0; --vx-l:max(24px, env(safe-area-inset-left)); --vx-r:max(24px, env(safe-area-inset-right)); }
+  #v-check > .bar { flex:none; padding-bottom:12px; }
+  .cards { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; }
+  /* 放得下就上下居中,放不下从顶上开始滚(margin:auto 不会把上面的卡挤到滚不到的地方) */
+  .cards-in { margin:auto 0; display:flex; flex-wrap:wrap; justify-content:center; align-items:flex-start; gap:16px 20px; padding:12px 0; }
+${CHECK_FOOT_CSS}
+  /* 一个词一张卡;格子多大由 fitCheck 定(--pad 在 #c-list 上) */
+  .wc { display:flex; flex-direction:column; align-items:stretch; gap:10px; min-width:164px; padding:14px; background:var(--card); border:1px solid var(--line); border-radius:20px; }
   .wc .pads { gap:10px; flex-wrap:nowrap; }
   .wc .padbox { cursor:pointer; }
-  .ask { display:flex; align-items:center; gap:12px; padding:6px 6px 6px 16px; background:var(--tutor); border-radius:24px; font-size:17px; color:var(--tutor-ink); }
-  .ask button { display:inline-flex; align-items:center; gap:6px; min-height:44px; padding:0 20px; border-radius:22px; border:0; background:var(--clay); color:#fff; font-weight:600; }
-  .self { display:inline-flex; align-items:center; gap:6px; min-height:44px; padding:0 16px; border-radius:22px; border:1px solid var(--line); background:#fff; font-size:15px; color:var(--dim); }
-  .ask button svg, .self svg { width:18px; height:18px; flex:none; }
+  /* 格子下面一行,整条一个按钮、不折行:问一句(淡的学科色)、没问的(安静)、写过第二遍(还能再写) */
+  .ask, .self, .redo { display:flex; align-items:center; justify-content:center; gap:8px; min-height:48px; border-radius:24px; white-space:nowrap; }
+  .ask { padding:0 14px; border:1px solid var(--tutor-line); background:var(--tutor); color:var(--tutor-ink); font-size:17px; font-weight:600; }
+  .self { padding:0 14px; border:1px solid var(--line); background:#fff; color:var(--dim); font-size:16px; }
+  .redo { justify-content:space-between; padding:0 5px 0 14px; background:#f4f2ec; color:#4f4b45; font-size:16px; }
+  .redo button { display:inline-flex; align-items:center; gap:6px; min-height:38px; padding:0 14px; border-radius:19px; border:1px solid var(--line); background:#fff; color:var(--dim); font-size:15px; }
+  .ask svg, .self svg { width:18px; height:18px; flex:none; }
+  .redo svg { width:16px; height:16px; flex:none; }
   .hint { color:var(--dim); font-size:17px; }
   /* 逐笔看 */
   #v-order .grow { flex-direction:row; align-items:center; justify-content:center; gap:48px; flex-wrap:wrap; }
@@ -262,11 +272,11 @@ ${TUTOR_FACE_CSS}
 
 <div class="view" id="v-check">
   <div class="bar">
-    <div class="l"><span class="bk-slot"></span><div style="display:flex;flex-direction:column;gap:2px;min-width:0"><span class="ttl">写完啦,自己对一对</span><span class="hint">淡蓝的是书上的字,叠在你写的上面。点一个字,看它一笔一笔怎么写。</span></div></div>
+    <div class="l"><span class="bk-slot"></span><div style="display:flex;flex-direction:column;gap:2px;min-width:0"><span class="ttl">写完啦,自己对一对</span><span class="hint">淡蓝的是书上的字,叠在你写的上面</span></div></div>
     ${btn('tool sm', 'overlay', '拿开蓝字', 'id="c-toggle"')}
   </div>
-  <div class="cards" id="c-cards"></div>
-  <div class="foot"><span></span>${btn('main', 'done', '对好了', 'id="c-done"')}</div>
+  <div class="cards" id="c-cards"><div class="cards-in" id="c-list"></div></div>
+  ${checkFoot('tap', '点一个字,看它一笔一笔怎么写')}
 </div>
 
 <div class="view" id="v-order">
@@ -837,28 +847,55 @@ ${BTN_JS}
   };
 
   // ---------- 对答案 ----------
+  /**
+   * 格子下面那一行,整条就是按钮:ask = 比对后问一句(点了就是答应),redo = 写过第二遍(还能再写),self = 没问、自己想写也行。
+   * 录像里同一份,不给 go(不接点击)
+   */
+  var checkTail = function (state, go) {
+    var on = go ? { click: go } : {};
+    if (state === 'ask') return h('button', { 'class': 'ask', type: 'button', on: on }, ico('write'), lbl('再写一遍?'));
+    if (state === 'redo') return h('div', { 'class': 'redo' }, h('span', { text: '又写了一遍' }), h('button', { type: 'button', on: on }, ico('write'), lbl('再写')));
+    return h('button', { 'class': 'self', type: 'button', on: on }, ico('write'), lbl('我想再写'));
+  };
+  /**
+   * 对一对的格子多大:中间那块不滚就放得下的最大(上限 240);放不下就用下限,中间滚,上下两栏不动。
+   * 卡宽 = 字数 × 格 + 字间 10 + 边距 30(至少 164,放得下一行按钮),卡高 = 格 + 90;卡间横 20、竖 16
+   */
+  var fitCheck = function (counts) {
+    var wrap = $('#c-cards'), list = $('#c-list');
+    var W = wrap.clientWidth, H = wrap.clientHeight - 24, lo = window.innerWidth < 700 ? 80 : 96;
+    for (var s = 240; s >= lo; s -= 4) {
+      var x = 0, rows = 1, fits = true;
+      for (var i = 0; i < counts.length; i++) {
+        var w = Math.max(164, counts[i] * s + (counts[i] - 1) * 10 + 30);
+        if (w > W) { fits = false; break; }
+        if (x && x + 20 + w > W) { rows++; x = w; } else x += (x ? 20 : 0) + w;
+      }
+      if (fits && rows * (s + 90) + (rows - 1) * 16 <= H) { list.style.setProperty('--pad', s + 'px'); return; }
+    }
+    list.style.setProperty('--pad', lo + 'px');
+  };
+  window.addEventListener('resize', function () { if ($('#v-check').classList.contains('on') && S.ccounts) fitCheck(S.ccounts); });
   var openCheck = function () {
     if (!S.v.answers) { api('GET', '/api/dictation/' + S.v.id + '/kid').then(function (v) { setView(v); if (v.answers) openCheck(); }); return; }
-    var box = $('#c-cards');
-    var size = window.innerWidth < 700 ? 110 : 130;
-    var most = Math.max.apply(null, S.v.answers.map(function (w) { return Array.from(w.chars).length; }));
-    box.style.setProperty('--card', Math.min(window.innerWidth - 48, most * (size + 10) + 40) + 'px');
+    var box = $('#c-list');
     box.replaceChildren();
+    S.ccounts = S.v.answers.map(function (w) { return Array.from(w.chars).length; });
     S.v.answers.forEach(function (w, wi) {
       var chars = Array.from(w.chars);
       var row = h('div', { 'class': 'pads' });
-      row.style.setProperty('--pad', size + 'px');
       chars.forEach(function (ch, ci) {
         var pad = makePad({ ink: w.ink[ci] || [], onTap: function () { event('strokeOrder', wi, ci); openStrokeOrder(wi, ci); } });
         glyph(ch).then(function (d) { fillStd(pad, d, ''); });
         row.append(pad.el);
       });
       var tail = w.ask
-        ? h('div', { 'class': 'ask' }, '这个再写一遍?', h('button', { on: { click: function () { event('rewrite', wi); openRewrite(wi, false); } } }, ico('write'), lbl('好')))
-        : h('button', { 'class': 'self', on: { click: function () { event('self', wi); openRewrite(wi, true); } } }, ico('write'), lbl(w.rewrote ? '再写一次' : '我想再写'));
+        ? checkTail('ask', function () { event('rewrite', wi); openRewrite(wi, false); })
+        : checkTail(w.rewrote ? 'redo' : 'self', function () { event('self', wi); openRewrite(wi, true); });
       box.append(h('div', { 'class': 'wc' }, row, tail));
     });
     show('check');
+    fitCheck(S.ccounts);
   };
   $('#c-toggle').addEventListener('click', function () {
     var bare = $('#v-check').classList.toggle('bare');
@@ -1020,17 +1057,16 @@ ${BTN_JS}
     var R = RL.r;
     if (rebuild) {
       show('check');
-      var box = $('#c-cards'), size = window.innerWidth < 700 ? 110 : 130;
-      var most = Math.max.apply(null, R.chars.map(function (cs) { return cs.length; }));
-      box.style.setProperty('--card', Math.min(window.innerWidth - 48, most * (size + 10) + 40) + 'px');
+      var box = $('#c-list');
       RL.cards = R.chars.map(function (cs, wi) {
-        var row = h('div', { 'class': 'pads' }); row.style.setProperty('--pad', size + 'px');
+        var row = h('div', { 'class': 'pads' });
         var pads = cs.map(function (ch) { var p = makePad({}); var d = reelGlyph(ch); if (d) fillStd(p, d, ''); row.append(p.el); return p; });
         var rewrote = R.rewrites.some(function (x) { return x.word === wi && x.to <= RL.t; });
-        var tail = RL.s.asked.indexOf(wi) >= 0 && !rewrote ? h('div', { 'class': 'ask' }, '这个再写一遍?', h('button', {}, ico('write'), lbl('好'))) : h('button', { 'class': 'self' }, ico('write'), lbl(rewrote ? '再写一次' : '我想再写'));
+        var tail = checkTail(RL.s.asked.indexOf(wi) >= 0 && !rewrote ? 'ask' : rewrote ? 'redo' : 'self');
         return { pads: pads, el: h('div', { 'class': 'wc' }, row, tail) };
       });
       box.replaceChildren.apply(box, RL.cards.map(function (c) { return c.el; }));
+      fitCheck(R.chars.map(function (cs) { return cs.length; }));
     }
     RL.cards.forEach(function (c, wi) { c.pads.forEach(function (p, ci) { reelInk(p, f.latest[wi][ci] || []); }); });
   };

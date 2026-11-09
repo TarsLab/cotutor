@@ -44,12 +44,26 @@ export const ICON = {
   next: svg('<path d="M9 18l6-6-6-6"></path>'),
   /** 重拍:老师页输入条那个相机 */
   camera: cameraSvg(),
+  /** 点一下(对一对底栏的提示):手指 */
+  tap: svg('<path d="M9 11V5.5a1.5 1.5 0 0 1 3 0V11"></path><path d="M12 10.5V9a1.5 1.5 0 0 1 3 0v2"></path><path d="M15 10.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-.5a6 6 0 0 1-4.6-2.2L4.6 16a1.5 1.5 0 0 1 2.3-1.9L9 16.5"></path>'),
 } as const;
 
 export type IconName = keyof typeof ICON;
 
 /** 写字那排(两页一样):再念、撤销、擦掉、不会写,给答案、写好了 */
 export const WRITE_TOOLS = ['再念', '撤销', '擦掉', '不会写,给答案', '写好了'] as const;
+
+/**
+ * 对一对的底栏(两页一样):钉在屏幕底下,左边一句提示、右边「对好了」,词再多也不用滑到底找它(2026-11-09 iPad 真机)。
+ * 那页的 #v-check 要一屏高、只滚中间,并给出 --vx-l / --vx-r(.view 的左右内边距):底栏伸到屏幕两边
+ */
+export const CHECK_FOOT_CSS = `
+  .cfoot { flex:none; display:flex; align-items:center; justify-content:space-between; gap:12px; margin:0 calc(-1 * var(--vx-r)) 0 calc(-1 * var(--vx-l)); padding:14px var(--vx-r) calc(env(safe-area-inset-bottom) + 14px) var(--vx-l); background:#fff; border-top:1px solid var(--line); }
+  .cfoot .ctip { display:flex; align-items:center; gap:10px; min-width:0; font-size:16px; color:var(--dim); }
+  .cfoot .ctip svg { width:22px; height:22px; flex:none; }
+  @media (max-width: 600px) { .cfoot .ctip { display:none; } .cfoot { justify-content:flex-end; } }`;
+export const checkFoot = (icon: IconName, tip: string): string =>
+  `<div class="cfoot"><span class="ctip">${ICON[icon]}<span>${tip}</span></span>${btn('main', 'done', '对好了', 'id="c-done"')}</div>`;
 
 /** 页面里写死的按钮:图标在字前面;attrs 原样拼进标签(id、data-*、hidden……);label 空 = 只有图标,要写 aria-label */
 export const btn = (cls: string, icon: IconName, label: string, attrs = ''): string =>

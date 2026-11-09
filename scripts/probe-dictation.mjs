@@ -166,6 +166,34 @@ try {
   ok('问「这个再写一遍?」的只有鼓励(少一笔);春天不问,叶看过答案照着写了也不问', asks === 'self,ask,self', asks);
   ok('页面上没有叉、没有分数、没有对错的字', !(await evaluate(`/[✗×]|错|分数|不对/.test(document.querySelector('#v-check').innerText)`)));
   await shot('04-check');
+  // 2026-11-09 iPad 真机:两排卡时「对好了」被挤出屏幕、「这个再写一遍?」折成三行、返回胶囊压在滚上来的卡上
+  const layout = () => evaluate(`(() => {
+    const r = (el) => el.getBoundingClientRect();
+    const done = r(document.querySelector('#c-done')), cards = r(document.querySelector('#c-cards')), back = r(document.querySelector('#back'));
+    const lines = [...document.querySelectorAll('.wc .ask, .wc .self, .wc .redo')].map((el) => Math.round(r(el).height));
+    return { doneIn: done.top >= 0 && done.bottom <= innerHeight && done.right <= innerWidth, pageScroll: document.scrollingElement.scrollHeight - innerHeight,
+      cardsBelowBack: cards.top >= back.bottom, tallest: Math.max(...lines), pad: getComputedStyle(document.querySelector('#c-list')).getPropertyValue('--pad').trim(),
+      scrolls: document.querySelector('#c-cards').scrollHeight > document.querySelector('#c-cards').clientHeight };
+  })()`);
+  const l1 = await layout();
+  ok('对一对:「对好了」在屏幕里,页面本身不滚;卡区在返回胶囊下面;字下那行一行(不折)', l1.doneIn && l1.pageScroll <= 1 && l1.cardsBelowBack && l1.tallest <= 52, JSON.stringify(l1));
+  // 卡多了(拍照听写一次十几个词):只滚中间,上下两栏不动
+  await evaluate(`(() => { const list = document.querySelector('#c-list'), c = list.firstElementChild; for (let i = 0; i < 12; i++) { const x = c.cloneNode(true); x.dataset.probeClone = '1'; list.append(x); } })()`);
+  const l2 = await layout();
+  ok('十五张卡:中间滚,「对好了」还在屏幕里,页面本身不滚', l2.scrolls && l2.doneIn && l2.pageScroll <= 1, JSON.stringify(l2));
+  await evaluate(`document.querySelector('#c-cards').scrollTop = 1e6`);
+  await shot('04b-check-many');
+  await evaluate(`document.querySelector('#c-cards').scrollTop = 0; document.querySelectorAll('[data-probe-clone]').forEach((x) => x.remove())`);
+  // iPad 竖放:格子按剩的地方放大,底栏照样在
+  await send('Emulation.setDeviceMetricsOverride', { width: 820, height: 1180, deviceScaleFactor: 1, mobile: false });
+  await waitFor(`innerWidth === 820`);
+  await sleep(300);
+  const l3 = await layout();
+  ok('竖放:「对好了」在屏幕里,格子比横放大', l3.doneIn && l3.pageScroll <= 1 && parseInt(l3.pad) > parseInt(l1.pad), JSON.stringify({ landscape: l1.pad, portrait: l3.pad, doneIn: l3.doneIn }));
+  await shot('04c-check-portrait');
+  await send('Emulation.clearDeviceMetricsOverride');
+  await waitFor(`innerWidth !== 820`);
+  await sleep(300);
   await tap('#c-toggle');
   ok('拿开蓝字:书上的字藏起来', await evaluate(`getComputedStyle(document.querySelector('.wc .std')).display === 'none'`));
   await shot('05-check-bare');

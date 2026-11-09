@@ -123,6 +123,19 @@ try {
   ok('看过答案的那个写着', await evaluate(`document.querySelectorAll('#c-rows .row')[1].innerText.includes('看了答案')`));
   ok('页面上没有叉、没有分数、没有对错的字', await evaluate(`!/[×✗✘]|分数|错|对了/.test(document.body.innerText.replace('对一对', '').replace('对好了', ''))`));
   await shot('en-04-check');
+  // 2026-11-09:「对好了」原先跟在最后一行后面,词多了要滑到底;现在一屏高、只滚中间,底栏不动
+  const layout = () => evaluate(`(() => {
+    const done = document.querySelector('#c-done').getBoundingClientRect(), sc = document.querySelector('#c-scroll');
+    return { doneIn: done.top >= 0 && done.bottom <= innerHeight && done.right <= innerWidth, pageScroll: document.scrollingElement.scrollHeight - innerHeight, scrolls: sc.scrollHeight > sc.clientHeight };
+  })()`);
+  const l1 = await layout();
+  ok('对一对:「对好了」在屏幕里,页面本身不滚', l1.doneIn && l1.pageScroll <= 1, JSON.stringify(l1));
+  await evaluate(`(() => { const rows = document.querySelector('#c-rows'), r = rows.firstElementChild; for (let i = 0; i < 12; i++) { const x = r.cloneNode(true); x.dataset.probeClone = '1'; rows.append(x); } })()`);
+  const l2 = await layout();
+  ok('十五行:中间滚,「对好了」还在屏幕里,页面本身不滚', l2.scrolls && l2.doneIn && l2.pageScroll <= 1, JSON.stringify(l2));
+  await evaluate(`document.querySelector('#c-scroll').scrollTop = 1e6`);
+  await shot('en-04b-check-many');
+  await evaluate(`document.querySelector('#c-scroll').scrollTop = 0; document.querySelectorAll('[data-probe-clone]').forEach((x) => x.remove())`);
   await tap('#c-hide');
   ok('拿开蓝字', await waitFor(`document.querySelectorAll('#c-rows .enw').length === 0`));
   await tap('#c-hide');

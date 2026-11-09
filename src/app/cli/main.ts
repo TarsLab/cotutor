@@ -11,6 +11,7 @@ import { basename, join } from 'node:path';
 import { doctorWorkspace } from './doctor.ts';
 import { initWorkspace } from './init.ts';
 import { gradePacks } from './grades.ts';
+import { guideText } from './guide.ts';
 import { makeCert } from './cert.ts';
 import { PIN_RE, USER_PIN_FILE, clearPin, readPin, setPin } from '../http/access.ts';
 import { addTutorFile, upgradeTutors } from './tutors.ts';
@@ -106,7 +107,7 @@ async function backupBeforeUpgrade(root: string): Promise<string | null> {
 }
 
 /** 不用 workspace 的命令:--sandbox 对它们没有意义 */
-const NO_WORKSPACE = ['grades', 'init', 'mock', 'pin', 'cert', 'tray', 'update'];
+const NO_WORKSPACE = ['guide', 'grades', 'init', 'mock', 'pin', 'cert', 'tray', 'update'];
 
 export async function main(argv: string[]): Promise<void> {
   let json = false;
@@ -136,6 +137,10 @@ export async function main(argv: string[]): Promise<void> {
       }
     }
     switch (cmd) {
+      case 'guide': {
+        process.stdout.write(guideText(version()));
+        return;
+      }
       case 'grades': {
         const packs = (await gradePacks()).map(({ grade }) => ({ grade }));
         process.stdout.write(json ? `${JSON.stringify(packs, null, 2)}\n` : `可安装的教学包:${packs.map((p) => `${p.grade} 年级`).join('、') || '无'}\n`);

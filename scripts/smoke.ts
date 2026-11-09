@@ -36,6 +36,11 @@ try {
 }
 need(out.trim() === pkg.version, `dist 的 --version 报 ${JSON.stringify(out)},应是 ${pkg.version}`);
 
+// 2b. cotutor guide 从 dist 出发找得到随包发的 INSTALL.md(家长那句 npx cotutor@latest guide 靠它)
+const { PACKAGE_INSTALL_MD } = await import(new URL('../dist/app/cli/guide.js', import.meta.url).href) as typeof import('../src/app/cli/guide.ts');
+need(PACKAGE_INSTALL_MD === join(root, 'INSTALL.md') && existsSync(PACKAGE_INSTALL_MD), `dist 算出的 INSTALL.md 是 ${PACKAGE_INSTALL_MD}`);
+need((pkg as { files?: string[] }).files?.includes('INSTALL.md'), 'package.json 的 files 里没有 INSTALL.md,npx cotutor guide 打印不出来');
+
 // 3. 老师定义从 dist 出发要能找到,且随包发出去(init 靠它拷贝)
 const { PACKAGE_AGENTS_DIR } = await import(new URL('../dist/app/cli/skeleton.js', import.meta.url).href) as { PACKAGE_AGENTS_DIR: string };
 need(PACKAGE_AGENTS_DIR === join(root, 'grades', 'grade-2', 'agents'), `dist 算出的 agents 目录是 ${PACKAGE_AGENTS_DIR}`);

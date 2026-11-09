@@ -6,10 +6,16 @@
 
 ## 五分钟用起来
 
-**让 AI 助手帮你装:** 把这句话发给编程助手(Claude Code、Codex 这类能在电脑上跑命令的),或者网页版的聊天机器人,它会一步步带你做。百炼的 Key 由你自己填在页面上,不用告诉它。
+**让 AI 助手帮你装:** 把这句话发给能在电脑上跑命令的 AI 助手(WorkBuddy、Claude Code、Codex 这类),它会一步步带你做。不用输网址:安装说明跟着 npm 包走,和装上的版本对得上。百炼的 Key 由你自己填在页面上,不用告诉它。
 
 ```text
-请阅读 https://raw.githubusercontent.com/TarsLab/cotutor/main/INSTALL.md ,照着在这台电脑上安装 cotutor
+帮我在这台电脑上装 cotutor:先跑 npx cotutor@latest guide,照它说的一步步做。没有 Node 就先告诉我
+```
+
+网页版的聊天机器人跑不了命令,换这句,它会一次告诉你一步:
+
+```text
+请阅读 https://cdn.jsdelivr.net/npm/cotutor@latest/INSTALL.md ,一步一步带我在这台电脑上安装 cotutor
 ```
 
 **自己装:** 需要一台电脑(Mac 最省事)、[Node.js](https://nodejs.org) ≥ 22.18(装 LTS 版),和一个百炼账号(北京地域,按量付费)。老师的嘴和脑都走百炼,由应用直接调用,不用另装模型客户端:嘴是 `qwen3.8-omni-flash-realtime`,听孩子说、照着讲稿念;脑是 `qwen3.8-max`,写讲稿和板书。

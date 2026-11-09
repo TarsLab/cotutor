@@ -1,5 +1,6 @@
 /** 命令用法(cotutor --help;技能 cotutor-analyze 的 references/命令与文件.md 从这里取分析用的那几行,所以放单独文件,别的模块 import 不会跑到 CLI) */
 export const USAGE = `用法:
+  cotutor guide                                                     给 AI 助手的安装说明(包里的 INSTALL.md,和这个版本对得上):替家长在新电脑上装 cotutor,先跑 npx cotutor@latest guide,照它一步步做
   cotutor init <slug> [--dir <path>] [--vault <path>] [--name <孩子名>] [--grade <1-6>] [--port <n>]   建 cotutor 文件夹 ~/cotutor/<slug>/ 与旁边的笔记文件夹(vault)~/cotutor/<slug>-vault/(幂等补缺;--vault 指家长已有的库,不能在 cotutor 文件夹里;默认二年级教学包;端口在这里选一次写进 cotutor.json:443 优先,不行就 8443、8445…,以后不变)
   cotutor grades [--json]                                          列出本包可安装的年级教学包
   cotutor doctor [--workspace <dir>] [--json] [--live] [--fix]                 逐项体检;--live 真连一次百炼实时模型、真合成一句配音(花一分钱)把 API 层的坑摆出来(真跑老师用 cotutor send);--json 里不过的项带 cmd(能直接跑)或 human(要人来);--fix 把带 cmd 的一条条修掉,要人来的留着

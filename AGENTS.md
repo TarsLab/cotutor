@@ -7,7 +7,7 @@
 本文件写仓库结构、开发方式与当前约束。历史讨论看 git log。Codex 直接读本文件,Claude Code 经 `CLAUDE.md` 的 `@AGENTS.md` 引入;改规矩只改这里。
 
 - 使用、配置与开发启动见 `README.md`;iPad 真机见 `docs/iPad与iPhone.md`。
-- `docs/` 只维护六篇:设备使用、vault、提示词、卡片协议、年级教学包和词表;根目录的 `INSTALL.md` 给替家长安装的 agent 看,`tests/install-doc.test.ts` 盯着里面的命令、旗标和字段。契约以 `src/schema/` 为准,具体行为以实现和测试为准。
+- `docs/` 只维护六篇:设备使用、vault、提示词、卡片协议、年级教学包和词表;根目录的 `INSTALL.md` 给替家长安装的 agent 看,随 npm 包发,`cotutor guide`(`src/app/cli/guide.ts`)原样打印,README 给家长的那句就是叫助手跑 `npx cotutor@latest guide`(不用输网址、走 npm 能换国内镜像、和装上的版本对得上);`tests/install-doc.test.ts` 盯着里面的命令、旗标和字段。契约以 `src/schema/` 为准,具体行为以实现和测试为准。
 - 改 `grades/`、`skills/`、`cards/` 下的 md 先看 `docs/写提示词.md`;自造的词查 `docs/词表.md`。
 - 草稿与随手记放 `docs/wip/`(gitignore)。已有的 `docs/archive/` 是本机材料;清理正式文档时不删除这些未入库文件。过时的正式文档直接删除,历史由 Git 保存。
 
@@ -55,7 +55,7 @@
 - 新版本提醒(`src/app/machine/update.ts`、比较与升级步骤 `src/shared/upgrade.ts`):服务每天问一次 npm 的 `latest`,存 `~/.config/cotutor/update.json`,经 `/api/health` 的 `latest`、`latestNotes` 给托盘菜单、家长端首页、`service status`;从仓库跑的不问;不自动升级。升级是 `cotutor update`(`src/app/cli/update-cmd.ts`):换完程序只用子进程跑新的 bin,这个文件别改成动态 import。改了先过 `tests/update.test.ts`、`tests/update-cmd.test.ts` 与 `tests/tray.test.ts`
 - 百炼跑起来以后的故障(`src/app/machine/bailian.ts` 的 `note` / `trouble` / `blocked` / `recheck`):嘴连不上(`mouthHealth`)、脑的请求失败记下,经 `/api/health` 的 `bailianTrouble` 给图标、家长端、`service status`、`doctor`;要家长动手的类别让孩子端首页 `ready` 变 false。WebSocket 看不到握手被拒的状态码,`askRealtime` 用普通 HTTPS 问错误码。欠费没法真测,照官方错误码表写。改了先过 `tests/bailian-trouble.test.ts`
 - 改 `cotutor doctor`、`service status --json` 或安装流程先过 `tests/init-doctor.test.ts`、`tests/service.test.ts` 与 `tests/install-doc.test.ts`,照着改 `INSTALL.md`。doctor 不过的项要么有 `cmd`(agent 直接跑:幂等、不碰孩子的数据、不用人输东西),要么由 `finish` 标 `human`
-- 发版:先写 `CHANGELOG.md` 和 `package.json` 的 `releaseNotes`(家长在提示条上看到的就是它,随 npm 下发;`tests/update.test.ts` 盯着两边一致)。账号开了发布 2FA,验证码 30 秒失效,所以先跑完 `prepublishOnly` 里的检查,再由人在自己的终端跑 `npm publish --ignore-scripts`。npm 回 `202` 后要扫描,公开前 `npm view` 查不到这个版本(0.4.0 等了约 26 分钟),要轮询;`INSTALL.md` 里新的命令和字段等 npm 公开后再推 main,因为推上去就生效
+- 发版:先写 `CHANGELOG.md` 和 `package.json` 的 `releaseNotes`(家长在提示条上看到的就是它,随 npm 下发;`tests/update.test.ts` 盯着两边一致)。账号开了发布 2FA,验证码 30 秒失效,所以先跑完 `prepublishOnly` 里的检查,再由人在自己的终端跑 `npm publish --ignore-scripts`。npm 回 `202` 后要扫描,公开前 `npm view` 查不到这个版本(0.4.0 等了约 26 分钟),要轮询;`INSTALL.md` 里新的命令和字段、README 里给家长的那几行都等 npm 公开后再推 main,因为推上去就生效(家长照 README 跑的 `npx cotutor@latest guide` 拿的是 npm 上的版本)
 - 冒烟:`init <slug> --dir <tmp>` → `doctor --workspace <tmp> --live` → `serve`;真跑老师 `cotutor send`;不花钱看前端 `cotutor mock`(老师都走实时老师页,假嘴念静音的声音;`--scenario nokey` 看没配百炼)
 - 页面里的 JS 有两个 CDP 探针进了 `pnpm test`(`tests/probe.test.ts` 起 `probe-layout`、`probe-play`,走 mock;要本机 Chrome,没有就跳过;`COTUTOR_SKIP_PROBES=1` 跳过),改 `kid-page.ts` 先看它们红不红;其余手动验收走 `scripts/probe-*.mjs`(CDP);舞台里的东西用 CDP 驱动;截图也走 CDP(`Page.captureScreenshot`),孩子端、工作台在轮询,无头 Chrome 的 `--screenshot` 会挂;手机尺寸要 `--force-device-scale-factor=2 --window-size=780,1688`;探针不出声:起 Chrome 加 `QUIET_ARGS`(`scripts/_quiet.mjs`,`--mute-audio`;页面不用浏览器合成声,mock 里卡的配音也是静音),要听加 `COTUTOR_PROBE_SOUND=1`
 

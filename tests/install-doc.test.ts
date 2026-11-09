@@ -2,6 +2,7 @@
  * INSTALL.md 是 agent 一字不差照做的:里面出现的 cotutor 命令、子命令、旗标都要在 USAGE 里有,过期的步骤比没有更糟。
  * 要人做的步骤必须标「交给家长」;命令块里不能出现禁止项;读的 JSON 字段要真有。
  */
+import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { check, done } from './_check.ts';
@@ -80,10 +81,21 @@ const ipad = read('docs/iPad与iPhone.md');
 check('iPad 文档在,第 3、4 节还是根证书与信任开关', existsSync(join(root, 'docs/iPad与iPhone.md')) && /^## 3\. .*根证书/m.test(ipad) && /^## 4\. .*信任/m.test(ipad));
 check('README 有「数据与升级」', /^## 数据与升级/m.test(read('README.md')));
 
-// ---- 入口:README 最上面一句可复制的话,AGENTS 第一屏分流 ----
+// ---- 入口:README 最上面一句可复制的话(不用输网址,走 npm),AGENTS 第一屏分流 ----
 const readme = read('README.md');
-const start = readme.indexOf('https://raw.githubusercontent.com/TarsLab/cotutor/main/INSTALL.md');
-check('README 在「五分钟用起来」开头放了给 AI 助手的那句', start > 0 && start < readme.indexOf('npm i -g cotutor'));
+const start = readme.indexOf('npx cotutor@latest guide');
+check('README 在「五分钟用起来」开头放了给 AI 助手的那句,叫它跑 npx cotutor@latest guide', start > 0 && start < readme.indexOf('npm i -g cotutor'));
+const web = readme.indexOf('https://cdn.jsdelivr.net/npm/cotutor@latest/INSTALL.md');
+check('跑不了命令的聊天机器人:读 npm 包里那份(jsDelivr),紧跟在后面', web > start && web < readme.indexOf('npm i -g cotutor'));
+check('README 不再让助手读 GitHub main 上的 INSTALL.md(main 可能比 npm 新)', !readme.includes('raw.githubusercontent.com/TarsLab/cotutor/main/INSTALL.md'));
+check('INSTALL.md 随 npm 包发', (JSON.parse(read('package.json')) as { files: string[] }).files.includes('INSTALL.md'));
+check('INSTALL.md 说了 npx 只是看,第 2 步照样装', doc.slice(0, doc.indexOf('## 不能做')).includes('npx cotutor@latest guide') && doc.includes('第 2 步照样要装'));
+// cotutor guide 原样打印;第一行只有 ASCII(PowerShell 5.1 按代码页解管道,中文成乱码时这行还读得懂)
+const guide = execFileSync(process.execPath, [join(root, 'bin', 'cotutor.js'), 'guide'], { encoding: 'utf8' });
+const [head, ...rest] = guide.split('\n');
+check('cotutor guide 打印的就是 INSTALL.md', rest.join('\n').trim() === doc.trim());
+check('guide 第一行只有 ASCII,带版本号和文件位置', /^[\x20-\x7e]+$/.test(head) && head.includes(JSON.parse(read('package.json')).version) && head.includes('INSTALL.md'), head);
+check('USAGE 第一条就是 guide(助手先看最上面)', usageLines[0]?.trim().startsWith('cotutor guide'), usageLines[0]);
 check('手动装的 README:第一次装会打开,不用再跑 cotutor open', readme.includes('第一次装会打开家长端') && !/^cotutor open /m.test(readme));
 check('AGENTS 第一屏分流:在家长的电脑上安装看 INSTALL.md', read('AGENTS.md').slice(0, 300).includes('INSTALL.md'));
 

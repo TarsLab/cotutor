@@ -114,6 +114,8 @@ ${BRAND_CSS}
   .qrrow { display:flex; flex-direction:column; gap:10px; align-items:center; text-align:center; }
   .qrimg { flex:none; width:220px; height:220px; max-width:100%; border-radius:8px; box-shadow:0 0 0 1px var(--line); overflow:hidden; background:#fff; }
   .qrimg svg { display:block; width:100%; height:100%; }
+  /* 「装证书」那格的红点:还没有平板连进来过 = 多半还没装,先扫它 */
+  .seg > .new::after { content:''; flex:none; width:8px; height:8px; margin-left:6px; border-radius:50%; background:var(--red); }
   .qrurl { font:13px/1.4 ui-monospace,Menlo,monospace; background:#faf9f4; border-radius:8px; padding:8px 10px; overflow-wrap:anywhere; }
   .qrwarn { font-size:13px; color:var(--accent); line-height:1.5; }
   .gh .x { height:auto; padding:2px 0; font-size:13px; }
@@ -350,7 +352,8 @@ ${pageDomJs(3200)}
   };
 
   // ---- 扫码打开:孩子的平板一张(孩子端)、家长自己的手机一张(家长端);服务端现画,地址同 /parent/qr。还没有孩子的设备连过就开着,连过收起;家长开合过就记住 ----
-  const QR = { d: null, ip: false, open: null, to: 'kid' };
+  // to 是 null 时第一次画再定(还没有平板连过、有证书 → 先给「装证书」);caName 是「装证书」那张换成电脑名
+  const QR = { d: null, ip: false, caName: false, open: null, to: null };
   try { const v = localStorage.getItem('parent-home-qr'); if (v === 'open' || v === 'closed') QR.open = v === 'open'; } catch (e) {}
   const qrEl = h('div', { id: 'kidqr' });
   const qrToggle = (open) => { QR.open = open; try { localStorage.setItem('parent-home-qr', open ? 'open' : 'closed'); } catch (e) {} qrDraw(); };
@@ -367,13 +370,18 @@ ${pageDomJs(3200)}
         h('span', { style: 'flex:none;display:flex', html: QR_ICON }), h('span', { class: 'tx' }, h('b', {}, '扫码打开'), h('small', {}, seen)), h('span', { class: 'lnk', style: 'font-size:14px' }, '展开'))));
       return;
     }
+    if (QR.to === null) QR.to = d.ca && !d.devices ? 'ca' : 'kid';
     if (QR.to === 'ca' && !d.ca) QR.to = 'kid';
     const kid = QR.to === 'kid', ca = QR.to === 'ca', c = kid ? d : ca ? d.ca : (d.parent || d);
-    const useIp = QR.ip && c.ip;
+    // 「装证书」缺省编 IP:Safari 把域名的 http 自动升成 https(这时还不信任证书,打不开,再去试 www.),IP 不升(2026-11-10 iPad 真机)
+    const useIp = Boolean(c.ip) && (ca ? !QR.caName : QR.ip);
     // 装证书(serve.ts 的 http 那一面给根证书):平板第一次用之前扫一次;有证书、找得到根证书才有这一格
     const tabs = [['kid', '孩子的平板'], ['parent', '我的手机']].concat(d.ca ? [['ca', '装证书']] : []);
     const seg = h('div', { class: 'seg', role: 'group', 'aria-label': '给谁扫' }, ...tabs.map(([k, l]) =>
-      h('button', { type: 'button', class: QR.to === k ? 'on' : '', 'aria-pressed': QR.to === k ? 'true' : 'false', on: { click: () => { QR.to = k; qrDraw(); } } }, l)));
+      h('button', { type: 'button', class: (QR.to === k ? 'on' : '') + (k === 'ca' && !d.devices ? ' new' : ''), 'aria-pressed': QR.to === k ? 'true' : 'false', on: { click: () => { QR.to = k; qrDraw(); } } }, l)));
+    const flip = ca
+      ? { label: useIp ? '换成 ' + host(c.url) : '换回 ' + host(c.ip), click: () => { QR.caName = !QR.caName; qrDraw(); } }
+      : { label: useIp ? '换回 ' + host(c.url) : '扫了打不开?换成 ' + host(c.ip), click: () => { QR.ip = !QR.ip; qrDraw(); } };
     const print = '/parent/qr?' + new URLSearchParams(Object.assign({}, useIp ? { via: 'ip' } : {}, kid ? {} : { to: 'parent' })).toString();
     qrEl.replaceChildren(
       h('div', { class: 'gh' }, h('span', {}, '扫码打开'), h('button', { type: 'button', class: 'x', 'aria-expanded': 'true', on: { click: () => qrToggle(false) } }, '收起')),
@@ -384,7 +392,7 @@ ${pageDomJs(3200)}
         h('div', { class: 'qrurl' }, useIp ? c.ip : c.url),
         d.https ? null : h('div', { class: 'qrwarn' }, d.notes[0] || ''),
         h('div', { class: 'row2', style: 'font-size:14px' },
-          c.ip ? h('button', { type: 'button', class: 'x', style: 'height:auto;padding:0;font-size:14px;text-align:left', on: { click: () => { QR.ip = !QR.ip; qrDraw(); } } }, useIp ? '换回 ' + host(c.url) : '扫了打不开?换成 ' + host(c.ip)) : h('span'),
+          c.ip ? h('button', { type: 'button', class: 'x', style: 'height:auto;padding:0;font-size:14px;text-align:left', on: { click: flip.click } }, flip.label) : h('span'),
           h('span', { style: 'display:flex;gap:14px;flex:none' },
             h('a', { class: 'lnk kidl', style: 'font-size:14px', href: '/', target: '_blank' }, '孩子端 ↗'),
             ca ? null : h('a', { class: 'lnk', style: 'font-size:14px', href: print, target: '_blank' }, '打印 ›'))))),

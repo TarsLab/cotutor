@@ -123,7 +123,7 @@ export async function installActivities(root: string): Promise<ActivityInstallSt
       await installOne(root, a, manifest);
       touched = true;
       steps.push({ item, action: s.state === 'missing' ? 'created' : 'replaced', note: s.state === 'broken' ? '读不到,重新拷贝' : `拷自本包 ${PACKAGE_VERSION}` });
-    } else steps.push({ item, action: s.state === 'untracked' ? 'kept' : 'exists', note: s.state === 'custom' ? `自定义(基于 ${s.basedOn})` : s.state === 'upgradable' ? '可升级(cotutor upgrade)' : s.state === 'untracked' ? '已有(没有出厂记录);升级时当自定义对待' : undefined });
+    } else steps.push({ item, action: s.state === 'untracked' ? 'kept' : 'exists', note: s.state === 'custom' ? `自定义(基于 ${s.basedOn})` : s.state === 'upgradable' ? '可升级(cotutor refresh)' : s.state === 'untracked' ? '已有(没有出厂记录);升级时当自定义对待' : undefined });
   }
   if (touched) await writeManifest(root, { ...manifest, version: PACKAGE_VERSION });
   return steps;
@@ -163,7 +163,7 @@ export async function upgradeActivities(root: string, opts: { force?: string[] }
 }
 
 /**
- * 只把一个出厂 activity 换回出厂那份(工作台「恢复出厂」,与 upgrade --force 老师/名 同一条路,但不碰别的):
+ * 只把一个出厂 activity 换回出厂那份(工作台「恢复出厂」,与 cotutor reset 老师/名 同一条路,但不碰别的):
  * 现在那份和出厂不一样就先存 .bak。不是出厂的 → UsageError。返回 .bak 的路径(没存就是 null)
  */
 export async function restoreActivity(root: string, tutor: string, name: string): Promise<{ bak: string | null }> {

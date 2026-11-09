@@ -232,7 +232,7 @@ try {
     mkdirSync(join(ws, '.cotutor', 'tts'), { recursive: true });
     writeFileSync(join(ws, '.cotutor', 'tts', 'b.mp3'), 'x');
     const dOld = await doctorWorkspace(ws, { probeEnv: false });
-    check('老布局 → doctor 的 layout 必需失败,点名两处、附 upgrade;链那项不过', !dOld.ok && dOld.checks.some((c) => c.name === 'layout' && c.required && !c.ok && c.detail.includes('.claude/agents/') && c.detail.includes('.claude/skills/') && c.fix?.includes('cotutor upgrade') === true) && dOld.checks.some((c) => c.name === 'skills.claude' && !c.ok), JSON.stringify(dOld.checks.filter((c) => c.name === 'layout' || c.name === 'skills.claude')));
+    check('老布局 → doctor 的 layout 必需失败,点名两处、附 refresh;链那项不过', !dOld.ok && dOld.checks.some((c) => c.name === 'layout' && c.required && !c.ok && c.detail.includes('.claude/agents/') && c.detail.includes('.claude/skills/') && c.fix?.includes('cotutor refresh') === true) && dOld.checks.some((c) => c.name === 'skills.claude' && !c.ok), JSON.stringify(dOld.checks.filter((c) => c.name === 'layout' || c.name === 'skills.claude')));
     const r = await initWorkspace({ slug: 'ming' });
     check('init 先搬家:改过的老师文件原样挪到 agents/,没被出厂件占位;老目录删掉', readFileSync(link, 'utf8').includes('再温柔一点') && r.steps.some((s) => s.item === 'agents/math-tutor.md' && s.action === 'moved') && r.steps.some((s) => s.item === '.claude/agents/' && s.action === 'removed') && !existsSync(join(claude, 'agents')), JSON.stringify(r.steps.filter((s) => s.action === 'moved' || s.action === 'removed' || s.item.startsWith('.claude'))));
     check('不再用的机器文件删掉,现用的配音缓存不碰', ['tts-preview', 'dictation-say', 'tts-try.mp3'].every((n) => !existsSync(join(ws, '.cotutor', n)) && r.steps.some((s) => s.item === `.cotutor/${n}` && s.action === 'removed')) && existsSync(join(ws, '.cotutor', 'tts', 'b.mp3')), JSON.stringify(r.steps.filter((s) => s.item.startsWith('.cotutor'))));
@@ -312,7 +312,7 @@ try {
     const cap = d.checks.find((c) => c.name === 'captures');
     check('doctor:captures 还没拍过也绿(第一张时建),不是必需项', cap?.ok === true && cap.required === false && cap.detail.includes('还没有'), JSON.stringify(cap));
     const mig = d.checks.find((c) => c.name === 'config.migrate');
-    check('doctor 点名 config.migrate,不是必需项(点名不拦体检)', mig !== undefined && !mig.ok && !mig.required && mig.detail.includes('english-tutor') && (mig.fix ?? '').includes('cotutor upgrade --config'), JSON.stringify(mig));
+    check('doctor 点名 config.migrate,不是必需项(点名不拦体检)', mig !== undefined && !mig.ok && !mig.required && mig.detail.includes('english-tutor') && (mig.fix ?? '').includes('cotutor refresh --config'), JSON.stringify(mig));
 
     const before = readFileSync(cfgFile, 'utf8');
     const dry = await upgradeConfig(ws, { dryRun: true });

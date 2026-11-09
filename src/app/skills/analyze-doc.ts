@@ -1,9 +1,9 @@
 /**
- * cotutor-analyze 技能的生成部分(2026-09-15):references/命令与文件.md 从 CLI 的用法文本(app/cli/usage.ts)与对话文件的命名规则(runtime/journal/conversation.ts
+ * cotutor-analyze 技能的生成部分(2026-09-15):references/命令与文件.md 从命令表(app/cli/commands.ts,经 usage.ts 的 commandsReference)与对话文件的命名规则(runtime/journal/conversation.ts
  * conversationFiles)现生成,scripts/gen-skills.ts 写进包根 skills/cotutor-analyze/,tests/skills.test.ts 断言入库的和生成的一致——
  * 技能里的命令与文件名永远和代码同源。SKILL.md 本体(怎么查、禁区)是手写的。
  */
-import { USAGE } from '../cli/usage.ts';
+import { commandsReference } from '../cli/usage.ts';
 import { conversationFiles } from '../../schema/index.ts';
 
 export const ANALYZE_SKILL = 'cotutor-analyze';
@@ -12,10 +12,6 @@ export const ANALYZE_SKILL = 'cotutor-analyze';
 const ANALYZE_COMMANDS = ['show', 'pack', 'replay', 'compare', 'trace', 'doctor', 'send', 'rate', 'bookkeep'];
 
 export function analyzeReferenceDoc(): string {
-  const cmds = USAGE.split('\n').filter((l) => {
-    const m = /^\s+cotutor (\S+)/.exec(l);
-    return m !== null && ANALYZE_COMMANDS.includes(m[1]);
-  });
   const f = conversationFiles('conversations', '<老师>', '<日期>');
   const rows = [
     [f.index, '一天的索引:每条消息物化了 text / kidText / section(卡与讲稿)/ tools(读了什么)/ timing / tokens(这轮老师用的 token:输入 / 输出)/ warnings / bookkeeping;顶层 sessions / ratings / booked(老数据里还有 costUsd,是 claude 时代的美元,不用管)'],
@@ -28,10 +24,10 @@ export function analyzeReferenceDoc(): string {
   ];
   return `# 命令与文件(机器生成,别改)
 
-## 分析用的命令(在 workspace 根跑;完整用法 cotutor --help)
+## 分析用的命令(在 workspace 根跑;每条就是 cotutor <命令> --help 的内容)
 
 \`\`\`
-${cmds.join('\n')}
+${commandsReference(ANALYZE_COMMANDS)}
 \`\`\`
 
 ## 一轮的文件(conversations/ 下;回放的在 evals/ 下,同一套名字)

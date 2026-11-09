@@ -4,7 +4,7 @@
  * 和老师的家 agents/<name>/ 并排,同包里一样(2026-10-30 从 .claude/agents/ 挪来,老 workspace 由 migrate.ts 的 migrateLayout 搬)。
  * 出厂时的内容 hash 记在 .cotutor/shipped.json(机器文件,家长不用管),据此分三种状态:
  *   latest     与本包一致
- *   upgradable 与记录的出厂 hash 一致(没改过,只是包更新了)→ cotutor upgrade 直接换新
+ *   upgradable 与记录的出厂 hash 一致(没改过,只是包更新了)→ cotutor refresh 直接换新
  *   custom     改过 → upgrade 只报 diff,不动
  *   untracked  没有记录(旧workspace、或家长手写的老师)→ 当 custom 对待
  */
@@ -98,7 +98,7 @@ export async function installTutors(root: string, configured: string[] = []): Pr
       // 没记录但内容在:当家长的,记一笔当前 hash 免得以后一直是 untracked?不记——记了就等于宣称它是出厂件。留 untracked。
       steps.push({ item, action: 'kept', note: '已有(不是出厂件,或没有记录);升级时当自定义对待' });
     } else {
-      steps.push({ item, action: 'exists', note: s.state === 'custom' ? `自定义(基于 ${s.basedOn})` : s.state === 'upgradable' ? `可升级(cotutor upgrade)` : undefined });
+      steps.push({ item, action: 'exists', note: s.state === 'custom' ? `自定义(基于 ${s.basedOn})` : s.state === 'upgradable' ? `可升级(cotutor refresh)` : undefined });
     }
   }
   for (const name of configured.filter((n) => !shipped.some((a) => a.name === n))) {
@@ -173,7 +173,7 @@ export function lineDiff(a: string, b: string): string[] {
 }
 
 /**
- * cotutor upgrade:latest 跳过;upgradable 换新;custom / untracked 只报 diff 并保留(--force <name> 才覆盖,原文留 .bak);缺的补。
+ * cotutor refresh:latest 跳过;upgradable 换新;custom / untracked 只报 diff 并保留(--force <name> 才覆盖,原文留 .bak);缺的补。
  */
 export async function upgradeTutors(root: string, opts: { force?: string[] } = {}): Promise<UpgradeStep[]> {
   const manifest = await readManifest(root);
@@ -256,7 +256,7 @@ export async function shippedTutorText(name: string, root?: string): Promise<str
 }
 
 /**
- * 只把一位出厂老师的文件换回出厂那份(工作台「恢复出厂」,与 upgrade --force <老师> 同一条路,但不碰别的老师):
+ * 只把一位出厂老师的文件换回出厂那份(工作台「恢复出厂」,与 cotutor reset <老师> 同一条路,但不碰别的老师):
  * 现在那份和出厂不一样就先存 .bak。不是出厂的 → UsageError。返回 .bak 的路径(没存就是 null)
  */
 export async function restoreTutor(root: string, name: string): Promise<{ bak: string | null }> {

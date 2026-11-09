@@ -1,39 +1,165 @@
-/** 命令用法(cotutor --help;技能 cotutor-analyze 的 references/命令与文件.md 从这里取分析用的那几行,所以放单独文件,别的模块 import 不会跑到 CLI) */
-export const USAGE = `用法:
-  cotutor guide                                                     给 AI 助手的安装说明(包里的 INSTALL.md,和这个版本对得上):替家长在新电脑上装 cotutor,先跑 npx cotutor@latest guide,照它一步步做
-  cotutor init <slug> [--dir <path>] [--vault <path>] [--name <孩子名>] [--grade <1-6>] [--port <n>]   建 cotutor 文件夹 ~/cotutor/<slug>/ 与旁边的笔记文件夹(vault)~/cotutor/<slug>-vault/(幂等补缺;--vault 指家长已有的库,不能在 cotutor 文件夹里;默认二年级教学包;端口在这里选一次写进 cotutor.json:443 优先,不行就 8443、8445…,以后不变)
-  cotutor grades [--json]                                          列出本包可安装的年级教学包
-  cotutor doctor [--workspace <dir>] [--json] [--live] [--fix]                 逐项体检;--live 真连一次百炼实时模型、真合成一句配音(花一分钱)把 API 层的坑摆出来(真跑老师用 cotutor send);--json 里不过的项带 cmd(能直接跑)或 human(要人来);--fix 把带 cmd 的一条条修掉,要人来的留着
-  cotutor report [--workspace <dir>]                                   诊断信息:版本、系统、服务、体检没过的、最近报错的原因;不含孩子的对话、照片、录音、档案和 key,名字和 IP 已抹掉,先看再发
-  cotutor backup [list | restore <名字> [--yes]] [--workspace <dir>]   备份到 workspace 旁边的 .backups/:不含录音;服务开着时每天一份(留 14 份),cotutor upgrade 前一份(留 5 份);没变的文件硬链接,不占第二份地方;restore 先把现在的也备一份再拷回去,不加 --yes 只说会做什么
-  cotutor update [--anyway]                                            升级一条命令管到底:问 npm 有没有新版本,换程序,每个孩子更新出厂文件、重起服务和图标;孩子在通话时不动(--anyway 才动),npm 没成服务不动
-  cotutor upgrade [--workspace <dir>] [--force <老师>]...                老师文件、activity 与 skill 换新版:没改过的直接换,改过的只报 diff(--force <老师> 或 --force <老师>/<名> 才覆盖,原文留 .bak)
-  cotutor upgrade --config [--dry-run] [--workspace <dir>]              cotutor.json 补缺:新出厂老师 / 运行时 / 命令模板旗标(只加缺的,你改过的值不动)
-  cotutor add <老师名> --display <显示名> [--subject <学科>] [--avatar <emoji|图片相对路径>] [--hidden]   加一位自家的老师:出模板文件、进 cotutor.json、建目录(名字以 -tutor 结尾的是老师,figshot 给它做头像)
-  cotutor add-theme <主题名> [--from <主题>] [--workspace <dir>]       加一个自家的主题:拷一份(缺省出厂的 default)到 themes/<主题名>/,改 cotutor.json 的 kid.theme 换过去
-  cotutor serve [--workspace <dir>] [--port <n>] [--http] [--trace] [--open] [--log-dir <目录>]   在终端里起服务(一 workspace 一进程;~/.config/cotutor/certs/ 有证书就走 HTTPS;--trace 每一轮的事件按道打印;只打印家长端首页的地址,孩子的平板在那里扫码;--open 顺手打开,旧名 --open-qr 照样认;--log-dir 输出按天落文件,后台服务用;关了终端就停,一直开着用 cotutor service)
-  cotutor open [--workspace <dir>] [--sandbox] [--print] [--json]        打开家长端(读 cotutor.json,不用记端口);--sandbox 开试用的那个(端口永远是真的 +1);--print 只打印地址;没在跑就说怎么起,以 1 退
-  cotutor service install | uninstall | start | stop | restart [--workspace <dir>] [--no-tray] [--no-open]   把 serve 装成这台电脑的后台服务(macOS launchd、Linux systemd 用户服务、Windows 用户的登录项,都不要管理员):登录后自己起来、崩了 10 秒后再起、日志按天落文件留 14 天;一个 workspace 一个;第一次 install 打开一次家长端(--no-open 不开),以后的启动都不开;换了 node 版本或包挪了地方再 install 一次
-  cotutor tray on | off | status [--json]                             菜单栏 / 任务栏图标(macOS、Windows;service install 时一起装,--no-tray 不带):正常时只有 logo,有事出橙点,没在跑时变淡加红点并通知一次;点它看状态、打开家长端、重启、看日志、退出;off 关掉并记住
-  cotutor service status [--json] | logs [--lines <n>] [--follow]      后台服务在不在跑、端口答不答应、跑的哪个版本、vault 读不读得到、日志在哪;--json 还答平板地址、证书、百炼配没配、图标;logs 看最近的日志
-  cotutor pin [off | status] [--pin <数字>] [--json]                       家长端 /parent 与工作台 /dev 的锁:机器级 PIN(所有 workspace 共用),iPad 上输一次、这台电脑免密;没设就全开(家长在旁边可以不设);off 撤掉
-  cotutor cert [--host <名或IP>]...                                      用 mkcert 建这台机器的自签证书到 ~/.config/cotutor/certs/(平板、手机上录音要 HTTPS;所有 workspace 共用)
-  cotutor send <老师> [<消息>] [--from kid|system] [--runtime <名>] [--new] [--photo a.jpg,b.png] [--activity <名> [--param '名=值;名=值']] [--lane main,tts] [--quiet]   终端里发一条,现场按道打印每道工序的事件,说完打印结果(孩子的话照实时写,同孩子端:上下文包带 live:、不补提问卡,只是没有嘴;--from system 不算;--new 开新话题;--photo 带作业照片,拷进 captures/,有照片时消息可以空;--activity 像孩子点了首页的 activity 按钮,新开话题,参数同按钮下面那几行;--quiet 只要结果)
-  cotutor pack <老师> [<消息>] [--from kid|system] [--at <ISO时间>] [--activity <名> [--param '名=值;名=值']] [--json]   干跑上下文包(--activity 看 activity 话题第一条老师拿到什么):不起模型,打印现在会发给老师的那份 + 每段来自哪个文件、那里一共几条、按政策带了几条(改了档案 / 日记 / 计划立刻看效果)
-  cotutor replay <老师> <job> [<日期>] [--runtime <名>] [--json]   回放一轮:同一问按现在的 vault 与提示词再跑一遍(落 evals/,不进孩子的对话、不配音),跑完并排打印上下文包 / 讲稿 / 卡 / 读了什么的 diff
-  cotutor compare <老师> [<evalJob>] [<日期>] [--json]                   再看一次回放的对照(不给 evalJob 就列这天回放过哪些)
-  cotutor show <老师> <job> [<日期>] [--json] [--evals] [--workspace <dir>]   看一轮:问了什么、上下文包、当时的老师文件与技能 hash、讲稿与卡、读了什么、token 与用时、给家长的尾巴;--json 是家长端「看原文」同一份数据,给编程助手分析用
-  cotutor trace <老师> <job> [<日期>] [--lane …] [--workspace <dir>]     回放一轮的事件(<日期>.<job>.events.jsonl;排查昨天那轮用)
-  cotutor rate <老师> <话题> <1-5> [--date <日期>]                       给一个话题打星(与家长端同一条路;≥ vault.keepScore 的话题记账时摘要才进日记)
-  cotutor bookkeep <老师> [--date <日期>] [--thread <话题>]...           记账:这天每个还没记过的话题各起一轮记账任务,老师回「## 记账」,应用写进 vault 的日记(话题名、孩子问、摘要、观察)
-  cotutor home check [--published] [--json]                           检查首页草稿 home/draft.md(或已发布的那份):孩子会看到哪几张卡、每位老师的按钮、要改的与提醒(带行号);不花钱
-  cotutor home publish [--force] [--from <文件>] [--json]              发布首页:检查 → 留历史 home/history/<id>.md → 写 home/published.json(孩子端只读它);有要改的不发,--force 丢掉那几张照发;--from 发另一份(如历史)
-  cotutor home show [--json]                                          现在发布的是哪份、几天前、每个按钮被点了几次(哪天、哪个话题)
-  cotutor activity check [<老师> [<名>]] [--json]                      检查 activity 文件(agents/<老师>/activities/<名>.md):家长填的、应用算的、应用拦的、裁段、插槽、正文用的卡、第一句与收(带行号);不花钱
-  cotutor activity eval <老师> <名> [--runs <n>] [--only <例子>] [--kid-model <千问模型>] [--json]   照 <名>.例子.md 跑:真老师 + 模拟孩子(千问,缺省 qwen3.8-flash,有 Token Plan 走它)多轮(照实时写,同孩子端),判只看板书;一个例子跑 n 次(缺省 3)次次都过才算过;落 evals/,画家是假的;花钱
-  cotutor chalk <check|build|bake|snap|dub> <scene.ts|课包 id> [...]   做小课堂的课包:check 校验场景、build 出课包到 bundles/、bake 烤画面、snap 每步截图、dub 配音(cotutor chalk 看各自的选项;bake / snap 要本机的 Chrome)
-  cotutor mock [--port <n>] [--scenario normal|nokey] [--delay <ms>] [--http]   不经真实老师与百炼,用固定的板书 JSON 起孩子端,测前端交互与渲染(不需要 workspace;老师都走实时老师页,假嘴照脚本念静音的声音;nokey = 没配百炼,孩子端只出「老师们还没到」)
-  cotutor --version | --help
-workspace解析:--workspace > COTUTOR_WORKSPACE > cwd 或祖先有 cotutor.json > ~/.config/cotutor/config.json > ~/cotutor/ 下唯一的孩子目录
-试用:要 workspace 的命令加 --sandbox,换到真 workspace 旁边的 .sandbox/<目录名>/,试的对话与 vault 的写入不进孩子的记录(第一次自动分:设置照拷,对话与照片不带,vault 拷一份;标题前加「试用」、端口 +1、自动记账关掉);--sandbox --fresh 重新分
-`;
+/**
+ * 帮助与参数检查,都从命令表(commands.ts)来:顶层帮助只列命令和一句话,参数、例子在 cotutor <命令> --help。
+ * 纯函数、不碰 I/O:技能生成(app/skills/*-doc.ts)和测试都 import 它,不能把 CLI 带进去。
+ */
+import { COMMANDS, GROUP_TITLE, commandSpec, type CommandSpec, type FlagSpec, type Group } from './commands.ts';
+
+const WORKSPACE_DESC = '哪个孩子的 cotutor 文件夹(缺省:COTUTOR_WORKSPACE → 当前目录往上找 → ~/.config/cotutor/config.json → ~/cotutor/ 下唯一的那个)';
+const SANDBOX_DESC = '在试用副本里跑(旁边的 .sandbox/,写的东西不进孩子的记录;--fresh 重新分一份)';
+
+/** 顶层帮助;all 时连开发与调试的命令也列 */
+export function topHelp(opts: { all?: boolean } = {}): string {
+  const groups: Group[] = opts.all ? ['setup', 'daily', 'custom', 'debug'] : ['setup', 'daily', 'custom'];
+  const width = Math.max(...COMMANDS.map((c) => c.name.length)) + 2;
+  const out = ['cotutor — 家里的 AI 老师团', '', '用法:cotutor <命令> [选项]'];
+  for (const g of groups) {
+    out.push('', GROUP_TITLE[g]);
+    for (const c of COMMANDS.filter((x) => x.group === g && !x.hidden)) out.push(`  ${pad(c.name, width)}${c.summary}`);
+  }
+  out.push(
+    '',
+    '常用选项:',
+    '  --workspace <目录>  选哪个孩子(缺省自动找)',
+    '  --json              机器可读的输出',
+    '  --sandbox           在试用副本里跑,不进孩子的记录',
+    '  --version           版本号',
+    '各命令认哪些,看它的帮助;不认的选项、多余的参数都报错,不会悄悄忽略。',
+    '退出码:0 成功 · 1 没通过(体检、检查有要改的) · 2 用法错 · 4 内部错误',
+    '',
+    '参数和例子:cotutor <命令> --help',
+  );
+  if (!opts.all) out.push(`开发与调试的命令(${COMMANDS.filter((c) => c.group === 'debug' && !c.hidden).map((c) => c.name).join('、')}):cotutor --help --all`);
+  return `${out.join('\n')}\n`;
+}
+
+/** 一条命令的全部选项(连同它认的全局选项),帮助和检查共用 */
+function flagsOf(c: CommandSpec, opts: { place?: boolean } = {}): FlagSpec[] {
+  const out: FlagSpec[] = [...(c.flags ?? [])];
+  const place = opts.place !== false;
+  if (c.workspace) out.push({ name: 'workspace', value: '<目录>', desc: WORKSPACE_DESC, ...(place ? {} : { hidden: true }) });
+  if (c.sandbox) out.push({ name: 'sandbox', desc: SANDBOX_DESC, ...(place ? {} : { hidden: true }) }, { name: 'fresh', desc: '', hidden: true });
+  if (c.json) out.push({ name: 'json', desc: '机器可读的输出', ...(Array.isArray(c.json) ? { subs: c.json as readonly string[] } : {}) });
+  return out;
+}
+
+/** 终端里占几格:中文、全角两格 */
+const cells = (s: string): number => [...s].reduce((n, ch) => n + (/[ᄀ-ᅟ⺀-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦]/.test(ch) ? 2 : 1), 0);
+const pad = (s: string, width: number): string => s + ' '.repeat(Math.max(0, width - cells(s)));
+/** 帮助里旗标说明前面的 [install];'' 是不带子命令的那种 */
+const subsTag = (subs: readonly string[]): string => `[${subs.map((s) => (s === '' ? '不带子命令' : s)).join('、')}] `;
+/** 报错里说「只给谁用」 */
+const subsWho = (c: CommandSpec, subs: readonly string[]): string => subs.map((s) => (s === '' ? `cotutor ${c.name}(不带子命令)` : `${c.name} ${s}`)).join('、');
+
+/** cotutor <命令> --help;place: false 不列 --workspace / --sandbox(技能参考里统一说一次) */
+export function commandHelp(name: string, opts: { place?: boolean } = {}): string {
+  const c = commandSpec(name);
+  if (!c) return topHelp();
+  const out = [`cotutor ${c.name} — ${c.summary}`, '', '用法:', ...c.usage.map((u) => `  ${u}`)];
+  const shown = flagsOf(c, opts).filter((f) => !f.hidden);
+  if (shown.length) {
+    const label = (f: FlagSpec): string => `--${f.name}${f.value ? ` ${f.value}` : ''}`;
+    const width = Math.min(26, Math.max(...shown.map((f) => cells(label(f)))) + 2);
+    out.push('', '选项:');
+    for (const f of shown) {
+      const l = label(f);
+      out.push(`  ${cells(l) >= width ? `${l}\n  ${' '.repeat(width)}` : pad(l, width)}${f.subs ? subsTag(f.subs) : ''}${f.desc}`);
+    }
+  }
+  if (c.notes?.length) out.push('', '说明:', ...c.notes.map((n) => `  - ${n}`));
+  if (c.effects?.length) out.push('', '注意:', ...c.effects.map((n) => `  - ${n}`));
+  out.push('', '例子:', ...c.examples.map((e) => `  ${e}`));
+  return `${out.join('\n')}\n`;
+}
+
+/** 技能里的命令参考:这几条命令各自的帮助;--workspace、--sandbox 在开头说一次 */
+export function commandsReference(names: readonly string[]): string {
+  return [
+    '这些命令都认 --workspace <目录>(在 workspace 根跑可以不写)和 --sandbox(在试用副本里跑,不进孩子的记录)。',
+    ...names.map((n) => commandHelp(n, { place: false }).trimEnd()),
+  ].join('\n\n');
+}
+
+/** 编辑距离,给打错的字找最像的 */
+function distance(a: string, b: string): number {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array<number>(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      // 两个字母打反了(josn → json)算一步
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+    }
+  }
+  return d[a.length][b.length];
+}
+
+function closest(word: string, candidates: readonly string[]): string | undefined {
+  let best: string | undefined;
+  let score = Infinity;
+  for (const c of candidates) {
+    const s = c.startsWith(word) || word.startsWith(c) ? 1 : distance(word, c);
+    if (s < score) { score = s; best = c; }
+  }
+  return score <= Math.max(1, Math.floor(word.length / 3)) ? best : undefined;
+}
+
+/** 不认识的命令:一句话,带最像的那个 */
+export function unknownCommand(cmd: string): string {
+  const near = closest(cmd, COMMANDS.filter((c) => !c.hidden).map((c) => c.name));
+  return `没有 '${cmd}' 这条命令${near ? `,是不是 cotutor ${near}?` : ''}`;
+}
+
+/**
+ * 照命令表检查参数:不认识的旗标、用错子命令的旗标、不认识的子命令、多余的参数。
+ * 通过返回 null,不通过返回一句话(调用方补「看 cotutor <命令> --help」)。命令本身认不认识由调用方先判。
+ */
+export function checkArgs(c: CommandSpec, positionals: readonly string[], flags: Readonly<Record<string, string | true>>): string | null {
+  const sub = positionals[0];
+  if (c.subs && (sub !== undefined || c.subRequired) && !c.subs.includes(sub ?? '') && !c.hiddenSubs?.includes(sub ?? '')) {
+    const near = sub === undefined ? undefined : closest(sub, c.subs);
+    return `${c.name} 后面跟 ${c.subs.join(' / ')}${c.subRequired ? ' 之一' : ''}${sub === undefined ? '' : `,不认识 '${sub}'`}${near ? `,是不是 ${near}?` : ''}`;
+  }
+  if (positionals.length > c.maxArgs) {
+    const extra = positionals[c.maxArgs];
+    return c.maxArgs === 0 ? `${c.name} 不带参数,多了 '${extra}'` : `多余的参数 '${extra}':${c.name} 最多 ${c.maxArgs} 个${extra.includes(' ') ? '(带空格的值要加引号)' : ''}`;
+  }
+  const known = flagsOf(c);
+  const actualSub = c.subs?.includes(sub ?? '') || c.hiddenSubs?.includes(sub ?? '') ? (sub ?? '') : '';
+  for (const key of Object.keys(flags)) {
+    // --sandbox / --fresh 由 main 自己说清楚(这条命令为什么不用试用副本),这里不抢
+    if (key === 'help' || key === 'all' || key === 'version' || key === 'sandbox' || key === 'fresh') continue;
+    const f = known.find((x) => x.name === key);
+    if (!f) {
+      const near = closest(key, known.filter((x) => !x.hidden).map((x) => x.name));
+      return `${c.name} 不认识 --${key}${near ? `,是不是 --${near}?` : ''}`;
+    }
+    if (f.subs && !f.subs.includes(actualSub)) return `--${key} 只给 ${subsWho(c, f.subs)} 用`;
+    if (f.value && flags[key] === true && key !== 'force') return `--${key} 要一个值:--${key} ${f.value}`;
+  }
+  return null;
+}
+
+/** 一行 cotutor 命令(文档、测试里写的)照命令表对不对得上;对得上返回 null */
+export function checkCommandLine(line: string): string | null {
+  const words = line.trim().split(/\s+/);
+  if (words[0] !== 'cotutor' && words[0] !== 'cotutor.cmd') return `不是 cotutor 命令:${line}`;
+  const [cmd, ...rest] = words.slice(1);
+  if (cmd === '--version' || cmd === '--help') return null;
+  const c = commandSpec(cmd);
+  if (!c) return unknownCommand(cmd);
+  if (rest.includes('--help')) return null;
+  const positionals: string[] = [];
+  const flags: Record<string, string | true> = {};
+  for (let i = 0; i < rest.length; i++) {
+    const w = rest[i];
+    if (!w.startsWith('--')) { positionals.push(w); continue; }
+    const key = w.slice(2).split('=')[0];
+    const spec = flagsOf(c).find((f) => f.name === key);
+    if (spec?.value && rest[i + 1] !== undefined && !rest[i + 1].startsWith('--')) flags[key] = rest[++i];
+    else flags[key] = true;
+  }
+  return checkArgs(c, positionals, flags);
+}
+
+/** 旧名:顶层帮助 */
+export const USAGE = topHelp();

@@ -4,7 +4,7 @@
 
 这篇随 npm 包发：`npx cotutor@latest guide` 打印的就是它，和 npm 上最新的版本对得上。npx 只是临时取来看，第 2 步照样要装；装好以后 `cotutor guide` 还能再看。
 
-- **能跑命令的：** 照下面一步步跑。每步先看「成功」；不符合再看「不成功」。这里没写的 cotutor 命令不要自己编，用法不确定就看 `cotutor --help`。
+- **能跑命令的：** 照下面一步步跑。每步先看「成功」；不符合再看「不成功」。这里没写的 cotutor 命令不要自己编，用法不确定就看那条命令的帮助，如 `cotutor service --help`。写错了的选项、多余的参数，cotutor 会报错（退出码 2）并说是哪里不对，照它改，不要换着写法硬试。
 - **不能跑命令的（网页聊天）：** 一次只告诉家长一步，等家长贴回结果再走下一步。
 - **【交给家长】的步骤必须停下：** 告诉家长做什么，等家长说做完了再继续。不要替家长做，也不要绕过去。
 
@@ -15,7 +15,7 @@
 - 不要让家长把百炼的 API Key 贴进对话，对话内容会传到你的厂商那里。家长贴了，提醒他们到百炼控制台换一把。也不要读 `~/.config/cotutor/bailian.json`。
 - 不要 `git clone` 本仓库，用 npm 装。
 - 不要用 `sudo` 跑 npm。
-- 不要跑 `cotutor upgrade --force`。
+- 不要跑 `cotutor reset`：它把家长改过的老师换回出厂的。家长明确说要回出厂的才跑。
 - 不要跑 `cotutor backup restore`，除非家长明确说要恢复。
 - 不要删孩子的 cotutor 文件夹（缺省 `~/cotutor/<slug>/`）和笔记文件夹（vault，缺省在旁边的 `~/cotutor/<slug>-vault/`），里面的记录删了找不回来。
 - 不要关防火墙，不要改系统安全设置或 PowerShell 执行策略。
@@ -46,6 +46,7 @@ cotutor --version
 - 报 `EACCES`（没权限）：不要加 `sudo`。跑 `npm config set prefix ~/.npm-global`，把 `~/.npm-global/bin` 加进 PATH，再装一次。
 - 找不到 `cotutor`：重开终端再试。Node 是 asdf 装的，跑 `asdf reshim nodejs`。还不行，跑 `npm prefix -g` 看装到了哪，把那个目录下的 `bin`（Windows 上是目录本身）加进 PATH。
 - Windows 的 PowerShell 说禁止运行脚本：这篇里所有的 `npm`、`cotutor` 都改用 `npm.cmd`、`cotutor.cmd`。不要改执行策略。
+- Windows 的 PowerShell 里 cotutor 的中文成了乱码（中文系统按代码页 936 解）：先在这个终端里跑 `[Console]::OutputEncoding = [Text.Encoding]::UTF8` 再看。只管这个终端，不改系统设置。
 
 ## 3. 建孩子的 cotutor 文件夹和笔记文件夹
 

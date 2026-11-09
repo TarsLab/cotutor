@@ -87,11 +87,11 @@ Mac 和 Windows 上,`service install` 会一起装一个菜单栏(任务栏)图�
 
 出厂文件在 `grades/grade-2/`。三科分别提供预习、检查作业、复习(孩子端老师牌上常驻三块方砖);语文有写话与看图写话,英语有口语课,数学小课堂配合提前做好的课包。家长按教材版本、学期和孩子实际进度设置材料。
 
-孩子当前学期仍由档案决定;升年级不会自动替换家长的老师文件。旧 workspace 执行 `cotutor upgrade` 补记二年级来源,保留自定义内容。贡献其他年级与验证方式见 [年级教学包设计](docs/年级教学包.md)。
+孩子当前学期仍由档案决定;升年级不会自动替换家长的老师文件。旧 workspace 执行 `cotutor refresh` 补记二年级来源,保留自定义内容。贡献其他年级与验证方式见 [年级教学包设计](docs/年级教学包.md)。
 
 ## 老师是文件
 
-每位老师 = 一个 Markdown 文件(frontmatter + 正文即系统提示)+ cotutor.json 里的一条(显示名、头像、音色、开关、政策)+ 自己的目录与对话。出厂三位(数学、语文、英语)随包发布,init **拷贝**进你的老师们,改了就是你家的;`cotutor upgrade` 只换没改过的,改过的打印差异让你定。再加一位:
+每位老师 = 一个 Markdown 文件(frontmatter + 正文即系统提示)+ cotutor.json 里的一条(显示名、头像、音色、开关、政策)+ 自己的目录与对话。出厂三位(数学、语文、英语)随包发布,init **拷贝**进你的老师们,改了就是你家的;`cotutor refresh` 只换没改过的,改过的打印差异让你定;想回出厂的那份,`cotutor reset <老师>`(你那份存成 .bak)。再加一位:
 
 ```sh
 cotutor add science-tutor --display 科学老师 --subject 科学 --avatar 🔬
@@ -142,7 +142,7 @@ import { loadWorkspace } from 'cotutor/workspace';                        // 解
 
 默认 workspace(孩子的 cotutor 文件夹)是 `~/cotutor/<孩子>/`:配置在 `cotutor.json`,老师在 `agents/<老师>.md`,activity 在 `agents/<老师>/activities/`,技能在 `.agents/skills/`,对话在 `conversations/`,账本在 `ledger/`,照片在 `captures/`,课包在 `bundles/`,首页在 `home/`。长期档案、记忆和日记在 vault(笔记文件夹),和 workspace 分开放:缺省是旁边的 `~/cotutor/<孩子>-vault/`,位置写在 `cotutor.json` 的 `paths.vault`(0.4.4 及以前建的没写,vault 就是 workspace 本身,照旧能用,`cotutor doctor` 的 `vault.separate` 说怎么分开),规则见 [obsidian 仓库设计](docs/obsidian仓库设计.md)。workspace 与 vault 都要留着。
 
-**备份**放在 cotutor 文件夹旁边的 `.backups/<孩子>/`,一份就是一个普通目录。服务开着时每天自动备一份(留 14 份),`cotutor upgrade` 前也备一份(留 5 份),没变的文件不占第二份地方;`cotutor backup` 随时手动备。**录音(wav)不在备份里**,它占了绝大部分地方;想留就自己拷 `conversations/`。笔记文件夹里的 md 也备一份(在那一份的 `_vault/` 里);恢复时不动笔记文件夹,只告诉你那份在哪,要不要拿回来你定。硬盘坏了这些也跟着没了,重要的话把 `.backups` 再拷到别处。
+**备份**放在 cotutor 文件夹旁边的 `.backups/<孩子>/`,一份就是一个普通目录。服务开着时每天自动备一份(留 14 份),`cotutor refresh` 前也备一份(留 5 份),没变的文件不占第二份地方;`cotutor backup` 随时手动备。**录音(wav)不在备份里**,它占了绝大部分地方;想留就自己拷 `conversations/`。笔记文件夹里的 md 也备一份(在那一份的 `_vault/` 里);恢复时不动笔记文件夹,只告诉你那份在哪,要不要拿回来你定。硬盘坏了这些也跟着没了,重要的话把 `.backups` 再拷到别处。
 
 ```sh
 cotutor backup list                   # 看有哪些
@@ -163,24 +163,24 @@ cotutor update
 
 ```sh
 npm i -g cotutor                      # 换上新版程序
-cotutor upgrade                       # 更新未修改的出厂老师、activity、主题与技能
+cotutor refresh                       # 更新未修改的出厂老师、activity、主题与技能
 cotutor service restart               # 服务和图标换上新代码(在终端里跑的就重开 serve)
 ```
 
 升完它提示要迁移配置时再跑:
 
 ```sh
-cotutor upgrade --config --dry-run    # 预览 cotutor.json 的迁移
-cotutor upgrade --config              # 执行配置迁移
+cotutor refresh --config --dry-run    # 预览 cotutor.json 的迁移
+cotutor refresh --config              # 执行配置迁移
 ```
 
 家长改过的老师与主题保留并显示差异;机器技能会随版本覆盖。配置迁移补缺,并更新未自定义的旧命令模板,保留自定义配置。换了 Node 版本、或包装到了别处,再 `cotutor service install` 一次。
 
-2026-10-30 之前建的 workspace,老师在 `.claude/agents/`、技能在 `.claude/skills/`。`cotutor upgrade`(或 `init`)先把它们原样挪到新位置,再照常升级;新位置已有同名的不挪,会点名。`.claude/` 里别的文件不动。
+2026-10-30 之前建的 workspace,老师在 `.claude/agents/`、技能在 `.claude/skills/`。`cotutor refresh`(或 `init`)先把它们原样挪到新位置,再照常升级;新位置已有同名的不挪,会点名。`.claude/` 里别的文件不动。
 
 ### 旧 workspace 换运行时
 
-2026-11-02 起不再起命令行(Qwen Code;Claude CLI 更早就去掉了),老师只走应用直连百炼。2026-10-31 之前建的 workspace 缺省走 Qwen Code,doctor 会报「命令行运行时不再支持」:先 `cotutor upgrade --config` 补上出厂的 `api` / `api-flash`,把 `runtimes.default` 和 `tutors.*.runtime` 改成 `api`,在家长端「首页」填好百炼,再删掉 `qwen`、`qwen-flash`(或更早的 Claude)条目。换之前聊的话题照上面「配置模型」说的办:记录照样能看,不导入、不记账。旧 `proxy` 字段可删除,对应命令已移除。
+2026-11-02 起不再起命令行(Qwen Code;Claude CLI 更早就去掉了),老师只走应用直连百炼。2026-10-31 之前建的 workspace 缺省走 Qwen Code,doctor 会报「命令行运行时不再支持」:先 `cotutor refresh --config` 补上出厂的 `api` / `api-flash`,把 `runtimes.default` 和 `tutors.*.runtime` 改成 `api`,在家长端「首页」填好百炼,再删掉 `qwen`、`qwen-flash`(或更早的 Claude)条目。换之前聊的话题照上面「配置模型」说的办:记录照样能看,不导入、不记账。旧 `proxy` 字段可删除,对应命令已移除。
 
 ### 试用不进孩子的记录
 

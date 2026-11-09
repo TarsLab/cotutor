@@ -1,7 +1,7 @@
 /**
  * 主题(themes/<name>/theme.json + kid.css):孩子端板书的样子。样子的真相在主题里,不在卡的协议里。
  * 出厂主题 default 在包根 themes/default/;init **拷贝**进 workspace 的 themes/default/(拷进来就是家长的,改了刷新就有),
- * 目录 hash 记 .cotutor/shipped.json 的 themes,与老师文件 / skill 同一套:没改过的随 cotutor upgrade 换新,改过的报 diff 保留。
+ * 目录 hash 记 .cotutor/shipped.json 的 themes,与老师文件 / skill 同一套:没改过的随 cotutor refresh 换新,改过的报 diff 保留。
  * 自家的主题(cotutor add-theme <name> 拷一份 default 来改,或直接建目录)永远 untracked,upgrade 不碰。
  */
 import { cp, lstat, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
@@ -124,7 +124,7 @@ export async function installThemes(root: string): Promise<ThemeStep[]> {
       await installOne(root, name, manifest);
       touched = true;
       steps.push({ item, action: 'created', note: '孩子端的主题(theme.json 槽的清单 + kid.css 样式),拷自本包,改了刷新就有' });
-    } else steps.push({ item, action: 'exists', note: s.state === 'custom' ? `自定义(基于 ${s.basedOn})` : s.state === 'upgradable' ? '可升级(cotutor upgrade)' : s.state === 'untracked' ? '已有(没有出厂记录);升级时当自定义对待' : undefined });
+    } else steps.push({ item, action: 'exists', note: s.state === 'custom' ? `自定义(基于 ${s.basedOn})` : s.state === 'upgradable' ? '可升级(cotutor refresh)' : s.state === 'untracked' ? '已有(没有出厂记录);升级时当自定义对待' : undefined });
   }
   if (touched) await writeManifest(root, { ...manifest, version: PACKAGE_VERSION });
   return steps;

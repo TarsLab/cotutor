@@ -95,14 +95,14 @@ const { recordKidLog } = await import('../src/runtime/journal/kid-log.ts');
   const report = (checks: { name: string; ok: boolean; cmd?: string; human?: true; required?: boolean; detail?: string }[]) => ({ ok: true, root: '/w', source: 'flag', checks: checks.map((c) => ({ required: false, detail: '', ...c })) });
   {
     const queue = [
-      report([{ name: 'a', ok: false, cmd: 'cotutor upgrade' }, { name: 'b', ok: false, cmd: 'git init "$HOME/x"' }, { name: 'c', ok: false, human: true }]),
+      report([{ name: 'a', ok: false, cmd: 'cotutor refresh' }, { name: 'b', ok: false, cmd: 'git init "$HOME/x"' }, { name: 'c', ok: false, human: true }]),
       report([{ name: 'a', ok: true }, { name: 'b', ok: false, cmd: 'git init "$HOME/x"' }, { name: 'c', ok: false, human: true }]),
       report([{ name: 'a', ok: true }, { name: 'b', ok: true }, { name: 'c', ok: false, human: true }]),
     ];
     const ran: string[] = [];
     const out: string[] = [];
     const final = await runFixes({ doctor: async () => queue.shift() as never, run: async (a) => { ran.push(a.join(' ')); return { code: 0, out: '' }; }, print: (l) => out.push(l) });
-    check('一条条修,修完再查,要人来的不碰', ran.length === 2 && ran[0] === 'cotutor upgrade' && ran[1].startsWith('git init ') && final.checks.find((c) => c.name === 'c')?.ok === false, ran.join('|'));
+    check('一条条修,修完再查,要人来的不碰', ran.length === 2 && ran[0] === 'cotutor refresh' && ran[1].startsWith('git init ') && final.checks.find((c) => c.name === 'c')?.ok === false, ran.join('|'));
     check('说修了什么', out.length === 2 && out[0].includes('✓') && out[0].includes('a'), out.join('|'));
   }
   {

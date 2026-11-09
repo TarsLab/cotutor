@@ -171,7 +171,7 @@ export function homeIssues(doc: HomeDoc, ctx: HomeCheckContext): HomeIssue[] {
       const act = b.kind === 'activity' ? { name: b.activity, params: b.params } : b.kind === 'lecture' ? { name: b.activity ?? LECTURE_ACTIVITY, params: {} } : null;
       if (act && ctx.activities) {
         const got = ctx.activities.get(`${name}/${act.name}`);
-        if (!got) out.push({ level: 'fix', line, card: n, button: k, text: b.kind === 'lecture' && !b.activity ? `${t.display}的「${b.label}」:看完怎么聊写在 agents/${name}/activities/${LECTURE_ACTIVITY}.md,这份不在(cotutor upgrade 补出厂的;或按钮下面写一行 activity: <名> 换一个)` : `${t.display}的「${b.label}」:agents/${name}/activities/${act.name}.md 不在(cotutor activity check ${name} 看这位老师有哪些)` });
+        if (!got) out.push({ level: 'fix', line, card: n, button: k, text: b.kind === 'lecture' && !b.activity ? `${t.display}的「${b.label}」:看完怎么聊写在 agents/${name}/activities/${LECTURE_ACTIVITY}.md,这份不在(cotutor refresh 补出厂的;或按钮下面写一行 activity: <名> 换一个)` : `${t.display}的「${b.label}」:agents/${name}/activities/${act.name}.md 不在(cotutor activity check ${name} 看这位老师有哪些)` });
         else {
           if (got.fixes) out.push({ level: 'fix', line, card: n, button: k, text: `${t.display}的「${b.label}」:activity 文件 ${act.name}.md 有 ${got.fixes} 处要改(cotutor activity check ${name} ${act.name})` });
           for (const text of resolveParams(got.activity, act.params).issues) out.push({ level: 'fix', line, card: n, button: k, text: `${t.display}的「${b.label}」:${text}` });

@@ -53,7 +53,7 @@ const worthSaying = (out: string): string[] => out.split('\n').map((l) => l.trim
 
 async function updateOne(d: UpdateDeps, s: UpdateService, target: string): Promise<boolean> {
   let ok = true;
-  const up = await d.cli(['upgrade', '--workspace', s.root]);
+  const up = await d.cli(['refresh', '--workspace', s.root]);
   for (const l of worthSaying(up.out)) d.print(`  ${l}`);
   if (up.code !== 0) { d.print(`  ! ${s.kid}:出厂文件没更新完,先接着往下走`); ok = false; }
   // 以前装的写死了带版本号的 node(Homebrew):趁这次换掉,不然下次 brew upgrade 就起不来。--no-tray:图标下一步 restart 管,没开图标的不能装回来
@@ -73,14 +73,14 @@ async function updateOne(d: UpdateDeps, s: UpdateService, target: string): Promi
   try {
     const checks = (JSON.parse(doc.out) as { checks: { name: string; ok: boolean; cmd?: string }[] }).checks;
     const migrate = checks.find((c) => c.name === 'config.migrate' && !c.ok);
-    if (migrate) d.print(`  ! ${s.kid} 的配置要迁移:${migrate.cmd ?? 'cotutor upgrade --config'}`);
+    if (migrate) d.print(`  ! ${s.kid} 的配置要迁移:${migrate.cmd ?? 'cotutor refresh --config'}`);
   } catch { /* 体检读不了不影响升级 */ }
   return ok;
 }
 
 export async function runUpdate(d: UpdateDeps, o: { anyway?: boolean } = {}): Promise<number> {
   if (d.fromRepo) {
-    d.print('这份是从仓库跑的:git pull,再 cotutor upgrade、cotutor service restart。cotutor update 只管 npm 装的。');
+    d.print('这份是从仓库跑的:git pull,再 cotutor refresh、cotutor service restart。cotutor update 只管 npm 装的。');
     return 1;
   }
   const services = await d.services();
@@ -128,7 +128,7 @@ export async function runUpdate(d: UpdateDeps, o: { anyway?: boolean } = {}): Pr
   if (!services.length) {
     const root = d.workspace();
     if (root) {
-      const up = await d.cli(['upgrade', '--workspace', root]);
+      const up = await d.cli(['refresh', '--workspace', root]);
       for (const l of worthSaying(up.out)) d.print(`  ${l}`);
       if (up.code !== 0) ok = false;
       d.print('没装后台服务:在终端里跑的 cotutor serve 要关掉重开才用上新版。');

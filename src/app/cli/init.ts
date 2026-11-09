@@ -2,7 +2,7 @@
  * cotutor init <slug>:建 ~/cotutor/<slug>/ 骨架,vault 建在旁边的 ~/cotutor/<slug>-vault/(--vault 另指;2026-11-09 起两边分开)。语义是**幂等补缺**——已有的文件与目录一律不动,缺什么补什么。
  * 三条边界(沿 drawtell init):政策文件只在缺失时写模板;用户配置只在还没指定 workspace 时补;不动 git。
  * 老师文件**拷贝**进 agents/<name>.md:拷进来就是家长的,想改就改;出厂 hash 记 .cotutor/shipped.json,
- * cotutor upgrade 据此换新或报 diff。老布局(.claude/agents、.claude/skills)先原样挪到新位置(migrate.ts 的 migrateLayout)。
+ * cotutor refresh 据此换新或报 diff。老布局(.claude/agents、.claude/skills)先原样挪到新位置(migrate.ts 的 migrateLayout)。
  */
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';

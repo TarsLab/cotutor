@@ -13,7 +13,7 @@ const sh = read('install.sh');
 const ps = read('install.ps1');
 const pkg = JSON.parse(read('package.json')) as { engines: { node: string }; files: string[] };
 const readme = read('README.md');
-const { USAGE } = await import('../src/app/cli/usage.ts');
+const { checkCommandLine } = await import('../src/app/cli/usage.ts');
 
 if (process.platform !== 'win32') {
   let ok = true;
@@ -40,7 +40,7 @@ check('脚本里自己写的地址和 README 一致', sh.includes('https://raw.g
 // ---- 卸载 ----
 const un = readme.slice(readme.indexOf('## 卸载'), readme.indexOf('## 开发'));
 check('README 有卸载说明,先说孩子的记录不会被碰', un.length > 200 && un.indexOf('找不回来') < un.indexOf('```'));
-for (const c of ['cotutor service uninstall']) check(`卸载用的命令在 USAGE 里:${c}`, un.includes(c) && USAGE.includes(c.replace('cotutor service uninstall', 'cotutor service install | uninstall')));
+for (const c of ['cotutor service uninstall']) check(`卸载用的命令照命令表对得上:${c}`, un.includes(c) && checkCommandLine(c) === null);
 check('卸载说明不叫人删孩子的 cotutor 文件夹', !/rm -rf|Remove-Item/.test(un));
 check('还留着的都说了在哪:key 与证书、日志、根证书、平板、防火墙', ['.config/cotutor', 'Library/Logs/cotutor', 'LOCALAPPDATA', 'mkcert -uninstall', '描述文件', '防火墙'].every((w) => un.includes(w)), un);
 

@@ -5,7 +5,7 @@ description: cotutor 有脸的老师共同的守则:上下文包怎么看、三�
 
 <!-- 给人看
 谁读:有脸的老师。应用去掉 frontmatter 和独占一行的注释,在话题第一条放进 <cotutor-rules>
-能改:机器件,init / upgrade 每次覆盖。某位老师要不一样的做法,写进那位老师文件的学科一节,它优先
+能改:机器件,init / refresh 每次覆盖。某位老师要不一样的做法,写进那位老师文件的学科一节,它优先
 改了:cotutor pack 看注入,再 cotutor replay 对照(《写提示词.md》§一)
 {{有 x}} 到 {{/有}} 之间的,这位老师的卡里有 x 才留(cotutor.json tutors.<老师>.cards;没写 = 全有)
 -->

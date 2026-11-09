@@ -158,7 +158,7 @@ try {
     rmSync(rulesFile);
     const packNoRules = await gatherContext(ctx.ws, 'math-tutor', { from: 'kid', at: now });
     writeFileSync(rulesFile, saved);
-    check('守则文件缺:YAML 写缺了、叫 upgrade 补,不带原文', packNoRules.rules?.startsWith('缺:') === true && packNoRules.rules.includes('cotutor upgrade') && !packNoRules.notes?.some((n) => n.role === 'rules'), JSON.stringify(packNoRules.rules));
+    check('守则文件缺:YAML 写缺了、叫 refresh 补,不带原文', packNoRules.rules?.startsWith('缺:') === true && packNoRules.rules.includes('cotutor refresh') && !packNoRules.notes?.some((n) => n.role === 'rules'), JSON.stringify(packNoRules.rules));
   }
   check('寒假:2 月 → 二年级寒假,数学没有入口文件', (await gatherContext(ctx.ws, 'math-tutor', { from: 'kid', at: new Date(2027, 1, 3, 10, 0) })).semester === '二年级寒假');
   check('课程表命中 → slot(2026-09-08 是周二 16:20)', pack.slot === '数学 16:00-17:00', String(pack.slot));

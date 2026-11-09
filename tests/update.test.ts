@@ -135,7 +135,7 @@ await initWorkspace({ slug: 'kid', dir: wsRoot });
   check('孩子端不说新版本', typeof kid.html === 'string' && !kid.html.includes('updatebar') && !kid.html.includes('有新版本') && !kid.html.includes('npm i -g'));
   check('家长端首页说:走 /api/health、给升级步骤、知道了就这个版本不再提', PARENT_HOME_PAGE.includes('id="updatebar"') && PARENT_HOME_PAGE.includes("'/api/health'") && upgradeSteps().every((s) => PARENT_HOME_PAGE.includes(s)) && PARENT_HOME_PAGE.includes('cotutor.updateSeen'));
 
-  // 2026-11-07 真机看到过:join 的换行符被当成文字,家长看到的是一行 npm i -g cotutor\ncotutor upgrade…。每条单独一行就不靠转义了
+  // 2026-11-07 真机看到过:join 的换行符被当成文字,家长看到的是一行 npm i -g cotutor\ncotutor refresh…。每条单独一行就不靠转义了
   const script = PARENT_HOME_PAGE.slice(PARENT_HOME_PAGE.indexOf('const showUpdate'), PARENT_HOME_PAGE.indexOf('const load = async'));
   check('提示条:每条命令单独一行,不靠换行符转义', script.includes('UPGRADE_STEPS.map') && !script.includes('.join('), script);
   check('提示条:有说明就列出来,用 h 画(网上来的不当 HTML)', script.includes('hh.latestNotes.map') && !script.includes('innerHTML'));
@@ -153,17 +153,17 @@ await initWorkspace({ slug: 'kid', dir: wsRoot });
 
 // ---- 升级步骤:命令要在 USAGE 里,README 要写全;不用 && ----
 {
-  const { USAGE } = await import('../src/app/cli/usage.ts');
+  const { checkCommandLine } = await import('../src/app/cli/usage.ts');
   const readme = readFileSync(join(import.meta.dirname, '..', 'README.md'), 'utf8');
   const section = readme.slice(readme.indexOf('## 数据与升级'), readme.indexOf('### 旧 workspace 换运行时'));
   check('升级步骤都写进 README 的「数据与升级」', UPGRADE_STEPS.every((s) => section.includes(s)), section);
-  check('cotutor 的步骤在 USAGE 里', UPGRADE_STEPS.filter((s) => s.startsWith('cotutor ')).every((s) => USAGE.includes(s.split(' ').slice(0, 2).join(' '))));
+  check('cotutor 的步骤照命令表对得上', UPGRADE_STEPS.filter((s) => s.startsWith('cotutor ')).every((s) => checkCommandLine(s) === null));
   check('步骤里没有 &&(Windows 的 PowerShell 5.1 不认)', UPGRADE_STEPS.every((s) => !s.includes('&&')));
   // 2026-11-07 真机:新电脑的 PowerShell 拦 npm.ps1、cotutor.ps1,照提示升级第一条就报错
   check('Windows 给 .cmd:PowerShell 和 cmd.exe 都能跑', upgradeSteps('win32').join(' ; ') === 'cotutor.cmd update', upgradeSteps('win32').join(' ; '));
   check('Mac、Linux 原样', upgradeSteps('darwin').join() === UPGRADE_STEPS.join() && upgradeSteps('linux').join() === UPGRADE_STEPS.join());
   check('README 说了 Windows 要带 .cmd', section.includes('cotutor.cmd update') && section.includes('npm.cmd'));
-  check('README 给了还没有 cotutor update 的旧版本怎么升', section.includes('npm i -g cotutor') && section.includes('cotutor upgrade') && section.includes('cotutor service restart'));
+  check('README 给了还没有 cotutor update 的旧版本怎么升', section.includes('npm i -g cotutor') && section.includes('cotutor refresh') && section.includes('cotutor service restart'));
   // 家长在提示条上看到的是 releaseNotes,翻历史看的是 CHANGELOG:发版时两边都要写
   const pkg = JSON.parse(readFileSync(join(import.meta.dirname, '..', 'package.json'), 'utf8')) as { version: string; releaseNotes?: string[] };
   const log = readFileSync(join(import.meta.dirname, '..', 'CHANGELOG.md'), 'utf8');

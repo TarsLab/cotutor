@@ -14,8 +14,8 @@ import { gradePacks } from './grades.ts';
 import { guideText } from './guide.ts';
 import { makeCert } from './cert.ts';
 import { PIN_RE, USER_PIN_FILE, clearPin, readPin, setPin } from '../http/access.ts';
-import { addTutorFile, upgradeTutors } from './tutors.ts';
-import { activityRunFor, checkActivities, upgradeActivities } from './activities.ts';
+import { addTutorFile, restoreTutor, upgradeTutors } from './tutors.ts';
+import { activityRunFor, checkActivities, restoreActivity, upgradeActivities } from './activities.ts';
 import { configGapsOf, migrateLayout, upgradeConfig } from './migrate.ts';
 import { linkClaudeSkills, upgradeSkills } from './skills.ts';
 import { addTheme, upgradeThemes } from './themes.ts';
@@ -33,7 +33,8 @@ import { startUpdateChecks } from '../machine/update.ts';
 import { isNewer, upgradeSteps } from '../../shared/upgrade.ts';
 import { serveMock, type MockScenario } from '../mock/mock.ts';
 import { UsageError, loadWorkspace, redactDeep, redactHome, workspaceReport } from '../workspace.ts';
-import { USAGE } from './usage.ts';
+import { checkArgs, commandHelp, topHelp, unknownCommand } from './usage.ts';
+import { VALUED_FLAGS, commandSpec } from './commands.ts';
 import { PHOTO_MAX_BYTES, createContext } from '../http/app.ts';
 import { MESSAGE_FROM, type MessageFrom } from '../../schema/index.ts';
 import { formatEvent, laneFilter, parseEvents } from '../../runtime/journal/events.ts';
@@ -58,7 +59,10 @@ function interactive(json: boolean): boolean {
   return !json && Boolean(process.stdin.isTTY && process.stdout.isTTY);
 }
 
-function parseArgs(argv: string[], valued: string[]): Parsed {
+/** 参数写错了(不是运行时的状况):报错时补一句去看这条命令的帮助 */
+class ArgError extends UsageError {}
+
+function parseArgs(argv: string[], valued: readonly string[]): Parsed {
   const flags: Record<string, string | true> = {};
   const positionals: string[] = [];
   let cmd: string | undefined;
@@ -68,12 +72,12 @@ function parseArgs(argv: string[], valued: string[]): Parsed {
       const key = a.slice(2);
       if (valued.includes(key)) {
         const next = argv[i + 1];
-        // --force 的值可省:upgrade --force <老师>,home publish --force
+        // --force 的值可省:upgrade --force <老师>(旧名),home publish --force
         if ((next === undefined || next.startsWith('--')) && key === 'force') {
           flags[key] = true;
           continue;
         }
-        if (next === undefined || next.startsWith('--')) throw new UsageError(`选项 --${key} 需要一个值。\n${USAGE}`);
+        if (next === undefined || next.startsWith('--')) throw new ArgError(`选项 --${key} 需要一个值`);
         flags[key] = next;
         i++;
       } else flags[key] = true;
@@ -106,13 +110,13 @@ async function backupBeforeUpgrade(root: string): Promise<string | null> {
   }
 }
 
-/** 不用 workspace 的命令:--sandbox 对它们没有意义 */
-const NO_WORKSPACE = ['guide', 'grades', 'init', 'mock', 'pin', 'cert', 'tray', 'update'];
 
 export async function main(argv: string[]): Promise<void> {
   let json = false;
+  let helpFor: string | undefined;
   try {
-    const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'vault', 'name', 'grade', 'port', 'from', 'runtime', 'force', 'display', 'subject', 'avatar', 'description', 'scenario', 'delay', 'lane', 'job', 'date', 'thread', 'at', 'photo', 'activity', 'param', 'runs', 'only', 'kid-model', 'pin', 'out', 'bundles', 'step', 'voice', 'tutor', 'instruction', 'log-dir', 'lines']);
+    const { cmd, positionals, flags } = parseArgs(argv, VALUED_FLAGS);
+    helpFor = cmd;
     json = flags.json === true;
     let workspace = typeof flags.workspace === 'string' ? flags.workspace : undefined;
     // --version / --help 是旗标不是命令,parseArgs 把它们收进 flags,cmd 拿不到,所以在 switch 前处理
@@ -120,15 +124,28 @@ export async function main(argv: string[]): Promise<void> {
       process.stdout.write(`${version()}\n`);
       return;
     }
-    if (flags.help === true || cmd === undefined || cmd === '-h') {
-      process.stdout.write(USAGE);
+    // 帮助:裸跑与 --help 是顶层(--all 连开发与调试的),cotutor <命令> --help 与 cotutor help <命令> 是那条命令的
+    if (cmd === 'help' && positionals[0] && commandSpec(positionals[0])) {
+      process.stdout.write(commandHelp(positionals[0]));
       return;
     }
+    if (flags.help === true || cmd === undefined || cmd === '-h' || cmd === 'help') {
+      process.stdout.write(cmd && commandSpec(cmd) ? commandHelp(cmd) : topHelp({ all: flags.all === true }));
+      return;
+    }
+    // 照命令表先查一遍:打错的旗标、用错子命令的旗标、多余的参数都报错,不悄悄忽略
+    const spec = commandSpec(cmd);
+    if (!spec) {
+      helpFor = undefined;
+      throw new ArgError(unknownCommand(cmd));
+    }
+    const wrong = checkArgs(spec, positionals, flags);
+    if (wrong) throw new ArgError(wrong);
     // --sandbox:要 workspace 的命令都换到它的试用副本(src/app/cli/sandbox.ts),下面照常把它当 --workspace
     if (flags.fresh === true && flags.sandbox !== true) throw new UsageError('--fresh 只跟 --sandbox 一起用:cotutor serve --sandbox --fresh 重新分出试用 workspace');
     if (flags.sandbox === true) {
-      if (NO_WORKSPACE.includes(cmd)) throw new UsageError(`${cmd} 不用 workspace,--sandbox 没有意义`);
       if (cmd === 'service') throw new UsageError('试用 workspace 不装后台服务:试的时候 cotutor serve --sandbox 在前台跑');
+      if (!spec.sandbox) throw new UsageError(`${cmd} 不用 workspace,--sandbox 没有意义`);
       const sb = await openSandbox(workspace, { fresh: flags.fresh === true });
       workspace = sb.root;
       if (!json) {
@@ -148,7 +165,7 @@ export async function main(argv: string[]): Promise<void> {
       }
       case 'init': {
         const slug = positionals[0];
-        if (!slug || !/^[a-z0-9][a-z0-9-]*$/.test(slug)) throw new UsageError(`init 需要一个 slug(小写字母数字连字符,是短名不是真名),如 cotutor init ming。\n${USAGE}`);
+        if (!slug || !/^[a-z0-9][a-z0-9-]*$/.test(slug)) throw new ArgError(`init 需要一个 slug(小写字母数字连字符,是短名不是真名),如 cotutor init ming`);
         const port = typeof flags.port === 'string' ? Number(flags.port) : undefined;
         if (port !== undefined && !(Number.isInteger(port) && port > 0 && port < 65536)) throw new UsageError('--port 要是 1–65535 的整数');
         if (flags.grade !== undefined && (typeof flags.grade !== 'string' || !/^[1-6]$/.test(flags.grade))) throw new UsageError('--grade 要是 1–6 的整数,如 --grade 2');
@@ -176,6 +193,7 @@ export async function main(argv: string[]): Promise<void> {
         const [sub, name] = positionals;
         if (!sub) {
           const b = await backup.makeBackup(target, { why: 'manual', version: BUILD.version });
+          if (json) { process.stdout.write(`${JSON.stringify(redactDeep({ ok: true, backup: b, dir: backup.backupsOf(ws.root), vault: b.vault ?? null }), null, 2)}\n`); return; }
           process.stdout.write(`备份好了:${backup.describeBackup(b)}\n  在 ${redactHome(backup.backupsOf(ws.root))}\n  不含录音(wav)和能重新生成的文件${b.audioSkipped ? `,这次跳过 ${b.audioSkipped} 个录音` : ''}\n`);
           if (b.vault === 'unreadable') process.stdout.write(`! 笔记文件夹(vault)读不了(${redactHome(ws.paths.vault)}),这份里没有它\n`);
           return;
@@ -187,9 +205,11 @@ export async function main(argv: string[]): Promise<void> {
           for (const b of list) process.stdout.write(`${backup.describeBackup(b)}\n`);
           return;
         }
-        if (sub !== 'restore' || !name) throw new UsageError(`cotutor backup [list | restore <名字> [--yes]]\n${USAGE}`);
+        if (sub !== 'restore' || !name) throw new ArgError('backup restore 要备份的名字,如 cotutor backup restore <名字> --yes(cotutor backup list 看有哪些)');
         if (!(await backup.listBackups(ws.root)).some((b) => b.name === name)) throw new UsageError(`没有这份备份:${name}(cotutor backup list 看有哪些)`);
         if (flags.yes !== true) {
+          // 不加 --yes 只说会做什么,以 1 退:agent 拿到 needsYes 也不能自己补,要家长明确说要恢复
+          if (json) { process.stdout.write(`${JSON.stringify({ ok: false, needsYes: true, backup: name, would: '备份里有的文件覆盖回去,之后新多出来的不删;先把现在的也备一份;服务停一下;录音不受影响' }, null, 2)}\n`); process.exitCode = 1; return; }
           process.stdout.write(`会把孩子的 cotutor 文件夹恢复成 ${name} 那时的样子:备份里有的文件都覆盖回去,之后新多出来的不删。\n恢复前会先把现在的样子也备份一份,恢复错了还能回来。服务会停一下。录音不在备份里,不受影响。\n确定的话加 --yes\n`);
           process.exitCode = 1;
           return;
@@ -202,9 +222,12 @@ export async function main(argv: string[]): Promise<void> {
         const service = await findService(host, ws.root);
         if (service && health) await controlService(host, ws.root, 'stop');
         const r = await backup.restoreBackup(target, name, { version: BUILD.version });
+        const restart = Boolean(service && health);
+        if (restart) await controlService(host, ws.root, 'start');
+        if (json) { process.stdout.write(`${JSON.stringify(redactDeep({ ok: true, backup: name, files: r.files, safety: r.safety, vaultCopy: r.vaultCopy, restarted: restart }), null, 2)}\n`); return; }
         process.stdout.write(`恢复好了:${r.files} 个文件。恢复前的样子留在 ${r.safety}\n`);
         if (r.vaultCopy) process.stdout.write(`笔记文件夹(vault)没动;要拿回来,那一份的 md 在 ${redactHome(r.vaultCopy)}\n`);
-        if (service && health) { await controlService(host, ws.root, 'start'); process.stdout.write('服务重起了\n'); }
+        if (restart) process.stdout.write('服务重起了\n');
         return;
       }
       case 'doctor': {
@@ -291,7 +314,7 @@ export async function main(argv: string[]): Promise<void> {
       case 'tray': {
         // 菜单栏 / 任务栏图标(tray.ts);tray run 由 bin/cotutor.js 直接走轻入口,不到这里
         const sub = positionals[0];
-        if (sub !== 'on' && sub !== 'off' && sub !== 'status') throw new UsageError(`tray 后面跟 on / off / status 之一。\n${USAGE}`);
+        if (sub !== 'on' && sub !== 'off' && sub !== 'status') throw new ArgError(`tray 后面跟 on / off / status 之一`);
         const host = realHost();
         if (!traySupported(host.platform)) throw new UsageError(`${host.platform} 上没做托盘图标(GNOME 缺省不显示托盘):cotutor service status 看服务状态`);
         const word = host.platform === 'darwin' ? '菜单栏图标' : '任务栏图标';
@@ -325,7 +348,7 @@ export async function main(argv: string[]): Promise<void> {
           return;
         }
         const SUBS = ['install', 'uninstall', 'start', 'stop', 'restart', 'status', 'logs'];
-        if (!sub || !SUBS.includes(sub)) throw new UsageError(`service 后面跟 ${SUBS.join(' / ')} 之一。\n${USAGE}`);
+        if (!sub || !SUBS.includes(sub)) throw new ArgError(`service 后面跟 ${SUBS.join(' / ')} 之一`);
         const host = realHost();
         const platform = servicePlatform(host.platform);
         const ws = loadWorkspace(workspace);
@@ -494,7 +517,7 @@ export async function main(argv: string[]): Promise<void> {
       case 'add': {
         const name = positionals[0];
         const display = typeof flags.display === 'string' ? flags.display : undefined;
-        if (!name || !display) throw new UsageError(`add 需要老师名和 --display 显示名,如 cotutor add science-tutor --display 科学老师 --subject 科学 --avatar 🔬。\n${USAGE}`);
+        if (!name || !display) throw new ArgError(`add 需要老师名和 --display 显示名,如 cotutor add science-tutor --display 科学老师 --subject 科学 --avatar 🔬`);
         const ws = loadWorkspace(workspace);
         if (ws.config.tutors[name]) throw new UsageError(`cotutor.json 里已经有 ${name} 了;要改人设去老师团页或直接改文件`);
         const subject = typeof flags.subject === 'string' ? flags.subject : undefined;
@@ -509,7 +532,7 @@ export async function main(argv: string[]): Promise<void> {
       }
       case 'add-theme': {
         const name = positionals[0];
-        if (!name) throw new UsageError(`add-theme 需要主题名,如 cotutor add-theme dark。\n${USAGE}`);
+        if (!name) throw new ArgError(`add-theme 需要主题名,如 cotutor add-theme dark`);
         const { root } = resolveRoot(workspace);
         const r = await addTheme(root, name, typeof flags.from === 'string' ? flags.from : 'default');
         if (json) process.stdout.write(`${JSON.stringify(redactDeep(r), null, 2)}\n`);
@@ -521,8 +544,26 @@ export async function main(argv: string[]): Promise<void> {
         process.exitCode = await runUpdate(realUpdateDeps(() => { try { return resolveRoot(workspace).root; } catch { return null; } }), { anyway: flags.anyway === true });
         return;
       }
-      case 'upgrade': {
-        if (flags.grade !== undefined) throw new UsageError('upgrade 只更新已安装的教学包,不能用 --grade 切换年级');
+      case 'reset': {
+        // 只把点名的出厂老师 / activity 换回出厂那份(工作台「恢复出厂」同一条路),别的不碰;现在那份存 .bak
+        if (!positionals.length) throw new ArgError('reset 要说换回哪几份,如 cotutor reset math-tutor 或 cotutor reset chinese-tutor/你说我画');
+        const { root } = resolveRoot(workspace);
+        const said = await backupBeforeUpgrade(root);
+        if (said && !json) process.stdout.write(`${said}\n`);
+        const done: { name: string; bak: string | null }[] = [];
+        for (const name of positionals) {
+          const [tutor, activity] = name.split('/');
+          const r = activity ? await restoreActivity(root, tutor, activity) : await restoreTutor(root, tutor);
+          done.push({ name, bak: r.bak });
+        }
+        if (json) process.stdout.write(`${JSON.stringify(redactDeep({ ok: true, reset: done }), null, 2)}\n`);
+        else for (const d of done) process.stdout.write(`✓ ${d.name} 换回出厂的${d.bak ? `;你那份存在 ${redactHome(d.bak)}` : '(本来就和出厂的一样)'}\n`);
+        return;
+      }
+      // upgrade 是 refresh 的旧名:0.4.x 的 cotutor update 换完程序会用新程序跑 upgrade --workspace <孩子>,一直要认;--force 的活现在归 reset
+      case 'upgrade':
+      case 'refresh': {
+        if (flags.grade !== undefined) throw new UsageError(`${cmd} 只更新已安装的教学包,不能用 --grade 切换年级`);
         const { root } = resolveRoot(workspace);
         // 升级前留一份:新代码弄坏了能回来。备份不成不拦升级,说一声。--dry-run 不动文件,不用
         if (flags['dry-run'] !== true) {
@@ -540,7 +581,7 @@ export async function main(argv: string[]): Promise<void> {
             for (const st of r.installed) process.stdout.write(`✓ ${st.item.padEnd(24)} ${st.note ?? '建好了'}\n`);
             process.stdout.write(
               dryRun
-                ? `\n${r.gaps.length} 项要改,还没动文件:cotutor upgrade --config 真改(只加缺的、删不再用的出厂段,你改过的值不动)\n`
+                ? `\n${r.gaps.length} 项要改,还没动文件:cotutor refresh --config 真改(只加缺的、删不再用的出厂段,你改过的值不动)\n`
                 : `\n改了 ${r.gaps.length} 项到 ${redactHome(r.file)};服务在跑的话不用重启(改了就热重载)。\n`,
             );
           }
@@ -566,7 +607,7 @@ export async function main(argv: string[]): Promise<void> {
           for (const s of steps) {
             process.stdout.write(`${s.action === 'kept-custom' ? '!' : '✓'} ${s.name.padEnd(18)} ${word[s.action]}${s.basedOn && s.action !== 'latest' ? `(基于 ${s.basedOn})` : ''}\n`);
             if (s.diff?.length) {
-              process.stdout.write(`    你的 vs 新版(- 你的 / + 新版),想用新版:cotutor upgrade --force ${s.name}\n`);
+              process.stdout.write(`    你的 vs 新版(- 你的 / + 新版),想用新版:cotutor reset ${s.name}\n`);
               for (const l of s.diff.slice(0, 40)) process.stdout.write(`    ${l}\n`);
               if (s.diff.length > 40) process.stdout.write(`    …还有 ${s.diff.length - 40} 行\n`);
             }
@@ -574,22 +615,22 @@ export async function main(argv: string[]): Promise<void> {
           for (const s of activitySteps) {
             process.stdout.write(`${s.action === 'kept-custom' ? '!' : '✓'} activity ${s.key.padEnd(18)} ${word[s.action]}${s.from ? `(原来叫「${s.from}」)` : ''}${s.basedOn && s.action !== 'latest' ? `(基于 ${s.basedOn})` : ''}\n`);
             if (s.diff?.length) {
-              process.stdout.write(`    你的 vs 新版(- 你的 / + 新版),想用新版:cotutor upgrade --force ${s.key}\n`);
+              process.stdout.write(`    你的 vs 新版(- 你的 / + 新版),想用新版:cotutor reset ${s.key}\n`);
               for (const l of s.diff.slice(0, 40)) process.stdout.write(`    ${l}\n`);
               if (s.diff.length > 40) process.stdout.write(`    …还有 ${s.diff.length - 40} 行\n`);
             }
           }
-          if (gaps.length) process.stdout.write(`! 配置有 ${gaps.length} 项要改(新出厂老师 / 运行时 / 命令模板旗标 / 不再用的段):cotutor upgrade --config --dry-run 先看\n`);
+          if (gaps.length) process.stdout.write(`! 配置有 ${gaps.length} 项要改(新出厂老师 / 运行时 / 命令模板旗标 / 不再用的段):cotutor refresh --config --dry-run 先看\n`);
         }
         return;
       }
       case 'activity': {
         const sub = positionals[0];
-        if (sub !== 'check' && sub !== 'eval') throw new UsageError(`activity 后面跟 check / eval,如 cotutor activity check chinese-tutor 你说我画。\n${USAGE}`);
+        if (sub !== 'check' && sub !== 'eval') throw new ArgError(`activity 后面跟 check / eval,如 cotutor activity check chinese-tutor 你说我画`);
         const ws = loadWorkspace(workspace);
         const [, tutor, name] = positionals;
         if (sub === 'eval') {
-          if (!tutor || !name) throw new UsageError(`activity eval 要老师和名字,如 cotutor activity eval chinese-tutor 你说我画。\n${USAGE}`);
+          if (!tutor || !name) throw new ArgError(`activity eval 要老师和名字,如 cotutor activity eval chinese-tutor 你说我画`);
           const runs = typeof flags.runs === 'string' ? Number(flags.runs) : 3;
           if (!Number.isInteger(runs) || runs < 1 || runs > 10) throw new UsageError('--runs 要是 1–10 的整数');
           const { evalActivity, makeKidModel } = await import('../activity-eval.ts');
@@ -615,7 +656,7 @@ export async function main(argv: string[]): Promise<void> {
           return;
         }
         const results = await checkActivities(ws.root, ws.config.tutors, { tutor, name });
-        if (!results.length) throw new UsageError(tutor ? `agents/${tutor}/activities/ 里没有${name ? ` ${name}.md` : ' activity 文件'}` : '这个 workspace 里还没有 activity 文件(cotutor upgrade 补出厂的)');
+        if (!results.length) throw new UsageError(tutor ? `agents/${tutor}/activities/ 里没有${name ? ` ${name}.md` : ' activity 文件'}` : '这个 workspace 里还没有 activity 文件(cotutor refresh 补出厂的)');
         const fixes = results.reduce((n, r) => n + r.issues.filter((i) => i.level === 'fix').length, 0);
         if (json) process.stdout.write(`${JSON.stringify(redactDeep({ ok: fixes === 0, activities: results.map((r) => ({ tutor: r.tutor, name: r.name, file: r.file, issues: r.issues, params: r.activity?.params ?? [], state: r.activity?.state ?? [], gates: r.activity?.gates ?? [], tools: r.activity?.tools.map((t) => t.tool) ?? [] })) }), null, 2)}\n`);
         else {
@@ -669,7 +710,7 @@ export async function main(argv: string[]): Promise<void> {
       }
       case 'pack': {
         const [tutor, ...rest] = positionals;
-        if (!tutor) throw new UsageError(`pack 需要老师名,如 cotutor pack math-tutor "讲讲退位"。\n${USAGE}`);
+        if (!tutor) throw new ArgError(`pack 需要老师名,如 cotutor pack math-tutor "讲讲退位"`);
         const ws = loadWorkspace(workspace);
         const { packDryRun } = await import('../../runtime/runner.ts');
         const from = typeof flags.from === 'string' ? flags.from : 'kid';
@@ -703,7 +744,7 @@ export async function main(argv: string[]): Promise<void> {
       }
       case 'show': {
         const [tutor, jobArg, dateArg] = positionals;
-        if (!tutor || !jobArg) throw new UsageError(`show 需要老师名和 job,如 cotutor show math-tutor 1620-1 2026-09-12(日期缺省今天)。\n${USAGE}`);
+        if (!tutor || !jobArg) throw new ArgError(`show 需要老师名和 job,如 cotutor show math-tutor 1620-1 2026-09-12(日期缺省今天)`);
         const ws = loadWorkspace(workspace);
         const { rawView } = await import('../http/raw-view.ts');
         const { localDate } = await import('../../shared/time.ts');
@@ -732,7 +773,7 @@ export async function main(argv: string[]): Promise<void> {
       }
       case 'replay': {
         const [tutor, jobArg, dateArg] = positionals;
-        if (!tutor || !jobArg) throw new UsageError(`replay 需要老师名和 job,如 cotutor replay math-tutor 1620-1 2026-09-12(日期缺省今天)。\n${USAGE}`);
+        if (!tutor || !jobArg) throw new ArgError(`replay 需要老师名和 job,如 cotutor replay math-tutor 1620-1 2026-09-12(日期缺省今天)`);
         const ws = loadWorkspace(workspace);
         const { compareReplay, formatCompare, startReplay } = await import('../replay.ts');
         const { localDate } = await import('../../shared/time.ts');
@@ -748,7 +789,7 @@ export async function main(argv: string[]): Promise<void> {
       }
       case 'compare': {
         const [tutor, evalJobArg, dateArg] = positionals;
-        if (!tutor) throw new UsageError(`compare 需要老师名,如 cotutor compare math-tutor 1712-1 2026-09-12。\n${USAGE}`);
+        if (!tutor) throw new ArgError(`compare 需要老师名,如 cotutor compare math-tutor 1712-1 2026-09-12`);
         const ws = loadWorkspace(workspace);
         const { compareReplay, formatCompare, listReplays } = await import('../replay.ts');
         const { localDate } = await import('../../shared/time.ts');
@@ -768,7 +809,7 @@ export async function main(argv: string[]): Promise<void> {
       }
       case 'trace': {
         const [tutor, jobArg, dateArg] = positionals;
-        if (!tutor || !jobArg) throw new UsageError(`trace 需要老师名和 job,如 cotutor trace math-tutor 1620-1 2026-09-12(日期缺省今天)。\n${USAGE}`);
+        if (!tutor || !jobArg) throw new ArgError(`trace 需要老师名和 job,如 cotutor trace math-tutor 1620-1 2026-09-12(日期缺省今天)`);
         const ws = loadWorkspace(workspace);
         const { localDate } = await import('../../shared/time.ts');
         const { conversationFiles } = await import('../../schema/index.ts');
@@ -788,7 +829,7 @@ export async function main(argv: string[]): Promise<void> {
       case 'rate': {
         const [tutor, thread, score] = positionals;
         const n = Number(score);
-        if (!tutor || !thread || !(n >= 1 && n <= 5 && Number.isInteger(n))) throw new UsageError(`rate 需要老师名、话题 id 和 1–5 的星,如 cotutor rate math-tutor 1620-1 4。\n${USAGE}`);
+        if (!tutor || !thread || !(n >= 1 && n <= 5 && Number.isInteger(n))) throw new ArgError(`rate 需要老师名、话题 id 和 1–5 的星,如 cotutor rate math-tutor 1620-1 4`);
         const ws = loadWorkspace(workspace);
         const date = typeof flags.date === 'string' ? flags.date : localDate(new Date());
         const index = await rateThread(ws, tutor, date, thread, n);
@@ -798,7 +839,7 @@ export async function main(argv: string[]): Promise<void> {
       }
       case 'bookkeep': {
         const [tutor] = positionals;
-        if (!tutor) throw new UsageError(`bookkeep 需要老师名,如 cotutor bookkeep math-tutor。\n${USAGE}`);
+        if (!tutor) throw new ArgError(`bookkeep 需要老师名,如 cotutor bookkeep math-tutor`);
         const ctx = createContext(loadWorkspace(workspace));
         const date = typeof flags.date === 'string' ? flags.date : localDate(new Date());
         const only = typeof flags.thread === 'string' ? [flags.thread] : undefined;
@@ -821,7 +862,7 @@ export async function main(argv: string[]): Promise<void> {
       }
       case 'home': {
         const sub = positionals[0];
-        if (sub !== 'check' && sub !== 'publish' && sub !== 'show') throw new UsageError(`home 后面跟 check / publish / show,如 cotutor home check。\n${USAGE}`);
+        if (sub !== 'check' && sub !== 'publish' && sub !== 'show') throw new ArgError(`home 后面跟 check / publish / show,如 cotutor home check`);
         const ws = loadWorkspace(workspace);
         const now = new Date();
         const home = await import('../../runtime/home/store.ts');
@@ -870,7 +911,7 @@ export async function main(argv: string[]): Promise<void> {
         // --activity:像孩子点了首页的 activity 按钮,新开话题;没写消息就发 activity 的名字(按钮上的字)
         const activityName = typeof flags.activity === 'string' ? flags.activity : undefined;
         const text = words.join(' ') || activityName || '';
-        if (!tutor || (!text && !photoFiles.length)) throw new UsageError(`send 需要老师名和消息,如 cotutor send math-tutor "这一步为什么要借位"。\n${USAGE}`);
+        if (!tutor || (!text && !photoFiles.length)) throw new ArgError(`send 需要老师名和消息,如 cotutor send math-tutor "这一步为什么要借位"`);
         const from = typeof flags.from === 'string' ? flags.from : 'kid';
         if (!(MESSAGE_FROM as readonly string[]).includes(from)) throw new UsageError(`--from 只能是 ${MESSAGE_FROM.join(' / ')}`);
         const ws = loadWorkspace(workspace);
@@ -916,12 +957,14 @@ export async function main(argv: string[]): Promise<void> {
         return;
       }
       default:
-        throw new UsageError(`未知命令 '${cmd}'。\n${USAGE}`);
+        throw new ArgError(unknownCommand(cmd));
     }
   } catch (err) {
     if (err instanceof UsageError) {
-      if (json) process.stdout.write(`${JSON.stringify({ ok: false, error: 'usage', message: err.message })}\n`);
-      else process.stderr.write(`cotutor: ${err.message}\n`);
+      // 参数写错了:一句话 + 去哪看用法,不再把整篇帮助倒出来
+      const help = err instanceof ArgError ? (helpFor && commandSpec(helpFor) ? `cotutor ${helpFor} --help` : 'cotutor --help') : undefined;
+      if (json) process.stdout.write(`${JSON.stringify({ ok: false, error: 'usage', message: err.message, ...(help ? { help } : {}) })}\n`);
+      else process.stderr.write(`cotutor: ${err.message}\n${help ? `  用法:${help}\n` : ''}`);
       process.exitCode = 2;
       return;
     }

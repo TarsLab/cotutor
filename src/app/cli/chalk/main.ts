@@ -15,17 +15,13 @@ import { UsageError, loadWorkspace, redactDeep, redactHome } from '../../workspa
 import { buildBundle, readBundle } from './build.ts';
 import { LoadError, NotFoundError, loadScene, loadSceneFiles, resolveSceneInput } from './load-scene.ts';
 import { typecheckScene } from './typecheck.ts';
+import { commandHelp } from '../usage.ts';
 
 type Flags = Record<string, string | true>;
 
-export const CHALK_USAGE = `用法:
-  cotutor chalk check <scene.ts|目录> [--no-types] [--json]
-  cotutor chalk build <scene.ts|目录> [--out <dir>] [--json]
-  cotutor chalk bake <scene.ts|课包 id> [--bundles <dir>] [--json]
-  cotutor chalk snap <scene.ts|课包 id> [--step <n>] [--no-cursor] [--out <dir>] [--bundles <dir>] [--json]
-  cotutor chalk dub <scene.ts|课包 id> [--voice <音色>] [--tutor <老师>] [--instruction <语气>] [--dry-run] [--bundles <dir>] [--json]
-课包缺省在 workspace 的 bundles/(--bundles 换);场景源与 --out / --bundles 的相对路径按当前目录。
-`;
+/** cotutor chalk 的用法从命令表来(app/cli/commands.ts),帮助和参数检查同源 */
+const CHALK_HELP = (): string => commandHelp('chalk');
+const SEE_HELP = '用法:cotutor chalk --help';
 
 const str = (v: string | true | undefined): string | undefined => (typeof v === 'string' ? v : undefined);
 
@@ -79,11 +75,11 @@ export async function chalkCommand(args: string[], flags: Flags, opts: { workspa
   const [sub, file, ...extra] = args;
   const json = opts.json;
   if (!sub || flags.help === true) {
-    process.stdout.write(CHALK_USAGE);
+    process.stdout.write(CHALK_HELP());
     return;
   }
-  if (!file) throw new UsageError(`cotutor chalk ${sub} 要一个场景文件(或课包 id)。\n${CHALK_USAGE}`);
-  if (extra.length) throw new UsageError(`多余的参数 '${extra[0]}'。\n${CHALK_USAGE}`);
+  if (!file) throw new UsageError(`cotutor chalk ${sub} 要一个场景文件(或课包 id)。${SEE_HELP}`);
+  if (extra.length) throw new UsageError(`多余的参数 '${extra[0]}'。${SEE_HELP}`);
   const bundlesOf = (): string => (str(flags.bundles) ? resolve(str(flags.bundles)!) : loadWorkspace(opts.workspace).dirs.bundles);
   try {
     switch (sub) {
@@ -178,7 +174,7 @@ export async function chalkCommand(args: string[], flags: Flags, opts: { workspa
         return;
       }
       default:
-        throw new UsageError(`cotutor chalk 没有 '${sub}'。\n${CHALK_USAGE}`);
+        throw new UsageError(`cotutor chalk 没有 '${sub}'。${SEE_HELP}`);
     }
   } catch (err) {
     // 找不到场景 / 课包是用法问题;场景求值失败是场景的问题(exit 1)

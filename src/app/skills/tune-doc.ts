@@ -4,13 +4,13 @@
  * tests/skills.test.ts 断言入库的和生成的一致——改老师团时能改哪些字段、缺省是什么,永远和契约同源。SKILL.md 本体(三条路子、禁区)是手写的。
  */
 import { z } from 'zod';
-import { USAGE } from '../cli/usage.ts';
+import { commandsReference } from '../cli/usage.ts';
 import { POLICY_DEFAULTS, PolicySchema, TutorSchema } from '../../schema/config.ts';
 import { AGENT_FRONTMATTER_KEYS } from '../../runtime/agent-file.ts';
 
 export const TUNE_SKILL = 'cotutor-tune';
 
-const TUNE_COMMANDS = ['add', 'add-theme', 'upgrade', 'doctor', 'pack', 'replay', 'compare', 'show'];
+const TUNE_COMMANDS = ['add', 'add-theme', 'refresh', 'reset', 'doctor', 'pack', 'replay', 'compare', 'show'];
 
 function unwrap(s: z.ZodTypeAny): z.ZodTypeAny {
   let cur = s;
@@ -41,10 +41,6 @@ function rows(shape: Record<string, z.ZodTypeAny>, defaults: Record<string, unkn
 }
 
 export function tuneReferenceDoc(): string {
-  const cmds = USAGE.split('\n').filter((l) => {
-    const m = /^\s+cotutor (\S+)/.exec(l);
-    return m !== null && TUNE_COMMANDS.includes(m[1]);
-  });
   // tutors 字段的缺省从 zod 的 .default() 取(enabled / hidden);display 是必需的,给个占位再抹掉
   const tutorDefaults = TutorSchema.parse({ display: 'x' }) as unknown as Record<string, unknown>;
   delete tutorDefaults.display;
@@ -70,10 +66,10 @@ ${tutorRows.join('\n')}
 |---|---|---|---|
 ${policyRows.join('\n')}
 
-## 相关命令(完整用法 cotutor --help)
+## 相关命令(每条就是 cotutor <命令> --help 的内容)
 
 \`\`\`
-${cmds.join('\n')}
+${commandsReference(TUNE_COMMANDS)}
 \`\`\`
 `;
 }

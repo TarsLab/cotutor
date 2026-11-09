@@ -50,6 +50,6 @@ export async function writeManifest(root: string, m: ShippedManifest): Promise<v
   const file = join(root, SHIPPED_FILE);
   await mkdir(dirname(file), { recursive: true });
   const tmp = `${file}.tmp`;
-  await writeFile(tmp, `${JSON.stringify({ ...m, _note: '出厂时老师文件的 hash,cotutor upgrade 据此分辨「没改过」与「改过」;机器写,不用手改' }, null, 2)}\n`);
+  await writeFile(tmp, `${JSON.stringify({ ...m, _note: '出厂时老师文件的 hash,cotutor refresh 据此分辨「没改过」与「改过」;机器写,不用手改' }, null, 2)}\n`);
   await rename(tmp, file);
 }

@@ -3,7 +3,7 @@
  * tests/skills.test.ts 断言入库的和生成的一致。首页语法.md 从首页能用的卡的 card.md 拼(首页专属的全文,和板书共用的只给一句 + 指向 cotutor-board),
  * <kind>.md 是首页专属卡的协议全文,命令.md 从 CLI 用法文本取。SKILL.md 本体(流程、铁律)是手写的。
  */
-import { USAGE } from '../cli/usage.ts';
+import { commandsReference } from '../cli/usage.ts';
 import { BUTTON_LABEL_MAX, TUTOR_BUTTONS_MAX, kindsFor } from '../../board/cards/index.ts';
 import { PACKAGE_CARDS_DIR, readCardDoc } from '../../board/cards/docs.ts';
 
@@ -86,16 +86,12 @@ for: 2026-09-18
 }
 
 export function homeCommandsDoc(): string {
-  const cmds = USAGE.split('\n').filter((l) => {
-    const m = /^\s+cotutor (\S+)/.exec(l);
-    return m !== null && HOME_COMMANDS.includes(m[1]);
-  });
   return `# 命令(机器生成,别改)
 
-在 workspace 根跑;完整用法 cotutor --help。
+在 workspace 根跑;每条就是 cotutor <命令> --help 的内容。
 
 \`\`\`
-${cmds.join('\n')}
+${commandsReference(HOME_COMMANDS)}
 \`\`\`
 
 ## 文件

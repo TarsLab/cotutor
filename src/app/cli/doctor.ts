@@ -158,7 +158,7 @@ export async function doctorWorkspace(
   // 路径写 $HOME/…,和别的字段一样:用户名不传给 agent 的厂商;redactDeep 只换开头,管不到命令中间的路径;sh 与 PowerShell 都展开
   const quoted = `"${redactHome(root)}"`;
   const flag = source === 'flag' ? ` --workspace ${quoted}` : '';
-  const upgrade = `cotutor upgrade${flag}`;
+  const refresh = `cotutor refresh${flag}`;
 
   // ---- cotutor.json ----
   let ws: Workspace | null = null;
@@ -194,7 +194,7 @@ export async function doctorWorkspace(
     const manifest = await readManifest(root);
     teachingPack = await workspaceGradePack(root);
     push({ name: 'teachingPack', ok: true, required: true, detail: `${teachingPack.grade} 年级教学包 · ${redactHome(teachingPack.dir)}` });
-    if (!manifest.teachingPack) push({ name: 'teachingPack.origin', ok: false, required: false, detail: '旧版出厂内容按二年级来源读取,尚未补记;孩子档案不变', fix: 'cotutor upgrade 补记来源,保留自定义文件与原 hash', cmd: upgrade });
+    if (!manifest.teachingPack) push({ name: 'teachingPack.origin', ok: false, required: false, detail: '旧版出厂内容按二年级来源读取,尚未补记;孩子档案不变', fix: 'cotutor refresh 补记来源,保留自定义文件与原 hash', cmd: refresh });
   } catch (err) {
     push({ name: 'teachingPack', ok: false, required: true, detail: (err as Error).message, fix: '检查 .cotutor/shipped.json 的 teachingPack 与本包 grades/;恢复原来源记录或安装包含该年级的版本,不要改成其他年级绕过' });
   }
@@ -207,8 +207,8 @@ export async function doctorWorkspace(
       ok: gaps.length === 0,
       required: false,
       detail: gaps.length ? `${gaps.length} 项要改:${gaps.map((g) => g.detail).join(';')}` : 'cotutor.json 有出厂模板里的全部老师、运行时与旗标,也没有不再用的段',
-      fix: gaps.length ? 'cotutor upgrade --config --dry-run 先看,再 cotutor upgrade --config 改(只加缺的、删不再用的出厂段,你改过的值不动)' : undefined,
-      cmd: gaps.length ? `cotutor upgrade --config${flag}` : undefined,
+      fix: gaps.length ? 'cotutor refresh --config --dry-run 先看,再 cotutor refresh --config 改(只加缺的、删不再用的出厂段,你改过的值不动)' : undefined,
+      cmd: gaps.length ? `cotutor refresh --config${flag}` : undefined,
     });
   }
 
@@ -225,7 +225,7 @@ export async function doctorWorkspace(
   });
   // 老布局(2026-10-30 之前):老师文件在 .claude/agents/、技能在 .claude/skills/,现在都读不到了
   const legacy = await legacyLayout(root);
-  if (legacy.length) push({ name: 'layout', ok: false, required: true, detail: `${legacy.join(' ')} 是老位置:老师文件现在在 agents/<老师>.md,技能在 ${SKILLS_DIR}/`, fix: 'cotutor upgrade(原样挪过去,不改内容;新位置已有同名的不挪、会点名)', cmd: upgrade });
+  if (legacy.length) push({ name: 'layout', ok: false, required: true, detail: `${legacy.join(' ')} 是老位置:老师文件现在在 agents/<老师>.md,技能在 ${SKILLS_DIR}/`, fix: 'cotutor refresh(原样挪过去,不改内容;新位置已有同名的不挪、会点名)', cmd: refresh });
   // 家规(根的 QWEN.md)2026-09-15 起不出厂:有就是家长自建的共同规矩,提一句;没有不缺
   const rulesThere = (await Promise.all(['QWEN.md'].map(async (f) => ((await statOrNull(join(root, f))) ? f : null)))).filter(Boolean);
   push({ name: 'rules', ok: true, required: false, detail: rulesThere.length ? `家长自建的家规 ${rulesThere.join(' ')} 在,所有老师每轮都读` : '没有根目录的 QWEN.md(不需要:老师要知道的都在老师文件与技能里)' });
@@ -259,7 +259,7 @@ export async function doctorWorkspace(
         cmd: !ok && shipped ? initCmd() : undefined,
       });
       const st = statuses.get(name);
-      if (!st) push({ name: `tutor.${name}.origin`, ok: true, required: false, detail: teachingPack ? '自家加的老师(不是出厂件,upgrade 不碰)' : '出厂来源无法确认,先修复 teachingPack 检查项' });
+      if (!st) push({ name: `tutor.${name}.origin`, ok: true, required: false, detail: teachingPack ? '自家加的老师(不是出厂件,refresh 不碰)' : '出厂来源无法确认,先修复 teachingPack 检查项' });
       if (st) {
         const label: Record<string, string> = { latest: '出厂件,最新', upgradable: `出厂件,基于 ${st.basedOn},包已更新`, custom: `自定义(基于 ${st.basedOn})`, untracked: '自定义(没有出厂记录)', missing: '缺', broken: '读不到' };
         push({
@@ -267,8 +267,8 @@ export async function doctorWorkspace(
           ok: st.state !== 'upgradable',
           required: false,
           detail: label[st.state],
-          fix: st.state === 'upgradable' ? 'cotutor upgrade 换新版' : undefined,
-          cmd: st.state === 'upgradable' ? upgrade : undefined,
+          fix: st.state === 'upgradable' ? 'cotutor refresh 换新版' : undefined,
+          cmd: st.state === 'upgradable' ? refresh : undefined,
         });
       }
       const home = join(ws.dirs.agents, name);
@@ -335,11 +335,11 @@ export async function doctorWorkspace(
       const { CLAUDE_SKILLS_LINK, skillStatuses } = await import('./skills.ts');
       for (const sk of teachingPack ? await skillStatuses(root) : []) {
         const label: Record<string, string> = { latest: sk.machine ? '机器件,最新' : '出厂件,最新', upgradable: sk.machine ? '机器件,和包里不一样(改过或包已更新)' : `出厂件,基于 ${sk.basedOn},包已更新`, custom: `自定义(基于 ${sk.basedOn})`, untracked: '自定义(没有出厂记录)', missing: sk.machine ? '缺(机器件,老师或家长的技能靠它)' : '缺' };
-        push({ name: `skill.${sk.name}`, ok: sk.state !== 'missing' && sk.state !== 'upgradable', required: Boolean(sk.machine), detail: `${SKILLS_DIR}/${sk.name}/:${label[sk.state]}`, fix: sk.state === 'missing' ? 'cotutor init 补拷' : sk.state === 'upgradable' ? 'cotutor upgrade 换新版' : undefined, cmd: sk.state === 'missing' ? initCmd() : sk.state === 'upgradable' ? upgrade : undefined });
+        push({ name: `skill.${sk.name}`, ok: sk.state !== 'missing' && sk.state !== 'upgradable', required: Boolean(sk.machine), detail: `${SKILLS_DIR}/${sk.name}/:${label[sk.state]}`, fix: sk.state === 'missing' ? 'cotutor init 补拷' : sk.state === 'upgradable' ? 'cotutor refresh 换新版' : undefined, cmd: sk.state === 'missing' ? initCmd() : sk.state === 'upgradable' ? refresh : undefined });
       }
       // Claude Code 只认 .claude/skills:那里该是指向 .agents/skills 的链;老师用不到,家长在 workspace 里用 Claude Code 才要
       const linked = (await lstat(join(root, CLAUDE_SKILLS_LINK)).catch(() => null))?.isSymbolicLink() ?? false;
-      push({ name: 'skills.claude', ok: linked, required: false, detail: linked ? `${CLAUDE_SKILLS_LINK} 链到 ${SKILLS_DIR}(Claude Code 读的是同一份)` : `${CLAUDE_SKILLS_LINK} 不是链,在 workspace 里用 Claude Code 看不到 ${SKILLS_DIR}/ 的技能`, fix: linked ? undefined : 'cotutor upgrade 建链(是实体目录的话先把里面的挪进 .agents/skills/ 再删掉)', cmd: linked ? undefined : upgrade });
+      push({ name: 'skills.claude', ok: linked, required: false, detail: linked ? `${CLAUDE_SKILLS_LINK} 链到 ${SKILLS_DIR}(Claude Code 读的是同一份)` : `${CLAUDE_SKILLS_LINK} 不是链,在 workspace 里用 Claude Code 看不到 ${SKILLS_DIR}/ 的技能`, fix: linked ? undefined : 'cotutor refresh 建链(是实体目录的话先把里面的挪进 .agents/skills/ 再删掉)', cmd: linked ? undefined : refresh });
       // ---- activity:老师的家里 agents/<老师>/activities/<名>.md;出厂的看新旧,每份都过一遍 activity check ----
       {
         const { activityStatuses, checkActivities } = await import('./activities.ts');
@@ -354,7 +354,7 @@ export async function doctorWorkspace(
         }
         for (const r of await checkActivities(root, ws.config.tutors)) {
           const key = `${r.tutor}/${r.name}`;
-          // 老 workspace 改过老师文件:upgrade 只报 diff,里面同名那节还在,两处说法会打架
+          // 老 workspace 改过老师文件:refresh 只报 diff,里面同名那节还在,两处说法会打架
           const agentText = await readFile(tutorFilePath(ws.dirs.agents, r.tutor), 'utf8').catch(() => '');
           if (new RegExp(`^#{2,4}\\s*${r.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'm').test(agentText)) push({ name: `activity.${key}.dup`, ok: false, required: false, detail: `agents/${r.tutor}.md 里还有一节「${r.name}」,和 activity 文件两处说法会打架`, fix: `删掉老师文件里那一节(做法以 agents/${r.tutor}/activities/${r.name}.md 为准)` });
           const st = states.get(key);
@@ -365,8 +365,8 @@ export async function doctorWorkspace(
             ok: !fixes.length && st?.state !== 'upgradable',
             required: false,
             detail: fixes.length ? `${origin};${fixes.length} 条要改,第一条:${fixes[0].line ? `第 ${fixes[0].line} 行 ` : ''}${fixes[0].text}` : origin,
-            fix: fixes.length ? `cotutor activity check ${r.tutor} ${r.name} 看全` : st?.state === 'upgradable' ? 'cotutor upgrade 换新版' : undefined,
-            cmd: !fixes.length && st?.state === 'upgradable' ? upgrade : undefined,
+            fix: fixes.length ? `cotutor activity check ${r.tutor} ${r.name} 看全` : st?.state === 'upgradable' ? 'cotutor refresh 换新版' : undefined,
+            cmd: !fixes.length && st?.state === 'upgradable' ? refresh : undefined,
           });
         }
       }
@@ -379,15 +379,15 @@ export async function doctorWorkspace(
           const t = await readTheme(dir);
           push({ name: 'theme.manifest', ok: true, required: false, detail: `themes/${name}/:${Object.keys(t.manifest.tints).length} 个底色槽、${Object.keys(t.manifest.looks).length} 个字形槽、${Object.keys(t.manifest.pens).length} 支笔,default = ${t.manifest.default}` });
         } catch (err) {
-          push({ name: 'theme.manifest', ok: false, required: false, detail: `themes/${name}/ 用不了(服务退回出厂 default):${err instanceof Error ? err.message : String(err)}`, fix: name === 'default' ? 'cotutor init 补拷(已有的不动)或 cotutor upgrade' : `修 themes/${name}/theme.json 与 kid.css,或把 cotutor.json 的 kid.theme 改回 default`, cmd: name === 'default' ? initCmd() : undefined });
+          push({ name: 'theme.manifest', ok: false, required: false, detail: `themes/${name}/ 用不了(服务退回出厂 default):${err instanceof Error ? err.message : String(err)}`, fix: name === 'default' ? 'cotutor init 补拷(已有的不动)或 cotutor refresh' : `修 themes/${name}/theme.json 与 kid.css,或把 cotutor.json 的 kid.theme 改回 default`, cmd: name === 'default' ? initCmd() : undefined });
         }
         for (const th of teachingPack ? await themeStatuses(root) : []) {
           if (!th.shipped) {
-            push({ name: `theme.${th.name}.origin`, ok: true, required: false, detail: `themes/${th.name}/:自家的主题(不是出厂件,upgrade 不碰)` });
+            push({ name: `theme.${th.name}.origin`, ok: true, required: false, detail: `themes/${th.name}/:自家的主题(不是出厂件,refresh 不碰)` });
             continue;
           }
           const label: Record<string, string> = { latest: '出厂件,最新', upgradable: `出厂件,基于 ${th.basedOn},包已更新`, custom: `自定义(基于 ${th.basedOn})`, untracked: '自定义(没有出厂记录)', missing: '缺' };
-          push({ name: `theme.${th.name}.origin`, ok: th.state !== 'missing' && th.state !== 'upgradable', required: false, detail: `themes/${th.name}/:${label[th.state]}`, fix: th.state === 'missing' ? 'cotutor init 补拷' : th.state === 'upgradable' ? 'cotutor upgrade 换新版' : undefined, cmd: th.state === 'missing' ? initCmd() : th.state === 'upgradable' ? upgrade : undefined });
+          push({ name: `theme.${th.name}.origin`, ok: th.state !== 'missing' && th.state !== 'upgradable', required: false, detail: `themes/${th.name}/:${label[th.state]}`, fix: th.state === 'missing' ? 'cotutor init 补拷' : th.state === 'upgradable' ? 'cotutor refresh 换新版' : undefined, cmd: th.state === 'missing' ? initCmd() : th.state === 'upgradable' ? refresh : undefined });
         }
       }
     }

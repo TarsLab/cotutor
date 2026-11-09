@@ -148,7 +148,7 @@ export async function installSkills(root: string): Promise<SkillStep[]> {
       await installOne(root, skill, src, manifest);
       touched = true;
       steps.push({ item, action: 'exists', note: s.state === 'latest' ? '已按本包刷新(机器件)' : '已按本包换新(机器件,不认改动)' });
-    } else steps.push({ item, action: 'exists', note: s.state === 'custom' ? `自定义(基于 ${s.basedOn})` : s.state === 'upgradable' ? '可升级(cotutor upgrade)' : s.state === 'untracked' ? '已有(没有出厂记录);升级时当自定义对待' : undefined });
+    } else steps.push({ item, action: 'exists', note: s.state === 'custom' ? `自定义(基于 ${s.basedOn})` : s.state === 'upgradable' ? '可升级(cotutor refresh)' : s.state === 'untracked' ? '已有(没有出厂记录);升级时当自定义对待' : undefined });
   }
   if (touched) await writeManifest(root, { ...manifest, version: PACKAGE_VERSION });
   return steps;
@@ -211,7 +211,7 @@ export async function linkClaudeSkills(root: string): Promise<SkillStep> {
     const key = (p: string): string => (process.platform === 'win32' ? p.toLowerCase() : p);
     return key(resolve(dirname(link), to.replace(/^\\\\\?\\/, ''))) === key(resolve(root, SKILLS_DIR)) ? { item, action: 'exists' } : { item, action: 'kept', note: `已经是指向 ${to} 的链,没动` };
   }
-  if (st) return { item, action: 'kept', note: `${CLAUDE_SKILLS_LINK} 是实体目录,没建链:把里面的技能挪进 ${SKILLS_DIR}/、删掉它,再跑 cotutor upgrade` };
+  if (st) return { item, action: 'kept', note: `${CLAUDE_SKILLS_LINK} 是实体目录,没建链:把里面的技能挪进 ${SKILLS_DIR}/、删掉它,再跑 cotutor refresh` };
   await mkdir(dirname(link), { recursive: true });
   try {
     await symlink(target, link, process.platform === 'win32' ? 'junction' : undefined);

@@ -162,7 +162,7 @@ export async function gatherContext(ws: Workspace, tutor: string, input: { from:
       pack.notes.push({ role: 'rules', path: TUTOR_RULES_PATH, text: tutorRulesBody(await readFile(join(ws.root, TUTOR_RULES_PATH), 'utf8'), input.kinds ?? tutorCardKinds(ws.config.tutors[tutor]?.cards) ?? undefined) });
       pack.rules = TUTOR_RULES_PATH;
     } catch {
-      pack.rules = `缺:${TUTOR_RULES_PATH} 不在(cotutor upgrade 补),照你老师文件里的做`;
+      pack.rules = `缺:${TUTOR_RULES_PATH} 不在(cotutor refresh 补),照你老师文件里的做`;
     }
   }
   pack.notes.push(...mem.notes);
@@ -265,7 +265,7 @@ async function systemParts(ws: Workspace, tutor: string, policy: Policy, pack: C
   if (!takesTutorRules(tutor) || boardOff) return { systemBody: agentBody, activityInSystem: false };
   const guide = await boardGuideOf(ws, tutor);
   if (!guide) {
-    pack.boardGuide = `缺:${BOARD_GUIDE_PATH} 不在(cotutor upgrade 补),照你会的写`;
+    pack.boardGuide = `缺:${BOARD_GUIDE_PATH} 不在(cotutor refresh 补),照你会的写`;
     return { systemBody: agentBody, activityInSystem: false };
   }
   pack.boardGuide = BOARD_GUIDE_IN_SYSTEM;

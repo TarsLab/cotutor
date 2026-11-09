@@ -1298,7 +1298,7 @@ ${pageDomJs(4000)}
         catch (e) { feedback(card, false, e.message); }
       } } }, '补上'))));
     card.append(h('ul', { class: 'gaps' }, ...gaps.map((g) => h('li', {}, h('span', { class: g.kind === 'retired' ? 'plus minus' : 'plus' }, g.kind === 'retired' ? '−' : '+'), h('span', {}, g.detail)))));
-    card.append(h('p', { class: 'hint' }, '新版 cotutor 带来的新老师、新运行时、命令模板里的新旗标(+),和新版不再读的出厂段(−)。cotutor.json 是你的政策文件,机器不会自己改它,所以要你点一下。只改上面这些,你改过的值一个都不动;终端里等同于 cotutor upgrade --config。'));
+    card.append(h('p', { class: 'hint' }, '新版 cotutor 带来的新老师、新运行时、命令模板里的新旗标(+),和新版不再读的出厂段(−)。cotutor.json 是你的政策文件,机器不会自己改它,所以要你点一下。只改上面这些,你改过的值一个都不动;终端里等同于 cotutor refresh --config。'));
     return card;
   };
 
@@ -1591,7 +1591,7 @@ ${pageDomJs(4000)}
     const rows = listRows();
     const first = (want && rows.find((r) => (isTutorFile(r) ? r.tutor : r.tutor + '/' + r.name) === want)) || rows[0];
     if (first) return openActivity(first.tutor, first.name, true, first.kind);
-    $('#activity').replaceChildren(h('div', { class: 'wrap act-wrap' }, actHead(), h('p', { class: 'note' }, '这个 workspace 里还没有 activity(agents/<老师>/activities/<名>.md);cotutor upgrade 会补上出厂的。')));
+    $('#activity').replaceChildren(h('div', { class: 'wrap act-wrap' }, actHead(), h('p', { class: 'note' }, '这个 workspace 里还没有 activity(agents/<老师>/activities/<名>.md);cotutor refresh 会补上出厂的。')));
   };
 
   const openActivity = async (t, n, force, kind) => {
@@ -1876,7 +1876,7 @@ ${pageDomJs(4000)}
     if (!r.diff) return [h('p', { class: 'note' }, tf ? '自家加的老师,没有出厂那份可比。' : '自家加的 activity,没有出厂那份可比。')];
     const out = [h('div', { class: 'srow' }, r.diff.length ? h('span', { class: 'st accent' }, '和出厂不一样 ' + r.diff.length + ' 处') : h('span', { class: 'st ok' }, '和出厂一样'), h('span', { class: 'note' }, '含没存的')),
       ...r.diff.map((d) => hunkEl(d, true))];
-    out.push(h('p', { class: 'note' }, c.state === 'upgradable' ? '这份没改过,是旧版出厂的;cotutor upgrade 会换成新的。' : c.state === 'latest' ? '存下以后就算改过的出厂件:cotutor upgrade 不再自动换新版,只报 diff。' : '改过的出厂件,cotutor upgrade 不再自动换新版,只报 diff。'));
+    out.push(h('p', { class: 'note' }, c.state === 'upgradable' ? '这份没改过,是旧版出厂的;cotutor refresh 会换成新的。' : c.state === 'latest' ? '存下以后就算改过的出厂件:cotutor refresh 不再自动换新版,只报 diff。' : '改过的出厂件,cotutor refresh 不再自动换新版,只报 diff。'));
     out.push(rule(), h('div', { class: 'srow' },
       h('button', { class: 'btn danger', type: 'button', disabled: !r.diff.length && !dirtyCount(), on: { click: restoreActivityBtn } }, '恢复出厂'),
       h('span', { class: 'note' }, c.state === 'latest' ? '磁盘上那份就是出厂的,恢复只是丢掉没存的改动。' : '换回出厂那份;你这份存成 ' + bakName(c) + '。' + (tf ? '别的老师、这位老师的 activity 都不碰。' : '别的 activity 不碰。'))));
@@ -1921,7 +1921,7 @@ ${pageDomJs(4000)}
     out.push(h('div', { class: 'srow' }, h('span', { class: 'note', style: 'flex:1;min-width:160px' }, '这就是新话题里老师的系统提示:老师文件去掉 frontmatter' + (pv.board ? ',后面再接板书写法' : '') + '。'), h('button', { class: 'btn small', type: 'button', on: { click: (e) => copy(pv.text, e.target) } }, '复制全文')));
     if (pv.rules) {
       out.push(rule(), h('h3', {}, '话题第一条还带守则'),
-        h('p', { class: 'note' }, '有脸的老师共用的 ' + pv.rules.path + ',机器件,cotutor upgrade 每次覆盖,这里不改。这位老师要不一样的做法,写进上面的老师文件,它优先。'),
+        h('p', { class: 'note' }, '有脸的老师共用的 ' + pv.rules.path + ',机器件,cotutor refresh 每次覆盖,这里不改。这位老师要不一样的做法,写进上面的老师文件,它优先。'),
         h('details', {}, h('summary', {}, '看守则原文'), h('pre', { class: 'pv tool' }, pv.rules.text)));
     }
     out.push(rule(), h('p', { class: 'note' }, '档案、日记、计划这些每轮现拼进上下文包,不在这里;看一轮会拼成什么(不花钱):'),
@@ -1966,7 +1966,7 @@ ${pageDomJs(4000)}
   const restoreActivityBtn = async () => {
     const c = act.cur;
     const tf = isTutorFile(c);
-    const lead = c.state === 'latest' ? '磁盘上那份就是出厂的;没存的 ' + dirtyCount() + ' 处丢掉。' : '你这份存成 ' + bakName(c) + (dirtyCount() ? ',没存的 ' + dirtyCount() + ' 处一起丢掉' : '') + '。和 cotutor upgrade --force ' + c.tutor + (tf ? '' : '/' + c.name) + ' 同一条路,' + (tf ? '别的老师不碰。' : '别的 activity 不碰。');
+    const lead = c.state === 'latest' ? '磁盘上那份就是出厂的;没存的 ' + dirtyCount() + ' 处丢掉。' : '你这份存成 ' + bakName(c) + (dirtyCount() ? ',没存的 ' + dirtyCount() + ' 处一起丢掉' : '') + '。和 cotutor reset ' + c.tutor + (tf ? '' : '/' + c.name) + ' 同一条路,' + (tf ? '别的老师不碰。' : '别的 activity 不碰。');
     if (!(await ask('换回出厂那份?', [lead], '恢复出厂', '算了'))) return;
     let r;
     try { r = await api('POST', docUrl(c) + '/restore', {}); } catch (e) { alert(e.message); return; }

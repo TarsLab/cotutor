@@ -38,14 +38,14 @@ function world(o: Partial<UpdateDeps> & { kids?: UpdateService[] } = {}) {
 {
   const w = world();
   const code = await runUpdate(w.deps);
-  check('有新版本:说改了什么、换程序、更新文件、重起、看一眼体检,以 0 退', code === 0 && w.npm[0][0] === '0.5.0' && w.npm[0][1] === null && w.cli.join('|') === 'upgrade --workspace /w/ray|service restart --workspace /w/ray|doctor --workspace /w/ray --json', w.cli.join('|'));
+  check('有新版本:说改了什么、换程序、更新文件、重起、看一眼体检,以 0 退', code === 0 && w.npm[0][0] === '0.5.0' && w.npm[0][1] === null && w.cli.join('|') === 'refresh --workspace /w/ray|service restart --workspace /w/ray|doctor --workspace /w/ray --json', w.cli.join('|'));
   check('家长看得到版本和说明、每个孩子的结果', w.text().includes('0.4.2') && w.text().includes('改了这个') && w.text().includes('✓ RAY:在跑 0.5.0') && w.text().includes('升好了:0.4.2 → 0.5.0'), w.text());
   check('「已是最新」「已换新」这种一行行不念', !w.text().includes('已是最新') && !w.text().includes('已换新'), w.text());
 }
 {
   const w = world({ kids: [kid('ray'), kid('ming', { port: 8445 })] });
   await runUpdate(w.deps);
-  check('几个孩子:只下载一次,每个孩子都更新、重起', w.npm.length === 1 && w.cli.filter((c) => c.startsWith('upgrade')).length === 2 && w.cli.filter((c) => c.startsWith('service restart')).length === 2);
+  check('几个孩子:只下载一次,每个孩子都更新、重起', w.npm.length === 1 && w.cli.filter((c) => c.startsWith('refresh')).length === 2 && w.cli.filter((c) => c.startsWith('service restart')).length === 2);
 }
 {
   const w = world({ fromRepo: true });
@@ -105,12 +105,12 @@ function world(o: Partial<UpdateDeps> & { kids?: UpdateService[] } = {}) {
 }
 {
   const w = world({ kids: [] , workspace: () => '/w/solo' });
-  check('没装后台服务:更新文件,提醒重开 serve', await runUpdate(w.deps) === 0 && w.cli.join() === 'upgrade --workspace /w/solo' && w.text().includes('重开'), w.text());
+  check('没装后台服务:更新文件,提醒重开 serve', await runUpdate(w.deps) === 0 && w.cli.join() === 'refresh --workspace /w/solo' && w.text().includes('重开'), w.text());
 }
 {
-  const w = world({ cli: async (args) => ({ code: 0, out: args[0] === 'doctor' ? JSON.stringify({ checks: [{ name: 'config.migrate', ok: false, cmd: 'cotutor upgrade --config' }] }) : '  chinese-tutor 你改过,没换,差异……' }) });
+  const w = world({ cli: async (args) => ({ code: 0, out: args[0] === 'doctor' ? JSON.stringify({ checks: [{ name: 'config.migrate', ok: false, cmd: 'cotutor refresh --config' }] }) : '  chinese-tutor 你改过,没换,差异……' }) });
   await runUpdate(w.deps);
-  check('要迁移配置、家长改过的文件没换:都说出来', w.text().includes('cotutor upgrade --config') && w.text().includes('你改过'), w.text());
+  check('要迁移配置、家长改过的文件没换:都说出来', w.text().includes('cotutor refresh --config') && w.text().includes('你改过'), w.text());
 }
 {
   const src = readFileSync(join(import.meta.dirname, '..', 'src', 'app', 'cli', 'update-cmd.ts'), 'utf8').replace(/^\s*\*.*$/gm, '');

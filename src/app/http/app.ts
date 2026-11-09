@@ -753,7 +753,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       }
       return { status: 405, json: { error: 'method_not_allowed' } };
     }
-    // 政策文件补缺(与 cotutor upgrade --config 同一条路):只加缺的出厂件,家长写过的值不动
+    // 政策文件补缺(与 cotutor refresh --config 同一条路):只加缺的出厂件,家长写过的值不动
     if (p === '/api/config/migrate' && method === 'POST') {
       const r = await upgradeConfig(ws.root);
       await ctx.reload();

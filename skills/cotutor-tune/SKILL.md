@@ -5,7 +5,7 @@ description: 调 cotutor 的老师团:改某位老师的提示词(口气、规�
 
 <!-- 给人看
 谁读:家长在 workspace 根开的编程助手
-能改:机器件,upgrade 覆盖;references/字段.md 由 src/app/skills/tune-doc.ts 生成
+能改:机器件,refresh 覆盖;references/字段.md 由 src/app/skills/tune-doc.ts 生成
 改了:在试用 workspace 里开编程助手说一句「老师话太多」(《写提示词.md》§一)
 -->
 
@@ -27,9 +27,9 @@ description: 调 cotutor 的老师团:改某位老师的提示词(口气、规�
   - 改 vault:pack 干跑(不花钱)。
   - 加老师:doctor,再 pack。
 - 不改 conversations/、evals/、ledger/。
-- 不碰 .cotutor/、.agents/skills/:那是机器件,upgrade 会覆盖。
+- 不碰 .cotutor/、.agents/skills/:那是机器件,refresh 会覆盖。
 - .claude/skills 是链到 .agents/skills 的,同一份,也不碰。
-- 出厂老师的文件改过之后,cotutor upgrade 不再覆盖它,只报 diff。告诉家长这个代价;想回出厂的,用 `cotutor upgrade --force <老师>`。
+- 出厂老师的文件改过之后,cotutor refresh 不再覆盖它,只报 diff。告诉家长这个代价;想回出厂的,用 `cotutor reset <老师>`。
 - agents/<name>.md 是老师文件,由 cotutor 读正文传给 Qwen,**不要把它们当子代理派**。
 
 ## 一、改某位老师的提示词
@@ -48,7 +48,7 @@ description: 调 cotutor 的老师团:改某位老师的提示词(口气、规�
 
 - 老师文件要通用:换个孩子、换个学期也能用。关于孩子的事不进老师文件。
 - 老师文件只管自由话题。某个 activity 的做法不写进老师文件:activity 话题不读老师文件,写了也用不上。
-- 有脸的老师共同的守则(上下文包怎么看、三种回复、记忆段、不说错、不写文件、不派子代理)在机器技能 .agents/skills/cotutor-tutor/。应用每个话题第一条把原文放进上下文包,upgrade 会覆盖,别改它。
+- 有脸的老师共同的守则(上下文包怎么看、三种回复、记忆段、不说错、不写文件、不派子代理)在机器技能 .agents/skills/cotutor-tutor/。应用每个话题第一条把原文放进上下文包,refresh 会覆盖,别改它。
 - 某位老师要和守则不一样的做法,写进那位老师文件里这一科那一节,它优先。只有守则的「不变的规矩」改不了。
 
 ### 路子
@@ -116,7 +116,7 @@ vault 不在 workspace 里:位置看 cotutor.json 的 `paths.vault`(相对 works
    - 费用或时限要不一样的,配自己的 runtime。
 4. 验:cotutor doctor(它会查文件、目录、链),再 `cotutor pack <name> "你好"`,看它拿到的上下文包对不对:学期、档案、入口文件、这学科的观察、计划里它那段。
    - 要试真回答,就 `cotutor send <name> "<一句>"`(花钱,先问)。
-5. 自家加的老师 upgrade 永远不碰。要删,就在 cotutor.json 里删条目,文件改名留着。
+5. 自家加的老师 refresh 永远不碰。要删,就在 cotutor.json 里删条目,文件改名留着。
 
 ## 四、改一个 activity
 
@@ -138,10 +138,10 @@ activity 是孩子从首页一个按钮进去的一种做法,一个文件在 `ag
 - 改完先 `cotutor activity check <老师> <名>`(不花钱),红了先修。
 - 验:`cotutor activity eval <老师> <名> --runs 1`,真老师 + 模拟孩子把旁边 `<名>.例子.md` 的例子跑一遍(花钱,先说要跑几个例子、几轮)。也可以 `cotutor replay` 那一轮。
 - 家长看到一次跑偏,就在 `<名>.例子.md` 里记成一个例子,写上「判:」,以后改它都要跑过。
-- 出厂的 activity 改过之后,upgrade 不再覆盖它,只报 diff;回出厂用 `cotutor upgrade --force <老师>/<名>`。
+- 出厂的 activity 改过之后,refresh 不再覆盖它,只报 diff;回出厂用 `cotutor reset <老师>/<名>`。
 
 ## 报告怎么写
 
 1. 先说改了哪个文件的哪一处,为什么放那里(归属)。
 2. 再贴验证结果:pack 的来源行、replay 的 diff、doctor 的那几项。
-3. 最后说副作用:改了出厂老师 upgrade 只报 diff、改了档案所有老师都会看到、花了多少钱。
+3. 最后说副作用:改了出厂老师 refresh 只报 diff、改了档案所有老师都会看到、花了多少钱。

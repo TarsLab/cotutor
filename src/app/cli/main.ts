@@ -111,7 +111,7 @@ const NO_WORKSPACE = ['grades', 'init', 'mock', 'pin', 'cert', 'tray', 'update']
 export async function main(argv: string[]): Promise<void> {
   let json = false;
   try {
-    const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'name', 'grade', 'port', 'from', 'runtime', 'force', 'display', 'subject', 'avatar', 'description', 'scenario', 'delay', 'lane', 'job', 'date', 'thread', 'at', 'photo', 'activity', 'param', 'runs', 'only', 'kid-model', 'pin', 'out', 'bundles', 'step', 'voice', 'tutor', 'instruction', 'log-dir', 'lines']);
+    const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'vault', 'name', 'grade', 'port', 'from', 'runtime', 'force', 'display', 'subject', 'avatar', 'description', 'scenario', 'delay', 'lane', 'job', 'date', 'thread', 'at', 'photo', 'activity', 'param', 'runs', 'only', 'kid-model', 'pin', 'out', 'bundles', 'step', 'voice', 'tutor', 'instruction', 'log-dir', 'lines']);
     json = flags.json === true;
     let workspace = typeof flags.workspace === 'string' ? flags.workspace : undefined;
     // --version / --help 是旗标不是命令,parseArgs 把它们收进 flags,cmd 拿不到,所以在 switch 前处理
@@ -147,7 +147,7 @@ export async function main(argv: string[]): Promise<void> {
         const port = typeof flags.port === 'string' ? Number(flags.port) : undefined;
         if (port !== undefined && !(Number.isInteger(port) && port > 0 && port < 65536)) throw new UsageError('--port 要是 1–65535 的整数');
         if (flags.grade !== undefined && (typeof flags.grade !== 'string' || !/^[1-6]$/.test(flags.grade))) throw new UsageError('--grade 要是 1–6 的整数,如 --grade 2');
-        const r = await initWorkspace({ slug, grade: flags.grade === undefined ? undefined : Number(flags.grade), dir: typeof flags.dir === 'string' ? flags.dir : undefined, name: typeof flags.name === 'string' ? flags.name : undefined, port });
+        const r = await initWorkspace({ slug, grade: flags.grade === undefined ? undefined : Number(flags.grade), dir: typeof flags.dir === 'string' ? flags.dir : undefined, vault: typeof flags.vault === 'string' ? flags.vault : undefined, name: typeof flags.name === 'string' ? flags.name : undefined, port });
         if (json) process.stdout.write(`${JSON.stringify(redactDeep(r), null, 2)}\n`);
         else {
           process.stdout.write(`cotutor init → ${redactHome(r.root)}\n`);

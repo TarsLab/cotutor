@@ -1,6 +1,6 @@
 # obsidian 仓库设计:vault 是长期记忆
 
-> 前提:一孩一 workspace 一 vault;Ray 的 vault 是 `ray-vault`(git 仓库)。本文回答三件事:vault 里**装什么、每样东西长什么样、cotutor 怎么写进去又怎么取出来**。
+> 前提:一孩一 workspace 一 vault,两边分开放:`cotutor init` 缺省把 vault 建在 workspace 旁边的 `<目录名>-vault/`(`--vault` 指家长已有的库),位置写在 cotutor.json 的 `paths.vault`。vault 里全是 markdown,不需要装 Obsidian,Obsidian 只是看和改的工具。Ray 的 vault 是 `ray-vault`(git 仓库)。本文回答三件事:vault 里**装什么、每样东西长什么样、cotutor 怎么写进去又怎么取出来**。
 
 ## 0. 三条准则,一个判据
 

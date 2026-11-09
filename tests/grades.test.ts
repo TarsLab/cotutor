@@ -52,7 +52,7 @@ try {
   const mineActivity = factoryActivity + '\n家长的话:今天只看一题。\n';
   writeFileSync(teacher, mine);
   writeFileSync(activity, mineActivity);
-  const profile = join(root, '孩子.md');
+  const profile = join(`${root}-vault`, '孩子.md'); // vault 在旁边(2026-11-09)
   const profileText = '---\ncotutor: profile\nsemester: 三年级上\n---\n孩子英语刚起步。\n';
   writeFileSync(profile, profileText);
   const configText = readFileSync(join(root, 'cotutor.json'), 'utf8');

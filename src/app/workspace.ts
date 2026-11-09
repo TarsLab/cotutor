@@ -9,11 +9,11 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { readFile, writeFile, rename } from 'node:fs/promises';
 import { ConfigError, UsageError } from '../shared/errors.ts';
-import { redactDeep, redactHome } from '../shared/home.ts';
+import { expandPath, redactDeep, redactHome } from '../shared/home.ts';
 import { SANDBOX_MARK, SKILLS_DIR, SandboxMarkSchema, type RootSource, type SandboxMark, type Workspace } from '../schema/workspace.ts';
 
 import { homedir } from 'node:os';
-import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import {
   CotutorConfigSchema,
   PATH_ROLES,
@@ -24,7 +24,7 @@ import {
 } from '../schema/index.ts';
 
 // 挪走了的几样照旧从这里转出(旧的引法不用改)
-export { ConfigError, UsageError, redactDeep, redactHome };
+export { ConfigError, UsageError, expandPath, redactDeep, redactHome };
 export type { RootSource, Workspace };
 
 
@@ -41,10 +41,26 @@ export interface ResolvedRoot {
   source: RootSource;
 }
 
-export function expandPath(p: string, base: string): string {
-  if (p === '~') return homedir();
-  if (p.startsWith('~/')) return join(homedir(), p.slice(2));
-  return isAbsolute(p) ? p : resolve(base, p);
+/** p 是 dir 本身或在它里面 */
+export function isInside(p: string, dir: string): boolean {
+  const r = relative(dir, p);
+  return r === '' || (r !== '..' && !r.startsWith(`..${sep}`) && !isAbsolute(r));
+}
+
+/**
+ * vault 与 workspace 分开:谁也不在谁里面(2026-11-09)。vault 是家长的长期记忆,workspace 是机器的运行记录;
+ * 混在一起时 Obsidian 里满是 agents/、conversations/,扫 vault 要走遍对话与照片,备份恢复把家长的笔记跟着 workspace 一起盖掉。
+ * 旧版 init 不写 paths.vault(缺省 `.`,vault 就是 workspace 根),那样的照旧读得进来,doctor 的 vault.separate 提一句。
+ */
+export const vaultSeparate = (root: string, vault: string): boolean => !isInside(vault, root) && !isInside(root, vault);
+
+/** init 缺省的 vault:workspace 旁边的 <目录名>-vault(~/cotutor/ming → ~/cotutor/ming-vault;不在「文稿」与 iCloud 里,后台服务读得到) */
+export const defaultVaultOf = (root: string): string => join(dirname(root), `${basename(root)}-vault`);
+
+/** 写进 cotutor.json 的路径:家目录下的写成 ~/…(输出里不带用户名,换了用户名也对得上),别处写绝对路径 */
+export function homePath(abs: string): string {
+  const rel = relative(homedir(), abs);
+  return rel && !rel.startsWith('..') && !isAbsolute(rel) ? `~/${rel.split(sep).join('/')}` : abs;
 }
 
 
@@ -99,6 +115,16 @@ export function homeWorkspaces(homeRoot = HOME_ROOT): string[] {
   } catch {
     return [];
   }
+}
+
+/** 这台电脑上认得的孩子:~/cotutor/ 下的,加用户配置指的那个(在别处 --dir 建的) */
+export function knownWorkspaces(): string[] {
+  const roots = new Set(homeWorkspaces());
+  try {
+    const user = readJson(USER_CONFIG) as { workspace?: unknown } | null;
+    if (typeof user?.workspace === 'string' && user.workspace) roots.add(expandPath(user.workspace, homedir()));
+  } catch { /* 用户配置坏了 doctor 去报 */ }
+  return [...roots];
 }
 
 export interface ResolveOptions {

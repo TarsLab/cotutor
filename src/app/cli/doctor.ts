@@ -40,11 +40,15 @@ import {
   type RootSource,
   type Workspace,
   assembleWorkspace,
+  defaultVaultOf,
   expandPath,
+  homePath,
+  isInside,
   parseConfig,
   readJson,
   redactHome,
   resolveRoot,
+  vaultSeparate,
 } from '../workspace.ts';
 
 export interface DoctorCheck {
@@ -433,6 +437,22 @@ export async function doctorWorkspace(
       const there = dir === cap;
       const n = there ? (await readdir(cap).catch(() => [] as string[])).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)).length : 0;
       push({ name: 'captures', ok: inside && writable, required: false, detail: !inside ? `${redactHome(cap)} 在 workspace 根以外,页面看不到照片(/api/kid/image 只给根以内的)` : !writable ? `${redactHome(cap)} 写不了(最近的已有目录 ${redactHome(dir)} 没有写权限)` : there ? `${redactHome(cap)}:${n} 天的作业照片` : `${redactHome(cap)} 还没有(第一张照片时建)`, fix: !inside ? '把 cotutor.json 的 paths.captures 改回根以内(缺省 captures)' : !writable ? '改目录权限,或换 paths.captures' : undefined });
+    }
+
+    // ---- vault 与 workspace 分开(2026-11-09):旧版 init 不写 paths.vault,vault 就是 workspace 根;照旧能用,这里说怎么分。sandbox 的 vault 本来就拷在里面,不查 ----
+    if (!ws.sandbox) {
+      const vault = ws.paths.vault;
+      const separate = vaultSeparate(ws.root, vault);
+      const rootInVault = !separate && !isInside(vault, ws.root);
+      push({
+        name: 'vault.separate',
+        ok: separate,
+        required: false,
+        detail: separate ? `vault 在 ${redactHome(vault)},和孩子的文件夹分开` : rootInVault ? `孩子的文件夹在 vault(${redactHome(vault)})里面` : vault === ws.root ? 'vault 就是孩子的文件夹(旧版 init 的布局):照旧能用,但用 Obsidian 打开满是程序的文件,恢复备份会连家长的笔记一起换掉' : `vault 在孩子的文件夹里(${redactHome(vault)})`,
+        fix: separate ? undefined : rootInVault
+          ? '把孩子的文件夹挪到 vault 外面(挪了要再 cotutor service install),或者 vault 换一个目录'
+          : `想分开:cotutor service stop,建 ${homePath(defaultVaultOf(ws.root))},把档案、日记/、记忆/、计划/、教材/、参考/ 和你自己的笔记挪过去,cotutor.json 的 paths.vault 写成它,再 cotutor service start`,
+      });
     }
 
     // ---- vault(《obsidian仓库设计.md》2026-09-17):档案与每位老师的入口文件按 frontmatter 找,原文整篇进上下文包 ----

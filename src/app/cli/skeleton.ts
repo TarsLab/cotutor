@@ -4,7 +4,8 @@
  *   cotutor.json / .cotutor/shipped.json(出厂 hash)/ .agents/skills/(技能;.claude/skills 是指过去的链,给 Claude Code)
  *   agents/<name>.md(老师文件,拷自本包 grades/grade-<n>/agents/,是家长的;所有运行时都从这里拿老师正文)与 agents/<name>/(老师的家 = 会话 cwd)
  *   ledger/(产物账本)/ conversations/(对话索引与转录)
- * vault 侧(《obsidian仓库设计.md》):档案 / 课程表 / 日记 / 教材 / 计划 / 参考,init 只建档案与参考 README(缺了才写)
+ * vault 侧(《obsidian仓库设计.md》):档案 / 课程表 / 日记 / 教材 / 计划 / 参考,init 只建档案与参考 README(缺了才写);
+ *   vault 不在 workspace 里,缺省是旁边的 <目录名>-vault/(2026-11-09;旧版没写 paths.vault 的落在 workspace 根)
  */
 import { readFileSync } from 'node:fs';
 import { readFile, readdir } from 'node:fs/promises';
@@ -139,6 +140,8 @@ export interface ConfigTemplateInput {
   slug: string;
   name?: string;
   port?: number;
+  /** 写进 paths.vault 的(~/… 或绝对路径);不给就不写,vault 落在 workspace 根(旧版的布局) */
+  vault?: string;
   tutors: ShippedAgent[];
 }
 
@@ -170,7 +173,7 @@ export function configTemplate(input: ConfigTemplateInput): string {
     title: input.name ? `${input.name}的老师们` : 'cotutor',
     kid: { slug: input.slug, ...(input.name ? { name: input.name } : {}) },
     server: { port: input.port ?? DEFAULT_PORT },
-    paths: {},
+    paths: input.vault ? { vault: input.vault } : {},
     policyDefaults: {},
     tutors,
     // 缺省 api:应用直连百炼,家长端「首页」填一次按量 key + 业务空间 id 就能用(2026-10-31);2026-11-02 起只有 API 运行时

@@ -7,12 +7,11 @@
  * 旧 workspace 写着什么就是什么;cotutor.json 没写端口的走 DEFAULT_PORT,不跟着这里变。
  */
 import { createConnection, createServer } from 'node:net';
-import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { DEFAULT_PORT } from '../../schema/index.ts';
 import { holderScript, parseHolder, parseLsof, portHolder, type PortHolder } from './port-holder.ts';
 import { probeHealth, type ServiceHost } from './service.ts';
-import { CONFIG_FILE, USER_CONFIG, UsageError, expandPath, homeWorkspaces, readJson } from '../workspace.ts';
+import { CONFIG_FILE, UsageError, knownWorkspaces, readJson } from '../workspace.ts';
 
 export const PORT_CANDIDATES: readonly number[] = [443, ...Array.from({ length: 9 }, (_, i) => 8443 + i * 2)];
 
@@ -78,13 +77,8 @@ export function choiceNote(c: PortChoice): string {
 
 /** 这台电脑上别的 workspace 写着的端口(~/cotutor/ 下的,加上用户配置指的那个):还没起的也要让开 */
 export function knownPorts(): number[] {
-  const roots = new Set(homeWorkspaces());
-  try {
-    const user = readJson(USER_CONFIG) as { workspace?: unknown } | null;
-    if (typeof user?.workspace === 'string' && user.workspace) roots.add(expandPath(user.workspace, homedir()));
-  } catch { /* 用户配置坏了 doctor 去报 */ }
   const ports: number[] = [];
-  for (const root of roots) {
+  for (const root of knownWorkspaces()) {
     try {
       const raw = readJson(join(root, CONFIG_FILE)) as { server?: { port?: unknown } } | null;
       if (!raw) continue;

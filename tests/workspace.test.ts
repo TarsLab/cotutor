@@ -9,7 +9,7 @@ process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 const originalCwd = process.cwd();
 
-const { ConfigError, UsageError, loadWorkspace, resolveRoot, resolvePaths } = await import('../src/app/workspace.ts');
+const { ConfigError, UsageError, defaultVaultOf, homePath, isInside, loadWorkspace, resolveRoot, resolvePaths, vaultSeparate } = await import('../src/app/workspace.ts');
 const { configTemplate, shippedAgents } = await import('../src/app/cli/skeleton.ts');
 
 const agents = await shippedAgents();
@@ -77,6 +77,8 @@ try {
   check('loadWorkspace 读到配置', ws.config.kid.slug === 'ming' && ws.dirs.agents === join(ws1, 'agents'));
   check('vault 未配 → 角色相对根,缺省中文名', ws.paths.vault === ws1 && ws.paths.diary === join(ws1, '日记') && ws.paths.profile === join(ws1, '孩子.md') && ws.paths.textbooks === join(ws1, '教材'));
   const paths = resolvePaths(ws1, { vault: '~/vault', diary: 'diary', extra: 'x' });
+  check('vault 与 workspace 分开(2026-11-09):谁也不在谁里面才算;前缀相同的兄弟目录不算在里面', vaultSeparate('/h/cotutor/ming', '/h/cotutor/ming-vault') && !vaultSeparate('/h/cotutor/ming', '/h/cotutor/ming') && !vaultSeparate('/h/cotutor/ming', '/h/cotutor/ming/vault') && !vaultSeparate('/h/cotutor/ming', '/h/cotutor') && !isInside('/h/cotutor/ming-vault', '/h/cotutor/ming'));
+  check('缺省 vault 在旁边;家目录下的写成 ~/…,别处写绝对路径', defaultVaultOf(join(home, 'cotutor', 'ming')) === join(home, 'cotutor', 'ming-vault') && homePath(join(home, 'cotutor', 'ming-vault')) === '~/cotutor/ming-vault' && homePath('/srv/kids/ming-vault') === '/srv/kids/ming-vault' && homePath(home) === home, homePath(join(home, 'cotutor', 'ming-vault')));
   check('vault 配了 → 角色相对 vault,未知角色保留,captures 相对 workspace 根', paths.diary === join(home, 'vault', 'diary') && paths.extra === join(home, 'vault', 'x') && paths.captures === join(ws1, 'captures'));
 
   writeFileSync(join(other, 'cotutor.json'), '{ 坏');

@@ -38,15 +38,15 @@ const { recordKidLog } = await import('../src/runtime/journal/kid-log.ts');
 // ---- init ----
 {
   const { root } = await initWorkspace({ slug: 'g2', name: '小二', grade: 2, now: new Date(2026, 10, 7) });
-  const profile = readFileSync(join(root, '孩子.md'), 'utf8');
+  const profile = readFileSync(join(`${root}-vault`, '孩子.md'), 'utf8');
   check('init --grade:档案里算好了 school_start', frontmatter(profile).school_start === '2025-09', profile);
   const vp = (await doctorWorkspace(root, { probeEnv: false, now: new Date(2026, 10, 7) })).checks.find((c) => c.name === 'vault.profile');
   check('doctor:学期算得出,这一项不用家长管', vp?.ok === true && vp.detail.includes('二年级上'), JSON.stringify(vp));
   const { root: r2 } = await initWorkspace({ slug: 'nog', name: '小无' });
-  check('没给年级:不猜(教学包的缺省年级不等于孩子的年级)', !frontmatter(readFileSync(join(r2, '孩子.md'), 'utf8')).school_start);
-  writeFileSync(join(root, '孩子.md'), '---\ncotutor: profile\nschool_start: 2020-09\n---\n家长写的\n');
+  check('没给年级:不猜(教学包的缺省年级不等于孩子的年级)', !frontmatter(readFileSync(join(`${r2}-vault`, '孩子.md'), 'utf8')).school_start);
+  writeFileSync(join(`${root}-vault`, '孩子.md'), '---\ncotutor: profile\nschool_start: 2020-09\n---\n家长写的\n');
   await initWorkspace({ slug: 'g2', name: '小二', grade: 2, now: new Date(2026, 10, 7) });
-  check('再 init 一次:家长写的不动', readFileSync(join(root, '孩子.md'), 'utf8').includes('2020-09'));
+  check('再 init 一次:家长写的不动', readFileSync(join(`${root}-vault`, '孩子.md'), 'utf8').includes('2020-09'));
 }
 
 // ---- 还差几步 ----
@@ -69,7 +69,7 @@ const { recordKidLog } = await import('../src/runtime/journal/kid-log.ts');
   check('年级不在 1-6:不收', bad.status === 400);
   const ok = await route('POST', '/api/parent/setup/grade', ctx, { grade: 3 }, 'local');
   check('选了年级:写进档案,这一步好了', ok.status === 200 && by(await steps(), 'semester')?.done === true, JSON.stringify(ok.json));
-  const file = join(root, '孩子.md');
+  const file = join(`${root}-vault`, '孩子.md');
   check('档案里只多了学期,别的没动', frontmatter(readFileSync(file, 'utf8')).nickname === '小步' && Boolean(frontmatter(readFileSync(file, 'utf8')).school_start));
   const again = await route('POST', '/api/parent/setup/grade', ctx, { grade: 5 }, 'local');
   check('已经写了:不覆盖(家长可能手写过)', again.status === 409);

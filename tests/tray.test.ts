@@ -26,9 +26,29 @@ type Health = import('../src/app/cli/service.ts').Health;
 
 const VERSION = '0.3.0';
 const healthy = (o: Partial<Health> = {}): Health => ({ version: VERSION, started: '2026-11-03T00:00:00Z', pid: 9, mode: 'service', vault: 'ok', bailian: true, calls: 0, configError: null, scheme: 'https', ...o });
-const probe = (o: Partial<Probe> = {}): Probe => ({ name: 'ray', kid: 'Ray', root: '/w/ray', logDir: '/L/ray', port: 443, health: healthy(), holder: null, ...o });
+const probe = (o: Partial<Probe> = {}): Probe => ({ name: 'ray', kid: 'Ray', root: '/w/ray', vault: '/w/ray-vault', logDir: '/L/ray', port: 443, health: healthy(), holder: null, ...o });
 const NOW = Date.parse('2026-11-06T00:00:00Z');
 const model = (platform: NodeJS.Platform = 'darwin') => new t.TrayModel({ platform, version: () => VERSION });
+
+// ---- 读 cotutor.json(不带 zod):孩子名、端口、vault 在哪;vault 照 resolvePaths 算 ----
+{
+  const ws = (name: string, cfg: unknown): { name: string; label: string; file: string; args: string[]; root: string; logDir: string } => {
+    const root = join(home, 'kids', name);
+    mkdirSync(root, { recursive: true });
+    writeFileSync(join(root, 'cotutor.json'), typeof cfg === 'string' ? cfg : JSON.stringify(cfg));
+    return { name, label: name, file: name, args: [], root, logDir: join(home, 'logs', name) };
+  };
+  const { resolvePaths } = await import('../src/app/workspace.ts');
+  const resolved = (r: string, paths: Record<string, string>): string => resolvePaths(r, paths).vault;
+  const tilde = ws('ming', { kid: { slug: 'ming', name: '小明' }, server: { port: 8443 }, paths: { vault: '~/cotutor/ming-vault' } });
+  const rel = ws('hong', { kid: { slug: 'hong' }, paths: { vault: '../hong-notes' } });
+  const old = ws('lan', { kid: { slug: 'lan' }, paths: {} });
+  const bad = ws('su', '{ 坏');
+  const [a, b, c, d] = await Promise.all([tilde, rel, old, bad].map((s) => t.inspectService(s)));
+  check('inspectService:~/ 展开到家目录,名字和端口照读', a.vault === join(home, 'cotutor', 'ming-vault') && a.kid === '小明' && a.port === 8443, JSON.stringify(a));
+  check('inspectService:相对的相对 workspace 根;没写就是根(旧版的布局);读不了也是根', b.vault === join(home, 'kids', 'hong-notes') && c.vault === old.root && d.vault === bad.root && d.kid === 'su', JSON.stringify({ b, c, d }));
+  check('inspectService 和 resolvePaths 算的 vault 一样', a.vault === resolved(tilde.root, { vault: '~/cotutor/ming-vault' }) && b.vault === resolved(rel.root, { vault: '../hong-notes' }) && c.vault === resolved(old.root, {}));
+}
 
 // ---- 跑了多久 ----
 check('跑了多久', t.uptimeText(NOW - 10 * 60_000, NOW) === '不到 1 小时' && t.uptimeText(NOW - 5 * 3600_000, NOW) === '5 小时' && t.uptimeText(NOW - 3 * 86400_000, NOW) === '3 天');
@@ -38,7 +58,8 @@ check('跑了多久', t.uptimeText(NOW - 10 * 60_000, NOW) === '不到 1 小时'
   const texts = (h: Partial<Health>, platform: NodeJS.Platform = 'darwin') => t.issuesOf(probe({ health: healthy(h) }), { platform, version: VERSION });
   check('都好:没事', texts({}).length === 0);
   check('读不到 vault(Mac):开隐私设置的完全磁盘访问', texts({ vault: 'denied' })[0].text.includes('磁盘权限') && JSON.stringify(texts({ vault: 'denied' })[0].fix).includes('Privacy_AllFiles'));
-  check('读不到 vault(Windows):开 workspace 目录', texts({ vault: 'denied' }, 'win32')[0].text.includes('权限') && (texts({ vault: 'denied' }, 'win32')[0].fix as { target: string }).target === '/w/ray');
+  check('读不到 vault(Windows):开 vault 那个目录,不是孩子的文件夹(2026-11-09 起两边分开)', texts({ vault: 'denied' }, 'win32')[0].text.includes('权限') && (texts({ vault: 'denied' }, 'win32')[0].fix as { target: string }).target === '/w/ray-vault');
+  check('vault 不在、配置写坏了:开孩子的文件夹(改 cotutor.json 在那)', (texts({ vault: 'missing' }, 'win32')[0].fix as { target: string }).target === '/w/ray' && (texts({ configError: 'bad json' }, 'win32')[0].fix as { target: string }).target === '/w/ray');
   check('vault 不在', texts({ vault: 'missing' })[0].text.includes('不在了'));
   check('配置写坏了', texts({ configError: 'bad json' })[0].text.includes('写坏了'));
   check('没填百炼:开家长端,地址里不写 443', texts({ bailian: false })[0].text.includes('百炼') && (texts({ bailian: false })[0].fix as { target: string }).target === 'https://localhost/parent/home');
@@ -222,7 +243,7 @@ function start(o: { services?: number; health?: Health | null; pollMs?: number }
     setUpdateSeen: (v) => { run.seen = v; },
     now: () => Date.now(),
     list: async () => SERVICES.slice(0, count),
-    inspect: async (s) => ({ kid: s.name === 'ray' ? 'Ray' : '小红', port: s.name === 'ray' ? 443 : 8443 }),
+    inspect: async (s) => ({ kid: s.name === 'ray' ? 'Ray' : '小红', port: s.name === 'ray' ? 443 : 8443, vault: `${s.root}-vault` }),
     probe: async (port) => healths.get(port) ?? null,
     holder: async () => null,
     control: async (root, what) => { run.controls.push(`${what} ${root}`); if (run.failControl) throw run.failControl; },

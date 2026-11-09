@@ -21,7 +21,10 @@ const { PACKAGE_AGENTS_DIR } = await import('../src/app/cli/skeleton.ts');
 try {
   const r1 = await initWorkspace({ slug: 'ming', name: '小明' });
   const ws = join(home, 'cotutor', 'ming');
+  const vault = join(home, 'cotutor', 'ming-vault');
   check('缺省建在 ~/cotutor/<slug>', r1.root === ws && existsSync(ws), r1.root);
+  check('vault 和 workspace 分开(2026-11-09):缺省建在旁边的 <slug>-vault,paths.vault 写成 ~/…;档案、参考在 vault 里,不在 workspace 根', existsSync(join(vault, '孩子.md')) && existsSync(join(vault, '参考', 'README.md')) && !existsSync(join(ws, '孩子.md')) && !existsSync(join(ws, '参考')) && (JSON.parse(readFileSync(join(ws, 'cotutor.json'), 'utf8')) as { paths: Record<string, string> }).paths.vault === '~/cotutor/ming-vault', readFileSync(join(ws, 'cotutor.json'), 'utf8').slice(0, 400));
+  check('init 说 vault 在哪、不用装 Obsidian', r1.steps.some((s) => s.item.endsWith('cotutor/ming-vault') && s.action === 'created') && r1.suggestions.some((l) => l.includes('ming-vault') && l.includes('不用装 Obsidian')), JSON.stringify(r1.suggestions));
   check('骨架目录齐(.qwen/ 退役,不建)', ['agents', 'ledger', 'conversations', 'bundles'].every((d) => existsSync(join(ws, d))) && !existsSync(join(ws, 'scenes')) && !existsSync(join(ws, 'snaps')) && !existsSync(join(ws, '.qwen')));
   check('老师目录齐', ['math-tutor', 'chinese-tutor', 'english-tutor'].every((n) => existsSync(join(ws, 'agents', n, '.gitkeep'))));
   const link = join(ws, 'agents', 'math-tutor.md');
@@ -115,17 +118,57 @@ try {
   const d1 = await doctorWorkspace(ws, { probeEnv: false });
   check('健康workspace体检通过', d1.ok, JSON.stringify(d1.checks.filter((c) => c.required && !c.ok)));
   // vault(2026-09-17):档案与入口文件按属性找;init 补的档案模板带 cotutor: profile,学期没填 doctor 提醒
-  check('init 补的档案带 cotutor: profile', readFileSync(join(ws, '孩子.md'), 'utf8').startsWith('---\ncotutor: profile\n'));
+  check('init 补的档案带 cotutor: profile', readFileSync(join(vault, '孩子.md'), 'utf8').startsWith('---\ncotutor: profile\n'));
   const vp = d1.checks.find((c) => c.name === 'vault.profile');
   check('doctor:档案在但算不出学期 → 提醒写 school_start;入口文件先指回档案', vp?.ok === false && vp.fix?.includes('school_start') === true && d1.checks.find((c) => c.name === 'vault.entry.math-tutor')?.fix === '先让档案算得出学期(见 vault.profile)', JSON.stringify(vp));
-  writeFileSync(join(ws, '孩子.md'), '---\ncotutor: profile\nsemester: 二年级上\n---\n\n小明\n');
-  mkdirSync(join(ws, '课程', '二年级上'), { recursive: true });
-  writeFileSync(join(ws, '课程', '二年级上', '数学.md'), '---\ncotutor: subject\nsubject: 数学\nsemester: 二年级上\n---\n\n会凑十\n');
+  writeFileSync(join(vault, '孩子.md'), '---\ncotutor: profile\nsemester: 二年级上\n---\n\n小明\n');
+  mkdirSync(join(vault, '课程', '二年级上'), { recursive: true });
+  writeFileSync(join(vault, '课程', '二年级上', '数学.md'), '---\ncotutor: subject\nsubject: 数学\nsemester: 二年级上\n---\n\n会凑十\n');
   const dv = await doctorWorkspace(ws, { probeEnv: false });
   const zhEntry = dv.checks.find((c) => c.name === 'vault.entry.chinese-tutor');
   check('doctor:档案齐了;数学有入口文件,语文没有 → 入口文件可选(2026-10-30),算过,说想写的话建哪、写什么属性', dv.checks.find((c) => c.name === 'vault.profile')?.ok === true && dv.checks.find((c) => c.name === 'vault.entry.math-tutor')?.ok === true && zhEntry?.ok === true && zhEntry.detail.includes('可选') && zhEntry.detail.includes('课程/二年级上/语文.md') && zhEntry.detail.includes('subject: 语文'), JSON.stringify(zhEntry));
   check('doctor:每个 agent 查记忆文件,还没有不算错、说会建在哪', ['math-tutor', 'chinese-tutor'].every((n) => dv.checks.some((c) => c.name === `vault.memory.${n}` && c.ok)) && dv.checks.find((c) => c.name === 'vault.memory.chinese-tutor')?.detail.includes('记忆/语文老师.md') === true);
   const again = await initWorkspace({ slug: 'ming' });
+  check('doctor:vault 分开 → vault.separate 过', dv.checks.find((c) => c.name === 'vault.separate')?.ok === true, JSON.stringify(dv.checks.find((c) => c.name === 'vault.separate')));
+  {
+    // vault 放哪:不能在孩子的文件夹里、不能把孩子的文件夹装进去、不能和别的孩子共用;已有的再给 --vault 对不上就报错,不悄悄换
+    const { UsageError } = await import('../src/app/workspace.ts');
+    const refused = async (o: Parameters<typeof initWorkspace>[0], re: RegExp): Promise<boolean> => {
+      try {
+        await initWorkspace(o);
+        return false;
+      } catch (err) {
+        return err instanceof UsageError && re.test(err.message);
+      }
+    };
+    check('--vault 在孩子的文件夹里:拒', await refused({ slug: 'lan', vault: join(home, 'cotutor', 'lan', 'notes') }, /不能放在孩子的文件夹里/) && !existsSync(join(home, 'cotutor', 'lan')));
+    check('--vault 把孩子的文件夹装进去:拒', await refused({ slug: 'lan', vault: join(home, 'cotutor') }, /不能放在 vault 里面/));
+    check('--vault 用别的孩子的 vault:拒(一孩一 vault)', await refused({ slug: 'lan', vault: vault }, /一个孩子一个 vault/));
+    check('--vault 在别的孩子的文件夹里:拒', await refused({ slug: 'lan', vault: join(ws, 'notes') }, /别的孩子的文件夹/));
+    check('短名撞上别的孩子的 vault(init ming-vault):拒,不在 vault 里建 workspace', await refused({ slug: 'ming-vault' }, /的 vault 里/) && !existsSync(join(vault, 'cotutor.json')));
+    check('已有的 workspace 再给别的 --vault:拒,不改向', await refused({ slug: 'ming', vault: join(home, 'other-vault') }, /不换 vault/));
+    const lib = join(home, 'Obsidian', '家');
+    mkdirSync(lib, { recursive: true });
+    writeFileSync(join(lib, '读书笔记.md'), '家长自己的');
+    const r4 = await initWorkspace({ slug: 'lan', vault: lib, grade: 2 });
+    const lanCfg = JSON.parse(readFileSync(join(r4.root, 'cotutor.json'), 'utf8')) as { paths: Record<string, string> };
+    check('--vault 指家长已有的库:用它(exists),档案补进去,家长的笔记不动', lanCfg.paths.vault === '~/Obsidian/家' && r4.steps.some((s) => s.item.endsWith('Obsidian/家') && s.action === 'exists') && readFileSync(join(lib, '孩子.md'), 'utf8').includes('cotutor: profile') && readFileSync(join(lib, '读书笔记.md'), 'utf8') === '家长自己的', JSON.stringify(lanCfg.paths));
+    check('同一个 --vault 再跑:照常', (await initWorkspace({ slug: 'lan', vault: lib })).root === r4.root);
+    rmSync(r4.root, { recursive: true, force: true });
+    // 旧版的布局(没写 paths.vault,vault 就是根):照旧能用,init 不改,doctor 说怎么分
+    const old = join(home, 'oldkid');
+    await initWorkspace({ slug: 'oldkid', dir: old });
+    const oldFile = join(old, 'cotutor.json');
+    const oldCfg = JSON.parse(readFileSync(oldFile, 'utf8')) as { paths: Record<string, string> };
+    oldCfg.paths = {};
+    writeFileSync(oldFile, JSON.stringify(oldCfg));
+    const r5 = await initWorkspace({ slug: 'oldkid', dir: old });
+    check('旧布局再 init:vault 照旧是根(kept),档案补在根', r5.steps.some((s) => s.item === 'vault' && s.action === 'kept') && existsSync(join(old, '孩子.md')), JSON.stringify(r5.steps.filter((s) => s.item.includes('vault') || s.item.includes('孩子'))));
+    const sep5 = (await doctorWorkspace(old, { probeEnv: false })).checks.find((c) => c.name === 'vault.separate');
+    check('旧布局:doctor 的 vault.separate 不过、不是必需项、交给人,说怎么分', sep5?.ok === false && !sep5.required && sep5.human === true && !sep5.cmd && sep5.detail.includes('旧版') && sep5.fix?.includes('paths.vault') === true && sep5.fix.includes('~/oldkid-vault'), JSON.stringify(sep5));
+    rmSync(old, { recursive: true, force: true });
+    rmSync(`${old}-vault`, { recursive: true, force: true });
+  }
   check('init 再跑:档案按属性认出来,不再补', again.steps.some((x) => x.item.endsWith('孩子.md') && x.action === 'exists'), JSON.stringify(again.steps.filter((x) => x.item.includes('孩子'))));
   check('doctor 查板书技能(机器件,必需)', d1.checks.some((c) => c.name === 'skill.cotutor-board' && c.ok && c.required));
   check('老师文件都查了(三位)', d1.checks.filter((c) => c.name.startsWith('tutor.') && c.name.endsWith('.file')).length === 3);

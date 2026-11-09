@@ -1,6 +1,6 @@
 /** 命令用法(cotutor --help;技能 cotutor-analyze 的 references/命令与文件.md 从这里取分析用的那几行,所以放单独文件,别的模块 import 不会跑到 CLI) */
 export const USAGE = `用法:
-  cotutor init <slug> [--dir <path>] [--name <孩子名>] [--grade <1-6>] [--port <n>]   建 ~/cotutor/<slug>/ 骨架(幂等补缺;默认二年级教学包;端口在这里选一次写进 cotutor.json:443 优先,不行就 8443、8445…,以后不变)
+  cotutor init <slug> [--dir <path>] [--vault <path>] [--name <孩子名>] [--grade <1-6>] [--port <n>]   建 ~/cotutor/<slug>/ 骨架与旁边的 vault ~/cotutor/<slug>-vault/(幂等补缺;--vault 指家长已有的库,不能在孩子的文件夹里;默认二年级教学包;端口在这里选一次写进 cotutor.json:443 优先,不行就 8443、8445…,以后不变)
   cotutor grades [--json]                                          列出本包可安装的年级教学包
   cotutor doctor [--workspace <dir>] [--json] [--live] [--fix]                 逐项体检;--live 真连一次百炼实时模型、真合成一句配音(花一分钱)把 API 层的坑摆出来(真跑老师用 cotutor send);--json 里不过的项带 cmd(能直接跑)或 human(要人来);--fix 把带 cmd 的一条条修掉,要人来的留着
   cotutor report [--workspace <dir>]                                   诊断信息:版本、系统、服务、体检没过的、最近报错的原因;不含孩子的对话、照片、录音、档案和 key,名字和 IP 已抹掉,先看再发

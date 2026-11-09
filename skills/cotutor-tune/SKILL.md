@@ -91,7 +91,7 @@ vault 里的文件**按属性找,不认文件名与目录**。
 - 记忆太长了(doctor 的 vault.memory 报),就帮家长合并、删旧的。
 - 每个 activity 的记忆各是一篇,老师之间、activity 之间不共享。家长想让「你说我画」也知道语文老师记的某条,就把那一行复制过去,一处一处确认。关于孩子本人的,挪进孩子的记忆,大家都看得到。
 
-vault 是 Obsidian 仓库,可能在 iCloud 里:
+vault 不在 workspace 里:位置看 cotutor.json 的 `paths.vault`(相对 workspace 根,`~/` 是家目录),缺省是旁边的 `<目录名>-vault/`;旧版建的没写 `paths.vault`,vault 就是 workspace 根。家长可能用 Obsidian 打开它,也可能放在 iCloud 里:
 
 - 只改文本,不加标签,不放图片。
 - 新学期的入口文件要新建,不改上学期的,属性写全。

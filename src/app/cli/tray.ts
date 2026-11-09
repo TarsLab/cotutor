@@ -16,6 +16,7 @@ import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { DEFAULT_PORT } from '../../shared/default-port.ts';
 import { UsageError } from '../../shared/errors.ts';
+import { expandPath } from '../../shared/home.ts';
 import { siteUrl } from '../../shared/site-url.ts';
 import { isNewer } from '../../shared/upgrade.ts';
 import { portHolder } from './port-holder.ts';
@@ -52,6 +53,8 @@ export interface TrayProbe {
   name: string;
   kid: string;
   root: string;
+  /** vault 在哪(cotutor.json 的 paths.vault;没写就是 root):Windows 上读不到 vault 时打开它 */
+  vault: string;
   logDir: string | null;
   port: number;
   health: Health | null;
@@ -109,7 +112,7 @@ export function issuesOf(p: TrayProbe, o: { platform: NodeJS.Platform; version: 
   const url = siteUrl(h.scheme ?? 'https', 'localhost', p.port, '/parent/home');
   const out: { text: string; fix: TrayFix }[] = [];
   if (h.configError) out.push({ text: 'cotutor.json 写坏了:改的没生效', fix: { kind: 'open', target: p.root } });
-  if (h.vault === 'denied') out.push(o.platform === 'darwin' ? { text: '读不到 vault:要给 node 开磁盘权限', fix: { kind: 'open', target: MAC_FULL_DISK } } : { text: '读不到 vault:看看这个目录的权限', fix: { kind: 'open', target: p.root } });
+  if (h.vault === 'denied') out.push(o.platform === 'darwin' ? { text: '读不到 vault:要给 node 开磁盘权限', fix: { kind: 'open', target: MAC_FULL_DISK } } : { text: '读不到 vault:看看这个目录的权限', fix: { kind: 'open', target: p.vault } });
   else if (h.vault === 'missing') out.push({ text: 'vault 不在了:看看 cotutor.json 的 paths.vault', fix: { kind: 'open', target: p.root } });
   if (h.bailian === false) out.push({ text: '还没填百炼:老师们到不了', fix: { kind: 'open', target: url } });
   else if (h.bailianTrouble) out.push({ text: h.bailianTrouble.message, fix: { kind: 'open', target: url } });
@@ -268,7 +271,7 @@ export interface TrayDeps {
   now(): number;
   list(): Promise<InstalledService[]>;
   /** 读 cotutor.json:孩子叫什么、哪个端口 */
-  inspect(s: InstalledService): Promise<{ kid: string; port: number }>;
+  inspect(s: InstalledService): Promise<{ kid: string; port: number; vault: string }>;
   probe(port: number): Promise<Health | null>;
   holder(port: number): Promise<string | null>;
   control(root: string, what: 'start' | 'stop' | 'restart'): Promise<unknown>;
@@ -396,7 +399,7 @@ export function runTray(d: TrayDeps): Promise<number> {
               holders.set(s.name, { at: now, who: holder });
             }
           } else holders.delete(s.name);
-          probes.push({ name: s.name, kid: w.kid, root: s.root, logDir: s.logDir, port: w.port, health, holder });
+          probes.push({ name: s.name, kid: w.kid, root: s.root, vault: w.vault, logDir: s.logDir, port: w.port, health, holder });
         }
         const r = model.update(probes, d.now());
         rows = r.rows;
@@ -515,14 +518,16 @@ export function trayNote(dir: string): (text: string) => void {
   };
 }
 
-/** 孩子叫什么、哪个端口:只读这两样,不加载 zod(托盘进程常驻,要轻);读不了就用服务名和缺省端口 */
-export async function inspectService(s: InstalledService): Promise<{ kid: string; port: number }> {
+/** 孩子叫什么、哪个端口、vault 在哪:只读这三样,不加载 zod(托盘进程常驻,要轻);读不了就用服务名、缺省端口、workspace 根。
+ *  vault 照 workspace.ts 的 resolvePaths 算:paths.vault 相对 workspace 根,没写就是根(旧版的布局) */
+export async function inspectService(s: InstalledService): Promise<{ kid: string; port: number; vault: string }> {
   try {
-    const c = JSON.parse(await readFile(join(s.root, 'cotutor.json'), 'utf8')) as { kid?: { name?: unknown; slug?: unknown }; server?: { port?: unknown } };
+    const c = JSON.parse(await readFile(join(s.root, 'cotutor.json'), 'utf8')) as { kid?: { name?: unknown; slug?: unknown }; server?: { port?: unknown }; paths?: { vault?: unknown } };
     const kid = typeof c.kid?.name === 'string' && c.kid.name ? c.kid.name : typeof c.kid?.slug === 'string' && c.kid.slug ? c.kid.slug : s.name;
-    return { kid, port: typeof c.server?.port === 'number' ? c.server.port : DEFAULT_PORT };
+    const vault = typeof c.paths?.vault === 'string' && c.paths.vault ? expandPath(c.paths.vault, s.root) : s.root;
+    return { kid, port: typeof c.server?.port === 'number' ? c.server.port : DEFAULT_PORT, vault };
   } catch {
-    return { kid: s.name, port: DEFAULT_PORT };
+    return { kid: s.name, port: DEFAULT_PORT, vault: s.root };
   }
 }
 

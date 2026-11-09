@@ -102,8 +102,19 @@ check('不留临时目录', readdirSync(join(home, 'cotutor', '.sandbox')).join(
 check('真 workspace 一个文件都没多、没少', JSON.stringify(listAll(real)) === JSON.stringify(realBefore));
 check('真 vault 没动', JSON.stringify(listAll(vault)) === JSON.stringify(vaultBefore) && readFileSync(join(vault, '记忆', '数学老师.md'), 'utf8') === '- 真记忆\n');
 
-// ---- vault 就是 workspace 根(init 的缺省):根下的档案、参考跟着拷,vault 还是根 ----
+// ---- init 的缺省(2026-11-09):vault 在旁边的 <目录名>-vault,和 sandbox 外面的 vault 一样整份拷进 vault/ ----
+{
+  const { root: su } = await initWorkspace({ slug: 'su', dir: join(home, 'kids', 'su') });
+  write(join(home, 'kids', 'su-vault', '日记', '2026-11-01.md'), '苏的日记\n');
+  const s1 = await openSandbox(su);
+  const s1ws = loadWorkspace(s1.root);
+  check('缺省布局:vault 拷进 sandbox 的 vault/,档案、日记都在,真的那份不动', s1ws.paths.vault === join(s1.root, 'vault') && existsSync(join(s1.root, 'vault', '孩子.md')) && readFileSync(join(s1.root, 'vault', '日记', '2026-11-01.md'), 'utf8') === '苏的日记\n' && !existsSync(join(s1.root, '孩子.md')), s1ws.paths.vault);
+}
+
+// ---- 旧版的布局:vault 就是 workspace 根(没写 paths.vault):根下的档案、参考跟着拷,vault 还是根 ----
 const { root: ming } = await initWorkspace({ slug: 'ming', dir: join(home, 'kids', 'ming') });
+patchConfig(ming, (c) => { c.paths = {}; });
+await initWorkspace({ slug: 'ming', dir: join(home, 'kids', 'ming') });
 write(join(ming, '日记', '2026-11-01.md'), '明的日记\n');
 write(join(ming, 'conversations', 'math-tutor', '2026-11-01.json'), '{}');
 const m = await openSandbox(ming);
@@ -121,7 +132,7 @@ check('教材指在外面:只读,照旧指那份,并说一声', loadWorkspace(tb
 patchConfig(ming, (c) => { c.paths = { diary: join(home, 'elsewhere-diary') }; });
 const beforeBlocked = listAll(tb.root);
 check('日记指在外面:拦下(试用记账会写进去)', await threw(() => openSandbox(ming, { fresh: true }), 'paths.diary'));
-check('拦下时旧的 sandbox 原样在,不留临时目录', JSON.stringify(listAll(tb.root)) === JSON.stringify(beforeBlocked) && readdirSync(join(home, 'kids', '.sandbox')).join() === 'ming');
+check('拦下时旧的 sandbox 原样在,不留临时目录', JSON.stringify(listAll(tb.root)) === JSON.stringify(beforeBlocked) && readdirSync(join(home, 'kids', '.sandbox')).sort().join() === 'ming,su');
 
 // ---- 挡路的不是 sandbox:不动它 ----
 const { root: hong } = await initWorkspace({ slug: 'hong', dir: join(home, 'kids', 'hong') });

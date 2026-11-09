@@ -79,6 +79,7 @@
 ## 约定
 
 - 一孩一 workspace 一 vault 一服务进程;`agents/<name>/` 是老师的家(activity 在里面)
+- vault 和 workspace 分开放(2026-11-09):init 缺省建在旁边的 `<目录名>-vault/`,`--vault` 指家长已有的库,写进 `paths.vault`(家目录下写 `~/…`);谁也不能在谁里面、不能和别的孩子共用,init 拦着(`checkVaultPlace`)。旧版没写 `paths.vault` 的 vault 就是根,照旧读、不迁移,doctor 的 `vault.separate` 提一句;sandbox 的 vault 拷在它里面的 `vault/`,不查
 - 出厂件(老师文件、主题、技能)拷贝不链;workspace 里唯一的链是 `.claude/skills → ../.agents/skills`;hash 记 shipped.json,upgrade 只换没改过的、改过的报 diff;`machine: true` 的技能每次覆盖
 - 老师按 cotutor.json 里有谁走,没有注册表;键以 `-tutor` 结尾的是有脸的老师,其余是工具人
 - 老师文件里只有运行字段与正文;display / avatar / voice / enabled / policy / runtime 在 cotutor.json

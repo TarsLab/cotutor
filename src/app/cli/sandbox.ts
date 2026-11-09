@@ -5,10 +5,10 @@
  * 已经在 sandbox 里(cwd 在里面、--workspace 指过来)就用它;--fresh 从它记着的真 workspace 重新分,不套娃。
  */
 import { copyFile, cp, mkdir, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
-import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path';
+import { basename, dirname, join, relative } from 'node:path';
 import { PATH_ROLES, ROLE_DEFAULTS, WORKSPACE_ROLES, type PathRole } from '../../schema/index.ts';
 import { SANDBOX_DIR, SANDBOX_KEEP_MACHINE, SANDBOX_MARK, SANDBOX_SKIP, SANDBOX_TITLE, SANDBOX_VAULT, type SandboxMark, type Workspace } from '../../schema/workspace.ts';
-import { CONFIG_FILE, UsageError, expandPath, loadWorkspace, parseConfig, readJson, readSandboxMark, redactHome, resolveRoot, type ResolveOptions } from '../workspace.ts';
+import { CONFIG_FILE, UsageError, expandPath, isInside as inside, loadWorkspace, parseConfig, readJson, readSandboxMark, redactHome, resolveRoot, type ResolveOptions } from '../workspace.ts';
 import { sandboxPort } from './port.ts';
 import { DIRS, LEDGER_FILES } from './skeleton.ts';
 
@@ -33,12 +33,6 @@ const READ_ONLY_ROLES: readonly string[] = ['textbooks', 'reference'];
 
 /** ~/cotutor/ray → ~/cotutor/.sandbox/ray */
 export const sandboxRootOf = (real: string): string => join(dirname(real), SANDBOX_DIR, basename(real));
-
-/** p 是 dir 本身或在它里面 */
-function inside(p: string, dir: string): boolean {
-  const r = relative(dir, p);
-  return r === '' || (r !== '..' && !r.startsWith(`..${sep}`) && !isAbsolute(r));
-}
 
 async function exists(p: string): Promise<boolean> {
   return stat(p).then(() => true, () => false);

@@ -103,6 +103,9 @@ try {
 
   writeFileSync(join(ws, 'QWEN.md'), '# 我家的规矩');
   const r2 = await initWorkspace({ slug: 'ming' });
+  check('同一个称呼重跑照常', (await initWorkspace({ slug: 'ming', name: '小明' })).root === ws);
+  const other = await initWorkspace({ slug: 'ming', name: '豆豆' }).then(() => '', (e: Error) => e.message);
+  check('称呼对不上(别的孩子推出了同一个短名):init 拦下,不装进第一个孩子的文件夹', other.includes('「小明」') && other.includes('换个短名') && JSON.parse(readFileSync(join(ws, 'cotutor.json'), 'utf8')).kid.name === '小明', other);
   check('重跑没有 created', r2.steps.every((s) => s.action !== 'created'), JSON.stringify(r2.steps.filter((s) => s.action === 'created')));
   check('家长自建的家规,init 不动', readFileSync(join(ws, 'QWEN.md'), 'utf8') === '# 我家的规矩');
   unlinkSync(join(ws, 'QWEN.md'));

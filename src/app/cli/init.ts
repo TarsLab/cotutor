@@ -78,6 +78,17 @@ export async function initWorkspace(opts: InitOptions): Promise<InitResult> {
   const pack = await requireGradePack(grade);
   if (existing && grade !== (installed ?? LEGACY_GRADE)) throw new UsageError('init 只补缺,不能切换已有 workspace 的年级包;请另建 workspace,原有自定义文件和话题保持不动。');
   if (installed !== undefined && installed !== grade) throw new UsageError(`已安装 ${installed} 年级包,init 不切换年级`);
+  // 已有的文件夹是别的孩子的(称呼对不上):init 只补缺,不然第二个孩子会悄悄装进第一个孩子的文件夹
+  if (existing && opts.name !== undefined) {
+    let raw: { kid?: { name?: unknown } } | null = null;
+    try {
+      raw = readJson(join(root, CONFIG_FILE)) as { kid?: { name?: unknown } } | null;
+    } catch (err) {
+      if (!(err instanceof ConfigError)) throw err; // 配置坏了,doctor 去报
+    }
+    const theirs = raw?.kid?.name;
+    if (typeof theirs === 'string' && theirs !== opts.name) throw new UsageError(`${redactHome(root)} 已经是「${theirs}」的 cotutor 文件夹(cotutor.json 的 kid.name),init 只补缺,不换孩子;再加一个孩子换个短名,给这个孩子改称呼就改 ${CONFIG_FILE}`);
+  }
   const agents = await shippedAgents(pack.agentsDir);
   // vault 只在新建 cotutor.json 时定(写进 paths.vault),以后 init 不改向;已有的再给 --vault,对不上就报错,不悄悄换
   const vaultArg = opts.vault ? resolve(expandPath(opts.vault, resolve(process.cwd()))) : undefined; // resolve 去掉末尾的 /,好比较

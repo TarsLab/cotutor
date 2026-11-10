@@ -34,6 +34,7 @@
 ## 运行与验证
 
 - `pnpm typecheck`;`pnpm test`;`node bin/cotutor.js --help`(bin 直跑 src,Node ≥ 22.18)
+- `pnpm test` 几个文件一起跑(缺省 4 个,`COTUTOR_TEST_JOBS=<n>` 改,1 = 串行);`pnpm test <名字里的一段>...` 只跑那几个。占固定端口、断言选中哪个端口、掐真时间的测试要进 `scripts/test.ts` 的 `ALONE`(排在最后单独跑),别的测试里端口一律 `listen(0)`
 - 跨目录的 import 由 `tests/layers.test.ts` 盯着:模块之间谁能引谁在它的 `ALLOW`;`LEGACY`(「模块 → 被引的文件」的旧账)已经清空,不再加;内联进页面的文件运行时只能从别的内联文件拿值
 - 命令行照命令表走(`src/app/cli/commands.ts`:每条命令的一句话、用法、旗标与只给哪个子命令、参数个数、会花钱或写孩子数据的、例子)。顶层帮助、`cotutor <命令> --help`、技能里的命令参考、参数检查都从它来:不认的旗标、用错子命令的旗标、多余的参数一律 exit 2,一句话加「看 cotutor <命令> --help」,不倒整篇帮助。加命令或旗标先进表(不然被当成打错的拦掉),再跑 `pnpm run gen:skills`,先过 `tests/main.test.ts`(代码读的旗标都在表里、例子照表能过)与 `tests/install-doc.test.ts`
 - 改了 `cards/` 下的 md、`src/app/skills/*-doc.ts` 跑 `pnpm run gen:skills`(不跑 skills.test 会红);改了 `src/ui/stage/` 跑 `pnpm run build:stage`(dist 不在 git,没打包时舞台开不了)

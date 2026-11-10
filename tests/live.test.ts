@@ -5,8 +5,9 @@
  * setTurn 的成与败;连接时报错、服务端断线都不抛。
  */
 import { createServer } from 'node:http';
+import { connect, type Socket } from 'node:net';
 import { check, done } from './_check.ts';
-import { acceptWebSocket, decodeFrame, encodeFrame, isUpgrade, acceptKey, type ServerSocket } from '../src/app/ws/ws.ts';
+import { MAX_MESSAGE, acceptWebSocket, decodeFrame, encodeFrame, isUpgrade, acceptKey, type ServerSocket } from '../src/app/ws/ws.ts';
 import { MAX_IMAGE_B64, RealtimeSession, sessionConfig, turnDetection, endpointOf, type Usage } from '../src/realtime/bailian.ts';
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -107,6 +108,39 @@ const port = (server.address() as { port: number }).port;
   ws.close(4001, 'done');
   const ok2 = await until(() => closes.length === 1);
   check('客户端 close:码与原因到服务端', ok2 && closes[0][0] === 4001 && closes[0][1] === 'done', JSON.stringify(closes));
+
+  // 分片:加起来不超的拼成一条;一直发不带 fin 的分片、加起来过了上限 → 关连接(1009),攒着的不交出去
+  const rawClient = async (): Promise<{ sock: Socket; data: () => Buffer }> => {
+    const sock = connect((echo.address() as { port: number }).port, '127.0.0.1');
+    let inbox = Buffer.alloc(0);
+    sock.on('data', (c: Buffer) => { inbox = Buffer.concat([inbox, c]); });
+    sock.on('error', () => {});
+    await new Promise<void>((r) => sock.once('connect', () => r()));
+    sock.write('GET /x HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n');
+    await until(() => inbox.includes('\r\n\r\n'));
+    const at = inbox.indexOf('\r\n\r\n') + 4;
+    return { sock, data: () => inbox.subarray(at) };
+  };
+  {
+    const c = await rawClient();
+    const n0 = bins.length;
+    c.sock.write(Buffer.concat([masked(0x2, Buffer.alloc(1000, 1), false), masked(0x0, Buffer.alloc(1000, 2), false), masked(0x0, Buffer.alloc(500, 3))]));
+    const okFrag = await until(() => bins.length === n0 + 1);
+    check('分片:三片拼成一条 2500 字节的', okFrag && bins[n0] === 2500, JSON.stringify(bins.slice(n0)));
+    c.sock.destroy();
+    await until(() => closes.length === 2);
+  }
+  {
+    const c = await rawClient();
+    const n0 = bins.length;
+    const piece = Buffer.alloc(1024 * 1024, 5);
+    const pieces = Math.floor(MAX_MESSAGE / piece.length) + 1;
+    for (let i = 0; i < pieces; i++) c.sock.write(masked(i ? 0x0 : 0x2, piece, false));
+    const okBig = await until(() => closes.length === 3, 8000);
+    const back = c.data();
+    check('分片加起来过了上限:关连接、码 1009,那条消息不交出去', okBig && closes[2][0] === 1009 && bins.length === n0 && back.length >= 4 && back[0] === 0x88 && back.readUInt16BE(2) === 1009, JSON.stringify({ closes: closes.slice(2), back: [...back.subarray(0, 4)], bins: bins.length - n0 }));
+    c.sock.destroy();
+  }
   echo.close();
 }
 

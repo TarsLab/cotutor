@@ -97,6 +97,8 @@ try {
   check('课包落到 bundles/<id>/ → scene.json / manifest.json 能取;坏 id、越界、别的扩展名 404', sj.status === 200 && sj.contentType?.startsWith('application/json') === true && (await get('/api/bundles/2026-09-04-guilv5/manifest.json')).status === 200 && (await get('/api/bundles/Bad/scene.json')).status === 404 && (await get('/api/bundles/2026-09-04-guilv5/../../cotutor.json')).status === 404 && existsSync(join(root, 'bundles', '2026-09-04-guilv5', 'scene.json')), JSON.stringify(sj));
   check('日期列表空', ((await get('/api/conversations/math-tutor')).json as { dates: string[] }).dates.length === 0);
   check('没这位老师 404', (await get('/api/conversations/nobody')).status === 404);
+  // 地址里的 % 编码写坏了:是请求不对(400),不抛到外面变 500
+  check('坏的 % 编码 400:孩子端的笔顺、家长端的话题', (await get('/api/kid/tianzige/%E4')).status === 400 && (await get('/api/kid/letters/%')).status === 400 && (await get('/api/conversations/math-tutor/today/threads/%E4/reel')).status === 400 && (await route('DELETE', '/api/conversations/math-tutor/2026-01-01/threads/%E4', ctx)).status === 400);
   // 证书是机器级的:没有 → null;~/.config/cotutor/certs/ 有 → 用它;server.https 配了 → 覆盖(相对 workspace 根)
   check('没证书走 HTTP', httpsFiles(ctx.ws) === null);
   const certDir = join(home, '.config', 'cotutor', 'certs');

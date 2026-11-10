@@ -723,6 +723,17 @@ try {
   const p2 = await route('PATCH', '/api/config', ctx, { tutors: { 'math-tutor': { display: '' } } });
   check('不合契约的补丁 422 且不落盘', p2.status === 422 && (JSON.parse(readFileSync(cfgFile, 'utf8')) as typeof raw).tutors['math-tutor'].display === '数学老师', JSON.stringify(p2.json));
   check('改运行时模板被拒', (await route('PATCH', '/api/config', ctx, { runtimes: { fake: { run: ['x'], resume: ['x'] } } })).status === 422);
+  // 工作台老师团页「保存全局」发的就是 {title, runtimes: {default}, policyDefaults}:default 能换,别的运行时原样留着;旧键 agents 不认(以前认它,往文件里写一段没人读的)
+  {
+    const readCfg = () => JSON.parse(readFileSync(cfgFile, 'utf8')) as { title: string; runtimes: Record<string, unknown>; agents?: unknown };
+    const before = readCfg();
+    const g1 = await route('PATCH', '/api/config', ctx, { title: before.title, runtimes: { default: 'fake2' }, policyDefaults: {} });
+    check('保存全局:runtimes.default 能换,别的运行时不动', g1.status === 200 && (g1.json as { runtime: string }).runtime === 'fake2' && readCfg().runtimes.default === 'fake2' && JSON.stringify(readCfg().runtimes.preload) === JSON.stringify(before.runtimes.preload) && Object.keys(readCfg().runtimes).join() === Object.keys(before.runtimes).join(), JSON.stringify(g1.json).slice(0, 200));
+    check('runtimes.default 指到没有的运行时被拒,文件不动', (await route('PATCH', '/api/config', ctx, { runtimes: { default: 'nope' } })).status === 422 && readCfg().runtimes.default === 'fake2');
+    check('runtimes 不是对象被拒', (await route('PATCH', '/api/config', ctx, { runtimes: 'api' })).status === 422);
+    check('旧键 agents 不认,不往文件里写', (await route('PATCH', '/api/config', ctx, { agents: { default: 'fake2' } })).status === 422 && readCfg().agents === undefined);
+    check('换回来', (await route('PATCH', '/api/config', ctx, { runtimes: { default: before.runtimes.default } })).status === 200 && readCfg().runtimes.default === before.runtimes.default);
+  }
   check('改 kid 被拒', (await route('PATCH', '/api/config', ctx, { kid: { slug: 'x' } })).status === 422);
   // 按住说话在哪边(kid.hand):家长端设置页改(/api/parent/settings),写进文件、孩子端首页接口带出去;选回缺省的 right 删键;工作台的 /api/config 不改 kid
   check('设置页读:缺省 right', ((await route('GET', '/api/parent/settings', ctx)).json as { hand: string }).hand === 'right');

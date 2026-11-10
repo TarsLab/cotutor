@@ -793,7 +793,6 @@ export async function route(method: string, path: string, ctx: AppContext, body?
 
     // ---- 孩子端:过滤在服务端做,永远不带工具 / 错误 / 评判 ----
     if (p === '/api/kid/home' && method === 'GET') return { status: 200, json: await kidHome(ctx, ctx.now()) };
-    // 按住说话的诊断:识别全在浏览器里、出错静默,真机上哪一步断了只有它自己知道;只收事件码与毫秒,不收字也不收声音
     // 孩子端的流水:一次打开、页面脚本出错;没有设备 cookie 就种一枚
     if (p === '/api/kid/log' && method === 'POST') {
       const row = parseKidLog(body);
@@ -803,6 +802,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       await recordKidLog(ws, row, { device, ip: client.ip, srv: { v: BUILD.version, commit: shortCommit(BUILD.commit), started: BUILD.started } }, ctx.now()).catch((err) => console.error('kid-log: 落盘失败', err));
       return { status: 200, json: { ok: true }, ...(known ? {} : { setCookie: deviceCookie(device, Boolean(ctx.listen?.().https)) }) };
     }
+    // 按住说话的诊断:真机上出错是静默的,哪一步断了只有页面自己知道;只收事件码与毫秒,不收字也不收声音
     if (p === '/api/kid/voice-diag' && method === 'POST') {
       if (!isObj(body) || JSON.stringify(body).length > 4000) return { status: 400, json: { error: 'bad_request' } };
       const row = { at: ctx.now().toISOString(), ...body };
@@ -1055,7 +1055,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         const device = body.device === undefined ? undefined : DeviceSchema.safeParse(body.device);
         if (device && !device.success) return { status: 400, json: { error: 'bad_request', message: 'device 只能是 phone / tablet' } };
         const action = body.action === undefined ? undefined : body.action === 'submit' ? ('submit' as const) : null;
-        if (action === null) return { status: 400, json: { error: 'bad_request', message: 'action 只能是 continue / submit' } };
+        if (action === null) return { status: 400, json: { error: 'bad_request', message: 'action 只能是 submit' } };
         if (!body.text.trim() && !action && !photos?.length) return { status: 400, json: { error: 'bad_request', message: '要说点什么' } };
         const started = await ctx.runner.send(tutor, {
           from: from as (typeof MESSAGE_FROM)[number],
@@ -1113,7 +1113,6 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     if (method !== 'GET') return { status: 405, json: { error: 'method_not_allowed' } };
     // 工作台:对话原始视图、看原文、老师团、activity、设置——给有技术背景的家长与开发者;家长端在 /parent
     if (p === '/dev') return { status: 200, html: DEV_PAGE };
-    // 按住说话的试验页(真机上比策略用;不在孩子端与家长端的入口里)
     // 按钮样张:老师页那颗「头像 + 按住说话」的每一种样子,调动画时看这一页
     if (p === '/dev/voice') return { status: 200, html: VOICE_GALLERY_PAGE };
     // 主屏幕(iPad「添加到主屏幕」):清单与图标都按标题现生成,没有静态资源
@@ -1149,6 +1148,8 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     if (err instanceof ConfigError) return { status: 422, json: { error: 'config', message: err.message } };
     if (err instanceof IndexError) return { status: 500, json: { error: 'index', message: err.message } };
     if (err instanceof UsageError) return { status: 400, json: { error: 'usage', message: err.message } };
+    // 地址里的 % 编码写坏了(decodeURIComponent 抛的):是请求不对,不是服务出错
+    if (err instanceof URIError) return { status: 400, json: { error: 'bad_request', message: '地址里的 % 编码不对' } };
     throw err;
   }
 }
@@ -1170,10 +1171,6 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
   }
 }
 
-/**
- * 发文件(配音、图、小课堂的视频……):都带 accept-ranges 与长度;GET 带单段 Range → 206 只发那一段(iPad Safari 放视频非这样不可,
- * 先要 bytes=0-1,拿不到 206 就不放;音频拖动也靠它),起点越界 416;HEAD 只发头。文件读之前没了 → 404
- */
 /** 这个进程的启动号:每个 JSON 响应都带(x-cotutor-boot)。页面轮询时见它变了 = 服务重起过(多半是换了新代码),空下来就自己重载——iPad 上下拉刷新常拉不到位 */
 const BOOT = Date.now().toString(36);
 

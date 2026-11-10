@@ -10,6 +10,10 @@ import type { Duplex } from 'node:stream';
 const GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 /** 一帧最多收这么大(一块音频 100 毫秒 3200 字节;JSON 控制消息更小) */
 const MAX_FRAME = 4 * 1024 * 1024;
+/** 一条消息最多收这么大:分片的加起来算。不设的话一直发不带 fin 的分片,每片都不超、内存一直涨(这条线不过家长的锁) */
+export const MAX_MESSAGE = MAX_FRAME;
+/** 太大的帧或消息:关连接时回 1009(message too big),别的坏帧回 1002 */
+class TooBig extends Error {}
 
 export interface SocketEvents {
   onText?(text: string): void;
@@ -55,8 +59,8 @@ export function decodeFrame(buf: Buffer): Frame | null {
   let len = buf[1] & 0x7f;
   let p = 2;
   if (len === 126) { if (buf.length < 4) return null; len = buf.readUInt16BE(2); p = 4; }
-  else if (len === 127) { if (buf.length < 10) return null; const big = buf.readBigUInt64BE(2); if (big > BigInt(MAX_FRAME)) throw new Error('frame too large'); len = Number(big); p = 10; }
-  if (len > MAX_FRAME) throw new Error('frame too large');
+  else if (len === 127) { if (buf.length < 10) return null; const big = buf.readBigUInt64BE(2); if (big > BigInt(MAX_FRAME)) throw new TooBig('frame too large'); len = Number(big); p = 10; }
+  if (len > MAX_FRAME) throw new TooBig('frame too large');
   if (!masked) throw new Error('client frame without mask');
   if (buf.length < p + 4 + len) return null;
   const mask = buf.subarray(p, p + 4);
@@ -75,7 +79,7 @@ export function acceptWebSocket(req: IncomingMessage, socket: Duplex, head: Buff
   socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${acceptKey(key)}\r\n\r\n`);
   let buf: Buffer = head.length ? Buffer.from(head) : Buffer.alloc(0);
   let open = true;
-  let partial: { opcode: number; chunks: Buffer[] } | null = null;
+  let partial: { opcode: number; chunks: Buffer[]; size: number } | null = null;
   const closeWith = (code: number, reason: string): void => {
     if (!open) return;
     open = false;
@@ -108,16 +112,24 @@ export function acceptWebSocket(req: IncomingMessage, socket: Duplex, head: Buff
         if (f.opcode === 0xa) continue;
         if (f.opcode === 0x0) {
           if (!partial) throw new Error('continuation without start');
+          partial.size += f.payload.length;
+          if (partial.size > MAX_MESSAGE) throw new TooBig('message too large');
           partial.chunks.push(f.payload);
           if (f.fin) { const whole = Buffer.concat(partial.chunks); const op = partial.opcode; partial = null; deliver(op, whole); }
           continue;
         }
-        if (!f.fin) { partial = { opcode: f.opcode, chunks: [f.payload] }; continue; }
+        if (!f.fin) { partial = { opcode: f.opcode, chunks: [f.payload], size: f.payload.length }; continue; }
         deliver(f.opcode, f.payload);
       }
     } catch (err) {
-      raw(0x8, Buffer.from([0x03, 0xea]));
-      closeWith(1002, err instanceof Error ? err.message : 'protocol error');
+      // 攒着的分片丢掉;太大回 1009,别的坏帧回 1002
+      partial = null;
+      buf = Buffer.alloc(0);
+      const code = err instanceof TooBig ? 1009 : 1002;
+      const p = Buffer.alloc(2);
+      p.writeUInt16BE(code, 0);
+      raw(0x8, p);
+      closeWith(code, err instanceof Error ? err.message : 'protocol error');
     }
   });
   socket.on('error', () => closeWith(1006, 'socket error'));

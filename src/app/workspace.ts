@@ -247,8 +247,8 @@ export function workspaceReport(ws: Workspace): Record<string, unknown> {
 
 // ---- cotutor.json 的补丁写回与热重载(从 runtime/journal/store.ts 搬来,2026-10-29) ----
 
-/** PATCH 允许改的顶层键(老师团页与设置页);kid / version / 运行时模板走编辑器 */
-export const CONFIG_PATCH_KEYS = ['title', 'policyDefaults', 'tutors', 'agents', 'paths', 'server', 'vault', 'live'] as const;
+/** PATCH 允许改的顶层键(老师团页与设置页);runtimes 只让改 default(用哪个运行时);kid / version / 运行时本身走编辑器 */
+export const CONFIG_PATCH_KEYS = ['title', 'policyDefaults', 'tutors', 'runtimes', 'paths', 'server', 'vault', 'live'] as const;
 
 const isPlainObj = (v: unknown): v is Record<string, unknown> => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
 
@@ -284,8 +284,9 @@ export async function patchConfig(ws: Workspace, patch: Record<string, unknown>,
   const allowed: readonly string[] = [...CONFIG_PATCH_KEYS, ...(opts.also ?? [])];
   const unknown = Object.keys(patch).filter((k) => !allowed.includes(k));
   if (unknown.length) throw new ConfigError(ws.files.config, `页面只能改 ${CONFIG_PATCH_KEYS.join(' / ')},不认识:${unknown.join(', ')};其余字段请直接编辑文件`);
-  if (isPlainObj(patch.agents) && Object.keys(patch.agents).some((k) => k !== 'default')) {
-    throw new ConfigError(ws.files.config, 'agents 只能在页面上改 default;运行时模板请直接编辑文件');
+  // runtimes 整个换掉(不是对象)也拦:只认 {default: <名字>}
+  if (patch.runtimes !== undefined && (!isPlainObj(patch.runtimes) || Object.keys(patch.runtimes).some((k) => k !== 'default'))) {
+    throw new ConfigError(ws.files.config, 'runtimes 只能在页面上改 default;运行时本身(模型、maxSteps)请直接编辑文件');
   }
   const raw = readJson(ws.files.config);
   if (raw === null) throw new ConfigError(ws.files.config, '不存在');

@@ -20,16 +20,17 @@ description: 在 cotutor workspace 里分析 AI 老师的对话:某一轮传了�
 - 索引 `<日期>.json` 一天一份。每条消息物化了讲稿与卡、读了什么(tools)、用时(timing)、token(tokens)、提醒。
 - 各文件是什么、命令怎么用,见 references/命令与文件.md。
 
-**老师看到的只有两样:**
+**老师看到的只有三样:**
 
 1. 上下文包:run.json 里的 prompt。每一行是什么,见 `.agents/skills/cotutor-tutor/references/上下文包.md`。
-2. 它自己 Read 的文件:消息的 tools。
+2. 同一个话题前面几轮:`<日期>.<话题>.brain.jsonl`。话题聊长了,前面的会换成一段前情。
+3. 它自己用 read_file 读的文件:消息的 tools。
 
-它看不到 cotutor.json,看不到别的老师,也看不到今天之前的对话。以前的事只有沉淀进 vault 的,它才看得到。
+它看不到 cotutor.json,看不到别的老师,也看不到别的话题。以前的事只有沉淀进 vault 的,它才看得到。
 
 ## 禁区
 
-- agents/<name>.md 是老师文件,由 cotutor 读正文传给 Qwen。**不要把它们当子代理派(Task)**,也不要替老师回答孩子。
+- agents/<name>.md 是老师文件,由 cotutor 读正文传给 Qwen。**不要把它们当子代理派**,也不要替老师回答孩子。
 - **不改** conversations/、evals/、ledger/ 里的任何文件。
 - **不写 vault**(日记、档案、计划、教材)。那是家长的长期记忆,要改也是家长自己动手。
 - 改老师文件、技能、cotutor.json,要先说清改什么、为什么、会影响哪些老师,得到同意再动。
@@ -49,7 +50,7 @@ description: 在 cotutor workspace 里分析 AI 老师的对话:某一轮传了�
 
 一天的 token 与延迟不用命令,读 conversations/<老师>/<日期>.json:
 
-- 每条的 `tokens` 是这轮老师用的 token(`in` 输入,含缓存读;`out` 输出);一天合计自己加。老数据里的 `costUsd` 是 claude 时代记的美元,不用管。
+- 每条的 `tokens` 是这轮老师用的 token(`in` 输入,含缓存读;`out` 输出);一天合计自己加。老数据里的 `costUsd` 是旧版记的美元,不用管。
 - `timing` 是从 startedAt 起算的毫秒:`firstReadyMs` 首拍就绪,`doneMs` 老师写完,`dubbedMs` 配音齐。
 
 ## 查「老师为什么没提 X」的顺序
@@ -78,7 +79,7 @@ description: 在 cotutor workspace 里分析 AI 老师的对话:某一轮传了�
 **这轮读了什么、贵在哪**
 
 - show 的「读了什么」,每条有字数。
-- 贵的一般是:派了子代理、读了大文件、或者轮数多。
+- 贵的一般是:话题聊得长(前面几轮都要带上)、读了大文件、或者一轮里来回多。
 - 真要看它读到的原文,grep 那轮的 .log。
 
 **我改了老师文件,效果怎样**

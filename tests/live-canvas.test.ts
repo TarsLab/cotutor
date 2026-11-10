@@ -68,7 +68,7 @@ const paperFile = (key: string) => join(convDir, `${today}.${key}.paper.json`);
 // ---- 画板卡的描述:各颜色几笔、画了多久(算上清空前那一版)、清空过几次与清掉的那几版 ----
 {
   const text = canvasInkText({ ink: INK, cleared: [{ at: t0 + 30_000, from: t0 - 240_000, strokes: 12, image: 'captures/x/1.jpg' }] });
-  check('画板卡的描述:画了几笔(红 2、蓝 1),画了约 7 分钟,清空重画过 1 次与清掉的那一版', text === '画了 3 笔(红 2、蓝 1),画了约 7 分钟,清空重画过 1 次,清掉的那几版:captures/x/1.jpg(用 Read 看)', text);
+  check('画板卡的描述:画了几笔(红 2、蓝 1),画了约 7 分钟,清空重画过 1 次与清掉的那一版', text === '画了 3 笔(红 2、蓝 1),画了约 7 分钟,清空重画过 1 次,清掉的那几版:captures/x/1.jpg(用 read_file 看)', text);
 }
 
 // ---- 纸的读写 ----

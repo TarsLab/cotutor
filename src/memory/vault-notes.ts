@@ -370,7 +370,7 @@ export function memoryCount(text: string): number {
  */
 export function tidyMemoryPrompt(opts: { date: string; count: number; cap: number; diaryFile: string }): string {
   return [
-    `学习结束、账记完了,把你的记忆整理一遍。记忆文件的原文在上下文包的 <vault-note role="memory">(现在 ${opts.count} 条;截了就自己 Read 全文),今天(${opts.date})的日记在 ${opts.diaryFile},读你这一科的几段对照一下。`,
+    `学习结束、账记完了,把你的记忆整理一遍。记忆文件的原文在上下文包的 <vault-note role="memory">(现在 ${opts.count} 条;截了就自己用 read_file 读全文),今天(${opts.date})的日记在 ${opts.diaryFile},读你这一科的几段对照一下。`,
     '',
     '只回一段「## 记忆」,一行一条,别的一个字都不用写:',
     '',
@@ -390,11 +390,11 @@ export function tidyMemoryPrompt(opts: { date: string; count: number; cap: numbe
  */
 export function clipNote(text: string, limit: number, keep: 'head' | 'tail'): { text: string; cut: boolean } {
   if (text.length <= limit) return { text, cut: false };
-  if (keep === 'head') return { text: `${text.slice(0, limit)}\n……(后面截掉了,要看全文自己 Read)`, cut: true };
+  if (keep === 'head') return { text: `${text.slice(0, limit)}\n……(后面截掉了,要看全文自己用 read_file 读)`, cut: true };
   const tail = text.slice(-limit);
   const nl = tail.indexOf('\n');
   const aligned = text.at(-limit - 1) === '\n' || nl < 0 ? tail : tail.slice(nl + 1);
-  return { text: `……(前面旧的截掉了,下面是最近的;要看全文自己 Read)\n${aligned}`, cut: true };
+  return { text: `……(前面旧的截掉了,下面是最近的;要看全文自己用 read_file 读)\n${aligned}`, cut: true };
 }
 
 /** 短 hash(FNV-1a 32 位):同一话题里判断「这篇上次带过、没改」 */

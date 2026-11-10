@@ -22,16 +22,18 @@ const { DEV_PAGE } = await import('../src/ui/dev/dev-page.ts');
 
 try {
   // ---- 纯函数:检查、节 ----
-  const okFile = '---\nname: math-tutor\ndescription: 数学\nmaxTurns: 40\n---\n你是数学老师。\n\n## 数学这一科\n\n```text\n## 围栏里的不算\n```\n';
+  const okFile = '---\nname: math-tutor\ndescription: 数学\n---\n你是数学老师。\n\n## 数学这一科\n\n```text\n## 围栏里的不算\n```\n';
   check('lint:好好的没有一条', lintAgentFile(okFile, 'math-tutor').length === 0, JSON.stringify(lintAgentFile(okFile, 'math-tutor')));
   const wrong = lintAgentFile(okFile.replace('name: math-tutor', 'name: maths'), 'math-tutor');
   check('lint:name 不对 = 要改,指到 name 那行', wrong.length === 1 && wrong[0].level === 'fix' && wrong[0].line === 2, JSON.stringify(wrong));
   check('lint:没有 frontmatter = 要改', lintAgentFile('你是数学老师。\n', 'math-tutor').some((i) => i.level === 'fix' && i.line === 1));
   check('lint:正文空 = 要改', lintAgentFile('---\nname: math-tutor\n---\n\n', 'math-tutor').some((i) => i.level === 'fix' && i.text.includes('正文')));
-  const notes = lintAgentFile(okFile.replace('maxTurns: 40', 'voice: x\ntools: Read'), 'math-tutor');
-  check('lint:cotutor.json 的键、两家不都认的键只提醒', notes.length === 2 && notes.every((i) => i.level === 'note') && notes[0].text.includes('cotutor.json') && notes[1].line === 5, JSON.stringify(notes));
+  const notes = lintAgentFile(okFile.replace('description: 数学', 'description: 数学\nvoice: x\ntools: Read'), 'math-tutor');
+  check('lint:cotutor.json 的键、应用不认的键只提醒', notes.length === 2 && notes.every((i) => i.level === 'note') && notes[0].text.includes('cotutor.json') && notes[1].line === 5 && notes[1].text.includes('不认'), JSON.stringify(notes));
+  const legacy = lintAgentFile(okFile.replace('description: 数学', 'description: 数学\nmaxTurns: 40\npermissionMode: bypassPermissions'), 'math-tutor');
+  check('lint:旧版给 CLI 的键(maxTurns、permissionMode)提醒可以删,不算要改', legacy.length === 2 && legacy.every((i) => i.level === 'note' && i.text.includes('旧版')) && legacy[0].line === 4, JSON.stringify(legacy));
   const secs = tutorFileSections(okFile);
-  check('节:头、开头、每个 ##,围栏里的不算', secs.map((x) => x.title + '@' + x.line).join(' ') === '头@1 开头@6 数学这一科@8' && secs[1].reader === '老师的系统提示', JSON.stringify(secs));
+  check('节:头、开头、每个 ##,围栏里的不算', secs.map((x) => x.title + '@' + x.line).join(' ') === '头@1 开头@5 数学这一科@7' && secs[1].reader === '老师的系统提示', JSON.stringify(secs));
 
   const { root } = await initWorkspace({ slug: 'ming', name: '小明' });
   const ctx = createContext(loadWorkspace(root));

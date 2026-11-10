@@ -6,7 +6,7 @@
 import { z } from 'zod';
 import { commandsReference } from '../cli/usage.ts';
 import { POLICY_DEFAULTS, PolicySchema, TutorSchema } from '../../schema/config.ts';
-import { AGENT_FRONTMATTER_KEYS } from '../../runtime/agent-file.ts';
+import { AGENT_FRONTMATTER_KEYS, LEGACY_AGENT_KEYS } from '../../runtime/agent-file.ts';
 
 export const TUNE_SKILL = 'cotutor-tune';
 
@@ -50,7 +50,9 @@ export function tuneReferenceDoc(): string {
 
 ## 老师文件 agents/<name>.md
 
-frontmatter 只写应用支持的这几个键:${AGENT_FRONTMATTER_KEYS.map((k) => `\`${k}\``).join('、')}。\`name\` 必须等于文件名,也是 cotutor.json 里 tutors 的键,**不能改**。正文就是系统提示。
+frontmatter 只写这几个键:${AGENT_FRONTMATTER_KEYS.map((k) => `\`${k}\``).join('、')}。\`name\` 必须等于文件名,也是 cotutor.json 里 tutors 的键,**不能改**。\`description\` 是工作台里看到的一句介绍。正文就是系统提示。
+
+旧版文件里的 ${LEGACY_AGENT_KEYS.map((k) => `\`${k}\``).join('、')} 现在不起作用,可以删。
 
 ## cotutor.json 的 tutors.<name>(人设、开关、运行时)
 

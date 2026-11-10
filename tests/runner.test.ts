@@ -695,7 +695,7 @@ try {
     const cvJob = (cvR.json as { job: string }).job;
     const cvRun = JSON.parse(readFileSync(join(root, 'conversations', 'math-tutor', `${phDate}.${cvJob}.run.json`), 'utf8')) as { prompt: string; argv: string[] };
     const cvM = ((await day('math-tutor', phDate)).json as { index: { messages: { job: string; cards?: { card: string; text: string }[] }[] } }).index.messages.find((m) => m.job === cvJob)!;
-    check('交了画板的那条:带只读工具,包里是图的绝对路径,消息里是相对的', cvPut.status === 200 && existsSync(join(root, cvRel)) && cvR.status === 202 && toolsOf(cvRun.prompt)?.join() === 'read_file,glob,grep_search' && cvRun.prompt.includes(`画了 2 笔,图:${JSON.stringify(join(root, cvRel)).slice(1, -1)}(用 Read 看)`) && cvM.cards?.[0]?.text.endsWith(`画了 2 笔,图:${cvRel}(用 Read 看)`) === true, JSON.stringify({ put: cvPut.status, tools: toolsOf(cvRun.prompt), cards: cvM.cards, prompt: cvRun.prompt.slice(0, 600) }));
+    check('交了画板的那条:带只读工具,包里是图的绝对路径,消息里是相对的', cvPut.status === 200 && existsSync(join(root, cvRel)) && cvR.status === 202 && toolsOf(cvRun.prompt)?.join() === 'read_file,glob,grep_search' && cvRun.prompt.includes(`画了 2 笔,图:${JSON.stringify(join(root, cvRel)).slice(1, -1)}(用 read_file 看)`) && cvM.cards?.[0]?.text.endsWith(`画了 2 笔,图:${cvRel}(用 read_file 看)`) === true, JSON.stringify({ put: cvPut.status, tools: toolsOf(cvRun.prompt), cards: cvM.cards, prompt: cvRun.prompt.slice(0, 600) }));
   }
   await route('PUT', rateUrl(phJ.thread), ctx, { rating: 4 });
   const phBk = await route('POST', `/api/conversations/math-tutor/${phDate}/bookkeep`, ctx, { threads: [phJ.thread] });

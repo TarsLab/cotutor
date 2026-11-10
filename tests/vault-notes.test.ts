@@ -67,7 +67,7 @@ check('hash:稳定、8 位、内容变就变', textHash('a') === textHash('a') &
   const exact = clipNote('aaaa\nbb\n', 3, 'tail');
   check('clipNote tail:切点正好在行首不再丢一行', exact.text.endsWith('\nbb\n'), exact.text);
   const head = clipNote(mem, 10, 'head');
-  check('clipNote head:留开头(档案、入口文件)', head.cut && head.text.startsWith('---\ncotu') && head.text.endsWith('后面截掉了,要看全文自己 Read)'));
+  check('clipNote head:留开头(档案、入口文件)', head.cut && head.text.startsWith('---\ncotu') && head.text.endsWith('后面截掉了,要看全文自己用 read_file 读)'));
 }
 {
   check('parseMemoryOp:缺省新增、改(全角半角冒号、→ 与 ->)、删', JSON.stringify([parseMemoryOp('凑十他懂'), parseMemoryOp('改:还没学竖式 → 会竖式了'), parseMemoryOp('改: a b -> c'), parseMemoryOp('删:别出选择题')]) === JSON.stringify([{ op: 'add', text: '凑十他懂' }, { op: 'change', from: '还没学竖式', to: '会竖式了' }, { op: 'change', from: 'a b', to: 'c' }, { op: 'delete', from: '别出选择题' }]));

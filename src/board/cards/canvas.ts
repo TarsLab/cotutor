@@ -3,7 +3,7 @@
  * captures/… 或别的 workspace 里的图片,R5:在自己的作业照片上圈错题、写答案)、空白 + 题目;
  * 舞台是舞台包里的 excalidraw 编辑器(底层锁定,孩子的笔打 customData.layer = 'ink');「给老师看」→ 导出 png 存 .cards/<n>.png,
  * 状态存 ink 元素;清空前那一版存一张图(cleared);describe 给笔数、各颜色几笔、画了多久、清空过几次与图的路径,
- * 老师 Read 看图(进上下文包时 runner 换成绝对路径、这轮带只读工具;看不了图就靠笔数)。
+ * 老师用 read_file 看图(进上下文包时 runner 换成绝对路径、这轮带只读工具;看不了图就靠笔数)。
  */
 import { z } from 'zod';
 import { BUNDLE_ID_RE, bodyLines, type CardKind } from './kind.ts';
@@ -31,7 +31,7 @@ export const CanvasStateSchema = z.object({
 });
 export type CanvasState = z.infer<typeof CanvasStateSchema>;
 
-/** 「画了 103 笔(黑 12、红 40、蓝 51),画了约 7 分钟,清空重画过 4 次,清掉的那几版:…(用 Read 看)」;图另写 */
+/** 「画了 103 笔(黑 12、红 40、蓝 51),画了约 7 分钟,清空重画过 4 次,清掉的那几版:…(用 read_file 看)」;图另写 */
 export function canvasInkText(s: Pick<CanvasState, 'ink' | 'cleared'>): string {
   const sum = canvasSummary(canvasStrokes(s.ink));
   const cleared = s.cleared ?? [];
@@ -43,7 +43,7 @@ export function canvasInkText(s: Pick<CanvasState, 'ink' | 'cleared'>): string {
   if (starts.length && end !== null) parts.push(`画了${canvasMinutesText(end - Math.min(...starts))}`);
   if (cleared.length) {
     const imgs = cleared.flatMap((c) => (c.image ? [c.image] : []));
-    parts.push(`清空重画过 ${cleared.length} 次${imgs.length ? `,清掉的那几版:${imgs.join('、')}(用 Read 看)` : ''}`);
+    parts.push(`清空重画过 ${cleared.length} 次${imgs.length ? `,清掉的那几版:${imgs.join('、')}(用 read_file 看)` : ''}`);
   }
   return parts.join(',');
 }
@@ -77,6 +77,6 @@ export const canvas: CardKind<CanvasProps, CanvasState> = {
   describe(_p, s) {
     const ink = canvasInkText(s);
     if (ink === '还没画') return ink;
-    return `${ink}${s.image ? `,图:${s.image}(用 Read 看)` : ''}`;
+    return `${ink}${s.image ? `,图:${s.image}(用 read_file 看)` : ''}`;
   },
 };

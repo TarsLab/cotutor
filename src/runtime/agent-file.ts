@@ -1,10 +1,16 @@
 /**
  * 老师文件(agents/<name>.md):YAML frontmatter + 正文即系统提示。
- * 这里只认平铺的 `key: value` frontmatter(name / description / maxTurns / permissionMode / memory,当初两个 CLI 的公共子集,应用只读 name);
+ * 这里只认平铺的 `key: value` frontmatter;应用读 name(老师键)与 description(工作台、加老师时的一句介绍)。
  * 正文是系统提示的前半(后面接板书写法)。
  */
 /** 老师文件 frontmatter 只写这几个键(人设 / 政策 / 开关在 cotutor.json);技能 cotutor-tune 的字段表从这里取 */
-export const AGENT_FRONTMATTER_KEYS = ['name', 'description', 'maxTurns', 'permissionMode', 'memory'] as const;
+export const AGENT_FRONTMATTER_KEYS = ['name', 'description'] as const;
+
+/**
+ * 起 CLI 那时(2026-11-02 以前)给 Claude Code / Qwen Code 的键:轮数上限、权限、记忆。脑改成应用直连百炼以后谁也不读,
+ * 旧文件里留着不碍事,检查时提醒一句可以删
+ */
+export const LEGACY_AGENT_KEYS = ['maxTurns', 'permissionMode', 'memory'] as const;
 
 export interface AgentFile {
   frontmatter: Record<string, string>;
@@ -38,7 +44,7 @@ const CONFIG_KEYS = ['display', 'avatar', 'voice', 'enabled', 'hidden', 'policy'
 
 /**
  * 老师文件的检查(工作台边改边查):frontmatter 要在、name 要是老师键(与 cotutor.json 的老师键一致);
- * 正文不能空(正文就是系统提示);两家 CLI 公共子集外的键提醒一句。和 parseAgentFile 同一套认法
+ * 正文不能空(正文就是系统提示);旧版的键、不认的键提醒一句。和 parseAgentFile 同一套认法
  */
 export function lintAgentFile(text: string, name: string): AgentFileIssue[] {
   const lines = text.split('\n');
@@ -55,7 +61,8 @@ export function lintAgentFile(text: string, name: string): AgentFileIssue[] {
     if (!m) continue;
     if (m[1] === 'name') nameLine = i + 1;
     else if (CONFIG_KEYS.includes(m[1])) out.push({ level: 'note', line: i + 1, text: `${m[1]} 在 cotutor.json 里设(老师团页),写在这里不生效` });
-    else if (!(AGENT_FRONTMATTER_KEYS as readonly string[]).includes(m[1])) out.push({ level: 'note', line: i + 1, text: `${m[1]} 不是两家 CLI 都认的键(只写 ${AGENT_FRONTMATTER_KEYS.join(' / ')})` });
+    else if ((LEGACY_AGENT_KEYS as readonly string[]).includes(m[1])) out.push({ level: 'note', line: i + 1, text: `${m[1]} 是旧版的键,现在不起作用,可以删掉` });
+    else if (!(AGENT_FRONTMATTER_KEYS as readonly string[]).includes(m[1])) out.push({ level: 'note', line: i + 1, text: `${m[1]} 应用不认(只写 ${AGENT_FRONTMATTER_KEYS.join(' / ')})` });
   }
   const fm = parseAgentFile(text).frontmatter;
   if (!nameLine) out.push({ level: 'fix', line: 1, text: `frontmatter 里要有 name: ${name}(老师键靠它对上)` });

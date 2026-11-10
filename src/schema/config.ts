@@ -1,7 +1,6 @@
 /**
- * cotutor.json:每个 workspace 一份,一孩一 workspace。承接 drawtell.json 的做法——
- * `paths` 角色映射 + `runtimes` 的 {run, resume} 命令模板——再加老师表与政策。
- * 字段归属铁律:老师的 .md 文件里只有 name / description / maxTurns / permissionMode + 正文;
+ * cotutor.json:每个 workspace 一份,一孩一 workspace。`paths` 角色映射 + `runtimes`(用哪个模型)+ 老师表与政策。
+ * 字段归属铁律:老师的 .md 文件里只有 name / description + 正文(src/runtime/agent-file.ts);
  * 人设(display / avatar / voice)、政策、开关全在这里。
  */
 import { z } from 'zod';
@@ -19,25 +18,25 @@ export const PolicySchema = z.object({
     entryChars: z.number().int().positive().describe('档案与这位老师的入口文件(vault 里 cotutor: subject 那篇)原文各最多带多少字;超出截断并在上下文包里注明'),
   }),
   /**
-   * 老师动笔前想多久(2026-09-20):由 Qwen 适配器转成思考量配置。孩子在等第一个字:9 月 18–19 日真跑,输出 token 的 60–95% 是思考,
+   * 老师动笔前想多久(2026-09-20):脑把它换成思考开关与思考量(src/brain/api.ts 的 thinkingOf、effortOf)。孩子在等第一个字:9 月 18–19 日真跑,输出 token 的 60–95% 是思考,
    * 用工具的轮次首拍就绪 38–50 秒;low 把思考从 1000–1900 token 压到几十、来回从 5–6 个变 2 个,首拍 11–16 秒。
    * 不用 MAX_THINKING_TOKENS=0:同日真跑,思考归零后老师把盘算写进了讲稿(会念给孩子听)、字源开始编
    */
-  effort: z.enum(['low', 'medium', 'high']).describe('老师动笔前想多久:low = 想得少、开口快(缺省,孩子等 10–15 秒);medium = 多想一会儿(算题的老师);high = 最慢最细。填进运行时模板的 {effort};模板里没有 {effort} 的运行时不受影响'),
+  effort: z.enum(['low', 'medium', 'high']).describe('老师动笔前想多久:low = 不想、开口快(缺省,孩子等 10–15 秒);medium = 想一点(算题的老师);high = 不限,最慢最细。带工具的那轮至少想一点'),
   /**
-   * 孩子的话,老师带不带工具(2026-10-04):填进运行时模板的 {tools}。ray 9 月的真实对话,用了工具的轮首拍就绪中位数 31.7 秒(24 轮),没用的 6.8 秒(37 轮);
+   * 孩子的话,老师带不带工具(2026-10-04)。ray 9 月的真实对话,用了工具的轮首拍就绪中位数 31.7 秒(24 轮),没用的 6.8 秒(37 轮);
    * 孩子最喜欢的是回得快的那位老师。off 时要用的东西由应用放进上下文包
    */
   tools: z.enum(['off', 'on']).describe('孩子说的话,老师带不带工具:off = 不带,只凭上下文包答,开口快(缺省);on = 带只读工具(查教材、读 vault,慢)。带照片的那条、记账,总是带只读工具(read_file / glob / grep_search)'),
   /** 板书开关:auto = 老师判断要不要出卡(缺省);off = 只说话不出卡 */
   board: z.enum(['auto', 'off']).describe('板书:auto = 讲题讲概念时老师出卡(缺省);off = 只说话不出卡'),
   /**
-   * 断流看门狗(2026-09-21):老师进程多久一个字节都不吐(工具在跑时不算)就当 API 流断了,杀掉、resume 同一个会话接着写。
-   * CLI 自己的断流重试可能要等很久,9 月 21 日真跑连断两次,「讲个故事」一轮等了 6 分钟,模型真干活不到 10 秒
+   * 断流看门狗(2026-09-21):脑的流多久没有一块到就停,这轮记没成(src/brain/api.ts)。不接着跑:重发会把念过的再念一遍。
+   * 9 月 21 日真跑连断两次,「讲个故事」一轮等了 6 分钟,模型真干活不到 10 秒。
+   * 以前还有 retries(断了接着跑几次),起 CLI 那时用;旧 cotutor.json 里写着的读进来就丢掉
    */
   stall: z.object({
-    ms: z.number().int().nonnegative().describe('老师进程多少毫秒没有任何输出就当断流(缺省 30000;工具在跑时不算;0 = 不看,交给 CLI 自己约 180 秒的重试)'),
-    retries: z.number().int().nonnegative().describe('一轮里断流后最多接着跑几次(缺省 2);用完还断,这轮按出错收尾'),
+    ms: z.number().int().nonnegative().describe('老师那头多少毫秒没有动静就停,这轮记没成(缺省 30000;0 = 不看)'),
   }),
 });
 export type Policy = z.infer<typeof PolicySchema>;
@@ -49,7 +48,7 @@ export const PolicyPatchSchema = z.object({
   effort: PolicySchema.shape.effort.optional(),
   tools: PolicySchema.shape.tools.optional(),
   board: PolicySchema.shape.board.optional(),
-  stall: z.object({ ms: z.number().int().nonnegative().optional(), retries: z.number().int().nonnegative().optional() }).optional(),
+  stall: z.object({ ms: z.number().int().nonnegative().optional() }).optional(),
 });
 export type PolicyPatch = z.infer<typeof PolicyPatchSchema>;
 
@@ -60,7 +59,7 @@ export const POLICY_DEFAULTS: Policy = {
   effort: 'low',
   tools: 'off',
   board: 'auto',
-  stall: { ms: 30000, retries: 2 },
+  stall: { ms: 30000 },
 };
 
 /** 板书能用的卡(注册表顺序;tests/cards.test.ts 断言与 src/board/cards 的 kindsFor('board') 一致,这里不 import 卡,免得契约拖进卡的依赖) */
@@ -96,7 +95,7 @@ export const TutorSchema = z.object({
   /** 学科色:头像的环、牌的边、新话题气泡(白字压在上面)、听写页的按钮;不写 = 自动(src/ui/shared/tutor-color.ts) */
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/, '要 #rrggbb').optional().describe('学科色 #rrggbb:头像的环、牌的边、新话题气泡(白字压在上面,要够深,doctor 会查)、听写页的按钮;不写 = 语文粉、数学蓝、英语绿,其余按先后自动分、不撞色'),
   /** 卡的配音音色 id(src/media/tts-voices.ts);没有 = 卡不配音 */
-  voice: z.string().optional().describe('卡的配音用的音色 id(百炼 Qwen-Audio-TTS,如 qwen-audio-3.0-tts-plus-longcanzhuyue;工作台音色页「卡的配音」听着挑;点读、单词卡、听写念词的声音);不配这些卡就没有声音。老师开口的嘴在 live.voices'),
+  voice: z.string().optional().describe('卡的配音用的音色 id(百炼 Qwen-Audio-TTS,如 qwen-audio-3.0-tts-plus-longcanzhuyue;家长端首页「样子与声音」里挑;点读、单词卡、听写念词的声音)。不写 = 语文、数学、英语老师用出厂的那个,别的老师没有配音。老师开口的嘴在 live.voices'),
   enabled: z.boolean().default(true).describe('开关:false 时两端都不见'),
   /** 孩子端不露(只和系统、家长打交道的工具人) */
   hidden: z.boolean().default(false).describe('孩子端不露(只和系统、家长打交道的工具人)'),
@@ -104,7 +103,7 @@ export const TutorSchema = z.object({
   cards: z.array(z.enum(BOARD_CARD_KINDS)).optional().describe(`这位老师的板书写法里讲哪几种卡(${BOARD_CARD_KINDS.join(' / ')});不写 = 全部,text 总是带着。只裁递给老师的写法,写了清单外的卡照常显示`),
   policy: PolicyPatchSchema.optional().describe('覆盖 policyDefaults 的字段,没写的继承'),
   /** 这位老师用哪个运行时(runtimes 里的键);不配用 runtimes.default。要更大预算与时限的老师配一个自己的 */
-  runtime: z.string().optional().describe('这位老师用的运行时(runtimes 里的键;不配用 default)——预算、时限不同的老师配自己的'),
+  runtime: z.string().optional().describe('这位老师用的运行时(runtimes 里的键;不配用 default)——要换模型的老师配自己的'),
   extras: z.array(z.enum(TUTOR_EXTRAS)).optional().describe('老师卡上的常驻入口:dictation 听写(含拍照听写)、talk 口语课(要 talk.enabled);不写按学科给缺省:语文有听写,其余没有;[] = 都不要'),
   /** 三块方砖(HOME_TILES)哪块关掉:只记 false;没写 = 开着(家里有那个 activity 文件才出) */
   tiles: z.object(Object.fromEntries(HOME_TILE_IDS.map((id) => [id, z.boolean().optional()])) as Record<HomeTileId, z.ZodOptional<z.ZodBoolean>>).strict().optional().describe('老师卡上常驻的方砖:preview 预习、check 检查作业、review 复习;写 false 关掉,没写 = 开着(老师家里有那个 activity 文件才出)'),
@@ -364,7 +363,6 @@ export function resolvePolicy(config: CotutorConfig, tutor: string): Policy {
     if (p.tools !== undefined) out.tools = p.tools;
     if (p.board !== undefined) out.board = p.board;
     if (p.stall?.ms !== undefined) out.stall.ms = p.stall.ms;
-    if (p.stall?.retries !== undefined) out.stall.retries = p.stall.retries;
   }
   return out;
 }

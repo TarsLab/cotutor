@@ -84,8 +84,7 @@ text-overlap 等)由 `cotutor chalk check` 强制——机制在 cotutor 的 src
 
 ## 种子与真题参考
 
-- 本包里的完整例子:`grades/grade-2/examples/2026-10-27-pingjunfen.ts`(平均分,实物分组);
-  更早的种子场景 `dengche.ts`(时间数轴)、`zuqiu.ts`(实物图 + 辅助函数写法)、`bimoduo.ts`(比多少变体:对齐 + 虚线一一对应)
-  留在已归档的 drawtell 仓 `scenes/`
+- 完整例子:`grades/grade-2/examples/2026-10-27-pingjunfen.ts`(平均分,实物分组),旁边同名目录是烤好的课包。
+- 这个路径相对 cotutor 的包根:全局装的,包根是 `npm root -g` 打出的目录下的 `cotutor/`;从仓库跑的,就是仓库根。
 - 第一批真题跑过 12 个场景(排队点阵、线段图、凑十、破十、小棒进位、数列分行、爬楼),
   下面的经验都是从那一批里长出来的

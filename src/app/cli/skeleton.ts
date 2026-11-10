@@ -107,8 +107,6 @@ export function tutorTemplate(t: TutorTemplateInput): string {
   return `---
 name: ${t.name}
 description: ${t.description ?? `${t.display}。${what}都找它;随口问的一两句答完,要讲的在板书上一节一节讲`}
-maxTurns: 40
-permissionMode: bypassPermissions
 ---
 你是这个家的${t.display},对面是一个孩子。(在这里写这位老师的性子和讲法,一两句:比如「说话慢一点,爱打比方」。)
 

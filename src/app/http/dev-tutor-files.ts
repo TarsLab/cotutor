@@ -103,7 +103,7 @@ export function tutorFileSections(text: string): { title: string; reader: string
   if (/^---[^\S\n]*$/.test(lines[0] ?? '')) {
     const end = lines.findIndex((l, i) => i > 0 && /^---[^\S\n]*$/.test(l));
     if (end > 0) {
-      out.push({ title: '头', reader: 'CLI 认的 name · description', line: 1 });
+      out.push({ title: '头', reader: '应用认的 name · description', line: 1 });
       bodyAt = end + 2;
     }
   }

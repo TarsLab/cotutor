@@ -160,6 +160,3 @@ export function checkCommandLine(line: string): string | null {
   }
   return checkArgs(c, positionals, flags);
 }
-
-/** 旧名:顶层帮助 */
-export const USAGE = topHelp();

@@ -1,6 +1,6 @@
 /**
- * 对话与配置的文件层:索引读写(坏索引响亮报错,不静默覆盖)、日期列表、转录读取、老师正文、cotutor.json 补丁写回。
- * 纯函数在 lib/,这里只碰文件系统。
+ * 对话的文件层:索引读写(坏索引响亮报错,不静默覆盖)、日期列表、转录读取、老师正文、卡的状态、作业照片、删话题与撤回。
+ * 纯函数在 ./conversation.ts,这里只碰文件系统;cotutor.json 的补丁写回在 src/app/workspace.ts。
  */
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
@@ -284,9 +284,6 @@ export async function rateThread(ws: Workspace, tutor: string, date: string, thr
   return next;
 }
 
-// ---- vault 搬到了 src/memory/vault.ts;旧路径留转发,迁完删 ----
-export { readDiaries, readTextbooks, scanVault, undoThreadVault, writeDiary, type ThreadUndo, type Vault } from '../../memory/vault.ts';
-
 /**
  * 删掉一天里的一个话题(家长板书页清单上的「删」,2026-09-22):索引里它的消息、会话、星、记账标记都去掉,
  * 这些轮的文件(转录、run、事件、配音、卡的状态与资产)按 <日期>.<job>.* 整个删。
@@ -348,5 +345,3 @@ export async function undoVaultWrite(ws: Workspace, tutor: string, date: string,
   await writeIndex(ws, out);
   return { index: out, undo };
 }
-
-// cotutor.json 的补丁写回与热重载在 src/app/workspace.ts(读配置那边)

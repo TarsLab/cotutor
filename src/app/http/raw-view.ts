@@ -77,7 +77,7 @@ export interface RawView {
   kid: { lines: RawKidLine[]; cards: RawCard[] };
   /** 转录(工具行、子代理),与家长视图同一套折叠 */
   trace: TranscriptRow[];
-  /** 这轮用了哪些工具、读了什么(索引物化的;老轮次从 .log 现抽);kind 是工具的类别(src/brain/cli/,页面按它认「读了几个文件」,不比工具名) */
+  /** 这轮用了哪些工具、读了什么(索引物化的;老轮次从 .log 现抽);kind 是工具的类别(src/brain/types.ts 的 toolKind,页面按它认「读了几个文件」,不比工具名) */
   tools: (ToolCall & { kind: ToolKind })[];
   /** 时间线:这轮的事件(<日期>.<job>.events.jsonl;2026-09-13 之前的轮次没有 → 空)+ 甘特的段 + 控制台那种一行一条 */
   events: RunEvent[];

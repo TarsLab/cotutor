@@ -2,10 +2,10 @@
  * 26 个小写拉丁字母的笔顺(print 分写体,英美小学通行写法)。大写在 capitals.ts。
  *
  * 一个字形一条记录,strokes 顺序 = 教学笔顺;圈类字母(a c d e g o q)逆时针,
- * 拱类(h m n r)先竖后拱,点(i j)最后落。选型口径见 docs/glyphs.md。
+ * 拱类(h m n r)先竖后拱,点(i j)最后落。
  *
  * 坐标是归一化的四线三格(metrics.ts):x 高 = 1,基线 = 0,升部 -2,降部 +1。
- * 数值经 snap 逐字调过;改动请重跑 `node --experimental-strip-types tests/letters.test.ts`
+ * 数值经 snap 逐字调过;改动请重跑 `node --experimental-strip-types tests/chalk-letters.test.ts`
  * 与字母表 snap,几何断言(升降部到位、笔画连续、墨迹不越界)会挡住手滑。
  */
 

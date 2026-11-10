@@ -5,7 +5,7 @@
  * 笔顺遵教学通行序:先竖后横(E F H L T)、先左后右(A M N V W)、圈类逆时针(C G O Q S)。
  * 宽度参考 Excalifont 实测比例后规整化——手写体的字宽起伏属于骨架,不跟。
  *
- * 改动请重跑 `pnpm test` 与 `scripts/glyph-sheet.mjs --caps`。
+ * 改动请重跑 `pnpm test`(几何断言在 tests/chalk-letters.test.ts)。
  */
 
 import type { Glyph } from './types.ts';

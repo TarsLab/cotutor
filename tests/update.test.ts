@@ -151,7 +151,7 @@ await initWorkspace({ slug: 'kid', dir: wsRoot });
   check('doctor:家长关了 → 不提', (await by()) === undefined);
 }
 
-// ---- 升级步骤:命令要在 USAGE 里,README 要写全;不用 && ----
+// ---- 升级步骤:命令要在命令表里,README 要写全;不用 && ----
 {
   const { checkCommandLine } = await import('../src/app/cli/usage.ts');
   const readme = readFileSync(join(import.meta.dirname, '..', 'README.md'), 'utf8');

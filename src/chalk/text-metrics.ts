@@ -1,5 +1,5 @@
 /**
- * 机器生成(scripts/gen-text-metrics.mjs),别手改:excalidraw 手写字体里每个字的宽(字号 1),用真播放器量的。
+ * 量出来的表,别手改:excalidraw 手写字体里每个字的宽(字号 1),用真播放器量的;换字体要重量。
  * 表里没有的:CJK 统一表意文字按 CJK_EM(量了 49 个常用字取平均,最宽最窄差 0.000),其余按 FALLBACK_EM。
  */
 export const LINE_HEIGHT = 1.25;

@@ -66,9 +66,9 @@ check('effort:不认的档位过不了契约', !CotutorConfigSchema.safeParse({ 
 check('口语课页不再打电话:talk 只剩开关、读口语单的模型、聊几分钟、家长的话(老配置里通话那几项丢掉)', JSON.stringify(Object.keys(CotutorConfigSchema.parse({ ...raw, talk: { callMaxMinutes: 45, voice: 'Tina', read: { again: 1 } } }).talk).sort()) === '["enabled","listModel","minutes"]');
 // API 运行时(2026-10-29):{api, model},应用直连模型;default 可以指它;只认百炼
 {
-  const withApi = CotutorConfigSchema.safeParse({ ...raw, runtimes: { ...raw.runtimes, default: 'api', api: { api: 'bailian', model: 'qwen3.6-plus', maxSteps: 4 } } });
+  const withApi = CotutorConfigSchema.safeParse({ ...raw, runtimes: { ...raw.runtimes, default: 'api', api: { api: 'bailian', model: 'qwen3.8-flash', maxSteps: 4 } } });
   const rt = withApi.success ? withApi.data.runtimes.api : null;
-  check('API 运行时:{api, model} 过得了契约,default 能指它', withApi.success && typeof rt === 'object' && rt !== null && isApiRuntime(rt) && rt.model === 'qwen3.6-plus' && rt.maxSteps === 4, JSON.stringify(withApi.error?.issues ?? null));
+  check('API 运行时:{api, model} 过得了契约,default 能指它', withApi.success && typeof rt === 'object' && rt !== null && isApiRuntime(rt) && rt.model === 'qwen3.8-flash' && rt.maxSteps === 4, JSON.stringify(withApi.error?.issues ?? null));
   const legacy = CotutorConfigSchema.safeParse({ ...raw, runtimes: { ...raw.runtimes, qwen: { run: ['qwen', '{prompt}'], resume: ['qwen', '--resume', '{session}'], stdin: 'stream-json' } } });
   check('旧的命令行运行时照样读得进来(用不用得了归 src/brain/runtime.ts)', legacy.success && !isApiRuntime(legacy.data.runtimes.qwen as never), JSON.stringify(legacy.error?.issues ?? null));
   check('API 运行时:不认的家、没写模型过不了契约', !CotutorConfigSchema.safeParse({ ...raw, runtimes: { ...raw.runtimes, x: { api: 'openai', model: 'm' } } }).success && !CotutorConfigSchema.safeParse({ ...raw, runtimes: { ...raw.runtimes, x: { api: 'bailian' } } }).success);

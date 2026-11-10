@@ -3,7 +3,7 @@
  *
  * 场景语言 = excalidraw skeleton(契约 1),这里只声明我们消费的最小面,
  * 深路径类型脆弱,一律不 import excalidraw 内部类型。
- * 运行时校验在 src/schema/scene.ts(zod),两处结构保持对齐。
+ * 运行时校验在 ./scene-schema.ts(zod),两处结构保持对齐。
  */
 
 /**
@@ -153,5 +153,3 @@ export interface ChalkScene {
   /** 弹窗子场景;由 blocks[].subsceneId 触发 */
   subscenes?: ChalkSubscene[];
 }
-
-export type ChalkPhase = 'loading' | 'ready' | 'drawing' | 'gap' | 'done';

@@ -160,7 +160,7 @@ export type CliRuntime = z.infer<typeof CliRuntimeSchema>;
  */
 export const ApiRuntimeSchema = z.object({
   api: z.literal('bailian').describe('哪家的接口:现在只有百炼'),
-  model: z.string().min(1).describe('模型名,如 qwen3.6-plus'),
+  model: z.string().min(1).describe('模型名,如 qwen3.8-max'),
   maxSteps: z.number().int().min(1).max(20).optional().describe('一轮里模型最多来回几次(每用一次工具多一次);缺省 6'),
 });
 export type ApiRuntime = z.infer<typeof ApiRuntimeSchema>;
@@ -212,7 +212,7 @@ export const TalkSchema = z.object({
 export type TalkConfig = z.infer<typeof TalkSchema>;
 
 /**
- * 实时老师:老师用 realtime 模型开口(嘴),老师 CLI 在后面写板书(脑);讲稿不配音,交给嘴照念。
+ * 实时老师:老师用 realtime 模型开口(嘴),脑(应用直连百炼)在后面写板书;讲稿不配音,交给嘴照念。
  * 有脸的老师都走实时,没有开关;要百炼按量 key 与业务空间 id,没配孩子端打不开。
  */
 /** 嘴的缺省音色:出厂三位各一个(10-19 起 Ray 那里用着的),别的老师用 MOUTH_VOICE。不进 voices 的缺省值:voices 的键要是在的老师 */

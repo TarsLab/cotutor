@@ -14,9 +14,9 @@
 - **错误信息即修复指南**:每条报错说「哪个文件、该是什么、现在是什么、怎么修」。doctor 是它的集中体现。
 - **文件是真相,页面是视图**:cotutor.json、老师文件、账本、课程表都是文本;页面只写这些文件,不藏状态。
 - **孩子端永远没有错误与评判**:过滤在服务端做(`/api/kid/*`),不靠前端隐藏。
-- **不动用户数据**:init 幂等补缺,政策文件与家规只在缺失时写;老师文件拷进 workspace 后归家长,upgrade 不覆盖改过的。
-- **只支持 Qwen Code**:实时模型负责听说(默认 `qwen3.8-omni-flash-realtime`),脑模型通过 Qwen Code 生成讲稿与板书。Qwen 的工具、环境与命令模板集中在 `src/brain/cli/qwen.ts`;不再维护 Claude CLI。
-- 老师文件与技能仍沿用 `.claude/agents/`、`.claude/skills/` 这两个历史数据目录,由应用读取并传给 Qwen,不依赖 Claude CLI。
+- **不动用户数据**:init 幂等补缺,政策文件与家规只在缺失时写;老师文件拷进 workspace 后归家长,`cotutor refresh` 不覆盖改过的。
+- **嘴和脑都由应用直连百炼**:实时模型负责听说(默认 `qwen3.8-omni-flash-realtime`),脑模型(默认 `qwen3.8-max`)生成讲稿与板书。脑的请求与只读工具在 `src/brain/`(`api.ts`、`api-tools.ts`);2026-11-02 起不再起命令行(Qwen Code、Claude CLI),旧配置只读得进来、用不了。
+- 老师文件在 workspace 的 `agents/<老师>.md`,技能在 `.agents/skills/`(`.claude/skills` 是链到它的,给 Claude Code 读);老师文件由应用读正文当系统提示。
 
 ## 提交前
 
@@ -28,7 +28,7 @@ pnpm typecheck && pnpm test && pnpm build && pnpm build:stage && pnpm smoke
 
 ## 加一位出厂老师
 
-在对应年级的 `grades/grade-<n>/agents/<name>.md` 写文件(frontmatter:name / description / maxTurns / permissionMode,正文即系统提示,只写人设与这一科的做法,照现有几位有脸的老师,写法见 `docs/写提示词.md`;公共守则在 `skills/cotutor-tutor/SKILL.md`,名字要以 `-tutor` 结尾才拿得到),`src/app/cli/skeleton.ts` 的 `TUTOR_DEFAULTS` 加人设缺省。用户侧加老师不用改仓库:`cotutor add`。
+在对应年级的 `grades/grade-<n>/agents/<name>.md` 写文件(frontmatter:name / description,正文即系统提示,只写人设与这一科的做法,照现有几位有脸的老师,写法见 `docs/写提示词.md`;公共守则在 `skills/cotutor-tutor/SKILL.md`,名字要以 `-tutor` 结尾才拿得到),`src/app/cli/skeleton.ts` 的 `TUTOR_DEFAULTS` 加人设缺省。用户侧加老师不用改仓库:`cotutor add`。
 
 ## 贡献年级教学包
 

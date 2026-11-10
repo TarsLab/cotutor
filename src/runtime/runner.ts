@@ -1,14 +1,14 @@
 /**
- * 发消息 = 拼上下文包 → 按运行时 spawn / resume → stream-json 落 conversations/<老师>/<日期>.<job>.log → 索引更新
+ * 发消息 = 拼上下文包 → 请脑(src/brain/,应用直连百炼;同一话题接着它的会话)→ 统一事件落 conversations/<老师>/<日期>.<job>.log → 索引更新
  * (最终文本 → 板书节 section + 家长尾巴 parentText + 解析提醒 warnings)。
- * 流式:stdout 经本进程落盘,同时喂 PartialReader 拼当前回复正文 → parseBoard(partial) → 内存里的 partial section
+ * 流式:脑的正文随流回报,这里拼当前回复正文 → parseBoard(partial) → 内存里的 partial section
  * (孩子端 pending 条目带着它,卡随围栏闭合逐张出现);讲稿不配音,交给实时的嘴照念。
  * 点读段、单词等卡的资产在索引写好之后后台配,孩子端点到还没好的段等它到,等不到就不出声。
- * 一老师同时只跑一条(老师还在回上一条就 409),跨天自动新开(索引按本地日期分文件,新文件没 session 就不带 --resume)。
- * 话题(2026-09-11):一天可多个,每个话题自己的会话(index.sessions[thread]);newThread / 系统消息 / 今天第一条开新话题(不 resume、不带旧卡),
- * 指定 thread 接着今天的旧话题(resume 它的会话),缺省接当前话题。
- * 埋点(2026-09-11):每轮记 timing(进程起的时刻、首卡、进程退出、配音收尾,毫秒),家长视图每轮一行。
- * 进程 cwd 是老师目录 agents/<name>/。
+ * 一老师同时只跑一条(老师还在回上一条就 409),跨天自动新开(索引按本地日期分文件,新文件没有会话就新开)。
+ * 话题(2026-09-11):一天可多个,每个话题自己的会话(index.sessions[thread]);newThread / 系统消息 / 今天第一条开新话题(不接会话、不带旧卡),
+ * 指定 thread 接着今天的旧话题(接它的会话),缺省接当前话题。
+ * 埋点(2026-09-11):每轮记 timing(这一轮起的时刻、首卡、脑回完、配音收尾,毫秒),家长视图每轮一行。
+ * 2026-11-02 以前是 spawn 命令行(Qwen Code)读 stream-json;注释里还叫「进程」的地方指的就是脑这一轮。
  */
 import { lecturePack, readLecture, storedMarks, type IncomingMark } from './lecture.ts';
 import { appendFile, mkdir, readFile } from 'node:fs/promises';
@@ -707,9 +707,9 @@ export class Runner {
     if (kidView.section) timing.beats = beatTimings(events, beatsOf(kidView.section));
     // 重新读索引再并入:跑的这段时间里别的字段(比如家长改了别的)不被旧对象盖掉
     const latest = await readIndex(ws, tutor, date);
-    // 板书写法已经递到手里(系统提示或话题第一条),老师还用工具去读它 → 预载没起作用,家长端这轮上点名(换模型 / CLI / 版本后最先坏的地方)
+    // 板书写法已经递到手里(系统提示或话题第一条),老师还用工具去读它 → 预载没起作用,家长端这轮上点名(换模型 / 版本后最先坏的地方)
     const reread = takesTutorRules(tutor) && policy.board !== 'off' ? boardGuideReads(tools) : [];
-    if (reread.length) kidView.warnings.push(`板书写法已经递给老师了,这轮它还是用工具去读了一遍(${reread.join(';')}):多一次模型来回。cotutor doctor 的 runtime.*.board 看这个运行时走的哪条递法`);
+    if (reread.length) kidView.warnings.push(`板书写法已经递给老师了,这轮它还是用工具去读了一遍(${reread.join(';')}):多一次模型来回`);
     // 清单外的卡(《卡片协议.md》「谁拿到哪些卡」):照常解析、照常显示,只在这轮记一条,家长据此调清单
     // activity 话题的卡是 activity 自己的(加 text);别的话题照老师的清单
     const jobAt = latest.messages.findIndex((m) => m.job === job);

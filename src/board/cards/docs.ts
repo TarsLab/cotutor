@@ -106,7 +106,7 @@ export function cardsIndexDoc(dir = PACKAGE_CARDS_DIR): string {
   });
   return `# 卡的种类(索引)
 
-每种卡一份协议:是什么、什么时候用 / 别用、写法、例子、反例、孩子看到什么、你会收回什么、状态的形状。讲解前只读需要的那一两张;总表在 ../SKILL.md。机器文件,init / upgrade 刷新。
+每种卡一份协议:是什么、什么时候用 / 别用、写法、例子、反例、孩子看到什么、你会收回什么、状态的形状。讲解前只读需要的那一两张;总表在 ../SKILL.md。机器文件,init / refresh 刷新。
 
 ${rows.join('\n')}
 `;

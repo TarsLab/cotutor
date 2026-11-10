@@ -21,7 +21,7 @@ export interface SceneJson {
   /** 元素分组(语义);画面的一部分,所以在 scene.json 不在 manifest */
   groups?: ChalkGroup[];
   /**
-   * build 时量好的每个元素的包围盒(场景坐标,[minX, minY, maxX, maxY]):文字按 core/text-metrics 的字宽算,
+   * build 时量好的每个元素的包围盒(场景坐标,[minX, minY, maxX, maxY]):文字按 ./text-metrics.ts 的字宽算,
    * 线按点、框按宽高。浏览器外的消费方(应用的服务端、检验)不用再估;播放器不读它。
    */
   bounds?: Record<string, [number, number, number, number]>;

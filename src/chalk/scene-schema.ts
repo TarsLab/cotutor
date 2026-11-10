@@ -1,6 +1,6 @@
 /**
  * 场景契约的运行时校验(zod)。
- * 类型真相在 src/player/types.ts,本 schema 与之对齐,文件底部用赋值断言在编译期锁住。
+ * 类型真相在 ./types.ts,本 schema 与之对齐,文件底部用赋值断言在编译期锁住。
  * 校验错误面向 agent:每条都要能指出改哪里(README「Design principles」)。
  */
 
@@ -17,9 +17,6 @@ export const KNOWN_ELEMENT_TYPES = [
   'text',
   'freedraw',
 ] as const;
-
-/** 笔顺里的动作:不画东西,改画面上已经有的(ChalkErase、ChalkBoard) */
-export const ACTION_TYPES = ['erase', 'board'] as const;
 
 /** 背景图:画板 = 图片,场景坐标即图片像素 */
 export const backgroundSchema = z.strictObject({

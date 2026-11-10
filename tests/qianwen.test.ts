@@ -34,7 +34,7 @@ check('环境变量、qwen、voxtell 的配置都不看', k4.plan === null && k4
 // 老师的脑(兼容接口):Token Plan 有这个模型就走它;按量知道业务空间 id 走它的域名,不知道走公网域名
 const cl1 = compatibleLine('qwen3.8-max', { HOME: home });
 check('脑:Token Plan 有的模型 → token-plan 的端点与 key', cl1?.plan === true && cl1.baseURL === `https://${TOKEN_PLAN_HOST}/compatible-mode/v1` && cl1.key === 'sk-sp-a', JSON.stringify(cl1));
-const cl2 = compatibleLine('qwen3.6-plus', { HOME: home });
+const cl2 = compatibleLine('qwen3.8-omni-flash', { HOME: home });
 check('脑:Token Plan 没有的模型 → 按量,业务空间的域名', cl2?.plan === false && cl2.baseURL === 'https://llm-x.cn-beijing.maas.aliyuncs.com/compatible-mode/v1' && cl2.key === 'sk-ws-b', JSON.stringify(cl2));
 const cl3 = compatibleLine('qwen3.8-max', { HOME: keysHome({ payg: 'sk-ws-b' }) });
 check('脑:只有按量 key、没有业务空间 id → 公网域名', cl3?.plan === false && cl3.baseURL === `https://${DASHSCOPE_HOST}/compatible-mode/v1`, JSON.stringify(cl3));

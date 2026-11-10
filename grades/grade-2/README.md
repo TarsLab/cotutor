@@ -4,7 +4,7 @@
 
 普通聊天使用 `agents/<老师>.md`;activity 使用自己完整的「老师怎么带」,不继承老师正文。共同守则和板书协议仍由应用提供。
 
-安装: `cotutor init ming --grade 2`。文件拷进 workspace 后属于家长;upgrade 只换未修改的。老师 ID 与现有 activity 名称保持稳定,看图说话的按钮可显示为「看图写话」。
+安装: `cotutor init ming --grade 2`。文件拷进 workspace 后属于家长;`cotutor refresh` 只换未修改的。老师 ID 与现有 activity 名称保持稳定,看图说话的按钮可显示为「看图写话」。
 
 三科提供预习、检查作业、复习(孩子端老师牌上常驻三块方砖);语文另有看图说话、写话、听写与表达活动;英语另有口语课、听写;小课堂继续使用提前做好的课包,看完再问。典型题型的完整示例见 `examples/数学平均分.md`。
 

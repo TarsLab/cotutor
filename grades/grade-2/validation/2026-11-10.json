@@ -1,0 +1,5365 @@
+{
+ "date": "2026-11-10",
+ "note": "合成孩子,不是实际儿童教学效果测量。source_sha256 是这次验证结束时仓里的出厂文件;full-flow 与 repeat-before-fix 里的你说我画、看图说话跑的是修正前的版本(当天改了各一两句),其余 activity 的文件从跑到记录没有动过。没过的轮次照实保留。",
+ "runtime": {
+  "chinese": "api: qwen3.8-max / low",
+  "math": "api: qwen3.8-max / medium",
+  "english": "api: qwen3.8-max / medium",
+  "kid": "qwen3.8-flash",
+  "painter": "eval 里是假的,不画图"
+ },
+ "tokens": {
+  "teacher_in": 3331857,
+  "teacher_out": 39618,
+  "note": "老师这一头各轮合计,模拟孩子另算"
+ },
+ "source_sha256": {
+  "agents/chinese-tutor.md": "b71f892a2b3094f11ba24901d3b0f2c3e670fcc0edcd7a88ec8478b9d24f46ff",
+  "agents/chinese-tutor/activities/你说我画.md": "65e3a0a2008ddbe3afde7cec03fcafe8111e6d2ff3e11fdfd81cf4beedc94214",
+  "agents/chinese-tutor/activities/你说我画.例子.md": "84d85d4f75c282eac097ef1aeb8b116086ca1dd2cd1f1e3893a0c4a70aaedc03",
+  "agents/chinese-tutor/activities/写话.md": "8a94b0c024f104ce8be8d9589c212016ab7a2d63dcc45f23368babdb15cd2656",
+  "agents/chinese-tutor/activities/写话.例子.md": "e217c2451d83cb5ff9ed2cc9891e8107cb5efee3db59a6bcfe89f3dec505e847",
+  "agents/chinese-tutor/activities/听写.md": "186cf1691413a86013513f3b664f04c17ca55afacd9d84fa7d0313037f4d681e",
+  "agents/chinese-tutor/activities/复习.md": "1cbf593c7db23f92f8788534b7d09a202f7c95b2655dfe85ca86385e95a110a7",
+  "agents/chinese-tutor/activities/复习.例子.md": "b222735074ba47dd4cbcff32b001927c23b85e3c3d144234588e05194a00fb3f",
+  "agents/chinese-tutor/activities/小课堂.md": "44ac13f32efcd0242a92c9f8d817d3f2bcc2ee5e548240f248f005664b1fa741",
+  "agents/chinese-tutor/activities/检查作业.md": "37178b047cf588d3fa5f9c0be50b7b5684cea779e431dd8c47d954c2ffee27f1",
+  "agents/chinese-tutor/activities/检查作业.例子.md": "26be5e19707747b76c33ddacebf8e4c10ba95c4dc2d6fe1b07640f9876eb55c3",
+  "agents/chinese-tutor/activities/看图说话.md": "ca3158f8ac3bcc82896fce6791de66949adc69d4009b8e1850f8d879bb72884a",
+  "agents/chinese-tutor/activities/看图说话.例子.md": "c024c29bed01d24844ab04aeda89ea11587efd69dd99e5f11472b5d49e496090",
+  "agents/chinese-tutor/activities/预习.md": "e27f83ceeb4809f524c7ec87e1370f3fdaea69e8701352d0fd0f1dc88fb87199",
+  "agents/chinese-tutor/activities/预习.例子.md": "9f9433d95329e245ea1f13857ee415d8b122c295e4614bdcd3effe77fff3d897",
+  "agents/english-tutor.md": "aae84b90fbd441a72618b8dc3931d3a9d513ecab4b5e91c49911707a1972d00a",
+  "agents/english-tutor/activities/口语课.md": "6e207689e874da55d8f8f7e18215157276640f308221a4d74ca45ebf37602924",
+  "agents/english-tutor/activities/口语课.例子.md": "aae9911f5c94d90e65040fe70bb78c183c2cb1d772a4fdd2144bf8f893323703",
+  "agents/english-tutor/activities/听写.md": "04ec932bf75b6e452bd99f8d863773d33ecc195c2df7171d6ee1d28650956fed",
+  "agents/english-tutor/activities/复习.md": "ead8150ff480d3ce6e39a347905489dabb407bc6c9f1cbc47084392c2024445d",
+  "agents/english-tutor/activities/复习.例子.md": "6900e6fa0aef733635ba9453b8e9cdfaad816ac86b5f0de48504d697a553ca55",
+  "agents/english-tutor/activities/小课堂.md": "3c1d8f1ac59c81816f7feb652ac2935d1d1c9fd7ae15d52e334c6d1c21310934",
+  "agents/english-tutor/activities/检查作业.md": "9513f3447a3f566a4c9c274c7660ada2e9d15fbb3c8e9d9928e82a3c9a35fd4f",
+  "agents/english-tutor/activities/检查作业.例子.md": "3d717c41cfd6b4a15f2398605228a54180457ae4ff8932474e5bd31f8f36ce69",
+  "agents/english-tutor/activities/预习.md": "51c7c8771508a9e51c2f0cd1a1616c9b7df2aec342ccf5bba5e1febde8751711",
+  "agents/english-tutor/activities/预习.例子.md": "5ef263772085a3c557a52d1d79296adaf759d06a7fac4a619cd5c5369a317bba",
+  "agents/math-tutor.md": "d2489a79272de6d746d32ca8e7908101b5a33ec2e54e25ac462bc0cc54f286be",
+  "agents/math-tutor/activities/复习.md": "311f811fd96b2bd6a18be669fa8a916727e8b86c393cca3fdce7628c0c7750b5",
+  "agents/math-tutor/activities/复习.例子.md": "a2982d5a7526b34651e1dc3d93715e0106bbdbb496a71941237da98b25fe17e5",
+  "agents/math-tutor/activities/小课堂.md": "96ab16739fdb7b8e4ffd37d6b4e541286c1da9b9a1569a37f3e915179ea5c385",
+  "agents/math-tutor/activities/小课堂.例子.md": "4f743cb06d599bb5f64f7c4c8ade1f182db044ff5643fea89006ac1389f579ad",
+  "agents/math-tutor/activities/检查作业.md": "0adbcd84cce015d926e44490a26194aa17649fd3f8b3634150ea8d2d4324aa27",
+  "agents/math-tutor/activities/检查作业.例子.md": "ff5e4fef56df9f4e4bd8f7c287f77d5a79d01b036b17d15f7d2a432dfc2b5e85",
+  "agents/math-tutor/activities/预习.md": "6a519084ecd4aa63aadbb4958b61bd49375fcc9ea78881cf54d3e438e4c65d7e",
+  "agents/math-tutor/activities/预习.例子.md": "74d71267afa7010ff9d99928e153de08ce268d708030b0d14d2a6ab51a0f23d5"
+ },
+ "phases": [
+  {
+   "phase": "full-flow",
+   "complete": true,
+   "note": "14 个带例子的 activity,每个例子 1 次。你说我画、看图说话这一批跑的是修正前的文件",
+   "results": [
+    {
+     "tutor": "math-tutor",
+     "name": "复习",
+     "pass": true,
+     "checks": [
+      {
+       "name": "缺少材料",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      },
+      {
+       "name": "给定范围后尝试并结束",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      },
+      {
+       "name": "孩子想停",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      }
+     ]
+    },
+    {
+     "tutor": "math-tutor",
+     "name": "小课堂",
+     "pass": true,
+     "checks": [
+      {
+       "name": "画了不够拿那里",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      },
+      {
+       "name": "问课里没讲的",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      },
+      {
+       "name": "看懂了就收",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      }
+     ]
+    },
+    {
+     "tutor": "math-tutor",
+     "name": "检查作业",
+     "pass": true,
+     "checks": [
+      {
+       "name": "缺少材料",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      },
+      {
+       "name": "给定范围后尝试并结束",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      },
+      {
+       "name": "孩子想停",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      }
+     ]
+    },
+    {
+     "tutor": "math-tutor",
+     "name": "预习",
+     "pass": true,
+     "checks": [
+      {
+       "name": "缺少材料",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      },
+      {
+       "name": "给定范围后尝试并结束",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      },
+      {
+       "name": "孩子想停",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      }
+     ]
+    },
+    {
+     "tutor": "chinese-tutor",
+     "name": "你说我画",
+     "pass": false,
+     "checks": [
+      {
+       "name": "顺的故事",
+       "runs": 1,
+       "passed": 0,
+       "fail": [
+        "每节末句是问句"
+       ]
+      },
+      {
+       "name": "前后对不上",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      },
+      {
+       "name": "魔法种子",
+       "runs": 1,
+       "passed": 0,
+       "fail": [
+        "每节末句是问句"
+       ]
+      },
+      {
+       "name": "催着画",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      },
+      {
+       "name": "我来出题",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      }
+     ]
+    },
+    {
+     "tutor": "chinese-tutor",
+     "name": "写话",
+     "pass": true,
+     "checks": [
+      {
+       "name": "讲一件小事",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      },
+      {
+       "name": "想停就停",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      },
+      {
+       "name": "没看到字不能判书写",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      }
+     ]
+    },
+    {
+     "tutor": "chinese-tutor",
+     "name": "复习",
+     "pass": true,
+     "checks": [
+      {
+       "name": "缺少材料",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      },
+      {
+       "name": "给定范围后尝试并结束",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      },
+      {
+       "name": "孩子想停",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      }
+     ]
+    },
+    {
+     "tutor": "chinese-tutor",
+     "name": "检查作业",
+     "pass": true,
+     "checks": [
+      {
+       "name": "缺少材料",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      },
+      {
+       "name": "给定范围后尝试并结束",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      },
+      {
+       "name": "孩子想停",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      }
+     ]
+    },
+    {
+     "tutor": "chinese-tutor",
+     "name": "看图说话",
+     "pass": false,
+     "checks": [
+      {
+       "name": "还没拍图",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      },
+      {
+       "name": "一幅图",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      },
+      {
+       "name": "四幅图一口气说",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      },
+      {
+       "name": "说不出就给两个挑",
+       "runs": 1,
+       "passed": 0,
+       "fail": [
+        "一节一问"
+       ]
+      }
+     ]
+    },
+    {
+     "tutor": "chinese-tutor",
+     "name": "预习",
+     "pass": true,
+     "checks": [
+      {
+       "name": "缺少材料",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      },
+      {
+       "name": "给定范围后尝试并结束",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      },
+      {
+       "name": "孩子想停",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      }
+     ]
+    },
+    {
+     "tutor": "english-tutor",
+     "name": "口语课",
+     "pass": true,
+     "checks": [
+      {
+       "name": "按给定词句热身",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      }
+     ]
+    },
+    {
+     "tutor": "english-tutor",
+     "name": "复习",
+     "pass": true,
+     "checks": [
+      {
+       "name": "缺少材料",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      },
+      {
+       "name": "给定范围后尝试并结束",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      },
+      {
+       "name": "孩子想停",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      }
+     ]
+    },
+    {
+     "tutor": "english-tutor",
+     "name": "检查作业",
+     "pass": true,
+     "checks": [
+      {
+       "name": "缺少材料",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      },
+      {
+       "name": "给定范围后尝试并结束",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      },
+      {
+       "name": "孩子想停",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      }
+     ]
+    },
+    {
+     "tutor": "english-tutor",
+     "name": "预习",
+     "pass": true,
+     "checks": [
+      {
+       "name": "缺少材料",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      },
+      {
+       "name": "给定范围后尝试并结束",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      },
+      {
+       "name": "孩子想停",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "phase": "lecture-pingjunfen",
+   "complete": true,
+   "note": "把 examples/平均分.例子.md 当作数学小课堂的例子文件跑,课包 2026-10-27-pingjunfen 拷进试用 workspace 的 bundles/",
+   "results": [
+    {
+     "tutor": "math-tutor",
+     "name": "小课堂(examples/平均分.例子.md)",
+     "pass": true,
+     "checks": [
+      {
+       "name": "看懂就结束",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      },
+      {
+       "name": "主动想试一题",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "phase": "repeat-before-fix",
+   "complete": true,
+   "note": "full-flow 里没过的三个例子,修正前各 3 次;通过的轮次只留检查结果",
+   "results": [
+    {
+     "tutor": "chinese-tutor",
+     "name": "你说我画",
+     "pass": false,
+     "checks": [
+      {
+       "name": "顺的故事",
+       "runs": 3,
+       "passed": 0,
+       "fail": [
+        "每节末句是问句"
+       ]
+      }
+     ]
+    },
+    {
+     "tutor": "chinese-tutor",
+     "name": "你说我画",
+     "pass": false,
+     "checks": [
+      {
+       "name": "魔法种子",
+       "runs": 3,
+       "passed": 0,
+       "fail": [
+        "每节末句是问句"
+       ]
+      }
+     ]
+    },
+    {
+     "tutor": "chinese-tutor",
+     "name": "看图说话",
+     "pass": false,
+     "checks": [
+      {
+       "name": "说不出就给两个挑",
+       "runs": 3,
+       "passed": 1,
+       "fail": [
+        "一节一问",
+        "每节末句是问句"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "phase": "repeat-after-fix",
+   "complete": true,
+   "note": "改了提示词以后,同样三个例子各 3 次;通过的轮次只留检查结果",
+   "results": [
+    {
+     "tutor": "chinese-tutor",
+     "name": "你说我画",
+     "pass": true,
+     "checks": [
+      {
+       "name": "顺的故事",
+       "runs": 3,
+       "passed": 3,
+       "fail": []
+      }
+     ]
+    },
+    {
+     "tutor": "chinese-tutor",
+     "name": "你说我画",
+     "pass": true,
+     "checks": [
+      {
+       "name": "魔法种子",
+       "runs": 3,
+       "passed": 3,
+       "fail": []
+      }
+     ]
+    },
+    {
+     "tutor": "chinese-tutor",
+     "name": "看图说话",
+     "pass": false,
+     "checks": [
+      {
+       "name": "说不出就给两个挑",
+       "runs": 3,
+       "passed": 1,
+       "fail": [
+        "一节一问"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "phase": "full-flow-after-fix",
+   "complete": true,
+   "note": "改了提示词以后,这两个 activity 的全部例子各 1 次",
+   "results": [
+    {
+     "tutor": "chinese-tutor",
+     "name": "你说我画",
+     "pass": false,
+     "checks": [
+      {
+       "name": "顺的故事",
+       "runs": 1,
+       "passed": 0,
+       "fail": [
+        "出画图卡"
+       ]
+      },
+      {
+       "name": "前后对不上",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      },
+      {
+       "name": "魔法种子",
+       "runs": 1,
+       "passed": 0,
+       "fail": [
+        "分幅没有看不见的词"
+       ]
+      },
+      {
+       "name": "催着画",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      },
+      {
+       "name": "我来出题",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      }
+     ]
+    },
+    {
+     "tutor": "chinese-tutor",
+     "name": "看图说话",
+     "pass": true,
+     "checks": [
+      {
+       "name": "还没拍图",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      },
+      {
+       "name": "一幅图",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      },
+      {
+       "name": "四幅图一口气说",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      },
+      {
+       "name": "说不出就给两个挑",
+       "runs": 1,
+       "passed": 1,
+       "fail": []
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "traces": [
+  {
+   "phase": "full-flow",
+   "tutor": "math-tutor",
+   "activity": "复习",
+   "at": "2026-11-10T06:12:34.020Z",
+   "examples": [
+    {
+     "name": "缺少材料",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "出拍给我看卡",
+         "pass": true
+        },
+        {
+         "check": "每节有讲稿",
+         "pass": true
+        },
+        {
+         "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+         "pass": true
+        },
+        {
+         "check": "不出画图卡",
+         "pass": true
+        },
+        {
+         "check": "一节一问",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "复习",
+         "said": "把今天要复习的内容拍给我看看。",
+         "cards": [
+          "photo"
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "给定范围后尝试并结束",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "一节一问",
+         "pass": true
+        },
+        {
+         "check": "每节有讲稿",
+         "pass": true
+        },
+        {
+         "check": "不出画图卡",
+         "pass": true
+        },
+        {
+         "check": "不说: 你太笨、这么简单都不会、你错了",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "复习",
+         "said": "把今天要复习的内容拍给我看看。",
+         "cards": [
+          "photo"
+         ]
+        },
+        {
+         "kid": "复习两位数加法,我学过进位,但个位满十有时忘了进一",
+         "said": "好，我们来练一练进位加法。\n先算一道：24 加 17。\n先从个位开始，4 加 7 等于多少？",
+         "cards": []
+        },
+        {
+         "kid": "十一",
+         "said": "对，4 加 7 等于 11。\n个位是 11，满十了，接下来怎么办？",
+         "cards": []
+        },
+        {
+         "kid": "进一",
+         "said": "对，个位满十，向十位进一。\n个位写 1，进上去的 1 记在十位。\n那十位怎么算？2 加 1，再加进上来的 1，等于多少？",
+         "cards": []
+        },
+        {
+         "kid": "四",
+         "said": "对，2 加 1 再加进上来的 1，等于 4。\n所以 24 加 17 等于 41，你进位没忘，做得很好。\n再来一道试试：35 加 27，个位先算，等于多少？",
+         "cards": []
+        },
+        {
+         "kid": "十二",
+         "said": "对，5 加 7 等于 12，满十了，个位写 2，向十位进一。\n十位怎么算？",
+         "cards": []
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "孩子想停",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "收尾不问",
+         "pass": true
+        },
+        {
+         "check": "每节有讲稿",
+         "pass": true
+        },
+        {
+         "check": "不出画图卡",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "复习",
+         "said": "把今天要复习的内容拍给我看看。",
+         "cards": [
+          "photo"
+         ]
+        },
+        {
+         "kid": "今天不想学了,先到这里吧",
+         "said": "好的，今天先到这里。想学的时候随时来找我。",
+         "cards": []
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "phase": "full-flow",
+   "tutor": "math-tutor",
+   "activity": "小课堂",
+   "at": "2026-11-10T06:14:32.490Z",
+   "examples": [
+    {
+     "name": "画了不够拿那里",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "放课里一段",
+         "pass": true
+        },
+        {
+         "check": "一节最多一段",
+         "pass": true
+        },
+        {
+         "check": "说到: 你画的",
+         "pass": true
+        },
+        {
+         "check": "收尾不问",
+         "pass": true
+        },
+        {
+         "check": "不说: 你错了、说错了、不对哦",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "为什么要拆开那一捆呀?",
+         "said": "你画的就是那 3 根散的。\n要拿走 8 根,可是散的只有 3 根,不够拿,所以才要拆开那一捆,从里面拿。\n3 根不够拿 8 根,就得拆捆,这就是破十法里\"破十\"的意思。",
+         "cards": [
+          "lecture"
+         ]
+        },
+        {
+         "kid": "哦，懂了。",
+         "said": "好，散的不",
+         "cards": []
+        },
+        {
+         "kid": "散的不够拿，就要拆开那一捆。",
+         "said": "对，就是这个道理。",
+         "cards": []
+        },
+        {
+         "kid": "嗯，现在我知道为什么要拆那一捆啦。",
+         "said": "记住了,散的不",
+         "cards": []
+        },
+        {
+         "kid": "散的不够拿，就要拆开那一捆。",
+         "said": "对，这就是破十法的道理。",
+         "cards": []
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "问课里没讲的",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "收尾不问",
+         "pass": true
+        },
+        {
+         "check": "一节最多一段",
+         "pass": true
+        },
+        {
+         "check": "不说: 你错了、说错了、不对哦",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "那 14 减 9 怎么算?",
+         "said": "跟刚才 13 减 8 一样的办法。\n14 分成 10 和 4，先从 10 里面拿走 9。\n10 减 9 等于几？",
+         "cards": []
+        },
+        {
+         "kid": "10减9等于1，1加4等于5，所以答案是5！",
+         "said": "对，14 减 9 等于 5，破十法用得特别好。",
+         "cards": []
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "看懂了就收",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "收尾不问",
+         "pass": true
+        },
+        {
+         "check": "不说: 用自己的话、你教教我、你错了",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "我看懂了",
+         "said": "好，破十法就是这样：先拆十，再合起来。",
+         "cards": []
+        },
+        {
+         "kid": "嗯！那我去玩啦，再见老师！",
+         "said": "去吧，玩得开心！",
+         "cards": []
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "phase": "full-flow",
+   "tutor": "math-tutor",
+   "activity": "检查作业",
+   "at": "2026-11-10T06:10:36.571Z",
+   "examples": [
+    {
+     "name": "缺少材料",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "出拍给我看卡",
+         "pass": true
+        },
+        {
+         "check": "每节有讲稿",
+         "pass": true
+        },
+        {
+         "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+         "pass": true
+        },
+        {
+         "check": "不出画图卡",
+         "pass": true
+        },
+        {
+         "check": "一节一问",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "检查作业",
+         "said": "把题目和你写好的答案拍给我看看。",
+         "cards": [
+          "photo"
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "给定范围后尝试并结束",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "一节一问",
+         "pass": true
+        },
+        {
+         "check": "每节有讲稿",
+         "pass": true
+        },
+        {
+         "check": "不出画图卡",
+         "pass": true
+        },
+        {
+         "check": "不说: 你太笨、这么简单都不会、你错了",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "检查作业",
+         "said": "把题目和你写好的答案拍给我看看。",
+         "cards": [
+          "photo"
+         ]
+        },
+        {
+         "kid": "题目是 23 加 18,我写了 31,怎么算的我记不清了",
+         "said": "我们先看个位。\n3 加 8，你数一数等于多少？",
+         "cards": []
+        },
+        {
+         "kid": "11",
+         "said": "对，3 加 8 等于 11。\n个位满十了，要往十位进 1。\n十位上 2 加 1，再加上进上来的 1，等于几？",
+         "cards": []
+        },
+        {
+         "kid": "4",
+         "said": "对，十位是 4。\n个位写 1，十位写 4，合起来就是 41。\n你原来写的是 31，差在十位少加了进上来的那个 1。\n把答案改成 41 吧。",
+         "cards": []
+        },
+        {
+         "kid": "哦，原来是这样。老师，今天先到这里吧。",
+         "said": "好的，进位的时候记得十位多加 1，下次算完可以用减法验算一下。",
+         "cards": []
+        },
+        {
+         "kid": "嗯，我记住了。",
+         "said": "下次见！",
+         "cards": []
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "孩子想停",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "收尾不问",
+         "pass": true
+        },
+        {
+         "check": "每节有讲稿",
+         "pass": true
+        },
+        {
+         "check": "不出画图卡",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "检查作业",
+         "said": "把题目和你写好的答案拍给我看看。",
+         "cards": [
+          "photo"
+         ]
+        },
+        {
+         "kid": "今天不想学了,先到这里吧",
+         "said": "好，今天就到这里，下次再一起看。",
+         "cards": []
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "phase": "full-flow",
+   "tutor": "math-tutor",
+   "activity": "预习",
+   "at": "2026-11-10T06:11:29.532Z",
+   "examples": [
+    {
+     "name": "缺少材料",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "出拍给我看卡",
+         "pass": true
+        },
+        {
+         "check": "每节有讲稿",
+         "pass": true
+        },
+        {
+         "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+         "pass": true
+        },
+        {
+         "check": "不出画图卡",
+         "pass": true
+        },
+        {
+         "check": "一节一问",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "预习",
+         "said": "把今天要预习的那一页拍给我看看。",
+         "cards": [
+          "photo"
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "给定范围后尝试并结束",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "一节一问",
+         "pass": true
+        },
+        {
+         "check": "每节有讲稿",
+         "pass": true
+        },
+        {
+         "check": "不出画图卡",
+         "pass": true
+        },
+        {
+         "check": "不说: 你太笨、这么简单都不会、你错了、余数、7 颗、7颗、七颗",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "预习",
+         "said": "把今天要预习的那一页拍给我看看。",
+         "cards": [
+          "photo"
+         ]
+        },
+        {
+         "kid": "明天学平均分,我还没学除法,我能数到十",
+         "said": "我们先用小棒摆一摆。\n把 6 根小棒分给两只小熊，两边要一样多。\n你想先怎么摆？",
+         "cards": []
+        },
+        {
+         "kid": "左边放三根，右边也放三根",
+         "said": "对，左边三根右边三根，两边一样多。\n这样每份一样多的分法，就叫平均分。\n明天课上要学的就是这个。",
+         "cards": []
+        },
+        {
+         "kid": "哦，原来平均分就是两边一样多呀。",
+         "said": "对，每份分得一样多，就是平均分。\n明天课上会碰到更多分法，到时候再试。",
+         "cards": []
+        },
+        {
+         "kid": "今天先到这里吧，我有点累了。",
+         "said": "好，今天就到这里。\n你已经知道平均分就是每份一样多，明天课上见。",
+         "cards": []
+        },
+        {
+         "kid": "老师再见",
+         "said": "再见，小验。",
+         "cards": []
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "孩子想停",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "收尾不问",
+         "pass": true
+        },
+        {
+         "check": "每节有讲稿",
+         "pass": true
+        },
+        {
+         "check": "不出画图卡",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "预习",
+         "said": "把今天要预习的那一页拍给我看看。",
+         "cards": [
+          "photo"
+         ]
+        },
+        {
+         "kid": "今天不想学了,先到这里吧",
+         "said": "好的，那今天先休息，下次想学的时候再来找我。",
+         "cards": []
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "phase": "full-flow",
+   "tutor": "chinese-tutor",
+   "activity": "你说我画",
+   "at": "2026-11-10T06:16:42.733Z",
+   "examples": [
+    {
+     "name": "顺的故事",
+     "pass": false,
+     "runs": [
+      {
+       "pass": false,
+       "error": null,
+       "checks": [
+        {
+         "check": "出画图卡",
+         "pass": true
+        },
+        {
+         "check": "画图卡前放过整段",
+         "pass": true
+        },
+        {
+         "check": "分幅至少: 2",
+         "pass": true
+        },
+        {
+         "check": "分幅没有看不见的词",
+         "pass": true
+        },
+        {
+         "check": "每节末句是问句",
+         "pass": false,
+         "why": "第 8 轮末句「你看着板上的话,把它们连起来讲一遍给画家听。」"
+        },
+        {
+         "check": "问到: 画家",
+         "pass": true
+        },
+        {
+         "check": "不说: 你没说清楚、你错了、说错了、不对哦",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "你说我画",
+         "said": "画家来了,想听一个故事。\n小验,你想讲谁的故事呀?",
+         "cards": []
+        },
+        {
+         "kid": "我想讲小熊和小猴的故事",
+         "said": "小熊和小猴的故事,画家最喜欢听了。\n画家想知道,这个故事发生在哪里,是什么时候的事呢?",
+         "cards": []
+        },
+        {
+         "kid": "春天的早上，他们在地里种西瓜。",
+         "said": "春天的早上,小熊和小猴在地里种西瓜。\n画家想知道,他们先做了什么?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "中午太阳很大，小熊提着水壶给瓜苗浇水。",
+         "said": "中午太阳很大,小熊提着水壶给瓜苗浇水。\n画家想知道,接着小猴在干什么呢?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小猴躺在树下睡大觉。",
+         "said": "小猴躺在树下睡大觉。\n画家想知道,最后怎么样了?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "到了夏天，小熊的地里结满了大西瓜。",
+         "said": "到了夏天,小熊的地里结满了大西瓜。\n画家想知道,小猴的地里长了什么,小熊和小猴心里怎么想呢?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小猴的地里只长了草。",
+         "said": "小猴的地里只长了草。\n画家想知道,看到自己的地里只长了草,小猴心里怎么想,脸上是什么样子呢?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小熊送给小猴一个西瓜，小猴低着头，脸红红的。",
+         "said": "小熊送给小猴一个西瓜,小猴低着头,脸红红的。\n画家想知道的都说清楚了。\n你看着板上的话,把它们连起来讲一遍给画家听。",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "春天的早上，小熊和小猴在地里种西瓜。中午太阳很大，小熊提着水壶给瓜苗浇水，小猴躺在树下睡大觉。到了夏天，小熊的地里结满了大西瓜，小猴的地里只长了草。小熊送给小猴一个西瓜，小猴低着头，脸红红的。",
+         "said": "你讲得真清楚,一句也没落下。\n我们来看看,这个故事可以分成几幅画。\n一共四件事,我们就分四幅画。\n画家开始画了。\n你猜,画家会怎么画出小猴脸红红的样子呢?",
+         "cards": [
+          "read",
+          "paint"
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "前后对不上",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "并排: 睡大觉 | 浇了水",
+         "pass": true
+        },
+        {
+         "check": "每节末句是问句",
+         "pass": true
+        },
+        {
+         "check": "不说: 你没说清楚、你错了、说错了、不对哦",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "你说我画",
+         "said": "画家来了，想听一个故事。\n小验，你先告诉画家，这是谁的故事？",
+         "cards": []
+        },
+        {
+         "kid": "我想讲小猴的故事",
+         "said": "小猴的故事，好。\n画家想知道，小猴在哪里、什么时候发生的事呢？",
+         "cards": []
+        },
+        {
+         "kid": "小猴一整天都在睡大觉",
+         "said": "小猴一整天都在睡大觉，你记得真清楚。\n画家想知道，小猴是在哪里睡大觉的呢？",
+         "cards": []
+        },
+        {
+         "kid": "小猴帮小熊浇了水",
+         "said": "小猴帮小熊浇了水，你记得真清楚。\n可是画家有点糊涂了。\n这两句都是你说的。\n画家画小猴，是画他睡觉，还是画他浇水呢？",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "选睡觉，小猴一整天都在睡大觉。",
+         "said": "好，就画小猴睡大觉。\n画家想知道，小猴是在哪里睡的呀？",
+         "cards": []
+        },
+        {
+         "kid": "在树底下睡的",
+         "said": "在树底下睡大觉，画家知道了。\n这是故事的开头。\n接着发生什么事了？",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "后来小猴帮小熊浇了水",
+         "said": "后来小猴帮小熊浇了水，画家知道了。\n最后呢，还发生了什么事？",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "后来西瓜熟了，小熊很高兴。",
+         "said": "后来西瓜熟了，小熊很高兴。\n画家想知道，小熊很高兴，怎么画出来呢？",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小熊抱着大西瓜，笑得眼睛都眯起来了。",
+         "said": "小熊抱着大西瓜，笑得眼睛都眯起来了。\n画家一听就知道怎么画了。\n故事讲完了，小猴心里怎么想的呢？",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小猴想，帮朋友做事真开心呀！",
+         "said": "小猴想，帮朋友做事真开心呀。\n画家想知道，小猴觉得真开心，怎么画出来呢？",
+         "cards": [
+          "read"
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "魔法种子",
+     "pass": false,
+     "runs": [
+      {
+       "pass": false,
+       "error": null,
+       "checks": [
+        {
+         "check": "出画图卡",
+         "pass": true
+        },
+        {
+         "check": "画图卡前放过整段",
+         "pass": true
+        },
+        {
+         "check": "分幅至少: 2",
+         "pass": true
+        },
+        {
+         "check": "分幅没有看不见的词",
+         "pass": true
+        },
+        {
+         "check": "每节末句是问句",
+         "pass": false,
+         "why": "第 8 轮末句「你看着板上的话,连起来给画家讲一遍吧。」"
+        }
+       ],
+       "turns": [
+        {
+         "kid": "你说我画",
+         "said": "画家来了,想听一个故事。\n小验,你先告诉画家,这是谁的故事呀?",
+         "cards": []
+        },
+        {
+         "kid": "我要讲魔法种子",
+         "said": "魔法种子,这个名字真有意思。\n画家想知道,这是谁的故事呀?",
+         "cards": []
+        },
+        {
+         "kid": "是小兔子的故事，它种了一颗魔法种子。",
+         "said": "小兔子种了一颗魔法种子,画家记下了。\n这是一个有魔法的故事。\n画家想知道,故事开头,小兔子在哪里、什么时候种的这颗种子呢?",
+         "cards": []
+        },
+        {
+         "kid": "小兔子在院子里种的，晚上还下了一场大雨呢。",
+         "said": "晚上在院子里种的,还下了一场大雨,画家听清楚了。\n画家想知道,接着发生了什么事呢?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "第二天早上，种子长成了一棵比房子还高的胡萝卜树！",
+         "said": "第二天早上就长成了比房子还高的胡萝卜树,真是魔法呀。\n画家想知道,接着小兔子做了什么?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小兔子请好朋友们来摘胡萝卜",
+         "said": "小兔子请好朋友们来摘胡萝卜,真大方。\n画家想知道,最后结果怎么样,小兔子心里怎么想的呢?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "大家都很开心，小兔子心里美滋滋的。",
+         "said": "大家都很开心,小兔子心里美滋滋的。\n画家想知道,大家开心、小兔子美滋滋的,画家怎么画出来呢?\n比如,好朋友们在做什么动作,小兔子的脸上是什么样子?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小兔子笑得眼睛弯弯的，大家举着大胡萝卜蹦蹦跳跳。",
+         "said": "笑得眼睛弯弯的,举着大胡萝卜蹦蹦跳跳,画家一听就看见了。\n你看着板上的话,连起来给画家讲一遍吧。",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小兔子在院子里种魔法种子，晚上下了大雨，第二天长出胡萝卜树，大家蹦蹦跳跳真开心！",
+         "said": "你讲得真清楚,画家全听明白了。\n我们把这个故事分成三幅画。\n画家开始画了。\n你猜,那棵比房子还高的胡萝卜树,画家会怎么画出来呢?",
+         "cards": [
+          "read",
+          "paint"
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "催着画",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "不出画图卡",
+         "pass": true
+        },
+        {
+         "check": "每节末句是问句",
+         "pass": true
+        },
+        {
+         "check": "不说: 你没说清楚",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "你说我画",
+         "said": "画家来了,想听一个故事。\n小验,请你说说,这是谁的故事呀?",
+         "cards": []
+        },
+        {
+         "kid": "小狗",
+         "said": "小狗的故事,画家最喜欢听了。\n画家想知道,这只小狗在哪里、什么时候发生的事呢?",
+         "cards": []
+        },
+        {
+         "kid": "快画吧",
+         "said": "画家也想快点画。\n可是画家还想知道一件事。\n小狗在哪里、什么时候发生的事呢?",
+         "cards": []
+        },
+        {
+         "kid": "公园里",
+         "said": "公园里,画家记住了。\n那是什么时候呢,早上还是下午?",
+         "cards": []
+        },
+        {
+         "kid": "下午的。快画吧",
+         "said": "下午的公园里,小狗的故事,画家都记下了。\n可是画家还想知道一件事。\n小狗在公园里先做了什么呀?",
+         "cards": []
+        },
+        {
+         "kid": "玩球。快画吧",
+         "said": "小狗在公园里玩球,画家记下了。\n画家还想知道一件事。\n接着,小狗又做了什么呀?",
+         "cards": [
+          "read"
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "我来出题",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "出画图卡",
+         "pass": true
+        },
+        {
+         "check": "画图卡前放过整段",
+         "pass": true
+        },
+        {
+         "check": "分幅至少: 2",
+         "pass": true
+        },
+        {
+         "check": "问到: 怎么看",
+         "pass": true
+        },
+        {
+         "check": "画图卡带题干和词",
+         "pass": true
+        },
+        {
+         "check": "分幅没有看不见的词",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "你说我画",
+         "said": "画家来了,想听一个故事。\n这四个词是这周学的,你先挑三四个,等会儿我们把它放进画里考考看图的人。\n请你说说,这是谁的故事?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "是小熊和小猴的故事。我想用播种、睡大觉和满满这几个词。",
+         "said": "小熊和小猴的故事,你挑了播种、睡大觉和满满。\n画家想知道,故事发生在什么时候,在哪里,小熊和小猴长什么样子?",
+         "cards": []
+        },
+        {
+         "kid": "春天，小熊在田里播种，小猴在大树下睡大觉。",
+         "said": "春天,小熊在田里播种,小猴在大树下睡大觉。\n画家想知道,小熊和小猴长什么样子,穿什么衣服?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小熊胖乎乎，小猴瘦瘦的。",
+         "said": "小熊胖乎乎,小猴瘦瘦的,画家记下了。\n画家想知道,接着发生了什么事?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "夏天，小熊地里西瓜满满一地，小猴什么也没有。",
+         "said": "夏天,小熊地里西瓜满满一地,小猴什么也没有。\n画家想知道,最后结果怎么样,小熊和小猴心里怎么想?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小猴看着西瓜，心里觉得很羞愧。",
+         "said": "小猴看着西瓜,心里觉得很羞愧。\n画家想知道,「羞愧」是心里的想法,画家怎么画出来呢?\n比如小猴的脸是什么颜色,头是抬着还是低着?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "脸红红的，头低低的，不敢看小熊。",
+         "said": "脸红红的,头低低的,不敢看小熊。\n画家要知道的都清楚了。\n你看着板上的字,连起来给画家讲一遍故事。",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "春天小熊播种，小猴睡大觉。夏天西瓜满满，小猴脸红低头很羞愧。",
+         "said": "你讲得真清楚。\n我们把这个故事分成三幅画。\n你挑了播种、睡大觉和满满这三个词。\n播种落在第 1 幅,看图的人怎么看得出来小熊在播种呢?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小熊手里拿着种子，往土里撒。",
+         "said": "小熊手里拿着种子,往土里撒,看图的人一看就知道他在播种。\n睡大觉也落在第 1 幅,看图的人怎么看得出来小猴在睡大觉呢?",
+         "cards": []
+        },
+        {
+         "kid": "小猴躺在树下，闭着眼睛，肚子一起一伏的。",
+         "said": "小猴躺在树下,闭着眼睛,肚子一起一伏的,看图的人一看就知道他在睡大觉。\n满满落在第 2 幅,看图的人怎么看得出来西瓜满满一地呢?",
+         "cards": []
+        },
+        {
+         "kid": "西瓜堆得满满的，把地都盖住了。",
+         "said": "西瓜堆得满满的,把地都盖住了,看图的人一看就知道是满满一地。\n你挑了播种、睡大觉和满满,都落进画里了。\n你还要问看图的人什么呢?\n比如图上画了谁,他们在干什么,结果怎么样?",
+         "cards": []
+        },
+        {
+         "kid": "我想问他们，小猴最后为什么脸红红的呀？",
+         "said": "小猴最后为什么脸红红的呀,这个问题问得真好。\n画家开始画了。\n你猜,画家会怎么画出小猴肚子一起一伏的样子呢?",
+         "cards": [
+          "paint"
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "phase": "full-flow",
+   "tutor": "chinese-tutor",
+   "activity": "写话",
+   "at": "2026-11-10T06:10:54.079Z",
+   "examples": [
+    {
+     "name": "讲一件小事",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "一节一问",
+         "pass": true
+        },
+        {
+         "check": "放过整段",
+         "pass": true
+        },
+        {
+         "check": "不出画图卡",
+         "pass": true
+        },
+        {
+         "check": "不说: 你错了、必须写一百字",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "写话",
+         "said": "小验，今天有什么事让你想讲一讲？",
+         "cards": []
+        },
+        {
+         "kid": "今天我和妈妈去公园,看到一只猫",
+         "said": "你已经说清楚和谁去了哪里。\n那只猫正在做什么呀？",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "它在树下睡觉。",
+         "said": "你把它在做什么也说清楚了。\n这只猫是什么颜色的呀？",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "它是黄色的，毛软软的。",
+         "said": "你把猫的样子也说出来了。\n现在这几句话已经说清楚了，你连着念一遍听听看。",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "今天我和妈妈去公园看到一只黄色的猫，毛软软的，它在树下睡觉。",
+         "said": "你连起来说得真顺，把颜色也放进第一句里了。\n要写下来的话，我们就一句一句写。\n哪个字不会写，你告诉我。",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "黄”字怎么写呀",
+         "said": "黄色的黄，上面是草字头，中间一个由，下面两点一横。\n你先在纸上写一遍，写完拍给我看看。",
+         "cards": [
+          "tianzige",
+          "photo"
+         ]
+        },
+        {
+         "kid": "老师我写完了。我不想了，不想再写了。",
+         "said": "好，今天写到这里就收。\n你把去公园看到黄猫的事说得很清楚，也自己写出了黄字，做得很好。\n下次想写了再来找我。",
+         "cards": []
+        },
+        {
+         "kid": "老师，我下次还要去看那只猫。",
+         "said": "好呀，下次再去看看它。\n说不定它又在树下睡觉呢。",
+         "cards": []
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "想停就停",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "收尾不问",
+         "pass": true
+        },
+        {
+         "check": "每节有讲稿",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "写话",
+         "said": "小验，今天有什么事让你想讲一讲？",
+         "cards": []
+        },
+        {
+         "kid": "我今天不想写了",
+         "said": "好，那今天就不写了。\n想聊点别的，或者去玩都行。",
+         "cards": []
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "没看到字不能判书写",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "不说: 没有错别字、标点全对、字写得真好",
+         "pass": true
+        },
+        {
+         "check": "一节一问",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "写话",
+         "said": "小验，今天有什么事让你想讲一讲？",
+         "cards": []
+        },
+        {
+         "kid": "我已经在纸上写好了,但现在没有照片",
+         "said": "写好了真棒。\n你把纸上的话念给我听一听，我们先看看说得清不清楚。",
+         "cards": []
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "phase": "full-flow",
+   "tutor": "chinese-tutor",
+   "activity": "复习",
+   "at": "2026-11-10T06:10:24.474Z",
+   "examples": [
+    {
+     "name": "缺少材料",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "出拍给我看卡",
+         "pass": true
+        },
+        {
+         "check": "每节有讲稿",
+         "pass": true
+        },
+        {
+         "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+         "pass": true
+        },
+        {
+         "check": "不出画图卡",
+         "pass": true
+        },
+        {
+         "check": "一节一问",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "复习",
+         "said": "把今天要复习的内容拍给我看看。",
+         "cards": [
+          "photo"
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "给定范围后尝试并结束",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "一节一问",
+         "pass": true
+        },
+        {
+         "check": "每节有讲稿",
+         "pass": true
+        },
+        {
+         "check": "不出画图卡",
+         "pass": true
+        },
+        {
+         "check": "不说: 你太笨、这么简单都不会、你错了",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "复习",
+         "said": "把今天要复习的内容拍给我看看。",
+         "cards": [
+          "photo"
+         ]
+        },
+        {
+         "kid": "今天想复习学过的池和河,我常把它们弄混",
+         "said": "我们想想小鱼生活的地方。\n「池塘」的「池」,你记得它旁边是什么偏旁吗?",
+         "cards": []
+        },
+        {
+         "kid": "三点水",
+         "said": "对,都是三点水,因为它们都跟水有关。\n那它们右边不一样。\n「池塘」的「池」,右边是个什么字?",
+         "cards": [
+          "text"
+         ]
+        },
+        {
+         "kid": "也",
+         "said": "对,就是「也」。\n三点水加个「也」,就是池塘的「池」。\n那「小河」的「河」,右边是什么字?",
+         "cards": [
+          "tianzige"
+         ]
+        },
+        {
+         "kid": "可",
+         "said": "对,就是「可」。\n三点水加个「也」是池塘的「池」,小小的水坑。\n三点水加个「可」是小河的「河」,长长的水流。\n这两个字你分得很清楚。",
+         "cards": []
+        },
+        {
+         "kid": "那今天先到这里吧",
+         "said": "好,今天就复习到这里。\n「池」和「河」你分得很清楚,下次见。",
+         "cards": []
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "孩子想停",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "收尾不问",
+         "pass": true
+        },
+        {
+         "check": "每节有讲稿",
+         "pass": true
+        },
+        {
+         "check": "不出画图卡",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "复习",
+         "said": "把今天要复习的内容拍给我看看。",
+         "cards": [
+          "photo"
+         ]
+        },
+        {
+         "kid": "今天不想学了,先到这里吧",
+         "said": "好,那今天就先到这里。\n小验去休息吧。",
+         "cards": []
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "phase": "full-flow",
+   "tutor": "chinese-tutor",
+   "activity": "检查作业",
+   "at": "2026-11-10T06:09:50.042Z",
+   "examples": [
+    {
+     "name": "缺少材料",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "出拍给我看卡",
+         "pass": true
+        },
+        {
+         "check": "每节有讲稿",
+         "pass": true
+        },
+        {
+         "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+         "pass": true
+        },
+        {
+         "check": "不出画图卡",
+         "pass": true
+        },
+        {
+         "check": "一节一问",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "检查作业",
+         "said": "把题目和你写好的答案拍给我看看。",
+         "cards": [
+          "photo"
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "给定范围后尝试并结束",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "一节一问",
+         "pass": true
+        },
+        {
+         "check": "每节有讲稿",
+         "pass": true
+        },
+        {
+         "check": "不出画图卡",
+         "pass": true
+        },
+        {
+         "check": "不说: 你太笨、这么简单都不会、你错了",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "检查作业",
+         "said": "把题目和你写好的答案拍给我看看。",
+         "cards": [
+          "photo"
+         ]
+        },
+        {
+         "kid": "我写的是:小鸟在天上飞,它很开兴。帮我看看用词",
+         "said": "这句话说清楚了小鸟在哪里。\n我们看看「开兴」这个词。\n表示高兴的「开心」,后面是哪个字?",
+         "cards": []
+        },
+        {
+         "kid": "是心，我写错了。",
+         "said": "对,就是心。\n「开心」的「心」,是心里高兴的意思。\n你把「开兴」改成「开心」,这句话就写对了。",
+         "cards": [
+          "tianzige"
+         ]
+        },
+        {
+         "kid": "好的，我改好了。",
+         "said": "改好了就行,这句话写得很清楚。",
+         "cards": []
+        },
+        {
+         "kid": "今天先到这里，我不写了。",
+         "said": "好，今天就到这里。",
+         "cards": []
+        },
+        {
+         "kid": "老师再见！",
+         "said": "再见，去休息吧。",
+         "cards": []
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "孩子想停",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "收尾不问",
+         "pass": true
+        },
+        {
+         "check": "每节有讲稿",
+         "pass": true
+        },
+        {
+         "check": "不出画图卡",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "检查作业",
+         "said": "把题目和你写好的答案拍给我看看。",
+         "cards": [
+          "photo"
+         ]
+        },
+        {
+         "kid": "今天不想学了,先到这里吧",
+         "said": "好,那今天就先到这里。\n去休息吧,下次想检查作业了再来找我。",
+         "cards": []
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "phase": "full-flow",
+   "tutor": "chinese-tutor",
+   "activity": "看图说话",
+   "at": "2026-11-10T06:13:46.422Z",
+   "examples": [
+    {
+     "name": "还没拍图",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "问到: 拍",
+         "pass": true
+        },
+        {
+         "check": "出拍给我看卡",
+         "pass": true
+        },
+        {
+         "check": "不出画图卡",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "看图说话",
+         "said": "小验，今天我们来玩看图说话。\n你去拿一幅画，拍下来发给我，好吗？",
+         "cards": [
+          "photo"
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "一幅图",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "放过整段",
+         "pass": true
+        },
+        {
+         "check": "每节末句是问句",
+         "pass": true
+        },
+        {
+         "check": "一节一问",
+         "pass": true
+        },
+        {
+         "check": "问到: 谁",
+         "pass": true
+        },
+        {
+         "check": "卡上有: 先看清",
+         "pass": true
+        },
+        {
+         "check": "不说: 你错了、说错了、不对哦",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "看图说话",
+         "said": "小验,今天我们来练习看图说话。\n你找一幅图拍下来发给我,好吗?",
+         "cards": [
+          "photo"
+         ]
+        },
+        {
+         "kid": "这是我的看图说话",
+         "said": "这是一道看图说话,一幅图。\n我们一个问题一个问题来说。先看第一个:谁。\n图上都有谁呀?",
+         "cards": []
+        },
+        {
+         "kid": "一个小男孩，还有一只小白狗。",
+         "said": "一个小男孩,还有一只小白狗,你看得真仔细。\n下一个:在哪里。看看四周,有房子,地上还有水。\n他们在哪里呀?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "他们在放学路上，街边的屋檐下。",
+         "said": "在放学路上,街边的屋檐下,你说得真清楚。\n下一个:什么时候。天上在下雨,地上湿湿的。\n是早上,还是下午?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "是下午，天快黑了，还在下雨呢。",
+         "said": "是下午,天快黑了,还在下雨呢,你想得真周到。\n下一个:在干什么。看看小男孩手里拿着什么,小狗在做什么。\n他们在干什么呀?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小男孩撑着黄雨伞笑着走，小白狗淋湿了抬头看他。",
+         "said": "小男孩撑着黄雨伞笑着走,小白狗淋湿了抬头看他,你说得真生动。\n下一个:为什么。看看小男孩的伞举得高高的,自己的肩膀都湿了。\n他为什么要这样做呀?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "我想他要把伞分给小狗挡雨，小狗可高兴啦。",
+         "said": "要把伞分给小狗挡雨,小狗可高兴啦,你的心真善良。\n最后一个:怎么样。看看小男孩脸上的表情,还有小狗的样子。\n他们心里觉得怎么样呀?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小男孩笑得很开心，小狗摇着尾巴也很高兴。",
+         "said": "小男孩笑得很开心,小狗摇着尾巴也很高兴,你说得真好。\n六个问题都答完了。我们把刚才说的连成一段话,你看着读一遍。\n你看着这一段,自己连起来说一遍,好吗?",
+         "cards": [
+          "read",
+          "read"
+         ]
+        },
+        {
+         "kid": "下午天黑下雨，小男孩和小白狗在屋檐下。他撑黄伞笑着走，想把伞分给淋湿的小白狗挡雨，小狗摇尾巴可高兴啦。",
+         "said": "你说得太棒了,故事讲得又完整又温暖。\n老师送你一个顺口溜,下次看图说话也能用上。\n下回拿到一幅图,你也这样自己问问,好吗?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "好呀，下回我也自己问问！",
+         "said": "真乖,老师相信你下次一定能说得更棒。今天看图说话就到这里啦,再见!",
+         "cards": []
+        },
+        {
+         "kid": "老师再见！",
+         "said": "再见,小验!",
+         "cards": []
+        },
+        {
+         "kid": "嗯！",
+         "said": "好的,去休息吧!",
+         "cards": []
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "四幅图一口气说",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "放过整段",
+         "pass": true
+        },
+        {
+         "check": "每节末句是问句",
+         "pass": true
+        },
+        {
+         "check": "一节一问",
+         "pass": true
+        },
+        {
+         "check": "不说: 你错了、说错了、不对哦",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "看图说话",
+         "said": "小验,今天我们来练习看图说话。\n你去拿一幅图,拍下来发给我,好吗?",
+         "cards": [
+          "photo"
+         ]
+        },
+        {
+         "kid": "这是我的看图说话,有四幅",
+         "said": "这是一道看图说话,四幅图,讲的是一个故事。\n我们一个问题一个问题来说。先看第一个:谁。\n图上都有谁呀?",
+         "cards": []
+        },
+        {
+         "kid": "小猴穿黄背心，小兔子穿粉裙子，还有好多桃子挂在树上。",
+         "said": "小猴穿黄背心,小兔子穿粉裙子,还有好多桃子挂在树上。你看得真仔细,连衣服颜色都说出来了。\n下一个:在哪里。看看四周有什么,有树,有草,远处还有山。\n他们在哪里呀?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "在山坡上，桃树底下。",
+         "said": "在山坡上,桃树底下。你说得真清楚。\n下一个:什么时候。看看天是亮的,太阳照着。\n是早上,还是中午?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "哎呀老师，我刚才就说了嘛，天亮亮的太阳照着，肯定是中午呀！",
+         "said": "是呀,天亮了,太阳照着,就是中午。你自己就想到了,真棒。\n下一个:在干什么。先看第一幅图。\n小猴提着篮子,他在做什么呀?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小猴提着空篮子走过来，看着树上的桃子。",
+         "said": "小猴提着空篮子走过来,看着树上的桃子。你说得真完整。\n再看第二幅图。\n小猴爬到树上,他在做什么呀?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小猴坐在树枝上摘桃子，篮子装满了。",
+         "said": "小猴坐在树枝上摘桃子,篮子装满了。你看得真仔细。\n再看第三幅图。\n小兔子来了,她在做什么呀?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小兔子踮着脚够桃子，可是够不着。",
+         "said": "小兔子踮着脚够桃子,可是够不着。你说得真生动。\n再看第四幅图。\n小猴下来了,他在做什么呀?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小猴把大桃子送给小兔子，两个都笑了。",
+         "said": "小猴把大桃子送给小兔子,两个都笑了。你说得真好。\n下一个:为什么。看最后一幅图。\n小猴为什么要把桃子送给小兔子呀?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "因为小兔子够不着桃子，小猴想帮帮她呀！",
+         "said": "因为小兔子够不着桃子,小猴想帮帮她呀。你真是个懂事的孩子,能想到这一层。\n最后一个:怎么样。看最后一幅图。\n他们送完桃子以后,心情怎么样呀?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "他们俩都笑得可开心啦，眼睛都眯成了一条缝！",
+         "said": "他们俩都笑得可开心啦,眼睛都眯成了一条缝。你说得太生动了,老师好像也看到他们笑了。\n六个问题都问完了。我们把刚才说的连成一段话。注意哦,「什么时候」要放到最前面。\n你看着这段话,自己连起来说一遍,好吗?",
+         "cards": [
+          "read",
+          "read"
+         ]
+        },
+        {
+         "kid": "中午，小猴摘桃装满篮，小兔够不着，小猴送她大桃子，俩人都笑啦！",
+         "said": "你说得太棒了!短短几句话,把整个故事讲得又清楚又好听,还会自己总结呢。\n老师送你一个顺口溜,下次看图说话也能用上:\n下回拿到一幅图,你也这样自己问问,好吗?",
+         "cards": [
+          "read"
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "说不出就给两个挑",
+     "pass": false,
+     "runs": [
+      {
+       "pass": false,
+       "error": null,
+       "checks": [
+        {
+         "check": "问到: 还是",
+         "pass": true
+        },
+        {
+         "check": "每节末句是问句",
+         "pass": true
+        },
+        {
+         "check": "一节一问",
+         "pass": false,
+         "why": "第 7 轮问了 2 个"
+        },
+        {
+         "check": "不说: 你错了、说错了、不对哦",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "看图说话",
+         "said": "今天我们来练习看图说话。\n请你把要看的那幅图拍下来发给我,好吗?",
+         "cards": [
+          "photo"
+         ]
+        },
+        {
+         "kid": "这是我的看图说话",
+         "said": "这是一道看图说话,一幅图。\n我们一个问题一个问题来说。先看第一个:谁。\n图上都有谁呀?",
+         "cards": []
+        },
+        {
+         "kid": "一个小男孩和一只小白狗。",
+         "said": "一个小男孩,还有一只小白狗,你说得真清楚。\n下一个:在哪里。看看四周,有房子,地上还有水。\n他们在哪里呀?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "不知道",
+         "said": "没关系,我们再看看图。\n旁边有门,地上湿湿的,还有小水坑。\n是在家里,还是在外面呀?",
+         "cards": []
+        },
+        {
+         "kid": "外面",
+         "said": "对,是在外面,就在房子门口。\n下一个:什么时候。天上在下雨,小男孩还背着书包。\n是早上,还是晚上?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "不知道",
+         "said": "没关系,猜一猜也行。\n你看他背着书包,天也是亮亮的。\n是早上去上学,还是晚上回家呀?",
+         "cards": []
+        },
+        {
+         "kid": "晚上",
+         "said": "好,那就说是晚上放学回家的时候。\n下一个:在干什么。你看小男孩手里拿着什么,伞是撑在谁头顶上的?\n他在干什么呀?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "他撑着黄雨伞",
+         "said": "对,他手里撑着一把黄雨伞。\n下一个:为什么。你看,伞是歪着的,小男孩自己的头发都湿了,可是小狗身上没有水。\n他为什么要这样做呀?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "不知道",
+         "said": "没关系,我们再看看。\n雨下得很大,小狗个子矮,淋了雨会感冒的。\n他是想给谁挡雨呀?",
+         "cards": []
+        },
+        {
+         "kid": "他想给小狗挡雨",
+         "said": "对,他想给小狗挡雨,怕小狗淋湿了。\n最后一个:怎么样。你看小男孩的脸,还有小狗的尾巴。\n他们心里怎么样呀?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "不知道",
+         "said": "没关系,看看他们的表情。\n小男孩嘴巴弯弯的,小狗尾巴也在摇。\n是开心,还是难过呀?",
+         "cards": []
+        },
+        {
+         "kid": "开心",
+         "said": "对,他们都很开心。\n六个问题都问完了。我们把刚才说的连成一段话。\n你看着这一段,自己连起来说一遍,好吗?",
+         "cards": [
+          "read",
+          "read"
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "phase": "full-flow",
+   "tutor": "chinese-tutor",
+   "activity": "预习",
+   "at": "2026-11-10T06:10:08.153Z",
+   "examples": [
+    {
+     "name": "缺少材料",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "出拍给我看卡",
+         "pass": true
+        },
+        {
+         "check": "每节有讲稿",
+         "pass": true
+        },
+        {
+         "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+         "pass": true
+        },
+        {
+         "check": "不出画图卡",
+         "pass": true
+        },
+        {
+         "check": "一节一问",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "预习",
+         "said": "把今天要预习的那一页拍给我看看。",
+         "cards": [
+          "photo"
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "给定范围后尝试并结束",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "一节一问",
+         "pass": true
+        },
+        {
+         "check": "每节有讲稿",
+         "pass": true
+        },
+        {
+         "check": "不出画图卡",
+         "pass": true
+        },
+        {
+         "check": "不说: 你太笨、这么简单都不会、你错了",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "预习",
+         "said": "把今天要预习的那一页拍给我看看。",
+         "cards": [
+          "photo"
+         ]
+        },
+        {
+         "kid": "预习这一段:小蝌蚪游来游去。我不会读蝌蚪",
+         "said": "蝌蚪就是青蛙小时候的样子，黑黑的，有一条小尾巴。\n你把「小蝌蚪游来游去」读一遍，好吗？",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小蝌蚪游来游去。",
+         "said": "读得真好。\n小蝌蚪在水里游来游去，说明它正在找妈妈呢。\n这句话里，小蝌蚪在做什么？",
+         "cards": []
+        },
+        {
+         "kid": "在找妈妈",
+         "said": "对，小蝌蚪游来游去，就是在找妈妈。\n这一段我们读完了，也聊明白了。\n你有没有想带到课堂上问老师的问题？",
+         "cards": []
+        },
+        {
+         "kid": "没有。今天先到这里吧。",
+         "said": "好，今天我们先预习到这里。\n小蝌蚪的故事后面还有呢，下次想读了再来找我。",
+         "cards": []
+        },
+        {
+         "kid": "好的，老师再见。",
+         "said": "再见，小验。",
+         "cards": []
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "孩子想停",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "收尾不问",
+         "pass": true
+        },
+        {
+         "check": "每节有讲稿",
+         "pass": true
+        },
+        {
+         "check": "不出画图卡",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "预习",
+         "said": "把今天要预习的那一页拍给我看看。",
+         "cards": [
+          "photo"
+         ]
+        },
+        {
+         "kid": "今天不想学了,先到这里吧",
+         "said": "好的,那今天就先到这里。\n去休息吧,下次想预习了再来找我。",
+         "cards": []
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "phase": "full-flow",
+   "tutor": "english-tutor",
+   "activity": "口语课",
+   "at": "2026-11-10T06:09:27.755Z",
+   "examples": [
+    {
+     "name": "按给定词句热身",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "每节有讲稿",
+         "pass": true
+        },
+        {
+         "check": "说到: duck",
+         "pass": true
+        },
+        {
+         "check": "不说: Ray、一年级、发音标准",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "口语课",
+         "said": "我们先热热身!我说一个英文,你学一个,像回声。我先来:duck!\n嘎嘎嘎!小声一点,像小老鼠:duck…\n大一点,像狮子:DUCK!\n慢慢的,一个音一个音:d-u-ck\n快快的,一口气:duck!\n鸭子走路摇摇摆摆,一边摇一边说:duck!\n你先说:鸭子,英文怎么说?\n一起说:duck!\n热身好啦!老师给你打个电话,电话里我只说英文哦,听不懂就说「听不懂」。",
+         "cards": [
+          "word"
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "phase": "full-flow",
+   "tutor": "english-tutor",
+   "activity": "复习",
+   "at": "2026-11-10T06:12:19.722Z",
+   "examples": [
+    {
+     "name": "缺少材料",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "出拍给我看卡",
+         "pass": true
+        },
+        {
+         "check": "每节有讲稿",
+         "pass": true
+        },
+        {
+         "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+         "pass": true
+        },
+        {
+         "check": "不出画图卡",
+         "pass": true
+        },
+        {
+         "check": "一节一问",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "复习",
+         "said": "把今天要复习的内容拍给我看看。",
+         "cards": [
+          "photo"
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "给定范围后尝试并结束",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "一节一问",
+         "pass": true
+        },
+        {
+         "check": "每节有讲稿",
+         "pass": true
+        },
+        {
+         "check": "不出画图卡",
+         "pass": true
+        },
+        {
+         "check": "不说: 你太笨、这么简单都不会、你错了",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "复习",
+         "said": "把今天要复习的内容拍给我看看。",
+         "cards": [
+          "photo"
+         ]
+        },
+        {
+         "kid": "复习学过的 duck、bus 和 under,我记不住 under",
+         "said": "鸭子，英文怎么说？",
+         "cards": []
+        },
+        {
+         "kid": "duck",
+         "said": "对，duck，鸭子。\n那公共汽车，英文怎么说？",
+         "cards": []
+        },
+        {
+         "kid": "bus",
+         "said": "好，bus 也对。\n现在想想，鸭子在公共汽车下面，\"下面\"怎么说？你刚才说记不住这个词，我们想个办法。\nunder 就是\"在下面\"的意思。你跟我念一遍：under。",
+         "cards": []
+        },
+        {
+         "kid": "under",
+         "said": "对，under，在下面。\n我们用它说一句话。鸭子在公共汽车下面，英文是：The duck is under the bus.\n你来说一遍试试。",
+         "cards": []
+        },
+        {
+         "kid": "The duck is under the bus.",
+         "said": "说得好，三个词都用上了。\n今天 duck 和 bus 你自己就说出来了，under 跟读了一遍，还放进句子里说了。下次再试试自己说出 under。",
+         "cards": []
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "孩子想停",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "收尾不问",
+         "pass": true
+        },
+        {
+         "check": "每节有讲稿",
+         "pass": true
+        },
+        {
+         "check": "不出画图卡",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "复习",
+         "said": "把今天要复习的内容拍给我看看。",
+         "cards": [
+          "photo"
+         ]
+        },
+        {
+         "kid": "今天不想学了,先到这里吧",
+         "said": "好的，下次再复习。",
+         "cards": []
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "phase": "full-flow",
+   "tutor": "english-tutor",
+   "activity": "检查作业",
+   "at": "2026-11-10T06:10:23.473Z",
+   "examples": [
+    {
+     "name": "缺少材料",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "出拍给我看卡",
+         "pass": true
+        },
+        {
+         "check": "每节有讲稿",
+         "pass": true
+        },
+        {
+         "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+         "pass": true
+        },
+        {
+         "check": "不出画图卡",
+         "pass": true
+        },
+        {
+         "check": "一节一问",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "检查作业",
+         "said": "把题目和你写好的答案拍给我看看。",
+         "cards": [
+          "photo"
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "给定范围后尝试并结束",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "一节一问",
+         "pass": true
+        },
+        {
+         "check": "每节有讲稿",
+         "pass": true
+        },
+        {
+         "check": "不出画图卡",
+         "pass": true
+        },
+        {
+         "check": "不说: 你太笨、这么简单都不会、你错了",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "检查作业",
+         "said": "把题目和你写好的答案拍给我看看。",
+         "cards": [
+          "photo"
+         ]
+        },
+        {
+         "kid": "题目是写出苹果的英文,我纸上写的是 aple",
+         "said": "你已经写出了开头的 a 和结尾的 le。\n中间有两个 p。\n你把这个词补完整，好吗？",
+         "cards": []
+        },
+        {
+         "kid": "apple",
+         "said": "对了，两个 p 都写上了，apple 拼对了。\n这道题改好了。",
+         "cards": [
+          "word"
+         ]
+        },
+        {
+         "kid": "今天先到这里。",
+         "said": "好的，今天到这里。",
+         "cards": []
+        },
+        {
+         "kid": "老师再见",
+         "said": "再见，下次见！",
+         "cards": []
+        },
+        {
+         "kid": "老师再见",
+         "said": "再见！",
+         "cards": []
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "孩子想停",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "收尾不问",
+         "pass": true
+        },
+        {
+         "check": "每节有讲稿",
+         "pass": true
+        },
+        {
+         "check": "不出画图卡",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "检查作业",
+         "said": "把题目和你写好的答案拍给我看看。",
+         "cards": [
+          "photo"
+         ]
+        },
+        {
+         "kid": "今天不想学了,先到这里吧",
+         "said": "好的，今天先到这里。想来的时候随时找我。",
+         "cards": []
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "phase": "full-flow",
+   "tutor": "english-tutor",
+   "activity": "预习",
+   "at": "2026-11-10T06:11:21.410Z",
+   "examples": [
+    {
+     "name": "缺少材料",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "出拍给我看卡",
+         "pass": true
+        },
+        {
+         "check": "每节有讲稿",
+         "pass": true
+        },
+        {
+         "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+         "pass": true
+        },
+        {
+         "check": "不出画图卡",
+         "pass": true
+        },
+        {
+         "check": "一节一问",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "预习",
+         "said": "把今天要预习的那一页拍给我看看。",
+         "cards": [
+          "photo"
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "给定范围后尝试并结束",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "一节一问",
+         "pass": true
+        },
+        {
+         "check": "每节有讲稿",
+         "pass": true
+        },
+        {
+         "check": "不出画图卡",
+         "pass": true
+        },
+        {
+         "check": "不说: 你太笨、这么简单都不会、你错了、四个字母、4 个字母、4个字母",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "预习",
+         "said": "把今天要预习的那一页拍给我看看。",
+         "cards": [
+          "photo"
+         ]
+        },
+        {
+         "kid": "今天学 apple 和 I like apples,我不会说",
+         "said": "Apple,苹果。\n我们先说这个词:apple。\na 发「啊」,pp 发「噗」,le 发「欧」,连起来就是 apple。\n你也说一次,好吗?",
+         "cards": [
+          "word"
+         ]
+        },
+        {
+         "kid": "啊噗欧……apple",
+         "said": "好,你试着说了。\n现在我们把 apple 放到句子里。\nlike 是喜欢的意思。\nI like apples,就是我喜欢苹果。\n你跟着说一次,好吗?",
+         "cards": [
+          "word"
+         ]
+        },
+        {
+         "kid": "啊噗欧……I like apples",
+         "said": "你说了,很好。\nI like apples,是说我喜欢什么?",
+         "cards": []
+        },
+        {
+         "kid": "我喜欢苹果",
+         "said": "对,就是我喜欢苹果。\n今天预习了 apple 和 I like apples,apple 你自己试着拼了,句子也跟读了一遍,意思也说对了。",
+         "cards": []
+        },
+        {
+         "kid": "嗯，今天先到这里吧。",
+         "said": "好,今天就到这里。\napple 和 I like apples 都过了一遍,下次再练。",
+         "cards": []
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "孩子想停",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "收尾不问",
+         "pass": true
+        },
+        {
+         "check": "每节有讲稿",
+         "pass": true
+        },
+        {
+         "check": "不出画图卡",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "预习",
+         "said": "把今天要预习的那一页拍给我看看。",
+         "cards": [
+          "photo"
+         ]
+        },
+        {
+         "kid": "今天不想学了,先到这里吧",
+         "said": "好的，今天先到这里。下次想学的时候再来找我。",
+         "cards": []
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "phase": "lecture-pingjunfen",
+   "tutor": "math-tutor",
+   "activity": "小课堂(examples/平均分.例子.md)",
+   "at": "2026-11-10T06:15:09.108Z",
+   "examples": [
+    {
+     "name": "看懂就结束",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "收尾不问",
+         "pass": true
+        },
+        {
+         "check": "不出画图卡",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "我知道了,平均分就是每盘一样多,今天先到这里",
+         "said": "对，每盘一样多就是平均分。下次见。",
+         "cards": []
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "主动想试一题",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "一节一问",
+         "pass": true
+        },
+        {
+         "check": "不说: 方程、未知数",
+         "pass": true
+        },
+        {
+         "check": "不出画图卡",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "我想自己试一道平均分",
+         "said": "好,你来试一道。\n8 个草莓,放进 4 个盘子,每盘要一样多。\n你一个一个地放,每盘能放几个?",
+         "cards": []
+        },
+        {
+         "kid": "每盘放一个，再放一个，数出两个就做完啦。",
+         "said": "对,每盘 2 个,正好放完。\n你用的就是刚才课里那个办法,一个一个轮着放,放完数一数。",
+         "cards": []
+        },
+        {
+         "kid": "嗯，我数到十就会啦！",
+         "said": "好,十以内的平均分你都会了。",
+         "cards": []
+        },
+        {
+         "kid": "那我先去数数啦！",
+         "said": "去吧,数数愉快!",
+         "cards": []
+        },
+        {
+         "kid": "好呀，我去数草莓啦！",
+         "said": "好,去数吧!",
+         "cards": []
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "phase": "repeat-before-fix",
+   "tutor": "chinese-tutor",
+   "activity": "你说我画",
+   "at": "2026-11-10T07:08:38.772Z",
+   "examples": [
+    {
+     "name": "顺的故事",
+     "pass": false,
+     "runs": [
+      {
+       "pass": false,
+       "error": null,
+       "checks": [
+        {
+         "check": "出画图卡",
+         "pass": true
+        },
+        {
+         "check": "画图卡前放过整段",
+         "pass": true
+        },
+        {
+         "check": "分幅至少: 2",
+         "pass": true
+        },
+        {
+         "check": "分幅没有看不见的词",
+         "pass": true
+        },
+        {
+         "check": "每节末句是问句",
+         "pass": false,
+         "why": "第 8 轮末句「你看着板上的字,把这个故事连起来说一遍。」"
+        },
+        {
+         "check": "问到: 画家",
+         "pass": true
+        },
+        {
+         "check": "不说: 你没说清楚、你错了、说错了、不对哦",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "你说我画",
+         "said": "画家来了,想听一个故事。\n小验,请你说说,这是谁的故事?",
+         "cards": []
+        },
+        {
+         "kid": "我想讲小熊和小猴的故事",
+         "said": "小熊和小猴的故事,画家很喜欢。\n画家想知道,这个故事发生在哪里,是什么时候呢?",
+         "cards": []
+        },
+        {
+         "kid": "春天的早上，他们在地里种西瓜。",
+         "said": "春天的早上,小熊和小猴在地里种西瓜。\n画家想知道,他们先做了什么,接着做了什么,最后又做了什么呢?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "中午太阳很大，小熊给瓜苗浇水。",
+         "said": "中午太阳很大,小熊给瓜苗浇水。\n画家想知道,接着小猴在干什么呢?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小猴躺在树下睡大觉。",
+         "said": "小猴躺在树下睡大觉。\n画家想知道,最后怎么样了?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "到了夏天，小熊地里结满了大西瓜。",
+         "said": "到了夏天,小熊地里结满了大西瓜。\n画家想知道,小猴的地里长了什么呢?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小猴的地里只长了草。",
+         "said": "小猴的地里只长了草。\n画家想知道,小猴看到自己的地里只长了草,心里怎么想呢?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小熊送给他一个西瓜，小猴脸红红的。",
+         "said": "小熊送给他一个西瓜,小猴脸红红的。\n画家想知道的都说清楚了。\n你看着板上的字,把这个故事连起来说一遍。",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "春天的早上种西瓜，中午小熊浇水小猴睡觉，夏天小熊有瓜小猴长草，最后小熊送瓜给小猴。",
+         "said": "你连着说了一遍,说得真清楚。\n我们把故事分成四幅画。\n一幅画一件事,一共四幅。\n画家想知道,小熊和小猴长什么样子呢?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小熊胖胖的，小猴瘦瘦的，尾巴长长的。",
+         "said": "小熊胖胖的,小猴瘦瘦的,尾巴长长的。\n画家开始画了。\n你猜,画家会怎么画出小猴脸红红的样子呢?",
+         "cards": [
+          "paint"
+         ]
+        }
+       ]
+      },
+      {
+       "pass": false,
+       "error": null,
+       "checks": [
+        {
+         "check": "出画图卡",
+         "pass": true
+        },
+        {
+         "check": "画图卡前放过整段",
+         "pass": true
+        },
+        {
+         "check": "分幅至少: 2",
+         "pass": true
+        },
+        {
+         "check": "分幅没有看不见的词",
+         "pass": true
+        },
+        {
+         "check": "每节末句是问句",
+         "pass": false,
+         "why": "第 6 轮末句「现在请你看着板上的字,把故事连着讲一遍给画家听。」"
+        },
+        {
+         "check": "问到: 画家",
+         "pass": true
+        },
+        {
+         "check": "不说: 你没说清楚、你错了、说错了、不对哦",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "你说我画",
+         "said": "画家来了,想听一个故事。\n小验,你先告诉画家,这是谁的故事呀?",
+         "cards": []
+        },
+        {
+         "kid": "我想讲小熊和小猴的故事",
+         "said": "小熊和小猴的故事,画家很爱听。\n画家想知道,故事开头,小熊和小猴在哪里,是什么时候的事呢?",
+         "cards": []
+        },
+        {
+         "kid": "春天的早上，小熊和小猴在地里种西瓜。",
+         "said": "春天的早上,小熊和小猴在地里种西瓜。\n开头说清楚了。\n画家想知道,接着他们先做了什么,然后又做了什么?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "中午太阳很大，小熊给瓜苗浇水，小猴在树下睡大觉。",
+         "said": "中午太阳很大,小熊给瓜苗浇水,小猴在树下睡大觉。\n画家想知道,最后怎么样了?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "到了夏天，小熊的西瓜结满了，小猴的地里只长了草。",
+         "said": "到了夏天,小熊的西瓜结满了,小猴的地里只长了草。\n画家想知道,小猴看到自己的地里只长了草,心里怎么想呢?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小熊送给小猴一个西瓜，小猴低着头，脸红红的。",
+         "said": "小熊送给小猴一个西瓜,小猴低着头,脸红红的。\n画家想知道的都问清楚了。\n现在请你看着板上的字,把故事连着讲一遍给画家听。",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "春天的早上，小熊和小猴在地里种西瓜。中午太阳很大，小熊给瓜苗浇水，小猴在树下睡大觉。到了夏天，小熊的西瓜结满了，小猴的地里只长了草。小熊送给小猴一个西瓜，小猴低着头，脸红红的。",
+         "said": "讲得真清楚,一句都没落下。\n我们把故事分成四幅画,一幅画一件事。\n画家开始画了。\n你猜,画家会怎么画出小猴「脸红红的」呢?",
+         "cards": [
+          "read",
+          "paint"
+         ]
+        }
+       ]
+      },
+      {
+       "pass": false,
+       "error": null,
+       "checks": [
+        {
+         "check": "出画图卡",
+         "pass": true
+        },
+        {
+         "check": "画图卡前放过整段",
+         "pass": true
+        },
+        {
+         "check": "分幅至少: 2",
+         "pass": true
+        },
+        {
+         "check": "分幅没有看不见的词",
+         "pass": true
+        },
+        {
+         "check": "每节末句是问句",
+         "pass": false,
+         "why": "第 7 轮末句「请你看着板上的字,把这个故事连起来讲一遍。」"
+        },
+        {
+         "check": "问到: 画家",
+         "pass": true
+        },
+        {
+         "check": "不说: 你没说清楚、你错了、说错了、不对哦",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "你说我画",
+         "said": "画家来了,想听一个故事。\n小验,请你说说,这是谁的故事呀?",
+         "cards": []
+        },
+        {
+         "kid": "我想讲小熊和小猴的故事",
+         "said": "小熊和小猴的故事,真好。\n画家想知道,这个故事发生在哪里,是什么时候呀?",
+         "cards": []
+        },
+        {
+         "kid": "春天的早上，他们在地里种西瓜。",
+         "said": "春天的早上,小熊和小猴在地里种西瓜。\n画家想知道,他们先做了什么?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "中午太阳很大，小熊提着水壶给瓜苗浇水。",
+         "said": "中午太阳很大,小熊提着水壶给瓜苗浇水。\n画家想知道,接着小猴在干什么呢?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小猴躺在树下睡大觉。",
+         "said": "小猴躺在树下睡大觉。\n画家想知道,最后怎么样了?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "到了夏天，小熊地里结满大西瓜，小猴地里只长了草。",
+         "said": "到了夏天,小熊地里结满大西瓜,小猴地里只长了草。\n画家想知道,看到自己的地里只长了草,小猴心里怎么想,脸上是什么样子呢?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小熊送给我一个西瓜，我低着头，脸红红的。",
+         "said": "小熊送给小猴一个西瓜,小猴低着头,脸红红的。\n画家想知道的都听清楚了。\n请你看着板上的字,把这个故事连起来讲一遍。",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "春天的早上，小熊和小猴在地里种西瓜。中午太阳很大，小熊提着水壶给瓜苗浇水，小猴躺在树下睡大觉。到了夏天，小熊地里结满大西瓜，小猴地里只长了草。小熊送给小猴一个西瓜，小猴低着头，脸红红的。",
+         "said": "讲得真清楚,一句都没落下。\n我们把这个故事分成四幅画,一幅画一件事。\n画家想知道,小熊和小猴长什么样子,穿什么颜色的衣服呢?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小熊穿红衣服，小猴穿绿裤子。",
+         "said": "小熊穿红衣服,小猴穿绿裤子,画家记住了。\n画家开始画了。\n你猜,画家会怎么画小猴躺在地里睡觉的样子呢?",
+         "cards": [
+          "paint"
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "phase": "repeat-before-fix",
+   "tutor": "chinese-tutor",
+   "activity": "你说我画",
+   "at": "2026-11-10T07:10:43.409Z",
+   "examples": [
+    {
+     "name": "魔法种子",
+     "pass": false,
+     "runs": [
+      {
+       "pass": false,
+       "error": null,
+       "checks": [
+        {
+         "check": "出画图卡",
+         "pass": true
+        },
+        {
+         "check": "画图卡前放过整段",
+         "pass": true
+        },
+        {
+         "check": "分幅至少: 2",
+         "pass": true
+        },
+        {
+         "check": "分幅没有看不见的词",
+         "pass": true
+        },
+        {
+         "check": "每节末句是问句",
+         "pass": false,
+         "why": "第 6 轮末句「请你看着板上的字，把故事连着讲一遍给画家听。」"
+        }
+       ],
+       "turns": [
+        {
+         "kid": "你说我画",
+         "said": "画家来了，想听一个故事。\n小验，你想讲谁的故事呀？",
+         "cards": []
+        },
+        {
+         "kid": "我要讲魔法种子",
+         "said": "魔法种子，听起来真有意思。\n画家想知道，这个故事里都有谁，在哪里，什么时候发生的呢？",
+         "cards": []
+        },
+        {
+         "kid": "小兔子在院子里种魔法种子，晚上下雨啦！",
+         "said": "小兔子在院子里种魔法种子，晚上下雨啦。\n画家想知道，后来发生什么事了呢？",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "第二天早上，种子长成了比房子还高的胡萝卜树！",
+         "said": "第二天早上，种子长成了比房子还高的胡萝卜树。\n画家想知道，最后怎么样了，小兔子心里怎么想呢？",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小兔子请好朋友来摘胡萝卜，大家都特别开心！",
+         "said": "小兔子请好朋友来摘胡萝卜，大家都特别开心。\n画家想知道，大家“特别开心”，画家怎么画出来呢？",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "大家举着胡萝卜蹦蹦跳跳，笑得眼睛都弯成小月亮啦！",
+         "said": "举着胡萝卜蹦蹦跳跳，笑得眼睛都弯成小月亮，画家一听就知道怎么画了。\n现在画家要知道的都清楚了。\n请你看着板上的字，把故事连着讲一遍给画家听。",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "晚上小兔子种下魔法种子，下雨了。第二天早上长成了比房子还高的胡萝卜树！小兔子请好朋友来摘胡萝卜，大家举着胡萝卜蹦蹦跳跳，笑得眼睛都弯成小月亮啦！",
+         "said": "讲得真清楚，画家全听明白了。\n我们来分一分，看看画几幅。\n一共三件事，就分三幅。\n画家开始画了。\n你猜一猜，画家会怎么画那棵比房子还高的胡萝卜树呢？",
+         "cards": [
+          "read",
+          "paint"
+         ]
+        }
+       ]
+      },
+      {
+       "pass": false,
+       "error": null,
+       "checks": [
+        {
+         "check": "出画图卡",
+         "pass": true
+        },
+        {
+         "check": "画图卡前放过整段",
+         "pass": true
+        },
+        {
+         "check": "分幅至少: 2",
+         "pass": true
+        },
+        {
+         "check": "分幅没有看不见的词",
+         "pass": true
+        },
+        {
+         "check": "每节末句是问句",
+         "pass": false,
+         "why": "第 7 轮末句「小验,你看着这几句话,把它们连起来讲一遍给画家听。」"
+        }
+       ],
+       "turns": [
+        {
+         "kid": "你说我画",
+         "said": "画家来了,想听一个故事。\n小验,请你说说,这是谁的故事呀?",
+         "cards": []
+        },
+        {
+         "kid": "我要讲魔法种子",
+         "said": "魔法种子,这个名字真好听。\n画家想知道,这是谁的故事呀?",
+         "cards": []
+        },
+        {
+         "kid": "是小兔子的故事呀",
+         "said": "小兔子的故事,画家记下了。\n画家想知道,小兔子在哪里、什么时候遇到了魔法种子呢?",
+         "cards": []
+        },
+        {
+         "kid": "小兔子在院子里种下了魔法种子，晚上下了一场雨。",
+         "said": "小兔子在院子里种下了魔法种子,晚上下了一场雨。\n画家想知道,接着发生了什么事呢?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "第二天早上，种子长成了一棵比房子还高的胡萝卜树！",
+         "said": "第二天早上,种子长成了一棵比房子还高的胡萝卜树。\n画家想知道,最后小兔子做了什么呀?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小兔子请好朋友们来摘胡萝卜，大家都很开心！",
+         "said": "小兔子请好朋友们来摘胡萝卜,大家都很开心。\n画家想知道,大家很开心,画家怎么画出来呢?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "画好多小朋友笑着举胡萝卜，小兔子也笑得眼睛弯弯的！",
+         "said": "好多小朋友笑着举胡萝卜,小兔子也笑得眼睛弯弯的。\n画家想知道的都清楚了。\n小验,你看着这几句话,把它们连起来讲一遍给画家听。",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小兔子在院子里种下魔法种子，晚上下雨了。第二天早上长出了比房子还高的胡萝卜树！小兔子请好朋友来摘胡萝卜，大家举着胡萝卜笑得眼睛弯弯的，可开心啦！",
+         "said": "你连着讲了一遍,画家听得真清楚。\n我们来看看,这个故事可以分成几幅画呢。\n一共三件事,就分三幅画。\n画家开始画了。\n小验,你猜画家会怎么画出那棵比房子还高的胡萝卜树呢?",
+         "cards": [
+          "read",
+          "paint"
+         ]
+        }
+       ]
+      },
+      {
+       "pass": false,
+       "error": null,
+       "checks": [
+        {
+         "check": "出画图卡",
+         "pass": true
+        },
+        {
+         "check": "画图卡前放过整段",
+         "pass": true
+        },
+        {
+         "check": "分幅至少: 2",
+         "pass": true
+        },
+        {
+         "check": "分幅没有看不见的词",
+         "pass": true
+        },
+        {
+         "check": "每节末句是问句",
+         "pass": false,
+         "why": "第 8 轮末句「你看着这几句话,把它们连起来,给画家讲一遍这个故事吧。」"
+        }
+       ],
+       "turns": [
+        {
+         "kid": "你说我画",
+         "said": "画家来了,想听一个故事。\n小验,先告诉画家,这是谁的故事?",
+         "cards": []
+        },
+        {
+         "kid": "我要讲魔法种子",
+         "said": "魔法种子,画家一听就睁大了眼睛。\n那这是谁的故事呢?",
+         "cards": []
+        },
+        {
+         "kid": "是小兔子的故事",
+         "said": "是小兔子的故事,画家记下了。\n画家想知道,小兔子在哪里、什么时候,遇到了这颗魔法种子?",
+         "cards": []
+        },
+        {
+         "kid": "小兔子在院子里种下魔法种子，晚上下了一场雨。",
+         "said": "小兔子在院子里种下魔法种子,晚上下了一场雨。\n画家想知道,小兔子长什么样子?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小兔子有长长的耳朵，红红的眼睛，还有短短的尾巴。",
+         "said": "长长的耳朵,红红的眼睛,短短的尾巴,画家一听就认得出是小兔子了。\n画家想知道,接着发生了什么事?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "第二天早上，种子长成了一棵比房子还高的胡萝卜树。",
+         "said": "比房子还高的胡萝卜树,画家听了都张大了嘴巴。\n画家想知道,最后小兔子怎么样了?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小兔子请好朋友们来摘胡萝卜，大家都很开心！",
+         "said": "请好朋友们来摘胡萝卜,大家都很开心。\n画家想知道,“大家都很开心”,画家怎么画出来呢?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "大家举着大胡萝卜，笑得眼睛都弯成了小月牙！",
+         "said": "举着大胡萝卜,笑得眼睛弯成小月牙,画家一看就知道大家有多开心了。\n你看着这几句话,把它们连起来,给画家讲一遍这个故事吧。",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小兔子有长耳朵红眼睛，种下魔法种子下雨后长出比房子还高的胡萝卜树，请朋友来摘，大家举着胡萝卜笑成小月牙！",
+         "said": "你讲得真清楚,画家全听明白了。\n我们来分一分,一共画几幅。\n三件事,就分三幅,一幅画一件事。\n画家开始画了。\n你猜,那棵比房子还高的胡萝卜树,画家会怎么画出来?",
+         "cards": [
+          "read",
+          "paint"
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "phase": "repeat-before-fix",
+   "tutor": "chinese-tutor",
+   "activity": "看图说话",
+   "at": "2026-11-10T07:07:02.212Z",
+   "examples": [
+    {
+     "name": "说不出就给两个挑",
+     "pass": false,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "问到: 还是",
+         "pass": true
+        },
+        {
+         "check": "每节末句是问句",
+         "pass": true
+        },
+        {
+         "check": "一节一问",
+         "pass": true
+        },
+        {
+         "check": "不说: 你错了、说错了、不对哦",
+         "pass": true
+        }
+       ]
+      },
+      {
+       "pass": false,
+       "error": null,
+       "checks": [
+        {
+         "check": "问到: 还是",
+         "pass": true
+        },
+        {
+         "check": "每节末句是问句",
+         "pass": true
+        },
+        {
+         "check": "一节一问",
+         "pass": false,
+         "why": "第 5 轮问了 2 个"
+        },
+        {
+         "check": "不说: 你错了、说错了、不对哦",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "看图说话",
+         "said": "小验,今天我们来练习看图说话。\n你去拿一幅看图说话的图,拍下来发给我,好吗?",
+         "cards": [
+          "photo"
+         ]
+        },
+        {
+         "kid": "这是我的看图说话",
+         "said": "这是一道看图说话,一幅图。\n我们一个问题一个问题来说。先看第一个:谁。\n图上都有谁呀?",
+         "cards": []
+        },
+        {
+         "kid": "有个穿红外套的小男孩，还有只小白狗。",
+         "said": "有个穿红外套的小男孩,还有只小白狗,你看得真仔细。\n下一个:在哪里。看看四周,有房子,地上还有水。\n他们在哪里呀?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "下雨天，傍晚放学路上",
+         "said": "下雨天,傍晚放学路上,你把什么时候和在哪里都说出来了,真棒。\n下一个:在干什么。\n小男孩在做什么呀?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小男孩撑着黄雨伞。",
+         "said": "小男孩撑着黄雨伞,说得对。\n那小白狗呢?它在做什么呀?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小白狗淋湿了，抬头看他，摇尾巴。",
+         "said": "小白狗淋湿了,抬头看他,摇尾巴,你观察得真仔细。\n下一个:为什么。小男孩为什么要给小狗撑伞呀?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "不知道",
+         "said": "没关系,我们猜一猜。\n是怕小狗淋雨感冒,还是想和小狗一起回家?",
+         "cards": []
+        },
+        {
+         "kid": "怕小狗淋雨感冒",
+         "said": "怕小狗淋雨感冒,你猜得有道理。\n最后一个:怎么样。你看小男孩的表情,他开心吗?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "不知道",
+         "said": "没关系,我们再看看图。\n小男孩是笑着的,还是皱着眉头的?",
+         "cards": []
+        },
+        {
+         "kid": "笑着的",
+         "said": "笑着的,你看得对。\n六个问题都问完了。我们把刚才说的连成一段话,你看着读一遍。\n你看着这几句,自己连起来说一遍,好吗?",
+         "cards": [
+          "read",
+          "read"
+         ]
+        },
+        {
+         "kid": "下雨天的傍晚，放学路上有个穿红外套的小男孩撑着黄雨伞，旁边淋湿的小白狗抬头看他摇尾巴，他怕小狗感冒，笑得很开心。",
+         "said": "你说得真完整,把时间、人物、事情都讲清楚了,特别棒。\n老师教你一个顺口溜,下次看图说话就能自己问了。\n下回拿到一幅图,你也这样自己问问,好吗?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "好",
+         "said": "好的,今天看图说话练得真好,下次见。",
+         "cards": []
+        }
+       ]
+      },
+      {
+       "pass": false,
+       "error": null,
+       "checks": [
+        {
+         "check": "问到: 还是",
+         "pass": true
+        },
+        {
+         "check": "每节末句是问句",
+         "pass": false,
+         "why": "第 1 轮末句「请你把要说的图拍下来发给我吧。」"
+        },
+        {
+         "check": "一节一问",
+         "pass": true
+        },
+        {
+         "check": "不说: 你错了、说错了、不对哦",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "看图说话",
+         "said": "小验，今天我们来练习看图说话。\n请你把要说的图拍下来发给我吧。",
+         "cards": [
+          "photo"
+         ]
+        },
+        {
+         "kid": "这是我的看图说话",
+         "said": "这是一道看图说话，一幅图。\n我们一个问题一个问题来说。先看第一个：谁。\n图上都有谁呀？",
+         "cards": [
+          "image"
+         ]
+        },
+        {
+         "kid": "有一个穿红外套的小男孩，还有一只小白狗。",
+         "said": "一个穿红外套的小男孩，还有一只小白狗，你看得真仔细。\n下一个：在哪里。看看四周，有房子，地上还有水。\n他们在哪里呀？",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "不知道",
+         "said": "没关系，我们再看看图。\n右边有一扇门，地上湿湿的，还有小水坑。\n是家门口，还是学校门口？",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "学校门口",
+         "said": "学校门口，好的。\n下一个：什么时候。看看天上，还有地上。\n是早上，还是下午？",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "不知道",
+         "said": "没关系，猜一猜也行。\n小男孩背着书包，天上下着雨。\n是早上上学，还是下午放学？",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "下午放学",
+         "said": "下午放学，说得对。\n下一个：在干什么。看看小男孩手里拿着什么，小狗在哪里。\n他在干什么呀？",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "撑着黄雨伞，小狗在淋雨",
+         "said": "撑着黄雨伞，小狗在淋雨。\n我们把「撑」换成「举着」，听起来更顺口：举着黄雨伞。\n下一个：为什么。看看伞遮住了谁，没遮住谁。\n他为什么要这样做呀？",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "不知道",
+         "said": "没关系，我们再看看。\n伞举在小狗头顶上，小男孩自己的肩膀都湿了。\n他是想给自己挡雨，还是想给小狗挡雨？",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "想给小狗挡雨",
+         "said": "想给小狗挡雨，你看得真准。\n最后一个：怎么样。看看小男孩的脸，还有小狗的样子。\n他们看起来怎么样呀？",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "不知道",
+         "said": "没关系，看看他们的表情。\n小男孩嘴巴弯弯的，小狗尾巴也在摇。\n是开心，还是难过？",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小男孩笑得很开心，小狗也在摇尾巴",
+         "said": "小男孩笑得很开心，小狗也在摇尾巴。说得真好。\n六个问题都问完了。我们把刚才说的连成一段话。\n「什么时候」要放到最前面哦。\n你看着这几句，自己连起来说一遍，好吗？",
+         "cards": [
+          "read",
+          "read"
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "phase": "repeat-after-fix",
+   "tutor": "chinese-tutor",
+   "activity": "你说我画",
+   "at": "2026-11-10T07:13:23.271Z",
+   "examples": [
+    {
+     "name": "顺的故事",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "出画图卡",
+         "pass": true
+        },
+        {
+         "check": "画图卡前放过整段",
+         "pass": true
+        },
+        {
+         "check": "分幅至少: 2",
+         "pass": true
+        },
+        {
+         "check": "分幅没有看不见的词",
+         "pass": true
+        },
+        {
+         "check": "每节末句是问句",
+         "pass": true
+        },
+        {
+         "check": "问到: 画家",
+         "pass": true
+        },
+        {
+         "check": "不说: 你没说清楚、你错了、说错了、不对哦",
+         "pass": true
+        }
+       ]
+      },
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "出画图卡",
+         "pass": true
+        },
+        {
+         "check": "画图卡前放过整段",
+         "pass": true
+        },
+        {
+         "check": "分幅至少: 2",
+         "pass": true
+        },
+        {
+         "check": "分幅没有看不见的词",
+         "pass": true
+        },
+        {
+         "check": "每节末句是问句",
+         "pass": true
+        },
+        {
+         "check": "问到: 画家",
+         "pass": true
+        },
+        {
+         "check": "不说: 你没说清楚、你错了、说错了、不对哦",
+         "pass": true
+        }
+       ]
+      },
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "出画图卡",
+         "pass": true
+        },
+        {
+         "check": "画图卡前放过整段",
+         "pass": true
+        },
+        {
+         "check": "分幅至少: 2",
+         "pass": true
+        },
+        {
+         "check": "分幅没有看不见的词",
+         "pass": true
+        },
+        {
+         "check": "每节末句是问句",
+         "pass": true
+        },
+        {
+         "check": "问到: 画家",
+         "pass": true
+        },
+        {
+         "check": "不说: 你没说清楚、你错了、说错了、不对哦",
+         "pass": true
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "phase": "repeat-after-fix",
+   "tutor": "chinese-tutor",
+   "activity": "你说我画",
+   "at": "2026-11-10T07:15:23.579Z",
+   "examples": [
+    {
+     "name": "魔法种子",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "出画图卡",
+         "pass": true
+        },
+        {
+         "check": "画图卡前放过整段",
+         "pass": true
+        },
+        {
+         "check": "分幅至少: 2",
+         "pass": true
+        },
+        {
+         "check": "分幅没有看不见的词",
+         "pass": true
+        },
+        {
+         "check": "每节末句是问句",
+         "pass": true
+        }
+       ]
+      },
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "出画图卡",
+         "pass": true
+        },
+        {
+         "check": "画图卡前放过整段",
+         "pass": true
+        },
+        {
+         "check": "分幅至少: 2",
+         "pass": true
+        },
+        {
+         "check": "分幅没有看不见的词",
+         "pass": true
+        },
+        {
+         "check": "每节末句是问句",
+         "pass": true
+        }
+       ]
+      },
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "出画图卡",
+         "pass": true
+        },
+        {
+         "check": "画图卡前放过整段",
+         "pass": true
+        },
+        {
+         "check": "分幅至少: 2",
+         "pass": true
+        },
+        {
+         "check": "分幅没有看不见的词",
+         "pass": true
+        },
+        {
+         "check": "每节末句是问句",
+         "pass": true
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "phase": "repeat-after-fix",
+   "tutor": "chinese-tutor",
+   "activity": "看图说话",
+   "at": "2026-11-10T07:18:07.990Z",
+   "examples": [
+    {
+     "name": "说不出就给两个挑",
+     "pass": false,
+     "runs": [
+      {
+       "pass": false,
+       "error": null,
+       "checks": [
+        {
+         "check": "问到: 还是",
+         "pass": true
+        },
+        {
+         "check": "每节末句是问句",
+         "pass": true
+        },
+        {
+         "check": "一节一问",
+         "pass": false,
+         "why": "第 7 轮问了 2 个"
+        },
+        {
+         "check": "不说: 你错了、说错了、不对哦",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "看图说话",
+         "said": "小验,今天我们来玩看图说话。\n你找一幅喜欢的图,把那幅图拍下来发给我,好吗?",
+         "cards": [
+          "photo"
+         ]
+        },
+        {
+         "kid": "这是我的看图说话",
+         "said": "这是一道看图说话,一幅图。\n我们一个问题一个问题来说。先看第一个:谁。\n图上都有谁呀?",
+         "cards": [
+          "image"
+         ]
+        },
+        {
+         "kid": "有一个小男孩，还有一只小白狗。",
+         "said": "一个小男孩,还有一只小白狗,你看得真仔细。\n下一个:在哪里。看看四周,有房子,地上还有水。\n他们在哪里呀?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "不知道",
+         "said": "没关系,我们再看看图。\n右边有一扇门,地上湿湿的,还有小水坑。\n是在学校门口,还是在家门口呀?",
+         "cards": []
+        },
+        {
+         "kid": "在家门口",
+         "said": "在家门口,说得对。\n下一个:什么时候。看看天上,还有地上。\n是早上,还是晚上呀?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "不知道",
+         "said": "没关系,我们再仔细看看。\n天是亮亮的,小男孩还背着书包呢。\n是早上,还是晚上呀?",
+         "cards": []
+        },
+        {
+         "kid": "晚上",
+         "said": "你觉得是晚上。\n不过你看,天还是亮亮的,小男孩背着书包,像是刚放学回家呢。\n我们说成傍晚,好不好?就是快天黑的时候。\n下一个:在干什么。看看小男孩手里拿着什么,小狗身上怎么样。\n小男孩在干什么呀?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "他撑着黄雨伞",
+         "said": "他撑着一把黄雨伞,说得真好。\n下一个:为什么。看看天上有什么落下来,小狗身上湿不湿。\n为什么要撑伞呀?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "不知道",
+         "said": "没关系,我们再看看图。\n天上有细细的线落下来,地上还有小水坑,小狗身上也湿漉漉的。\n是下雨了,还是下雪了呀?",
+         "cards": []
+        },
+        {
+         "kid": "下雨了",
+         "said": "下雨了,说得对。\n最后一个:怎么样。看看小男孩的脸,还有小狗的样子。\n小男孩开心吗?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "不知道",
+         "said": "没关系,我们再看看小男孩的脸。\n他的嘴巴弯弯的,像是在笑呢。\n是开心,还是难过呀?",
+         "cards": []
+        },
+        {
+         "kid": "开心",
+         "said": "开心,说得对。小男孩笑得很甜呢。\n六个问题都问完啦。我们把刚才说的连起来,变成一段话。\n你看着它,自己连起来说一遍,好吗?",
+         "cards": [
+          "read",
+          "read"
+         ]
+        }
+       ]
+      },
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "问到: 还是",
+         "pass": true
+        },
+        {
+         "check": "每节末句是问句",
+         "pass": true
+        },
+        {
+         "check": "一节一问",
+         "pass": true
+        },
+        {
+         "check": "不说: 你错了、说错了、不对哦",
+         "pass": true
+        }
+       ]
+      },
+      {
+       "pass": false,
+       "error": null,
+       "checks": [
+        {
+         "check": "问到: 还是",
+         "pass": true
+        },
+        {
+         "check": "每节末句是问句",
+         "pass": true
+        },
+        {
+         "check": "一节一问",
+         "pass": false,
+         "why": "第 8 轮问了 2 个;第 11 轮问了 2 个"
+        },
+        {
+         "check": "不说: 你错了、说错了、不对哦",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "看图说话",
+         "said": "今天我们来练习看图说话。\n把那幅图拍下来发给我,好吗?",
+         "cards": [
+          "photo"
+         ]
+        },
+        {
+         "kid": "这是我的看图说话",
+         "said": "这是一道看图说话,一幅图。\n我们一个问题一个问题来说。先看第一个:谁。\n图上都有谁呀?",
+         "cards": []
+        },
+        {
+         "kid": "有个穿红衣服的小男孩，还有一只小白狗。",
+         "said": "有个穿红衣服的小男孩,还有一只小白狗,你看得真仔细。\n下一个:在哪里。看看四周,有房子,地上还有水。\n他们在哪里呀?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "不知道",
+         "said": "没关系,我们猜一猜。\n旁边有房子,地上湿湿的,是在家里,还是在外面呀?",
+         "cards": []
+        },
+        {
+         "kid": "在外面",
+         "said": "在外面,说得对。\n下一个:什么时候。天上在下雨,小男孩背着书包。\n是早上,还是晚上?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "不知道",
+         "said": "没关系,我们猜一猜。\n他背着书包,是要去上学,还是放学回家呀?",
+         "cards": []
+        },
+        {
+         "kid": "放学回家",
+         "said": "放学回家,那应该是下午或者傍晚。\n下一个:在干什么。看看小男孩手里拿着什么,伞撑在哪里。\n他在干什么呀?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "他撑着黄雨伞",
+         "said": "他撑着一把黄雨伞,说得对。\n再看看,伞是遮在自己头上,还是遮在小狗头上?\n他在给谁挡雨呀?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "遮在小狗头上",
+         "said": "遮在小狗头上,你看得真仔细。\n下一个:为什么。看看小男孩的头发和衣服,都湿了。\n他为什么要把伞给小狗呀?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "不知道",
+         "said": "没关系,我们猜一猜。\n是他怕小狗淋湿生病,还是他自己喜欢淋雨呀?",
+         "cards": []
+        },
+        {
+         "kid": "他怕小狗淋湿生病",
+         "said": "他怕小狗淋湿生病,真是个有爱心的好孩子。\n最后一个:怎么样。看看小男孩的脸,他在笑还是在哭?\n他心里觉得怎么样呀?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "他在笑",
+         "said": "他在笑,说明他心里很开心。\n六个问题都问完了。我们把刚才说的连成一段话。\n你看着它,自己连起来说一遍,好吗?",
+         "cards": [
+          "read",
+          "read"
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "phase": "full-flow-after-fix",
+   "tutor": "chinese-tutor",
+   "activity": "你说我画",
+   "at": "2026-11-10T07:21:25.070Z",
+   "examples": [
+    {
+     "name": "顺的故事",
+     "pass": false,
+     "runs": [
+      {
+       "pass": false,
+       "error": null,
+       "checks": [
+        {
+         "check": "出画图卡",
+         "pass": false,
+         "why": "16 轮都没写画图卡"
+        },
+        {
+         "check": "画图卡前放过整段",
+         "pass": true,
+         "why": "没写画图卡,不用判"
+        },
+        {
+         "check": "分幅至少: 2",
+         "pass": true
+        },
+        {
+         "check": "分幅没有看不见的词",
+         "pass": true
+        },
+        {
+         "check": "每节末句是问句",
+         "pass": true
+        },
+        {
+         "check": "问到: 画家",
+         "pass": true
+        },
+        {
+         "check": "不说: 你没说清楚、你错了、说错了、不对哦",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "你说我画",
+         "said": "画家来了,想听一个故事。\n小验,请你说说,这是谁的故事?",
+         "cards": []
+        },
+        {
+         "kid": "我想讲小熊和小猴的故事",
+         "said": "小熊和小猴的故事,画家最喜欢听了。\n画家想知道,这个故事发生在什么时候,小熊和小猴在哪里呢?",
+         "cards": []
+        },
+        {
+         "kid": "春天的早上，他们在地里种西瓜。",
+         "said": "春天的早上,小熊和小猴在地里种西瓜,你一下子就把开头说清楚了。\n画家想知道,他们先做了什么,接着做了什么,最后又做了什么呢?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "中午太阳很大，小熊给瓜苗浇水。",
+         "said": "中午太阳很大,小熊给瓜苗浇水,你接着往下讲了。\n画家想知道,这时候小猴在干什么呢?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小猴躺在树下睡大觉。",
+         "said": "小猴躺在树下睡大觉,你把他接着做的事也说出来了。\n画家想知道,最后怎么样了,小熊和小猴的地里长出了什么?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "到了夏天，小熊地里结满大西瓜，小猴地里只长了草。",
+         "said": "到了夏天,小熊地里结满大西瓜,小猴地里只长了草,最后的结果你说得很清楚。\n画家想知道,小猴看到自己的地里只长了草,他是什么样子,心里怎么想呢?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小熊送给他一个西瓜，他低着头，脸红红的。",
+         "said": "小熊送给他一个西瓜,他低着头,脸红红的。\n你连小猴的样子都说出来了,画家一看就知道他心里怎么想。\n画家想知道的都问清楚了,我们把你说的连起来看一看。\n你看着这几句,连起来讲给画家听,好吗?",
+         "cards": [
+          "read",
+          "read"
+         ]
+        },
+        {
+         "kid": "好的。春天的早上，小熊和小猴在地里种西瓜。中午太阳很大，小熊给瓜苗浇水，小猴躺在树下睡大觉。到了夏天，小熊地里结满大西瓜，小猴地里只长了草。小熊送给他一个西瓜，他低着头，脸红红的。",
+         "said": "你讲得真清楚,画家都听明白了。\n我们把你讲的故事分成几幅画,一幅画一件事。\n一共五件事,就分五幅。\n画家想知道,小熊和小猴长什么样子,穿什么衣服呢?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小熊圆圆的，小猴瘦瘦的。",
+         "said": "小熊圆圆的,小猴瘦瘦的,画家记住他们的样子了。\n画家开始画了。\n你猜猜,画家会怎么画小熊圆圆的、小猴瘦瘦的样子呢?",
+         "cards": [
+          "text"
+         ]
+        },
+        {
+         "kid": "小熊画得胖胖的，小猴画得细细的。",
+         "said": "小熊胖胖的,小猴细细的,画家一听就明白了。\n画好了。\n你看看,哪里和你想的一样?\n哪里不一样?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "胖胖的像我想的一样，细细的也画出来了。",
+         "said": "胖胖的小熊和细细的小猴,画家都照你说的画出来了。\n你讲的小熊和小猴种西瓜的故事真有意思,连小猴低着头、脸红红的样子都说得那么清楚,画家一看就懂。",
+         "cards": []
+        },
+        {
+         "kid": "小猴脸红红的，真不好意思。",
+         "said": "是啊,小猴脸红红的,真不好意思。\n你把这个故事讲得真好,谁在什么时候做了什么、最后怎么样,都说得清清楚楚,画家一看就懂。",
+         "cards": []
+        },
+        {
+         "kid": "老师，我下次也要像小熊一样勤快！",
+         "said": "小验想学小熊一样勤快,真棒。\n你今天讲的故事,开头、经过、结果都说得清清楚楚,画家才能画得这么好。",
+         "cards": []
+        },
+        {
+         "kid": "嗯，我要给西瓜浇水。",
+         "said": "好呀,你像小熊一样去给西瓜浇水吧。",
+         "cards": []
+        },
+        {
+         "kid": "老师，那我先去浇水啦！",
+         "said": "去吧,浇完水回来再给老师讲新故事。",
+         "cards": []
+        },
+        {
+         "kid": "老师再见！",
+         "said": "再见,小验。",
+         "cards": []
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "前后对不上",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "并排: 睡大觉 | 浇了水",
+         "pass": true
+        },
+        {
+         "check": "每节末句是问句",
+         "pass": true
+        },
+        {
+         "check": "不说: 你没说清楚、你错了、说错了、不对哦",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "你说我画",
+         "said": "画家来了,想听一个故事。\n小验,你先告诉画家,这是谁的故事呀?",
+         "cards": []
+        },
+        {
+         "kid": "我想讲小猴的故事",
+         "said": "小猴的故事,画家最喜欢听了。\n画家想知道,小猴在哪里、什么时候发生的事呢?",
+         "cards": []
+        },
+        {
+         "kid": "小猴一整天都在睡大觉",
+         "said": "小猴一整天都在睡大觉,画家记下了。\n可是画家想知道,小猴是在哪里睡的呀?",
+         "cards": []
+        },
+        {
+         "kid": "小猴帮小熊浇了水",
+         "said": "小猴帮小熊浇了水,你记得真清楚。\n可是画家有点糊涂了。\n这两句都是你说的。\n画家画小猴,是画他睡觉,还是画他浇水呢?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "哎呀，记混了！小猴一整天都在睡大觉。",
+         "said": "没关系,记混了说清楚就好。\n画家知道了,小猴一整天都在睡大觉。\n那小猴是在哪里睡的呀?",
+         "cards": []
+        },
+        {
+         "kid": "小猴在树上睡的",
+         "said": "小猴在树上睡大觉,画家听明白了。\n那接着呢,小猴醒了以后先做了什么?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小猴醒了以后，帮小熊浇了水。",
+         "said": "小猴醒了帮小熊浇水,画家记下了。\n那接着呢,小猴浇完水又做了什么?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "后来西瓜熟了，小熊很高兴。",
+         "said": "西瓜熟了,小熊很高兴,画家也替他们开心。\n画家想知道,小熊很高兴的时候是什么样子呀?是跳起来了,还是笑着拍手呢?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小熊高兴得跳起来拍手",
+         "said": "小熊高兴得跳起来拍手,画家一下子就画出来了。\n那最后呢,小猴看见西瓜熟了,结果怎样,心里怎么想?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小猴也想吃，可是西瓜太大啦！",
+         "said": "小猴也想吃,可是西瓜太大啦,真有意思。\n画家想知道,小猴看着大西瓜吃不到,他是什么样子呀?是挠着头,还是张着嘴巴呢?",
+         "cards": [
+          "read"
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "魔法种子",
+     "pass": false,
+     "runs": [
+      {
+       "pass": false,
+       "error": null,
+       "checks": [
+        {
+         "check": "出画图卡",
+         "pass": true
+        },
+        {
+         "check": "画图卡前放过整段",
+         "pass": true
+        },
+        {
+         "check": "分幅至少: 2",
+         "pass": true
+        },
+        {
+         "check": "分幅没有看不见的词",
+         "pass": false,
+         "why": "「高兴」在「第二天早上，院子里。小兔子咧着嘴笑；小熊、小松鼠、小刺猬高兴得跳起来摘胡萝卜树上的胡萝卜。」"
+        },
+        {
+         "check": "每节末句是问句",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "你说我画",
+         "said": "画家来了，想听一个故事。\n小验，请你说说，这是谁的故事呀？",
+         "cards": []
+        },
+        {
+         "kid": "我要讲魔法种子",
+         "said": "魔法种子，听起来真有意思。\n画家想知道，这是谁的故事，他在哪里，是什么时候的事呢？",
+         "cards": []
+        },
+        {
+         "kid": "是小兔子在院子里种的，就是昨天晚上。",
+         "said": "小兔子昨天晚上在院子里种魔法种子，画家听明白了。\n这是故事的开头，画家已经记下来了。\n那后来呢，先发生了什么？",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "晚上下了一场大雨，种子喝了雨水。",
+         "said": "晚上下了一场大雨，种子喝了雨水，你讲得真生动。\n画家想知道，接着又发生了什么事呢？",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "第二天早上，种子长成了比房子还高的胡萝卜树！",
+         "said": "第二天早上，种子长成了比房子还高的胡萝卜树，这棵魔法树真神奇。\n画家想知道，最后小兔子做了什么，结果怎么样，心里怎么想的呢？",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小兔子请朋友们来摘胡萝卜，大家都很开心！",
+         "said": "小兔子请朋友们来摘胡萝卜，大家都很开心。\n画家想知道，大家「很开心」，画面上怎么看得出来呢？\n是小兔子咧着嘴笑，还是朋友们高兴得跳起来呀？",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小兔子咧着嘴笑，朋友们高兴得跳起来摘胡萝卜！",
+         "said": "小兔子咧着嘴笑，朋友们高兴得跳起来摘胡萝卜，画家一听就知道怎么画了。\n你看着这几句，连起来讲给画家听，好吗？",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小兔子种下魔法种子，喝了雨水长成胡萝卜树，大家跳起来摘，开心极了！",
+         "said": "你讲得真清楚，画家全听明白了。\n我们把这个故事分成四幅画。\n画家想知道，小兔子长什么样子，朋友们又是谁呢？",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小兔子白白的，耳朵长长的。朋友们是小熊、小松鼠和小刺猬呀！",
+         "said": "小兔子白白的，耳朵长长的，朋友们是小熊、小松鼠和小刺猬，画家都记下来了。\n画家开始画了。\n你猜一猜，画家会怎么画那棵比房子还高的胡萝卜树呢？",
+         "cards": [
+          "paint"
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "催着画",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "不出画图卡",
+         "pass": true
+        },
+        {
+         "check": "每节末句是问句",
+         "pass": true
+        },
+        {
+         "check": "不说: 你没说清楚",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "你说我画",
+         "said": "画家来了,想听一个故事。\n小验,你先告诉画家,这是谁的故事呀?",
+         "cards": []
+        },
+        {
+         "kid": "小狗",
+         "said": "是小狗的故事,画家记住了。\n画家想知道,小狗在哪里、什么时候发生了什么事呢?",
+         "cards": []
+        },
+        {
+         "kid": "快画吧",
+         "said": "画家还想知道一件事。\n小狗在哪里、什么时候，先做了什么，接着做了什么，最后怎么样了？",
+         "cards": []
+        },
+        {
+         "kid": "小狗在公园玩球。快画吧",
+         "said": "小狗在公园玩球,画家记下来了。\n可是画家还想知道一件事。\n小狗是早上在公园玩球,还是下午在公园玩球呢?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "下午。快画吧",
+         "said": "下午,小狗在公园玩球,画家记下来了。\n画家还想知道一件事。\n小狗先怎么玩球的,接着怎么了,最后怎么样了?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "先追球。快画吧",
+         "said": "小狗先追球,画家记下来了。\n画家还想知道一件事。\n小狗接着怎么了?",
+         "cards": [
+          "read"
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "我来出题",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "出画图卡",
+         "pass": true
+        },
+        {
+         "check": "画图卡前放过整段",
+         "pass": true
+        },
+        {
+         "check": "分幅至少: 2",
+         "pass": true
+        },
+        {
+         "check": "问到: 怎么看",
+         "pass": true
+        },
+        {
+         "check": "画图卡带题干和词",
+         "pass": true
+        },
+        {
+         "check": "分幅没有看不见的词",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "你说我画",
+         "said": "画家来了，想听一个故事。\n这周我们学了几个词：播种、睡大觉、满满、羞愧。\n你先挑三四个，等会儿放到你的故事里。\n画家想知道，这是谁的故事呀？",
+         "cards": []
+        },
+        {
+         "kid": "是小熊和小猴的故事。小熊在播种，小猴在睡大觉。",
+         "said": "小熊和小猴的故事，画家听清楚了。\n你挑了播种和睡大觉这两个词，真棒。\n画家想知道，这个故事发生在哪里，是什么时候呢？",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "春天，小熊在地里播种，小猴在树下睡大觉。",
+         "said": "春天，地里，小熊和小猴。\n画家想知道的开头都听清楚了。\n接着呢？\n后来小熊和小猴又做了什么，你一件一件讲给画家听。",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "夏天，小熊的西瓜满满一地，小猴什么也没有，觉得很羞愧。",
+         "said": "夏天，小熊的西瓜满满一地，小猴什么也没有，觉得很羞愧。\n你挑的四个词都用上了，真厉害。\n画家想知道，“满满”怎么画出来呢？\n是地上到处都滚着大西瓜吗？",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "对呀，地上到处都滚着大西瓜，一个挨着一个。",
+         "said": "地上到处都滚着大西瓜，一个挨着一个。\n画家一听就知道“满满”怎么画了。\n画家还想知道，小猴觉得“羞愧”，他是什么样子呢？\n是低着头，还是脸红红的？",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小猴低着头，脸红红的，不敢看小熊。",
+         "said": "小猴低着头，脸红红的，不敢看小熊。\n画家一听就知道“羞愧”怎么画了。\n故事讲完了，画家还想知道一件事。\n小猴心里是怎么想的呢？",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小猴想，以后我也要像小熊一样勤快，再也不睡大觉了。",
+         "said": "小猴想，以后我也要像小熊一样勤快，再也不睡大觉了。\n画家想知道的七件事都齐了。\n你看着这几句，连起来讲给画家听，好吗？",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "春天，小熊在地里播种，小猴在树下睡大觉。夏天，小熊的西瓜满满一地，小猴什么也没有，低着头脸红红的很羞愧。小猴想以后再也不睡大觉了。",
+         "said": "你讲得真清楚，画家全听明白了。\n我们来分幅。\n你讲了春天和夏天两件事，就分两幅画。\n我们挑的词是播种、睡大觉、满满、羞愧。\n第一幅画春天的事。\n看图的人怎么看得出来小熊在“播种”，小猴在“睡大觉”呢？",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小熊手里拿着种子往土里撒，小猴闭着眼睛趴在树根下打呼噜。",
+         "said": "手里拿着种子往土里撒，闭着眼睛趴在树根下打呼噜。\n画家一看就知道是播种和睡大觉了。\n第二幅画夏天的事。\n看图的人怎么看得出来西瓜满满一地，小猴很羞愧呢？",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "地上到处是大西瓜，小猴低着头脸红红的，不敢看小熊。",
+         "said": "地上到处是大西瓜，小猴低着头脸红红的，不敢看小熊。\n画家一看就知道是满满和羞愧了。\n四个词都落到画里了。\n你要问看图的人什么呢？\n比如你可以问：图上画了谁？他们在干什么？结果怎么样？用上下面的词，写几句话。\n你想怎么问看图的人？",
+         "cards": []
+        },
+        {
+         "kid": "图上画了谁？他们在干什么？结果怎么样？",
+         "said": "图上画了谁？他们在干什么？结果怎么样？\n你出的题真清楚，看图的人一看就知道要说什么。\n画家开始画了。\n你猜，画家会怎么画小猴趴在树根下打呼噜的样子呢？",
+         "cards": [
+          "paint"
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "phase": "full-flow-after-fix",
+   "tutor": "chinese-tutor",
+   "activity": "看图说话",
+   "at": "2026-11-10T07:24:10.083Z",
+   "examples": [
+    {
+     "name": "还没拍图",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "问到: 拍",
+         "pass": true
+        },
+        {
+         "check": "出拍给我看卡",
+         "pass": true
+        },
+        {
+         "check": "不出画图卡",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "看图说话",
+         "said": "今天我们来练习看图说话。\n把那幅图拍下来发给我,好吗?",
+         "cards": [
+          "photo"
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "一幅图",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "放过整段",
+         "pass": true
+        },
+        {
+         "check": "每节末句是问句",
+         "pass": true
+        },
+        {
+         "check": "一节一问",
+         "pass": true
+        },
+        {
+         "check": "问到: 谁",
+         "pass": true
+        },
+        {
+         "check": "卡上有: 先看清",
+         "pass": true
+        },
+        {
+         "check": "不说: 你错了、说错了、不对哦",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "看图说话",
+         "said": "今天我们来练习看图说话。\n把那幅图拍下来发给我,好吗?",
+         "cards": [
+          "photo"
+         ]
+        },
+        {
+         "kid": "这是我的看图说话",
+         "said": "这是一道看图说话,一幅图。\n我们一个问题一个问题来说。先看第一个:谁。\n图上都有谁呀?",
+         "cards": [
+          "image"
+         ]
+        },
+        {
+         "kid": "一个小男孩，还有一只白色的小狗。",
+         "said": "一个小男孩,还有一只白色的小狗,你看得真仔细。\n下一个:在哪里。看看四周,有房子,地上还有水。\n他们在哪里呀?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "在放学路上，街边的屋檐下。",
+         "said": "在放学路上,街边的屋檐下,你说得真清楚。\n下一个:什么时候。天上在下雨,地上全是水。\n是早上,还是下午呀?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "是下雨天的傍晚。",
+         "said": "是下雨天的傍晚,你想得真好。\n下一个:在干什么。小男孩手里拿着一把黄色的伞。\n他在做什么呀?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "他撑着黄雨伞，笑着往前走。",
+         "said": "他撑着黄雨伞,笑着往前走,你说得真生动。\n下一个:为什么。小狗身上湿漉漉的,小男孩把伞往小狗那边歪。\n他为什么要这样做呀?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "因为小狗淋湿了，他想把伞分给小狗挡雨。",
+         "said": "因为小狗淋湿了,他想把伞分给小狗挡雨,你真是个有爱心的人。\n最后一个:怎么样。小男孩自己的肩膀都湿了,但他还在笑。\n你觉得他是个怎样的孩子呀?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "他是个有爱心、爱笑的好孩子。",
+         "said": "他是个有爱心、爱笑的好孩子,你说得真好。\n六个问题都问完了。我们把刚才说的连成一段话。注意哦,要把「什么时候」放到最前面。\n你看着它,自己连起来说一遍,好吗?",
+         "cards": [
+          "read",
+          "read"
+         ]
+        },
+        {
+         "kid": "下雨天的傍晚，小男孩和小狗在屋檐下。他撑黄伞笑着走，想把伞分给淋湿的小狗挡雨，真是个有爱心的好孩子。",
+         "said": "你说得太棒了,连起来说得又通顺又好听。\n下回拿到一幅图,你也这样自己问问,好吗?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "好，下次我也这样问一问。",
+         "said": "真乖,那今天的看图说话就练到这里,你学会了一个好办法。",
+         "cards": []
+        },
+        {
+         "kid": "谢谢老师，再见！",
+         "said": "不客气,小验再见!",
+         "cards": []
+        },
+        {
+         "kid": "老师再见！",
+         "said": "再见!",
+         "cards": []
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "四幅图一口气说",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "放过整段",
+         "pass": true
+        },
+        {
+         "check": "每节末句是问句",
+         "pass": true
+        },
+        {
+         "check": "一节一问",
+         "pass": true
+        },
+        {
+         "check": "不说: 你错了、说错了、不对哦",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "看图说话",
+         "said": "今天我们来练习看图说话。\n把那幅图拍下来发给我,好吗?",
+         "cards": [
+          "photo"
+         ]
+        },
+        {
+         "kid": "这是我的看图说话,有四幅",
+         "said": "这是一道看图说话,有四幅图,它们讲的是一个小故事。\n我们一个问题一个问题来说,先看第一个:谁。\n图上都有谁呀?",
+         "cards": []
+        },
+        {
+         "kid": "小猴提着空篮子，还有穿粉裙子的小兔子。",
+         "said": "小猴提着空篮子,还有穿粉裙子的小兔子,你看得真仔细。\n下一个:在哪里。看看四周有什么,有树,地上还有草。\n他们在哪里呀?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "山坡上有一棵结满桃子的树，小猴和兔子都在树下呢。",
+         "said": "山坡上有一棵结满桃子的树,小猴和兔子都在树下呢,你说得真清楚。\n下一个:什么时候。看看天是亮的还是黑的。\n是早上,还是下午呀?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "天亮亮的，小猴看着桃子，兔子踮脚够不着。",
+         "said": "天亮亮的,小猴看着桃子,兔子踮脚够不着,你观察得真仔细。\n下一个:做什么。看看小猴和兔子在干什么。\n他们在做什么呀?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小猴爬树摘桃子，兔子够不着，小猴送给她一个大桃子。",
+         "said": "小猴爬树摘桃子,兔子够不着,小猴送给她一个大桃子,你说得真完整。\n下一个:为什么。看看兔子为什么够不着。\n兔子为什么够不着呀?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "兔子个子太矮啦，够不着桃子，小猴就送给它一个大桃子。",
+         "said": "兔子个子太矮啦,够不着桃子,小猴就送给它一个大桃子,你说得真好。\n下一个:怎么样。看看小猴和兔子最后怎么样了。\n他们最后怎么样呀?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "小猴和小兔子都笑了，心里甜滋滋的。",
+         "said": "小猴和小兔子都笑了,心里甜滋滋的,你说得真棒。\n六个问题都问完了,我们把刚才说的连成一段话。\n你看着它,自己连起来说一遍,好吗?",
+         "cards": [
+          "read",
+          "read"
+         ]
+        },
+        {
+         "kid": "在一个天亮的早上，小猴摘桃子送给够不着的兔子，他俩都笑了。",
+         "said": "你说得真顺口,把故事讲得又清楚又好听。\n下回拿到一幅图,你也这样自己问问,好吗?",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "好！谁在哪干啥为啥咋样，我都记啦！",
+         "said": "真棒,你都记住啦。下次看图说话,就用这六个问题问问自己。",
+         "cards": []
+        },
+        {
+         "kid": "嗯！下次我肯定全都说出来，一个都不漏！",
+         "said": "好,老师相信你。下次看图说话,咱们再一起练。",
+         "cards": []
+        },
+        {
+         "kid": "好呀！老师再见，我要去告诉妈妈我学会看图说话啦！",
+         "said": "好,快去告诉妈妈吧。老师再见!",
+         "cards": []
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "说不出就给两个挑",
+     "pass": true,
+     "runs": [
+      {
+       "pass": true,
+       "error": null,
+       "checks": [
+        {
+         "check": "问到: 还是",
+         "pass": true
+        },
+        {
+         "check": "每节末句是问句",
+         "pass": true
+        },
+        {
+         "check": "一节一问",
+         "pass": true
+        },
+        {
+         "check": "不说: 你错了、说错了、不对哦",
+         "pass": true
+        }
+       ],
+       "turns": [
+        {
+         "kid": "看图说话",
+         "said": "小验，今天我们来练习看图说话。\n把你看到的那幅图拍下来发给我，好吗？",
+         "cards": [
+          "photo"
+         ]
+        },
+        {
+         "kid": "这是我的看图说话",
+         "said": "这是一道看图说话，一幅图。\n我们一个问题一个问题来说，先看第一个：谁。\n图上都有谁呀？",
+         "cards": []
+        },
+        {
+         "kid": "有个穿红衣服的小男孩，还有一只小白狗。",
+         "said": "有个穿红衣服的小男孩，还有一只小白狗，你看得真仔细。\n下一个：在哪里。看看四周，有房子，地上还有水。\n他们在哪里呀？",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "不知道",
+         "said": "没关系，我们再看看图。\n旁边有房子，地上湿湿的还有水坑。\n是在学校门口，还是在家门口呀？",
+         "cards": []
+        },
+        {
+         "kid": "在家门口",
+         "said": "在家门口，说得对。\n下一个：什么时候。看看天上，还有地上。\n是早上，还是晚上呀？",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "不知道",
+         "said": "没关系，我们再看看。\n天是亮亮的，小男孩还背着书包呢。\n是早上去上学，还是下午放学回家呀？",
+         "cards": []
+        },
+        {
+         "kid": "下午放学回家",
+         "said": "下午放学回家，你想得真周到。\n下一个：在干什么。看看小男孩手里拿着什么，小狗怎么样了。\n小男孩在干什么呀？",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "撑着黄雨伞",
+         "said": "撑着黄雨伞，说得对。\n下一个：为什么。看看天上在掉什么，小狗身上湿不湿。\n他为什么要撑伞呀？",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "不知道",
+         "said": "没关系，我们再看看图。\n天上下着雨，小狗身上都淋湿了。\n是为了自己不被淋湿，还是为了给小狗挡雨呀？",
+         "cards": []
+        },
+        {
+         "kid": "为了自己不被淋湿",
+         "said": "为了自己不被淋湿，说得有道理。\n最后一个：怎么样。看看小男孩的脸，还有小狗的样子。\n小男孩开心吗？",
+         "cards": [
+          "read"
+         ]
+        },
+        {
+         "kid": "不知道",
+         "said": "没关系，我们再看看他的脸。\n他的嘴巴弯弯的，像在笑呢。\n是开心，还是难过呀？",
+         "cards": []
+        },
+        {
+         "kid": "开心",
+         "said": "开心，你说得对，他笑得很甜。\n六个问题都问完了，我们把刚才说的连成一段话。\n你看着它，自己连起来说一遍，好吗？",
+         "cards": [
+          "read",
+          "read"
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

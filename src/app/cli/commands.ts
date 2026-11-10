@@ -120,7 +120,7 @@ export const COMMANDS: readonly CommandSpec[] = [
     usage: ['cotutor cert [<名或IP>]... [--json]'], maxArgs: Infinity, json: true,
     flags: [{ name: 'host', value: '<名或IP>', desc: '多认一个名字或 IP(也可以直接写在后面)' }],
     notes: ['要先装 mkcert;缺省认电脑名,换 Wi-Fi、IP 变了都不用重签', '所有孩子共用一张,在 ~/.config/cotutor/certs/', '签完 cotutor service restart 才走 HTTPS'],
-    effects: ['这台电脑信任根证书要人自己跑 mkcert -install(要输密码或点弹窗)'],
+    effects: ['这台电脑信任根证书另有一步(Mac 弹框要登录密码,Windows 弹窗点「是」,Linux 要 sudo),没做只是这台电脑的浏览器报警告;要做的那条命令 cotutor cert 会打印'],
     examples: ['cotutor cert', 'cotutor cert 192.168.1.20'],
   },
   {

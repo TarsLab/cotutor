@@ -134,7 +134,7 @@ export function plainHandler(caFile: () => string | null): RequestListener {
         return;
       }
       res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
-      res.end('这台电脑上没找到根证书:先在电脑上跑 mkcert -install 和 cotutor cert');
+      res.end('这台电脑上没找到根证书:先在电脑上跑 cotutor cert');
       return;
     }
     res.writeHead(301, { location: `https://${req.headers.host ?? 'localhost'}${req.url ?? '/'}`, 'cache-control': 'no-store' });

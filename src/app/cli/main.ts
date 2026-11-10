@@ -12,7 +12,7 @@ import { doctorWorkspace } from './doctor.ts';
 import { initWorkspace } from './init.ts';
 import { gradePacks } from './grades.ts';
 import { guideText } from './guide.ts';
-import { makeCert } from './cert.ts';
+import { makeCert, trustCommand, trustPrompt } from './cert.ts';
 import { PIN_RE, USER_PIN_FILE, clearPin, readPin, setPin } from '../http/access.ts';
 import { addTutorFile, restoreTutor, upgradeTutors } from './tutors.ts';
 import { activityRunFor, checkActivities, restoreActivity, upgradeActivities } from './activities.ts';
@@ -704,7 +704,7 @@ export async function main(argv: string[]): Promise<void> {
           process.stdout.write(`  iPad / iPhone:${send} → 设置里安装描述文件 → 通用 › 关于本机 › 证书信任设置里**把开关打开**(装了不等于信任)\n`);
           process.stdout.write(`  安卓:${process.platform === 'darwin' ? '传到设备上' : send} → 设置里搜「CA 证书」,按提示安装(各家菜单不一样,会提示「网络可能受到监控」)\n`);
           process.stdout.write(`然后 cotutor service restart(在终端里跑的就重开 cotutor serve),cotutor open 打开家长端,用相机扫「扫码打开」那张。地址认电脑名,换 Wi-Fi、IP 变了都不用重签;改了电脑名才要重跑这条。详见 docs/iPad与iPhone.md\n`);
-          if (!r.trusted) process.stdout.write(`! 这台电脑还没信任根证书,浏览器打开家长端会报证书警告。请在这台电脑的终端里自己跑一次 mkcert -install(${process.platform === 'win32' ? '弹窗问时点「是」' : '要输开机密码'}),不用重签\n`);
+          if (!r.trusted) process.stdout.write(`! 这台电脑还没信任根证书,浏览器打开家长端会报证书警告。在这台电脑上跑一次 ${trustCommand()}(${trustPrompt()}),不用重签\n`);
         }
         return;
       }

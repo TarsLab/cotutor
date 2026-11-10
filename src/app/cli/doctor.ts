@@ -531,7 +531,7 @@ export async function doctorWorkspace(
     // ---- HTTPS:iPad 上录音要;没有只提醒 ----
     const tls = httpsFiles(ws);
     const { mkcertHint, mkcertReady } = await import('./cert.ts');
-    // mkcert -install 要开机密码或点弹窗,是人的事;做过了,签证书就不用人了
+    // 根证书建过了,签证书就不用人了;这台电脑信任根证书(trustCommand)要人输密码或点弹窗,不在这里
     const canSign = !tls && probeEnv && await mkcertReady();
     push({ name: 'https', ok: tls !== null, required: false, detail: tls ? `${redactHome(tls.cert)}` : '没有证书,serve 走 HTTP(平板、手机上按住说话不可用)', fix: tls ? undefined : `cotutor cert(需要 mkcert:${mkcertHint()}),签完 cotutor service restart`, cmd: canSign ? 'cotutor cert' : undefined });
 

@@ -30,9 +30,11 @@ scutil --get LocalHostName   # 电脑名,地址里写成 <电脑名>.local
 
 ```sh
 brew install mkcert
-mkcert -install
 cotutor cert
+security add-trusted-cert -r trustRoot -k ~/Library/Keychains/login.keychain-db "$(mkcert -CAROOT)/rootCA.pem"
 ```
+
+最后一行让这台 Mac 的浏览器信任根证书(信任到你自己的登录钥匙串),会弹框要登录密码,不用 sudo。不做也行,只是在 Mac 上打开家长端时浏览器报警告。以前跑过 `mkcert -install` 的不用再跑。
 
 `cotutor cert` 会打印证书位置、覆盖的主机名,以及根证书 `rootCA.pem` 的路径。它签的是**这台机器**:电脑名、`<电脑名>.local`、当前所有局域网 IP(只给手输数字地址的退路用)、`localhost`、`127.0.0.1`。证书是机器级的,放在 `~/.config/cotutor/certs/`,几个孩子的 workspace 共用同一张。
 

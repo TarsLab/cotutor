@@ -17,17 +17,35 @@ import { USER_CERT_DIR, UsageError } from '../workspace.ts';
 const execFileP = promisify(execFile);
 
 /**
- * 这个系统上怎么装 mkcert、信任一次根证书(doctor 与 cert 共用)。Windows 上 mkcert -install 装进当前用户的根证书,会弹窗问,点「是」;
+ * 这台电脑信任根证书的命令(只管这台电脑的浏览器;cotutor cert 不等它,mkcert 没有根证书时自己建一个照样签)。
+ * Mac 不用 mkcert -install:它 sudo 写系统钥匙串,要在终端里输管理员密码,标准账户跑不了。信任到当前用户的登录钥匙串就够了(Safari、Chrome 都认,
+ * mkcert 看 trusted 用的 security verify-cert 也认),系统弹框要登录密码,agent 起的也弹得出来(2026-11-10 在 macOS 27 上从 VS Code 里试过,点之前命令一直等着);经 SSH 弹不出框。
+ * Windows 的 mkcert -install 装进当前用户的根证书,不用管理员,弹窗点「是」。Linux 要 sudo。
+ */
+export function trustCommand(platform: NodeJS.Platform = process.platform): string {
+  return platform === 'darwin' ? 'security add-trusted-cert -r trustRoot -k ~/Library/Keychains/login.keychain-db "$(mkcert -CAROOT)/rootCA.pem"' : 'mkcert -install';
+}
+
+/** 跑 trustCommand 时人要做什么 */
+export function trustPrompt(platform: NodeJS.Platform = process.platform): string {
+  if (platform === 'darwin') return '弹框要这台电脑的登录密码,输在框里';
+  if (platform === 'win32') return '弹窗问装不装根证书,点「是」;不用管理员';
+  return '要 sudo 密码';
+}
+
+/**
+ * 这个系统上怎么装 mkcert、信任一次根证书(doctor 与 cert 共用)。
  * 没有 winget 的(11-02 那台就没有)下官方的 exe。
  */
 export function mkcertHint(platform: NodeJS.Platform = process.platform): string {
-  if (platform === 'darwin') return 'brew install mkcert && mkcert -install';
-  if (platform === 'win32') return 'winget install FiloSottile.mkcert(没有 winget 就到 https://github.com/FiloSottile/mkcert/releases 下 windows-amd64 那个,改名 mkcert.exe 放进 PATH),重开终端跑 mkcert -install(弹窗问装不装根证书,点「是」)';
+  const trust = `${trustCommand(platform)}(${trustPrompt(platform)})`;
+  if (platform === 'darwin') return `brew install mkcert,再 ${trust}`;
+  if (platform === 'win32') return `winget install FiloSottile.mkcert(没有 winget 就到 https://github.com/FiloSottile/mkcert/releases 下 windows-amd64 那个,改名 mkcert.exe 放进 PATH),重开终端跑 ${trust}`;
   // libnss3-tools 给 mkcert 一个 certutil,这台电脑上的 Chrome、Firefox 才认证书(2026-11-09 Ubuntu 22.04 上装过)
   return '用系统的包管理器装 mkcert(Ubuntu、Debian 上 sudo apt install mkcert libnss3-tools),再 mkcert -install(要 sudo 密码)';
 }
 
-/** mkcert 在、根证书建过了:cotutor cert 不用人就能跑。mkcert -install 要开机密码或点弹窗,那一步是人的 */
+/** mkcert 在、根证书建过了:cotutor cert 不用人就能跑(没建过时 cotutor cert 也能自己建,doctor 只是保守) */
 export async function mkcertReady(caRootOf: () => Promise<string> = async () => (await execFileP('mkcert', ['-CAROOT'], { timeout: 8000 })).stdout.trim()): Promise<boolean> {
   try {
     return existsSync(join(await caRootOf(), 'rootCA.pem'));
@@ -67,7 +85,7 @@ export async function makeCert(extraHosts: string[] = []): Promise<CertResult> {
     const { stderr } = await execFileP('mkcert', ['-cert-file', cert, '-key-file', key, ...hosts], { timeout: 60_000 });
     trusted = !mkcertUntrusted(stderr);
   } catch (err) {
-    throw new UsageError(`mkcert 签证书失败:${err instanceof Error ? err.message : String(err)}\n先跑 mkcert -install,再重试。`);
+    throw new UsageError(`mkcert 签证书失败:${err instanceof Error ? err.message : String(err)}\n先跑 ${trustCommand()}(${trustPrompt()}),再重试。`);
   }
   return { cert, key, hosts, caRoot, trusted };
 }

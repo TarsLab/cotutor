@@ -122,9 +122,7 @@ cotutor service status --json
 - Linux（Ubuntu、Debian）：**【交给家长】** 请家长跑 `sudo apt install mkcert libnss3-tools`。`libnss3-tools` 让这台电脑上的 Chrome、Firefox 也认这张证书。
 - 别的情况（别的 Linux 发行版、没有 brew 或 winget）：**【交给家长】** 照 `cotutor doctor --json` 里 `https` 那条的 `fix` 装。
 
-**【交给家长】** 请家长在这台电脑的终端里自己跑 `mkcert -install`。Mac 上要输开机密码，Windows 上弹窗点「是」，Linux 上要输 sudo 密码。密码不要说给你听。Linux 上的 `apt install` 也一样由家长自己跑；不要主动问家长要 sudo 权限，也不要自己试 `sudo`。
-
-家长做完后：
+装好就签证书。签证书不用等这台电脑信任根证书，mkcert 没有根证书时会自己建一个：
 
 ```sh
 cotutor cert
@@ -134,9 +132,18 @@ cotutor service status --json
 
 **成功：** `cert.present`、`cert.coversName`、`cert.serving` 都是 `true`。
 
-**不成功：**
-- 说 PATH 里没有 mkcert：重开终端再试。
-- 说要先跑 `mkcert -install`（包括 `cotutor cert` 输出里以 `!` 开头的那行，这时证书签好了，但这台电脑的浏览器会报警告）：回到上面，交给家长。做完不用重签。
+**不成功：** 说 PATH 里没有 mkcert：重开终端再试。
+
+**这台电脑信任根证书：** `cotutor cert` 输出里以 `!` 开头、说「还没信任根证书」的那一行出现时才做。不做平板照样能用，只是在这台电脑上打开家长端时浏览器会报证书警告。Mac、Windows 上都由你来跑，不用管理员终端，不用 `sudo`：
+- Mac：先告诉家长「屏幕上会弹一个框要这台电脑的登录密码，输在框里，不要告诉我」，再由你跑：
+  ```sh
+  security add-trusted-cert -r trustRoot -k ~/Library/Keychains/login.keychain-db "$(mkcert -CAROOT)/rootCA.pem"
+  ```
+  家长点之前它一直等着；你的命令有超时的话放到后台等。家长点了取消或不想输，就跳过。
+- Windows：先告诉家长「会弹一个安全警告，问装不装证书，点『是』」，再由你跑 `mkcert -install`。不用管理员。
+- **【交给家长】** Linux，或者你是经 SSH 装的（弹框出不来）：请家长在这台电脑的终端里自己跑 `mkcert -install`，要输 sudo（Mac 上是开机）密码，密码不要说给你听。Linux 上的 `apt install` 也一样由家长自己跑；不要主动问家长要 sudo 权限，也不要自己试 `sudo`。
+
+做完不用重签。跳过了的，第 7 步告诉家长：在这台电脑上打开家长端会报一次证书警告，点「继续」就行，以后想去掉就再做这一步。
 
 平板上还要装根证书，第 7 步再交给家长：要在家长端里扫码装，家长端第 7 步才打开。
 

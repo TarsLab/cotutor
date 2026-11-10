@@ -429,8 +429,11 @@ try {
 {
   const { mkcertHint } = await import('../src/app/cli/cert.ts');
   const win = mkcertHint('win32');
-  check('mkcert 装法:Mac 说 brew;Windows 说 winget、没有就下官方 exe,再 mkcert -install,不说 brew', mkcertHint('darwin') === 'brew install mkcert && mkcert -install' && win.includes('winget install FiloSottile.mkcert') && win.includes('github.com/FiloSottile/mkcert/releases') && win.includes('mkcert -install') && !win.includes('brew'), win);
+  check('mkcert 装法:Mac 说 brew;Windows 说 winget、没有就下官方 exe,再 mkcert -install,不说 brew', mkcertHint('darwin').startsWith('brew install mkcert') && win.includes('winget install FiloSottile.mkcert') && win.includes('github.com/FiloSottile/mkcert/releases') && win.includes('mkcert -install') && !win.includes('brew'), win);
   check('mkcert 装法:Linux 说 apt 带上 libnss3-tools(这台电脑的 Chrome、Firefox 才认证书)', mkcertHint('linux').includes('apt install mkcert libnss3-tools') && mkcertHint('linux').includes('mkcert -install'), mkcertHint('linux'));
+  const { trustCommand, trustPrompt } = await import('../src/app/cli/cert.ts');
+  check('这台电脑信任根证书:Mac 信任到登录钥匙串(弹框输登录密码),不走 sudo 的 mkcert -install', trustCommand('darwin').includes('login.keychain-db') && !trustCommand('darwin').includes('sudo') && mkcertHint('darwin').includes(trustCommand('darwin')) && !mkcertHint('darwin').includes('mkcert -install') && trustPrompt('darwin').includes('登录密码'), mkcertHint('darwin'));
+  check('这台电脑信任根证书:Windows 还是 mkcert -install,说不用管理员', trustCommand('win32') === 'mkcert -install' && trustPrompt('win32').includes('不用管理员') && mkcertHint('win32').includes('不用管理员'), mkcertHint('win32'));
 }
 
 done();

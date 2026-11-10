@@ -4,13 +4,14 @@
  * 重新分先分到临时目录,成了才换掉旧的:中途断了旧的还在,半截的不会被当成分好的(标记最后写)。
  * 已经在 sandbox 里(cwd 在里面、--workspace 指过来)就用它;--fresh 从它记着的真 workspace 重新分,不套娃。
  */
-import { copyFile, cp, mkdir, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { copyFile, cp, lstat, mkdir, readdir, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, relative } from 'node:path';
-import { PATH_ROLES, ROLE_DEFAULTS, WORKSPACE_ROLES, type PathRole } from '../../schema/index.ts';
+import { PATH_ROLES, ROLE_DEFAULTS, SKILLS_DIR, WORKSPACE_ROLES, type PathRole } from '../../schema/index.ts';
 import { SANDBOX_DIR, SANDBOX_KEEP_MACHINE, SANDBOX_MARK, SANDBOX_SKIP, SANDBOX_TITLE, SANDBOX_VAULT, type SandboxMark, type Workspace } from '../../schema/workspace.ts';
 import { CONFIG_FILE, UsageError, expandPath, isInside as inside, loadWorkspace, parseConfig, readJson, readSandboxMark, redactHome, resolveRoot, type ResolveOptions } from '../workspace.ts';
 import { sandboxPort } from './port.ts';
 import { DIRS, LEDGER_FILES } from './skeleton.ts';
+import { CLAUDE_SKILLS_LINK, linkClaudeSkills } from './skills.ts';
 
 export interface SandboxResult {
   /** sandbox 的根:后面的命令都当 --workspace 用它 */
@@ -46,12 +47,27 @@ export async function openSandbox(override: string | undefined, opts: SandboxOpt
   const existing = here ?? ((await exists(box)) ? readSandboxMark(box) : null);
   if (!existing && (await exists(box))) throw new UsageError(`${redactHome(box)} 已经有了,但不是 sandbox(没有 ${SANDBOX_MARK}),不动它;挪走再试`);
   if (existing && !opts.fresh) {
-    const moved = await followPort(box, existing.from);
-    return { root: box, from: existing.from, created: false, notes: moved ? [moved] : [] };
+    const notes = [await followPort(box, existing.from), await unpointSkills(box, existing.from)].filter((n): n is string => n !== null);
+    return { root: box, from: existing.from, created: false, notes };
   }
   if (!(await exists(join(real, CONFIG_FILE)))) throw new UsageError(`这个 sandbox 是从 ${redactHome(real)} 分出来的,那里已经没有 workspace 了,重新分不了`);
   const notes = await fork(real, box, opts);
   return { root: box, from: real, created: true, notes };
+}
+
+/**
+ * 试用里的 .claude/skills 要指 sandbox 自己那份技能。Windows 的目录联接存的是绝对路径,照原样拷过来就指回真 workspace
+ * (在试用里改技能会改到真的;没开开发者模式的连拷都拷不了,Node 照原样建的是要权限的符号链接)。所以分的时候不拷这条链,
+ * 换上以后在 sandbox 里重建。以前分出来、指回真 workspace 的,打开时换掉;指别处的是家长自己建的,不动。返回说明,没动 → null
+ */
+async function unpointSkills(box: string, real: string): Promise<string | null> {
+  const link = join(box, CLAUDE_SKILLS_LINK);
+  if (!(await lstat(link).catch(() => null))?.isSymbolicLink()) return null;
+  const [to, theirs] = await Promise.all([realpath(link).catch(() => null), realpath(join(real, SKILLS_DIR)).catch(() => null)]);
+  if (to === null || to !== theirs) return null;
+  await rm(link);
+  const step = await linkClaudeSkills(box);
+  return step.action === 'created' ? `${CLAUDE_SKILLS_LINK} 原来指着真 workspace 的技能,改成指试用自己那份` : `${CLAUDE_SKILLS_LINK} 原来指着真 workspace 的技能,删了;${step.note ?? ''}`;
 }
 
 /** 试用的端口永远是真 workspace 的 +1:真的搬了端口,试用下次打开跟过去,不用记两套规矩;返回说明,没动 → null */
@@ -82,6 +98,10 @@ async function fork(real: string, box: string, opts: SandboxOptions): Promise<st
   parseConfig(config, join(box, CONFIG_FILE));
 
   const skip = new Set(SANDBOX_SKIP.map((n) => join(real, n)));
+  // .claude/skills 那条链不拷,换上以后重建(unpointSkills 的注释);是实体目录(旧布局没搬完)照拷
+  const skillsLink = join(real, CLAUDE_SKILLS_LINK);
+  const linked = (await lstat(skillsLink).catch(() => null))?.isSymbolicLink() ?? false;
+  if (linked) skip.add(skillsLink);
   if (inside(ws.paths.captures, real)) skip.add(ws.paths.captures);
   const keep = (src: string): boolean => basename(src) !== '.git' && !skip.has(src);
   const tmp = `${box}.tmp-${process.pid}`;
@@ -91,7 +111,7 @@ async function fork(real: string, box: string, opts: SandboxOptions): Promise<st
     for (const name of await readdir(real)) {
       const src = join(real, name);
       if (name === CONFIG_FILE || !keep(src)) continue;
-      // 链照原样拷(.claude/skills → ../.agents/skills 在 sandbox 里还是指自己那份)
+      // 别的链照原样拷
       await cp(src, join(tmp, name), { recursive: true, verbatimSymlinks: true, filter: keep });
     }
     await mkdir(join(tmp, '.cotutor'), { recursive: true });
@@ -111,6 +131,11 @@ async function fork(real: string, box: string, opts: SandboxOptions): Promise<st
   } catch (err) {
     await rm(tmp, { recursive: true, force: true });
     throw err;
+  }
+  // 联接存的是绝对路径:换上以后再建,不然指着已经不在的临时目录
+  if (linked) {
+    const step = await linkClaudeSkills(box);
+    if (step.action === 'kept' && step.note) notes.push(step.note);
   }
   return notes;
 }

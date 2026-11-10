@@ -2,7 +2,7 @@
  * --sandbox(src/app/cli/sandbox.ts):从真 workspace 分出试用的那份——设置照拷、状态不带、外面的 vault 拷一份;
  * cotutor.json 标题加「试用 · 」、端口 +1、paths 指进 sandbox;有了接着用,--fresh 重新分;真 workspace 一个字节都不动。
  */
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { check, done } from './_check.ts';
@@ -138,6 +138,28 @@ check('拦下时旧的 sandbox 原样在,不留临时目录', JSON.stringify(lis
 const { root: hong } = await initWorkspace({ slug: 'hong', dir: join(home, 'kids', 'hong') });
 write(join(home, 'kids', '.sandbox', 'hong', 'mine.txt'), '别人的东西');
 check('同名目录不是 sandbox:报错,不动它', (await threw(() => openSandbox(hong), '不是 sandbox')) && readFileSync(join(home, 'kids', '.sandbox', 'hong', 'mine.txt'), 'utf8') === '别人的东西');
+
+// ---- Windows 的目录联接存的是绝对路径:试用里那条要指试用自己的技能,不能照原样拷、指回真的 ----
+{
+  const { root: jun } = await initWorkspace({ slug: 'jun', dir: join(home, 'kids', 'jun') });
+  const realLink = join(jun, '.claude', 'skills');
+  rmSync(realLink);
+  symlinkSync(join(jun, '.agents', 'skills'), realLink, 'junction');
+  const j1 = await openSandbox(jun);
+  const boxLink = join(j1.root, '.claude', 'skills');
+  check('真的那条是绝对路径:试用里重建,指试用自己那份', lstatSync(boxLink).isSymbolicLink() && realpathSync(boxLink) === join(j1.root, '.agents', 'skills'), readlinkSync(boxLink));
+  check('真的那条没动', readlinkSync(realLink) === join(jun, '.agents', 'skills'));
+  rmSync(boxLink);
+  symlinkSync(join(jun, '.agents', 'skills'), boxLink, 'junction');
+  const j2 = await openSandbox(jun);
+  check('以前分出来、指回真的:打开时改成指自己,说一句', !j2.created && realpathSync(boxLink) === join(j1.root, '.agents', 'skills') && j2.notes.some((n) => n.includes('.claude/skills')), JSON.stringify(j2.notes));
+  const mine = join(home, 'my-skills');
+  mkdirSync(mine);
+  rmSync(boxLink);
+  symlinkSync(mine, boxLink, 'junction');
+  const j3 = await openSandbox(jun);
+  check('指别处的是家长自己建的:不动', readlinkSync(boxLink) === mine && j3.notes.length === 0, JSON.stringify(j3.notes));
+}
 
 // ---- 命令行:--sandbox 换 workspace;不用 workspace 的命令、单独的 --fresh 报用法错 ----
 async function run(argv: string[]): Promise<{ out: string; err: string; code: number }> {

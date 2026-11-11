@@ -175,7 +175,7 @@ try {
   check('init 再跑:档案按属性认出来,不再补', again.steps.some((x) => x.item.endsWith('孩子.md') && x.action === 'exists'), JSON.stringify(again.steps.filter((x) => x.item.includes('孩子'))));
   check('doctor 查板书技能(机器件,必需)', d1.checks.some((c) => c.name === 'skill.cotutor-board' && c.ok && c.required));
   check('老师文件都查了(三位)', d1.checks.filter((c) => c.name.startsWith('tutor.') && c.name.endsWith('.file')).length === 3);
-  check('doctor 报每位有脸的老师讲哪几种卡', d1.checks.find((c) => c.name === 'tutor.math-tutor.cards')?.detail === '板书写法讲 text choice image lecture canvas code' && d1.checks.find((c) => c.name === 'tutor.english-tutor.cards')?.detail === '板书写法讲 text read choice image word lecture', JSON.stringify(d1.checks.filter((c) => c.name.endsWith('.cards'))));
+  check('doctor 报每位有脸的老师讲哪几种卡', d1.checks.find((c) => c.name === 'tutor.math-tutor.cards')?.detail === '板书写法讲 text choice image lecture canvas kit code' && d1.checks.find((c) => c.name === 'tutor.english-tutor.cards')?.detail === '板书写法讲 text read choice image word lecture', JSON.stringify(d1.checks.filter((c) => c.name.endsWith('.cards'))));
   {
     // 学科色:手写的颜色白字压不住,doctor 提示;压得住的不说
     const cfgPath = join(ws, 'cotutor.json'), before = readFileSync(cfgPath, 'utf8');
@@ -309,7 +309,7 @@ try {
       delete noCards.tutors['math-tutor'].cards;
       noCards.tutors['chinese-tutor'].cards = ['text', 'read'];
       const cg = (await configGaps(noCards)).filter((g) => g.kind === 'cards');
-      check('没写 cards 的出厂老师 → 补出厂清单;写过的不动', cg.length === 1 && cg[0].path === 'tutors.math-tutor.cards' && (cg[0].value as string[]).join() === 'text,choice,image,lecture,canvas,code', JSON.stringify(cg));
+      check('没写 cards 的出厂老师 → 补出厂清单;写过的不动', cg.length === 1 && cg[0].path === 'tutors.math-tutor.cards' && (cg[0].value as string[]).join() === 'text,choice,image,lecture,canvas,kit,code', JSON.stringify(cg));
     }
     const d = await doctorWorkspace(ws, { probeEnv: false });
     const cap = d.checks.find((c) => c.name === 'captures');

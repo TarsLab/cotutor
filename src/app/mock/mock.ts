@@ -132,6 +132,7 @@ function withMockLooks(section: BoardSection, tutor: string, i: number): BoardSe
 /** 孩子发出后几毫秒内画图卡算「画家在画」(含老师想的那几秒;真的 qwen-image-2.0-pro 约 15 秒) */
 const MOCK_PAINT_MS = 20000;
 /** 画图卡的占位图:方的 2×2 四格,每格一个圆圈数字 */
+const MOCK_PLAN_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500"><rect width="800" height="500" fill="#f4f1ea"/><text x="330" y="80" font-size="26" font-family="sans-serif" fill="#333">安全疏散示意图</text><text x="712" y="52" font-size="24" font-family="sans-serif" fill="#333">北</text><path d="M724 100V62M714 76l10-16 10 16" fill="none" stroke="#c0392b" stroke-width="4"/><rect x="100" y="120" width="100" height="120" fill="#cfe3d2" stroke="#333" stroke-width="2"/><text x="150" y="172" font-size="22" font-family="sans-serif" fill="#333" text-anchor="middle">体育</text><text x="150" y="204" font-size="22" font-family="sans-serif" fill="#333" text-anchor="middle">库房</text><rect x="200" y="120" width="100" height="120" fill="#e6e8b8" stroke="#333" stroke-width="2"/><text x="250" y="172" font-size="22" font-family="sans-serif" fill="#333" text-anchor="middle">美术</text><text x="250" y="204" font-size="22" font-family="sans-serif" fill="#333" text-anchor="middle">教室</text><rect x="300" y="120" width="100" height="120" fill="#eeeeee" stroke="#333" stroke-width="2"/><text x="350" y="188" font-size="22" font-family="sans-serif" fill="#333" text-anchor="middle">楼梯</text><rect x="400" y="120" width="100" height="120" fill="#d5dbee" stroke="#333" stroke-width="2"/><text x="450" y="172" font-size="22" font-family="sans-serif" fill="#333" text-anchor="middle">心理</text><text x="450" y="204" font-size="22" font-family="sans-serif" fill="#333" text-anchor="middle">辅导室</text><rect x="500" y="120" width="100" height="120" fill="#f1ead9" stroke="#333" stroke-width="2"/><text x="550" y="172" font-size="22" font-family="sans-serif" fill="#333" text-anchor="middle">卫生</text><text x="550" y="204" font-size="22" font-family="sans-serif" fill="#333" text-anchor="middle">保健室</text><rect x="600" y="120" width="100" height="120" fill="#e3cdc3" stroke="#333" stroke-width="2"/><text x="650" y="188" font-size="22" font-family="sans-serif" fill="#333" text-anchor="middle">教室一</text><text x="60" y="290" font-size="22" font-family="sans-serif" fill="#333">西门</text><text x="380" y="420" font-size="22" font-family="sans-serif" fill="#333">南门</text><path d="M700 280H130M150 268l-20 12 20 12" fill="none" stroke="#333" stroke-width="3"/></svg>';
 const MOCK_PAINT_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#fbfaf6"/>${[[24, 24, '#dcecf7'], [524, 24, '#fdeccb'], [24, 524, '#e3f1d8'], [524, 524, '#f6dde4']].map(([x, y, c], i) => `<rect x="${x}" y="${y}" width="476" height="476" rx="24" fill="${c}" stroke="#8a8781" stroke-width="3"/><rect x="${x}" y="${Number(y) + 300}" width="476" height="176" fill="#a9d18e"/><circle cx="${Number(x) + 238}" cy="${Number(y) + 250}" r="70" fill="#9a6235"/><circle cx="${Number(x) + 62}" cy="${Number(y) + 62}" r="34" fill="#fff" stroke="#1f8a4c" stroke-width="6"/><text x="${Number(x) + 62}" y="${Number(y) + 76}" font-size="40" text-anchor="middle" fill="#1f8a4c" font-family="sans-serif" font-weight="700">${i + 1}</text>`).join('')}</svg>`;
 
 export const MOCK_TUTORS: MockTutor[] = [
@@ -332,6 +333,85 @@ gǔ lì
 我们回到课里看一遍。[[play]]
 
 看完了,你自己说说,每次少几?`,
+      // 教具卡(cards/kit/card.md):落下就自己铺满打开;交了不关,老师的下一张还是同一种画法就在这块板上接着画(scripts/probe-kit.mjs)。
+      // 先是「分一分」三问(点阵:切、切、切加涂),再换成方向盘(转、圈),最后一轮没有教具,板收起来
+      `18 个贴纸,我们画成圈圈。
+
+~~~点阵
+2 行 9 个
+操作: 切
+切一刀,分成 2 份,每份一样多。
+~~~
+
+一行 9 个,画两行,一共 18 个。
+分给 2 个小朋友,每人要一样多。
+你来切一刀。`,
+      `对,每份 9 个。
+
+~~~点阵
+2 行 9 个
+操作: 切
+分给 3 个小朋友,你来切。
+~~~
+
+现在分给 3 个小朋友。
+你来切,每份要一样多。`,
+      `对,每份 6 个。这两刀我留着。
+
+~~~点阵
+2 行 9 个
+线: 竖 3、竖 6
+操作: 切、涂
+再切一刀,分成 6 份,把其中一份涂出来。
+~~~
+
+分给 6 个小朋友。
+你再切一刀,把其中一份涂出来。`,
+      `涂的这一份是 3 个。小朋友越多,每人分到的越少。我们换一道方向的题。
+
+~~~方向盘
+操作: 转
+把「东」转到小人的前面。
+~~~
+
+这是一个方向盘,中间的小人就是你。
+你把「东」转到小人的前面。`,
+      `对,东到前面了。
+
+~~~方向盘
+上: 东
+操作: 圈
+小人的后面是哪个字?圈出来。
+~~~
+
+现在小人面向东。
+你把他后面的那个字圈出来。`,
+      // 照片做底(题目本身带图):老师裁出平面图请孩子圈;下一张在同一块板上添老师的圈和方位十字
+      `对,后面是西。东和西是面对面的。我们看本子上这幅图。
+
+~~~照片
+captures/2026-09-10/plan.jpg
+框: 80, 60, 940, 620
+操作: 圈
+把「心理辅导室」圈出来。
+~~~
+
+这是你本子上的平面图。
+你把「心理辅导室」圈出来。`,
+      `对,就是这一间。我在它上面画了方向。
+
+~~~照片
+captures/2026-09-10/plan.jpg
+框: 80, 60, 940, 620
+圈: 500, 240, 625, 480
+方位: 562, 360
+操作: 圈
+心理辅导室的东面有哪两间?圈出来。
+~~~
+
+图上的北在上面,所以东在右边。
+你把它东面的两间圈出来。`,
+      `对,是卫生保健室和教室一。`,
     ],
   },
   {
@@ -992,6 +1072,8 @@ export function createMock(opts: MockOptions = {}): Mock {
       if (rel.startsWith('mock-paint/')) return { status: 200, contentType: 'image/svg+xml', html: MOCK_PAINT_SVG };
       const up = uploads.get(rel);
       if (up) return { status: 200, contentType: up.type, body: up.data };
+      // 照片底板(数学卡的「照片」)用的假作业:一排六间屋子的平面图,800 × 500
+      if (rel.endsWith('/plan.jpg')) return { status: 200, contentType: 'image/svg+xml', html: MOCK_PLAN_SVG };
       const esc = rel.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c);
       return { status: 200, contentType: 'image/svg+xml', html: `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f7d9a8"/><stop offset="1" stop-color="#8fbf9f"/></linearGradient></defs><rect width="800" height="500" fill="url(#g)"/><circle cx="260" cy="250" r="90" fill="#e8743b"/><circle cx="420" cy="230" r="80" fill="#f4c542"/><circle cx="560" cy="270" r="85" fill="#e0508a"/><text x="400" y="460" font-size="22" text-anchor="middle" fill="#2b2b2b" font-family="sans-serif">${esc}</text></svg>` };
     }

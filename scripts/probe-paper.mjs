@@ -3,9 +3,7 @@
  * 画板的手动验收(不进 pnpm test,要本机 Chrome 与一个跑着的 mock;不花钱):
  * 一、画板卡铺满:盖住左栏、题目在顶栏(点开看全)、工具一列、底下老师的小头像;画三笔、撤销一笔 → 清空(清空前那一版存图)→ 再画 →
  *     按住小头像说(边画边聊:松手带 chat 与一张 jpeg,假嘴接住一句、画布顶上浮字幕,不起老师)→ 点「给老师看」交了、紧凑态出缩略图。
- * 二、左栏的纸:左栏四个钮(画板 · 拍照 · 相册 · 打字);点「画板」铺满、空白;画三笔、关掉再开还在(存在服务端);
- *     按住「给老师看」说一句 = 画和这句话一起给老师(消息带 drawing),板上节前一张孩子的画卡(真图)、「接着画」又打开那张纸;
- *     再画到换色、停笔,点开 20 秒后嘴主动说一句(孩子端发 chat、假嘴说、字幕浮上来)。
+ * 二、左栏的「画板」:左栏四个钮(画板 · 拍照 · 相册 · 打字);点「画板」不再打开一张空白的纸(2026-11-11),而是对老师说一句想画。
  * iPad 横屏各截一张(Page.captureScreenshot,AGENTS.md:无头 --screenshot 会挂)。
  * 用法:node scripts/probe-paper.mjs [mock 根地址] [--out <截图目录>]
  *   缺省 http://127.0.0.1:8790(先 cotutor mock --http;探针会交掉 mock 里那张画板卡,再跑要重起 mock)
@@ -172,47 +170,18 @@ try {
   ok('点「给老师看」= 只交画(send 带 action submit 与 focus)', Boolean(gone) && sub?.body?.action === 'submit' && Boolean(sub.body.focus?.card), JSON.stringify(sub?.body ?? null));
   ok('交过的画板卡有缩略图', Boolean(await until(`Boolean(document.querySelector('#board .c-canvas img'))`, 6000)));
 
-  // ---- 二、左栏的纸 ----
+  // ---- 二、左栏的「画板」:不再是一张空白的纸,点它 = 对老师说想画(老师定板上先放什么) ----
   await send('Page.navigate', { url: `${base}/?tutor=math-tutor` });
   await until(`document.body.classList.contains('live') && Boolean(document.querySelector('#lv-paper'))`, 10000);
   await until(`!document.body.classList.contains('pending')`, 15000);
   const row = await evaluate(`(() => { const bs = [...document.querySelectorAll('#lv-tools button')]; return { names: bs.map((b) => b.textContent.trim()), gaps: bs.slice(1).map((b, i) => Math.round(b.querySelector('.ic').getBoundingClientRect().left - bs[i].querySelector('.ic').getBoundingClientRect().right)), right: Math.round(bs[bs.length - 1].getBoundingClientRect().right), lv: Math.round(document.querySelector('#lv').getBoundingClientRect().right) }; })()`);
   ok('左栏四个一排:画板 · 拍照 · 相册 · 打字,间距 24,不出白纸', row.names.join() === '画板,拍照,相册,打字' && row.gaps.every((g) => g === 24) && row.right <= row.lv, JSON.stringify(row));
   await shot('left-column.png');
-  await press('#lv-paper', 80);
-  ok('点「画板」→ 铺满的空白纸', Boolean(await canvasUp()) && (await evaluate(`document.querySelector('#stage').classList.contains('cv') && document.querySelector('#st-ttl').textContent === '画板' && document.querySelector('#st-go').disabled`)));
-  ok('纸上画三笔', /画了 3 笔/.test(await draw(THREE, RED)));
-  await sleep(600);
-  await press('#st-x', 80);
-  await until(`!document.querySelector('#stage').classList.contains('on')`, 4000);
-  await press('#lv-paper', 80);
-  await canvasUp();
-  ok('关掉再开,纸还在(存在服务端)', /画了 3 笔/.test(String(await until(`(() => { const t = document.querySelector('#st-note').textContent; return /画了/.test(t) && t; })()`, 6000))));
-  await shot('paper-open.png');
-
-  // 按住「给老师看」说一句:画和这句话一起给老师(release 带 drawing,不带 chat)
   sent.length = 0;
-  await pressLive('#st-go', 1400);
-  const give = await (async () => { for (let i = 0; i < 40; i++) { const r = sent.find((x) => x.t === 'release'); if (r) return r; await sleep(200); } return null; })();
-  ok('按住「给老师看」说 → release 带 drawing(纸、captures/ 里的图),不带 chat', Boolean(give?.body?.drawing) && give.body.drawing.key && /^captures\//.test(give.body.drawing.image) && !give.chat, JSON.stringify(give ?? null));
-  const card = await until(`(() => { const im = document.querySelector('#board .c-draw img'); return im && im.complete && im.naturalWidth > 0 && { w: im.naturalWidth, t: document.querySelector('#board .c-draw b').textContent }; })()`, 15000);
-  ok('板上节前一张孩子的画卡(真图、几笔)', Boolean(card) && /画了 3 笔/.test(card.t), JSON.stringify(card));
-  await until(`!document.body.classList.contains('pending')`, 20000);
-  await shot('paper-drawing-card.png');
-  await press('#board .c-draw .dw-go', 80);
-  await canvasUp();
-  ok('「接着画」又打开那张纸(还是 3 笔,没锁)', /画了 3 笔/.test(String(await until(`(() => { const t = document.querySelector('#st-note').textContent; return /画了/.test(t) && t; })()`, 6000))) && !(await evaluate(`document.querySelector('#st-go').hidden`)));
-
-  // 嘴主动说一句:红的再画到 ≥ 5 笔、换蓝画一笔、停笔;点开 20 秒后孩子端发 chat(说红色),假嘴说一句、回 said
-  sent.length = 0;
-  const opened = Date.now();
-  await draw(TWO, RED);
-  await draw([[[600, 400], [640, 420]]], BLUE);
-  const look = await (async () => { for (let i = 0; i < 160; i++) { const r = sent.find((x) => x.t === 'chat'); if (r) return r; await sleep(250); } return null; })();
-  ok('换了颜色、停笔:点开 20 秒后孩子端让嘴主动说一句(说红色、带一张 jpeg)', Boolean(look) && look.ask?.color === '红' && String(look.image).startsWith('data:image/jpeg') && Date.now() - opened >= 20_000, look ? JSON.stringify({ ...look, image: String(look.image).slice(0, 24) }) : '没发');
-  const said = await until(`(() => { const c = document.querySelector('#cv-cap'); return c.classList.contains('on') && c.textContent; })()`, 6000);
-  ok('嘴说的那句浮在画布顶上', /红色/.test(String(said)), String(said));
-  await shot('paper-chat-look.png');
+  await press('#lv-paper', 80);
+  const want = await (async () => { for (let i = 0; i < 20; i++) { const r = sent.find((x) => x.t === 'send'); if (r) return r; await sleep(150); } return null; })();
+  ok('点「画板」= 对老师说想画(发一句话,不带 drawing),不开空白的纸', want?.body?.text === '我想在画板上画给你看。' && !want.body.drawing && !(await evaluate(`document.querySelector('#stage').classList.contains('on')`)), JSON.stringify(want?.body ?? null));
+  ok('板上没有「接着画」', !(await evaluate(`Boolean(document.querySelector('#board .dw-go'))`)));
 } catch (err) {
   bad++;
   console.error('✗ 探针出错:', err instanceof Error ? err.stack : err);

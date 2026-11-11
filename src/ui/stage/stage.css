@@ -40,6 +40,24 @@ html, body, #root { margin: 0; height: 100%; background: #fffdf8; font: 18px/1.5
   .canvas-sep { width: 28px; height: 1px; }
 }
 
+/* ---- 教具(kit.tsx):工具一列(向左转、向右转、擦掉),画面占满;最底下给页面浮上来的老师小头像留一格(同画板铺满);类名带 kt- ---- */
+.kt-wrap { flex: 1; min-height: 0; display: flex; flex-direction: row; background: #fffdf8; }
+.kt-wrap.kt-hand-left { flex-direction: row-reverse; }
+.kt-tools { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 18px 12px calc(env(safe-area-inset-bottom) + 104px); border-right: 1px solid #e2dfd6; overflow: auto; }
+.kt-hand-left .kt-tools { border-right: 0; border-left: 1px solid #e2dfd6; }
+.kt-btn { width: 76px; padding: 8px 0 6px; border-radius: 18px; background: #ffffff; border: 2px solid #e2dfd6; color: #2b2b2b; display: flex; flex-direction: column; align-items: center; gap: 2px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; flex: 0 0 auto; -webkit-tap-highlight-color: transparent; transition: transform .12s; }
+.kt-btn:active { transform: scale(.94); }
+.kt-btn:disabled { opacity: .35; }
+.kt-btn.kt-left, .kt-btn.kt-right { border-color: #7a4fc9; color: #7a4fc9; }
+.kt-sep { width: 36px; height: 1px; background: #e2dfd6; }
+.kt-board { position: relative; flex: 1; min-width: 0; min-height: 0; display: grid; touch-action: none; }
+.kt-board.kt-pen { cursor: crosshair; }
+/* 顶上空出一条:页面把老师说的那句浮在画面顶上(#cv-cap),别盖住图 */
+.kt-host { position: absolute; inset: 64px 12px 12px; display: grid; place-items: center; }
+.kt-box { position: relative; }
+.kt-svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.kt-board .stage-wait { position: absolute; inset: 0; }
+
 /* ---- 小课堂:左边一条竖栏(回去、课名、圈一圈 / 擦掉),画面占满中间,下面字幕、一行控制(播放、进度条、时间、去问老师) ---- */
 /* 底色就是课包板子的纸色(#fffdf8):画面四周不留白框,也不画分割线,竖向的地方都给画面 */
 .lc { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); background: #fffdf8; }

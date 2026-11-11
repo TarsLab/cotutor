@@ -195,10 +195,10 @@ export function bookkeepingPrompt(opts: { thread: string; rating?: number; keepS
     '  name: 这个话题叫什么(不超过 12 字,像日记里的小标题)',
     opts.headings.length ? '  textbook: 属于哪册哪节——从下面的教材目录里挑一条原样抄;都不是就不写这行' : '  textbook: 属于哪册哪节,写成「册#节」;认不出就不写这行',
     '  asked:',
-    '    - 孩子在这个话题里问的、说的,挑 1–3 句以后还值得看的,照他的原话抄,可以只抄其中一截(语音转写有错字也照抄;没有就不写 asked)',
+    '    - 孩子在这个话题里问的、说的,挑 1–3 句以后还值得看的,照他的原话抄,可以只抄其中一截(语音转写有错字也照抄;明显是机器听岔的那句不挑;没有就不写 asked)',
     ...(keep ? [`  summary: 一到三句,讲了什么、难点在哪、孩子哪里卡住${opts.photos ? ';这个话题里有 ' + opts.photos + ' 张作业照片,把你认出的册子 / 页 / 题号 / 题面写成文字(日记不存图、不写照片路径)' : ''}`, '  steps: 讲解的骨架,一行,步骤用 → 连'] : []),
     '  observations:',
-    '    - 关于孩子、值得别的老师下次知道的一句话(0–3 条;没有就不写 observations)',
+    '    - 关于孩子、值得别的老师下次知道的一句话(0–3 条;没有就不写 observations)。孩子的话是机器听写的:同音字、听岔的词是机器的错,不写「他把某字说成某字」「同音字分不清」这类',
   ];
   if (opts.headings.length) lines.push('', '教材目录:', ...opts.headings.map((h) => `- ${h}`));
   return lines.join('\n');

@@ -794,7 +794,7 @@ ${pageDomJs(4000)}
     return el;
   };
 
-  const KIND_LABEL = { text: '文字', read: '点读', choice: '选择', fill: '填空', image: '图片', tianzige: '田字格', word: '单词', lecture: '小课堂', canvas: '画板', code: '原样' };
+  const KIND_LABEL = { text: '文字', read: '点读', choice: '选择', fill: '填空', image: '图片', tianzige: '田字格', word: '单词', lecture: '小课堂', canvas: '画板', kit: '教具', code: '原样' };
   const cardEl = (card, n) => {
     const p = card.props || {};
     const style = card.kind === 'text' ? (p.style || 'plain') : '';
@@ -818,6 +818,9 @@ ${pageDomJs(4000)}
     } else if (card.kind === 'canvas') {
       body.append(h('div', {}, p.prompt || '(没写题目)'),
         h('div', { class: 'meta2' }, p.base && p.base.bundle ? '底图课包 ' + p.base.bundle : p.base && p.base.skeletons ? '行内骨架 ' + p.base.skeletons.length + ' 个' : '空白画板'));
+    } else if (card.kind === 'kit') {
+      body.append(h('div', {}, p.prompt || '(没写题目)'),
+        h('div', { class: 'meta2' }, (p.kit || '') + (p.params ? ' · ' + Object.entries(p.params).map(([k, v]) => k + ' ' + v).join(' · ') : '')));
     } else body.append(h('pre', {}, p.text || ''));
     box.append(body);
     return box;

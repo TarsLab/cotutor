@@ -697,6 +697,30 @@ try {
     const cvM = ((await day('math-tutor', phDate)).json as { index: { messages: { job: string; cards?: { card: string; text: string }[] }[] } }).index.messages.find((m) => m.job === cvJob)!;
     check('交了画板的那条:带只读工具,包里是图的绝对路径,消息里是相对的', cvPut.status === 200 && existsSync(join(root, cvRel)) && cvR.status === 202 && toolsOf(cvRun.prompt)?.join() === 'read_file,glob,grep_search' && cvRun.prompt.includes(`画了 2 笔,图:${JSON.stringify(join(root, cvRel)).slice(1, -1)}(用 read_file 看)`) && cvM.cards?.[0]?.text.endsWith(`画了 2 笔,图:${cvRel}(用 read_file 看)`) === true, JSON.stringify({ put: cvPut.status, tools: toolsOf(cvRun.prompt), cards: cvM.cards, prompt: cvRun.prompt.slice(0, 600) }));
   }
+  {
+    // 数学卡:老师先画(方向盘),孩子转了交回来——包里是请他做的操作和应用算的大概,板的图直接附在这一轮(不经读图工具,不带工具)
+    const ktR = await kidSend(ctx, 'math-tutor', { text: '面向东后面是什么 方向盘' });
+    await wait('math-tutor');
+    const ktJob = (ktR.json as { job: string }).job;
+    const ktDay = ((await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { job: string; section?: { cards: { kind: string; props: Record<string, unknown>; state?: unknown; submitted?: boolean }[] } }[] }).messages.find((m) => m.job === ktJob)!;
+    const ktN = ktDay.section?.cards.findIndex((c) => c.kind === 'kit') ?? -1;
+    check('老师写的数学卡下发到孩子端:哪种画法、参数、开放的操作、题目', ktN >= 0 && JSON.stringify(ktDay.section!.cards[ktN].props) === '{"kit":"方向盘","params":{"上":"北","小人":"有"},"ops":["转"],"prompt":"把「东」转到小人的前面。"}', JSON.stringify(ktDay.section?.cards));
+    const ktPNG = 'data:image/png;base64,' + Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).toString('base64');
+    const ktBad = await route('PUT', `/api/kid/conversations/math-tutor/cards/${ktJob}/${ktN}`, ctx, { turn: { disc: 270 }, moves: 1, marks: 'x' });
+    const ktPut = await route('PUT', `/api/kid/conversations/math-tutor/cards/${ktJob}/${ktN}`, ctx, { turn: { disc: 270 }, moves: 1, marks: [], image: ktPNG });
+    const ktRel = `conversations/math-tutor/${phDate}.${ktJob}.cards/${ktN}.png`;
+    const ktS = await kidSend(ctx, 'math-tutor', { text: '', action: 'submit', focus: { card: `${ktJob}/${ktN}` } });
+    await wait('math-tutor');
+    const ktJob2 = (ktS.json as { job: string }).job;
+    const ktRun = JSON.parse(readFileSync(join(root, 'conversations', 'math-tutor', `${phDate}.${ktJob2}.run.json`), 'utf8')) as { prompt: string };
+    const ktSaid = `${ktJob}/${ktN} kit「把「东」转到小人的前面。」 请他做的:转;大概:把方向盘逆时针转了 90°(按了 1 次);现在前面是东、右面是南、后面是西、左面是北;没有圈;图随这一轮附上,以图为准`;
+    const ktM = ((await day('math-tutor', phDate)).json as { index: { messages: { job: string; cards?: { card: string; text: string }[] }[] } }).index.messages.find((m) => m.job === ktJob2)!;
+    const ktHist = readFileSync(join(root, 'conversations', 'math-tutor', `${phDate}.${phJ.thread}.brain.jsonl`), 'utf8').trim().split('\n').map((l) => JSON.parse(l) as { user: { images: string[] } });
+    check('交了数学卡:状态形状不对不收;板的图存成文件;包里是请他做的 + 大概;图直接附在这一轮、不带工具;消息里记着同一句', ktBad.status === 400 && ktPut.status === 200 && existsSync(join(root, ktRel)) && ktS.status === 202 && ktRun.prompt.includes(ktSaid) && (toolsOf(ktRun.prompt) ?? []).length === 0 && ktHist[ktHist.length - 1].user.images.join() === ktRel && `${ktM.cards?.[0]?.card} ${ktM.cards?.[0]?.text}` === ktSaid, JSON.stringify({ bad: ktBad.status, put: ktPut.status, file: existsSync(join(root, ktRel)), tools: toolsOf(ktRun.prompt), images: ktHist[ktHist.length - 1].user.images, cards: ktM.cards }));
+    const ktAgain = await kidSend(ctx, 'math-tutor', { text: '', action: 'submit', focus: { card: `${ktJob}/${ktN}` } });
+    const ktLocked = await route('PUT', `/api/kid/conversations/math-tutor/cards/${ktJob}/${ktN}`, ctx, { turn: { disc: 0 }, moves: 2 });
+    check('交过的教具卡锁住:不能再交、不能再改', ktAgain.status === 409 && ktLocked.status === 409, JSON.stringify([ktAgain.status, ktLocked.status]));
+  }
   await route('PUT', rateUrl(phJ.thread), ctx, { rating: 4 });
   const phBk = await route('POST', `/api/conversations/math-tutor/${phDate}/bookkeep`, ctx, { threads: [phJ.thread] });
   await ctx.runner.flush();

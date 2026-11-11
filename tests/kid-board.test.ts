@@ -6,9 +6,12 @@ import {
   cardTitle,
   findPhrase,
   hasState,
+  isFullStage,
   isHeavy,
+  opensItself,
   lectureReady,
   segmentAudio,
+  standsAlone,
   stateSummary,
   pickedLabels,
   togglePick,
@@ -117,6 +120,11 @@ const lectureCard: BoardCard = { kind: 'lecture', props: { bundle: '2026-09-04-g
   check('做了什么(交给老师能不能按):选择题是选项、别的卡永远空', stateSummary({ ...cards[3], state: { picked: [0] } }).join() === 'A 他自己的' && stateSummary({ ...cards[4], state: { answers: ['多做一步'] } }).length === 0 && stateSummary({ ...cards[0], state: { x: 1 } }).length === 0);
   const cv: BoardCard = { kind: 'canvas', props: { base: null, prompt: '画一条蛇' } };
   check('画板卡:有交互(给老师看)、重卡;做了什么 = 画了 N 笔;标题是题目', hasState(cv) && isHeavy(cv) && stateSummary(cv).length === 0 && stateSummary({ ...cv, state: { ink: [{}, {}, {}] } }).join() === '画了 3 笔' && cardTitle(cv) === '画一条蛇' && cardTitle({ kind: 'canvas', props: { base: null } }) === '画一画' && cardTexts(cv).join() === '画一条蛇');
+  {
+    const kt: BoardCard = { kind: 'kit', props: { kit: '方向盘', params: { 上: '北', 小人: '有' }, prompt: '把「东」转到小人的前面。' } };
+    check('教具卡:有交互(给老师看)、重卡、铺满、落下就自己打开、独占一行、做题的紫;画板不自己打开', hasState(kt) && isHeavy(kt) && isFullStage(kt) && opensItself(kt) && standsAlone(kt) && tintFor(kt) === 'plum' && isFullStage({ kind: 'canvas', props: {} }) && !opensItself({ kind: 'canvas', props: {} }) && !isFullStage({ kind: 'choice', props: {} }));
+    check('教具卡:做了什么 = 转过了 / 画了几笔;没动手是空的(「给老师看」按不了);标题是题目,没题目是教具名', stateSummary(kt).length === 0 && stateSummary({ ...kt, state: { turn: { disc: 0 }, moves: 0, marks: [] } }).length === 0 && stateSummary({ ...kt, state: { turn: { disc: 270 }, moves: 1, marks: [] } }).join() === '转过了' && stateSummary({ ...kt, state: { moves: 2, marks: [[[1, 1], [2, 2]]] } }).join() === '转过了,画了 1 笔' && cardTitle(kt) === '把「东」转到小人的前面。' && cardTitle({ kind: 'kit', props: { kit: '方向盘', params: {} } }) === '方向盘' && cardTexts(kt).join() === '把「东」转到小人的前面。');
+  }
   check('重卡:小课堂 / canvas 在舞台包里开;小课堂卡读得出、有起止才 ready', isHeavy(lectureCard) && isHeavy({ kind: 'canvas', props: {} }) && !isHeavy(cards[3]) && lectureReady(lectureCard) && !lectureReady({ kind: 'lecture', props: { bundle: 'x' } }) && !lectureReady(cards[0]) && !isHeavy({ kind: 'scene', props: { bundle: 'x', ready: true } }));
   check('小课堂卡:能标注标题 / 那句话;标题是 title;没有「交给老师」', cardTexts(lectureCard).join('|') === '找规律|再看一遍' && cardTitle(lectureCard) === '找规律' && !hasState(lectureCard));
   check('图片卡:能标注的是图注,标题是图注 / 「图」', cardTexts({ kind: 'image', props: { src: 'a.png', caption: '看这里' } }).join() === '看这里' && cardTitle({ kind: 'image', props: { src: 'a.png', caption: '看这里' } }) === '看这里' && cardTitle({ kind: 'image', props: { src: 'a.png' } }) === '图');

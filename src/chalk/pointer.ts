@@ -24,3 +24,11 @@ export const ERASER_POINTER_IMG = `data:image/svg+xml,${encodeURIComponent(ERASE
 export const PAPER_COLOR = '#fffdf7';
 
 export const DEFAULT_POINTER_IMG = `data:image/svg+xml,${encodeURIComponent(PENCIL_SVG)}`;
+
+/**
+ * 孩子的笔:蓝,只有这一个颜色,老师画的东西不用它;线比老师的粗(老师 2,孩子 5,不随画面缩放)。
+ * 老师的用色是做课包时定的(skills/chalk-teaching「用色」):主笔迹墨色,红 = 强调,橙 = 划掉——所以孩子的笔不能是红的。
+ * 小课堂里画的一处、教具上圈的一笔都用它;教具的画面里不许出现它(tests/chalk-kit.test.ts)。
+ */
+export const KID_INK = '#2f6fd6';
+export const KID_INK_WIDTH = 5;

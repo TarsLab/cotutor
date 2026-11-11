@@ -5,6 +5,7 @@
 import { z } from 'zod';
 import type { BoardCard, BoardSection } from '../presentation.ts';
 import { canvas } from './canvas.ts';
+import { kit, kitTag } from './kit.ts';
 import { choice } from './choice.ts';
 import { code } from './code.ts';
 import { tianzige } from './tianzige.ts';
@@ -27,15 +28,16 @@ export { code, type CodeProps } from './code.ts';
 export { image, IMAGE_EXT, type ImageProps } from './image.ts';
 export { lecture, type LectureProps, type LectureState } from './lecture.ts';
 export { canvas, type CanvasProps, type CanvasState } from './canvas.ts';
+export { kit, KIT_PROMPT_MAX, type KitProps } from './kit.ts';
 export { paint, PaintPropsSchema, PAINT_PANELS_MAX, type PaintCast, type PaintProps } from './paint.ts';
 export { tianzige, HAN, TIANZIGE_MAX, type TianzigeProps } from './tianzige.ts';
 export { word, wordChunks, WORD_MAX, WORD_MAX_WORDS, WORD_RE, type WordProps } from './word.ts';
 export { tutor, BUTTON_LABEL_MAX, TUTOR_BUTTONS_MAX, TutorButtonSchema, type TutorButton, type TutorProps } from './tutor.ts';
 export { dictation, dictationEmoji, dictationWordLang, DictationPropsSchema, DICTATION_EN_MAX, DICTATION_SAY_MAX, DICTATION_WORD_MAX, DICTATION_WORDS_MAX, EN_WORD_RE, type DictationLang, type DictationProps, type DictationWord } from './dictation.ts';
 
-/** 全部种类:先板书的十一种(注册表顺序即技能里的顺序),再首页专属的 */
+/** 全部种类:先板书的十二种(注册表顺序即技能里的顺序),再首页专属的 */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const CARD_KINDS: readonly CardKind<any>[] = [text, read, choice, image, tianzige, word, lecture, canvas, paint, photo, code, tutor, dictation];
+export const CARD_KINDS: readonly CardKind<any>[] = [text, read, choice, image, tianzige, word, lecture, canvas, kit, paint, photo, code, tutor, dictation];
 
 export function cardKind(name: string): CardKind | undefined {
   return CARD_KINDS.find((k) => k.name === name) as CardKind | undefined;
@@ -90,7 +92,10 @@ export function parseCard(tag: string, body: string, place: CardPlace = 'board')
   const [name, ...mods] = tag.trim().split(/\s+/).filter(Boolean);
   const asText = (why: string): ParsedCard => ({ card: { kind: 'text', props: { text: body.trim() || name || '…' } }, warning: why, fallback: true });
   if (!name) return place === 'board' ? { card: { kind: 'code', props: code.parse(body, []) } } : asText('围栏没写种类');
-  const kind = cardKind(name.toLowerCase());
+  // 教具卡的标签是画法的名字(```点阵):当成 kit 卡,名字交给它
+  const asKit = !cardKind(name.toLowerCase()) && kitTag(name);
+  const kind = asKit ? kit as unknown as CardKind : cardKind(name.toLowerCase());
+  if (asKit) mods.unshift(name);
   if (!kind) return place === 'board' ? { card: { kind: 'code', props: code.parse(body, [name]) } } : asText(`不认识的卡:${name}`);
   if (!usableIn(kind, place)) return asText(place === 'board' ? `${name} 是首页的卡,板书里不能用` : `首页放不了 ${name} 卡(它要交给某位老师,只能在板书里)`);
   const um = TEXTUAL.has(kind.name) ? unmark(body) : { body, had: false };
@@ -117,11 +122,11 @@ export function stripSecrets(section: BoardSection): BoardSection {
   };
 }
 
-/** 一张卡的标题(舞台顶栏、给老师的描述里用):文字卡的 title / text,选择题的问题,其余第一段有字的,田字格的字,单词卡的词,听写卡的词表 */
+/** 一张卡的标题(舞台顶栏、给老师的描述里用):文字卡的 title / text,选择题的问题,其余第一段有字的,田字格的字,单词卡的词,听写卡的词表,教具卡没写题目就是教具的名字 */
 export function cardLabel(card: BoardCard): string {
   const p = card.props;
   const s = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
-  const first = s(p.title) || s(p.question) || s(p.show) || s(p.text) || s(p.caption) || s(p.prompt) || (Array.isArray(p.segments) ? s(p.segments[0]) : '') || s(p.chars) || s(p.word) || (Array.isArray(p.words) ? p.words.map((w) => s((w as { chars?: unknown })?.chars)).filter(Boolean).join('、') : '');
+  const first = s(p.title) || s(p.question) || s(p.show) || s(p.text) || s(p.caption) || s(p.prompt) || (Array.isArray(p.segments) ? s(p.segments[0]) : '') || s(p.chars) || s(p.word) || (Array.isArray(p.words) ? p.words.map((w) => s((w as { chars?: unknown })?.chars)).filter(Boolean).join('、') : '') || (card.kind === 'kit' ? s(p.kit) : '');
   const cps = Array.from(first.replace(/\s+/g, ' '));
   return cps.length > 40 ? `${cps.slice(0, 40).join('')}…` : cps.join('');
 }

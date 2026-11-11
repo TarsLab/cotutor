@@ -1,0 +1,7 @@
+/* 教具(cards/kit/card.md):题目 + 「点开」;做过之后写着转过了、画了几笔;舞台是 iframe 里的教具(src/ui/stage/kit.tsx) */
+.c.c-kit { gap:8px; }
+.c.c-kit .kp { font-weight:600; }
+.c.c-kit .kb { display:flex; align-items:center; gap:12px; border:2px dashed var(--tint-plum-head); border-radius:12px; padding:14px 16px; color:var(--tint-plum-head); background:#fff; white-space:normal; }
+.c.c-kit .kb .ki { flex:none; width:44px; height:44px; display:grid; place-items:center; }
+.c.c-kit .kb .kn { font-weight:600; font-size:17px; }
+.c.c-kit .kb .kd { margin-left:auto; font-size:15px; }

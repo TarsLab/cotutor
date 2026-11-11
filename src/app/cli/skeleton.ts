@@ -147,7 +147,7 @@ export interface ConfigTemplateInput {
  *  不写 avatar:三门主科用包里的出厂头像(src/app/http/avatars.ts) */
 const TUTOR_DEFAULTS: Record<string, { display: string; subject?: string; hidden?: boolean; runtime?: string; enabled?: boolean; cards?: BoardCardKind[]; policy?: { effort?: 'low' | 'medium' | 'high'; tools?: 'on' } }> = {
   // 数学多想一会儿:算错的代价大(别的老师用缺省 low);走 qwen3.8-max(同语文老师)。运行时 api = 应用直连百炼(2026-10-31 起出厂缺省)
-  'math-tutor': { display: '数学老师', subject: '数学', runtime: 'api', cards: ['text', 'choice', 'image', 'lecture', 'canvas', 'code'], policy: { effort: 'medium' } },
+  'math-tutor': { display: '数学老师', subject: '数学', runtime: 'api', cards: ['text', 'choice', 'image', 'lecture', 'canvas', 'kit', 'code'], policy: { effort: 'medium' } },
   // 画图卡(paint)不在这里:只在「你说我画」activity 的话题里有(agents/chinese-tutor/activities/你说我画.md 头上的 cards)
   // 语文老师走 qwen3.8-max(你说我画、看图说话两套 activity eval 在它上面验证;2026-10-31 Ray 上 API 与 Qwen Code 对照过)
   'chinese-tutor': { display: '语文老师', subject: '语文', runtime: 'api', cards: ['text', 'read', 'choice', 'image', 'tianzige', 'lecture', 'canvas'] },

@@ -470,10 +470,17 @@ export class Runner {
     // 画板交上来的图(状态里是相对 workspace 根的路径):包里那行换成绝对路径(Read 只认绝对路径,老师的 cwd 在 agents/<名>/),消息里照旧记相对的
     const changed = fresh || input.bookkeep ? [] : changedCards(index, await readCardStates(ws, tutor, date), thread);
     let drawings = 0;
+    /** 教具卡交上来的图:随这一轮直接附给老师(同作业照片),不经读图工具 */
+    const kitImages: string[] = [];
     const cards: { card: string; text: string; pack?: string }[] = await Promise.all(changed.map(async (c) => {
       const card = index.messages.find((m) => m.job === c.job)?.section?.cards[c.n];
       const id = cardId(c.job, c.n);
       if (!card) return { card: id, text: JSON.stringify(c.file.state) };
+      if (card.kind === 'kit') {
+        const img = (c.file.state as { image?: unknown } | null)?.image;
+        if (typeof img === 'string') kitImages.push(join(ws.root, img));
+        return { card: id, text: describeCard(card, c.file.state) };
+      }
       const st = card.kind === 'canvas' ? (c.file.state as { image?: unknown; cleared?: { image?: unknown }[] } | null) : null;
       const image = typeof st?.image === 'string' ? st.image : undefined;
       // 清空前存的那几版也是图,一样换绝对路径、一样要 Read
@@ -510,7 +517,7 @@ export class Runner {
       pack.live = { ...(l.caught ? { caught: l.caught } : {}), ...(l.cut !== undefined ? { cut: l.cut } : {}), ...(l.warmup?.length ? { warmup: l.warmup } : {}), ...(l.phone !== undefined ? { phone: l.phone } : {}), ...(l.app ? { app: l.app } : {}), ...(l.draw?.length ? { draw: l.draw } : {}) };
     }
     const prompt = buildContextPack(pack, text, policy.contextPack);
-    const req: BrainRequest = { agent: tutor, prompt, systemBody, runtime: input.runtime ?? t.runtime, effort: policy.effort, tools, readDirs: readDirsOf(ws), session, ...(compact ? { compact: { digest: threadDigest(index.messages.filter((_, i) => known[i] === thread)) } } : {}), ...(pack.photoFiles?.length ? { images: pack.photoFiles } : {}) };
+    const req: BrainRequest = { agent: tutor, prompt, systemBody, runtime: input.runtime ?? t.runtime, effort: policy.effort, tools, readDirs: readDirsOf(ws), session, ...(compact ? { compact: { digest: threadDigest(index.messages.filter((_, i) => known[i] === thread)) } } : {}), ...(pack.photoFiles?.length || kitImages.length ? { images: [...(pack.photoFiles ?? []), ...kitImages] } : {}) };
     const plan = this.brain.plan(req);
 
     // 原声:落在这轮旁边(删话题一起删);写不下就当没有,消息照发

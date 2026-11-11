@@ -53,6 +53,9 @@ export const GRADERS: Readonly<Record<string, string>> = {
   并排: '有一张 read 卡同时有这两句里的字(「并排: 睡大觉 | 浇了水」)',
   卡上有: '老师写的卡上出现过这几个说法(「卡上有: 先看清」,如顺口溜)',
   出拍给我看卡: '写过拍给我看卡(photo):要孩子拍照片发来时',
+  出教具卡: '写过数学卡(kit):老师先画出来、请孩子动笔时;后面写画法的名字就要是那一种(「出教具卡: 照片」)',
+  不出教具卡: '没写过数学卡(kit):作业全对,说一句就收,不讲题时',
+  问就上板: '讲稿里有问号的每一轮都带一张数学卡或画板卡(请孩子拍照的那一轮不算):讲题不只用嘴问',
   词落到幅: '参数「词」里至少这么多个原样出现在分幅里(「词落到幅: 2」);只适合画得出来的词,「羞愧」「满满」老师会照规矩换成看得见的样子',
 };
 
@@ -224,6 +227,19 @@ export function gradeRun(checks: readonly string[], turns: readonly EvalTurn[], 
       case '出拍给我看卡': {
         const ok = turns.some((t) => (t.section?.cards ?? []).some((c) => c.kind === 'photo'));
         return { check, pass: ok, ...(ok ? {} : { why: `${turns.length} 轮都没写拍给我看卡` }) };
+      }
+      case '出教具卡': {
+        const want = arg.trim();
+        const ok = turns.some((t) => (t.section?.cards ?? []).some((c) => c.kind === 'kit' && (!want || (c.props as { kit?: unknown }).kit === want)));
+        return { check, pass: ok, ...(ok ? {} : { why: `${turns.length} 轮都没写${want ? `「${want}」这种` : ''}数学卡` }) };
+      }
+      case '不出教具卡': {
+        const n = turns.filter((t) => (t.section?.cards ?? []).some((c) => c.kind === 'kit')).length;
+        return { check, pass: !n, ...(n ? { why: `有 ${n} 轮写了数学卡` } : {}) };
+      }
+      case '问就上板': {
+        const bare = turns.filter((t) => (t.section?.lines ?? []).some((l) => /[??]/.test(l.text)) && !(t.section?.cards ?? []).some((c) => c.kind === 'kit' || c.kind === 'canvas' || c.kind === 'photo'));
+        return { check, pass: !bare.length, ...(bare.length ? { why: `有 ${bare.length} 轮只用嘴问、没出板:「${bare[0].section?.lines.find((l) => /[??]/.test(l.text))?.text ?? ''}」` } : {}) };
       }
       case '卡上有': {
         const cards = turns.flatMap((t) => (t.section?.cards ?? []).map((c) => JSON.stringify(c.props)));

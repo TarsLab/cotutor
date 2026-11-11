@@ -1,6 +1,6 @@
 /**
  * 舞台包入口(打成 dist/stage/stage.js,页面在 iframe 里装 /stage/?card=<id>):等页面发 card,按 kind 装组件;
- * 小课堂(孩子从首页看的整堂、老师放的一段)= lecture.tsx;画板卡 = excalidraw 编辑器(步 10)。所有对外说话都走 postMessage(protocol.ts)。
+ * 小课堂(孩子从首页看的整堂、老师放的一段)= lecture.tsx;画板卡 = excalidraw 编辑器(步 10);教具卡 = kit.tsx(老师先画好的图,孩子转、圈)。所有对外说话都走 postMessage(protocol.ts)。
  * ?chalk=bake|snap 是做课包时 CDP 开的(chalk/tool.ts),不是孩子端。
  * 界面上没有错误文案:装不上就发 error,页面关掉舞台、什么都不显示。
  */
@@ -15,6 +15,8 @@ const backOf = (v: unknown): LectureBack | null => {
   return typeof b.color === 'string' && typeof b.initial === 'string' && b.initial ? { color: b.color, initial: b.initial } : null;
 };
 import type { CanvasCleared, CanvasStageHandle } from './canvas.tsx';
+import { KitStage, type KitStageHandle } from './kit.tsx';
+import type { KitState } from '../../chalk/index.ts';
 import '@excalidraw/excalidraw/dist/prod/index.css';
 import { STAGE_SOURCE, type FromStage, type ToStage } from './protocol.ts';
 import './stage.css';
@@ -34,6 +36,7 @@ const post = (m: Outgoing): void => { window.parent.postMessage({ source: STAGE_
 function App(): JSX.Element {
   const [card, setCard] = useState<Card | null>(null);
   const canvas = useRef<CanvasStageHandle>(null);
+  const kit = useRef<KitStageHandle>(null);
   const lecture = useRef<LectureStageHandle>(null);
   /** 录像的 follow 比播放器先到(卡刚到、还没挂上):记着最后那条,挂上了交给它(它自己再等课装好) */
   const pendingFollow = useRef<Extract<ToStage, { type: 'follow' }> | null>(null);
@@ -49,7 +52,7 @@ function App(): JSX.Element {
       if (m.type === 'card') setCard(m);
       else if (m.type === 'follow') { if (lecture.current) lecture.current.follow(m.ms, m.playing, m.rate, m.marks as StageMark[]); else pendingFollow.current = m; }
       else if (m.type === 'control') {
-        if (m.action === 'submit') canvas.current?.submit();
+        if (m.action === 'submit') { canvas.current?.submit(); kit.current?.submit(); }
         else if (m.action === 'snap') void (canvas.current ? canvas.current.snap() : Promise.resolve(null)).then((image) => post({ type: 'snap', image }));
         else lecture.current?.control(m.action);
       }
@@ -68,6 +71,8 @@ function App(): JSX.Element {
   const onInk = useCallback((ink: Record<string, unknown>[]) => post({ type: 'state', state: { ink } }), []);
   const onSubmit = useCallback((ink: Record<string, unknown>[], image: string) => post({ type: 'submit', state: { ink }, image }), []);
   const onCleared = useCallback((c: CanvasCleared) => post({ type: 'cleared', ...c }), []);
+  const onKitState = useCallback((state: KitState) => post({ type: 'state', state }), []);
+  const onKitSubmit = useCallback((state: KitState, image?: string) => post({ type: 'submit', state, ...(image ? { image } : {}) }), []);
   const onLectureDone = useCallback((w: LectureWatch) => post({ type: 'lecture', event: 'finished', ...w }), []);
   const onLectureClose = useCallback((w: LectureWatch) => post({ type: 'lecture', event: 'close', ...w }), []);
   const onLectureAsk = useCallback((w: LectureWatch) => post({ type: 'lecture', event: 'ask', ...w }), []);
@@ -95,6 +100,10 @@ function App(): JSX.Element {
         <CanvasStage key={Array.isArray(st.ink) ? st.ink.length : 0} ref={canvas} base={base} bundleUrl={card.bundleUrl} imageUrl={card.imageUrl} prompt={typeof card.props.prompt === 'string' ? card.props.prompt : undefined} ink={Array.isArray(st.ink) ? st.ink : []} readonly={card.readonly === true} full={card.full === true} hand={card.hand === 'left' ? 'left' : 'right'} onState={onInk} onSubmit={onSubmit} onCleared={onCleared} onError={onError} />
       </Suspense>
     );
+  }
+  if (card.kind === 'kit') {
+    const p = card.props as { kit?: unknown; params?: unknown; ops?: unknown };
+    return <KitStage ref={kit} id={card.id} kit={String(p.kit ?? '')} params={p.params && typeof p.params === 'object' ? (p.params as Record<string, unknown>) : {}} ops={p.ops} state={(card.state ?? null) as KitState | null} imageUrl={typeof card.imageUrl === 'string' ? card.imageUrl : undefined} readonly={card.readonly === true} hand={card.hand === 'left' ? 'left' : 'right'} onState={onKitState} onSubmit={onKitSubmit} onError={onError} />;
   }
   return <div className="stage-wait">{String(card.props.title ?? card.props.text ?? '')}</div>;
 }

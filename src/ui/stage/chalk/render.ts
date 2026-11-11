@@ -28,6 +28,8 @@ export interface MountedLesson {
   paint(frame: FrameProgress): void;
   /** 现在在第几块画板(0 起) */
   readonly board: number;
+  /** 一个元素在 SVG 里的那个 <g>(教具要把能转的一组收进一层、给字套一层反转;paint 只改它里面的属性,挪到别的父节点底下照样画);没有 = undefined */
+  rootOf(id: string): SVGElement | undefined;
 }
 
 let seq = 0;
@@ -105,6 +107,7 @@ export function mountBaked(baked: BakedPicture, opts: MountOptions = {}): Mounte
     get board() {
       return board;
     },
+    rootOf: (id) => els.find((x) => x.el.id === id)?.root,
     paint(frame) {
       const prog = progressMap(frame);
       const act = actionState(baked, prog);

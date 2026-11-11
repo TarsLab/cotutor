@@ -542,7 +542,7 @@ export async function overview(ctx: AppContext, date: string): Promise<Overview>
 
 /**
  * 卡的状态:孩子在舞台里选了、填了 → 存 <日期>.<job>.cards/<n>.json,不起老师;下一条消息带给老师。
- * 画板:body 里可以带 image(data:image/png;base64,…),存成 .cards/<n>.png,状态里只留路径(相对 workspace 根,老师 Read 看)
+ * 画板、教具:body 里可以带 image(data:image/png;base64,…),存成 .cards/<n>.png,状态里只留路径(相对 workspace 根;画板的老师用 read_file 看,教具的随那一轮直接附给老师)
  */
 async function putCardState(ctx: AppContext, ws: Workspace, tutor: string, job: string, n: number, body: unknown): Promise<RouteResult> {
   const date = localDate(ctx.now());
@@ -553,7 +553,8 @@ async function putCardState(ctx: AppContext, ws: Workspace, tutor: string, job: 
   // 交过的卡锁住了,不能再改
   if (submittedCards(index).has(`${job}/${n}`)) return { status: 409, json: { error: 'submitted' } };
   let state = body;
-  if (target.kind === 'canvas' && isObj(body) && typeof body.image === 'string') {
+  // 画板、教具:「给老师看」时带一张板的图
+  if ((target.kind === 'canvas' || target.kind === 'kit') && isObj(body) && typeof body.image === 'string') {
     const { image, ...rest } = body;
     const m = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(image);
     if (!m || m[1].length > 8_000_000) return { status: 400, json: { error: 'bad_state' } };

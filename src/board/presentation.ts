@@ -65,6 +65,7 @@ export function cardTexts(card: BoardCard): string[] {
     case 'lecture':
       return [str(p.title), str(p.text)];
     case 'canvas':
+    case 'kit':
       return [str(p.prompt)];
     case 'tianzige':
       return []; // 田字格里是 SVG 路径不是文字,标注落不上;讲稿里的 [鼓] 去别的卡找
@@ -151,6 +152,7 @@ export function tintFor(card: BoardCard): string {
       return isAskCard(card) ? 'plum' : style === 'formula' ? 'paper' : str(p.title) ? 'sky' : 'sand';
     case 'choice':
     case 'canvas':
+    case 'kit':
     case 'photo':
       return 'plum';
     case 'read':
@@ -195,9 +197,9 @@ export function penFor(card: BoardCard, phrase: string): PenName {
 /** 一行最多几张:明写的并排(课文件 / 老师的 same)能到 3 张;按宽度排的最多 2 张(半宽 + 半宽) */
 export const MAX_CARDS_PER_ROW = 3;
 
-/** 独占一行的卡:标题行、提问卡、画板、小课堂、画图、拍给我看(选择题量得下就能半宽,2026-10-01) */
+/** 独占一行的卡:标题行、提问卡、画板、教具、小课堂、画图、拍给我看(选择题量得下就能半宽,2026-10-01) */
 export function standsAlone(card: BoardCard): boolean {
-  return isHeading(card) || isAskCard(card) || card.kind === 'canvas' || card.kind === 'lecture' || card.kind === 'paint' || card.kind === 'photo';
+  return isHeading(card) || isAskCard(card) || card.kind === 'canvas' || card.kind === 'kit' || card.kind === 'lecture' || card.kind === 'paint' || card.kind === 'photo';
 }
 
 const HALF_KINDS = ['text', 'read', 'code', 'tianzige', 'word', 'choice'];
@@ -387,7 +389,7 @@ export function penPath(pen: PenName, w: number, h: number, seed: string): strin
 
 /** 有舞台交互(能改状态、能「交给老师」)的种类;其余点开只是放大看 */
 export function hasState(card: BoardCard): boolean {
-  return card.kind === 'choice' || card.kind === 'canvas';
+  return card.kind === 'choice' || card.kind === 'canvas' || card.kind === 'kit';
 }
 
 /** 画板上画了几笔(状态里的 ink 元素数) */
@@ -398,7 +400,23 @@ export function inkCount(card: BoardCard): number {
 
 /** 重卡:舞台在 iframe 里的舞台包(/stage/)开,页面只管顶栏、字幕行、输入条 */
 export function isHeavy(card: BoardCard): boolean {
-  return card.kind === 'canvas' || card.kind === 'lecture';
+  return card.kind === 'canvas' || card.kind === 'lecture' || card.kind === 'kit';
+}
+
+/** 铺满整屏的舞台(盖住左栏,顶栏是题目和「给老师看」):画板、教具 */
+export function isFullStage(card: BoardCard): boolean {
+  return card.kind === 'canvas' || card.kind === 'kit';
+}
+
+/** 落下就自己打开的卡:教具(老师先画好,孩子不用找、不用点) */
+export function opensItself(card: BoardCard): boolean {
+  return card.kind === 'kit';
+}
+
+/** 教具上孩子做了什么:转了几次、画了几笔(状态的形状见 src/board/cards/kit.ts) */
+export function kitDone(card: BoardCard): { moves: number; marks: number } {
+  const st = card.state as { moves?: unknown; marks?: unknown } | undefined;
+  return { moves: typeof st?.moves === 'number' && st.moves > 0 ? st.moves : 0, marks: Array.isArray(st?.marks) ? st.marks.length : 0 };
 }
 
 /** 小课堂卡能不能放:课包读得出来,下发时服务端填 ready 与那一段的起止 */
@@ -417,6 +435,7 @@ export function segmentAudio(card: BoardCard, k: number): string | null {
 export function stateSummary(card: BoardCard): string[] {
   if (card.kind === 'choice') return pickedLabels(card);
   if (card.kind === 'canvas') return inkCount(card) ? [`画了 ${inkCount(card)} 笔`] : [];
+  if (card.kind === 'kit') { const d = kitDone(card); return [...(d.moves ? ['转过了'] : []), ...(d.marks ? [`画了 ${d.marks} 笔`] : [])]; }
   return [];
 }
 
@@ -439,7 +458,7 @@ export function toneMark(syl: string): string {
 /** 舞台顶栏的名字:文字卡的标题 / 正文、选择题的问题、其余第一段有字的;截 24 字 */
 export function cardTitle(card: BoardCard): string {
   const p = card.props || {};
-  const first = card.kind === 'paint' ? '画家画的' : str(p.title) || str(p.question) || str(p.show) || str(p.text) || str(p.caption) || str(p.prompt) || strs(p.segments)[0] || cardTexts(card).find((t) => t.trim()) || (card.kind === 'image' ? '图' : card.kind === 'canvas' ? '画一画' : card.kind === 'tianzige' ? str(p.chars) : '');
+  const first = card.kind === 'paint' ? '画家画的' : str(p.title) || str(p.question) || str(p.show) || str(p.text) || str(p.caption) || str(p.prompt) || strs(p.segments)[0] || cardTexts(card).find((t) => t.trim()) || (card.kind === 'image' ? '图' : card.kind === 'canvas' ? '画一画' : card.kind === 'kit' ? str(p.kit) : card.kind === 'tianzige' ? str(p.chars) : '');
   const cps = Array.from(first.trim().replace(/\s+/g, ' '));
   return cps.length > 24 ? `${cps.slice(0, 24).join('')}…` : cps.join('');
 }

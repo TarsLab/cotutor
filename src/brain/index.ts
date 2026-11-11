@@ -32,6 +32,8 @@ export interface BrainRequest {
   readDirs: readonly string[];
   /** 本轮附的照片(绝对路径),直接附成图 */
   images?: readonly string[];
+  /** 孩子这一轮交的板(数学卡的图,绝对路径):只附在这一轮,不算作业照片——不把前面交的作业照片挤掉 */
+  boards?: readonly string[];
   /** 整段压缩(上一轮结束时上下文过了 32k):之前的模型历史不再发,digest 是应用照索引拼的前情;prompt 这一轮带笔记全文 */
   compact?: { digest: string };
 }

@@ -715,8 +715,16 @@ try {
     const ktRun = JSON.parse(readFileSync(join(root, 'conversations', 'math-tutor', `${phDate}.${ktJob2}.run.json`), 'utf8')) as { prompt: string };
     const ktSaid = `${ktJob}/${ktN} kit「把「东」转到小人的前面。」 请他做的:转;大概:把方向盘逆时针转了 90°(按了 1 次);现在前面是东、右面是南、后面是西、左面是北;没有圈;图随这一轮附上,以图为准`;
     const ktM = ((await day('math-tutor', phDate)).json as { index: { messages: { job: string; cards?: { card: string; text: string }[] }[] } }).index.messages.find((m) => m.job === ktJob2)!;
-    const ktHist = readFileSync(join(root, 'conversations', 'math-tutor', `${phDate}.${phJ.thread}.brain.jsonl`), 'utf8').trim().split('\n').map((l) => JSON.parse(l) as { user: { images: string[] } });
-    check('交了数学卡:状态形状不对不收;板的图存成文件;包里是请他做的 + 大概;图直接附在这一轮、不带工具;消息里记着同一句', ktBad.status === 400 && ktPut.status === 200 && existsSync(join(root, ktRel)) && ktS.status === 202 && ktRun.prompt.includes(ktSaid) && (toolsOf(ktRun.prompt) ?? []).length === 0 && ktHist[ktHist.length - 1].user.images.join() === ktRel && `${ktM.cards?.[0]?.card} ${ktM.cards?.[0]?.text}` === ktSaid, JSON.stringify({ bad: ktBad.status, put: ktPut.status, file: existsSync(join(root, ktRel)), tools: toolsOf(ktRun.prompt), images: ktHist[ktHist.length - 1].user.images, cards: ktM.cards }));
+    const ktHist = readFileSync(join(root, 'conversations', 'math-tutor', `${phDate}.${phJ.thread}.brain.jsonl`), 'utf8').trim().split('\n').map((l) => JSON.parse(l) as { user: { images: string[]; boards?: string[] } });
+    check('交了数学卡:状态形状不对不收;板的图存成文件;包里是请他做的 + 大概;图直接附在这一轮、不带工具;消息里记着同一句', ktBad.status === 400 && ktPut.status === 200 && existsSync(join(root, ktRel)) && ktS.status === 202 && ktRun.prompt.includes(ktSaid) && (toolsOf(ktRun.prompt) ?? []).length === 0 && (ktHist[ktHist.length - 1].user.boards ?? []).join() === ktRel && ktHist[ktHist.length - 1].user.images.length === 0 && `${ktM.cards?.[0]?.card} ${ktM.cards?.[0]?.text}` === ktSaid, JSON.stringify({ bad: ktBad.status, put: ktPut.status, file: existsSync(join(root, ktRel)), tools: toolsOf(ktRun.prompt), images: ktHist[ktHist.length - 1].user, cards: ktM.cards }));
+    // 板的图不算作业照片:交板那一轮,前面拍的作业照片照样附着;再下一轮板换成占位,作业照片还在
+    // 2026-11-12 ray 检查作业:交了板以后老师再看不到题,把「添上几盒」猜成了「还剩几盒」
+    const ktBody = JSON.stringify(teacher.requests.at(-1)?.messages ?? []);
+    const shots = (b: string): number => b.split('data:image/').length - 1;
+    const ktNext = await kidSend(ctx, 'math-tutor', { text: '我不懂' });
+    await wait('math-tutor');
+    const ktBody2 = JSON.stringify(teacher.requests.at(-1)?.messages ?? []);
+    check('交板那一轮:作业照片和板都附着;下一轮:作业照片还在,板换成一句占位', shots(ktBody) === phTwo.split(',').length + 1 && ktNext.status === 202 && shots(ktBody2) === phTwo.split(',').length && ktBody2.includes(`(板 ${ktRel}:孩子那一轮交的,这里不再附图)`), JSON.stringify([shots(ktBody), shots(ktBody2)]));
     const ktAgain = await kidSend(ctx, 'math-tutor', { text: '', action: 'submit', focus: { card: `${ktJob}/${ktN}` } });
     const ktLocked = await route('PUT', `/api/kid/conversations/math-tutor/cards/${ktJob}/${ktN}`, ctx, { turn: { disc: 0 }, moves: 2 });
     check('交过的教具卡锁住:不能再交、不能再改', ktAgain.status === 409 && ktLocked.status === 409, JSON.stringify([ktAgain.status, ktLocked.status]));

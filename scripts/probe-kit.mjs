@@ -7,7 +7,7 @@
  * 三、交了不关:板留着、写「老师在看」;老师的下一张还是点阵 → 同一块板(舞台没重装),孩子上一步的笔画清掉。
  * 四、切 3 份(两道竖线)再交;第三张板上多出老师的两道红线,圈圈没挪地方;加一道横线、涂一块再交。
  * 五、老师换成方向盘:同一个舞台换了画法;只开放「转」→ 有转的钮、拿不起笔;转一格(有动画、字是正的)交了;下一张只开放「圈」→ 没有转的钮,圈住「西」。
- * 六、最后一轮老师没出教具:板收起来,板书上那几张卡都锁着。
+ * 六、老师只说话、没有卡:板留着;再下一轮老师换了别的卡:板收起来,板书上那几张卡都锁着。
  * 每一步照服务端的说法说成给老师的那句(describeKit)。iPad 横屏各截一张(Page.captureScreenshot,AGENTS.md:无头 --screenshot 会挂)。
  * 用法:node scripts/probe-kit.mjs [mock 根地址] [--out <截图目录>]
  *   缺省 http://127.0.0.1:8790(先 cotutor mock --http;探针会交掉 mock 里那几张教具卡,再跑要重起 mock)
@@ -239,8 +239,14 @@ try {
   ok('给老师的那句:圈在东面那两间上', /中间在 \(7[3-6]\d, 3[4-7]\d\)/.test(saidOf(c7)), saidOf(c7));
   writeFileSync(join(shots, 'board-to-teacher-7.png'), Buffer.from(String(c7.state.image).split(',')[1], 'base64'));
 
-  // ---- 六、最后一轮没有教具:板收起来 ----
-  ok('老师这一轮没出教具:板收起来', Boolean(await until(`!document.querySelector('#stage').classList.contains('on')`, 20000)));
+  // ---- 六、老师只说话:板留着;再下一轮换了别的卡:板收起来 ----
+  await until(`document.querySelector('#st-note').textContent.includes('交给老师了')`, 20000);
+  ok('老师这一轮只说话、没有卡:板留着,不再写「老师在看」', (await evaluate(`document.querySelector('#stage').classList.contains('on') && document.querySelector('#st-note').textContent.includes('交给老师了')`)) === true, String(await evaluate(`document.querySelector('#st-note').textContent`)));
+  await until(`!document.body.classList.contains('pending')`, 20000);
+  await sleep(1500);
+  ok('过一会儿板还开着', (await evaluate(`document.querySelector('#stage').classList.contains('on')`)) === true);
+  for (let k = 0; k < 60; k++) { const r = await liveSend(base, 'math-tutor', { text: '好的' }); if (r.status === 202) break; await sleep(300); }
+  ok('老师下一轮换了别的卡:板收起来', Boolean(await until(`!document.querySelector('#stage').classList.contains('on')`, 20000)));
   await until(`!document.body.classList.contains('pending')`, 20000);
   ok('板书上七张教具卡都锁着', (await evaluate(`[...document.querySelectorAll('#board .c-kit')].filter((c) => c.querySelector('.lk')).length`)) === 7, String(await evaluate(`document.querySelectorAll('#board .c-kit').length`)));
   await shot('board-after.png');

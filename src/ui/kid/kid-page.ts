@@ -1937,9 +1937,20 @@ __WORD_DRAW_JS__
     setNow(secIdx, idx);
     postStage(stageCard(card));
   };
-  /** 老师这一轮写完了(或没成):板还在等,说明这一轮没有新的教具——收起来,孩子回到板书 */
-  /** idx = 刚写完(或撤掉)的那一节:只有它在等着的那张卡后面才算(那张卡自己那一节写完不算——孩子手快,老师还没说完就交了) */
-  const stageDone = (idx) => { if (S.stage && S.stage.waiting && idx > S.stage.section) closeStage(); };
+  /**
+   * 老师这一轮写完了(或没成),板还在等,说明这一轮没有新的教具:
+   * 这一节有别的卡(请拍照、算式、放一段课)= 老师换了地方,板收起来,孩子回到板书;
+   * 这一节只有话(或这一轮没成)= 板留着——他说的多半就是板上的东西(「你数一数最后一份有几个」),孩子自己关。
+   * 2026-11-12 ray 检查作业:交了板 6 秒板就收了,老师正请他数板上的圈,孩子自己点开了 5 次。
+   * idx = 刚写完(或撤掉)的那一节:只有它在等着的那张卡后面才算(那张卡自己那一节写完不算——孩子手快,老师还没说完就交了);dropped = 这一节撤掉了
+   */
+  const stageDone = (idx, dropped) => {
+    if (!S.stage || !S.stage.waiting || idx <= S.stage.section) return;
+    const sec = dropped ? null : S.sections[idx];
+    if (sec && sec.cards.length) { closeStage(); return; }
+    S.stage.heard = true;
+    renderGo();
+  };
   /** 舞台顶栏右边那一块:「给老师看」能不能按、旁边那行小字;交过的锁住,教具等老师时写「老师在看」 */
   const renderGo = () => {
     const card = stageCardNow();
@@ -1952,7 +1963,7 @@ __WORD_DRAW_JS__
     $('#st-go').hidden = false;
     $('#st-note').textContent = isFullStage(card) ? stateSummary(card).join('、') : '';
     $('#st-go').classList.remove('holding');
-    if (card.submitted) { $('#st-act').hidden = S.readonly; $('#st-go').hidden = true; if (S.stage && S.stage.waiting) $('#st-note').textContent = '老师在看…'; else $('#st-note').innerHTML = ICON.lock + ' 交给老师了'; }
+    if (card.submitted) { $('#st-act').hidden = S.readonly; $('#st-go').hidden = true; if (S.stage && S.stage.waiting && !S.stage.heard) $('#st-note').textContent = '老师在看…'; else $('#st-note').innerHTML = ICON.lock + ' 交给老师了'; }
   };
   const openStage = (secIdx, idx, opts = {}) => {
     const card = S.sections[secIdx] && S.sections[secIdx].cards[idx];
@@ -2022,7 +2033,7 @@ __WORD_DRAW_JS__
       if (card.submitted) { finish(null); return; }
       card.state = withCleared(card.state, m.state); card.submitted = true;
       const id = S.stage.id; const secI = S.stage.section, job = S.sections[secI].job; const idx = S.stage.card;
-      // 教具:交了不关——板留着等老师(只看),老师的下一张还是教具就在这块板上接着画(swapStage);老师这一轮没再出教具才关(stageDone)
+      // 教具:交了不关——板留着等老师(只看),老师的下一张还是教具就在这块板上接着画(swapStage);老师这一轮换了别的卡才关,只说话板留着(stageDone)
       if (opensItself(card)) { S.stage.waiting = true; renderGo(); postStage(stageCard(card)); }
       else closeStage();
       repaintCard(secI, idx);
@@ -2254,7 +2265,7 @@ __WORD_DRAW_JS__
         e.cards.forEach((_, k) => liveLand(idx, k, !silent));
       }
       // 这条既不 pending 也没定稿(运行出错了):撤掉;live 的那节也撤(孩子端出错的运行不出现)
-      if (S.partial && !entries.some((e) => e.job === S.partial.job)) { const P = S.partial; S.partial = null; P.el.remove(); if (P.live) { S.sections.splice(P.idx, 1); dispatch({ type: 'liveDropped' }); } stageDone(P.idx); }
+      if (S.partial && !entries.some((e) => e.job === S.partial.job)) { const P = S.partial; S.partial = null; P.el.remove(); if (P.live) { S.sections.splice(P.idx, 1); dispatch({ type: 'liveDropped' }); } stageDone(P.idx, true); }
       // 服务端的状态是真相(别的设备上选的、重开页面):没在舞台里改着的卡照它画;props 也跟(小课堂卡的 ready、起止是服务端下发时现读的)
       entries.forEach((e) => { const i = S.sections.findIndex((x) => x.job === e.job); if (i < 0 || fresh.includes(i)) return; e.cards.forEach((c, idx) => { const mine = S.sections[i].cards[idx]; if (!mine || (S.stage && S.stage.section === i && S.stage.card === idx)) return; const ds = JSON.stringify(mine.state) !== JSON.stringify(c.state), dp = JSON.stringify(mine.props) !== JSON.stringify(c.props); if (ds || dp) { mine.state = c.state; mine.props = c.props; repaintCard(i, idx); } }); });
       if (fresh.length && S.stage && !S.stage.waiting) closeStage();

@@ -1,6 +1,8 @@
 /**
  * 点阵:几行圈圈,每行一样多。分一分(平均分)、几个几(乘法)都在它上面讲:东西画成圈圈,用线切开,数一份里有几个。
- * 老师写几行、每行几个、板上已经有哪几道线;孩子的操作是切(画一道线)、圈(绕几个圈圈画一圈)、涂(在一份里来回涂)。
+ * 老师写几行、每行几个(或一共几个:最后一行可以不满)、板上已经有哪几道线;
+ * 孩子的操作是切(画一道线)、圈(绕几个圈圈画一圈)、涂(在一份里来回涂)、添(在空的地方点一下、画个小圈 = 添一个)。
+ * 2026-11-12 ray 检查作业「17 盒牛奶平均分给 5 人,最少添几盒」:老师画了 18 个请孩子切成 5 份,切不成;这种题要的是添。
  * 孩子画成什么样就是什么样,不归整。read 只按几何算个大概(几道线、大致分成几份、圈里大约几个),老师同时看图,以图为准。
  */
 
@@ -38,14 +40,17 @@ function readLines(v: string): string {
   return out.join(' ');
 }
 
-interface Grid { rows: number; cols: number; h: number[]; v: number[] }
+interface Grid { rows: number; cols: number; /** 一共几个(最后一行可以不满) */ count: number; h: number[]; v: number[] }
 
 function gridOf(p: Readonly<Record<string, string>>): Grid {
-  const rows = Number(p['行']) || 2;
   const cols = Number(p['每行']) || 9;
+  const total = Number(p['共']) || 0;
+  // 写了一共几个:行数照它算,最后一行可以不满
+  const rows = total ? Math.ceil(total / cols) : Number(p['行']) || 2;
+  const count = total || rows * cols;
   const lines = (p['线'] ?? '').split(' ').filter(Boolean);
   const pick = (kind: string, max: number): number[] => lines.filter((l) => l.startsWith(kind)).map((l) => Number(l.slice(1))).filter((k) => k >= 1 && k < max).sort((a, b) => a - b);
-  return { rows, cols, h: pick('横', rows), v: pick('竖', cols) };
+  return { rows, cols, count, h: pick('横', rows), v: pick('竖', cols) };
 }
 
 /** 第 k 行(列)后面那道缝的位置 */
@@ -53,17 +58,18 @@ const gapY = (k: number): number => Y0 + (k - 0.5) * STEP;
 const gapX = (k: number): number => X0 + (k - 0.5) * STEP;
 
 /** 一笔是什么:切(横 / 竖,在哪)、圈、涂、点、看不出 */
-type Stroke = { kind: 'cut'; dir: '横' | '竖'; at: number } | { kind: 'circle'; n: number } | { kind: 'fill'; n: number } | { kind: 'tap'; row: number; col: number } | { kind: 'unknown' };
+type Stroke = { kind: 'cut'; dir: '横' | '竖'; at: number } | { kind: 'circle'; n: number } | { kind: 'fill'; n: number } | { kind: 'tap'; row: number; col: number } | { kind: 'add'; at: [number, number] } | { kind: 'unknown' };
 
 function classify(pts: readonly [number, number][], g: Grid): Stroke {
   const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
   const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
   const w = maxX - minX, h = maxY - minY;
   const centers: [number, number, number, number][] = [];
-  for (let r = 0; r < g.rows; r++) for (let c = 0; c < g.cols; c++) centers.push([X0 + c * STEP, Y0 + r * STEP, r + 1, c + 1]);
+  for (let r = 0; r < g.rows; r++) for (let c = 0; c < g.cols; c++) if (r * g.cols + c < g.count) centers.push([X0 + c * STEP, Y0 + r * STEP, r + 1, c + 1]);
   if (Math.max(w, h) < 14) {
     const hit = centers.map((c) => ({ c, d: Math.hypot(c[0] - xs[0], c[1] - ys[0]) })).sort((a, b) => a.d - b.d)[0];
-    return hit && hit.d <= R + 12 ? { kind: 'tap', row: hit.c[2], col: hit.c[3] } : { kind: 'unknown' };
+    // 点在圈圈上是指它;点在空的地方是添一个
+    return hit && hit.d <= R + 12 ? { kind: 'tap', row: hit.c[2], col: hit.c[3] } : { kind: 'add', at: [xs[0], ys[0]] };
   }
   let len = 0;
   for (let i = 1; i < pts.length; i++) len += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
@@ -78,43 +84,51 @@ function classify(pts: readonly [number, number][], g: Grid): Stroke {
   if (len >= diag * 2.6) return { kind: 'fill', n: centers.filter((c) => c[0] >= minX - 4 && c[0] <= maxX + 4 && c[1] >= minY - 4 && c[1] <= maxY + 4).length };
   // 头尾接上了:圈
   const first = pts[0], last = pts[pts.length - 1];
-  if (Math.hypot(first[0] - last[0], first[1] - last[1]) <= len * 0.3 && Math.min(w, h) >= Math.max(w, h) * 0.2) return { kind: 'circle', n: centers.filter((c) => insidePolygon(pts as [number, number][], [c[0], c[1]])).length };
+  if (Math.hypot(first[0] - last[0], first[1] - last[1]) <= len * 0.3 && Math.min(w, h) >= Math.max(w, h) * 0.2) {
+    const n = centers.filter((c) => insidePolygon(pts as [number, number][], [c[0], c[1]])).length;
+    // 一个小圈、里面没有圈圈:他自己画了一个(课本上「用○代替添上的画一画」)
+    if (!n && Math.max(w, h) <= STEP * 1.4) return { kind: 'add', at: [(minX + maxX) / 2, (minY + maxY) / 2] };
+    return { kind: 'circle', n };
+  }
   return { kind: 'unknown' };
 }
 
-/** 一组切口(位置)把 n 个等距的东西分成几段、各几个;压着圈的那道另记 */
-function split(cuts: readonly number[], n: number, origin: number): { sizes: number[]; onDot: boolean } {
-  const inside = cuts.filter((x) => x > origin - STEP / 2 && x < origin + (n - 0.5) * STEP).sort((a, b) => a - b);
+/** 一组切口(位置)落在 n 个等距的东西中间的哪几道缝:一道缝只算一刀;压着圈的那道另记 */
+function gaps(cuts: readonly number[], n: number, origin: number): { at: number[]; onDot: boolean } {
   let onDot = false;
-  const sizes: number[] = [];
-  let prev = 0;
-  for (const x of inside) {
-    const before = Math.max(0, Math.min(n, Math.round((x - origin) / STEP + 0.5)));
+  const seen = new Map<number, number>();
+  for (const x of cuts) {
+    if (!(x > origin - STEP / 2 && x < origin + (n - 0.5) * STEP)) continue;
+    const before = Math.round((x - origin) / STEP + 0.5);
+    if (before < 1 || before >= n) continue;
     if (Math.abs((x - origin) / STEP - Math.round((x - origin) / STEP)) * STEP < R * 0.6) onDot = true;
-    if (before > prev && before < n) { sizes.push(before - prev); prev = before; }
+    if (!seen.has(before)) seen.set(before, x);
   }
-  sizes.push(n - prev);
-  return { sizes, onDot };
+  return { at: [...seen.values()].sort((a, b) => a - b), onDot };
 }
 
 export const dots: Kit = {
   name: '点阵',
   about: '几行圈圈,每行一样多。把东西画成圈圈,孩子画线切开、圈一圈、涂一份,数一份里有几个。讲平均分、几个几。',
-  ops: ['切', '圈', '涂'],
+  ops: ['切', '圈', '涂', '添'],
   params: [
     { key: '行', note: '几行。1 到 5,缺省 2。', read: int('行', ROWS_MAX), fallback: '2' },
     { key: '每行', note: '每行几个。1 到 12,缺省 9。', read: int('每行', COLS_MAX), fallback: '9' },
+    { key: '共', note: '一共几个。写了它就不用写行:照每行几个排,最后一行可以不满(17 个、每行 5 个 = 3 行多 2 个)。1 到 60。', read: int('共', ROWS_MAX * COLS_MAX), fallback: '' },
     { key: '线', note: '板上已经有的线,是你画的。写「横 1、竖 3」:横 1 是第 1 行下面那道,竖 3 是第 3 列右边那道。不写就没有线。', read: readLines, fallback: '' },
   ],
-  shorthand(line) {
+  shorthand(line): Record<string, string> | null {
     const m = /^(\d+)\s*行\s*[,,、]?\s*(?:每行)?\s*(\d+)\s*个?$/.exec(line.trim());
-    return m ? { 行: m[1], 每行: m[2] } : null;
+    if (m) return { 行: m[1], 每行: m[2] };
+    // 「17 个,每行 5 个」
+    const t = /^(?:一?共)?\s*(\d+)\s*个\s*[,,、]?\s*每行\s*(\d+)\s*个?$/.exec(line.trim());
+    return t ? { 共: t[1], 每行: t[2] } : null;
   },
   build(p): KitScene {
     const g = gridOf(p);
     const sk: ChalkSkeleton[] = [];
     for (let r = 0; r < g.rows; r++) {
-      for (let c = 0; c < g.cols; c++) sk.push({ type: 'ellipse', id: `dot-${r + 1}-${c + 1}`, x: X0 + c * STEP - R, y: Y0 + r * STEP - R, width: R * 2, height: R * 2, strokeColor: INK, strokeWidth: 2, animateDuration: Math.max(60, Math.round(1600 / (g.rows * g.cols))) });
+      for (let c = 0; c < g.cols; c++) if (r * g.cols + c < g.count) sk.push({ type: 'ellipse', id: `dot-${r + 1}-${c + 1}`, x: X0 + c * STEP - R, y: Y0 + r * STEP - R, width: R * 2, height: R * 2, strokeColor: INK, strokeWidth: 2, animateDuration: Math.max(60, Math.round(1600 / g.count)) });
     }
     const x1 = X0 - OVER, x2 = X0 + (g.cols - 1) * STEP + OVER, y1 = Y0 - OVER, y2 = Y0 + (g.rows - 1) * STEP + OVER;
     for (const k of g.h) sk.push({ type: 'line', id: `cut-h-${k}`, label: '横着的线', x: x1, y: gapY(k), points: [[0, 0], [x2 - x1, 0]], strokeColor: LINE, strokeWidth: 2, animateDuration: 500 });
@@ -129,17 +143,26 @@ export const dots: Kit = {
     const parts: string[] = [];
     const cuts = strokes.filter((s): s is Extract<Stroke, { kind: 'cut' }> => s.kind === 'cut');
     const kh = cuts.filter((c) => c.dir === '横').map((c) => c.at), kv = cuts.filter((c) => c.dir === '竖').map((c) => c.at);
+    const adds = strokes.filter((s): s is Extract<Stroke, { kind: 'add' }> => s.kind === 'add');
+    if (adds.length) parts.push(`添了 ${adds.length} 个圈,连原来的一共 ${g.count + adds.length} 个`);
     if (cuts.length) {
       parts.push(`画了${[kh.length ? ` ${kh.length} 道横线` : '', kv.length ? ` ${kv.length} 道竖线` : ''].filter(Boolean).join('、')}`);
-      // 连同老师已经画的线一起算:行分几段、列分几段,每一份 = 行段 × 列段
-      const rowCut = split([...g.h.map(gapY), ...kh], g.rows, Y0);
-      const colCut = split([...g.v.map(gapX), ...kv], g.cols, X0);
-      const sizes = rowCut.sizes.flatMap((a) => colCut.sizes.map((b) => a * b));
+      // 连同老师已经画的线一起算:每个圈圈(原来的、他添的)落在哪几道线之间,一格一格数
+      const rowCut = gaps([...g.h.map(gapY), ...kh], g.rows, Y0);
+      const colCut = gaps([...g.v.map(gapX), ...kv], g.cols, X0);
+      const items: [number, number][] = [];
+      for (let r = 0; r < g.rows; r++) for (let c = 0; c < g.cols; c++) if (r * g.cols + c < g.count) items.push([X0 + c * STEP, Y0 + r * STEP]);
+      for (const a of adds) items.push(a.at);
+      const cell = new Map<string, number>();
+      for (const [x, y] of items) { const k = `${rowCut.at.filter((v) => v < y).length}-${colCut.at.filter((v) => v < x).length}`; cell.set(k, (cell.get(k) ?? 0) + 1); }
+      const sizes: number[] = [];
+      for (let r = 0; r <= rowCut.at.length; r++) for (let c = 0; c <= colCut.at.length; c++) sizes.push(cell.get(`${r}-${c}`) ?? 0);
       const same = sizes.every((n) => n === sizes[0]);
       parts.push(`${g.h.length + g.v.length ? '连同板上原来的线,' : ''}大致分成 ${sizes.length} 份:${same ? `每份 ${sizes[0]} 个` : sizes.join('、')}`);
       if (rowCut.onDot || colCut.onDot) parts.push('有一道线压着圈圈,哪边的看图');
     }
     for (const s of strokes) {
+      if (s.kind === 'add') continue;
       if (s.kind === 'circle') parts.push(`圈了一圈,里面大约 ${s.n} 个`);
       else if (s.kind === 'fill') parts.push(`涂了一块,盖住大约 ${s.n} 个`);
       else if (s.kind === 'tap') parts.push(`点了第 ${s.row} 行第 ${s.col} 个`);

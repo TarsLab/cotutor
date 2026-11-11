@@ -58,7 +58,10 @@ export function readKitLines(kit: Kit, lines: readonly string[]): { params: Reco
     if (d.required) throw new Error(`${kit.name}要写「${d.key}」:${d.note}`);
     params[d.key] = fallbackOf(d);
   }
-  return { params, ops: ops ?? [...kit.ops], prompt: rest.join(' ').trim() };
+  // 参数照这种画法列的顺序排(存下来的样子不随老师写的先后变)
+  const ordered: Record<string, string> = {};
+  for (const d of kit.params) ordered[d.key] = params[d.key];
+  return { params: ordered, ops: ops ?? [...kit.ops], prompt: rest.join(' ').trim() };
 }
 
 /** 存下来的参数(卡的 props)再查一遍、补齐缺省;不对的值退回缺省(老对话里存的,不抛) */

@@ -10,7 +10,7 @@ import { check, done } from './_check.ts';
 const kit = kitOf('方向盘')!;
 const grid = kitOf('点阵')!;
 check('三种画法在册:照片、点阵、方向盘', KITS.map((k) => k.name).join() === '照片,点阵,方向盘' && kitOf('没有这种') === undefined);
-check('每种教具都列了孩子能做的操作', kit.ops.join() === '转,圈' && grid.ops.join() === '切,圈,涂');
+check('每种教具都列了孩子能做的操作', kit.ops.join() === '转,圈' && grid.ops.join() === '切,圈,涂,添');
 
 // ---- 参数与操作 ----
 const read = readKitLines(kit, ['上: 东', '小人:没有', '把「东」转到上面。', '想一想:哪个字在下面?']);
@@ -77,6 +77,16 @@ check('绕左上三个圈一圈:圈里大约 3 个', gread(G, [ring(X(2), 70, 88
 const scribble: [number, number][] = Array.from({ length: 14 }, (_, k) => [k % 2 ? X(3) + 14 : X(1) - 14, 50 + k * 7] as [number, number]);
 check('在左边来回涂:盖住大约 6 个(两行各 3 个)', gread(G, [scribble]) === '涂了一块,盖住大约 6 个', gread(G, [scribble]));
 check('点一下、看不出是什么的一笔', gread(G, [[[X(4), 126], [X(4), 126]]]) === '点了第 2 行第 4 个' && gread(G, [[[300, 200], [330, 230], [300, 250]]]) === '有 1 笔看不出是什么,看图', gread(G, [[[300, 200], [330, 230], [300, 250]]]));
+// 添:17 个、每行 5 个(最后一行只有 2 个);孩子在空的地方点三下,再横着切三道
+const M = readKitLines(grid, ['17 个,每行 5 个', '操作: 添、切']);
+const Y = (r: number): number => 70 + (r - 1) * 56;
+const hcut = (r: number): [number, number][] => [[40, Y(r) + 28], [150, Y(r) + 25], [320, Y(r) + 30]];
+const three: [number, number][][] = [3, 4, 5].map((c) => [[X(c), Y(4)], [X(c), Y(4)]]);
+check('一共 17 个、每行 5 个:排成 4 行,最后一行 2 个;只开放添、切', M.params['共'] === '17' && M.params['每行'] === '5' && M.ops.join() === '切,添' && grid.build(M.params).skeletons.length === 17 && grid.build(M.params).skeletons.some((e) => e.id === 'dot-4-2') && !grid.build(M.params).skeletons.some((e) => e.id === 'dot-4-3'), JSON.stringify(M));
+check('在空的地方点三下:添了 3 个,一共 20 个;点在圈圈上还是指它', gread(M.params, three) === '添了 3 个圈,连原来的一共 20 个' && gread(M.params, [[[X(2), Y(4)], [X(2), Y(4)]]]) === '点了第 4 行第 2 个', gread(M.params, three));
+check('自己画一个小圈也算添;绕着圈圈画的还是圈', gread(M.params, [ring(X(4), Y(4), 18)]) === '添了 1 个圈,连原来的一共 18 个' && gread(M.params, [ring(X(1), Y(4), 30)]) === '圈了一圈,里面大约 1 个', gread(M.params, [ring(X(4), Y(4), 18)]));
+check('添了 3 个再横着切三道:4 份,每份 5 个(他添的也数进去)', gread(M.params, [...three, hcut(1), hcut(2), hcut(3)]) === '添了 3 个圈,连原来的一共 20 个;画了 3 道横线;大致分成 4 份:每份 5 个', gread(M.params, [...three, hcut(1), hcut(2), hcut(3)]));
+check('没添就切:最后一份少,照实说 5、5、5、2', gread(M.params, [hcut(1), hcut(2), hcut(3)]) === '画了 3 道横线;大致分成 4 份:5、5、5、2', gread(M.params, [hcut(1), hcut(2), hcut(3)]));
 check('给老师的那几句', describeKit(grid, G, { marks: [vline(GX(3)), vline(GX(6))] }, ['切']) === '请他做的:切;大概:画了 2 道竖线;大致分成 3 份:每份 6 个');
 
 // ---- 照片:孩子拍的作业做底,位置都是整张照片的千分比 ----

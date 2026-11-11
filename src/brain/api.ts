@@ -87,7 +87,7 @@ interface TurnRecord {
   model: string;
   codec: string;
   /** 这轮的用户消息:上下文包 + 孩子的话;照片相对 workspace 根 */
-  user: { text: string; images: string[] };
+  user: { text: string; images: string[]; /** 这一轮交的板(数学卡的图):只在这一轮附,以后换成一句占位 */ boards?: string[] };
   /** 模型回的全部消息(含工具往返);没回完的轮次是空的 */
   messages: ModelMessage[];
   /** 没回完的轮次写出来的正文 */
@@ -168,6 +168,7 @@ export function slimTurn(messages: readonly ModelMessage[]): string {
 /**
  * 同一会话的前几轮拼回模型消息;note = 最后一轮没回完时,接在这条消息前头的那句。
  * 照片只附最近交的那组(这一轮自己带了照片就一张都不附),更早的换成一句占位:看图说话那种一张图聊十几轮的,图一直在。
+ * 孩子交的板(boards)不算照片:过了那一轮就换成占位,不把作业照片挤掉(2026-11-12 ray 检查作业:交了板,老师再看不到题,把题目猜错了)。
  * 从最近一次整段压缩的那一轮算起;这一轮要压缩(current.compact)就不拼,只回 note 与最近交的那组照片(带进压缩这一轮)
  */
 async function pastOf(file: string, session: string, root: string, current: { images: boolean; compact: boolean }): Promise<{ messages: ModelMessage[]; note: string | null; photos: string[] }> {
@@ -192,7 +193,7 @@ async function pastOf(file: string, session: string, root: string, current: { im
   for (const [i, r] of records.entries()) {
     const text = note ? `${note}\n\n${r.user.text}` : r.user.text;
     const shown = i === lastPhotos ? r.user.images : [];
-    const gone = r.user.images.filter((p) => !shown.includes(p)).map((p) => `(照片 ${p}:前面交过,这里不再附图)`);
+    const gone = [...r.user.images.filter((p) => !shown.includes(p)).map((p) => `(照片 ${p}:前面交过,这里不再附图)`), ...(r.user.boards ?? []).map((p) => `(板 ${p}:孩子那一轮交的,这里不再附图)`)];
     messages.push(await userMessage(gone.length ? `${text}\n\n${gone.join('\n')}` : text, shown, root));
     note = null;
     if (r.ok) messages.push({ role: 'assistant', content: slimTurn(r.messages) });
@@ -245,7 +246,8 @@ export class ApiBrain {
       event({ kind: 'session', id: session });
       const images = req.images ?? [];
       const stored = images.map((p) => { const rel = relative(root, p); return rel.startsWith('..') || isAbsolute(rel) ? p : rel.split(sep).join('/'); });
-      const record: TurnRecord = { v: 1, session, at: new Date().toISOString(), model: runtime.model, codec: CODEC, user: { text: req.prompt, images: stored }, messages: [], ok: false };
+      const boards = (req.boards ?? []).map((p) => { const rel = relative(root, p); return rel.startsWith('..') || isAbsolute(rel) ? p : rel.split(sep).join('/'); });
+      const record: TurnRecord = { v: 1, session, at: new Date().toISOString(), model: runtime.model, codec: CODEC, user: { text: req.prompt, images: stored, ...(boards.length ? { boards } : {}) }, messages: [], ok: false };
       let final: CliFinal;
       const line = this.line(runtime.model);
       if (!line && !this.endpoint) {
@@ -259,9 +261,9 @@ export class ApiBrain {
         const attach = req.compact && !stored.length ? photos : stored;
         if (req.compact) {
           record.compacted = true;
-          record.user = { text, images: attach };
+          record.user = { text, images: attach, ...(boards.length ? { boards } : {}) };
         }
-        const user = await userMessage(text, attach, root, warnings);
+        const user = await userMessage(text, [...attach, ...boards], root, warnings);
         const tier = effortOf(runtime.model, req.effort, req.tools);
         const alibaba = createAlibaba({ apiKey: line?.key ?? 'sk-endpoint', baseURL: this.endpoint ?? line!.baseURL, includeUsage: true, ...(tier ? { fetch: effortFetch(tier) } : {}) });
         // 断流看门狗:stall.ms 没有一块流到就停(工具在本进程里跑,几毫秒的事,不另算)

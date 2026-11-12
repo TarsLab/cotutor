@@ -16,6 +16,12 @@ export { kitMarks, markPhrases, turnOf, turnPoint, turnedSkeletons, type KitMark
 
 export const KITS: readonly Kit[] = [photo, dots, compass];
 
+/** 只看、不动笔的那种「操作」:写明了才算,不写操作时不在全开里;只开放它的卡没有笔、没有「给老师看」 */
+export const KIT_LOOK = '看';
+const openOps = (kit: Kit): string[] => kit.ops.filter((x) => x !== KIT_LOOK);
+/** 这张卡是不是只给孩子看的 */
+export const kitLookOnly = (ops: readonly string[]): boolean => ops.length > 0 && ops.every((x) => x === KIT_LOOK);
+
 export function kitOf(name: string): Kit | undefined {
   return KITS.find((k) => k.name === name);
 }
@@ -61,7 +67,7 @@ export function readKitLines(kit: Kit, lines: readonly string[]): { params: Reco
   // 参数照这种画法列的顺序排(存下来的样子不随老师写的先后变)
   const ordered: Record<string, string> = {};
   for (const d of kit.params) ordered[d.key] = params[d.key];
-  return { params: ordered, ops: ops ?? [...kit.ops], prompt: rest.join(' ').trim() };
+  return { params: ordered, ops: ops ?? openOps(kit), prompt: rest.join(' ').trim() };
 }
 
 /** 存下来的参数(卡的 props)再查一遍、补齐缺省;不对的值退回缺省(老对话里存的,不抛) */
@@ -80,7 +86,7 @@ export function kitParams(kit: Kit, raw: Readonly<Record<string, unknown>> | und
 export function kitOps(kit: Kit, raw: unknown): string[] {
   const want = Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : [];
   const ok = kit.ops.filter((x) => want.includes(x));
-  return ok.length ? ok : [...kit.ops];
+  return ok.length ? ok : openOps(kit);
 }
 
 /**

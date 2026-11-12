@@ -389,7 +389,13 @@ export function penPath(pen: PenName, w: number, h: number, seed: string): strin
 
 /** 有舞台交互(能改状态、能「交给老师」)的种类;其余点开只是放大看 */
 export function hasState(card: BoardCard): boolean {
-  return card.kind === 'choice' || card.kind === 'canvas' || card.kind === 'kit';
+  return card.kind === 'choice' || card.kind === 'canvas' || (card.kind === 'kit' && !kitLookOnly(card));
+}
+
+/** 只给孩子看的数学卡(「操作: 看」:老师把答案写在照片上):没有笔、没有「给老师看」(同 src/chalk/kit 的 kitLookOnly;这里内联进页面,不引它) */
+export function kitLookOnly(card: BoardCard): boolean {
+  const ops = (card.props as { ops?: unknown }).ops;
+  return card.kind === 'kit' && Array.isArray(ops) && ops.length > 0 && ops.every((x) => x === '看');
 }
 
 /** 画板上画了几笔(状态里的 ink 元素数) */

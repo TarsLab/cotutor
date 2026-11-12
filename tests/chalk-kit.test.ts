@@ -3,7 +3,7 @@
  * 方向盘照 2026-11-10 那次检查作业:「早晨面向太阳,前面是东,后面、左面、右面各是什么」;
  * 点阵照「分一分」:18 个贴纸平均分给 2 个、3 个、6 个小朋友。孩子的笔画不归整,读数只是大概。
  */
-import { KID_INK, KITS, describeKit, elementBounds, kitMarks, kitOf, kitOps, kitParams, kitTouched, readKitLines, turnPoint, turnedSkeletons, type KitState } from '../src/chalk/index.ts';
+import { KID_INK, KITS, kitLookOnly, describeKit, elementBounds, kitMarks, kitOf, kitOps, kitParams, kitTouched, readKitLines, turnPoint, turnedSkeletons, type KitState } from '../src/chalk/index.ts';
 import { sceneSchema } from '../src/chalk/scene-schema.ts';
 import { check, done } from './_check.ts';
 
@@ -108,6 +108,17 @@ const A = 1.25;
 const kidRing = ring(780, 708 * A, 40);
 check('照片:孩子圈的说成千分比(中间、左上、右下),老师照抄就能把记号画在那', describeKit(shot, PH.params, { marks: [kidRing], aspect: A }, ['圈']) === '请他做的:圈;大概:圈了一圈,中间在 (780, 708),左上 (740, 676)、右下 (820, 740);这些数是整张照片的千分比,和你写「圈」「方位」用的一样', describeKit(shot, PH.params, { marks: [kidRing], aspect: A }, ['圈']));
 check('照片:一道线说从哪到哪;没量到高宽比只说画了什么', shot.read(PH.params, { marks: [[[600, 500], [700, 500], [800, 500]]], aspect: 1 }, ps) === '画了一道线,从 (600, 500) 到 (800, 500);这些数是整张照片的千分比,和你写「圈」「方位」用的一样' && shot.read(PH.params, { marks: [kidRing] }, ps) === '圈了一圈;位置看图' && shot.read(PH.params, {}, ps) === '还没画');
+
+// 照片上写字:写进框里(字照框的大小)、写在点上;只看的板
+const W = readKitLines(shot, ['captures/2026-11-12/0935-1.jpg', '写: 18 在 591, 860, 657, 948;18 ÷ 3 = 6 在 600, 700', '操作: 看', '算式这样填。']);
+const wsk = shot.build(W.params, { aspect: 0.468 }).skeletons;
+check('照片的「写」:规整成「字|数」,两处各一段红字,写在点上的垫一块纸色的底;写进框里的字落在框中间、不出框', W.params['写'] === '18|591 860 657 948;18 ÷ 3 = 6|600 700' && wsk.length === 3 && wsk.filter((e) => e.type === 'text').length === 2 && wsk[1].type === 'rectangle' && wsk[1].backgroundColor === '#fffdf8' && wsk.every((e) => e.strokeColor === '#e03131') && Number(wsk[0].x) >= 591 && Number(wsk[0].x) + Number(wsk[0].width) <= 657 && Number(wsk[0].y) >= 860 * 0.468 && Number(wsk[0].y) + Number(wsk[0].height) <= 948 * 0.468 + 1, JSON.stringify([W.params['写'], wsk[0]]));
+const B = readKitLines(shot, ['a.jpg', '框: 100, 400, 900, 900', '写: 18 ÷ 3 = 6;每人折 6 只', '操作: 看']);
+const bs = shot.build(B.params, { aspect: 0.5 });
+check('照片的「写」不给位置:写在照片下面另起的纸上,一行一行,画框跟着往下长,不压着照片上裁的那一块', B.params['写'] === '18 ÷ 3 = 6|;每人折 6 只|' && bs.skeletons.length === 3 && bs.skeletons[0].type === 'rectangle' && bs.skeletons[0].backgroundColor === '#fffdf8' && bs.skeletons.slice(1).every((e) => e.type === 'text' && Number(e.y) > (900 + 500 * 0.04) * 0.5) && Number(bs.skeletons[2].y) > Number(bs.skeletons[1].y) + Number(bs.skeletons[1].height) && bs.frame![1] + bs.frame![3] > Number(bs.skeletons[2].y) + Number(bs.skeletons[2].height) && JSON.stringify(kitParams(shot, B.params)) === JSON.stringify(B.params), JSON.stringify([B.params['写'], bs.frame, bs.skeletons.map((e) => [e.y, e.height])]));
+check('存下来的参数再读一遍不变(舞台、服务端都是这样读的)', JSON.stringify(kitParams(shot, W.params)) === JSON.stringify(W.params) && JSON.stringify(kitParams(shot, PH.params)) === JSON.stringify(PH.params) && JSON.stringify(kitParams(grid, M.params)) === JSON.stringify(M.params), JSON.stringify(kitParams(shot, W.params)));
+check('只看:写明了才有;不写操作时全开里没有它', W.ops.join() === '看' && kitLookOnly(W.ops) && !kitLookOnly(PH.ops) && readKitLines(shot, ['a.jpg']).ops.join() === '圈,画' && kitOps(shot, undefined).join() === '圈,画' && kitOps(shot, ['看']).join() === '看');
+check('照片的「写」写错了读不成:字太长、数的个数不对、位置出界', threw(['a.jpg', '写: ' + '字'.repeat(15) + ' 在 500, 500']) && threw(['a.jpg', '写: ' + '字'.repeat(21)]) && threw(['a.jpg', '写: 18 在 1, 2, 3']) && threw(['a.jpg', '写: 18 在 1200, 500']));
 
 check('做了没有:转过或画过才算', !kitTouched(null) && !kitTouched({}) && !kitTouched({ turn: { disc: 0 }, moves: 0, marks: [] }) && kitTouched({ moves: 1 }) && kitTouched({ marks: [[[1, 1], [2, 2]]] }));
 

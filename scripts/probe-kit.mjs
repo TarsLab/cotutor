@@ -248,6 +248,19 @@ try {
   for (let k = 0; k < 60; k++) { const r = await liveSend(base, 'math-tutor', { text: '好的' }); if (r.status === 202) break; await sleep(300); }
   ok('老师下一轮换了别的卡:板收起来', Boolean(await until(`!document.querySelector('#stage').classList.contains('on')`, 20000)));
   await until(`!document.body.classList.contains('pending')`, 20000);
+  // ---- 七、只看的板:老师把答案写在照片上 ----
+  // 从页面里发(孩子自己说的那一轮,新落下的板才自己打开;别处发来的不抢屏幕)
+  await until(`!document.body.classList.contains('pending')`, 20000);
+  await type('怎么填');
+  ok('只看的板自己打开', Boolean(await until(`document.querySelector('#stage').classList.contains('on') && document.querySelector('#st-ttl').textContent.includes('这样填')`, 20000)), JSON.stringify(await evaluate(`[document.querySelector('#stage').className, document.querySelector('#st-ttl').textContent, document.body.className, [...document.querySelectorAll('#board .c-kit')].length]`)));
+  await ready();
+  ok('老师的字写上了;没有笔、没有「给老师看」', (await evaluate(`[...document.querySelector('#st-frame').contentDocument.querySelectorAll('.kt-svg text')].map((t) => t.textContent.trim()).join('')`)) === '东面有(卫生保健室)和(教室一)' && (await tools()) === '' && (await evaluate(`document.querySelector('#st-act').hidden`)) === true, JSON.stringify([await tools(), await evaluate(`document.querySelector('#st-act').hidden`)]));
+  const [lx, ly] = await onPhoto(300, 500);
+  await stroke([[lx, ly], [lx + 60, ly + 10], [lx + 120, ly]]);
+  ok('画不上东西', (await inkCount()) === 0);
+  await shot('photo-written.png');
+  await press('#st-x');
+  await until(`!document.querySelector('#stage').classList.contains('on')`, 5000);
   ok('板书上七张教具卡都锁着', (await evaluate(`[...document.querySelectorAll('#board .c-kit')].filter((c) => c.querySelector('.lk')).length`)) === 7, String(await evaluate(`document.querySelectorAll('#board .c-kit').length`)));
   await shot('board-after.png');
 } catch (err) {

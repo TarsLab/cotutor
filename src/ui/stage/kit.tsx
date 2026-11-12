@@ -9,7 +9,7 @@
  * 工具一列竖着(kid.hand: left 时在右),最底下空出一格放页面浮上来的老师小头像。类名都带 kt-(舞台页也装孩子端的 theme.css)。
  */
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { KID_INK, KID_INK_WIDTH, KIT_MARK_MAX, KIT_MARK_POINTS, elementBounds, frameAt, kitOf, kitOps, kitParams, kitTouched, lessonClock, turnOf, type KitState, type KitTurn, type LessonClock } from '../../chalk/index.ts';
+import { KID_INK, KID_INK_WIDTH, KIT_LOOK, KIT_MARK_MAX, KIT_MARK_POINTS, elementBounds, frameAt, kitOf, kitOps, kitParams, kitTouched, lessonClock, turnOf, type KitState, type KitTurn, type LessonClock } from '../../chalk/index.ts';
 import { mountBaked, type MountedLesson } from './chalk/render.ts';
 
 export interface KitStageHandle {
@@ -98,7 +98,7 @@ export const KitStage = forwardRef<KitStageHandle, KitStageProps>(function KitSt
   const kitDef = kitOf(kit);
   const open = kitDef ? kitOps(kitDef, ops) : [];
   const canTurn = open.includes('转');
-  const canPen = open.some((o) => o !== '转');
+  const canPen = open.some((o) => o !== '转' && o !== KIT_LOOK);
   /** loading 第一次还在烤 · swapping 换成下一张、还在烤(上一张的画面先留着)· drawing 正一笔一笔画 · ready 能动手了 */
   const [phase, setPhase] = useState<'loading' | 'swapping' | 'drawing' | 'ready'>('loading');
   const [turning, setTurning] = useState(false);

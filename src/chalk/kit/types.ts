@@ -72,7 +72,7 @@ export interface Kit {
   /** 给老师看的一句:这是什么 */
   about: string;
   params: readonly KitParam[];
-  /** 孩子在这张卡上能做的操作(事先设计好的);老师每张卡可以只开放其中几种(「操作: 切」),不写 = 全开 */
+  /** 孩子在这张卡上能做的操作(事先设计好的);老师每张卡可以只开放其中几种(「操作: 切」),不写 = 全开(「看」除外:只看、不动笔,要写明才是) */
   ops: readonly string[];
   /** 一行简写 → 参数(「2 行 9 个」→ 行、每行);不是简写回 null */
   shorthand?(line: string): Record<string, string> | null;

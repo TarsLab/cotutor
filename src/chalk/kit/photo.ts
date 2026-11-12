@@ -17,6 +17,8 @@ const PAPER = '#fffdf8';
 const DIRS = ['北', '东', '南', '西'] as const;
 const SIDES = ['上', '右', '下', '左'] as const;
 const RING_MAX = 4;
+const WRITE_MAX = 6;
+const WRITE_CHARS = 14;
 const ARROW_MAX = 3;
 /** 没量过高宽比时(服务端排画面只为读笔画)取的数:横着拍的 4:3 */
 const ASPECT = 0.75;
@@ -49,6 +51,29 @@ const readGroups = (name: string, size: number, max: number, how: string) => (v:
   }).join(';');
 };
 
+/**
+ * 「18 在 591, 860, 657, 948;3 在 693, 858, 752, 948」→「18|591 860 657 948;3|693 858 752 948」。
+ * 不给位置 = 写在照片下面另起的一条纸上(不压着题目,不靠坐标;一道题做完把答案写给孩子看,用这种);
+ * 四个数 = 写进这个框里(字照框的大小),两个数 = 写在这个点上。
+ */
+function readWrites(v: string): string {
+  const parts = v.split(/[;;]/).map((x) => x.trim()).filter(Boolean);
+  if (!parts.length || parts.length > WRITE_MAX) throw new Error(`照片的「写」最多 ${WRITE_MAX} 处,用分号隔开`);
+  return parts.map((part) => {
+    // 「字 在 数」是老师写的;「字|数」是存下来的样子(再读一遍也认)
+    const m = /^(.+?)\s*(?:在|@|\|)\s*([\d\s,,.]+)$/.exec(part);
+    const n = m ? nums(m[2]) : [];
+    const text = (m ? m[1] : part.replace(/\|$/, '')).trim().replace(/\|/g, '');
+    // 没有「在」:写在照片下面那条纸上
+    if (!m && text && Array.from(text).length <= WRITE_CHARS + 6 && !/[在@]/.test(text)) return `${text}|`;
+    if (!m || !text || Array.from(text).length > WRITE_CHARS || (n.length !== 2 && n.length !== 4) || !n.every(inRange) || (n.length === 4 && (n[2] <= n[0] || n[3] <= n[1]))) throw new Error('照片的「写」这样写:18 ÷ 3 = 6(写在照片下面),或 18 ÷ 3 = 6 在 600, 700(写在这个点上:横、竖,整张照片的千分比)');
+    return `${text}|${n.join(' ')}`;
+  }).join(';');
+}
+
+/** 手写体里一段字大约多宽(字号的倍数):汉字一个字宽,数字、符号窄一些 */
+const widthOf = (s: string): number => Array.from(s).reduce((w, ch) => w + (ch.charCodeAt(0) < 128 ? 0.62 : 1), 0);
+
 const groups = (v: string | undefined): number[][] => (v ?? '').split(';').map((x) => x.split(' ').filter(Boolean).map(Number)).filter((g) => g.length > 0);
 
 interface Layout { a: number; frame: [number, number, number, number]; u: number }
@@ -72,13 +97,14 @@ const r1 = (n: number): number => Math.round(n * 10) / 10;
 export const photo: Kit = {
   name: '照片',
   about: '孩子拍来的作业做底,裁出要讲的那一块。你在上面圈一圈、标方位、画箭头,孩子接着在上面圈、画。题目本身带图时用它。',
-  ops: ['圈', '画'],
+  ops: ['圈', '画', '看'],
   params: [
     { key: '图', note: '哪张照片。照 photos: 里的路径原样写;第一行直接写路径也行。', read: readPath, required: true },
     { key: '框', note: '只给孩子看照片的哪一块:左、上、右、下四个数,整张照片的千分比(左上角 0, 0,右下角 1000, 1000)。不写就是整张。', read: (v) => readBox('框', v), fallback: '' },
     { key: '圈', note: '你圈住的地方:左、上、右、下四个数,同样是千分比。几处用分号隔开,最多 4 处。', read: readGroups('圈', 4, RING_MAX, ''), fallback: '' },
     { key: '方位', note: '在这个点画一个东南西北的十字:横、竖两个数,千分比。', read: readGroups('方位', 2, 1, '写两个数:横、竖,整张照片的千分比,如 644, 708'), fallback: '' },
     { key: '北', values: SIDES, note: '照片上哪一边是北。缺省上。看图上的指北箭头定。' },
+    { key: '写', note: '你写上去的字(一道题做完,把答案写给孩子看):整条答案写成一行,写在照片下面。几行用分号隔开,最多 6 行。', read: readWrites, fallback: '' },
     { key: '箭头', note: '从一处指到另一处:起点的横、竖,终点的横、竖,四个数。几支用分号隔开,最多 3 支。', read: readGroups('箭头', 4, ARROW_MAX, '写四个数:起点的横、竖,终点的横、竖,如 644, 708 到 780, 708'), fallback: '' },
   ],
   shorthand(line) {
@@ -113,7 +139,39 @@ export const photo: Kit = {
         sk.push({ type: 'text', id: `${id}-word`, label: DIRS[k], text: DIRS[k], x: r1(cx + fx - font / 2), y: r1(cy + fy - (font * 1.25) / 2), width: r1(font), height: r1(font * 1.25), fontSize: r1(font), strokeColor: RED, animateDuration: 180 });
       }
     }
-    return { skeletons: sk, groups: [], turns: [], frame, photo: { src: p['图'] ?? '', width: 1000, height: 1000 * a } };
+    // 没给位置的几行:照片下面另起一条纸,一行一行写在正中;画框跟着往下长
+    let shown = frame;
+    let below = 0;
+    for (const item of (p['写'] ?? '').split(';').filter(Boolean)) {
+      const [word, where] = item.split('|');
+      const n = (where ?? '').split(' ').filter(Boolean).map(Number);
+      if (word && !n.length) {
+        const wide = widthOf(word);
+        const font = Math.min(40 * u, (frame[2] * 0.9) / wide);
+        const top = frame[1] + frame[3] + 14 * u + below * font * 1.6;
+        sk.push({ type: 'text', id: `write-below-${below}-${word}`, label: '老师写的', text: word, x: r1(frame[0] + frame[2] / 2 - (wide * font) / 2), y: r1(top), width: r1(wide * font), height: r1(font * 1.25), fontSize: r1(font), strokeColor: RED, animateDuration: 260 * Array.from(word).length });
+        below++;
+        shown = [frame[0], frame[1], frame[2], r1(top + font * 1.6 - frame[1])];
+        continue;
+      }
+      if (!word || (n.length !== 2 && n.length !== 4)) continue;
+      const wide = widthOf(word);
+      // 写进框里:字照框的大小(高的六成,宽放得下);写在点上:照画框的大小取个看得清的字号
+      const font = n.length === 4 ? Math.max(6, Math.min((n[3] - n[1]) * a * 0.62, ((n[2] - n[0]) * 0.86) / wide)) : 20 * u;
+      const cx = n.length === 4 ? (n[0] + n[2]) / 2 : n[0];
+      const cy = (n.length === 4 ? (n[1] + n[3]) / 2 : n[1]) * a;
+      // 写在点上的垫一块纸色的底(像贴了张条子):压在题目的字上也读得清,位置偏一点不要紧
+      // 2026-11-12 真模型试纸鹤那道题:讲课时给的方框位置偏 15–25 个千分点,字压在框线上;整条算式贴在旁边不怕偏
+      if (n.length === 2) sk.push({ type: 'rectangle', id: `write-pad-${word}-${n.join('-')}`, x: r1(cx - (wide * font) / 2 - font * 0.5), y: r1(cy - font * 0.95), width: r1(wide * font + font), height: r1(font * 1.9), strokeColor: RED, strokeWidth: Math.max(1, u), backgroundColor: PAPER, fillStyle: 'solid', roughness: 0, roundness: { type: 3 }, animateDuration: 200 });
+      sk.push({ type: 'text', id: `write-${word}-${n.join('-')}`, label: '老师写的', text: word, x: r1(cx - (wide * font) / 2), y: r1(cy - (font * 1.25) / 2), width: r1(wide * font), height: r1(font * 1.25), fontSize: r1(font), strokeColor: RED, animateDuration: 260 * Array.from(word).length });
+    }
+    // 那条纸:一块纸色的底,盖住照片在裁的那一块下面还露着的部分(照片是整张垫着的);排在字前面。
+    // 往左右和下面多盖出去一大截:舞台的框和画框的宽高比差一点时,边上会多露出一条
+    if (below) {
+      const at = sk.findIndex((e) => e.id.startsWith('write-below-'));
+      sk.splice(at, 0, { type: 'rectangle', id: 'write-strip', x: r1(frame[0] - 1500), y: r1(frame[1] + frame[3]), width: r1(frame[2] + 3000), height: r1(shown[3] - frame[3] + 1500), strokeColor: PAPER, strokeWidth: 1, backgroundColor: PAPER, fillStyle: 'solid', roughness: 0, animateDuration: 60 });
+    }
+    return { skeletons: sk, groups: [], turns: [], frame: shown, photo: { src: p['图'] ?? '', width: 1000, height: 1000 * a } };
   },
   read(_p, state) {
     const marks = (state.marks ?? []).filter((s) => s.length);

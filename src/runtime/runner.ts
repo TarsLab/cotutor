@@ -512,7 +512,8 @@ export class Runner {
       if (m.result !== 'ok') continue;
       for (const c of m.section?.cards ?? []) {
         const k = c.kind === 'kit' ? kitOf(String((c.props as { kit?: unknown }).kit ?? '')) : undefined;
-        if (k) kit = { kit: k.name, params: kitParams(k, (c.props as { params?: Record<string, unknown> }).params), ops: kitOps(k, (c.props as { ops?: unknown }).ops) };
+        // 只留老师写了的参数:缺省值(照片的「北: 上」)不是他画的
+        if (k) kit = { kit: k.name, params: Object.fromEntries(Object.entries(kitParams(k, (c.props as { params?: Record<string, unknown> }).params)).filter(([key, v]) => { const d = k.params.find((x) => x.key === key); return v !== (d?.values ? d.values[0] : (d?.fallback ?? '')); })), ops: kitOps(k, (c.props as { ops?: unknown }).ops) };
       }
     }
     const reads = Boolean(photo && x.activity && (await readActivity(ws, tutor, x.activity))?.tools.some((t) => t.tool === '认字'));

@@ -55,6 +55,7 @@ export const GRADERS: Readonly<Record<string, string>> = {
   出拍给我看卡: '写过拍给我看卡(photo):要孩子拍照片发来时',
   出教具卡: '写过数学卡(kit):老师先画出来、请孩子动笔时;后面写画法的名字就要是那一种(「出教具卡: 照片」)',
   不出教具卡: '没写过数学卡(kit):作业全对,说一句就收,不讲题时',
+  请动手就开放: '末句请孩子在板上动手(点一点、圈出来、切一刀…)的每一轮,板上开放了对应的操作(这一轮的板卡,没出就是板上原来那张):《画板为主设计》「话接不接得上」',
   问就上板: '讲稿里有问号的每一轮都带一张数学卡或画板卡(请孩子拍照的那一轮不算):讲题不只用嘴问',
   词落到幅: '参数「词」里至少这么多个原样出现在分幅里(「词落到幅: 2」);只适合画得出来的词,「羞愧」「满满」老师会照规矩换成看得见的样子',
 };
@@ -159,6 +160,30 @@ export interface GradeResult {
   why?: string;
 }
 
+/** 末句里请孩子动手的说法 → 板上要开放的操作 */
+export const ASK_OPS: readonly [RegExp, string][] = [
+  [/点一点|点一下|点点它|点出来/, '点字'],
+  [/圈出来|圈一圈|圈起来|圈住/, '圈'],
+  [/切一刀|切开|切成|再切/, '切'],
+  [/涂出来|涂一涂|涂上/, '涂'],
+  [/转到|转一转|转一下/, '转'],
+  [/添满|添上|添几|添一/, '添'],
+  [/画一画|画出来|画一道|画上/, '画'],
+];
+
+/** 每一轮末句请孩子动手要的操作,和那时板上开放的操作(这一轮出了板卡用它的,没出沿用上一张) */
+export function askedOps(turns: readonly EvalTurn[]): { turn: number; want: string; open: string[] }[] {
+  let open: string[] = [];
+  const out: { turn: number; want: string; open: string[] }[] = [];
+  turns.forEach((t, k) => {
+    const kit = (t.section?.cards ?? []).filter((c) => c.kind === 'kit').slice(-1)[0];
+    if (kit) open = Array.isArray((kit.props as { ops?: unknown }).ops) ? ((kit.props as { ops: string[] }).ops) : [];
+    const last = t.section?.lines.slice(-1)[0]?.text ?? '';
+    for (const [re, op] of ASK_OPS) if (re.test(last)) out.push({ turn: k + 1, want: op, open: [...open] });
+  });
+  return out;
+}
+
 const paintCards = (s: BoardSection | null): BoardSection['cards'] => (s?.cards ?? []).filter((c) => c.kind === 'paint');
 const panelsOf = (c: BoardSection['cards'][number]): string[] => (Array.isArray((c.props as { panels?: unknown }).panels) ? ((c.props as { panels: unknown[] }).panels as string[]) : []);
 const segmentsOf = (c: BoardSection['cards'][number]): string[] => (c.kind === 'read' && Array.isArray((c.props as { segments?: unknown }).segments) ? ((c.props as { segments: unknown[] }).segments as string[]) : []);
@@ -236,6 +261,10 @@ export function gradeRun(checks: readonly string[], turns: readonly EvalTurn[], 
       case '不出教具卡': {
         const n = turns.filter((t) => (t.section?.cards ?? []).some((c) => c.kind === 'kit')).length;
         return { check, pass: !n, ...(n ? { why: `有 ${n} 轮写了数学卡` } : {}) };
+      }
+      case '请动手就开放': {
+        const bad = askedOps(turns).filter((x) => !x.open.includes(x.want));
+        return { check, pass: !bad.length, ...(bad.length ? { why: bad.map((x) => `第 ${x.turn} 轮请他${x.want},板上开放的是${x.open.length ? x.open.join('、') : '没有'}`).join(';') } : {}) };
       }
       case '问就上板': {
         const bare = turns.filter((t) => (t.section?.lines ?? []).some((l) => /[??]/.test(l.text)) && !(t.section?.cards ?? []).some((c) => c.kind === 'kit' || c.kind === 'canvas' || c.kind === 'photo'));

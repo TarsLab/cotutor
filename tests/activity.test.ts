@@ -171,6 +171,12 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   ];
   check('判:画图卡带题干和词', !gradeRun(['画图卡带题干和词'], turns)[0].pass && gradeRun(['画图卡带题干和词'], [{ kid: 'x', section: sec(['好?'], [{ kind: 'paint', props: { panels: ['a'], ask: '题', words: ['词'] } }]) }])[0].pass);
   check('判:每节有讲稿拒绝只出卡、空白和空轮次', gradeRun(['每节有讲稿'], turns)[0].pass && !gradeRun(['每节有讲稿'], [{ kid: 'x', section: sec([], [story]) }])[0].pass && !gradeRun(['每节有讲稿'], [{ kid: 'x', section: sec(['  ']) }])[0].pass && !gradeRun(['每节有讲稿'], [{ kid: 'x', section: null }])[0].pass && !gradeRun(['每节有讲稿'], [])[0].pass);
+  {
+    const kitSec = (lines: string[], ops?: string[]) => sec(lines, ops ? [{ kind: 'kit', props: { kit: '照片', params: {}, ops } }] : []);
+    const ok1 = [{ kid: 'a', section: kitSec(['哪个字不认识,就点一点它。'], ['点字']) }, { kid: 'b', section: kitSec(['你把傍晚圈出来。']) }];
+    const r1 = gradeRun(['请动手就开放'], ok1)[0];
+    check('判:请动手就开放——末句请他动手,板上(这一轮的板卡,没出就沿用上一张)要开放那个操作', !r1.pass && r1.why === '第 2 轮请他圈,板上开放的是点字' && gradeRun(['请动手就开放'], [ok1[0], { kid: 'b', section: kitSec(['你把傍晚圈出来。'], ['点字', '圈']) }])[0].pass && gradeRun(['请动手就开放'], [{ kid: 'c', section: kitSec(['你读一读。']) }])[0].pass, JSON.stringify(r1));
+  }
   check('判:分幅至少', gradeRun(['分幅至少: 2'], turns)[0].pass && !gradeRun(['分幅至少: 3'], turns)[0].pass && gradeRun(['分幅至少: 3'], turns)[0].why!.includes('2 幅'));
   check('判:出教具卡(方向题老师先画出来)', gradeRun(['出教具卡'], [{ kid: 'x', section: sec(['你转一转。'], [{ kind: 'kit', props: { kit: '方向盘', params: {} } }]) }])[0].pass && !gradeRun(['出教具卡'], turns)[0].pass && gradeRun(['出教具卡'], turns)[0].why!.includes('没写数学卡'));
   check('判:出教具卡带画法名、不出教具卡', gradeRun(['出教具卡: 照片'], [{ kid: 'x', section: sec(['你圈一圈。'], [{ kind: 'kit', props: { kit: '照片', params: {} } }]) }])[0].pass && !gradeRun(['出教具卡: 照片'], [{ kid: 'x', section: sec(['你转一转。'], [{ kind: 'kit', props: { kit: '方向盘', params: {} } }]) }])[0].pass && gradeRun(['不出教具卡'], [{ kid: 'x', section: sec(['都对了。'], []) }])[0].pass && !gradeRun(['不出教具卡'], [{ kid: 'x', section: sec(['你转一转。'], [{ kind: 'kit', props: { kit: '方向盘', params: {} } }]) }])[0].pass);

@@ -276,13 +276,15 @@ export interface KidHomeTile {
   id: HomeTileId;
   label: string;
   resume?: Resume;
+  /** 这个 activity 以板为主(头上 board: page):孩子端点了先到拍照屏,带着照片(或白板)开话题 */
+  board?: 'page';
 }
 
 /** 这位老师牌上的方砖:开着的(on,牌上的先后)里,家里那个 activity 用得了的才出 */
-export function kidTiles(on: readonly HomeTileId[], opts: { usable: (activity: string) => boolean; resumes?: ReadonlyMap<string, Resume> }): KidHomeTile[] {
+export function kidTiles(on: readonly HomeTileId[], opts: { usable: (activity: string) => boolean; resumes?: ReadonlyMap<string, Resume>; boards?: ReadonlySet<string> }): KidHomeTile[] {
   return HOME_TILES.filter((t) => on.includes(t.id) && opts.usable(t.activity)).map((t) => {
     const r = opts.resumes?.get(`activity:${t.activity}`);
-    return { id: t.id, label: t.activity, ...(r ? { resume: r } : {}) };
+    return { id: t.id, label: t.activity, ...(r ? { resume: r } : {}), ...(opts.boards?.has(t.activity) ? { board: 'page' as const } : {}) };
   });
 }
 

@@ -192,7 +192,7 @@ export const photo: Kit = {
   about: '孩子拍来的作业、课本做底,裁出要讲的那一块。你在上面圈一圈、标方位、画箭头,孩子接着在上面圈、画;课本上的字词,孩子点一下就看到怎么写。',
   ops: ['圈', '画', PHOTO_PICK, '看'],
   params: [
-    { key: '图', note: '哪张照片。照 photos: 里的路径原样写;第一行直接写路径也行。', read: readPath, required: true },
+    { key: '图', note: '哪张照片。不写就是孩子最近发的那张(板上现在垫着的);要换别的照 photos: 里的路径原样写,第一行直接写路径也行。', read: readPath, fallback: '' },
     { key: '框', note: '只给孩子看照片的哪一块:左、上、右、下四个数,整张照片的千分比(左上角 0, 0,右下角 1000, 1000)。不写就是整张。', read: (v) => readBox('框', v), fallback: '' },
     { key: '圈', note: '你圈住的地方:左、上、右、下四个数,同样是千分比。几处用分号隔开,最多 4 处。', read: readGroups('圈', 4, RING_MAX, ''), fallback: '' },
     { key: '方位', note: '在这个点画一个东南西北的十字:横、竖两个数,千分比。', read: readGroups('方位', 2, 1, '写两个数:横、竖,整张照片的千分比,如 644, 708'), fallback: '' },

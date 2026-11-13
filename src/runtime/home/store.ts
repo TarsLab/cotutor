@@ -269,8 +269,14 @@ export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'pu
     const news = Boolean(publishedAt && arranged && !(await talkedSince(ws, name, publishedAt, now)));
     // 常驻的方砖(预习、检查作业、复习):不经发布,家里有那个 activity、没关掉就在
     const tiles: HomeTileId[] = [];
-    for (const t of HOME_TILES) if (tutorTiles(ws.config.tutors[name] ?? {}).includes(t.id) && (await usableActivity(ws, name, t.activity))) tiles.push(t.id);
-    out.push({ kind: 'tutor', props: { tutor: name, buttons, tiles: kidTiles(tiles, { usable: () => true, resumes }), ...(news ? { news: true } : {}) } });
+    const boards = new Set<string>();
+    for (const t of HOME_TILES) {
+      const act = tutorTiles(ws.config.tutors[name] ?? {}).includes(t.id) ? await usableActivity(ws, name, t.activity) : null;
+      if (!act) continue;
+      tiles.push(t.id);
+      if (act.board === 'page') boards.add(t.activity);
+    }
+    out.push({ kind: 'tutor', props: { tutor: name, buttons, tiles: kidTiles(tiles, { usable: () => true, resumes, boards }), ...(news ? { news: true } : {}) } });
   }
   return { home: id, cards: out };
 }

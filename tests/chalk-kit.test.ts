@@ -9,7 +9,7 @@ import { check, done } from './_check.ts';
 
 const kit = kitOf('方向盘')!;
 const grid = kitOf('点阵')!;
-check('三种画法在册:照片、点阵、方向盘', KITS.map((k) => k.name).join() === '照片,点阵,方向盘' && kitOf('没有这种') === undefined);
+check('四种画法在册:照片、白板、点阵、方向盘', KITS.map((k) => k.name).join() === '照片,白板,点阵,方向盘' && kitOf('没有这种') === undefined);
 check('每种教具都列了孩子能做的操作', kit.ops.join() === '转,圈' && grid.ops.join() === '切,圈,涂,添');
 
 // ---- 参数与操作 ----
@@ -94,7 +94,8 @@ const shot = kitOf('照片')!;
 const PH = readKitLines(shot, ['captures/2026-11-10/2159-1.jpg', '框: 243, 601, 927, 971', '圈: 595, 665, 694, 752', '操作: 圈', '心理辅导室的东面是哪两间?圈出来。']);
 check('照片:第一行是路径,框和圈规整成四个数,题目留下', PH.params['图'] === 'captures/2026-11-10/2159-1.jpg' && PH.params['框'] === '243 601 927 971' && PH.params['圈'] === '595 665 694 752' && PH.params['北'] === '上' && PH.ops.join() === '圈' && PH.prompt === '心理辅导室的东面是哪两间?圈出来。', JSON.stringify(PH));
 const threw = (lines: string[]): boolean => { try { readKitLines(shot, lines); return false; } catch { return true; } };
-check('照片:没写图、网上的图、框的数不对、千分比出界都读不成', threw(['圈出来。']) && threw(['https://example.com/a.jpg']) && threw(['a.jpg', '框: 1, 2, 3']) && threw(['a.jpg', '圈: 10, 10, 1200, 500']) && threw(['a.jpg', '方位: 5']));
+check('照片:没写图也读得成(就是孩子最近发的那张,应用补上);网上的图、框的数不对、千分比出界都读不成', readKitLines(shot, ['操作: 点字', '圈出来。']).params['图'] === '' && threw(['https://example.com/a.jpg']) && threw(['a.jpg', '框: 1, 2, 3']) && threw(['a.jpg', '圈: 10, 10, 1200, 500']) && threw(['a.jpg', '方位: 5']));
+const threw2 = (f: () => unknown): boolean => { try { f(); return false; } catch { return true; } };
 const ps = shot.build(PH.params, { aspect: 1.0076 });
 check('照片:画框是裁的那一块(多留一圈边),照片占整个场景,竖的数乘了高宽比', ps.photo?.src === 'captures/2026-11-10/2159-1.jpg' && ps.photo.width === 1000 && Math.abs(ps.photo.height - 1007.6) < 0.01 && ps.frame![0] < 243 && ps.frame![0] > 200 && Math.abs(ps.frame![1] - (601 - 370 * 0.04) * 1.0076) < 0.01, JSON.stringify(ps.frame));
 check('照片:一处圈 = 一个红圈,套在老师给的框外面', ps.skeletons.length === 1 && ps.skeletons[0].type === 'ellipse' && ps.skeletons[0].strokeColor === '#e03131' && Number(ps.skeletons[0].x) < 595 && Number(ps.skeletons[0].x) + Number(ps.skeletons[0].width) > 694);
@@ -153,5 +154,17 @@ check('照片的「写」写错了读不成:字太长、数的个数不对、位
 }
 
 check('做了没有:转过或画过才算', !kitTouched(null) && !kitTouched({}) && !kitTouched({ turn: { disc: 0 }, moves: 0, marks: [] }) && kitTouched({ moves: 1 }) && kitTouched({ marks: [[[1, 1], [2, 2]]] }));
+
+// ---- 白板:没有照片时老师写一个词、一道算式 ----
+const wb = kitOf('白板')!;
+const W1 = readKitLines(wb, ['写: 傍晚;18 ÷ 3 = 6', '把「晚」圈出来。']);
+const ws1 = wb.build(W1.params);
+check('白板:「写」几行用分号隔开;只写、圈、画,「看」写明了才有', W1.params['写'] === '傍晚;18 ÷ 3 = 6' && W1.ops.join() === '圈,画' && W1.prompt === '把「晚」圈出来。' && readKitLines(wb, ['操作: 看']).ops.join() === '看', JSON.stringify(W1));
+check('白板:一行一段字,竖着排在正中、不出画框;画框固定(添了线画面不挪)', ws1.skeletons.length === 2 && ws1.skeletons.every((e) => e.type === 'text' && Number(e.x) > 0 && Number(e.x) + Number(e.width) < 1000 && Number(e.y) > 0 && Number(e.y) + Number(e.height) < 625) && Number(ws1.skeletons[1].y) > Number(ws1.skeletons[0].y) && JSON.stringify(ws1.frame) === '[0,0,1000,625]', JSON.stringify(ws1.skeletons.map((e) => [e.x, e.y, e.width, e.height])));
+check('白板:不写就是空白板', wb.build(readKitLines(wb, []).params).skeletons.length === 0 && wb.read(readKitLines(wb, []).params, {}, wb.build(readKitLines(wb, []).params)) === '还没画');
+const t0 = ws1.skeletons[0];
+const ringAround = (e: typeof t0): [number, number][] => { const x = Number(e.x), y = Number(e.y), w = Number(e.width), h = Number(e.height); return Array.from({ length: 24 }, (_, i) => [Math.round(x + w / 2 + (w / 2 + 20) * Math.cos((i / 24) * Math.PI * 2)), Math.round(y + h / 2 + (h / 2 + 20) * Math.sin((i / 24) * Math.PI * 2))] as [number, number]); };
+check('白板:圈住一行就说圈住了它', describeKit(wb, W1.params, { marks: [ringAround(t0)] }, ['圈']) === '请他做的:圈;大概:画了 1 笔;圈住了:傍晚', describeKit(wb, W1.params, { marks: [ringAround(t0)] }, ['圈']));
+check('白板:写得太多读不成', threw2(() => readKitLines(wb, ['写: 一;二;三;四;五'])) && threw2(() => readKitLines(wb, ['写: ' + '字'.repeat(17)])));
 
 done();

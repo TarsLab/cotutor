@@ -3,6 +3,7 @@
  * 解析(永不抛,写坏的行变成问题)、检查(带行号,fix = 要改 / note = 提醒)、递给老师的那节(剥注释、按参数与卡裁段)、工具人模板填插槽。不读文件。
  */
 import {
+  ACTIVITY_BOARDS,
   ACTIVITY_GATES,
   ACTIVITY_PAGES,
   ACTIVITY_PARAM_TYPES,
@@ -186,6 +187,7 @@ export function parseActivity(text: string): ParsedActivity {
     description: frontmatter.description ?? '',
     cards: (frontmatter.cards ?? '').split(/[\s,，、]+/).filter(Boolean),
     ...(frontmatter.page?.trim() ? { page: frontmatter.page.trim() } : {}),
+    ...(frontmatter.board?.trim() ? { board: frontmatter.board.trim() } : {}),
     params: [],
     state: [],
     gates: [],
@@ -303,6 +305,9 @@ export function checkActivity(a: Activity, opts: CheckOptions = {}): ActivityIss
     if (!ACTIVITY_GATES[g.rule]) fix(`应用不认得「${g.rule}」这条拦法:只有 ${Object.keys(ACTIVITY_GATES).join('、')}(拦法只能加在代码里,这里只能删)`, g.line);
   }
 
+  if (a.board !== undefined && !ACTIVITY_BOARDS[a.board]) fix(`头上 board 写的「${a.board}」不认得:只有 ${Object.keys(ACTIVITY_BOARDS).join('、')}`);
+  if (a.board !== undefined && a.page !== undefined) fix('头上的 board 和 page 只能写一个:page 不起老师,没有板');
+  if (a.board !== undefined && !a.cards.includes('kit')) fix('头上写了 board: page,cards 里要有 kit(老师在板上画靠它)');
   if (a.page !== undefined && !ACTIVITY_PAGES[a.page]) fix(`头上 page 写的「${a.page}」不认得:只有 ${Object.keys(ACTIVITY_PAGES).join('、')}`);
   if (a.page !== undefined && a.tutor) fix(`头上写了 page: ${a.page}(不起老师,进那一页),「## 老师怎么带」用不上:删掉那节,或删掉 page`, a.tutor.line);
   else if (!a.tutor && a.page === undefined) issues.push({ level: 'note', text: '没有「## 老师怎么带」:这个 activity 不起老师' });

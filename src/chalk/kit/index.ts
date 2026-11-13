@@ -1,6 +1,6 @@
 /**
  * 教具的入口(纯函数,浏览器外可用):有哪几种、围栏里的参数怎么读、孩子做了什么说成给老师的那几句。
- * 画面与读数由各教具自己定(compass.ts 方向盘、dots.ts 点阵);一笔指着什么、转到哪了在 marks.ts。
+ * 画面与读数由各教具自己定(photo.ts 照片、white.ts 白板、compass.ts 方向盘、dots.ts 点阵);一笔指着什么、转到哪了在 marks.ts。
  * 舞台(src/ui/stage/kit.tsx)与板书的教具卡(src/board/cards/kit.ts)都从这里拿。
  * 加一种教具 = 加一个文件 + KITS 里一行,再在 cards/kit/card.md 里写它的参数、操作与例子。
  */
@@ -8,6 +8,7 @@
 import { compass } from './compass.ts';
 import { dots } from './dots.ts';
 import { PHOTO_PICK, photo } from './photo.ts';
+import { white } from './white.ts';
 import type { Kit, KitState } from './types.ts';
 
 export { KIT_MARK_MAX, KIT_MARK_POINTS, KIT_PICK_CHARS, KIT_PICK_MAX } from './types.ts';
@@ -15,7 +16,7 @@ export { PHOTO_PICK, photoPick, pickable, type PhotoLine, type PhotoWord } from 
 export type { Kit, KitEnv, KitParam, KitScene, KitState, KitTurn } from './types.ts';
 export { kitMarks, markPhrases, turnOf, turnPoint, turnedSkeletons, type KitMark } from './marks.ts';
 
-export const KITS: readonly Kit[] = [photo, dots, compass];
+export const KITS: readonly Kit[] = [photo, white, dots, compass];
 
 /** 只看、不动笔的那种「操作」:写明了才算,不写操作时不在全开里;只开放它的卡没有笔、没有「给老师看」 */
 export const KIT_LOOK = '看';

@@ -23,6 +23,8 @@ export interface ConversationFiles {
   cardAsset: (job: string, n: number, file: string) => string;
   /** API 运行时这个话题的模型历史 <date>.<话题>.brain.jsonl(src/brain/api.ts;话题 id 就是第一轮的 job,删话题按 <date>.<job>.* 一起删) */
   brain: (thread: string) => string;
+  /** 以板为主的话题里板的日志 <date>.<话题>.board.jsonl(src/runtime/journal/board-log.ts):孩子在板上做的事一件一行,应用记的(交给老师到哪了)也在;删话题按 <date>.<job>.* 一起删 */
+  board: (thread: string) => string;
 }
 
 /** conversations/<tutor>/<date>.json 与 <date>.<job>.log / .err.log / .mp3(整段配音)/ .<n>.mp3(讲稿第 n 句)/ .cards/<n>.json(卡的状态) */
@@ -41,6 +43,7 @@ export function conversationFiles(conversationsDir: string, tutor: string, date:
     cardAssetsDir: (job, n) => `${base}.${job}.cards/${n}`,
     cardAsset: (job, n, file) => `${base}.${job}.cards/${n}/${file}`,
     brain: (thread) => `${base}.${thread}.brain.jsonl`,
+    board: (thread) => `${base}.${thread}.board.jsonl`,
   };
 }
 

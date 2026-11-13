@@ -98,6 +98,23 @@ export function renderContextPack(pack: ContextPack): string {
     }
   }
   if (p.drawing) out.push(`  drawing: ${yamlScalar(p.drawing)}`);
+  // 以板为主的话题:板此刻的样子(键是给老师看的中文;和 board: off 不会同时有)
+  if (p.slate && p.board !== 'off') {
+    const b = p.slate;
+    out.push('  board:', `    底: ${yamlScalar(b.base)}`);
+    if (b.text?.length === 1) out.push(`    全文: ${yamlScalar(b.text[0])}`);
+    else if (b.text?.length) {
+      out.push('    全文:');
+      for (const x of b.text) out.push(`      - ${yamlScalar(x)}`);
+    }
+    if (b.drawn) out.push(`    你画的: ${yamlScalar(b.drawn)}`);
+    out.push(`    开放: ${yamlScalar(b.ops.length ? b.ops.join('、') : '无')}`);
+    if (b.did.length) {
+      out.push('    孩子做的:');
+      for (const x of b.did) out.push(`      - ${yamlScalar(x)}`);
+    }
+    if (b.recent) out.push(`    最近点的: ${yamlScalar(b.recent)}`);
+  }
   if (p.cards?.length) {
     out.push('  cards:');
     for (const c of p.cards) out.push(`    - ${yamlScalar(c)}`);

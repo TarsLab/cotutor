@@ -57,6 +57,15 @@ export const ACTIVITY_PAGES: Readonly<Record<string, string>> = {
   'dictation-en': '英文单词听写页 /dictation?lang=en',
 };
 
+/**
+ * 头上的 `board:`:这个 activity 的页面是不是一块板(2026-11-13《画板为主设计》)。
+ * page = 以板为主:进来先拍照(或直接用白板),照片一发应用就铺板,板从进来到回首页一直在;老师的卡只往板上画记号、开放操作,不出别的卡
+ */
+export const ACTIVITY_BOARDS: Readonly<Record<string, string>> = {
+  page: '以板为主:先拍照或用白板,板一直在,老师只在板上画',
+};
+export type ActivityBoard = 'page';
+
 /** 应用认的节标题;工具人那节是 `<工具人>收到什么` */
 export const ACTIVITY_SECTIONS = { params: '家长填的', state: '应用算的', gates: '应用拦的', tutor: '老师怎么带' } as const;
 export const ACTIVITY_TOOL_SECTION_RE = /^(.+?)收到什么$/;
@@ -119,6 +128,8 @@ export const ActivitySchema = z.object({
   gates: z.array(ActivityGateSchema),
   /** 头上的 `page:`:不起老师、进这一页(见 ACTIVITY_PAGES);没写 = 起老师 */
   page: z.string().optional(),
+  /** 头上的 `board:`:page = 以板为主(见 ACTIVITY_BOARDS);没写 = 照卡片流 */
+  board: z.string().optional(),
   /** 「老师怎么带」那节的原文(没剥注释、没裁);没有这节就是 null(这个 activity 不起老师,如听写) */
   tutor: z.object({ text: z.string(), line: z.number().int() }).nullable(),
   tools: z.array(ActivityToolSchema),

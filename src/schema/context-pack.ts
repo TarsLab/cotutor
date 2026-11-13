@@ -80,7 +80,7 @@ export const ContextPackSchema = z.object({
   /**
    * 这一轮走实时:嘴(realtime 模型)已经替老师接住了孩子,讲稿交给嘴照念、不配音。caught = 嘴接住时说的那句;cut = 上一轮的讲稿念到第几句被孩子打断(1 起;0 = 一句都没念到就被打断了;没打断不写)。
    * 口语课:warmup = 热身的摸底,一拍一行(应用按转写记);phone = 打电话打了几分钟(0 起,还没打不写);
-   * app = 这一轮不是孩子说的:call = 你念了 [[call]],现在开始打电话;quiet = 热身里孩子连着两拍没开口。
+   * app = 这一轮不是孩子说的:call = 你念了 [[call]],现在开始打电话;quiet = 热身里孩子连着两拍没开口;still = 板上孩子动了手以后一直没出声,应用替他叫你一次。
    * draw = 边画边聊:这张画画着的时候孩子说的和你(嘴)说的,一句一行,按先后
    */
   live: z
@@ -89,8 +89,23 @@ export const ContextPackSchema = z.object({
       cut: z.number().int().nonnegative().optional(),
       warmup: z.array(z.string()).optional(),
       phone: z.number().int().nonnegative().optional(),
-      app: z.enum(['call', 'quiet']).optional(),
+      app: z.enum(['call', 'quiet', 'still']).optional(),
       draw: z.array(z.string()).optional(),
+    })
+    .optional(),
+  /**
+   * 以板为主的话题:板此刻的样子,每一轮都带(应用写的,不是孩子端原样转发的;src/runtime/context/board-pack.ts)。
+   * base 底(照片的路径与认出的课名,或「白板」)· text 底上认出的全文(换底后第一次认完给全,之后只写「未变」;还没认完不写)·
+   * drawn 你在板上画着的 · ops 现在开放给孩子的操作 · did 孩子从上一轮到现在做的(合并过)· recent 他最近点的那一项(30 秒内,孩子说「这个」时指它)
+   */
+  slate: z
+    .object({
+      base: z.string().min(1),
+      text: z.array(z.string()).optional(),
+      drawn: z.string().optional(),
+      ops: z.array(z.string()).default([]),
+      did: z.array(z.string()).default([]),
+      recent: z.string().optional(),
     })
     .optional(),
   /** 孩子从左栏的纸交来的画:一句话说它是 photos 第几张、几笔、各颜色几笔、画了多久、清空过几次(清掉的那几版是 photos 第几张) */

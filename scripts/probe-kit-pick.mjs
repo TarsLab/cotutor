@@ -4,10 +4,10 @@
  * mock 的语文老师:说的话里有「课本」就出一张照片板(假课本页,操作: 点字);认出的字词头两次问还在认(三项),之后认完(八项)。
  * 一、打字发一句 → 照片板落下就自己铺满打开;没有「给老师看」、没有擦掉的钮(只点字,没有东西要交)。
  * 二、认出的字词垫着底,一个一个出来(先三项,后八项);课本要会写的那几项深一点。
- * 三、手指点「变」→ 田字格浮在板的一角、一笔一笔写;这一笔不留在板上;状态里记下点过「变」。
- * 四、圈住「海洋」→ 田字格换成两个字;状态里两项,照先后。点空白处:什么都不弹,板上也不留笔画。
+ * 三、手指点「变」→ 田字格浮在板的一角、一笔一笔写;这一笔不留在板上;卡的状态里不记(以板为主的话题里报给服务端,见 probe-board-page.mjs)。
+ * 四、圈住「海洋」→ 田字格换成两个字。点空白处:什么都不弹,板上也不留笔画。
  * 五、正文里没垫底的字也能点:点那一行的第 3 个字「课」→ 田字格是「课」;点在逗号上不弹。
- * 六、× 收起田字格;给老师的那句照先后列出点过的;关掉舞台田字格也跟着收。
+ * 六、× 收起田字格;关掉舞台田字格也跟着收。
  * iPad 横屏各截一张。用法:node scripts/probe-kit-pick.mjs [mock 根地址] [--out <截图目录>]
  *   缺省 http://127.0.0.1:8790(先 cotutor mock --http)
  */
@@ -135,8 +135,9 @@ try {
   ok('点「变」:田字格浮出来,是这个字', Boolean(await until(`!document.querySelector('#st-pick').hidden`, 3000)) && (await picked()) === '变', await picked());
   ok('田字格在一笔一笔写(有正在写的那一层)', Boolean(await until(`Boolean(document.querySelector('#st-pick .hz .ink'))`, 4000)));
   ok('这一笔不留在板上', (await inkCount()) === 0, String(await inkCount()));
-  let c = await waitState((s) => Array.isArray(s.picked) && s.picked.length === 1);
-  ok('状态里记下点过「变」', JSON.stringify(c.state?.picked) === '["变"]', JSON.stringify(c.state));
+  await sleep(600);
+  let c = await pickCard();
+  ok('点过的字不进卡的状态', !c.state?.picked, JSON.stringify(c.state));
   const pk = await center('#st-pick');
   const st = await center('#stage');
   ok('田字格在板的右上角(右手:工具在左),不挡照片中间', pk.x > st.x && pk.y < st.y, JSON.stringify({ pk, st }));
@@ -147,8 +148,6 @@ try {
   const rx = hy.w * 0.7, ry = hy.h * 0.9;
   await stroke(Array.from({ length: 25 }, (_, i) => { const a = (i / 24) * Math.PI * 2; return [hy.x + Math.cos(a) * rx, hy.y + Math.sin(a) * ry]; }));
   ok('圈住「海洋」:田字格换成两个字', Boolean(await until(`[...document.querySelectorAll('#st-pick .hz')].length === 2`, 3000)) && (await picked()) === '海洋', await picked());
-  c = await waitState((s) => Array.isArray(s.picked) && s.picked.length === 2);
-  ok('状态里两项,照先后', JSON.stringify(c.state?.picked) === '["变","海洋"]', JSON.stringify(c.state));
   await shot('pick-4-haiyang.png');
   await tap(photoBox.x + photoBox.w * 0.4, photoBox.y + photoBox.h * 0.42);
   await sleep(300);
@@ -164,15 +163,15 @@ try {
   await tap(comma.x, comma.y);
   await sleep(300);
   ok('点在逗号上:不弹别的,板上不留笔画', (await picked()) === '课' && (await inkCount()) === 0, await picked());
-  c = await waitState((s) => Array.isArray(s.picked) && s.picked.length === 3);
   await shot('pick-5-line.png');
 
   // ---- 六、收起;给老师的那句 ----
   await press('#st-pick-x');
   ok('× 收起田字格', Boolean(await until(`document.querySelector('#st-pick').hidden`, 2000)));
+  c = await pickCard();
   const k = kitOf(c.props.kit);
   const said = describeKit(k, kitParams(k, c.props.params), c.state ?? {}, kitOps(k, c.props.ops));
-  ok('给老师的那句', said === '请他做的:点字;大概:点开看了笔顺:「变」「海洋」「课」', said);
+  ok('卡上给老师的那句不说点过的字(那在 board: 里)', said === '请他做的:点字;大概:还没画', said);
   await tap(bian.x, bian.y);
   await until(`!document.querySelector('#st-pick').hidden`, 3000);
   await press('#st-x');

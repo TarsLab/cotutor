@@ -96,6 +96,10 @@ export function mockLiveUpgrade(mock: Mock) {
           send({ t: 'chat', canvas: x.canvas, said: true });
           break;
         case 'hush': holding = false; interrupt(); break;
+        // 以板为主:孩子点了一个字,安静时假嘴念它(真服务念认字时写好的念法)
+        case 'board':
+          if (!holding && playEnd <= Date.now() && isObj(x.body) && typeof x.body.text === 'string') say('catch', x.body.text);
+          break;
         case 'staged': { const r = rest; rest = null; r?.(); break; }
         case 'send': {
           if (!isObj(x.body)) return;

@@ -11,6 +11,9 @@
  *   {t:'hush'} 停下不开新一轮(上滑取消):嘴在出就掐、孩子端清了、没念的丢掉
  *   {t:'send', body} 不是说的(打字、拍照、交卡、首页按钮;舞台开着带 focus.card):body 同那条 POST · {t:'view', w, h} 屏幕多大 · {t:'bye'}
  *   {t:'staged'} 讲稿 [[play]] 的小课堂那一段放完了(或放不了、被关):后面的讲稿接着交给嘴
+ *   {t:'board', body} 以板为主的话题里孩子在板上做了一件事(现在只有点字 {k:'pick', thread, text, base}):记进板的日志(Runner.boardEvent),不起脑;
+ *   安静时嘴照念这个字词的念法(认字时写好的「傍,傍晚的傍」),老师正在说就不念;再点下一个,上一句掐掉。
+ *   点过以后 STILL_MS 没动静(没开口、没再点),应用替他叫一次老师(app: still,带上他做了什么);连着只叫一次,孩子开口了才再叫
  *   边画边聊:画板开着时按头像说的,松手带 chat {canvas, image, ask}——只给嘴(图跟着声音进对话、嘴接住),不起脑;
  *   {t:'chat', canvas, image, ask} 孩子端觉得该说一句了(换了颜色、停笔很久,src/board/canvas-chat.ts):安静时 0.5 秒静音 + 图交给嘴、嘴主动说一句,回 {t:'chat', canvas, said};不安静回 {t:'chat', canvas, skipped}。
  *   这张画上孩子说的、嘴说的记下来,交画那一轮(交画板卡 / 纸上的 drawing)带给脑(live.draw)
@@ -92,6 +95,8 @@ export interface LiveDeps {
   /** 测试:热身那句念完等孩子多久、打电话先响多久的铃 */
   echoWaitMs?: number;
   ringMs?: number;
+  /** 测试:板上点完字多久没动静替孩子叫老师 */
+  stillMs?: number;
   /** 测试:要嘴说了多久一个字没出算卡住 */
   stallMs?: number;
   /** 测试:录像这一段多久没动静、录了多久就切(心跳时看) */
@@ -130,6 +135,8 @@ const QUIET_BEATS = 2;
  */
 const IDLE_CUT_MS = 5 * 60_000;
 const MAX_TAKE_MS = 30 * 60_000;
+/** 板上点完字多久没动静,应用替孩子叫一次老师(《画板为主设计》下篇;起点,试用后调) */
+const STILL_MS = 12_000;
 /** 打电话:[[call]] 那句放完先响这么久的铃,脑的英文开场来得再早也等它(孩子听得到在打电话) */
 const RING_MS = 3000;
 /**
@@ -217,6 +224,11 @@ export class LiveCall {
   /** 热身每拍记的(摸底)、连着没开口的拍数 */
   private warm: WarmBeat[] = [];
   private quietBeats = 0;
+  /** 嘴这次(或孩子端还在放的那段)是照念点字的那句 */
+  private sayingPick = false;
+  /** 板上点完字,等着看他开不开口;stillUsed = 这一回已经替他叫过老师 */
+  private stillTimer: NodeJS.Timeout | null = null;
+  private stillUsed = false;
   /** 打电话从哪一刻起(墙钟,[[call]] 那句在孩子端放完、开始响铃);null = 还没打 */
   private phoneAt: number | null = null;
   /** 边画边聊:每张画(画板卡 <job>/<n>,纸 paper)上孩子说的、嘴说的,一句一行;交画那轮给脑后清掉 */
@@ -287,6 +299,7 @@ export class LiveCall {
   /** 让嘴说一次;接住要先告诉排队,嘴出完之前别交讲稿 */
   private ask(said: Said, instructions: string): void {
     this.said = said;
+    this.sayingPick = said.kind === 'say';
     this.saidOut = false;
     if (said.kind !== 'read') this.d.note({ e: 'asked' });
     this.session?.createResponse(instructions);
@@ -597,6 +610,7 @@ export class LiveCall {
         if (!this.session) return;
         this.events.begin([{ at, ev: { lane: 'mouth', kind: 'hold' } }]);
         this.holding = true;
+        this.stillReset();
         this.heldBytes = 0;
         this.session.clearAudio();
         // 热身在等孩子跟:按下就是在跟,不打断(排着的几拍留着);那句的声音还没放完就清掉
@@ -637,6 +651,8 @@ export class LiveCall {
       }
       case 'hush': {
         if (!this.session) return;
+        // 按了说话又取消也是他动了:等着替他叫的那次作废
+        this.stillReset();
         if (this.holding) { this.holding = false; this.session.clearAudio(); }
         this.interrupt();
         this.d.note({ e: 'release' });
@@ -656,6 +672,8 @@ export class LiveCall {
       }
       // 孩子端放完了小课堂那一段(或放不了、被关):后面的讲稿接着交给嘴
       case 'staged': this.d.step({ e: 'staged' }); break;
+      // 以板为主:孩子在板上点了一个字
+      case 'board': void this.board(m.body); break;
       // 边画边聊:孩子端觉得该说一句了
       case 'chat': this.chatLook(m); break;
       // 一直听:孩子端开口时报的上下文(收下时当松手的 body)
@@ -696,6 +714,7 @@ export class LiveCall {
    */
   private turn(kind: CatchKind, body: Record<string, unknown>, text?: string): void {
     const seq = ++this.turnSeq;
+    this.stillReset();
     this.caught = '';
     this.d.note({ e: 'release' });
     // 按住说的等转写回来(heard);一直听的转写已经有了(text)
@@ -903,7 +922,7 @@ export class LiveCall {
       ...(cut !== undefined ? { cut } : {}),
       ...(this.warm.length ? { warmup: warmLines(this.warm) } : {}),
       ...(this.phoneAt !== null ? { phone: Math.max(0, Math.floor((Date.now() - this.phoneAt) / 60_000)) } : {}),
-      ...(app === 'call' || app === 'quiet' ? { app: app as 'call' | 'quiet' } : {}),
+      ...(app === 'call' || app === 'quiet' || app === 'still' ? { app: app as 'call' | 'quiet' | 'still' } : {}),
     };
   }
 
@@ -980,14 +999,65 @@ export class LiveCall {
   }
 
   /** 应用起的一轮(不是孩子说的):嘴不出声,接在这次通话的话题后面交给脑 */
-  private appTurn(text: string, app: 'call' | 'quiet'): void {
+  private appTurn(text: string, app: 'call' | 'quiet' | 'still', thread: string | null = this.turns.thread): void {
     const seq = ++this.turnSeq;
     this.caught = '';
     this.caughtDone = true;
     this.pendingVoice = null;
     this.draft = null;
-    const body: Record<string, unknown> = { text, app, ...(this.turns.thread ? { thread: this.turns.thread } : {}), ...(this.ctxBody.device ? { device: this.ctxBody.device } : {}) };
+    const body: Record<string, unknown> = { text, app, ...(thread ? { thread } : {}), ...(this.ctxBody.device ? { device: this.ctxBody.device } : {}) };
     void this.toBrain(seq, body);
+  }
+
+  /**
+   * 以板为主:孩子在板上点了一个字(孩子端已经弹了田字格)。验过记进板的日志;安静时嘴照念它的念法,
+   * 嘴正在念上一个字就掐掉换这个;老师在说(照念讲稿、接住、脑在写、孩子在说)不念。之后等 STILL_MS 看他开不开口
+   */
+  private async board(body: unknown): Promise<void> {
+    const { ctx, tutor } = this.deps;
+    const r = await ctx.runner.boardEvent(tutor, localDate(ctx.now()), body).catch(() => null);
+    if (!r || this.ended) return;
+    this.lastActive = Date.now();
+    this.stillArm(r.thread);
+    const s = this.session;
+    if (!s?.isReady || this.echoing || this.holding || this.vadOn) return;
+    const mine = this.said?.kind === 'say' || (!this.said && this.sayingPick);
+    if (!mine && (!this.quiet() || this.playing())) return;
+    const go = (): void => this.ask({ kind: 'say' }, readCue([r.say]));
+    if (!mine) { go(); return; }
+    // 上一个字还在念:掐掉,出完(被掐)再念这个
+    if (this.said) {
+      this.afterDone = go;
+      if (s.responding) s.cancel(); else this.cancelOnCreate = true;
+    }
+    if (this.playing()) { this.d.flush(); this.send({ t: 'flush' }); }
+    if (!this.said) go();
+  }
+
+  /** 板上点完字:STILL_MS 后看他动没动;这一回已经替他叫过就不再叫 */
+  private stillArm(thread: string): void {
+    if (this.stillTimer) clearTimeout(this.stillTimer);
+    this.stillTimer = null;
+    if (this.stillUsed) return;
+    this.stillTimer = setTimeout(() => this.stillDue(thread), this.deps.stillMs ?? STILL_MS);
+  }
+
+  /** 孩子自己开口、发了东西:等的作废,下回点完了还能替他叫 */
+  private stillReset(): void {
+    if (this.stillTimer) clearTimeout(this.stillTimer);
+    this.stillTimer = null;
+    this.stillUsed = false;
+  }
+
+  /** 等够了:老师还在说、孩子在说就再等一回;不然替他叫一次老师(嘴不出声,脑那一轮带 app: still 和他做了什么) */
+  private stillDue(thread: string): void {
+    this.stillTimer = null;
+    if (this.ended || this.stillUsed) return;
+    if (!this.quiet() || this.playing() || this.pendingVoice || this.draft || this.echoing) { this.stillArm(thread); return; }
+    this.stillUsed = true;
+    const { ctx, tutor } = this.deps;
+    void ctx.runner.boardStill(tutor, localDate(ctx.now()), thread);
+    this.appTurn('(孩子在板上做完了,没出声)', 'still', thread);
   }
 
   /** 孩子端的一块声音:按着才推,一直听时一直推;嘴在现连时按着说的先攒着(最多一分钟),一直听的只留最近 10 秒 */
@@ -1029,6 +1099,7 @@ export class LiveCall {
     for (const t of this.timers) { clearTimeout(t); clearInterval(t); }
     this.d.stop();
     if (this.echoing?.timer) clearTimeout(this.echoing.timer);
+    if (this.stillTimer) clearTimeout(this.stillTimer);
     this.offEvents?.();
     const s = this.session;
     this.session = null;

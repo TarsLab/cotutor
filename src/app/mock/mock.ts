@@ -17,6 +17,7 @@ import { createServer as createHttps } from 'node:https';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseBoard } from '../../board/parse.ts';
+import { boardPageSection } from '../../board/board-page.ts';
 import { cardAssets, parseCardState, stripSecrets, DictationPropsSchema } from '../../board/cards/index.ts';
 import { fileURLToPath } from 'node:url';
 import { bundleAsset, stageAsset, stageIndex, stageVersion } from '../http/stage.ts';
@@ -153,6 +154,14 @@ const MOCK_PAGE_WORDS: { text: string; box: [number, number, number, number]; pi
   const half = (Array.from(w.text).length * r.size) / 2;
   return { text: w.text, pick: r.pick, box: [Math.round(((w.x - half) / 800) * 1000), Math.round(((r.y - r.size * 0.86) / 1000) * 1000), Math.round(((w.x + half) / 800) * 1000), Math.round(((r.y + r.size * 0.16) / 1000) * 1000)] as [number, number, number, number] };
 }));
+/** 以板为主的话题里孩子拍来一页:老师的照片板不写图(就是这块底,同真服务的 boardPageSection 补上) */
+const MOCK_BOARD_REPLY = `~~~照片
+操作: 点字
+哪个字不认识?点一点它。
+~~~
+
+这一页是《我是什么》。
+哪个字不认识,就点一点它。`;
 const MOCK_PAGE_REPLY = `~~~照片
 captures/2026-09-10/page.jpg
 操作: 点字
@@ -535,6 +544,8 @@ interface MockMessage {
   live?: true;
   /** 孩子从左栏的纸交的画(摘要按 mock 内存里那张纸算) */
   drawing?: ConversationMessage['drawing'];
+  /** 话题第一条:以板为主(语文老师的「预习」方砖进来的,同真服务) */
+  board?: 'page';
 }
 
 /** mock 的首页原文(昨晚 21:30 发布的那份;接着按钮指向 past 里昨天的话题,job = 0930-<老师名长度>) */
@@ -667,6 +678,8 @@ export function createMock(opts: MockOptions = {}): Mock {
   const inflight = new Map<string, Promise<void>>();
   /** 照片板的「点字」:那张照片被问了几次(头两次回「还在认」) */
   const wordAsks = new Map<string, number>();
+  /** 以板为主的话题里孩子拍来的照片:照假课本页认 */
+  const boardShots = new Set<string>();
   let seq = 0;
   /** 孩子端发来的实录(不打盘):老师 → [{话题, 记录}] */
   const mockPlays: Record<string, { thread: string; rec: PlayRecord }[]> = {};
@@ -737,7 +750,7 @@ export function createMock(opts: MockOptions = {}): Mock {
       const alive = (date: string, thread: string): boolean => (date === yesterday() && (past.get(name) ?? []).some((m) => m.thread === thread)) || (date === localDate(d) && list.some((m) => m.thread === thread));
       // 方砖:三门主科出厂都有预习、检查作业、复习(真服务看老师家里有没有那个 activity 文件)
       const main = ['语文', '数学', '英语'].includes(canonicalSubject(MOCK_TUTORS.find((t) => t.name === name)?.subject) ?? '');
-      return { kind: 'tutor', props: { tutor: name, tiles: main ? kidTiles(HOME_TILE_IDS, { usable: () => true }) : [], buttons: kidButtons((c.props.buttons ?? []) as TutorButton[], { resumes, alive, lecture: (id) => Boolean(mockLecture(id)), today: localDate(d) }).map((b) => { const l = b.kind === 'lecture' ? mockLecture(b.bundle) : null; return l ? { ...b, title: l.title, ms: l.ms, ...(l.video ? { video: true as const } : {}) } : b; }) } };
+      return { kind: 'tutor', props: { tutor: name, tiles: main ? kidTiles(HOME_TILE_IDS, { usable: () => true, ...(name === 'chinese-tutor' ? { boards: new Set(['预习']) } : {}) }) : [], buttons: kidButtons((c.props.buttons ?? []) as TutorButton[], { resumes, alive, lecture: (id) => Boolean(mockLecture(id)), today: localDate(d) }).map((b) => { const l = b.kind === 'lecture' ? mockLecture(b.bundle) : null; return l ? { ...b, title: l.title, ms: l.ms, ...(l.video ? { video: true as const } : {}) } : b; }) } };
     });
     // figshot:和配了 figshot 的 workspace 一样给端口;这台电脑上 figshot 没开着,页面照样藏着这张卡
     return { title, date: localDate(d), tutors: tutorsJson(), home: mockHomeId(), cards, figshot: { port: 8477 }, hand: 'right', ready: scenario !== 'nokey' };
@@ -801,9 +814,15 @@ export function createMock(opts: MockOptions = {}): Mock {
     const lectureFirst = Boolean(m.lecture && !m.lecture.again);
     // 对语文老师说到「课本」:出照片板(点字),同样不占脚本的位置
     const page = !lectureFirst && t.name === 'chinese-tutor' && (m.question ?? '').includes('课本');
-    const step = lectureFirst ? (m.lecture?.video ? MOCK_VIDEO_LECTURE_REPLY : MOCK_LECTURE_REPLY) : page ? MOCK_PAGE_REPLY : t.script[i];
-    if (!lectureFirst && !page) cur.set(t.name, i + 1);
-    const full = step ? withMockLooks(sectionFromScript(step), t.name, i) : null;
+    // 以板为主的话题(语文「预习」):拍来一页回照片板(不写图);板书落到板上之前同真服务把一把(只上最后一张板卡、照片板补上底)
+    const thr = (messages.get(t.name) ?? []).filter((x) => x.thread === m.thread);
+    const boardPage = thr[0]?.board === 'page';
+    const base = [...thr].reverse().find((x) => x.photos?.length)?.photos?.slice(-1)[0] ?? null;
+    const boardPhoto = boardPage && Boolean(m.photos?.length);
+    const step = lectureFirst ? (m.lecture?.video ? MOCK_VIDEO_LECTURE_REPLY : MOCK_LECTURE_REPLY) : boardPhoto ? MOCK_BOARD_REPLY : page ? MOCK_PAGE_REPLY : t.script[i];
+    if (!lectureFirst && !page && !boardPhoto) cur.set(t.name, i + 1);
+    const raw = step ? withMockLooks(sectionFromScript(step), t.name, i) : null;
+    const full = raw && (boardPage || raw.cards.some((c) => c.kind === 'kit')) ? boardPageSection(raw, { page: boardPage, photo: base }).section : raw;
     const n = full ? full.cards.length : 0;
     const tick = delay / (n + 1);
     return new Promise<void>((resolve) => {
@@ -1081,7 +1100,9 @@ export function createMock(opts: MockOptions = {}): Mock {
         sentAt.set(job, Date.now());
         // 新话题的第一条:话题还没有时画的那张纸归它(同真服务的 adoptPaper)
         if (thread === job && papers.has(`${name}|new`) && !papers.has(`${name}|${thread}`)) { papers.set(`${name}|${thread}`, papers.get(`${name}|new`)!); papers.delete(`${name}|new`); }
-        const m: MockMessage = { job, thread, at: now().toISOString(), question: text, reply: null, pending: true, artifacts: [], section: null, ...(body.live === true ? { live: true as const } : {}), ...(action ? { action } : {}), ...(action === 'submit' && focusCard ? { submitted: focusCard } : {}), ...(photos.length ? { photos } : {}), ...(drawing ? { drawing } : {}), ...(lec ? { lecture: { bundle: lec.bundle, title: lt?.title ?? lec.bundle, ...(lec.again ? { again: true as const } : {}), ...(lt?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}) }, lectureWatch: { watchedMs: lec.watchedMs, finished: lec.finished, pauses: lec.pauses }, ...(logIn.length ? { lectureLog: logIn } : {}) } : {}) };
+        const boardFirst = thread === job && name === 'chinese-tutor' && typeof button === 'object' && button !== null && button.kind === 'activity' && button.activity === '预习';
+        if (boardFirst || list.find((x) => x.thread === thread)?.board === 'page') for (const ph of photos) boardShots.add(ph);
+        const m: MockMessage = { job, thread, at: now().toISOString(), question: text, ...(boardFirst ? { board: 'page' as const } : {}), reply: null, pending: true, artifacts: [], section: null, ...(body.live === true ? { live: true as const } : {}), ...(action ? { action } : {}), ...(action === 'submit' && focusCard ? { submitted: focusCard } : {}), ...(photos.length ? { photos } : {}), ...(drawing ? { drawing } : {}), ...(lec ? { lecture: { bundle: lec.bundle, title: lt?.title ?? lec.bundle, ...(lec.again ? { again: true as const } : {}), ...(lt?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}) }, lectureWatch: { watchedMs: lec.watchedMs, finished: lec.finished, pauses: lec.pauses }, ...(logIn.length ? { lectureLog: logIn } : {}) } : {}) };
         list.push(m);
         const done = think(t, m, cursor).then(() => { inflight.delete(m.job); });
         inflight.set(m.job, done);
@@ -1118,7 +1139,8 @@ export function createMock(opts: MockOptions = {}): Mock {
     // 照片板的「点字」:假课本页认出的字词;头两次问还在认(只有前三项),之后认完——看得到框一个一个出来
     if (p === '/api/kid/photo-words' && method === 'GET') {
       const rel = url.searchParams.get('p') ?? '';
-      if (!rel.endsWith('/page.jpg')) return { status: 200, json: { state: 'none', items: [], lines: [] } };
+      // 假课本页,或以板为主的话题里孩子拍来的那张(探针拍的就是这一页的截图)
+      if (!rel.endsWith('/page.jpg') && !boardShots.has(rel)) return { status: 200, json: { state: 'none', items: [], lines: [] } };
       const n = (wordAsks.get(rel) ?? 0) + 1;
       wordAsks.set(rel, n);
       return { status: 200, json: n <= 2 ? { state: 'running', items: MOCK_PAGE_WORDS.slice(0, 3), lines: [] } : { state: 'done', items: MOCK_PAGE_WORDS, lines: MOCK_PAGE_LINES } };

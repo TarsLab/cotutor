@@ -146,6 +146,8 @@ const MessageObjectSchema = z.object({
   via: MessageViaSchema.optional(),
   /** 这个话题是从哪个 activity 起的(只记在话题第一条):名字与点的那一刻的参数,话题后面每条都照它带 */
   activity: ActivityRunSchema.optional(),
+  /** 这个话题以板为主(activity 头上 board: page;只记在话题第一条):孩子端的页面就是板,板的日志在 <date>.<话题>.board.jsonl */
+  board: z.literal('page').optional(),
   /** 口语课页的哪份口语单起的这个话题(talk/<id>/ 4,只记在话题第一条) */
   talk: z.string().optional(),
   /** 这个话题接着以前哪天的哪个话题(首页的「接着」按钮;新会话,上下文包带那个话题的尾巴) */

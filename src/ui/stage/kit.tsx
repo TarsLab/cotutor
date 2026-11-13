@@ -7,7 +7,7 @@
  * 状态({turn, moves, marks})改了就回页面;页面按「给老师看」→ control submit → 整份状态连一张板此刻的图(png)交回去,老师看图、服务端另算一句大概(describeKit)。
  * 页面再发一张卡进来(老师的下一张):还是同一种教具就不重来——上一张已经有的东西直接在,只把新添的画出来,少了的不见了;孩子上一步的笔画清掉。
  * 照片板开放了「点字」:照片上认出的字词(页面给的地址,这里轮询:认是流式的,框一个一个出来)垫一层淡黄的底;孩子点一下、圈一下,
- * 在本地算出是哪一项(src/chalk/kit/photo.ts 的 photoPick),记进状态的 picked、告诉页面(pick),页面在板上面弹田字格。这一笔不留。
+ * 在本地算出是哪一项(src/chalk/kit/photo.ts 的 photoPick),告诉页面(pick):页面在板上面弹田字格、报给服务端。这一笔不留,也不进卡的状态。
  * 工具一列竖着(kid.hand: left 时在右),最底下空出一格放页面浮上来的老师小头像。类名都带 kt-(舞台页也装孩子端的 theme.css)。
  */
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
@@ -439,12 +439,9 @@ export const KitStage = forwardRef<KitStageHandle, KitStageProps>(function KitSt
       const hit = photoPick(wordsRef.current, mark, b.photo.aspect, linesRef.current);
       if (hit) {
         s.el.remove();
-        const had = cur.current.picked ?? [];
-        // 同一个字词只记一次,挪到最后(他刚看的);记满了最早的让出来
-        cur.current = { ...cur.current, picked: [...had.filter((x) => x !== hit.text), hit.text].slice(-KIT_PICK_MAX) };
+        // 点了什么不进卡的状态:页面报给服务端记进板的日志(以板为主的话题),老师下一轮从上下文包的 board: 看到
         paintWords(hit);
         window.setTimeout(() => paintWords(), 500);
-        emit();
         onPick?.(hit.text);
         return;
       }

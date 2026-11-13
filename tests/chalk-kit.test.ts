@@ -120,6 +120,38 @@ check('存下来的参数再读一遍不变(舞台、服务端都是这样读的
 check('只看:写明了才有;不写操作时全开里没有它', W.ops.join() === '看' && kitLookOnly(W.ops) && !kitLookOnly(PH.ops) && readKitLines(shot, ['a.jpg']).ops.join() === '圈,画' && kitOps(shot, undefined).join() === '圈,画' && kitOps(shot, ['看']).join() === '看');
 check('照片的「写」写错了读不成:字太长、数的个数不对、位置出界', threw(['a.jpg', '写: ' + '字'.repeat(15) + ' 在 500, 500']) && threw(['a.jpg', '写: ' + '字'.repeat(21)]) && threw(['a.jpg', '写: 18 在 1, 2, 3']) && threw(['a.jpg', '写: 18 在 1200, 500']));
 
+// ---- 照片的「点字」:孩子点一个字词、圈一个字词,本地算出是哪一项 ----
+{
+  const { photoPick, pickable, PHOTO_PICK } = await import('../src/chalk/index.ts');
+  // 竖着拍的课本页(高宽比 1.4):场景里竖的数 = 千分比 × 1.4
+  const A2 = 1.4;
+  const words = [
+    { text: '变', box: [237, 233, 281, 267] as const },
+    { text: '极', box: [533, 233, 586, 267] as const },
+    { text: '海洋', box: [203, 836, 300, 857] as const },
+    { text: 'yellow', box: [600, 836, 700, 857] as const },
+  ];
+  const at = (x: number, y: number): [number, number] => [x, y * A2];
+  const tap = (x: number, y: number): [number, number][] => [at(x, y), at(x, y)];
+  check('点字:写明了才有;只有它的板没有东西要交', readKitLines(shot, ['a.jpg', '操作: 点字']).ops.join() === PHOTO_PICK && kitLookOnly([PHOTO_PICK]) && kitLookOnly(['看', PHOTO_PICK]) && !kitLookOnly([PHOTO_PICK, '圈']) && readKitLines(shot, ['a.jpg', '操作: 点字、圈']).ops.join() === '圈,点字' && !kitOps(shot, undefined).includes(PHOTO_PICK));
+  check('点字:点在框里就是那一项;框外半个字高以内算最近的一项,再远不算', photoPick(words, tap(260, 250), A2)?.text === '变' && photoPick(words, tap(290, 250), A2)?.text === '变' && photoPick(words, tap(400, 250), A2) === null && photoPick(words, tap(250, 862), A2)?.text === '海洋');
+  const ring = (x1: number, y1: number, x2: number, y2: number): [number, number][] => [at(x1, y1), at(x2, y1), at(x2, y2), at(x1, y2), at(x1, y1)];
+  check('点字:圈住哪一项的中心就是它;圈住两项取离圈中心近的;什么都没圈住不算', photoPick(words, ring(220, 220, 300, 280), A2)?.text === '变' && photoPick(words, ring(230, 220, 620, 280), A2)?.text === '极' && photoPick(words, ring(700, 400, 800, 500), A2) === null);
+  check('点字:只认一到四个汉字(弹得出田字格的);英文单词、五个字以上的点不中', pickable('变') && pickable('灌溉田地') && !pickable('yellow') && !pickable('小蝌蚪找妈妈') && !pickable('') && photoPick(words, tap(650, 846), A2) === null);
+  check('点字:没量到高宽比、空的一笔都不算', photoPick(words, tap(260, 250), 0) === null && photoPick(words, [], A2) === null);
+  check('点字:点开看过的字词说给老师;同时画了圈的两样都说', shot.read(PH.params, { picked: ['傍', '海洋'] }, ps) === '点开看了笔顺:「傍」「海洋」' && shot.read(PH.params, { picked: ['傍'], marks: [[[600, 500], [700, 500], [800, 500]]], aspect: 1 }, ps).startsWith('点开看了笔顺:「傍」;画了一道线') && describeKit(shot, PH.params, { picked: ['变'] }, [PHOTO_PICK]) === '请他做的:点字;大概:点开看了笔顺:「变」');
+  // 正文的行:按字数等分,一格一个字
+  const lines = [{ text: '我会变。太阳一晒,我就变成汽。升', box: [216, 202, 912, 228] as const }, { text: '小水滴聚在一起落下来', box: [200, 620, 420, 644] as const }];
+  const cellX = (l: (typeof lines)[number], i: number): number => l.box[0] + ((l.box[2] - l.box[0]) / Array.from(l.text).length) * (i + 0.5);
+  check('点字·正文:点一下是落在的那一格的字;点在标点上、行外面不算', photoPick([], tap(cellX(lines[0], 0), 215), A2, lines)?.text === '我' && photoPick([], tap(cellX(lines[0], 7), 215), A2, lines)?.text === '晒' && photoPick([], tap(cellX(lines[0], 15), 215), A2, lines)?.text === '升' && photoPick([], tap(cellX(lines[0], 3), 215), A2, lines) === null && photoPick([], tap(100, 215), A2, lines) === null && photoPick([], tap(500, 300), A2, lines) === null);
+  const got = photoPick([], tap(cellX(lines[0], 7), 215), A2, lines);
+  check('点字·正文:回的框是那一格(闪一下用)', !!got && got.box[1] === 202 && got.box[3] === 228 && got.box[2] - got.box[0] > 40 && got.box[2] - got.box[0] < 48 && got.box[0] < cellX(lines[0], 7) && got.box[2] > cellX(lines[0], 7));
+  check('点字·正文:圈住连着的几个字当一个词;标点把它断开取长的那一段;最多四个字', photoPick([], ring(cellX(lines[0], 4) - 15, 195, cellX(lines[0], 5) + 15, 235), A2, lines)?.text === '太阳' && photoPick([], ring(cellX(lines[0], 1) - 10, 195, cellX(lines[0], 5) + 10, 235), A2, lines)?.text === '会变' && photoPick([], ring(cellX(lines[0], 9) - 20, 195, cellX(lines[0], 15) + 20, 235), A2, lines)?.text === '我就变成');
+  const dotted = [{ text: '落', box: [354, 620, 376, 644] as const }];
+  check('点字:挑出来的字就在正文里时,点它是它,点它旁边的字是旁边那个字;没有行可看时框外一点才算它', photoPick(dotted, tap(365, 632), A2, lines)?.text === '落' && photoPick(dotted, tap(cellX(lines[1], 6), 632), A2, lines)?.text === '起' && photoPick(dotted, tap(cellX(lines[1], 6), 632), A2)?.text === '落');
+  check('点字:只点了字不算动过手(板重开还是从头画,不用「给老师看」)', !kitTouched({ picked: ['变'] }));
+}
+
 check('做了没有:转过或画过才算', !kitTouched(null) && !kitTouched({}) && !kitTouched({ turn: { disc: 0 }, moves: 0, marks: [] }) && kitTouched({ moves: 1 }) && kitTouched({ marks: [[[1, 1], [2, 2]]] }));
 
 done();

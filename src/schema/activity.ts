@@ -44,7 +44,7 @@ export function fillSlots(template: string, values: Readonly<Record<string, stri
 /** 工具人与它认得的插槽(都要在模板里出现) */
 export const ACTIVITY_TOOLS: Readonly<Record<string, { slots: readonly string[] }>> = {
   画家: { slots: ['版式', '角色', '分幅'] },
-  /** 听写的拍照认词(src/scenes/dictation/recognize.ts):格式 = 回什么格式,应用接(FORMAT / FORMAT_EN) */
+  /** 听写的拍照认词(src/scenes/photo-words/recognize.ts):格式 = 回什么格式,应用接(FORMAT / FORMAT_EN) */
   认字: { slots: ['格式'] },
 };
 

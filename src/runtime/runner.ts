@@ -49,6 +49,10 @@ import { compatibleLine } from '../shared/qianwen.ts';
 import { DRAW_ONLY_TEXT, drawingPackLine } from '../board/paper.ts';
 import { makeDraw, type Draw } from '../media/draw.ts';
 import { paintLines, startPaints } from '../scenes/paint/painter.ts';
+import { lookAt } from '../media/vision.ts';
+import type { Look } from '../scenes/look.ts';
+import { photoPromptFrom, recognizeWith } from '../scenes/photo-words/recognize.ts';
+import { startWords } from '../scenes/photo-words/store.ts';
 
 export class BusyError extends Error {
   constructor(tutor: string, job: string) {
@@ -332,7 +336,7 @@ export class Runner {
   /** 还在后台跑的资产生成(测试与关服前 flush) */
   private readonly background = new Set<Promise<void>>();
   private readonly getWs: () => Workspace;
-  private readonly opts: { now?: () => Date; env?: NodeJS.ProcessEnv; draw?: Draw };
+  private readonly opts: { now?: () => Date; env?: NodeJS.ProcessEnv; draw?: Draw; look?: Look };
   private readonly listeners = new Set<(e: RunEventEnvelope) => void>();
   /** noteEvent 每个事件文件一条追加链 */
   private readonly notes = new Map<string, Promise<void>>();
@@ -348,10 +352,17 @@ export class Runner {
   }
   /** 画图卡交给谁画(测试与 mock 注入假的) */
   readonly draw: Draw;
-  constructor(getWs: () => Workspace, opts: { now?: () => Date; env?: NodeJS.ProcessEnv; draw?: Draw } = {}) {
+  /** 认照片上的字词交给谁看(测试注入假的);COTUTOR_VISION_ENDPOINT:测试与探针指到假百炼 */
+  private readonly look: Look;
+  constructor(getWs: () => Workspace, opts: { now?: () => Date; env?: NodeJS.ProcessEnv; draw?: Draw; look?: Look } = {}) {
     this.getWs = getWs;
     this.opts = opts;
     this.draw = opts.draw ?? makeDraw({ env: opts.env });
+    const env0 = opts.env ?? process.env;
+    const vision = env0.COTUTOR_VISION_ENDPOINT || undefined;
+    // 脑指到了假百炼(测试、探针)而看图没指:不连真的,当没认成
+    const offline = Boolean(env0.COTUTOR_BRAIN_ENDPOINT) && !vision;
+    this.look = opts.look ?? (offline ? async () => ({ ok: false as const, error: 'no_endpoint', ms: 0 }) : (o) => lookAt({ ...o, env: opts.env, ...(vision ? { endpoint: vision } : {}) }));
     // API 运行时的 key 与配音、画图同一套选法(~/.config/cotutor/):Token Plan 有这个模型就走它,否则百炼按量;只有按量 key、没有业务空间 id 也能用(走公网域名)。
     // COTUTOR_BRAIN_ENDPOINT:测试与探针指到假百炼
     const env = opts.env ?? process.env;
@@ -427,6 +438,24 @@ export class Runner {
     } catch (err) {
       if (this.active.get(tutor) === active) this.active.delete(tutor);
       throw err;
+    }
+  }
+
+  /**
+   * 孩子这条带的照片,照这个 activity「认字收到什么」的要求认出字词和它们在照片上的位置,存在照片旁边(src/scenes/photo-words/store.ts)。
+   * 不等它:起了就回,认的过程一行一行落盘;activity 没有那一节就不认。
+   */
+  private async startPhotoWords(ws: Workspace, tutor: string, activity: string, photos: readonly string[]): Promise<void> {
+    const tool = (await readActivity(ws, tutor, activity))?.tools.find((x) => x.tool === '认字');
+    if (!tool) return;
+    // 全文的每一行也要框:正文里没被挑出来的字,孩子也能点
+    const text = photoPromptFrom(tool.prompt, 'zh', { boxed: true });
+    const model = ws.config.dictation.model;
+    for (const rel of photos) {
+      const bg = (await startWords(join(ws.root, rel), (image, onProgress) => recognizeWith(this.look, image, onProgress, { model, text }), { now: this.opts.now }))?.done;
+      if (!bg) continue;
+      this.background.add(bg);
+      void bg.finally(() => this.background.delete(bg));
     }
   }
 
@@ -523,6 +552,8 @@ export class Runner {
     // 原声:落在这轮旁边(删话题一起删);写不下就当没有,消息照发
     const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards: cards.map(({ card, text }) => ({ card, text })) } : {}), ...(photos.length ? { photos } : {}), ...(input.drawing ? { drawing: input.drawing } : {}), ...(input.device ? { device: input.device } : {}), ...(input.deviceId ? { deviceId: input.deviceId } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.tidy ? { tidy: true as const } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(input.eval ? { eval: true as const } : {}), ...(input.live ? { live: true as const } : {}), ...(input.via ? { via: input.via } : {}), ...(continued && input.continues ? { continues: { date: input.continues.date, thread: input.continues.thread } } : {}), ...(input.lecture ? { lecture: { bundle: input.lecture.bundle, title: lecture?.title ?? input.lecture.bundle, watchedMs: input.lecture.watchedMs, finished: input.lecture.finished, pauses: input.lecture.pauses, ...(input.lecture.again ? { again: true as const } : {}), ...(lecture?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}), ...(input.lecture.log?.length ? { log: input.lecture.log } : {}) } } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(fresh && activityRun ? { activity: activityRun } : {}), ...(fresh && input.talk ? { talk: input.talk } : {}), ...(compact ? { compacted: true as const } : {}), ...(lectureWarn.length || activityWarn.length ? { warnings: [...lectureWarn, ...activityWarn] } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
     await writeIndex(ws, started);
+    // 照片上的字词:activity 写了「认字收到什么」就在后台认(和老师写板书同时),照片板的「点字」用;回放、eval 不认(要花钱)
+    if (photos.length && activityRun && input.from === 'kid' && !input.replayOf && !input.eval) await this.startPhotoWords(ws, tutor, activityRun.name, photos).catch(() => undefined);
     // 运行记录(《vault重构方案》§7):除了老师文件与技能,还记这轮带进上下文的每篇笔记、替老师查的每个文件,事后重建得出老师看到的是哪一版
     const notesSent = (pack.notes ?? []).map((n) => ({ role: n.role, path: n.path, hash: textHash(n.text), chars: n.text.length, ...(n.cut ? { cut: true as const } : {}) }));
     await writeRunFile(ws, tutor, date, job, { at: pack.at, prompt, plan, agentBody: true, sources: { ...(await snapshotSources(ws, tutor)), notes: notesSent, retrieved: gathered.retrieved } });

@@ -7,7 +7,7 @@ import { mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { DictationWord } from '../../board/cards/index.ts';
 import type { CharJudge, InkPoint } from './match.ts';
-import type { PhotoItem } from './recognize.ts';
+import type { PhotoItem } from '../photo-words/recognize.ts';
 
 export const ID_RE = /^\d{4}-\d{2}-\d{2}-\d{4}(?:-\d{1,2})?$/;
 

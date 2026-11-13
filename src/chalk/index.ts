@@ -22,5 +22,5 @@ export { CHAR_EM, CJK_EM, FALLBACK_EM, LINE_HEIGHT } from './text-metrics.ts';
 export { computeStepWindows, durationOf, freezeTimeSec, FREEZE_EPS_MS, START_MS, stretchToAudio } from './timeline.ts';
 export type { StretchInfo, StepWindow } from './timeline.ts';
 export type { ChalkScene, ChalkSkeleton, ChalkErase, ChalkBoard, ChalkStep, ChalkBlock, ChalkGroup, ChalkSubscene, ChalkBackground } from './types.ts';
-export { KITS, KIT_LOOK, kitLookOnly, kitOf, readKitLines, kitParams, kitOps, kitMarks, markPhrases, describeKit, kitTouched, turnOf, turnPoint, turnedSkeletons, KIT_MARK_MAX, KIT_MARK_POINTS } from './kit/index.ts';
-export type { Kit, KitParam, KitScene, KitState, KitTurn, KitMark } from './kit/index.ts';
+export { KITS, KIT_LOOK, kitLookOnly, kitOf, readKitLines, kitParams, kitOps, kitMarks, markPhrases, describeKit, kitTouched, turnOf, turnPoint, turnedSkeletons, KIT_MARK_MAX, KIT_MARK_POINTS, KIT_PICK_CHARS, KIT_PICK_MAX, PHOTO_PICK, photoPick, pickable } from './kit/index.ts';
+export type { Kit, KitParam, KitScene, KitState, KitTurn, KitMark, PhotoLine, PhotoWord } from './kit/index.ts';

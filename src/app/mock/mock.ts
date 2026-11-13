@@ -135,6 +135,33 @@ const MOCK_PAINT_MS = 20000;
 const MOCK_PLAN_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500"><rect width="800" height="500" fill="#f4f1ea"/><text x="330" y="80" font-size="26" font-family="sans-serif" fill="#333">安全疏散示意图</text><text x="712" y="52" font-size="24" font-family="sans-serif" fill="#333">北</text><path d="M724 100V62M714 76l10-16 10 16" fill="none" stroke="#c0392b" stroke-width="4"/><rect x="100" y="120" width="100" height="120" fill="#cfe3d2" stroke="#333" stroke-width="2"/><text x="150" y="172" font-size="22" font-family="sans-serif" fill="#333" text-anchor="middle">体育</text><text x="150" y="204" font-size="22" font-family="sans-serif" fill="#333" text-anchor="middle">库房</text><rect x="200" y="120" width="100" height="120" fill="#e6e8b8" stroke="#333" stroke-width="2"/><text x="250" y="172" font-size="22" font-family="sans-serif" fill="#333" text-anchor="middle">美术</text><text x="250" y="204" font-size="22" font-family="sans-serif" fill="#333" text-anchor="middle">教室</text><rect x="300" y="120" width="100" height="120" fill="#eeeeee" stroke="#333" stroke-width="2"/><text x="350" y="188" font-size="22" font-family="sans-serif" fill="#333" text-anchor="middle">楼梯</text><rect x="400" y="120" width="100" height="120" fill="#d5dbee" stroke="#333" stroke-width="2"/><text x="450" y="172" font-size="22" font-family="sans-serif" fill="#333" text-anchor="middle">心理</text><text x="450" y="204" font-size="22" font-family="sans-serif" fill="#333" text-anchor="middle">辅导室</text><rect x="500" y="120" width="100" height="120" fill="#f1ead9" stroke="#333" stroke-width="2"/><text x="550" y="172" font-size="22" font-family="sans-serif" fill="#333" text-anchor="middle">卫生</text><text x="550" y="204" font-size="22" font-family="sans-serif" fill="#333" text-anchor="middle">保健室</text><rect x="600" y="120" width="100" height="120" fill="#e3cdc3" stroke="#333" stroke-width="2"/><text x="650" y="188" font-size="22" font-family="sans-serif" fill="#333" text-anchor="middle">教室一</text><text x="60" y="290" font-size="22" font-family="sans-serif" fill="#333">西门</text><text x="380" y="420" font-size="22" font-family="sans-serif" fill="#333">南门</text><path d="M700 280H130M150 268l-20 12 20 12" fill="none" stroke="#333" stroke-width="3"/></svg>';
 const MOCK_PAINT_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#fbfaf6"/>${[[24, 24, '#dcecf7'], [524, 24, '#fdeccb'], [24, 524, '#e3f1d8'], [524, 524, '#f6dde4']].map(([x, y, c], i) => `<rect x="${x}" y="${y}" width="476" height="476" rx="24" fill="${c}" stroke="#8a8781" stroke-width="3"/><rect x="${x}" y="${Number(y) + 300}" width="476" height="176" fill="#a9d18e"/><circle cx="${Number(x) + 238}" cy="${Number(y) + 250}" r="70" fill="#9a6235"/><circle cx="${Number(x) + 62}" cy="${Number(y) + 62}" r="34" fill="#fff" stroke="#1f8a4c" stroke-width="6"/><text x="${Number(x) + 62}" y="${Number(y) + 76}" font-size="40" text-anchor="middle" fill="#1f8a4c" font-family="sans-serif" font-weight="700">${i + 1}</text>`).join('')}</svg>`;
 
+/**
+ * 照片板的「点字」用的假课本页(800 × 1000):一排识字、一排写字、两个词语;字的位置是定死的,MOCK_PAGE_WORDS 的框照它算(千分比)。
+ * 孩子对语文老师说的话里有「课本」就出这一页(MOCK_PAGE_REPLY,不占脚本的位置);scripts/probe-kit.mjs 走它。
+ */
+const MOCK_PAGE_ROWS: { y: number; size: number; pick: boolean; words: { text: string; x: number }[] }[] = [
+  { y: 190, size: 48, pick: false, words: [{ text: '晒', x: 200 }, { text: '极', x: 320 }, { text: '傍', x: 440 }] },
+  { y: 400, size: 64, pick: true, words: [{ text: '变', x: 200 }, { text: '片', x: 360 }, { text: '海', x: 520 }] },
+  { y: 640, size: 48, pick: true, words: [{ text: '海洋', x: 240 }, { text: '灌溉', x: 480 }] },
+];
+/** 正文的一行(没被挑出来,没有底):点里面的字照行框按字数等分算 */
+const MOCK_PAGE_LINE = { text: '朗读课文,说说我是什么。', x: 120, y: 800, size: 26 };
+const MOCK_PAGE_LINES: { text: string; box: [number, number, number, number] }[] = [{ text: MOCK_PAGE_LINE.text, box: [Math.round((MOCK_PAGE_LINE.x / 800) * 1000), Math.round(MOCK_PAGE_LINE.y - MOCK_PAGE_LINE.size * 0.86), Math.round(((MOCK_PAGE_LINE.x + Array.from(MOCK_PAGE_LINE.text).length * MOCK_PAGE_LINE.size) / 800) * 1000), Math.round(MOCK_PAGE_LINE.y + MOCK_PAGE_LINE.size * 0.16)] }];
+const MOCK_PAGE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000"><rect width="800" height="1000" fill="#fbf8f1"/><text x="400" y="90" font-size="34" font-family="serif" fill="#333" text-anchor="middle">2 我是什么</text><path d="M120 120H680M120 230H680" stroke="#3aa6d0" stroke-width="2"/>${MOCK_PAGE_ROWS.flatMap((r) => r.words.map((w) => `<text x="${w.x}" y="${r.y}" font-size="${r.size}" font-family="serif" fill="#222" text-anchor="middle">${w.text}</text>`)).join('')}<text x="${MOCK_PAGE_LINE.x}" y="${MOCK_PAGE_LINE.y}" font-size="${MOCK_PAGE_LINE.size}" font-family="serif" fill="#555">${MOCK_PAGE_LINE.text}</text></svg>`;
+/** 那一页认出的字词:框 = 字的外框(一个字宽 = 字号,基线上面八成、下面两成),换成千分比 */
+const MOCK_PAGE_WORDS: { text: string; box: [number, number, number, number]; pick: boolean }[] = MOCK_PAGE_ROWS.flatMap((r) => r.words.map((w) => {
+  const half = (Array.from(w.text).length * r.size) / 2;
+  return { text: w.text, pick: r.pick, box: [Math.round(((w.x - half) / 800) * 1000), Math.round(((r.y - r.size * 0.86) / 1000) * 1000), Math.round(((w.x + half) / 800) * 1000), Math.round(((r.y + r.size * 0.16) / 1000) * 1000)] as [number, number, number, number] };
+}));
+const MOCK_PAGE_REPLY = `~~~照片
+captures/2026-09-10/page.jpg
+操作: 点字
+哪个字不会写?点一点它。
+~~~
+
+这一页是《我是什么》的生字和词语。
+哪个字不会写,就点一点它。`;
+
 export const MOCK_TUTORS: MockTutor[] = [
   {
     name: 'chinese-tutor',
@@ -638,6 +665,8 @@ export function createMock(opts: MockOptions = {}): Mock {
   const past = new Map<string, MockMessage[]>();
   const cursor = new Map<string, number>();
   const inflight = new Map<string, Promise<void>>();
+  /** 照片板的「点字」:那张照片被问了几次(头两次回「还在认」) */
+  const wordAsks = new Map<string, number>();
   let seq = 0;
   /** 孩子端发来的实录(不打盘):老师 → [{话题, 记录}] */
   const mockPlays: Record<string, { thread: string; rec: PlayRecord }[]> = {};
@@ -770,8 +799,10 @@ export function createMock(opts: MockOptions = {}): Mock {
     const i = cur.get(t.name) ?? 0;
     // 看完小课堂的第一问:老师放课里的那一段(小课堂卡 + [[play]]);不占脚本的位置
     const lectureFirst = Boolean(m.lecture && !m.lecture.again);
-    const step = lectureFirst ? (m.lecture?.video ? MOCK_VIDEO_LECTURE_REPLY : MOCK_LECTURE_REPLY) : t.script[i];
-    if (!lectureFirst) cur.set(t.name, i + 1);
+    // 对语文老师说到「课本」:出照片板(点字),同样不占脚本的位置
+    const page = !lectureFirst && t.name === 'chinese-tutor' && (m.question ?? '').includes('课本');
+    const step = lectureFirst ? (m.lecture?.video ? MOCK_VIDEO_LECTURE_REPLY : MOCK_LECTURE_REPLY) : page ? MOCK_PAGE_REPLY : t.script[i];
+    if (!lectureFirst && !page) cur.set(t.name, i + 1);
     const full = step ? withMockLooks(sectionFromScript(step), t.name, i) : null;
     const n = full ? full.cards.length : 0;
     const tick = delay / (n + 1);
@@ -1084,6 +1115,14 @@ export function createMock(opts: MockOptions = {}): Mock {
       const d = lettersData(decodeURIComponent(lt[1]));
       return d ? { status: 200, json: d } : { status: 404, json: { error: 'not_found' } };
     }
+    // 照片板的「点字」:假课本页认出的字词;头两次问还在认(只有前三项),之后认完——看得到框一个一个出来
+    if (p === '/api/kid/photo-words' && method === 'GET') {
+      const rel = url.searchParams.get('p') ?? '';
+      if (!rel.endsWith('/page.jpg')) return { status: 200, json: { state: 'none', items: [], lines: [] } };
+      const n = (wordAsks.get(rel) ?? 0) + 1;
+      wordAsks.set(rel, n);
+      return { status: 200, json: n <= 2 ? { state: 'running', items: MOCK_PAGE_WORDS.slice(0, 3), lines: [] } : { state: 'done', items: MOCK_PAGE_WORDS, lines: MOCK_PAGE_LINES } };
+    }
     if (p === '/api/kid/image') {
       // 图片卡:任何路径都给一张占位 svg(写着路径),前端能看到版式;画图卡(mock-paint/)给一张方的四格
       const rel = url.searchParams.get('p') ?? '';
@@ -1092,6 +1131,7 @@ export function createMock(opts: MockOptions = {}): Mock {
       if (up) return { status: 200, contentType: up.type, body: up.data };
       // 照片底板(数学卡的「照片」)用的假作业:一排六间屋子的平面图,800 × 500
       if (rel.endsWith('/plan.jpg')) return { status: 200, contentType: 'image/svg+xml', html: MOCK_PLAN_SVG };
+      if (rel.endsWith('/page.jpg')) return { status: 200, contentType: 'image/svg+xml', html: MOCK_PAGE_SVG };
       const esc = rel.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c);
       return { status: 200, contentType: 'image/svg+xml', html: `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f7d9a8"/><stop offset="1" stop-color="#8fbf9f"/></linearGradient></defs><rect width="800" height="500" fill="url(#g)"/><circle cx="260" cy="250" r="90" fill="#e8743b"/><circle cx="420" cy="230" r="80" fill="#f4c542"/><circle cx="560" cy="270" r="85" fill="#e0508a"/><text x="400" y="460" font-size="22" text-anchor="middle" fill="#2b2b2b" font-family="sans-serif">${esc}</text></svg>` };
     }

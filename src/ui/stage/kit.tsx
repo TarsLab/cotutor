@@ -6,10 +6,12 @@
  * 每张卡只开放老师写的那几种操作(props.ops):有「转」才有转的钮,有别的(切、圈、涂)才拿得起笔。笔画原样留着,不归整。
  * 状态({turn, moves, marks})改了就回页面;页面按「给老师看」→ control submit → 整份状态连一张板此刻的图(png)交回去,老师看图、服务端另算一句大概(describeKit)。
  * 页面再发一张卡进来(老师的下一张):还是同一种教具就不重来——上一张已经有的东西直接在,只把新添的画出来,少了的不见了;孩子上一步的笔画清掉。
+ * 照片板开放了「点字」:照片上认出的字词(页面给的地址,这里轮询:认是流式的,框一个一个出来)垫一层淡黄的底;孩子点一下、圈一下,
+ * 在本地算出是哪一项(src/chalk/kit/photo.ts 的 photoPick),记进状态的 picked、告诉页面(pick),页面在板上面弹田字格。这一笔不留。
  * 工具一列竖着(kid.hand: left 时在右),最底下空出一格放页面浮上来的老师小头像。类名都带 kt-(舞台页也装孩子端的 theme.css)。
  */
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { KID_INK, KID_INK_WIDTH, KIT_LOOK, KIT_MARK_MAX, KIT_MARK_POINTS, elementBounds, frameAt, kitOf, kitOps, kitParams, kitTouched, lessonClock, turnOf, type KitState, type KitTurn, type LessonClock } from '../../chalk/index.ts';
+import { KID_INK, KID_INK_WIDTH, KIT_LOOK, KIT_MARK_MAX, KIT_MARK_POINTS, KIT_PICK_MAX, PHOTO_PICK, elementBounds, frameAt, kitOf, kitOps, kitParams, kitTouched, lessonClock, photoPick, pickable, turnOf, type KitState, type KitTurn, type LessonClock, type PhotoLine, type PhotoWord } from '../../chalk/index.ts';
 import { mountBaked, type MountedLesson } from './chalk/render.ts';
 
 export interface KitStageHandle {
@@ -26,12 +28,16 @@ export interface KitStageProps {
   state: KitState | null;
   /** 照片做底的画法:那张照片的地址(页面给) */
   imageUrl?: string;
+  /** 照片板的「点字」:这张照片认出的字词从哪读(页面给;回 {state, items: [{text, box, pick}]}) */
+  wordsUrl?: string;
   /** 交给老师过了:只看 */
   readonly?: boolean;
   hand?: 'left' | 'right';
   onState(state: KitState): void;
   /** image = 板此刻的样子(png data URL);导不出来就没有 */
   onSubmit(state: KitState, image?: string): void;
+  /** 「点字」点中了一项:页面弹它的田字格 */
+  onPick?(text: string): void;
   onError(message: string): void;
 }
 
@@ -44,6 +50,9 @@ const TURN_MS = 650;
 const TAP = 14;
 /** 交给老师的那张图的长边、纸色 */
 const SHOT_SIDE = 1024;
+/** 「点字」:多久问一次认到哪了、最多问多久(认一页十几二十秒,超时两分钟) */
+const WORDS_POLL_MS = 1200;
+const WORDS_POLL_MAX_MS = 150_000;
 const PAPER = '#fffdf8';
 
 /** 能转的一组在 SVG 里:那层 <g>、绕哪个点(SVG 坐标)、里面保持正着的几样(各自的中心)、现在画在多少度 */
@@ -63,6 +72,8 @@ interface Built {
   dy: number;
   turns: TurnLayer[];
   ink: SVGGElement;
+  /** 「点字」能点的字词垫的那层底(在老师的记号下面一层看不清,所以放在墨迹下面、画面上面) */
+  words: SVGGElement;
   /** 照片做底:那张图(已经载好)、高 ÷ 宽、在 SVG 里占哪一块 */
   photo?: { img: HTMLImageElement; aspect: number; box: [number, number, number, number] };
 }
@@ -84,7 +95,7 @@ const ICON = {
   wipe: '<path d="M4 15l8-8 6 6-6 6H8z"></path><path d="M12 21h8"></path>',
 };
 
-export const KitStage = forwardRef<KitStageHandle, KitStageProps>(function KitStage({ id, kit, params, ops, state, imageUrl, readonly, hand, onState, onSubmit, onError }, ref) {
+export const KitStage = forwardRef<KitStageHandle, KitStageProps>(function KitStage({ id, kit, params, ops, state, imageUrl, wordsUrl, readonly, hand, onState, onSubmit, onPick, onError }, ref) {
   const host = useRef<HTMLDivElement>(null);
   const built = useRef<Built | null>(null);
   /** 孩子做到哪了(舞台是它的主人;页面只在装的时候、看录像时发进来) */
@@ -98,7 +109,15 @@ export const KitStage = forwardRef<KitStageHandle, KitStageProps>(function KitSt
   const kitDef = kitOf(kit);
   const open = kitDef ? kitOps(kitDef, ops) : [];
   const canTurn = open.includes('转');
-  const canPen = open.some((o) => o !== '转' && o !== KIT_LOOK);
+  /** 能留下笔画的操作(圈、画、切…);「点字」的那一笔不留 */
+  const canMark = open.some((o) => o !== '转' && o !== KIT_LOOK && o !== PHOTO_PICK);
+  const canPick = open.includes(PHOTO_PICK) && Boolean(wordsUrl);
+  const canPen = canMark || canPick;
+  /** 照片上认出的字词(只留能弹田字格的) */
+  const [words, setWords] = useState<PhotoWord[]>([]);
+  const wordsRef = useRef<PhotoWord[]>([]);
+  /** 正文的行(点正文里任意一个字用;不垫底,行太多) */
+  const linesRef = useRef<PhotoLine[]>([]);
   /** loading 第一次还在烤 · swapping 换成下一张、还在烤(上一张的画面先留着)· drawing 正一笔一笔画 · ready 能动手了 */
   const [phase, setPhase] = useState<'loading' | 'swapping' | 'drawing' | 'ready'>('loading');
   const [turning, setTurning] = useState(false);
@@ -129,8 +148,50 @@ export const KitStage = forwardRef<KitStageHandle, KitStageProps>(function KitSt
 
   const emit = useCallback(() => {
     const s = cur.current;
-    onState({ turn: { ...(s.turn ?? {}) }, moves: s.moves ?? 0, marks: (s.marks ?? []).map((st) => st.map((p) => [p[0], p[1]] as [number, number])), ...(s.aspect ? { aspect: s.aspect } : {}) });
+    onState({ turn: { ...(s.turn ?? {}) }, moves: s.moves ?? 0, marks: (s.marks ?? []).map((st) => st.map((p) => [p[0], p[1]] as [number, number])), ...(s.aspect ? { aspect: s.aspect } : {}), ...(s.picked?.length ? { picked: [...s.picked] } : {}) });
   }, [onState]);
+
+  /** 能点的字词垫一层底:课本要孩子会写的(pick)深一点,别的淡一点;点中的那一项闪一下 */
+  const paintWords = useCallback((flash?: PhotoWord) => {
+    const b = built.current;
+    if (!b) return;
+    const a = b.photo?.aspect;
+    if (!a || !canPick || readonly) { b.words.replaceChildren(); return; }
+    const rect = (w: PhotoWord, cls: string): SVGRectElement => {
+      const h = (w.box[3] - w.box[1]) * a, pad = h * 0.08;
+      return el('rect', { class: cls, x: String(w.box[0] + b.dx - pad), y: String(w.box[1] * a + b.dy - pad), width: String(w.box[2] - w.box[0] + pad * 2), height: String(h + pad * 2), rx: String(h * 0.18) });
+    };
+    const known = wordsRef.current.map((w) => rect(w, `kt-word${flash === w ? ' kt-hit' : ''}${(w as PhotoWord & { pick?: boolean }).pick ? ' kt-key' : ''}`));
+    // 正文里点中的字没有底:只在点中的那一下闪一块
+    b.words.replaceChildren(...known, ...(flash && !wordsRef.current.includes(flash) ? [rect(flash, 'kt-word kt-hit kt-loose')] : []));
+  }, [canPick, readonly]);
+
+  // 「点字」:问这张照片认出了哪些字词;还在认就接着问,框一个一个出来
+  useEffect(() => {
+    if (!canPick || !wordsUrl || readonly) { wordsRef.current = []; linesRef.current = []; setWords([]); return; }
+    let stop = false;
+    let timer = 0;
+    const t0 = Date.now();
+    const ask = async (): Promise<void> => {
+      let state = 'running';
+      try {
+        const r = await fetch(wordsUrl, { cache: 'no-store' });
+        const j = r.ok ? ((await r.json()) as { state?: string; items?: unknown; lines?: unknown }) : null;
+        if (stop) return;
+        if (j) {
+          state = String(j.state ?? 'none');
+          const items = (Array.isArray(j.items) ? j.items : []).filter((x): x is PhotoWord => Boolean(x) && typeof (x as PhotoWord).text === 'string' && Array.isArray((x as PhotoWord).box) && (x as PhotoWord).box.length === 4 && pickable((x as PhotoWord).text));
+          if (items.length !== wordsRef.current.length) { wordsRef.current = items; setWords(items); }
+          linesRef.current = (Array.isArray(j.lines) ? j.lines : []).filter((x): x is PhotoLine => Boolean(x) && typeof (x as PhotoLine).text === 'string' && Array.isArray((x as PhotoLine).box) && (x as PhotoLine).box.length === 4);
+        }
+      } catch { /* 网断了:下一次再问 */ }
+      // none = 还没开始认(老师的卡比认字先到),和 running 一样接着问
+      if (!stop && (state === 'running' || state === 'none') && Date.now() - t0 < WORDS_POLL_MAX_MS) timer = window.setTimeout(() => void ask(), WORDS_POLL_MS);
+    };
+    void ask();
+    return () => { stop = true; window.clearTimeout(timer); };
+  }, [canPick, wordsUrl, readonly]);
+  useEffect(() => { paintWords(); }, [words, phase, paintWords]);
 
   // 装:排画面、烤、挂上;没动过手的从头画一遍,动过的(重开、只看)直接是画完的样子
   useEffect(() => {
@@ -183,9 +244,10 @@ export const KitStage = forwardRef<KitStageHandle, KitStageProps>(function KitSt
         }
         turns.push({ t, g, px: t.pivot[0] + dx, py: t.pivot[1] + dy, ups, deg: 0 });
       }
+      const wordsLayer = el('g', { class: 'kt-words' });
       const ink = el('g', { class: 'kt-ink' });
-      svg.append(ink);
-      built.current = { m, clock, dx, dy, turns, ink, ...(scene.photo && photoImg && aspect ? { photo: { img: photoImg, aspect, box: [dx, dy, scene.photo.width, scene.photo.height] as [number, number, number, number] } } : {}) };
+      svg.append(wordsLayer, ink);
+      built.current = { m, clock, dx, dy, turns, ink, words: wordsLayer, ...(scene.photo && photoImg && aspect ? { photo: { img: photoImg, aspect, box: [dx, dy, scene.photo.width, scene.photo.height] as [number, number, number, number] } } : {}) };
       // 画框按 viewBox 的宽高比铺(同小课堂):手指画的那一圈贴着画面
       // 教具给了画框就按它铺(板上添了线、少了线,画面不挪地方)
       const vb: [number, number, number, number] = scene.frame ? [scene.frame[0] + dx, scene.frame[1] + dy, scene.frame[2], scene.frame[3]] : picture.viewBox;
@@ -198,7 +260,7 @@ export const KitStage = forwardRef<KitStageHandle, KitStageProps>(function KitSt
       fit();
       resize.current?.disconnect();
       if (host.current) { resize.current = new ResizeObserver(fit); resize.current.observe(host.current); }
-      const s0: KitState = { turn: { ...(state?.turn ?? {}) }, moves: state?.moves ?? 0, marks: (state?.marks ?? []).slice(0, KIT_MARK_MAX), ...(aspect ? { aspect } : {}) };
+      const s0: KitState = { turn: { ...(state?.turn ?? {}) }, moves: state?.moves ?? 0, marks: (state?.marks ?? []).slice(0, KIT_MARK_MAX), ...(aspect ? { aspect } : {}), ...(state?.picked?.length ? { picked: state.picked.slice(0, KIT_PICK_MAX) } : {}) };
       cur.current = s0;
       for (const L of turns) setAngle(L, turnOf(L.t, s0));
       paintInk();
@@ -274,7 +336,7 @@ export const KitStage = forwardRef<KitStageHandle, KitStageProps>(function KitSt
     const mine = cur.current;
     const same = JSON.stringify({ turn: mine.turn ?? {}, moves: mine.moves ?? 0, marks: mine.marks ?? [] }) === JSON.stringify({ turn: state.turn ?? {}, moves: state.moves ?? 0, marks: state.marks ?? [] });
     if (same) return;
-    cur.current = { turn: { ...(state.turn ?? {}) }, moves: state.moves ?? 0, marks: (state.marks ?? []).slice(0, KIT_MARK_MAX), ...(mine.aspect ? { aspect: mine.aspect } : {}) };
+    cur.current = { turn: { ...(state.turn ?? {}) }, moves: state.moves ?? 0, marks: (state.marks ?? []).slice(0, KIT_MARK_MAX), ...(mine.aspect ? { aspect: mine.aspect } : {}), ...(mine.picked?.length ? { picked: mine.picked } : {}) };
     for (const L of b.turns) {
       const to = turnOf(L.t, cur.current);
       if (to === norm(L.deg)) continue;
@@ -329,7 +391,7 @@ export const KitStage = forwardRef<KitStageHandle, KitStageProps>(function KitSt
   useImperativeHandle(ref, () => ({
     submit() {
       const s = cur.current;
-      const st: KitState = { turn: { ...(s.turn ?? {}) }, moves: s.moves ?? 0, marks: s.marks ?? [], ...(s.aspect ? { aspect: s.aspect } : {}) };
+      const st: KitState = { turn: { ...(s.turn ?? {}) }, moves: s.moves ?? 0, marks: s.marks ?? [], ...(s.aspect ? { aspect: s.aspect } : {}), ...(s.picked?.length ? { picked: [...s.picked] } : {}) };
       void snapshot().then((image) => onSubmit(st, image), () => onSubmit(st));
     },
   }), [onSubmit, snapshot]);
@@ -372,6 +434,22 @@ export const KitStage = forwardRef<KitStageHandle, KitStageProps>(function KitSt
     const step = Math.ceil(s.pts.length / KIT_MARK_POINTS);
     const pts = s.pts.filter((_, i) => i % step === 0 || i === s.pts.length - 1).slice(-KIT_MARK_POINTS).map(([x, y]) => [Math.round(x - b.dx), Math.round(y - b.dy)] as [number, number]);
     const mark = pts.length >= 2 ? pts : [pts[0], pts[0]];
+    // 点字:这一笔指着照片上的一个字词 → 弹它的田字格,这一笔不留;没指着东西,开放了圈、画就照旧留下,不然擦掉
+    if (canPick && b.photo) {
+      const hit = photoPick(wordsRef.current, mark, b.photo.aspect, linesRef.current);
+      if (hit) {
+        s.el.remove();
+        const had = cur.current.picked ?? [];
+        // 同一个字词只记一次,挪到最后(他刚看的);记满了最早的让出来
+        cur.current = { ...cur.current, picked: [...had.filter((x) => x !== hit.text), hit.text].slice(-KIT_PICK_MAX) };
+        paintWords(hit);
+        window.setTimeout(() => paintWords(), 500);
+        emit();
+        onPick?.(hit.text);
+        return;
+      }
+      if (!canMark) { s.el.remove(); return; }
+    }
     // 画满了:最早的那一笔让出来(他最后画的才是他要说的)
     cur.current = { ...cur.current, marks: [...(cur.current.marks ?? []), mark].slice(-KIT_MARK_MAX) };
     paintInk();
@@ -387,8 +465,8 @@ export const KitStage = forwardRef<KitStageHandle, KitStageProps>(function KitSt
       {readonly ? null : <div className="kt-tools">
         {canTurn && btn('kt-left', '向左转', () => turn(-1), !can || turning, icon(ICON.left))}
         {canTurn && btn('kt-right', '向右转', () => turn(1), !can || turning, icon(ICON.right))}
-        {canTurn && canPen && <span className="kt-sep" />}
-        {canPen && btn('kt-wipe', '擦掉', wipe, !can || !marks, icon(ICON.wipe))}
+        {canTurn && canMark && <span className="kt-sep" />}
+        {canMark && btn('kt-wipe', '擦掉', wipe, !can || !marks, icon(ICON.wipe))}
       </div>}
       <div className={`kt-board${can && canPen ? ' kt-pen' : ''}`} data-phase={phase} data-marks={marks} onPointerDown={penDown} onPointerMove={penMove} onPointerUp={penUp} onPointerCancel={penUp}>
         <div className="kt-host" ref={host} />

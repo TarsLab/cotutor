@@ -57,6 +57,11 @@ html, body, #root { margin: 0; height: 100%; background: #fffdf8; font: 18px/1.5
 .kt-box { position: relative; }
 .kt-svg { display: block; width: 100%; height: 100%; overflow: visible; }
 .kt-board .stage-wait { position: absolute; inset: 0; }
+/* 照片板的「点字」:能点的字词垫一层荧光笔似的底;课本要孩子会写的(kt-key)深一点;点中的闪一下蓝 */
+.kt-word { fill: rgba(255, 212, 59, .2); stroke: rgba(240, 160, 0, .45); stroke-width: 1.5; vector-effect: non-scaling-stroke; transition: fill .25s, stroke .25s; }
+.kt-word.kt-key { fill: rgba(255, 200, 40, .34); stroke: rgba(240, 140, 0, .7); }
+.kt-word.kt-hit { fill: rgba(28, 126, 214, .3); stroke: #1c7ed6; }
+.kt-word.kt-loose { transition: none; }
 
 /* ---- 小课堂:左边一条竖栏(回去、课名、圈一圈 / 擦掉),画面占满中间,下面字幕、一行控制(播放、进度条、时间、去问老师) ---- */
 /* 底色就是课包板子的纸色(#fffdf8):画面四周不留白框,也不画分割线,竖向的地方都给画面 */

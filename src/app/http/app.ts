@@ -60,6 +60,8 @@ import { bailianRoute, createBailian, type Bailian } from '../machine/bailian.ts
 import { PARENT_HOME_PAGE } from '../../ui/parent/parent-home-page.ts';
 import { PARENT_SETTINGS_PAGE } from '../../ui/parent/parent-settings-page.ts';
 import { dictationRoute } from '../dictation/route.ts';
+import { kidWords, readWords } from '../../scenes/photo-words/store.ts';
+import type { Look } from '../../scenes/look.ts';
 import { IndexError, capturePathOk, deleteThread, listDates, rateThread, readErrLog, readIndex, readTranscript, scanCards, undoVaultWrite, writeCapture, writeCardImage, writeCardState, type VaultWrite } from '../../runtime/journal/store.ts';
 import { memoryLineText } from '../../memory/vault-notes.ts';
 import { childItem } from '../../memory/proposals.ts';
@@ -115,7 +117,7 @@ export interface AppContext {
   mouthHealth(why: string | null, midCall?: boolean): Promise<void>;
 }
 
-export function createContext(ws: Workspace, opts: { now?: () => Date; env?: NodeJS.ProcessEnv; draw?: Draw; access?: Access; bailian?: Bailian } = {}): AppContext {
+export function createContext(ws: Workspace, opts: { now?: () => Date; env?: NodeJS.ProcessEnv; draw?: Draw; look?: Look; access?: Access; bailian?: Bailian } = {}): AppContext {
   let configText: string | null = null;
   const ctx: AppContext = {
     ws,
@@ -925,6 +927,12 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       if (!rel || isAbsolute(rel) || !file.startsWith(ws.root + sep) || !IMAGE_TYPES[ext]) return { status: 404, json: { error: 'not_found' } };
       if (!(await stat(file).catch(() => null))?.isFile()) return { status: 404, json: { error: 'not_found' } };
       return { status: 200, file, contentType: IMAGE_TYPES[ext] };
+    }
+    // 照片板的「点字」:这张作业照片上认出的字词与框(认是 runner 在后台起的,流式落在照片旁边;舞台轮询)。只认 captures/ 里在的照片
+    if (p === '/api/kid/photo-words' && method === 'GET') {
+      const rel = url.searchParams.get('p') ?? '';
+      if (!(await capturePathOk(ws, rel))) return { status: 404, json: { error: 'not_found' } };
+      return { status: 200, json: kidWords(await readWords(join(ws.root, rel))) };
     }
     const audio = /^\/api\/audio\/([a-z0-9][a-z0-9-]*)\/(.+)$/.exec(p);
     if (audio && method === 'GET') {

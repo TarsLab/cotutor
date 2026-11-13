@@ -6,7 +6,8 @@
  * 流式:模型一行一段地吐,收到一行就交出到这时为止认出的全部,孩子端轮询着一个一个画框,不用干等整张认完。
  * 2026-10-10 拿一页仿课本试(识字 9、写字 9、读读写写 6):qwen3.8-max 24 项全对、框都套在字上,第一项 2.8 秒、全部 23 秒;
  * qwen3.5-omni-flash 整张 20 秒但不照一行一段回;qwen-vl-max / qwen3-vl-plus 36–37 秒。
- * 这里是听写这个场景的规则(要求怎么拼、一行一段怎么解析);看图的请求在 src/media/vision.ts(key 与端点按模型定),由路由那层交进来。出错、超时都不抛。
+ * 两处用:听写页的拍照认词(src/app/dictation/),和照片板的「点字」(./store.ts:孩子在 activity 里发的作业照片,认出的字词在板上能点)。
+ * 这里是认照片这件事的规则(要求怎么拼、一行一段怎么解析);看图的请求在 src/media/vision.ts(key 与端点按模型定),由路由那层交进来。出错、超时都不抛。
  */
 import { DICTATION_PROMPT_DEFAULT, DICTATION_PROMPT_EN_DEFAULT, DICTATION_DEFAULT } from '../../schema/index.ts';
 import { fillSlots } from '../../schema/index.ts';
@@ -36,11 +37,19 @@ export interface PhotoItem {
   emoji?: string;
 }
 
-/** 认到这时为止的全部:挑出的字词、课名、全文(一行一个字符串,词之间空一格) */
+/** 正文的一行和它在照片上的框(0–1000);照片板上点正文里任意一个字,照这一行按字数等分算是哪个字 */
+export interface PhotoLine {
+  /** 这一行的字,照原样带标点(没分词、不带空格) */
+  text: string;
+  box: [number, number, number, number];
+}
+
+/** 认到这时为止的全部:挑出的字词、课名、全文(一行一个字符串,词之间空一格);要了行框的(FORMAT_BOXED)多一份带框的行 */
 export interface PhotoProgress {
   items: PhotoItem[];
   lesson: string | null;
   full: string[];
+  lines?: PhotoLine[];
 }
 
 export type Recognized = ({ ok: true; model: string } | { ok: false; error: string }) & PhotoProgress & { ms: number };
@@ -59,6 +68,16 @@ export const FORMAT = `回答的格式:一行一段 JSON,不要别的字、不�
    - sure:看清了 true;糊、反光、被挡住、拿不准写 false,text 写你觉得最可能的字。
    - say:念法。
 3. 最后是全文:照片上的正文照原样一行写一行 {"full": "冬天来啦!一场大雪过后"};不要拼音、页码、栏目名。`;
+
+/**
+ * 全文的每一行也带框(照片板的「点字」用:孩子点正文里任意一个字):FORMAT 的第 3 条换成这一条,别的一样。
+ * 2026-11-13 scripts/probe-photo-text.mjs:统编版二上两页各两遍,行框紧贴着字、两遍差 0–2 个千分点;课文正文按字数等分,每个字都落在自己那一格。
+ */
+const FULL_RULE = '3. 最后是全文:照片上的正文照原样一行写一行 {"full": "冬天来啦!一场大雪过后"};不要拼音、页码、栏目名。';
+const FULL_RULE_BOXED = `3. 最后是全文:照片上的正文一行写一行,从上到下 {"full": "冬天来啦!一场大雪过后", "box": [左, 上, 右, 下]};不要拼音、页码、栏目名。
+   - full:这一行的字照原样,带标点;照片上在哪儿换行就在哪儿断,不把两行并成一行。
+   - box:这一行汉字在照片上的位置(不含上面的拼音),同样的千分比,紧贴着字。`;
+export const FORMAT_BOXED = FORMAT.replace(FULL_RULE, FULL_RULE_BOXED);
 
 /** 英文单词的格式:一项一个单词;kind 只分 word(单词表、要会写的)与 read(会认就行)、other */
 export const FORMAT_EN = `回答的格式:一行一段 JSON,不要别的字、不要代码块。按这个顺序写:
@@ -80,9 +99,9 @@ export function photoPrompt(prompt?: readonly string[], lang: DictationLang = 'z
   return `${ask.join('\n')}\n\n${lang === 'en' ? FORMAT_EN : FORMAT}`;
 }
 
-/** 交给模型的整段:听写 activity 文件「认字收到什么」的模板填好 {{格式}} */
-export function photoPromptFrom(template: string, lang: DictationLang = 'zh'): string {
-  return fillSlots(template, { 格式: lang === 'en' ? FORMAT_EN : FORMAT });
+/** 交给模型的整段:activity 文件「认字收到什么」的模板填好 {{格式}};boxed = 全文的每一行也要框(照片板,只有中文的) */
+export function photoPromptFrom(template: string, lang: DictationLang = 'zh', opts: { boxed?: boolean } = {}): string {
+  return fillSlots(template, { 格式: lang === 'en' ? FORMAT_EN : opts.boxed ? FORMAT_BOXED : FORMAT });
 }
 
 
@@ -102,14 +121,19 @@ export function splitWords(line: string, lang: DictationLang = 'zh'): string {
   return [...ZH_WORDS.segment(t)].map((x) => x.segment.trim()).filter(Boolean).join(' ');
 }
 
+/** 模型给的框 → 四个 0–1000 的整数;形状不对、左右或上下反了 → null */
+function boxOf(v: unknown): [number, number, number, number] | null {
+  const b = Array.isArray(v) && v.length === 4 && v.every((x) => typeof x === 'number' && Number.isFinite(x)) ? (v as number[]).map((x) => Math.max(0, Math.min(1000, Math.round(x)))) : null;
+  return b && b[2] > b[0] && b[3] > b[1] ? (b as [number, number, number, number]) : null;
+}
+
 /** 模型的一行 → 一项;不是一项(形状不对、不是汉字、超过四个字;lang = en:不是一个英文单词)→ null */
 export function parseItem(v: unknown, lang: DictationLang = 'zh'): PhotoItem | null {
   if (!isObj(v)) return null;
   const t = lang === 'en' ? (str(v.text) ?? '') : (str(v.text)?.replace(/\s+/g, '') ?? '');
   if (dictationWordLang(t) !== lang) return null;
   const kind = PHOTO_KINDS.includes(v.kind as PhotoKind) ? (v.kind as PhotoKind) : 'other';
-  const b = Array.isArray(v.box) && v.box.length === 4 && v.box.every((x) => typeof x === 'number' && Number.isFinite(x)) ? (v.box as number[]).map((x) => Math.max(0, Math.min(1000, Math.round(x)))) : null;
-  const box = b && b[2] > b[0] && b[3] > b[1] ? (b as PhotoItem['box']) : null;
+  const box = boxOf(v.box);
   const say = str(v.say);
   const pick = typeof v.pick === 'boolean' ? v.pick : PICK_BY_KIND.includes(kind);
   const emoji = lang === 'en' ? dictationEmoji(v.emoji) : undefined;
@@ -124,6 +148,7 @@ export class LineReader implements PhotoProgress {
   items: PhotoItem[] = [];
   lesson: string | null = null;
   full: string[] = [];
+  lines: PhotoLine[] = [];
   private buf = '';
   private seen = new Set<string>();
   private onProgress: (p: PhotoProgress) => void;
@@ -145,7 +170,7 @@ export class LineReader implements PhotoProgress {
     this.buf = '';
   }
   snapshot(): PhotoProgress {
-    return { items: [...this.items], lesson: this.lesson, full: [...this.full] };
+    return { items: [...this.items], lesson: this.lesson, full: [...this.full], ...(this.lines.length ? { lines: [...this.lines] } : {}) };
   }
   private line(raw: string): void {
     const s = raw.trim().replace(/,$/, '');
@@ -163,6 +188,8 @@ export class LineReader implements PhotoProgress {
       const f = str(v.full);
       if (!f) return;
       this.full.push(splitWords(f, this.lang));
+      const box = boxOf(v.box);
+      if (box) this.lines.push({ text: f.replace(/\s+/g, ''), box });
     } else {
       const it = parseItem(v, this.lang);
       if (!it) return;

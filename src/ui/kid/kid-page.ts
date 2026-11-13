@@ -256,6 +256,17 @@ ${BACK_TINT_CSS}
   #stage.cv .top .ttl.open { white-space:normal; }
   #stage.cv #st-act { position:absolute; top:env(safe-area-inset-top); right:env(safe-area-inset-right); height:56px; box-sizing:border-box; padding:0 12px; border-top:0; gap:10px; }
   #stage.cv #st-note { font-size:14px; }
+  /* 照片板的「点字」:孩子点中的字词,田字格浮在板上面(不挡工具那一列:右手时在右上,左手时在左上) */
+  #st-pick { position:absolute; z-index:3; top:calc(env(safe-area-inset-top) + 72px); right:calc(env(safe-area-inset-right) + 16px); padding:14px 14px 12px; background:#fff; border-radius:24px; box-shadow:0 10px 36px rgba(60,50,30,.22), 0 0 0 1px rgba(60,50,30,.06); animation:st-pick-in .22s cubic-bezier(.2,.8,.2,1); }
+  #st-pick[hidden] { display:none; }
+  body.hand-left #st-pick { right:auto; left:calc(env(safe-area-inset-left) + 16px); }
+  #st-pick .c.c-tianzige { margin:0; padding:0; background:none; border:0; box-shadow:none; flex-wrap:nowrap; }
+  #st-pick .hz { width:168px; height:168px; }
+  #st-pick .hz .n { font-size:13px; }
+  #st-pick-x { position:absolute; top:-12px; right:-12px; width:40px; height:40px; border-radius:50%; border:0; background:var(--ink); color:#fff; display:grid; place-items:center; cursor:pointer; }
+  body.hand-left #st-pick-x { right:auto; left:-12px; }
+  @keyframes st-pick-in { from { opacity:0; scale:.9; } to { opacity:1; scale:1; } }
+  @media (max-width: 760px) { #st-pick .hz { width:112px; height:112px; } }
   #st-go.holding { background:#3d7fd9; border-color:#3d7fd9; color:#fff; }
   #cv-hold, #cv-cap { display:none !important; }
   body.live #stage.cv #cv-hold { display:flex !important; position:absolute; z-index:2; left:calc(env(safe-area-inset-left) + 4px); bottom:calc(env(safe-area-inset-bottom) + 20px); }
@@ -574,7 +585,7 @@ __VOICE_CSS__
     <div id="wrap">
       <div id="bmark" hidden></div>
       <div id="board"></div>
-      <div id="stage"><div class="top"><span class="ttl" id="st-ttl"></span><span class="kd" id="st-kd"></span><button id="st-x" type="button"></button></div><div id="st-body"></div><iframe id="st-frame" hidden title="stage"></iframe><div id="st-act" hidden><span class="note" id="st-note"></span><button id="st-go" type="button">交给老师</button></div><button id="cv-hold" class="vb-mini" type="button"></button><div id="cv-cap"></div></div>
+      <div id="stage"><div class="top"><span class="ttl" id="st-ttl"></span><span class="kd" id="st-kd"></span><button id="st-x" type="button"></button></div><div id="st-body"></div><iframe id="st-frame" hidden title="stage"></iframe><div id="st-pick" hidden></div><div id="st-act" hidden><span class="note" id="st-note"></span><button id="st-go" type="button">交给老师</button></div><button id="cv-hold" class="vb-mini" type="button"></button><div id="cv-cap"></div></div>
       <div id="st-dim"></div>
     </div>
     <div id="lv"><div id="lv-av"></div><div id="lv-kid"></div><div id="lv-cap"><div class="lv-prev"></div><div class="lv-cur"></div></div><div id="lv-ask"><b></b><small></small></div><div id="lv-acts"></div><button id="lv-replay" type="button" hidden><span class="ic"></span><span class="tx"></span></button><button id="lv-hold" type="button"></button><button id="lv-today" type="button">回到今天 ›</button><div id="lv-tools"><button type="button" id="lv-paper"><span class="ic"></span>画板</button><button type="button" id="lv-cam"><span class="ic"></span>拍照</button><button type="button" id="lv-album"><span class="ic"></span>相册</button><button type="button" id="lv-type"><span class="ic"></span>打字</button></div></div>
@@ -1933,6 +1944,7 @@ __WORD_DRAW_JS__
     S.stage = { section: secIdx, card: idx, id: S.sections[secIdx].job + '/' + idx, playing: null, delegate: false, autoplay: false };
     playRec({ k: 'stage', job: S.sections[secIdx].job, card: idx, open: true });
     $('#st-ttl').textContent = cardTitle(card); $('#st-ttl').classList.remove('open');
+    pickHide();
     renderGo();
     setNow(secIdx, idx);
     postStage(stageCard(card));
@@ -1983,6 +1995,18 @@ __WORD_DRAW_JS__
     setNow(secIdx, idx);
     if (card.kind === 'canvas') canvasOpened();
   };
+  /** 照片板的「点字」:孩子点中了一个字词 → 田字格浮在板上,一笔一笔写一遍(点格子再写一遍);再点别的字换成那个,× 收起来。老师不开口 */
+  const pickHide = () => { const box = $('#st-pick'); for (const b of box.querySelectorAll('.hz')) tianzigeReset(b); box.replaceChildren(); box.hidden = true; };
+  const pickShow = (text) => {
+    const chs = Array.from(String(text || '')).slice(0, 4);
+    if (!chs.length) return;
+    pickHide();
+    const cardEl = h('div', { class: 'c c-tianzige', 'data-ch': chs.join('') });
+    for (const ch of chs) cardEl.append(tianzigeBox(ch));
+    $('#st-pick').append(h('button', { id: 'st-pick-x', type: 'button', 'aria-label': '收起来', html: ICON.close, on: { click: pickHide } }), cardEl);
+    $('#st-pick').hidden = false;
+    tianzigePlay(cardEl);
+  };
   const STAGE_SOURCE = 'cotutor-stage';
   const frame = $('#st-frame');
   const postStage = (m) => { try { frame.contentWindow.postMessage({ source: STAGE_SOURCE, ...m }, '*'); } catch {} };
@@ -2002,7 +2026,7 @@ __WORD_DRAW_JS__
   const stageCard = (card) => {
     const b = card.kind === 'lecture' ? card.props.bundle : card.kind === 'canvas' && card.props.base && card.props.base.bundle ? card.props.base.bundle : null;
     const im = card.kind === 'canvas' && card.props.base && typeof card.props.base.image === 'string' ? card.props.base.image : card.kind === 'kit' && card.props.kit === '照片' && card.props.params && typeof card.props.params['图'] === 'string' ? card.props.params['图'] : null;
-    return { type: 'card', id: S.stage.id, kind: card.kind, props: card.props, state: card.state === undefined ? null : card.state, readonly: Boolean(card.submitted) || (card.kind === 'kit' && S.readonly), ...(isFullStage(card) ? { full: true, hand: document.body.classList.contains('hand-left') ? 'left' : 'right' } : {}), bundleUrl: b ? lcBundleUrl(b, card.kind === 'lecture' && card.props.video === true) : undefined, imageUrl: im ? '/api/kid/image?p=' + encodeURIComponent(im) : undefined, autoplay: S.stage.autoplay };
+    return { type: 'card', id: S.stage.id, kind: card.kind, props: card.props, state: card.state === undefined ? null : card.state, readonly: Boolean(card.submitted) || (card.kind === 'kit' && S.readonly), ...(isFullStage(card) ? { full: true, hand: document.body.classList.contains('hand-left') ? 'left' : 'right' } : {}), bundleUrl: b ? lcBundleUrl(b, card.kind === 'lecture' && card.props.video === true) : undefined, imageUrl: im ? '/api/kid/image?p=' + encodeURIComponent(im) : undefined, wordsUrl: im && card.kind === 'kit' && Array.isArray(card.props.ops) && card.props.ops.includes('点字') ? '/api/kid/photo-words?p=' + encodeURIComponent(im) : undefined, autoplay: S.stage.autoplay };
   };
   /** 舞台包说话:ready → 把卡发过去;phase → 记下在放还是放完;state → 存;done 且是讲稿委托的 → 关舞台接着念 */
   window.addEventListener('message', (e) => {
@@ -2012,6 +2036,7 @@ __WORD_DRAW_JS__
     if (!card) return;
     if (m.type === 'ready') postStage(stageCard(card));
     else if (m.type === 'snap') { const w = CV.snapWait; CV.snapWait = null; if (w) w(m.image); }
+    else if (m.type === 'pick') { if (card.kind === 'kit') pickShow(m.text); }
     else if (m.type === 'cleared') { if (!card.submitted) canvasCleared(card, m); }
     else if (m.type === 'phase') {
       S.stage.playing = { phase: m.phase, line: m.line };
@@ -2045,7 +2070,7 @@ __WORD_DRAW_JS__
   const closeStage = () => { if (S.stage && S.sections[S.stage.section]) playRec({ k: 'stage', job: S.sections[S.stage.section].job, card: S.stage.card, open: false });
     // 单词卡舞台:自动那一遍停下,慢念也停
     for (const v of document.querySelectorAll('#st-body video')) { try { v.pause(); } catch {} }
-    wordRun++; if (S.stage && !S.reel && S.sections[S.stage.section] && (S.sections[S.stage.section].cards[S.stage.card] || {}).kind === 'word') silence(); S.stage = null; frame.src = 'about:blank'; canvasClosed(); $('#stage').classList.remove('on'); renderSubtitle(); setNow(null, null); };
+    wordRun++; if (S.stage && !S.reel && S.sections[S.stage.section] && (S.sections[S.stage.section].cards[S.stage.card] || {}).kind === 'word') silence(); S.stage = null; pickHide(); frame.src = 'about:blank'; canvasClosed(); $('#stage').classList.remove('on'); renderSubtitle(); setNow(null, null); };
   $('#st-x').innerHTML = ICON.close;
   // 孩子关:讲稿交给小课堂卡、还没放完的,关了接着念
   const closeByKid = () => { const d = S.stage; const card = d && S.sections[d.section] ? S.sections[d.section].cards[d.card] : null; closeStage(); if (d && d.delegate && card && (!isHeavy(card) || card.kind === 'lecture')) resumeAfter(); };

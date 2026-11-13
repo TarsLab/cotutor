@@ -7,10 +7,11 @@
 
 import { compass } from './compass.ts';
 import { dots } from './dots.ts';
-import { photo } from './photo.ts';
+import { PHOTO_PICK, photo } from './photo.ts';
 import type { Kit, KitState } from './types.ts';
 
-export { KIT_MARK_MAX, KIT_MARK_POINTS } from './types.ts';
+export { KIT_MARK_MAX, KIT_MARK_POINTS, KIT_PICK_CHARS, KIT_PICK_MAX } from './types.ts';
+export { PHOTO_PICK, photoPick, pickable, type PhotoLine, type PhotoWord } from './photo.ts';
 export type { Kit, KitEnv, KitParam, KitScene, KitState, KitTurn } from './types.ts';
 export { kitMarks, markPhrases, turnOf, turnPoint, turnedSkeletons, type KitMark } from './marks.ts';
 
@@ -18,9 +19,12 @@ export const KITS: readonly Kit[] = [photo, dots, compass];
 
 /** 只看、不动笔的那种「操作」:写明了才算,不写操作时不在全开里;只开放它的卡没有笔、没有「给老师看」 */
 export const KIT_LOOK = '看';
-const openOps = (kit: Kit): string[] => kit.ops.filter((x) => x !== KIT_LOOK);
-/** 这张卡是不是只给孩子看的 */
-export const kitLookOnly = (ops: readonly string[]): boolean => ops.length > 0 && ops.every((x) => x === KIT_LOOK);
+/** 写明了才有的操作:「看」,和「点字」(要先认照片上的字,只有写了「认字收到什么」的 activity 里才有东西可点) */
+const ASKED_ONLY: readonly string[] = [KIT_LOOK, PHOTO_PICK];
+const openOps = (kit: Kit): string[] => kit.ops.filter((x) => !ASKED_ONLY.includes(x));
+
+/** 这张卡是不是没有东西要交回来:只开放「看」「点字」(点字是孩子自己看笔顺,不用「给老师看」) */
+export const kitLookOnly = (ops: readonly string[]): boolean => ops.length > 0 && ops.every((x) => ASKED_ONLY.includes(x));
 
 export function kitOf(name: string): Kit | undefined {
   return KITS.find((k) => k.name === name);

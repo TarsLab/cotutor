@@ -72,6 +72,7 @@ function App(): JSX.Element {
   const onSubmit = useCallback((ink: Record<string, unknown>[], image: string) => post({ type: 'submit', state: { ink }, image }), []);
   const onCleared = useCallback((c: CanvasCleared) => post({ type: 'cleared', ...c }), []);
   const onKitState = useCallback((state: KitState) => post({ type: 'state', state }), []);
+  const onKitPick = useCallback((text: string) => post({ type: 'pick', text }), []);
   const onKitSubmit = useCallback((state: KitState, image?: string) => post({ type: 'submit', state, ...(image ? { image } : {}) }), []);
   const onLectureDone = useCallback((w: LectureWatch) => post({ type: 'lecture', event: 'finished', ...w }), []);
   const onLectureClose = useCallback((w: LectureWatch) => post({ type: 'lecture', event: 'close', ...w }), []);
@@ -103,7 +104,7 @@ function App(): JSX.Element {
   }
   if (card.kind === 'kit') {
     const p = card.props as { kit?: unknown; params?: unknown; ops?: unknown };
-    return <KitStage ref={kit} id={card.id} kit={String(p.kit ?? '')} params={p.params && typeof p.params === 'object' ? (p.params as Record<string, unknown>) : {}} ops={p.ops} state={(card.state ?? null) as KitState | null} imageUrl={typeof card.imageUrl === 'string' ? card.imageUrl : undefined} readonly={card.readonly === true} hand={card.hand === 'left' ? 'left' : 'right'} onState={onKitState} onSubmit={onKitSubmit} onError={onError} />;
+    return <KitStage ref={kit} id={card.id} kit={String(p.kit ?? '')} params={p.params && typeof p.params === 'object' ? (p.params as Record<string, unknown>) : {}} ops={p.ops} state={(card.state ?? null) as KitState | null} imageUrl={typeof card.imageUrl === 'string' ? card.imageUrl : undefined} wordsUrl={typeof card.wordsUrl === 'string' ? card.wordsUrl : undefined} onPick={onKitPick} readonly={card.readonly === true} hand={card.hand === 'left' ? 'left' : 'right'} onState={onKitState} onSubmit={onKitSubmit} onError={onError} />;
   }
   return <div className="stage-wait">{String(card.props.title ?? card.props.text ?? '')}</div>;
 }

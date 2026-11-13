@@ -8,7 +8,7 @@
  * 舞台在舞台包里(src/ui/stage/kit.tsx):画面现烤、逐笔画出来,落下就自己铺满打开;下一张还是同一种画法,舞台不关、只画差别。
  */
 import { z } from 'zod';
-import { KITS, KIT_MARK_MAX, KIT_MARK_POINTS, describeKit, kitOf, kitOps, kitParams, readKitLines, type KitState } from '../../chalk/index.ts';
+import { KITS, KIT_MARK_MAX, KIT_MARK_POINTS, KIT_PICK_CHARS, KIT_PICK_MAX, describeKit, kitOf, kitOps, kitParams, readKitLines, type KitState } from '../../chalk/index.ts';
 import { bodyLines, type CardKind } from './kind.ts';
 
 /** 题目最多几个字:顶栏一行,孩子一眼读完 */
@@ -37,6 +37,8 @@ export const KitStateSchema = z.object({
   marks: z.array(z.array(point).min(1).max(KIT_MARK_POINTS)).max(KIT_MARK_MAX).optional(),
   /** 照片做底的板:照片的高 ÷ 宽(舞台量的) */
   aspect: z.number().finite().min(0.05).max(20).optional(),
+  /** 照片板的「点字」:孩子点开看过的字词 */
+  picked: z.array(z.string().min(1).max(KIT_PICK_CHARS * 2)).max(KIT_PICK_MAX).optional(),
   /** 「给老师看」时板那一刻的图(相对 workspace 根,如 conversations/math-tutor/2026-11-11.1620-3.cards/0.png);服务端写,页面不填 */
   image: z.string().optional(),
 });
@@ -65,7 +67,7 @@ export const kit: CardKind<KitProps, KitCardState> = {
   describe(p, s) {
     const k = kitOf(p.kit);
     if (!k) return JSON.stringify(s);
-    const st: KitState = { turn: s.turn, moves: s.moves, marks: s.marks, aspect: s.aspect };
+    const st: KitState = { turn: s.turn, moves: s.moves, marks: s.marks, aspect: s.aspect, picked: s.picked };
     return `${describeKit(k, kitParams(k, p.params), st, kitOps(k, p.ops))}${s.image ? ';图随这一轮附上,以图为准' : ''}`;
   },
 };

@@ -50,6 +50,8 @@ export interface KitState {
   marks?: [number, number][][];
   /** 照片做底的板:照片的高 ÷ 宽(舞台量的;服务端靠它把笔画换回照片上的千分比) */
   aspect?: number;
+  /** 照片板的「点字」:孩子点开看过的字词,先后照他点的(同一个只记一次) */
+  picked?: string[];
 }
 
 /**
@@ -88,3 +90,6 @@ export interface Kit {
 /** 一条消息里最多几笔、一笔最多几个点(舞台抽稀到这个数,服务端照它收) */
 export const KIT_MARK_MAX = 12;
 export const KIT_MARK_POINTS = 120;
+/** 「点字」最多记几个、一个最多几个字(田字格一张最多四个字) */
+export const KIT_PICK_MAX = 30;
+export const KIT_PICK_CHARS = 4;

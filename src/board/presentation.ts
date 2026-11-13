@@ -392,10 +392,10 @@ export function hasState(card: BoardCard): boolean {
   return card.kind === 'choice' || card.kind === 'canvas' || (card.kind === 'kit' && !kitLookOnly(card));
 }
 
-/** 只给孩子看的数学卡(「操作: 看」:老师把答案写在照片上):没有笔、没有「给老师看」(同 src/chalk/kit 的 kitLookOnly;这里内联进页面,不引它) */
+/** 没有东西要交回来的数学卡(「操作: 看」:老师把答案写在照片上;「操作: 点字」:孩子自己点字看笔顺):没有「给老师看」(同 src/chalk/kit 的 kitLookOnly;这里内联进页面,不引它) */
 export function kitLookOnly(card: BoardCard): boolean {
   const ops = (card.props as { ops?: unknown }).ops;
-  return card.kind === 'kit' && Array.isArray(ops) && ops.length > 0 && ops.every((x) => x === '看');
+  return card.kind === 'kit' && Array.isArray(ops) && ops.length > 0 && ops.every((x) => x === '看' || x === '点字');
 }
 
 /** 画板上画了几笔(状态里的 ink 元素数) */

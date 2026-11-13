@@ -8,7 +8,7 @@
  */
 
 import type { ChalkSkeleton } from '../types.ts';
-import type { Kit, KitEnv, KitScene } from './types.ts';
+import { KIT_PICK_CHARS, type Kit, type KitEnv, type KitScene } from './types.ts';
 
 const IMAGE = /\.(png|jpe?g|webp|gif)$/i;
 /** 老师的记号:强调红;字垫一小块纸色,压在照片上也读得出 */
@@ -94,10 +94,103 @@ function layout(p: Readonly<Record<string, string>>, env?: KitEnv): Layout {
 
 const r1 = (n: number): number => Math.round(n * 10) / 10;
 
+/** 「点字」这个操作的名字:孩子点一个字词、圈一个字词,板上弹出它的田字格 */
+export const PHOTO_PICK = '点字';
+
+/** 照片上认出的一项(src/scenes/photo-words/):字词与它的框,整张照片的千分比 [左, 上, 右, 下] */
+export interface PhotoWord {
+  text: string;
+  box: readonly [number, number, number, number];
+}
+
+/** 照片上正文的一行(src/scenes/photo-words/):字照原样带标点,框是这一行汉字的位置(千分比) */
+export interface PhotoLine {
+  text: string;
+  box: readonly [number, number, number, number];
+}
+
+/** 能弹田字格的:一到四个汉字 */
+const HANZI = /^[\u3400-\u9fff]+$/;
+export const pickable = (text: string): boolean => HANZI.test(text) && Array.from(text).length <= KIT_PICK_CHARS;
+
+/**
+ * 孩子的一笔指的是哪一项(纯函数;舞台在本地算,不等老师)。stroke 是场景坐标(横 = 千分比,竖 = 千分比 × 高宽比),aspect = 照片的高 ÷ 宽。
+ * 点一下(一笔很小):落在哪一项的框里就是它,框外面一点(半个字高以内)也算最近的那一项——手指比字粗;
+ * 圈一圈、划一道:这一笔的外框盖住了哪几项的中心,取离这一笔中心最近的一项。
+ * 挑出来的字词都不沾,再看正文的行(lines):一行按字数等分,一格一个字(课文正文差不多等宽、标点占一格)——
+ * 点一下是落在的那一格的字;圈一圈是圈住的那几格连着的汉字(最多四个,当一个词)。标点、拼音、空白都不算。都不沾 → null。
+ */
+export function photoPick(words: readonly PhotoWord[], stroke: readonly (readonly [number, number])[], aspect: number, lines: readonly PhotoLine[] = []): PhotoWord | null {
+  // 先后:正落在一项的框里(或圈住了它)→ 正文里落在的那个字 → 框外面一点的最近一项。
+  // 挑出来的字就在正文那一行里时(课后题的加点字),点它旁边的字要的是旁边那个字,不是它
+  return pickWord(words, stroke, aspect, false) ?? pickInLines(lines, stroke, aspect) ?? pickWord(words, stroke, aspect, true);
+}
+
+const isHanzi = (ch: string): boolean => HANZI.test(ch);
+
+function pickInLines(lines: readonly PhotoLine[], stroke: readonly (readonly [number, number])[], aspect: number): PhotoWord | null {
+  if (!stroke.length || !(aspect > 0) || !lines.length) return null;
+  const xs = stroke.map((q) => q[0]), ys = stroke.map((q) => q[1] / aspect);
+  const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+  const tap = Math.hypot(maxX - minX, (maxY - minY) * aspect) < 14;
+  // 这一笔在哪一行:点一下要落在行里(上下各让出三成行高,手指比字粗);圈一圈取圈的中心最近的、被圈盖到的那一行
+  const on = lines.filter((l) => {
+    const h = l.box[3] - l.box[1];
+    return tap ? cy >= l.box[1] - h * 0.3 && cy <= l.box[3] + h * 0.3 && cx >= l.box[0] && cx <= l.box[2] : (l.box[1] + l.box[3]) / 2 >= minY && (l.box[1] + l.box[3]) / 2 <= maxY && l.box[2] > minX && l.box[0] < maxX;
+  });
+  const line = on.reduce<PhotoLine | null>((best, l) => (!best || Math.abs((l.box[1] + l.box[3]) / 2 - cy) < Math.abs((best.box[1] + best.box[3]) / 2 - cy) ? l : best), null);
+  if (!line) return null;
+  const chars = Array.from(line.text);
+  if (!chars.length) return null;
+  const w = (line.box[2] - line.box[0]) / chars.length;
+  const cell = (i: number, j: number): PhotoWord['box'] => [Math.round(line.box[0] + i * w), line.box[1], Math.round(line.box[0] + (j + 1) * w), line.box[3]];
+  if (tap) {
+    const i = Math.max(0, Math.min(chars.length - 1, Math.floor((cx - line.box[0]) / w)));
+    return isHanzi(chars[i]) ? { text: chars[i], box: cell(i, i) } : null;
+  }
+  // 圈住的格:中心在圈的左右之间的;里面最长的一段连着的汉字(标点把它断开),最多四个
+  let best: [number, number] | null = null;
+  let from = -1;
+  for (let i = 0; i <= chars.length; i++) {
+    const inside = i < chars.length && isHanzi(chars[i]) && line.box[0] + (i + 0.5) * w >= minX && line.box[0] + (i + 0.5) * w <= maxX;
+    if (inside && from < 0) from = i;
+    if (!inside && from >= 0) { if (!best || i - from > best[1] - best[0] + 1) best = [from, i - 1]; from = -1; }
+  }
+  if (!best) return null;
+  const to = Math.min(best[1], best[0] + KIT_PICK_CHARS - 1);
+  return { text: chars.slice(best[0], to + 1).join(''), box: cell(best[0], to) };
+}
+
+/** loose = 点一下没落在任何一项的框里时,框外面半个字高以内的最近一项也算 */
+function pickWord(words: readonly PhotoWord[], stroke: readonly (readonly [number, number])[], aspect: number, loose: boolean): PhotoWord | null {
+  if (!stroke.length || !(aspect > 0)) return null;
+  const xs = stroke.map((q) => q[0]), ys = stroke.map((q) => q[1] / aspect);
+  const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+  const ok = words.filter((w) => pickable(w.text));
+  // 距离都按屏幕上的样子比(竖的那个数乘回高宽比),不然竖着拍的照片上下显得近
+  const dist = (w: PhotoWord): number => Math.hypot((w.box[0] + w.box[2]) / 2 - cx, ((w.box[1] + w.box[3]) / 2 - cy) * aspect);
+  const nearest = (list: readonly PhotoWord[]): PhotoWord | null => list.reduce<PhotoWord | null>((best, w) => (!best || dist(w) < dist(best) ? w : best), null);
+  const tap = Math.hypot(maxX - minX, (maxY - minY) * aspect) < 14;
+  if (tap) {
+    const inside = ok.filter((w) => cx >= w.box[0] && cx <= w.box[2] && cy >= w.box[1] && cy <= w.box[3]);
+    if (inside.length) return nearest(inside);
+    if (!loose) return null;
+    const near = ok.filter((w) => {
+      const slack = ((w.box[3] - w.box[1]) * aspect) / 2;
+      const dx = Math.max(w.box[0] - cx, 0, cx - w.box[2]), dy = Math.max(w.box[1] - cy, 0, cy - w.box[3]) * aspect;
+      return Math.hypot(dx, dy) <= slack;
+    });
+    return nearest(near);
+  }
+  return nearest(ok.filter((w) => { const mx = (w.box[0] + w.box[2]) / 2, my = (w.box[1] + w.box[3]) / 2; return mx >= minX && mx <= maxX && my >= minY && my <= maxY; }));
+}
+
 export const photo: Kit = {
   name: '照片',
-  about: '孩子拍来的作业做底,裁出要讲的那一块。你在上面圈一圈、标方位、画箭头,孩子接着在上面圈、画。题目本身带图时用它。',
-  ops: ['圈', '画', '看'],
+  about: '孩子拍来的作业、课本做底,裁出要讲的那一块。你在上面圈一圈、标方位、画箭头,孩子接着在上面圈、画;课本上的字词,孩子点一下就看到怎么写。',
+  ops: ['圈', '画', PHOTO_PICK, '看'],
   params: [
     { key: '图', note: '哪张照片。照 photos: 里的路径原样写;第一行直接写路径也行。', read: readPath, required: true },
     { key: '框', note: '只给孩子看照片的哪一块:左、上、右、下四个数,整张照片的千分比(左上角 0, 0,右下角 1000, 1000)。不写就是整张。', read: (v) => readBox('框', v), fallback: '' },
@@ -175,7 +268,10 @@ export const photo: Kit = {
   },
   read(_p, state) {
     const marks = (state.marks ?? []).filter((s) => s.length);
-    if (!marks.length) return '还没画';
+    const picked = (state.picked ?? []).filter(Boolean);
+    // 点字:他点开看了哪几个字的笔顺(应用弹的田字格,你没出卡);这几个是他自己想看的,多半是不会写、不认识的
+    const looked = picked.length ? `点开看了笔顺:${picked.map((w) => `「${w}」`).join('')}` : '';
+    if (!marks.length) return looked || '还没画';
     const a = state.aspect && state.aspect > 0 ? state.aspect : null;
     // 没量到高宽比:竖的那个数换不回千分比,只说画了什么,位置看图
     const pt = (x: number, y: number): string => (a ? `(${Math.round(x)}, ${Math.round(y / a)})` : '');
@@ -194,6 +290,7 @@ export const photo: Kit = {
       else parts.push(`画了一笔${a ? `,${box}` : ''}`);
     }
     parts.push(a ? '这些数是整张照片的千分比,和你写「圈」「方位」用的一样' : '位置看图');
+    if (looked) parts.unshift(looked);
     return parts.join(';');
   },
 };

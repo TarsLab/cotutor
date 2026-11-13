@@ -833,7 +833,7 @@ export function createMock(opts: MockOptions = {}): Mock {
     const step = lectureFirst ? (m.lecture?.video ? MOCK_VIDEO_LECTURE_REPLY : MOCK_LECTURE_REPLY) : boardPhoto ? MOCK_BOARD_REPLY : boardCover ? MOCK_BOARD_COVER : page ? MOCK_PAGE_REPLY : t.script[i];
     if (!lectureFirst && !page && !boardPhoto && !boardCover) cur.set(t.name, i + 1);
     const raw = step ? withMockLooks(sectionFromScript(step), t.name, i) : null;
-    const full = raw && (boardPage || raw.cards.some((c) => c.kind === 'kit')) ? boardPageSection(raw, { page: boardPage, photo: base, locate: (x) => photoLocate(MOCK_PAGE_WORDS, MOCK_PAGE_LINES, x) }).section : raw;
+    const full = raw && (boardPage || raw.cards.some((c) => c.kind === 'kit')) ? boardPageSection(raw, { page: boardPage, photo: base, locate: (x, within) => photoLocate(MOCK_PAGE_WORDS, MOCK_PAGE_LINES, x, within) }).section : raw;
     const n = full ? full.cards.length : 0;
     const tick = delay / (n + 1);
     return new Promise<void>((resolve) => {

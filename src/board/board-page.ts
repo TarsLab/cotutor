@@ -15,16 +15,16 @@ export interface BoardPageOpts {
   /** 这块底:孩子最近发的照片(相对 workspace 根);没有 = null */
   photo: string | null;
   /** 这块底上一个字词在哪(认出的字与行框,src/chalk/kit/photo.ts 的 photoLocate);还没认、没认成 = 不给 */
-  locate?: (text: string) => [number, number, number, number] | null;
+  locate?: (text: string, within?: readonly [number, number, number, number] | null) => [number, number, number, number] | null;
   /** 这块底上第几题在哪(认出的题号与框,分题);还没认、没认出题 = 不给 */
   question?: (no: string) => [number, number, number, number] | null;
 }
 
 /** 照片板的「圈」:写的字词换成框;找不到的那一处拿掉 */
-function resolveRings(v: string, locate: BoardPageOpts['locate'], unfound: string[]): string {
+function resolveRings(v: string, locate: BoardPageOpts['locate'], unfound: string[], within: readonly [number, number, number, number] | null = null): string {
   return photoRings(v).flatMap((r) => {
     if (r.box) return [r.text ? `${r.text}|${r.box.join(' ')}` : r.box.join(' ')];
-    const box = r.text && locate ? locate(r.text) : null;
+    const box = r.text && locate ? locate(r.text, within) : null;
     if (!box) { if (r.text) unfound.push(r.text); return []; }
     return [`${r.text}|${box.join(' ')}`];
   }).join(';');
@@ -58,7 +58,9 @@ export function boardPageSection(section: BoardSection, opts: BoardPageOpts): { 
     // 圈的、遮拼音的字词:照认出的字换成框
     for (const key of ['圈', '遮']) {
       const v = isPhotoBoard(card) ? (card.props.params as Record<string, unknown>)[key] : undefined;
-      if (typeof v === 'string' && v && photoRings(v).some((r) => !r.box)) card = { ...card, props: { ...card.props, params: { ...(card.props.params as Record<string, unknown>), [key]: resolveRings(v, photoOf(card) === opts.photo ? opts.locate : undefined, unfound) } } };
+      // 先找裁出来的那一块里的
+      const within = isPhotoBoard(card) ? (photoFrame(String((card.props.params as Record<string, unknown>)['框'] ?? '') || undefined)?.box ?? null) : null;
+      if (typeof v === 'string' && v && photoRings(v).some((r) => !r.box)) card = { ...card, props: { ...card.props, params: { ...(card.props.params as Record<string, unknown>), [key]: resolveRings(v, photoOf(card) === opts.photo ? opts.locate : undefined, unfound, within) } } };
     }
     if (opts.page && i !== lastKit) { dropped.push(c); return; }
     keep.push(i);

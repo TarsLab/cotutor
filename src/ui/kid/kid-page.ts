@@ -1223,7 +1223,9 @@ ${HOME_TILES_JS}
   /** 换底:照片铺满一块板(开了点字,认出的字词一个一个垫上底);白板是空的,等老师写。不等老师 */
   const bpBase = (photo) => {
     BP.base = photo;
-    const card = photo ? { kind: 'kit', props: { kit: '照片', params: { 图: photo }, ops: ['点字'] } } : { kind: 'kit', props: { kit: '白板', params: { 写: '' }, ops: ['看'] } };
+    // 数学的照片上点的是数和算式,不弹田字格:只看,等老师画
+    const pick = !(S.tutor && S.tutor.subject === '数学');
+    const card = photo ? { kind: 'kit', props: { kit: '照片', params: { 图: photo }, ops: [pick ? '点字' : '看'] } } : { kind: 'kit', props: { kit: '白板', params: { 写: '' }, ops: ['看'] } };
     bpShow(card);
   };
   /** 把这张(应用自己铺的)板放上舞台:舞台开着、是板就在原地换(舞台包比着画差别),没开就开 */

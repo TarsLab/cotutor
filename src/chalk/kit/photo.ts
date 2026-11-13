@@ -132,18 +132,36 @@ export function photoRings(v: string | undefined): { text: string | null; box: [
 /**
  * 照片上的一个字词在哪(纯函数):认出的项里有它就是那一项的框;没有就在正文的行里找,照行框按字数等分(同 photoPick)。都找不到回 null。
  */
-export function photoLocate(words: readonly PhotoWord[], lines: readonly PhotoLine[], text: string): [number, number, number, number] | null {
-  const item = words.find((w) => w.text === text);
-  if (item) return [...item.box];
-  for (const l of lines) {
+export function photoLocate(words: readonly PhotoWord[], lines: readonly PhotoLine[], text: string, within?: readonly [number, number, number, number] | null): [number, number, number, number] | null {
+  const found: [number, number, number, number][] = [];
+  for (const w of words) if (w.text === text) found.push([...w.box]);
+  const cut = (l: PhotoLine, at: number, n: number): [number, number, number, number] => {
     const chars = Array.from(l.text);
-    const at = l.text.indexOf(text);
-    if (at < 0 || !chars.length) continue;
     const i = Array.from(l.text.slice(0, at)).length;
     const w = (l.box[2] - l.box[0]) / chars.length;
-    return [Math.round(l.box[0] + i * w), l.box[1], Math.round(l.box[0] + (i + Array.from(text).length) * w), l.box[3]];
+    return [Math.round(l.box[0] + i * w), l.box[1], Math.round(l.box[0] + (i + n) * w), l.box[3]];
+  };
+  lines.forEach((l, k) => {
+    if (!l.text) return;
+    for (let at = l.text.indexOf(text); at >= 0; at = l.text.indexOf(text, at + 1)) found.push(cut(l, at, Array.from(text).length));
+    // 图上的字常常断成上下两行(平面图上的「心理 / 辅导室」):这一行的尾巴接下一行的开头
+    const next = lines[k + 1];
+    if (!next?.text) return;
+    for (let n = 1; n < Array.from(text).length; n++) {
+      const head = Array.from(text).slice(0, n).join(''), tail = Array.from(text).slice(n).join('');
+      if (l.text.endsWith(head) && next.text.startsWith(tail)) {
+        const a = cut(l, l.text.length - head.length, Array.from(head).length), b = cut(next, 0, Array.from(tail).length);
+        found.push([Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])]);
+      }
+    }
+  });
+  if (!found.length) return null;
+  // 照片上有好几处:先要裁出来的那一块里的(题目下面的问句里也有这个词)
+  if (within) {
+    const inside = found.find((b) => { const cx = (b[0] + b[2]) / 2, cy = (b[1] + b[3]) / 2; return cx >= within[0] && cx <= within[2] && cy >= within[1] && cy <= within[3]; });
+    if (inside) return inside;
   }
-  return null;
+  return found[0];
 }
 
 /** 几组数,用分号隔开;每组 size 个 */

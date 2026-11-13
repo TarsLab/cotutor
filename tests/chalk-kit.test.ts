@@ -174,6 +174,8 @@ check('做了没有:转过或画过才算', !kitTouched(null) && !kitTouched({})
   check('圈:不是字词、太长、框的数不对:读不成', threw2(() => readKitLines(shot, ['圈: 123'])) && threw2(() => readKitLines(shot, ['圈: ' + '字'.repeat(9)])) && threw2(() => readKitLines(shot, ['圈: 蚕|1 2 3'])));
   const LINES = [{ text: '采桑养蚕又插秧。', box: [104, 500, 456, 525] as const }, { text: '早起勤耕作，归来戴月光。', box: [103, 553, 649, 580] as const }];
   check('找字:正文的行按字数等分(和点字一样的算法)', JSON.stringify(photoLocate([], LINES, '蚕')) === '[236,500,280,525]' && JSON.stringify(photoLocate([], LINES, '耕作')) === '[240,553,331,580]', JSON.stringify([photoLocate([], LINES, '蚕'), photoLocate([], LINES, '耕作')]));
+  const MAP = [{ text: '心理', box: [140, 300, 200, 320] as const }, { text: '辅导室', box: [130, 325, 220, 345] as const }, { text: '(1)心理辅导室的东面有', box: [100, 650, 600, 690] as const }];
+  check('找字:断成上下两行的(平面图上的「心理 / 辅导室」)也找得到;好几处时先要裁出来的那一块里的', JSON.stringify(photoLocate([], MAP, '心理辅导室', [100, 100, 900, 500])) === '[130,300,220,345]' && JSON.stringify(photoLocate([], MAP, '心理辅导室')) === '[130,300,220,345]' && JSON.stringify(photoLocate([], MAP, '心理辅导室', [0, 600, 1000, 1000])) === '[225,650,433,690]', JSON.stringify([photoLocate([], MAP, '心理辅导室', [100, 100, 900, 500]), photoLocate([], MAP, '心理辅导室')]));
   check('找字:认出的项里有就用那一项的框;哪儿都没有回 null', JSON.stringify(photoLocate([{ text: '蚕', box: [1, 2, 30, 40] }], LINES, '蚕')) === '[1,2,30,40]' && photoLocate([], LINES, '飞') === null);
   check('photoRings:每一处的字词与框', JSON.stringify(photoRings('蚕|236 500 280 525;耕|;10 10 50 50')) === '[{"text":"蚕","box":[236,500,280,525]},{"text":"耕","box":null},{"text":null,"box":[10,10,50,50]}]');
 }

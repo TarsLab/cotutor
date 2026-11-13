@@ -31,7 +31,7 @@ import { parseSections } from '../board/sections.ts';
 import { threadDigest } from './context/thread-digest.ts';
 import { beatTimings } from './journal/events.ts';
 import { type RunEvent, type RunEventEnvelope, type RunEventInput } from '../schema/index.ts';
-import { BOARD_CARD_KINDS, subjectLang, MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, VAULT_PACK_ROLES, isApiRuntime, resolvePolicy, type ContextPack, type ConversationIndex, type MemoryProposal, type PendingMemory, type ActivityRun, type ConversationMessage, type Focus, type MessageFrom, type MessageVia, type Policy, type Timing } from '../schema/index.ts';
+import { BOARD_CARD_KINDS, canonicalSubject, subjectLang, MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, VAULT_PACK_ROLES, isApiRuntime, resolvePolicy, type ContextPack, type ConversationIndex, type MemoryProposal, type PendingMemory, type ActivityRun, type ConversationMessage, type Focus, type MessageFrom, type MessageVia, type Policy, type Timing } from '../schema/index.ts';
 import { UsageError } from '../shared/errors.ts';
 import type { Workspace } from '../schema/index.ts';
 import { capturePathOk, readAgentBody, readCardStates, readIndex, snapshotSources, writeIndex, writeRunFile } from './journal/store.ts';
@@ -414,7 +414,7 @@ export class Runner {
     const words = rec.items.flatMap((x) => (x.box ? [{ text: x.text, box: x.box }] : []));
     const qs = rec.questions ?? [];
     return {
-      ...(words.length || rec.lines?.length ? { locate: (text: string) => photoLocate(words, rec.lines ?? [], text) } : {}),
+      ...(words.length || rec.lines?.length ? { locate: (text: string, within?: readonly [number, number, number, number] | null) => photoLocate(words, rec.lines ?? [], text, within) } : {}),
       ...(qs.length ? { question: (no: string) => { const q = qs.find((x) => x.no === no); return q ? ([...q.box] as [number, number, number, number]) : null; } } : {}),
     };
   }
@@ -522,9 +522,9 @@ export class Runner {
     let photo: string | null = x.photos.length ? x.photos[x.photos.length - 1] : null;
     if (!photo) mine.forEach((m, i) => { if (m.from === 'kid' && m.photos?.length) { at = i; photo = m.photos[m.photos.length - 1]; } });
     const fresh = x.photos.length > 0;
-    // 这块底铺上以后老师出的最后一张板卡
+    // 这块底铺上以后老师出的最后一张板卡(带照片的那一条上老师回的那一节也算:那就是照着这块底画的)
     let kit: { kit: string; params: Record<string, string>; ops: string[] } | null = null;
-    if (!fresh) for (const m of mine.slice(at + 1)) {
+    if (!fresh) for (const m of mine.slice(Math.max(0, at))) {
       if (m.result !== 'ok') continue;
       for (const c of m.section?.cards ?? []) {
         const k = c.kind === 'kit' ? kitOf(String((c.props as { kit?: unknown }).kit ?? '')) : undefined;
@@ -536,7 +536,9 @@ export class Runner {
     const rec = photo && reads ? await readWords(join(ws.root, photo)) : null;
     // 全文给老师看原样的一行(带框的行是照原样带标点的;没有就把分词的空格拿掉,汉字之间不该有空格)
     const words = rec ? { state: rec.state, lesson: rec.lesson, questions: (rec.questions ?? []).map((q) => q.no), full: rec.lines?.length ? rec.lines.map((l) => l.text) : rec.full.map((l) => l.replace(/(?<=[^\x00-\x7f])\s+|\s+(?=[^\x00-\x7f])/g, '')) } : null;
-    return slateOf({ photo, fresh, words, events: await readBoard(ws, tutor, date, x.thread), kit, ops: photo && reads ? ['点字'] : [], now: x.now.getTime() });
+    // 老师还没画时孩子就能点字:语文、英语的照片(认了字);数学的照片上点的是数和算式,不弹
+    const canPick = photo && reads && canonicalSubject(ws.config.tutors[tutor]?.subject) !== '数学';
+    return slateOf({ photo, fresh, words, events: await readBoard(ws, tutor, date, x.thread), kit, ops: canPick ? ['点字'] : [], now: x.now.getTime() });
   }
 
   /** send 的后半:占位已在 active 里,这里读索引、拼包、起进程;抛了由 send 放掉占位 */

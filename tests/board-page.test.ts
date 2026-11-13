@@ -49,6 +49,8 @@ type Look = import('../src/scenes/look.ts').Look;
   check('给过全文的底:写「未变」;上一轮以后没做事就没有「孩子做的」;30 秒前的不算最近', JSON.stringify(s2.slate.text) === '["未变"]' && !s2.told && s2.slate.did.length === 0 && s2.slate.recent === undefined, JSON.stringify(s2));
   check('你画的:画法加写了的参数(图就是底,不重复);开放的照那张板卡', s2.slate.drawn === '照片:圈 412 300 470 330' && s2.slate.ops.join() === '点字,圈');
   check('这一轮刚发的照片:全文不写(图随这一轮附上);还在认写「还在认」', slateOf({ photo: 'captures/a.jpg', fresh: true, words, events: [], kit: null, ops: [], now: T }).slate.text === undefined && JSON.stringify(slateOf({ photo: 'captures/a.jpg', fresh: false, words: { ...words, state: 'running' }, events: [], kit: null, ops: [], now: T }).slate.text) === '["还在认"]');
+  const rv = slateOf({ photo: 'captures/a.jpg', fresh: false, words, events: [...ev, { at: at(1), k: 'reveal', text: '晒', base: 'captures/a.jpg' }], kit: { kit: '照片', params: { 遮: '晒|1 2 3 4;极|5 6 7 8' }, ops: ['点字'] }, ops: [], now: T });
+  check('遮了拼音:孩子做的里两份清单(揭了哪些、没揭哪些);你画的只说遮了哪几个字', rv.slate.did.includes('揭开了拼音:晒;没揭:极') && rv.slate.drawn === '照片:遮 晒、极', JSON.stringify(rv.slate));
   check('白板:底写「白板」', slateOf({ photo: null, fresh: false, words: null, events: [], kit: null, ops: [], now: T }).slate.base === '白板');
   const long = slateOf({ photo: 'captures/a.jpg', fresh: false, words: { ...words, full: Array.from({ length: 40 }, (_, i) => `第${i}行课文课文课文课文课文课文`) }, events: [], kit: null, ops: [], now: T });
   check(`全文太长先截:整段不过 ${SLATE_MAX} 字,截掉的说一句`, JSON.stringify(long.slate).length <= SLATE_MAX + 40 && /后面还有 \d+ 行/.test(long.slate.text!.slice(-1)[0]), String(JSON.stringify(long.slate).length));
@@ -78,6 +80,8 @@ type Look = import('../src/scenes/look.ts').Look;
   const ringSec: BoardSection = { cards: [{ kind: 'kit', props: { kit: '照片', params: { 图: '', 圈: '蚕|;飞|;10 10 50 50' }, ops: ['点字'] } }], lines: [] };
   const located = boardPageSection(ringSec, { page: true, photo: 'captures/a.jpg', locate: (t) => (t === '蚕' ? [236, 500, 280, 525] : null) });
   check('照片板圈的字词:照认出的字换成框;找不到的那一处拿掉、说一声', (located.section.cards[0].props.params as Record<string, string>)['圈'] === '蚕|236 500 280 525;10 10 50 50' && located.unfound.join() === '飞', JSON.stringify([located.section.cards[0].props.params, located.unfound]));
+  const coverSec: BoardSection = { cards: [{ kind: 'kit', props: { kit: '照片', params: { 图: '', 遮: '晒|;极|' }, ops: ['点字'] } }], lines: [] };
+  check('遮的字词同样照认出的字换成框', (boardPageSection(coverSec, { page: true, photo: 'captures/a.jpg', locate: (t) => (t === '晒' ? [1, 2, 30, 40] : [50, 2, 80, 40]) }).section.cards[0].props.params as Record<string, string>)['遮'] === '晒|1 2 30 40;极|50 2 80 40');
   check('还没认出字(没有 locate):字词那几处不画', (boardPageSection(ringSec, { page: true, photo: 'captures/a.jpg' }).section.cards[0].props.params as Record<string, string>)['圈'] === '10 10 50 50');
   check('没什么要改的:原样回', boardPageSection({ cards: [sec.cards[0]], lines: [] }, { page: false, photo: null }).section.cards[0] === sec.cards[0]);
 }

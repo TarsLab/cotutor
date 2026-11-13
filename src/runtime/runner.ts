@@ -382,20 +382,22 @@ export class Runner {
 
   /**
    * 以板为主的话题里孩子在板上做了一件事(实时那条连接报来的,src/runtime/live/call.ts 的 {t:'board'}):验过、记进板的日志,不起老师。
-   * 现在只有点字 {k:'pick', thread, text, base}:回这个字词的念法(认字时模型写好的「傍,傍晚的傍」,嘴照念);认出的字词里没有它(正文里的字)就念它自己。
+   * 点字 {k:'pick', thread, text, base}:回这个字词的念法(认字时模型写好的「傍,傍晚的傍」,嘴照念);认出的字词里没有它(正文里的字)就念它自己。
    * 话题不是今天以板为主的、底不在 captures/、字不是一到四个汉字:回 null,什么都不记
    */
-  async boardEvent(tutor: string, date: string, body: unknown): Promise<{ thread: string; say: string } | null> {
+  async boardEvent(tutor: string, date: string, body: unknown): Promise<{ thread: string; say: string | null } | null> {
     const ws = this.getWs();
     if (!body || typeof body !== 'object') return null;
     const b = body as Record<string, unknown>;
-    if (b.k !== 'pick' || typeof b.thread !== 'string' || typeof b.text !== 'string' || typeof b.base !== 'string' || !pickable(b.text)) return null;
+    if ((b.k !== 'pick' && b.k !== 'reveal') || typeof b.thread !== 'string' || typeof b.text !== 'string' || typeof b.base !== 'string' || !pickable(b.text)) return null;
     if (!(await capturePathOk(ws, b.base))) return null;
     const index = await readIndex(ws, tutor, date);
     const ths = threads(index.messages);
     if (index.messages.find((_, i) => ths[i] === b.thread)?.board !== 'page') return null;
     const now = (this.opts.now ?? (() => new Date()))();
-    await appendBoard(ws, tutor, date, b.thread, { at: now.toISOString(), k: 'pick', text: b.text, base: b.base });
+    await appendBoard(ws, tutor, date, b.thread, { at: now.toISOString(), k: b.k, text: b.text, base: b.base });
+    // 揭开拼音:露出来就够了,嘴不念(他在自己认)
+    if (b.k === 'reveal') return { thread: b.thread, say: null };
     const item = (await readWords(join(ws.root, b.base)))?.items.find((x) => x.text === b.text);
     return { thread: b.thread, say: item?.say?.trim() || b.text };
   }

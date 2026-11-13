@@ -50,7 +50,7 @@ cfg.live = { voices: { 'chinese-tutor': 'Serena' } };
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 const ctx = createContext(loadWorkspace(wsRoot), { look });
 await ctx.reload();
-const liveUpgrade = makeLiveUpgrade({ endpoint: fake.endpoint, stillMs: 400 });
+const liveUpgrade = makeLiveUpgrade({ endpoint: fake.endpoint, stillMs: 900 });
 const server = createServer(createHandler(ctx));
 server.on('upgrade', (req, socket, head) => { void liveUpgrade(req, socket, head, ctx).then((took) => { if (!took) socket.destroy(); }); });
 await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
@@ -102,6 +102,19 @@ await settle();
   check('点完了他按了说话:不替他叫老师', msgs.filter((m) => m.t === 'turn').length === turns);
 }
 
+// ---- 揭开拼音:记下,嘴不念 ----
+{
+  await sleep(300);
+  const r = c.responses.length;
+  sock.send(JSON.stringify({ t: 'board', body: { k: 'reveal', thread, text: '晒', base: shot } }));
+  await sleep(400);
+  check('揭开拼音:记进日志,嘴不念(他在自己认)', c.responses.length === r && (await readBoard(ws0, T, today, thread)).some((e) => e.k === 'reveal' && e.text === '晒'));
+  sock.send(JSON.stringify({ t: 'hold' }));
+  await sleep(30);
+  sock.send(JSON.stringify({ t: 'hush' }));
+  await sleep(300);
+}
+
 // ---- 不对的不理;孩子按着时不念 ----
 {
   await sleep(600);
@@ -128,7 +141,7 @@ await settle();
   check('点完 stillMs 没动静:应用替他叫一次老师,接在这个话题', called && turn.thread === thread);
   await settle();
   const prompt = (JSON.parse(readFileSync(join(convDir, `${today}.${turn.job}.run.json`), 'utf8')) as { prompt: string }).prompt;
-  check('那一轮:live.app: still,board: 里有他点了什么', prompt.includes('    app: still') && prompt.includes('点开看了笔顺:变、晒(2 次)') && prompt.includes('最近点的'), prompt.slice(prompt.indexOf('  board:'), prompt.indexOf('  board:') + 300));
+  check('那一轮:live.app: still,board: 里有他点了什么', prompt.includes('    app: still') && prompt.includes('点开看了笔顺:变、晒(2 次)') && prompt.includes('最近点的'), prompt.slice(prompt.indexOf('  board:'), prompt.indexOf('  board:') + 400).replace(/\n/g, ' | '));
   check('日志里记了一笔 still', (await readBoard(ws0, T, today, thread)).some((e) => e.k === 'still'));
   // 连着只叫一次:再点,不再叫
   const n2 = msgs.filter((m) => m.t === 'turn').length;

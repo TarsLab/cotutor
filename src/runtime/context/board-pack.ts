@@ -38,7 +38,9 @@ const ago = (ms: number): string => `${Math.max(1, Math.round(ms / 1000))} 秒�
 
 /** 老师画的那张板卡说成一行:画法加上写了的参数(照片的「图」就是底,不重复) */
 export function drawnLine(kit: NonNullable<SlateInput['kit']>): string {
-  const parts = Object.entries(kit.params).filter(([k, v]) => v && k !== '图').map(([k, v]) => `${k} ${v.replace(/\|$/, '').replace(/\|/g, ' 在 ')}`);
+  // 圈、遮写的字词只说字(框是应用找的);写的字照「字 在 位置」
+  const named = (v: string): string => v.split(';').map((x) => (x.includes('|') ? x.split('|')[0] || x.split('|')[1] : x)).join('、');
+  const parts = Object.entries(kit.params).filter(([k, v]) => v && k !== '图').map(([k, v]) => `${k} ${k === '圈' || k === '遮' ? named(v) : v.split(';').map((x) => x.replace(/\|$/, '').replace(/\|/g, ' 在 ')).join(';')}`);
   return parts.length ? `${kit.kit}:${parts.join(';')}` : kit.kit;
 }
 
@@ -59,6 +61,13 @@ export function slateOf(x: SlateInput): { slate: NonNullable<ContextPack['slate'
   x.events.forEach((e, i) => { if (e.k === 'turn') from = i + 1; });
   const since = x.events.slice(from);
   const did = [pickLine(since.filter(onBase).map((e) => e.text))].filter((s): s is string => Boolean(s));
+  // 遮了拼音的:揭了哪些、没揭哪些(这块底上揭过的都算)
+  const covered = x.kit?.params['遮'] ? x.kit.params['遮'].split(';').map((v) => v.split('|')[0]).filter(Boolean) : [];
+  if (covered.length) {
+    const opened = new Set(x.events.filter((e): e is BoardEvent & { k: 'reveal' } => e.k === 'reveal' && e.base === base).map((e) => e.text));
+    const yes = covered.filter((w) => opened.has(w)), no = covered.filter((w) => !opened.has(w));
+    did.push(`揭开了拼音:${yes.length ? yes.join('、') : '一个也没有'}${no.length ? `;没揭:${no.join('、')}` : ''}`);
+  }
   const last = [...x.events].reverse().find(onBase);
   const lastMs = last ? x.now - Date.parse(last.at) : Infinity;
   const recent = last && lastMs >= 0 && lastMs <= RECENT_PICK_MS ? `${last.text}(${ago(lastMs)})` : undefined;

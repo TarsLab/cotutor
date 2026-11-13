@@ -159,11 +159,15 @@ try {
   const hold = await center('#cv-hold');
   ok('板上有老师的小头像(按住说话)', Boolean(hold));
   await until(`!document.body.classList.contains('speaking') && !document.body.classList.contains('pending')`, 15000);
-  await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: hold.x, y: hold.y });
-  await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: hold.x, y: hold.y, button: 'left', buttons: 1, clickCount: 1 });
-  await sleep(1200);
-  await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: hold.x, y: hold.y, button: 'left', buttons: 0, clickCount: 1 });
-  for (let i = 0; i < 30 && !sent.some((m) => m.t === 'release'); i++) await sleep(100);
+  // 新开的浏览器第一次按,麦克风还在热(推不出声音,当没说清取消):没交出去就再按一次
+  for (let k = 0; k < 2 && !sent.some((m) => m.t === 'release'); k++) {
+    await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: hold.x, y: hold.y });
+    await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: hold.x, y: hold.y, button: 'left', buttons: 1, clickCount: 1 });
+    await sleep(1200);
+    await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: hold.x, y: hold.y, button: 'left', buttons: 0, clickCount: 1 });
+    for (let i = 0; i < 30 && !sent.some((m) => m.t === 'release'); i++) await sleep(100);
+    if (!sent.some((m) => m.t === 'release')) await sleep(1500);
+  }
   ok('松手交给老师了(带着这个话题)', sent.filter((m) => m.t === 'release').slice(-1)[0]?.body?.thread === head.thread, JSON.stringify(sent.filter((m) => m.t === 'release').slice(-1)[0]));
   await sleep(500);
   ok('老师写完这一轮', Boolean(await until(`!document.body.classList.contains('pending')`, 20000)));
@@ -171,6 +175,20 @@ try {
   const d2 = await day();
   ok('服务端只上板卡:这一轮别的卡没给孩子看', d2.messages.slice(-1)[0]?.section?.cards.every((c) => c.kind === 'kit') !== false, JSON.stringify(d2.messages.slice(-1)[0]?.section?.cards.map((c) => c.kind)));
   ok('板还在', await stageOn());
+  // 老师这一轮盖住了三个字的拼音(遮):点一块,揭开、报给服务端,嘴不念
+  await ready();
+  const covers = () => evaluate(`[...(document.querySelector('#st-frame')?.contentDocument?.querySelectorAll('[data-cover]') ?? [])].filter((e) => getComputedStyle(e).visibility !== 'hidden').length`);
+  const nCover = await until(`[...(document.querySelector('#st-frame')?.contentDocument?.querySelectorAll('[data-cover]') ?? [])].length`, 8000);
+  ok('老师遮了拼音:板上三块盖着的', nCover === 3, String(nCover) + ' ' + JSON.stringify((await day()).messages.slice(-1)[0]?.section?.cards.map((c) => c.props.params)));
+  await shot('board-5-cover.png');
+  const cv = await inStage(`(d) => d.querySelector('[data-cover]')`);
+  const sentBefore = sent.length, gotBefore = got.length;
+  await tap(cv.x, cv.y);
+  await sleep(600);
+  const rv = sent.slice(sentBefore).find((m) => m.t === 'board');
+  ok('点一块:揭开(少了一块),报给服务端 reveal', (await covers()) === 2 && rv?.body?.k === 'reveal' && rv.body.thread === head.thread, JSON.stringify(rv));
+  ok('揭拼音嘴不念', !got.slice(gotBefore).some((m) => m.t === 'tutor'));
+  ok('揭开的这一下没弹田字格、没留笔画', (await evaluate(`document.querySelector('#st-pick').hidden`)) === true);
   await shot('board-5-talk.png');
 
   // ---- 六、板上的拍照:换一张;× 回首页 ----

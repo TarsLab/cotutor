@@ -18,6 +18,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseBoard } from '../../board/parse.ts';
 import { boardPageSection } from '../../board/board-page.ts';
+import { photoLocate } from '../../chalk/index.ts';
 import { cardAssets, parseCardState, stripSecrets, DictationPropsSchema } from '../../board/cards/index.ts';
 import { fileURLToPath } from 'node:url';
 import { bundleAsset, stageAsset, stageIndex, stageVersion } from '../http/stage.ts';
@@ -162,6 +163,14 @@ const MOCK_BOARD_REPLY = `~~~照片
 
 这一页是《我是什么》。
 哪个字不认识,就点一点它。`;
+/** 以板为主的话题里孩子拍了一页之后开口:老师盖住三个字的拼音请他自己认(遮拼音),点字还开着 */
+const MOCK_BOARD_COVER = `~~~照片
+遮: 晒、极、傍
+操作: 点字
+~~~
+
+这三个字的拼音我盖住了。
+你先自己读一读,读不出来就点一点那块黄的。`;
 const MOCK_PAGE_REPLY = `~~~照片
 captures/2026-09-10/page.jpg
 操作: 点字
@@ -819,10 +828,12 @@ export function createMock(opts: MockOptions = {}): Mock {
     const boardPage = thr[0]?.board === 'page';
     const base = [...thr].reverse().find((x) => x.photos?.length)?.photos?.slice(-1)[0] ?? null;
     const boardPhoto = boardPage && Boolean(m.photos?.length);
-    const step = lectureFirst ? (m.lecture?.video ? MOCK_VIDEO_LECTURE_REPLY : MOCK_LECTURE_REPLY) : boardPhoto ? MOCK_BOARD_REPLY : page ? MOCK_PAGE_REPLY : t.script[i];
-    if (!lectureFirst && !page && !boardPhoto) cur.set(t.name, i + 1);
+    // 有底以后孩子第一次开口:遮拼音
+    const boardCover = boardPage && !boardPhoto && Boolean(base) && !thr.slice(0, -1).some((x) => x.section?.cards.some((c) => Boolean((c.props.params as Record<string, unknown> | undefined)?.['遮'])));
+    const step = lectureFirst ? (m.lecture?.video ? MOCK_VIDEO_LECTURE_REPLY : MOCK_LECTURE_REPLY) : boardPhoto ? MOCK_BOARD_REPLY : boardCover ? MOCK_BOARD_COVER : page ? MOCK_PAGE_REPLY : t.script[i];
+    if (!lectureFirst && !page && !boardPhoto && !boardCover) cur.set(t.name, i + 1);
     const raw = step ? withMockLooks(sectionFromScript(step), t.name, i) : null;
-    const full = raw && (boardPage || raw.cards.some((c) => c.kind === 'kit')) ? boardPageSection(raw, { page: boardPage, photo: base }).section : raw;
+    const full = raw && (boardPage || raw.cards.some((c) => c.kind === 'kit')) ? boardPageSection(raw, { page: boardPage, photo: base, locate: (x) => photoLocate(MOCK_PAGE_WORDS, MOCK_PAGE_LINES, x) }).section : raw;
     const n = full ? full.cards.length : 0;
     const tick = delay / (n + 1);
     return new Promise<void>((resolve) => {

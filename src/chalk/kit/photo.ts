@@ -64,6 +64,37 @@ function readRings(v: string): string {
   }).join(';');
 }
 
+/** 遮拼音最多几处、一处最多几个字 */
+const COVER_MAX = 8;
+const COVER_CHARS = 4;
+
+/**
+ * 「遮」:照片上要孩子自己认的字词,把它们头上的拼音盖住;孩子点一下揭开(《画板为主设计》「遮拼音」)。只认字词(应用照认出的字找到它在哪);
+ * 存下来同「圈」:「晒|左 上 右 下」(字的框,找到了)或「晒|」(还没找)。顿号、逗号、分号隔开都行。
+ */
+function readCovers(v: string): string {
+  // 存下来的「字|框」框里有空格:先按分号分,没有 | 的再按顿号、逗号、空格分
+  const parts = v.split(/[;;]/).flatMap((x) => (x.includes('|') ? [x] : x.split(/[、,,\s]+/))).map((x) => x.trim()).filter(Boolean);
+  if (!parts.length || parts.length > COVER_MAX) throw new Error(`照片的「遮」最多 ${COVER_MAX} 处:写要盖住拼音的字词,如 遮: 晒、极`);
+  return parts.map((part) => {
+    const m = /^(.*?)\|([\d\s,,.]*)$/.exec(part);
+    const text = (m ? m[1] : part).replace(/[「」『』""]/g, '');
+    if (!RING_TEXT.test(text) || Array.from(text).length > COVER_CHARS) throw new Error(`照片的「遮」写照片上的字词(一处最多 ${COVER_CHARS} 个字),如 遮: 晒、极`);
+    const n = m ? nums(m[2]) : [];
+    if (n.length && n.length !== 4) throw new Error('照片的「遮」存下来的框是四个数');
+    return n.length === 4 ? `${text}|${readBox('遮', n.join(' '))}` : `${text}|`;
+  }).join(';');
+}
+
+/** 字的框 → 盖它头上拼音的那一条(千分比):字高往上一格,左右各让出一点(拼音常比字宽) */
+export function pinyinStrip(box: readonly [number, number, number, number]): [number, number, number, number] {
+  const h = box[3] - box[1];
+  return [Math.max(0, Math.round(box[0] - h * 0.18)), Math.max(0, Math.round(box[1] - h * 1.02)), Math.min(1000, Math.round(box[2] + h * 0.18)), Math.max(0, Math.round(box[1] - h * 0.06))];
+}
+
+/** 盖拼音的那几块在画面里的元素 id 前缀;舞台点到它就揭开 */
+export const COVER_ID = 'cover-';
+
 /** 「圈」里的每一处:字词(找到没找到)与框;框没有就是还没找到 */
 export function photoRings(v: string | undefined): { text: string | null; box: [number, number, number, number] | null }[] {
   return (v ?? '').split(';').filter(Boolean).map((part) => {
@@ -247,6 +278,7 @@ export const photo: Kit = {
     { key: '圈', note: '你圈住的地方。照片上的字就写字(圈: 蚕),应用照认出的字找到它;图上的东西写左、上、右、下四个数,同样是千分比。几处用分号隔开,最多 4 处。', read: readRings, fallback: '' },
     { key: '方位', note: '在这个点画一个东南西北的十字:横、竖两个数,千分比。', read: readGroups('方位', 2, 1, '写两个数:横、竖,整张照片的千分比,如 644, 708'), fallback: '' },
     { key: '北', values: SIDES, note: '照片上哪一边是北。缺省上。看图上的指北箭头定。' },
+    { key: '遮', note: '要孩子自己认的字词:把它们头上的拼音盖住,孩子点一下揭开。写字,应用照认出的字找到它;几处用顿号隔开,最多 8 处。', read: readCovers, fallback: '' },
     { key: '写', note: '你写上去的字(一道题做完,把答案写给孩子看):整条答案写成一行,写在照片下面。几行用分号隔开,最多 6 行。', read: readWrites, fallback: '' },
     { key: '箭头', note: '从一处指到另一处:起点的横、竖,终点的横、竖,四个数。几支用分号隔开,最多 3 支。', read: readGroups('箭头', 4, ARROW_MAX, '写四个数:起点的横、竖,终点的横、竖,如 644, 708 到 780, 708'), fallback: '' },
   ],
@@ -266,6 +298,12 @@ export const photo: Kit = {
     }
     for (const [x1, y1, x2, y2] of groups(p['箭头'])) {
       sk.push({ type: 'arrow', id: `arrow-${x1}-${y1}-${x2}-${y2}`, x: x1, y: r1(y1 * a), points: [[0, 0], [x2 - x1, r1((y2 - y1) * a)]], strokeColor: RED, strokeWidth: w, endArrowhead: 'arrow', animateDuration: 500 });
+    }
+    // 遮拼音:字头上一条纸色的块,盖住拼音;孩子点它揭开(舞台按 id 前缀认)
+    for (const { text, box } of photoRings(p['遮'])) {
+      if (!box || !text) continue;
+      const [x1, y1, x2, y2] = pinyinStrip(box);
+      sk.push({ type: 'rectangle', id: `${COVER_ID}${text}`, label: `盖住的拼音:${text}`, x: r1(x1), y: r1(y1 * a), width: r1(x2 - x1), height: r1((y2 - y1) * a), strokeColor: '#d9c9a3', strokeWidth: Math.max(1, u), backgroundColor: '#f1e6c8', fillStyle: 'solid', roughness: 0, roundness: { type: 3 }, animateDuration: 150 });
     }
     const rose = groups(p['方位'])[0];
     if (rose) {

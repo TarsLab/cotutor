@@ -1019,11 +1019,13 @@ export class LiveCall {
     if (!r || this.ended) return;
     this.lastActive = Date.now();
     this.stillArm(r.thread);
+    if (!r.say) return;
+    const say = r.say;
     const s = this.session;
     if (!s?.isReady || this.echoing || this.holding || this.vadOn) return;
     const mine = this.said?.kind === 'say' || (!this.said && this.sayingPick);
     if (!mine && (!this.quiet() || this.playing())) return;
-    const go = (): void => this.ask({ kind: 'say' }, readCue([r.say]));
+    const go = (): void => this.ask({ kind: 'say' }, readCue([say]));
     if (!mine) { go(); return; }
     // 上一个字还在念:掐掉,出完(被掐)再念这个
     if (this.said) {

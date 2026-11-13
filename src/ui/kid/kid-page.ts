@@ -1237,10 +1237,10 @@ ${HOME_TILES_JS}
     if (wasKit) { renderGo(); postStage(stageCard(card)); } else renderStage();
   };
   /** 孩子点了一个字:田字格照弹(pickShow);以板为主的话题里报给服务端记进板的日志(嘴念这个字、老师下一轮知道) */
-  const bpPicked = (card, text) => {
+  const bpPicked = (card, text, k) => {
     if (!BP.on || !S.thread || S.readonly || REEL) return;
     const base = card && card.props && card.props.params && typeof card.props.params['图'] === 'string' ? card.props.params['图'] : null;
-    if (base) lvSend({ t: 'board', body: { k: 'pick', thread: S.thread, text, base } });
+    if (base) lvSend({ t: 'board', body: { k: k || 'pick', thread: S.thread, text, base } });
   };
   /** 拉了今天的话题以后:这个话题以板为主就把板摆出来(回到这个话题、刷新页面):老师最后那张板卡,没有就是底本身 */
   const bpSync = (mine) => {
@@ -2127,6 +2127,7 @@ __WORD_DRAW_JS__
     if (m.type === 'ready') postStage(stageCard(card));
     else if (m.type === 'snap') { const w = CV.snapWait; CV.snapWait = null; if (w) w(m.image); }
     else if (m.type === 'pick') { if (card.kind === 'kit') { pickShow(m.text); bpPicked(card, m.text); } }
+    else if (m.type === 'reveal') { if (card.kind === 'kit') bpPicked(card, m.text, 'reveal'); }
     else if (m.type === 'cleared') { if (!card.submitted) canvasCleared(card, m); }
     else if (m.type === 'phase') {
       S.stage.playing = { phase: m.phase, line: m.line };

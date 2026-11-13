@@ -3,7 +3,7 @@
  * 方向盘照 2026-11-10 那次检查作业:「早晨面向太阳,前面是东,后面、左面、右面各是什么」;
  * 点阵照「分一分」:18 个贴纸平均分给 2 个、3 个、6 个小朋友。孩子的笔画不归整,读数只是大概。
  */
-import { KID_INK, KITS, photoLocate, photoRings, kitLookOnly, describeKit, elementBounds, kitMarks, kitOf, kitOps, kitParams, kitTouched, readKitLines, turnPoint, turnedSkeletons, type KitState } from '../src/chalk/index.ts';
+import { COVER_ID, KID_INK, KITS, photoLocate, photoRings, pinyinStrip, kitLookOnly, describeKit, elementBounds, kitMarks, kitOf, kitOps, kitParams, kitTouched, readKitLines, turnPoint, turnedSkeletons, type KitState } from '../src/chalk/index.ts';
 import { sceneSchema } from '../src/chalk/scene-schema.ts';
 import { check, done } from './_check.ts';
 
@@ -165,6 +165,17 @@ check('做了没有:转过或画过才算', !kitTouched(null) && !kitTouched({})
   check('找字:正文的行按字数等分(和点字一样的算法)', JSON.stringify(photoLocate([], LINES, '蚕')) === '[236,500,280,525]' && JSON.stringify(photoLocate([], LINES, '耕作')) === '[240,553,331,580]', JSON.stringify([photoLocate([], LINES, '蚕'), photoLocate([], LINES, '耕作')]));
   check('找字:认出的项里有就用那一项的框;哪儿都没有回 null', JSON.stringify(photoLocate([{ text: '蚕', box: [1, 2, 30, 40] }], LINES, '蚕')) === '[1,2,30,40]' && photoLocate([], LINES, '飞') === null);
   check('photoRings:每一处的字词与框', JSON.stringify(photoRings('蚕|236 500 280 525;耕|;10 10 50 50')) === '[{"text":"蚕","box":[236,500,280,525]},{"text":"耕","box":null},{"text":null,"box":[10,10,50,50]}]');
+}
+
+// ---- 照片的「遮」:盖住字头上的拼音 ----
+{
+  const C = readKitLines(shot, ['遮: 晒、极,越']);
+  check('遮:字词用顿号逗号隔开都行,存成「字|」(还没找)', C.params['遮'] === '晒|;极|;越|', C.params['遮']);
+  check('遮:只认字词;太多、不是汉字读不成', threw2(() => readKitLines(shot, ['遮: 523, 100, 560, 125'])) && threw2(() => readKitLines(shot, ['遮: ' + Array.from({ length: 9 }, () => '晒').join('、')])) && threw2(() => readKitLines(shot, ['遮: sun'])));
+  check('拼音那一条在字的上面:高一个字,左右各让出一点', JSON.stringify(pinyinStrip([300, 500, 340, 525])) === '[296,475,345,499]', JSON.stringify(pinyinStrip([300, 500, 340, 525])));
+  const cs = shot.build(kitParams(shot, { 图: 'a.jpg', 遮: '晒|300 500 340 525;极|' }), { aspect: 1 });
+  const cov = cs.skeletons.filter((e) => e.id.startsWith(COVER_ID));
+  check('画面:找到了的那处一块纸色的块盖在拼音上(还没找的不画),id 带字(舞台点到它就揭开)', cov.length === 1 && cov[0].id === `${COVER_ID}晒` && Number(cov[0].y) + Number(cov[0].height) <= 500 && cov[0].backgroundColor !== undefined, JSON.stringify(cov));
 }
 
 // ---- 白板:没有照片时老师写一个词、一道算式 ----

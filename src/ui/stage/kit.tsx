@@ -11,7 +11,7 @@
  * 工具一列竖着(kid.hand: left 时在右),最底下空出一格放页面浮上来的老师小头像。类名都带 kt-(舞台页也装孩子端的 theme.css)。
  */
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { KID_INK, KID_INK_WIDTH, KIT_LOOK, KIT_MARK_MAX, KIT_MARK_POINTS, KIT_PICK_MAX, PHOTO_PICK, elementBounds, frameAt, kitOf, kitOps, kitParams, kitTouched, lessonClock, photoPick, pickable, turnOf, type KitState, type KitTurn, type LessonClock, type PhotoLine, type PhotoWord } from '../../chalk/index.ts';
+import { COVER_ID, KID_INK, KID_INK_WIDTH, KIT_LOOK, KIT_MARK_MAX, KIT_MARK_POINTS, KIT_PICK_MAX, PHOTO_PICK, elementBounds, frameAt, kitOf, kitOps, kitParams, kitTouched, lessonClock, photoPick, pickable, turnOf, type KitState, type KitTurn, type LessonClock, type PhotoLine, type PhotoWord } from '../../chalk/index.ts';
 import { mountBaked, type MountedLesson } from './chalk/render.ts';
 
 export interface KitStageHandle {
@@ -38,6 +38,8 @@ export interface KitStageProps {
   onSubmit(state: KitState, image?: string): void;
   /** 「点字」点中了一项:页面弹它的田字格 */
   onPick?(text: string): void;
+  /** 点开了一块盖住的拼音(老师写的「遮」) */
+  onReveal?(text: string): void;
   onError(message: string): void;
 }
 
@@ -74,6 +76,8 @@ interface Built {
   ink: SVGGElement;
   /** 「点字」能点的字词垫的那层底(在老师的记号下面一层看不清,所以放在墨迹下面、画面上面) */
   words: SVGGElement;
+  /** 盖住拼音的那几块(老师写的「遮」):字词、场景坐标的外框、画面里的那一层 */
+  covers: { text: string; b: ReturnType<typeof elementBounds>; root: SVGElement | undefined }[];
   /** 照片做底:那张图(已经载好)、高 ÷ 宽、在 SVG 里占哪一块 */
   photo?: { img: HTMLImageElement; aspect: number; box: [number, number, number, number] };
 }
@@ -95,7 +99,7 @@ const ICON = {
   wipe: '<path d="M4 15l8-8 6 6-6 6H8z"></path><path d="M12 21h8"></path>',
 };
 
-export const KitStage = forwardRef<KitStageHandle, KitStageProps>(function KitStage({ id, kit, params, ops, state, imageUrl, wordsUrl, readonly, hand, onState, onSubmit, onPick, onError }, ref) {
+export const KitStage = forwardRef<KitStageHandle, KitStageProps>(function KitStage({ id, kit, params, ops, state, imageUrl, wordsUrl, readonly, hand, onState, onSubmit, onPick, onReveal, onError }, ref) {
   const host = useRef<HTMLDivElement>(null);
   const built = useRef<Built | null>(null);
   /** 孩子做到哪了(舞台是它的主人;页面只在装的时候、看录像时发进来) */
@@ -106,6 +110,8 @@ export const KitStage = forwardRef<KitStageHandle, KitStageProps>(function KitSt
   const resize = useRef<ResizeObserver | null>(null);
   /** 板上现在这幅是哪种教具、有哪些元素(id → 原样):下一张还是它,已经有的不重画 */
   const shown = useRef<{ kit: string; els: Map<string, string> } | null>(null);
+  /** 这张照片上已经揭开的拼音(换了一张照片才清;老师下一张还遮着它,照样揭开着) */
+  const revealed = useRef<{ image: string; texts: Set<string> }>({ image: '', texts: new Set() });
   const kitDef = kitOf(kit);
   const open = kitDef ? kitOps(kitDef, ops) : [];
   const canTurn = open.includes('转');
@@ -247,7 +253,11 @@ export const KitStage = forwardRef<KitStageHandle, KitStageProps>(function KitSt
       const wordsLayer = el('g', { class: 'kt-words' });
       const ink = el('g', { class: 'kt-ink' });
       svg.append(wordsLayer, ink);
-      built.current = { m, clock, dx, dy, turns, ink, words: wordsLayer, ...(scene.photo && photoImg && aspect ? { photo: { img: photoImg, aspect, box: [dx, dy, scene.photo.width, scene.photo.height] as [number, number, number, number] } } : {}) };
+      if (revealed.current.image !== (imageUrl ?? '')) revealed.current = { image: imageUrl ?? '', texts: new Set() };
+      // 拼音揭开了用 visibility 藏(逐笔画的时候 paint 每一帧改 display)
+      const covers = scene.skeletons.filter((e) => e.id.startsWith(COVER_ID)).map((e) => ({ text: e.id.slice(COVER_ID.length), b: elementBounds(e), root: m.rootOf(e.id) }));
+      for (const c of covers) { c.root?.setAttribute('data-cover', c.text); if (revealed.current.texts.has(c.text) && c.root) c.root.style.visibility = 'hidden'; }
+      built.current = { m, clock, dx, dy, turns, ink, words: wordsLayer, covers, ...(scene.photo && photoImg && aspect ? { photo: { img: photoImg, aspect, box: [dx, dy, scene.photo.width, scene.photo.height] as [number, number, number, number] } } : {}) };
       // 画框按 viewBox 的宽高比铺(同小课堂):手指画的那一圈贴着画面
       // 教具给了画框就按它铺(板上添了线、少了线,画面不挪地方)
       const vb: [number, number, number, number] = scene.frame ? [scene.frame[0] + dx, scene.frame[1] + dy, scene.frame[2], scene.frame[3]] : picture.viewBox;
@@ -407,6 +417,19 @@ export const KitStage = forwardRef<KitStageHandle, KitStageProps>(function KitSt
   const pathD = (pts: readonly [number, number][]): string => pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ');
   const penDown = (e: React.PointerEvent): void => {
     if (phase === 'drawing') { finishDrawing(); return; }
+    // 点在盖住的拼音上:揭开(不管开放了什么操作,这一下不当笔画)
+    const at = phase === 'ready' && !readonly && built.current?.covers.length ? toSvg(e.clientX, e.clientY) : null;
+    if (at && built.current) {
+      const x = at[0] - built.current.dx, y = at[1] - built.current.dy;
+      const pad = 6;
+      const hit = built.current.covers.find((c) => !revealed.current.texts.has(c.text) && x >= c.b.minX - pad && x <= c.b.maxX + pad && y >= c.b.minY - pad && y <= c.b.maxY + pad);
+      if (hit) {
+        revealed.current.texts.add(hit.text);
+        if (hit.root) hit.root.style.visibility = 'hidden';
+        onReveal?.(hit.text);
+        return;
+      }
+    }
     if (readonly || !canPen || turning || phase !== 'ready') return;
     const p = toSvg(e.clientX, e.clientY);
     if (!p || !built.current) return;

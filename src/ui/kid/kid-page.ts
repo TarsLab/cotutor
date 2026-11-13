@@ -1977,6 +1977,8 @@ __WORD_DRAW_JS__
     if (LV.model.status === 'mouth' && LV.cap.cur) { if (el.textContent !== LV.cap.cur) el.textContent = LV.cap.cur; el.classList.add('on'); clearTimeout(CV.capT); CV.capT = 0; return; }
     if (el.classList.contains('on') && !CV.capT) CV.capT = setTimeout(() => { CV.capT = 0; el.classList.remove('on'); }, 4000);
   };
+  /** 板上有孩子还没交的笔迹(板卡上画了、转了,还没交):他这时开口,这一句连板此刻的图一起交(《画板为主设计》下篇「图什么时候附」) */
+  const kitInk = () => { const c = stageCardNow(); return c && c.kind === 'kit' && !c.submitted && S.stage && !S.stage.own && !S.readonly && !REEL && c.state && (((c.state.marks || []).length > 0) || c.state.moves > 0) ? c : null; };
   /** 「给老师看」:让舞台导出 png;画板卡存状态(连图),回这一条要带的(交卡的 action + focus);舞台关掉。8 秒没导出来算了 */
   const canvasGive = () => new Promise((resolve) => {
     if (CV.give) { const g = CV.give; CV.give = null; g(null); }
@@ -3471,7 +3473,8 @@ __REEL_DOCK_JS__
       return;
     }
     // 「给老师看」按住说:舞台导出、存好 / 传好那张画,这一句带着它交给脑(没说清服务端照交画);画没交成这一下作废
-    if (kind === 'give' && canvasNow()) {
+    // 板上有他新画的(没交):按头像说话也一样,话连板此刻的图一起交;只点字、没画就不附图
+    if ((kind === 'give' && (canvasNow() || kitInk())) || (kind !== 'give' && kitInk())) {
       LV.letGo = true;
       canvasGive().then((patch) => {
         LV.letGo = false;
@@ -3559,7 +3562,7 @@ __REEL_DOCK_JS__
   const bindGive = (el) => {
     let tapAt = 0;
     el.addEventListener('pointerdown', (e) => {
-      if (el.disabled || press || LV.letGo || !canvasNow() || !LV.on || !LV.ready || LV.model.open || S.bar === 'typing' || document.body.classList.contains('pending')) return;
+      if (el.disabled || press || LV.letGo || !(canvasNow() || kitInk()) || !LV.on || !LV.ready || LV.model.open || S.bar === 'typing' || document.body.classList.contains('pending')) return;
       e.preventDefault(); unlock();
       if (LV.audio) LV.audio.wake().catch(() => {});
       press = { y: e.clientY, cancelled: false, held: false, live: false, give: true, cancelPx: 80, onTap: giveTap, timer: setTimeout(() => { if (!press || !press.give) return; press.held = true; press.live = true; liveHold(); }, 300) };

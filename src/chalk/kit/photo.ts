@@ -42,6 +42,7 @@ function readBox(name: string, v: string): string {
 /** 圈住的字词最多几个字(一处) */
 const RING_CHARS = 8;
 const RING_TEXT = /^[\u3400-\u9fff]+$/;
+const RING_EN = /^[A-Za-z][A-Za-z' -]{0,29}$/;
 
 /**
  * 「圈」:几处用分号隔开,每处两种写法——照片上的字词(「蚕」「耕作」,应用照认出的字和行框找到它在哪),或四个数的框。
@@ -54,7 +55,8 @@ function readRings(v: string): string {
   return parts.map((part) => {
     const m = /^(.*?)\|([\d\s,,.]*)$/.exec(part);
     const text = (m ? m[1] : part).trim().replace(/[「」『』""]/g, '');
-    if (RING_TEXT.test(text) && Array.from(text).length <= RING_CHARS) {
+    // 汉字的字词,或英文的一个词、一个短语(英语课本上圈 apple)
+    if ((RING_TEXT.test(text) && Array.from(text).length <= RING_CHARS) || RING_EN.test(text)) {
       const n = m ? nums(m[2]) : [];
       if (n.length && n.length !== 4) throw new Error('照片的「圈」存下来的框是四个数:左、上、右、下');
       return n.length === 4 ? `${text}|${readBox('圈', n.join(' '))}` : `${text}|`;

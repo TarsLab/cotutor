@@ -170,7 +170,8 @@ check('做了没有:转过或画过才算', !kitTouched(null) && !kitTouched({})
   const R = readKitLines(shot, ['圈: 蚕;耕作;595, 665, 694, 752']);
   check('圈:字词与框可以混着写;字词存成「字|」(还没找),框照旧', R.params['圈'] === '蚕|;耕作|;595 665 694 752', R.params['圈']);
   check('圈:找到了的存成「字|框」,再读一遍不变;画面只画有框的(还没找的不画)', readKitLines(shot, ['圈: 蚕|236 500 280 525']).params['圈'] === '蚕|236 500 280 525' && kitParams(shot, { 图: 'a.jpg', 圈: '蚕|236 500 280 525;耕|' })['圈'] === '蚕|236 500 280 525;耕|' && shot.build(kitParams(shot, { 图: 'a.jpg', 圈: '蚕|236 500 280 525;耕|' })).skeletons.filter((e) => e.type === 'ellipse').length === 1);
-  check('圈:不是汉字、太长、框的数不对:读不成', threw2(() => readKitLines(shot, ['圈: abc'])) && threw2(() => readKitLines(shot, ['圈: ' + '字'.repeat(9)])) && threw2(() => readKitLines(shot, ['圈: 蚕|1 2 3'])));
+  check('圈:英文的词、短语也认(英语课本)', readKitLines(shot, ['圈: apple;I like']).params['圈'] === 'apple|;I like|' && JSON.stringify(photoLocate([], [{ text: 'I like apples.', box: [100, 500, 240, 540] }], 'apple')) === '[170,500,220,540]');
+  check('圈:不是字词、太长、框的数不对:读不成', threw2(() => readKitLines(shot, ['圈: 123'])) && threw2(() => readKitLines(shot, ['圈: ' + '字'.repeat(9)])) && threw2(() => readKitLines(shot, ['圈: 蚕|1 2 3'])));
   const LINES = [{ text: '采桑养蚕又插秧。', box: [104, 500, 456, 525] as const }, { text: '早起勤耕作，归来戴月光。', box: [103, 553, 649, 580] as const }];
   check('找字:正文的行按字数等分(和点字一样的算法)', JSON.stringify(photoLocate([], LINES, '蚕')) === '[236,500,280,525]' && JSON.stringify(photoLocate([], LINES, '耕作')) === '[240,553,331,580]', JSON.stringify([photoLocate([], LINES, '蚕'), photoLocate([], LINES, '耕作')]));
   check('找字:认出的项里有就用那一项的框;哪儿都没有回 null', JSON.stringify(photoLocate([{ text: '蚕', box: [1, 2, 30, 40] }], LINES, '蚕')) === '[1,2,30,40]' && photoLocate([], LINES, '飞') === null);

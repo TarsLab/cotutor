@@ -75,6 +75,10 @@ type Look = import('../src/scenes/look.ts').Look;
   check('不是以板为主:卡都在;照片板没写图,补上这块底', free.section.cards.length === 3 && (free.section.cards[1].props.params as Record<string, string>)['图'] === 'captures/a.jpg' && free.dropped.length === 0);
   const none = boardPageSection(sec, { page: false, photo: null });
   check('还没有底的照片板画不出来:撤掉', none.section.cards.length === 2 && none.dropped[0].props.kit === '照片');
+  const ringSec: BoardSection = { cards: [{ kind: 'kit', props: { kit: '照片', params: { 图: '', 圈: '蚕|;飞|;10 10 50 50' }, ops: ['点字'] } }], lines: [] };
+  const located = boardPageSection(ringSec, { page: true, photo: 'captures/a.jpg', locate: (t) => (t === '蚕' ? [236, 500, 280, 525] : null) });
+  check('照片板圈的字词:照认出的字换成框;找不到的那一处拿掉、说一声', (located.section.cards[0].props.params as Record<string, string>)['圈'] === '蚕|236 500 280 525;10 10 50 50' && located.unfound.join() === '飞', JSON.stringify([located.section.cards[0].props.params, located.unfound]));
+  check('还没认出字(没有 locate):字词那几处不画', (boardPageSection(ringSec, { page: true, photo: 'captures/a.jpg' }).section.cards[0].props.params as Record<string, string>)['圈'] === '10 10 50 50');
   check('没什么要改的:原样回', boardPageSection({ cards: [sec.cards[0]], lines: [] }, { page: false, photo: null }).section.cards[0] === sec.cards[0]);
 }
 

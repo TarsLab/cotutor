@@ -12,7 +12,7 @@ import { white } from './white.ts';
 import type { Kit, KitState } from './types.ts';
 
 export { KIT_MARK_MAX, KIT_MARK_POINTS, KIT_PICK_CHARS, KIT_PICK_MAX } from './types.ts';
-export { PHOTO_PICK, photoPick, pickable, type PhotoLine, type PhotoWord } from './photo.ts';
+export { PHOTO_PICK, photoLocate, photoPick, photoRings, pickable, type PhotoLine, type PhotoWord } from './photo.ts';
 export type { Kit, KitEnv, KitParam, KitScene, KitState, KitTurn } from './types.ts';
 export { kitMarks, markPhrases, turnOf, turnPoint, turnedSkeletons, type KitMark } from './marks.ts';
 

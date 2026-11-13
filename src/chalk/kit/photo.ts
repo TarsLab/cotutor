@@ -39,12 +39,62 @@ function readBox(name: string, v: string): string {
   return n.join(' ');
 }
 
+/** 圈住的字词最多几个字(一处) */
+const RING_CHARS = 8;
+const RING_TEXT = /^[\u3400-\u9fff]+$/;
+
+/**
+ * 「圈」:几处用分号隔开,每处两种写法——照片上的字词(「蚕」「耕作」,应用照认出的字和行框找到它在哪),或四个数的框。
+ * 存下来:框 =「左 上 右 下」;字词 =「蚕|左 上 右 下」(找到了)或「蚕|」(还没找,应用落板之前补上,找不到就不画)。
+ * 2026-11-13 真老师预习《田家四季歌》:自己估的框圈「蚕」落在「插秧」上、圈「耕」落在「作」上;认出的行框是准的,让应用来找
+ */
+function readRings(v: string): string {
+  const parts = v.split(/[;;]/).map((x) => x.trim()).filter(Boolean);
+  if (!parts.length || parts.length > RING_MAX) throw new Error(`照片的「圈」最多 ${RING_MAX} 处,用分号隔开`);
+  return parts.map((part) => {
+    const m = /^(.*?)\|([\d\s,,.]*)$/.exec(part);
+    const text = (m ? m[1] : part).trim().replace(/[「」『』""]/g, '');
+    if (RING_TEXT.test(text) && Array.from(text).length <= RING_CHARS) {
+      const n = m ? nums(m[2]) : [];
+      if (n.length && n.length !== 4) throw new Error('照片的「圈」存下来的框是四个数:左、上、右、下');
+      return n.length === 4 ? `${text}|${readBox('圈', n.join(' '))}` : `${text}|`;
+    }
+    if (m) throw new Error('照片的「圈」写照片上的字词(如 蚕),或四个数:左、上、右、下');
+    try { return readBox('圈', part); } catch { throw new Error(`照片的「圈」写照片上的字词(如 圈: 蚕),或四个数:左、上、右、下,整张照片的千分比;字词一处最多 ${RING_CHARS} 个字`); }
+  }).join(';');
+}
+
+/** 「圈」里的每一处:字词(找到没找到)与框;框没有就是还没找到 */
+export function photoRings(v: string | undefined): { text: string | null; box: [number, number, number, number] | null }[] {
+  return (v ?? '').split(';').filter(Boolean).map((part) => {
+    const [a, b] = part.includes('|') ? part.split('|') : [null, part];
+    const n = (b ?? '').split(' ').filter(Boolean).map(Number);
+    return { text: a, box: n.length === 4 && n.every(Number.isFinite) ? (n as [number, number, number, number]) : null };
+  });
+}
+
+/**
+ * 照片上的一个字词在哪(纯函数):认出的项里有它就是那一项的框;没有就在正文的行里找,照行框按字数等分(同 photoPick)。都找不到回 null。
+ */
+export function photoLocate(words: readonly PhotoWord[], lines: readonly PhotoLine[], text: string): [number, number, number, number] | null {
+  const item = words.find((w) => w.text === text);
+  if (item) return [...item.box];
+  for (const l of lines) {
+    const chars = Array.from(l.text);
+    const at = l.text.indexOf(text);
+    if (at < 0 || !chars.length) continue;
+    const i = Array.from(l.text.slice(0, at)).length;
+    const w = (l.box[2] - l.box[0]) / chars.length;
+    return [Math.round(l.box[0] + i * w), l.box[1], Math.round(l.box[0] + (i + Array.from(text).length) * w), l.box[3]];
+  }
+  return null;
+}
+
 /** 几组数,用分号隔开;每组 size 个 */
 const readGroups = (name: string, size: number, max: number, how: string) => (v: string): string => {
   const parts = v.split(/[;;]/).map((x) => x.trim()).filter(Boolean);
   if (!parts.length || parts.length > max) throw new Error(`照片的「${name}」最多 ${max} 处,用分号隔开`);
   return parts.map((part) => {
-    if (size === 4 && name === '圈') return readBox(name, part);
     const n = nums(part);
     if (n.length !== size || !n.every(inRange)) throw new Error(`照片的「${name}」${how}`);
     return n.join(' ');
@@ -194,7 +244,7 @@ export const photo: Kit = {
   params: [
     { key: '图', note: '哪张照片。不写就是孩子最近发的那张(板上现在垫着的);要换别的照 photos: 里的路径原样写,第一行直接写路径也行。', read: readPath, fallback: '' },
     { key: '框', note: '只给孩子看照片的哪一块:左、上、右、下四个数,整张照片的千分比(左上角 0, 0,右下角 1000, 1000)。不写就是整张。', read: (v) => readBox('框', v), fallback: '' },
-    { key: '圈', note: '你圈住的地方:左、上、右、下四个数,同样是千分比。几处用分号隔开,最多 4 处。', read: readGroups('圈', 4, RING_MAX, ''), fallback: '' },
+    { key: '圈', note: '你圈住的地方。照片上的字就写字(圈: 蚕),应用照认出的字找到它;图上的东西写左、上、右、下四个数,同样是千分比。几处用分号隔开,最多 4 处。', read: readRings, fallback: '' },
     { key: '方位', note: '在这个点画一个东南西北的十字:横、竖两个数,千分比。', read: readGroups('方位', 2, 1, '写两个数:横、竖,整张照片的千分比,如 644, 708'), fallback: '' },
     { key: '北', values: SIDES, note: '照片上哪一边是北。缺省上。看图上的指北箭头定。' },
     { key: '写', note: '你写上去的字(一道题做完,把答案写给孩子看):整条答案写成一行,写在照片下面。几行用分号隔开,最多 6 行。', read: readWrites, fallback: '' },
@@ -208,7 +258,9 @@ export const photo: Kit = {
     const { a, frame, u } = layout(p, env);
     const sk: ChalkSkeleton[] = [];
     const w = Math.max(1.5, 2.5 * u);
-    for (const [x1, y1, x2, y2] of groups(p['圈'])) {
+    for (const { box } of photoRings(p['圈'])) {
+      if (!box) continue;
+      const [x1, y1, x2, y2] = box;
       const pad = 10 * u;
       sk.push({ type: 'ellipse', id: `ring-${x1}-${y1}-${x2}-${y2}`, label: '老师圈的', x: r1(x1 - pad), y: r1(y1 * a - pad), width: r1(x2 - x1 + pad * 2), height: r1((y2 - y1) * a + pad * 2), strokeColor: RED, strokeWidth: w, animateDuration: 700 });
     }

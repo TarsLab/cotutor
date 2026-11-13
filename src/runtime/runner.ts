@@ -56,7 +56,7 @@ import { readWords, startWords } from '../scenes/photo-words/store.ts';
 import { appendBoard, readBoard } from './journal/board-log.ts';
 import { boardPageSection, type BoardPageOpts } from '../board/board-page.ts';
 import { slateOf } from './context/board-pack.ts';
-import { kitOf, kitOps, kitParams, pickable } from '../chalk/index.ts';
+import { kitOf, kitOps, kitParams, photoLocate, pickable } from '../chalk/index.ts';
 
 export class BusyError extends Error {
   constructor(tutor: string, job: string) {
@@ -402,7 +402,15 @@ export class Runner {
 
   /** 板书落到板上之前替老师把住的(src/board/board-page.ts);这一轮没定(工作台、旧路径)就原样 */
   private fitBoard(section: BoardSection, active: Active): ReturnType<typeof boardPageSection> {
-    return active.board ? boardPageSection(section, active.board) : { section, dropped: [] };
+    return active.board ? boardPageSection(section, active.board) : { section, dropped: [], unfound: [] };
+  }
+
+  /** 这块底上认出的字与行框 → 找字词的函数(照片板的「圈: 蚕」用);还没认出来就不给 */
+  private async locateOn(ws: Workspace, photo: string | null): Promise<BoardPageOpts['locate']> {
+    const rec = photo ? await readWords(join(ws.root, photo)) : null;
+    if (!rec || (!rec.items.length && !rec.lines?.length)) return undefined;
+    const words = rec.items.flatMap((x) => (x.box ? [{ text: x.text, box: x.box }] : []));
+    return (text) => photoLocate(words, rec.lines ?? [], text);
   }
 
   /** 应用替孩子叫了一次老师(他在板上点完了一直没出声):记进板的日志 */
@@ -603,7 +611,7 @@ export class Runner {
     const boardPage = !input.bookkeep && policy.board !== 'off' && (fresh ? Boolean(activityRun && (await readActivity(ws, tutor, activityRun.name))?.board === 'page') : first?.board === 'page');
     // 这块底:这一条带的照片,或这个话题里孩子最近发的那张;照片板没写「图」就是它
     const basePhoto = photos.length ? photos[photos.length - 1] : [...index.messages].reverse().find((m, i) => known[index.messages.length - 1 - i] === thread && !fresh && m.from === 'kid' && m.photos?.length)?.photos?.slice(-1)[0] ?? null;
-    active.board = { page: boardPage, photo: basePhoto };
+    active.board = { page: boardPage, photo: basePhoto, locate: await this.locateOn(ws, basePhoto) };
     const slate = boardPage ? await this.slateFor(ws, tutor, date, { messages: index.messages, ths: known, thread, photos, activity: threadRun?.name ?? null, now }) : null;
     if (slate) pack.slate = slate.slate;
     // 小课堂:课包现读;读不出来(删了、坏了)就不带,这条照发,家长端提醒
@@ -810,8 +818,11 @@ export class Runner {
     const kidView = deriveKidView(transcript, { replyMaxChars }, { live: active.live });
     kidView.warnings.push(...warnings);
     if (kidView.section) {
+      // 这一轮写着的时候后台可能刚认完字:定稿前再读一遍
+      if (active.board && !active.board.locate) active.board = { ...active.board, locate: await this.locateOn(ws, active.board.photo) };
       const fit = this.fitBoard(kidView.section, active);
       kidView.section = fit.section;
+      if (fit.unfound.length) kidView.warnings.push(`照片板圈的「${fit.unfound.join('」「')}」在认出的字里找不到,没画`);
       if (fit.dropped.length) kidView.warnings.push(active.board?.page ? `以板为主:这一节只上板一张板卡,别的没给孩子看(${fit.dropped.map((c) => `${c.kind} ${cardLabel(c)}`.trim()).join(';')})` : `照片板没写「图」,孩子还没发照片,画不出来,没给孩子看`);
     }
     // 整块出的(没走流式):卡与句这时才第一次见到,也发一遍

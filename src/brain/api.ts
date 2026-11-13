@@ -87,7 +87,7 @@ interface TurnRecord {
   model: string;
   codec: string;
   /** 这轮的用户消息:上下文包 + 孩子的话;照片相对 workspace 根 */
-  user: { text: string; images: string[]; /** 这一轮交的板(数学卡的图):只在这一轮附,以后换成一句占位 */ boards?: string[] };
+  user: { text: string; images: string[]; /** 这一轮交的板(板卡的图):只在这一轮附,以后换成一句占位 */ boards?: string[] };
   /** 模型回的全部消息(含工具往返);没回完的轮次是空的 */
   messages: ModelMessage[];
   /** 没回完的轮次写出来的正文 */

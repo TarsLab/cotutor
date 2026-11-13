@@ -53,10 +53,10 @@ export const GRADERS: Readonly<Record<string, string>> = {
   并排: '有一张 read 卡同时有这两句里的字(「并排: 睡大觉 | 浇了水」)',
   卡上有: '老师写的卡上出现过这几个说法(「卡上有: 先看清」,如顺口溜)',
   出拍给我看卡: '写过拍给我看卡(photo):要孩子拍照片发来时',
-  出教具卡: '写过数学卡(kit):老师先画出来、请孩子动笔时;后面写画法的名字就要是那一种(「出教具卡: 照片」)',
-  不出教具卡: '没写过数学卡(kit):作业全对,说一句就收,不讲题时',
+  出教具卡: '写过板卡(kit):老师先画出来、请孩子动笔时;后面写画法的名字就要是那一种(「出教具卡: 照片」)',
+  不出教具卡: '没写过板卡(kit):作业全对,说一句就收,不讲题时',
   请动手就开放: '末句请孩子在板上动手(点一点、圈出来、切一刀…)的每一轮,板上开放了对应的操作(这一轮的板卡,没出就是板上原来那张):《画板为主设计》「话接不接得上」',
-  问就上板: '讲稿里有问号的每一轮都带一张数学卡或画板卡(请孩子拍照的那一轮不算):讲题不只用嘴问',
+  问就上板: '讲稿里有问号的每一轮都带一张板卡或画板卡(请孩子拍照的那一轮不算):讲题不只用嘴问',
   词落到幅: '参数「词」里至少这么多个原样出现在分幅里(「词落到幅: 2」);只适合画得出来的词,「羞愧」「满满」老师会照规矩换成看得见的样子',
 };
 
@@ -256,11 +256,11 @@ export function gradeRun(checks: readonly string[], turns: readonly EvalTurn[], 
       case '出教具卡': {
         const want = arg.trim();
         const ok = turns.some((t) => (t.section?.cards ?? []).some((c) => c.kind === 'kit' && (!want || (c.props as { kit?: unknown }).kit === want)));
-        return { check, pass: ok, ...(ok ? {} : { why: `${turns.length} 轮都没写${want ? `「${want}」这种` : ''}数学卡` }) };
+        return { check, pass: ok, ...(ok ? {} : { why: `${turns.length} 轮都没写${want ? `「${want}」这种` : ''}板卡` }) };
       }
       case '不出教具卡': {
         const n = turns.filter((t) => (t.section?.cards ?? []).some((c) => c.kind === 'kit')).length;
-        return { check, pass: !n, ...(n ? { why: `有 ${n} 轮写了数学卡` } : {}) };
+        return { check, pass: !n, ...(n ? { why: `有 ${n} 轮写了板卡` } : {}) };
       }
       case '请动手就开放': {
         const bad = askedOps(turns).filter((x) => !x.open.includes(x.want));

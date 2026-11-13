@@ -67,7 +67,8 @@ export const canvas: CardKind<CanvasProps, CanvasState> = {
       if (!Array.isArray(sk) || !sk.length) throw new Error('行内骨架要有 skeletons 数组');
       return { base: { skeletons: sk as Record<string, unknown>[] }, ...(promptFromTag ? { prompt: promptFromTag } : {}) };
     }
-    if (first && IMAGE_EXT.test(first) && !/^https?:\/\//.test(first)) return { base: { image: first }, ...(rest || promptFromTag ? { prompt: rest || promptFromTag } : {}) };
+    // 照片做底归到照片板(2026-11-13《画板为主设计》「废弃」):旧记录里的 base.image 照样能看,新写的退成文字
+    if (first && IMAGE_EXT.test(first) && !/^https?:\/\//.test(first)) throw new Error('照片做底用照片板:```照片(圈、画、写都在上面);画板卡只用白纸或课包的图');
     if (first && BUNDLE_ID_RE.test(first) && !/[一-鿿]/.test(first)) return { base: { bundle: first }, ...(rest || promptFromTag ? { prompt: rest || promptFromTag } : {}) };
     const prompt = [promptFromTag, ...lines].filter(Boolean).join(' ').trim();
     if (!prompt) throw new Error('空白画板要有题目(写在正文或标签后面)');

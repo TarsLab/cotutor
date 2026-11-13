@@ -1172,7 +1172,7 @@ export function createMock(opts: MockOptions = {}): Mock {
       if (rel.startsWith('mock-paint/')) return { status: 200, contentType: 'image/svg+xml', html: MOCK_PAINT_SVG };
       const up = uploads.get(rel);
       if (up) return { status: 200, contentType: up.type, body: up.data };
-      // 照片底板(数学卡的「照片」)用的假作业:一排六间屋子的平面图,800 × 500
+      // 照片底板(板卡的「照片」)用的假作业:一排六间屋子的平面图,800 × 500
       if (rel.endsWith('/plan.jpg')) return { status: 200, contentType: 'image/svg+xml', html: MOCK_PLAN_SVG };
       if (rel.endsWith('/page.jpg')) return { status: 200, contentType: 'image/svg+xml', html: MOCK_PAGE_SVG };
       const esc = rel.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c);

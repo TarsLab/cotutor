@@ -2,9 +2,9 @@
 /**
  * 作业照片线(R5)的手动验收(不进 pnpm test,要本机 Chrome;老师是假 CLI,不花钱):
  * 自己起一个临时 workspace(运行时指假老师 tests/_fake-teacher.ts)+ 一个 HTTP 的 serve →
- * 把服务自己画的 /icon-192.png 当「照片」传上去(POST …/photos)→ 只带照片发一条 → 假老师「看图」:Read 那张、板书出 image 卡 + canvas 卡照片做底 →
- * 用 Chrome DevTools 协议开孩子端:老师的图片卡放着那张照片(节头不挂)、直开画板舞台、iframe 里 excalidraw 的场景有一个 image 元素(底图)与一份 files →
- * 画一笔「给老师看」→ .cards/<n>.png 落盘;家长端那轮的问句下有缩略图。
+ * 把服务自己画的 /icon-192.png 当「照片」传上去(POST …/photos)→ 只带照片发一条 → 假老师「看图」:Read 那张、板书出照片板(那张做底)+ 一张空白的画板卡
+ *(2026-11-13 起孩子的照片不再用 image 卡再给他看、不再给画板卡做底,都归到照片板)→
+ * 用 Chrome DevTools 协议开孩子端:直开画板舞台(白纸,没有底图)→ 画一笔「给老师看」→ .cards/<n>.png 落盘;家长端那轮的问句下有缩略图。
  * 再走发照片屏:相册选 2 张 → 裁一张、画一笔(没有配一句话那条了)→ 一条消息两张 jpg;板上哪一节的节头都不挂照片。
  * 老师都走实时:嘴是假百炼;发消息都经实时那条连接(_live-send.mjs),板上只有实时一种画法(节头是老师写的,孩子的照片由老师的图片卡放上板;答拍给我看卡的见 probe-photo-card)。
  *
@@ -66,12 +66,12 @@ try {
   const msg = today?.messages.find((m) => m.job === sent.json?.job);
   const cards = msg?.section?.cards ?? [];
   const canvasIdx = cards.findIndex((c) => c.kind === 'canvas');
-  ok('孩子端条目:问句「(拍了一张)」带 photos;板书 image 卡引用原图、canvas 卡照片做底', msg?.question === '(拍了一张)' && msg?.photos?.[0] === photo && cards.some((c) => c.kind === 'image' && c.props.src === photo) && canvasIdx >= 0 && cards[canvasIdx].props.base?.image === photo, JSON.stringify({ q: msg?.question, photos: msg?.photos, kinds: cards.map((c) => c.kind) }));
+  ok('孩子端条目:问句「(拍了一张)」带 photos;照片板拿那张做底,画板卡是白纸', msg?.question === '(拍了一张)' && msg?.photos?.[0] === photo && cards.some((c) => c.kind === 'kit' && c.props.params?.['图'] === photo) && canvasIdx >= 0 && !cards[canvasIdx].props.base, JSON.stringify({ q: msg?.question, photos: msg?.photos, kinds: cards.map((c) => c.kind) }));
   const parentDay = (await api('GET', '/api/conversations/math-tutor/today')).json;
   const pm = parentDay?.index?.messages.find((m) => m.job === sent.json?.job);
   ok('家长端索引:消息带 photos、转录里 Read 了那张', pm?.photos?.[0] === photo && JSON.stringify(parentDay?.runs?.[pm?.job] ?? []).includes(photo), JSON.stringify(pm?.photos));
 
-  // ---- Chrome:老师的图片卡放着那张照片 → 直开画板舞台 → excalidraw 场景里有底图 → 画一笔给老师看 ----
+  // ---- Chrome:直开画板舞台(白纸)→ 画一笔给老师看 ----
   const secIdx = 0;
   const url = `${base}/?tutor=math-tutor&stage=${secIdx}.${canvasIdx}`;
   browser = spawn(chrome, [...QUIET_ARGS, '--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', `--remote-debugging-port=${cdp}`, '--window-size=1180,820', `--user-data-dir=${join(home, 'chrome')}`, url], { stdio: 'ignore' });
@@ -85,13 +85,12 @@ try {
   const send = (method, params = {}) => new Promise((resolve) => { const id = ++seq; pending.set(id, resolve); ws.send(JSON.stringify({ id, method, params })); });
   const evaluate = async (expression) => { const r = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }); if (r.result?.exceptionDetails) throw new Error(JSON.stringify(r.result.exceptionDetails.exception?.description ?? r.result.exceptionDetails)); return r.result?.result?.value; };
   await send('Runtime.enable');
-  let scene = null;
-  for (let i = 0; i < 80 && !scene; i++) { scene = await evaluate(`(() => { const w = document.querySelector('#st-frame')?.contentWindow; const a = w && w.__excalidraw; if (!a) return null; const els = a.getSceneElements(); const img = els.filter((e) => e.type === 'image'); return img.length ? { images: img.length, files: Object.keys(a.getFiles()).length, locked: img[0].locked, opacity: img[0].opacity, layer: img[0].customData?.layer, w: img[0].width, h: img[0].height } : null; })()`); if (!scene) await sleep(250); }
-  ok('画板舞台:excalidraw 场景里有一个 image 元素做底(锁定、灰一档、layer base)、files 里一份', scene && scene.images === 1 && scene.files === 1 && scene.locked === true && scene.opacity === 45 && scene.layer === 'base' && scene.w > 0, JSON.stringify(scene));
-  const shown = await evaluate(`(() => { const im = document.querySelector('#board .c-image img'); return { src: im ? im.getAttribute('src') : null, head: document.querySelectorAll('#board .sh img').length }; })()`);
-  ok('孩子端:老师的图片卡放着那张照片(经 /api/kid/image 取),节头不挂照片', typeof shown.src === 'string' && shown.src.includes('/api/kid/image?p=') && shown.src.includes(encodeURIComponent(photo)) && shown.head === 0, JSON.stringify(shown));
-  const compact = await evaluate(`(() => { const th = document.querySelector('#board .c-canvas .th.base img'); return th ? th.getAttribute('src') : null; })()`);
-  ok('紧凑态画板卡上先是那张照片', typeof compact === 'string' && compact.includes('/api/kid/image?p=') && compact.includes(encodeURIComponent(photo)), String(compact));
+  const until = async (expr, ms = 8000) => { for (let t = 0; t < ms; t += 200) { if (await evaluate(expr)) return true; await sleep(200); } return false; };
+  await until(`Boolean(document.querySelector('#st-frame')?.contentWindow?.__excalidraw)`, 20000);
+  const scene = await evaluate(`(() => { const a = document.querySelector('#st-frame').contentWindow.__excalidraw; return { images: a.getSceneElements().filter((e) => e.type === 'image').length }; })()`);
+  ok('画板舞台:白纸,没有照片做底', scene?.images === 0, JSON.stringify(scene));
+  const head = await evaluate(`document.querySelectorAll('#board .sh img').length + document.querySelectorAll('#board .c-image img').length`);
+  ok('孩子端:节头不挂照片,也没有放孩子照片的图片卡', head === 0, String(head));
   const drew = await evaluate(`(async () => {
     const d = document.querySelector('#st-frame').contentDocument;
     const cv = d.querySelector('.canvas-board .excalidraw__canvas.interactive') || d.querySelector('.canvas-board canvas');

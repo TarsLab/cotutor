@@ -9,7 +9,7 @@
  * 「直接打电话」回一句带 [[call]],「(打电话)」回英文开场;含「家长段」加「## 家长」;含「记住它」「改记忆」回「## 记忆」(加三条 / 改一条删一条),
  * 「带证据」回两条带证据的(一条抄孩子的话、一条抄老师自己的),「记孩子」回一条 孩子: 开头的和一条普通的;记忆整理任务改一条删两条加一条;
  * 记账任务回固定形状的「## 记账」(「记账坏」或 FAKE_BOOKKEEP_BAD=1 少写 name;FAKE_BOOKKEEP_ASKED 里 | 分开的几句当 asked);
- * 上下文包有 photos 段就「看图」:请求带了工具先 read_file 那张照片,再回 image 卡与 canvas 卡;含「回读板书」先 read_file 板书写法(回读检查)。
+ * 上下文包有 photos 段就「看图」:请求带了工具先 read_file 那张照片,再回一张照片板(那张做底)与一张空白的 canvas 卡;含「回读板书」先 read_file 板书写法(回读检查)。
  */
 import { startFakeChat, type ChatBody, type FakeReply } from './_fake-bailian-chat.ts';
 
@@ -51,7 +51,7 @@ export function teacherReply(body: ChatBody): FakeReply {
   const ps = listAfter(prompt, 'photos');
   if (ps.length) {
     tool = { name: 'read_file', args: { file_path: ps[0] } };
-    parts.push(`看到照片:${ps.join(' | ')},是第 12 页第 3 题。\n\n\`\`\`image\n${ps[0]}\n你拍的作业\n\`\`\`\n\n\`\`\`canvas\n${ps[0]}\n把算错的那道圈出来。\n\`\`\`\n\n哪道算错了?`);
+    parts.push(`看到照片:${ps.join(' | ')},是第 12 页第 3 题。\n\n\`\`\`照片\n${ps[0]}\n操作: 圈\n把算错的那道圈出来。\n\`\`\`\n\n\`\`\`canvas\n把这道题的图画一画。\n\`\`\`\n\n哪道算错了?`);
   }
   // 回读检查:老师不听劝、又去读了一遍板书写法(请求带了工具才读得到)
   if (msg.includes('回读板书')) tool = { name: 'read_file', args: { file_path: '.agents/skills/cotutor-board/SKILL.md' } };

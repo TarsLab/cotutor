@@ -44,13 +44,14 @@ export function drawnLine(kit: NonNullable<SlateInput['kit']>): string {
   return parts.length ? `${kit.kit}:${parts.join(';')}` : kit.kit;
 }
 
-/** 点开看的那些合并成一句:「点开看了笔顺:傍(2 次)、晒」 */
-function pickLine(picks: readonly string[]): string | null {
+/** 点开看的那些合并成一句:「点开看了笔顺:傍(2 次)、晒」;英文单词「点开看了单词:yellow(2 次)」 */
+function pickLine(picks: readonly string[], what: string): string | null {
   if (!picks.length) return null;
   const n = new Map<string, number>();
   for (const p of picks) n.set(p, (n.get(p) ?? 0) + 1);
-  return `点开看了笔顺:${[...n].map(([w, k]) => (k > 1 ? `${w}(${k} 次)` : w)).join('、')}`;
+  return `点开看了${what}:${[...n].map(([w, k]) => (k > 1 ? `${w}(${k} 次)` : w)).join('、')}`;
 }
+const isEnglish = (t: string): boolean => /^[A-Za-z]/.test(t);
 
 /** 板此刻的样子;told = 这一轮把这块底的全文给了老师(记进日志,下一轮写「未变」) */
 export function slateOf(x: SlateInput): { slate: NonNullable<ContextPack['slate']>; told?: string } {
@@ -60,7 +61,8 @@ export function slateOf(x: SlateInput): { slate: NonNullable<ContextPack['slate'
   let from = 0;
   x.events.forEach((e, i) => { if (e.k === 'turn') from = i + 1; });
   const since = x.events.slice(from);
-  const did = [pickLine(since.filter(onBase).map((e) => e.text))].filter((s): s is string => Boolean(s));
+  const picked = since.filter(onBase).map((e) => e.text);
+  const did = [pickLine(picked.filter((t) => !isEnglish(t)), '笔顺'), pickLine(picked.filter(isEnglish), '单词')].filter((s): s is string => Boolean(s));
   // 遮了拼音的:揭了哪些、没揭哪些(这块底上揭过的都算)
   const covered = x.kit?.params['遮'] ? x.kit.params['遮'].split(';').map((v) => v.split('|')[0]).filter(Boolean) : [];
   if (covered.length) {

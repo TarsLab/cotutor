@@ -153,6 +153,12 @@ try {
   for (let i = 0; i < 20 && !got.some((m) => m.t === 'tutor' && m.done === '变'); i++) await sleep(100);
   ok('假嘴念了「变」', got.some((m) => m.t === 'tutor' && m.done === '变'), JSON.stringify(got.filter((m) => m.t === 'tutor').slice(-2)));
   await shot('board-4-pick.png');
+  // 英文单词:浮层换成单词卡(四线三格);舞台报来的点中了一个英文词(英语课本页,这里直接替舞台发)
+  await evaluate(`window.postMessage({ source: 'cotutor-stage', type: 'pick', text: 'yellow' }, '*')`);
+  ok('点中英文单词:浮层是单词卡,写着这个词', Boolean(await until(`document.querySelector('#st-pick').dataset.kind === 'word' && document.querySelector('#st-pick .c-word')?.dataset.w === 'yellow'`, 3000)));
+  await sleep(1500);
+  await shot('board-4-word.png');
+  await press('#st-pick-x');
 
   // ---- 五、按住头像说一句:老师这一轮出了别的卡,板还在 ----
   await press('#st-pick-x');

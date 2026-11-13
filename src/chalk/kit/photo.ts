@@ -190,9 +190,12 @@ export interface PhotoLine {
   box: readonly [number, number, number, number];
 }
 
-/** 能弹田字格的:一到四个汉字 */
+/** 能弹出来的:一到四个汉字(田字格),或一个英文单词(四线三格,最多 20 个字母) */
 const HANZI = /^[\u3400-\u9fff]+$/;
-export const pickable = (text: string): boolean => HANZI.test(text) && Array.from(text).length <= KIT_PICK_CHARS;
+const EN_WORD = /^[A-Za-z][A-Za-z'-]{0,19}$/;
+export const pickable = (text: string): boolean => (HANZI.test(text) && Array.from(text).length <= KIT_PICK_CHARS) || EN_WORD.test(text);
+/** 这一项是英文单词(浮层是单词卡,不是田字格) */
+export const pickEnglish = (text: string): boolean => EN_WORD.test(text);
 
 /**
  * 孩子的一笔指的是哪一项(纯函数;舞台在本地算,不等老师)。stroke 是场景坐标(横 = 千分比,竖 = 千分比 × 高宽比),aspect = 照片的高 ÷ 宽。
@@ -226,6 +229,13 @@ function pickInLines(lines: readonly PhotoLine[], stroke: readonly (readonly [nu
   if (!chars.length) return null;
   const w = (line.box[2] - line.box[0]) / chars.length;
   const cell = (i: number, j: number): PhotoWord['box'] => [Math.round(line.box[0] + i * w), line.box[1], Math.round(line.box[0] + (j + 1) * w), line.box[3]];
+  // 英文的一行:按字母等分(比例字体不准,够点中一个词),点一下 / 圈一圈都是落在的那个词
+  if (/[A-Za-z]/.test(line.text) && !/[\u3400-\u9fff]/.test(line.text)) {
+    const words = [...line.text.matchAll(/[A-Za-z][A-Za-z'-]*/g)].map((m) => ({ text: m[0].replace(/['-]+$/, ''), from: m.index ?? 0, to: (m.index ?? 0) + m[0].length - 1 }));
+    const i = Math.floor((cx - line.box[0]) / w);
+    const hit = tap ? words.find((x) => i >= x.from && i <= x.to) : words.filter((x) => line.box[0] + ((x.from + x.to + 1) / 2) * w >= minX && line.box[0] + ((x.from + x.to + 1) / 2) * w <= maxX).sort((a, b) => Math.abs(line.box[0] + ((a.from + a.to + 1) / 2) * w - cx) - Math.abs(line.box[0] + ((b.from + b.to + 1) / 2) * w - cx))[0];
+    return hit && EN_WORD.test(hit.text) ? { text: hit.text, box: cell(hit.from, hit.to) } : null;
+  }
   if (tap) {
     const i = Math.max(0, Math.min(chars.length - 1, Math.floor((cx - line.box[0]) / w)));
     return isHanzi(chars[i]) ? { text: chars[i], box: cell(i, i) } : null;

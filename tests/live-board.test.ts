@@ -120,7 +120,7 @@ await settle();
   await sleep(600);
   const r = c.responses.length;
   sock.send(JSON.stringify({ t: 'board', body: { k: 'pick', thread: '0000-1', text: '变', base: shot } }));
-  sock.send(JSON.stringify({ t: 'board', body: { k: 'pick', thread, text: 'abc', base: shot } }));
+  sock.send(JSON.stringify({ t: 'board', body: { k: 'pick', thread, text: '123', base: shot } }));
   await sleep(300);
   check('不是以板为主的话题、不是汉字:不念、不记', c.responses.length === r && (await readBoard(ws0, T, today, thread)).filter((e) => e.k === 'pick').length === 1);
   sock.send(JSON.stringify({ t: 'hold' }));

@@ -3,7 +3,7 @@
  * 方向盘照 2026-11-10 那次检查作业:「早晨面向太阳,前面是东,后面、左面、右面各是什么」;
  * 点阵照「分一分」:18 个贴纸平均分给 2 个、3 个、6 个小朋友。孩子的笔画不归整,读数只是大概。
  */
-import { COVER_ID, KID_INK, KITS, photoLocate, photoRings, pinyinStrip, kitLookOnly, describeKit, elementBounds, kitMarks, kitOf, kitOps, kitParams, kitTouched, readKitLines, turnPoint, turnedSkeletons, type KitState } from '../src/chalk/index.ts';
+import { COVER_ID, KID_INK, KITS, photoLocate, photoRings, pinyinStrip, pickEnglish, kitLookOnly, describeKit, elementBounds, kitMarks, kitOf, kitOps, kitParams, kitTouched, readKitLines, turnPoint, turnedSkeletons, type KitState } from '../src/chalk/index.ts';
 import { sceneSchema } from '../src/chalk/scene-schema.ts';
 import { check, done } from './_check.ts';
 
@@ -138,7 +138,17 @@ check('照片的「写」写错了读不成:字太长、数的个数不对、位
   check('点字:点在框里就是那一项;框外半个字高以内算最近的一项,再远不算', photoPick(words, tap(260, 250), A2)?.text === '变' && photoPick(words, tap(290, 250), A2)?.text === '变' && photoPick(words, tap(400, 250), A2) === null && photoPick(words, tap(250, 862), A2)?.text === '海洋');
   const ring = (x1: number, y1: number, x2: number, y2: number): [number, number][] => [at(x1, y1), at(x2, y1), at(x2, y2), at(x1, y2), at(x1, y1)];
   check('点字:圈住哪一项的中心就是它;圈住两项取离圈中心近的;什么都没圈住不算', photoPick(words, ring(220, 220, 300, 280), A2)?.text === '变' && photoPick(words, ring(230, 220, 620, 280), A2)?.text === '极' && photoPick(words, ring(700, 400, 800, 500), A2) === null);
-  check('点字:只认一到四个汉字(弹得出田字格的);英文单词、五个字以上的点不中', pickable('变') && pickable('灌溉田地') && !pickable('yellow') && !pickable('小蝌蚪找妈妈') && !pickable('') && photoPick(words, tap(650, 846), A2) === null);
+  check('点字:一到四个汉字(弹田字格)、一个英文单词(弹单词卡);五个字以上、数字、空的点不中', pickable('变') && pickable('灌溉田地') && pickable('yellow') && pickEnglish("It's") && !pickEnglish('变') && !pickable('小蝌蚪找妈妈') && !pickable('123') && !pickable('') && photoPick(words, tap(650, 846), A2)?.text === 'yellow');
+  {
+    // 英文的一行按字母等分:点在 colour 上是 colour,点在问号上不算;圈住 yellow 是 yellow
+    const en = [{ text: 'What colour is it? It is yellow.', box: [100, 500, 740, 540] as const }];
+    const W = (740 - 100) / en[0].text.length;
+    const at = (i: number): [number, number][] => tap(100 + (i + 0.5) * W, 520);
+    const col = photoPick([], at(6), A2, en), q = photoPick([], at(17), A2, en);
+    const yi = en[0].text.indexOf('yellow');
+    const ring: [number, number][] = Array.from({ length: 20 }, (_, k) => [100 + (yi + 3) * W + Math.cos((k / 20) * Math.PI * 2) * 3.4 * W, (520 + Math.sin((k / 20) * Math.PI * 2) * 30) * A2]);
+    check('英文的行:点一下是落在的那个词;点在标点上不算;圈一圈是圈住的那个词', col?.text === 'colour' && q === null && photoPick([], ring, A2, en)?.text === 'yellow', JSON.stringify([col, q, photoPick([], ring, A2, en)]));
+  }
   check('点字:没量到高宽比、空的一笔都不算', photoPick(words, tap(260, 250), 0) === null && photoPick(words, [], A2) === null);
   check('点字:点开看过的字词说给老师;同时画了圈的两样都说', shot.read(PH.params, { picked: ['傍', '海洋'] }, ps) === '点开看了笔顺:「傍」「海洋」' && shot.read(PH.params, { picked: ['傍'], marks: [[[600, 500], [700, 500], [800, 500]]], aspect: 1 }, ps).startsWith('点开看了笔顺:「傍」;画了一道线') && describeKit(shot, PH.params, { picked: ['变'] }, [PHOTO_PICK]) === '请他做的:点字;大概:点开看了笔顺:「变」');
   // 正文的行:按字数等分,一格一个字

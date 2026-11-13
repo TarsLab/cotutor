@@ -14,7 +14,7 @@ process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 
 const { startWords, readWords, kidWords, wordsFile } = await import('../src/scenes/photo-words/store.ts');
-const { recognizeWith, photoPromptFrom, FORMAT, FORMAT_BOXED } = await import('../src/scenes/photo-words/recognize.ts');
+const { recognizeWith, photoPromptFrom, FORMAT, FORMAT_BOXED, FORMAT_EN, FORMAT_EN_BOXED, LineReader } = await import('../src/scenes/photo-words/recognize.ts');
 const { initWorkspace } = await import('../src/app/cli/init.ts');
 const { loadWorkspace } = await import('../src/app/workspace.ts');
 const { createContext, route } = await import('../src/app/http/app.ts');
@@ -77,6 +77,15 @@ const fakeLook = (gate?: Promise<void>): Look => async (o) => {
   writeFileSync(wordsFile(stale), JSON.stringify({ at: new Date(Date.now() - 10 * 60_000).toISOString(), state: 'running', items: [], lesson: null, full: [] }));
   await (await startWords(stale, (image, onProgress) => recognizeWith(fakeLook(), image, onProgress, { text: 'x', model: 'm' })))?.done;
   check('丢了的那份(running 十分钟了)重认一遍', (await readWords(stale))?.state === 'done');
+}
+
+// ---- 英文:单词与带框的行(英语老师的照片板,点课文里任意一个单词) ----
+{
+  check('英文要行框的格式:只多了「full 带 box」那一条', FORMAT_EN_BOXED !== FORMAT_EN && FORMAT_EN_BOXED.includes('"box": [左, 上, 右, 下]};不要页码') && photoPromptFrom('x\n{{格式}}', 'en', { boxed: true }) === `x\n${FORMAT_EN_BOXED}`);
+  const r = new LineReader(() => {}, 'en');
+  r.push('{"lesson": "Unit 3 Colours"}\n{"text": "yellow", "kind": "word", "pick": true, "box": [600, 836, 700, 857], "say": "yellow, a yellow bus"}\n{"full": "What colour  is it?", "box": [100, 500, 740, 540]}\n');
+  r.end();
+  check('英文的行照原样留着空格(按词点要它)', r.items[0]?.text === 'yellow' && r.lines[0]?.text === 'What colour is it?' && r.full[0] === 'What colour is it', JSON.stringify([r.lines, r.full]));
 }
 
 // ---- 全流程:预习里发照片 → 后台认 → 孩子端问得到;别的话题不认 ----

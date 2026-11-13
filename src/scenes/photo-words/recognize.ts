@@ -93,15 +93,21 @@ export const FORMAT_EN = `回答的格式:一行一段 JSON,不要别的字、�
    - emoji:能画出来的东西配一个 emoji(👵 🚌 🍎);抽象的词(like、the、is)不写这一栏。孩子写完对答案时才看到。
 3. 最后是全文:照片上的正文照原样一行写一行 {"full": "What colour is it? It's yellow."};不要页码、栏目名。`;
 
+/** 英文的全文也带框(照片板上点课文里任意一个单词):FORMAT_EN 的第 3 条换成这一条 */
+const FULL_RULE_EN = '3. 最后是全文:照片上的正文照原样一行写一行 {"full": "What colour is it? It\'s yellow."};不要页码、栏目名。';
+export const FORMAT_EN_BOXED = FORMAT_EN.replace(FULL_RULE_EN, `3. 最后是全文:照片上的正文一行写一行,从上到下 {"full": "What colour is it? It's yellow.", "box": [左, 上, 右, 下]};不要页码、栏目名。
+   - full:这一行的字照原样,带标点和空格;照片上在哪儿换行就在哪儿断,不把两行并成一行。
+   - box:这一行在照片上的位置,同样的千分比,紧贴着字。`);
+
 /** 交给模型的整段(没有听写 activity 文件时):出厂的要求 + 格式 */
 export function photoPrompt(prompt?: readonly string[], lang: DictationLang = 'zh'): string {
   const ask = prompt ?? (lang === 'en' ? DICTATION_PROMPT_EN_DEFAULT : DICTATION_PROMPT_DEFAULT);
   return `${ask.join('\n')}\n\n${lang === 'en' ? FORMAT_EN : FORMAT}`;
 }
 
-/** 交给模型的整段:activity 文件「认字收到什么」的模板填好 {{格式}};boxed = 全文的每一行也要框(照片板,只有中文的) */
+/** 交给模型的整段:activity 文件「认字收到什么」的模板填好 {{格式}};boxed = 全文的每一行也要框(照片板) */
 export function photoPromptFrom(template: string, lang: DictationLang = 'zh', opts: { boxed?: boolean } = {}): string {
-  return fillSlots(template, { 格式: lang === 'en' ? FORMAT_EN : opts.boxed ? FORMAT_BOXED : FORMAT });
+  return fillSlots(template, { 格式: lang === 'en' ? (opts.boxed ? FORMAT_EN_BOXED : FORMAT_EN) : opts.boxed ? FORMAT_BOXED : FORMAT });
 }
 
 
@@ -189,7 +195,7 @@ export class LineReader implements PhotoProgress {
       if (!f) return;
       this.full.push(splitWords(f, this.lang));
       const box = boxOf(v.box);
-      if (box) this.lines.push({ text: f.replace(/\s+/g, ''), box });
+      if (box) this.lines.push({ text: this.lang === 'en' ? f.replace(/\s+/g, ' ').trim() : f.replace(/\s+/g, ''), box });
     } else {
       const it = parseItem(v, this.lang);
       if (!it) return;

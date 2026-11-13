@@ -31,7 +31,7 @@ import { parseSections } from '../board/sections.ts';
 import { threadDigest } from './context/thread-digest.ts';
 import { beatTimings } from './journal/events.ts';
 import { type RunEvent, type RunEventEnvelope, type RunEventInput } from '../schema/index.ts';
-import { BOARD_CARD_KINDS, MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, VAULT_PACK_ROLES, isApiRuntime, resolvePolicy, type ContextPack, type ConversationIndex, type MemoryProposal, type PendingMemory, type ActivityRun, type ConversationMessage, type Focus, type MessageFrom, type MessageVia, type Policy, type Timing } from '../schema/index.ts';
+import { BOARD_CARD_KINDS, subjectLang, MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, VAULT_PACK_ROLES, isApiRuntime, resolvePolicy, type ContextPack, type ConversationIndex, type MemoryProposal, type PendingMemory, type ActivityRun, type ConversationMessage, type Focus, type MessageFrom, type MessageVia, type Policy, type Timing } from '../schema/index.ts';
 import { UsageError } from '../shared/errors.ts';
 import type { Workspace } from '../schema/index.ts';
 import { capturePathOk, readAgentBody, readCardStates, readIndex, snapshotSources, writeIndex, writeRunFile } from './journal/store.ts';
@@ -496,10 +496,12 @@ export class Runner {
     const tool = (await readActivity(ws, tutor, activity))?.tools.find((x) => x.tool === '认字');
     if (!tool) return;
     // 全文的每一行也要框:正文里没被挑出来的字,孩子也能点
-    const text = photoPromptFrom(tool.prompt, 'zh', { boxed: true });
+    // 认中文还是英文:照这位老师的学科(英语老师认单词)
+    const lang = subjectLang(ws.config.tutors[tutor]?.subject);
+    const text = photoPromptFrom(tool.prompt, lang, { boxed: true });
     const model = ws.config.dictation.model;
     for (const rel of photos) {
-      const bg = (await startWords(join(ws.root, rel), (image, onProgress) => recognizeWith(this.look, image, onProgress, { model, text }), { now: this.opts.now }))?.done;
+      const bg = (await startWords(join(ws.root, rel), (image, onProgress) => recognizeWith(this.look, image, onProgress, { model, text, lang }), { now: this.opts.now }))?.done;
       if (!bg) continue;
       this.background.add(bg);
       void bg.finally(() => this.background.delete(bg));

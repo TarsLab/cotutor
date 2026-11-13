@@ -263,6 +263,8 @@ ${BACK_TINT_CSS}
   #st-pick .c.c-tianzige { margin:0; padding:0; background:none; border:0; box-shadow:none; flex-wrap:nowrap; }
   #st-pick .hz { width:168px; height:168px; }
   #st-pick .hz .n { font-size:13px; }
+  #st-pick .c.c-word { margin:0; padding:4px 8px; background:none; border:0; box-shadow:none; max-width:min(520px, 60vw); overflow:hidden; }
+  #st-pick .c.c-word svg { max-width:100%; height:auto; }
   #st-pick-x { position:absolute; top:-12px; right:-12px; width:40px; height:40px; border-radius:50%; border:0; background:var(--ink); color:#fff; display:grid; place-items:center; cursor:pointer; }
   body.hand-left #st-pick-x { right:auto; left:-12px; }
   @keyframes st-pick-in { from { opacity:0; scale:.9; } to { opacity:1; scale:1; } }
@@ -2087,15 +2089,26 @@ __WORD_DRAW_JS__
   };
   /** 照片板的「点字」:孩子点中了一个字词 → 田字格浮在板上,一笔一笔写一遍(点格子再写一遍);再点别的字换成那个,× 收起来。老师不开口 */
   const pickHide = () => { const box = $('#st-pick'); for (const b of box.querySelectorAll('.hz')) tianzigeReset(b); box.replaceChildren(); box.hidden = true; };
-  const pickShow = (text) => {
-    const chs = Array.from(String(text || '')).slice(0, 4);
-    if (!chs.length) return;
+  /**
+   * 浮层(板的一角,右手在右上):应用自己弹的现成的卡,不等老师。哪种卡能浮、点的是什么就弹哪种:
+   * 汉字 → 田字格(一笔一笔写,点格子再写一遍);英文单词 → 单词卡(四线三格写一遍)。点别的换成那个,× 收起
+   */
+  const FLOATS = [
+    { kind: 'word', fits: (t) => /^[A-Za-z][A-Za-z'-]*$/.test(t), make: (t) => { const grid = wordGrid(t, null, { stage: true }); return { el: h('div', { class: 'c c-word', 'data-w': t }, grid), play: () => wordWrite(grid, false, null, () => {}) }; } },
+    { kind: 'tianzige', fits: (t) => /^[\u3400-\u9fff]{1,4}$/.test(t), make: (t) => { const el = h('div', { class: 'c c-tianzige', 'data-ch': t }); for (const ch of Array.from(t)) el.append(tianzigeBox(ch)); return { el, play: () => tianzigePlay(el) }; } },
+  ];
+  const floatShow = (card) => {
     pickHide();
-    const cardEl = h('div', { class: 'c c-tianzige', 'data-ch': chs.join('') });
-    for (const ch of chs) cardEl.append(tianzigeBox(ch));
-    $('#st-pick').append(h('button', { id: 'st-pick-x', type: 'button', 'aria-label': '收起来', html: ICON.close, on: { click: pickHide } }), cardEl);
+    $('#st-pick').dataset.kind = card.kind;
+    $('#st-pick').append(h('button', { id: 'st-pick-x', type: 'button', 'aria-label': '收起来', html: ICON.close, on: { click: pickHide } }), card.el);
     $('#st-pick').hidden = false;
-    tianzigePlay(cardEl);
+    card.play();
+  };
+  const pickShow = (text) => {
+    const t = String(text || '').trim();
+    const f = FLOATS.find((x) => x.fits(t));
+    if (!f) return;
+    floatShow({ kind: f.kind, ...f.make(t) });
   };
   const STAGE_SOURCE = 'cotutor-stage';
   const frame = $('#st-frame');

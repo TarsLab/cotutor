@@ -6,14 +6,14 @@
  */
 import { z } from 'zod';
 
-/** 一行最多几个字(田字格一张最多四个字;英语单词以后放宽) */
-export const BOARD_PICK_CHARS = 4;
+/** 点的一项最多几个字符(田字格一张最多四个字;英文单词最多 20 个字母) */
+export const BOARD_PICK_CHARS = 20;
 
 export const BoardEventSchema = z.discriminatedUnion('k', [
   /** 孩子点开看了一个字词(应用弹了田字格);base = 那块底(照片的路径,相对 workspace 根) */
-  z.object({ at: z.string().min(1), k: z.literal('pick'), text: z.string().min(1).max(BOARD_PICK_CHARS * 2), base: z.string().min(1) }),
+  z.object({ at: z.string().min(1), k: z.literal('pick'), text: z.string().min(1).max(BOARD_PICK_CHARS), base: z.string().min(1) }),
   /** 孩子点开了一处盖住的拼音(老师写的「遮」);base 同上 */
-  z.object({ at: z.string().min(1), k: z.literal('reveal'), text: z.string().min(1).max(BOARD_PICK_CHARS * 2), base: z.string().min(1) }),
+  z.object({ at: z.string().min(1), k: z.literal('reveal'), text: z.string().min(1).max(BOARD_PICK_CHARS), base: z.string().min(1) }),
   /** 应用把板交给老师的那一轮(上下文包里有 board: 的那条);told = 这一轮把这块底认出的全文给了老师 */
   z.object({ at: z.string().min(1), k: z.literal('turn'), job: z.string().min(1), told: z.string().optional() }),
   /** 孩子动了手以后一直没出声,应用替他叫了一次老师(下一轮 live.app: still) */

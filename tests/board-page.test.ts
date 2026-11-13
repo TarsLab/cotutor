@@ -142,7 +142,7 @@ type Look = import('../src/scenes/look.ts').Look;
   check('点字:嘴念认字时写好的念法;正文里没挑出来的字念它自己', say1?.say === '晒,晒太阳' && say2?.thread === thread && say3?.say === '我', JSON.stringify([say1, say3]));
   const bad = [
     await ctx.runner.boardEvent(T, date, { k: 'pick', thread: '1111-1', text: '晒', base: p1 }),
-    await ctx.runner.boardEvent(T, date, { k: 'pick', thread, text: 'abc', base: p1 }),
+    await ctx.runner.boardEvent(T, date, { k: 'pick', thread, text: '123', base: p1 }),
     await ctx.runner.boardEvent(T, date, { k: 'pick', thread, text: '晒', base: 'cotutor.json' }),
     await ctx.runner.boardEvent(T, date, { k: 'drag', thread }),
   ];

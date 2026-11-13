@@ -85,6 +85,10 @@ const fakeLook = (gate?: Promise<void>): Look => async (o) => {
   const r = new LineReader(() => {}, 'en');
   r.push('{"lesson": "Unit 3 Colours"}\n{"text": "yellow", "kind": "word", "pick": true, "box": [600, 836, 700, 857], "say": "yellow, a yellow bus"}\n{"full": "What colour  is it?", "box": [100, 500, 740, 540]}\n');
   r.end();
+  const q = new LineReader(() => {}, 'zh');
+  q.push('{"full": "1. 18 ÷ 3 =", "box": [50, 100, 500, 130]}\n{"question": "1", "box": [40, 90, 960, 300]}\n{"question": "第2题", "box": [40, 310, 960, 600]}\n{"question": "1", "box": [0, 0, 10, 10]}\n{"question": "x", "box": [0, 0, 10, 10]}\n');
+  q.end();
+  check('分题:每道题一行,题号只留数字;同一题号只留第一个,没题号的不要;照片板的格式里要了题', JSON.stringify(q.questions) === '[{"no":"1","box":[40,90,960,300]},{"no":"2","box":[40,310,960,600]}]' && FORMAT_BOXED.includes('"question": "3"') && FORMAT_EN_BOXED.includes('"question": "3"') && !FORMAT.includes('"question"'), JSON.stringify(q.questions));
   check('英文的行照原样留着空格(按词点要它)', r.items[0]?.text === 'yellow' && r.lines[0]?.text === 'What colour is it?' && r.full[0] === 'What colour is it', JSON.stringify([r.lines, r.full]));
 }
 

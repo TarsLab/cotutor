@@ -408,11 +408,15 @@ export class Runner {
   }
 
   /** 这块底上认出的字与行框 → 找字词的函数(照片板的「圈: 蚕」用);还没认出来就不给 */
-  private async locateOn(ws: Workspace, photo: string | null): Promise<BoardPageOpts['locate']> {
+  private async locateOn(ws: Workspace, photo: string | null): Promise<Pick<BoardPageOpts, 'locate' | 'question'>> {
     const rec = photo ? await readWords(join(ws.root, photo)) : null;
-    if (!rec || (!rec.items.length && !rec.lines?.length)) return undefined;
+    if (!rec) return {};
     const words = rec.items.flatMap((x) => (x.box ? [{ text: x.text, box: x.box }] : []));
-    return (text) => photoLocate(words, rec.lines ?? [], text);
+    const qs = rec.questions ?? [];
+    return {
+      ...(words.length || rec.lines?.length ? { locate: (text: string) => photoLocate(words, rec.lines ?? [], text) } : {}),
+      ...(qs.length ? { question: (no: string) => { const q = qs.find((x) => x.no === no); return q ? ([...q.box] as [number, number, number, number]) : null; } } : {}),
+    };
   }
 
   /** 应用替孩子叫了一次老师(他在板上点完了一直没出声):记进板的日志 */
@@ -531,7 +535,7 @@ export class Runner {
     const reads = Boolean(photo && x.activity && (await readActivity(ws, tutor, x.activity))?.tools.some((t) => t.tool === '认字'));
     const rec = photo && reads ? await readWords(join(ws.root, photo)) : null;
     // 全文给老师看原样的一行(带框的行是照原样带标点的;没有就把分词的空格拿掉,汉字之间不该有空格)
-    const words = rec ? { state: rec.state, lesson: rec.lesson, full: rec.lines?.length ? rec.lines.map((l) => l.text) : rec.full.map((l) => l.replace(/(?<=[^\x00-\x7f])\s+|\s+(?=[^\x00-\x7f])/g, '')) } : null;
+    const words = rec ? { state: rec.state, lesson: rec.lesson, questions: (rec.questions ?? []).map((q) => q.no), full: rec.lines?.length ? rec.lines.map((l) => l.text) : rec.full.map((l) => l.replace(/(?<=[^\x00-\x7f])\s+|\s+(?=[^\x00-\x7f])/g, '')) } : null;
     return slateOf({ photo, fresh, words, events: await readBoard(ws, tutor, date, x.thread), kit, ops: photo && reads ? ['点字'] : [], now: x.now.getTime() });
   }
 
@@ -615,7 +619,7 @@ export class Runner {
     const boardPage = !input.bookkeep && policy.board !== 'off' && (fresh ? Boolean(activityRun && (await readActivity(ws, tutor, activityRun.name))?.board === 'page') : first?.board === 'page');
     // 这块底:这一条带的照片,或这个话题里孩子最近发的那张;照片板没写「图」就是它
     const basePhoto = photos.length ? photos[photos.length - 1] : [...index.messages].reverse().find((m, i) => known[index.messages.length - 1 - i] === thread && !fresh && m.from === 'kid' && m.photos?.length)?.photos?.slice(-1)[0] ?? null;
-    active.board = { page: boardPage, photo: basePhoto, locate: await this.locateOn(ws, basePhoto) };
+    active.board = { page: boardPage, photo: basePhoto, ...(await this.locateOn(ws, basePhoto)) };
     const slate = boardPage ? await this.slateFor(ws, tutor, date, { messages: index.messages, ths: known, thread, photos, activity: threadRun?.name ?? null, now }) : null;
     if (slate) pack.slate = slate.slate;
     // 小课堂:课包现读;读不出来(删了、坏了)就不带,这条照发,家长端提醒
@@ -823,10 +827,10 @@ export class Runner {
     kidView.warnings.push(...warnings);
     if (kidView.section) {
       // 这一轮写着的时候后台可能刚认完字:定稿前再读一遍
-      if (active.board && !active.board.locate) active.board = { ...active.board, locate: await this.locateOn(ws, active.board.photo) };
+      if (active.board && !active.board.locate) active.board = { ...active.board, ...(await this.locateOn(ws, active.board.photo)) };
       const fit = this.fitBoard(kidView.section, active);
       kidView.section = fit.section;
-      if (fit.unfound.length) kidView.warnings.push(`照片板圈的「${fit.unfound.join('」「')}」在认出的字里找不到,没画`);
+      if (fit.unfound.length) kidView.warnings.push(`照片板写的「${fit.unfound.join('」「')}」在认出的字、题里找不到,没画(题找不到就是整张)`);
       if (fit.dropped.length) kidView.warnings.push(active.board?.page ? `以板为主:这一节只上板一张板卡,别的没给孩子看(${fit.dropped.map((c) => `${c.kind} ${cardLabel(c)}`.trim()).join(';')})` : `照片板没写「图」,孩子还没发照片,画不出来,没给孩子看`);
     }
     // 整块出的(没走流式):卡与句这时才第一次见到,也发一遍

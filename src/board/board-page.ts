@@ -6,7 +6,7 @@
  * 2. 以板为主的话题(activity 头上 board: page):板是页面,老师的卡只往板上画——一节只认最后一张板卡,别的卡不给孩子看。
  * 撤掉的卡在讲稿里的引用(锚、敲黑板、[[cue]])跟着重排或撤掉;dropped 是撤掉的卡(给家长端记一行)。
  */
-import { photoRings } from '../chalk/index.ts';
+import { photoFrame, photoRings } from '../chalk/index.ts';
 import type { BoardCard, BoardSection } from '../schema/index.ts';
 
 export interface BoardPageOpts {
@@ -16,6 +16,8 @@ export interface BoardPageOpts {
   photo: string | null;
   /** 这块底上一个字词在哪(认出的字与行框,src/chalk/kit/photo.ts 的 photoLocate);还没认、没认成 = 不给 */
   locate?: (text: string) => [number, number, number, number] | null;
+  /** 这块底上第几题在哪(认出的题号与框,分题);还没认、没认出题 = 不给 */
+  question?: (no: string) => [number, number, number, number] | null;
 }
 
 /** 照片板的「圈」:写的字词换成框;找不到的那一处拿掉 */
@@ -45,6 +47,13 @@ export function boardPageSection(section: BoardSection, opts: BoardPageOpts): { 
     if (isPhotoBoard(c) && !photoOf(c)) {
       if (!opts.photo) { dropped.push(c); return; }
       card = { ...c, props: { ...c.props, params: { ...(c.props.params as Record<string, unknown>), 图: opts.photo } } };
+    }
+    // 框写的是题号(框: 第 3 题):照认出的题换成框;找不到就是整张
+    const fr = isPhotoBoard(card) ? photoFrame(String((card.props.params as Record<string, unknown>)['框'] ?? '') || undefined) : null;
+    if (fr?.question && !fr.box) {
+      const box = photoOf(card) === opts.photo && opts.question ? opts.question(fr.question.replace(/[^0-9]/g, '')) : null;
+      if (!box) unfound.push(fr.question);
+      card = { ...card, props: { ...card.props, params: { ...(card.props.params as Record<string, unknown>), 框: box ? `${fr.question}|${box.join(' ')}` : '' } } };
     }
     // 圈的、遮拼音的字词:照认出的字换成框
     for (const key of ['圈', '遮']) {

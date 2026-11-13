@@ -95,6 +95,29 @@ export function pinyinStrip(box: readonly [number, number, number, number]): [nu
 /** 盖拼音的那几块在画面里的元素 id 前缀;舞台点到它就揭开 */
 export const COVER_ID = 'cover-';
 
+/**
+ * 「框」:四个数,或一道题的题号(「第 3 题」「3 题」「第三题」都认,存成「第3题|」,应用照认出的题换成「第3题|左 上 右 下」;找不到就是整张)。
+ * 《画板为主设计》「分题」:一张作业照片认出几道题,老师一道一道裁着讲
+ */
+const CN_NUM: Record<string, number> = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10 };
+function readFrame(v: string): string {
+  const m = /^(?:第\s*)?([0-9]{1,2}|[一二三四五六七八九十])\s*(?:题|小题|大题)?\s*(?:\|([\d\s,,.]*))?$/.exec(v.trim());
+  if (m && (/题|第/.test(v) || v.includes('|'))) {
+    const no = /\d/.test(m[1]) ? Number(m[1]) : CN_NUM[m[1]];
+    const n = m[2] ? nums(m[2]) : [];
+    return n.length === 4 ? `第${no}题|${readBox('框', n.join(' '))}` : `第${no}题|`;
+  }
+  return readBox('框', v);
+}
+
+/** 「框」:题号(找没找到)与框;没写 = null */
+export function photoFrame(v: string | undefined): { question: string | null; box: [number, number, number, number] | null } | null {
+  if (!v) return null;
+  const [q, b] = v.includes('|') ? v.split('|') : [null, v];
+  const n = (b ?? '').split(/\s+/).filter(Boolean).map(Number);
+  return { question: q, box: n.length === 4 && n.every(Number.isFinite) ? (n as [number, number, number, number]) : null };
+}
+
 /** 「圈」里的每一处:字词(找到没找到)与框;框没有就是还没找到 */
 export function photoRings(v: string | undefined): { text: string | null; box: [number, number, number, number] | null }[] {
   return (v ?? '').split(';').filter(Boolean).map((part) => {
@@ -162,8 +185,8 @@ interface Layout { a: number; frame: [number, number, number, number]; u: number
 /** 画框(场景坐标)与记号的尺寸:裁得越小,记号跟着小,铺到屏幕上是一样大 */
 function layout(p: Readonly<Record<string, string>>, env?: KitEnv): Layout {
   const a = env?.aspect && env.aspect > 0 ? env.aspect : ASPECT;
-  const b = groups(p['框'])[0];
-  let [x1, y1, x2, y2] = b && b.length === 4 ? b : [0, 0, 1000, 1000];
+  const b = photoFrame(p['框'])?.box ?? undefined;
+  let [x1, y1, x2, y2] = b ?? [0, 0, 1000, 1000];
   if (b) {
     // 老师给的框多留一圈边:框偏一点,要讲的东西也还在里面
     const mx = (x2 - x1) * 0.04, my = (y2 - y1) * 0.04;
@@ -284,7 +307,7 @@ export const photo: Kit = {
   ops: ['圈', '画', PHOTO_PICK, '看'],
   params: [
     { key: '图', note: '哪张照片。不写就是孩子最近发的那张(板上现在垫着的);要换别的照 photos: 里的路径原样写,第一行直接写路径也行。', read: readPath, fallback: '' },
-    { key: '框', note: '只给孩子看照片的哪一块:左、上、右、下四个数,整张照片的千分比(左上角 0, 0,右下角 1000, 1000)。不写就是整张。', read: (v) => readBox('框', v), fallback: '' },
+    { key: '框', note: '只给孩子看照片的哪一块。作业上的一道题写题号(框: 第 3 题),应用照认出的题找到它;别的写左、上、右、下四个数,整张照片的千分比(左上角 0, 0,右下角 1000, 1000)。不写就是整张。', read: readFrame, fallback: '' },
     { key: '圈', note: '你圈住的地方。照片上的字就写字(圈: 蚕),应用照认出的字找到它;图上的东西写左、上、右、下四个数,同样是千分比。几处用分号隔开,最多 4 处。', read: readRings, fallback: '' },
     { key: '方位', note: '在这个点画一个东南西北的十字:横、竖两个数,千分比。', read: readGroups('方位', 2, 1, '写两个数:横、竖,整张照片的千分比,如 644, 708'), fallback: '' },
     { key: '北', values: SIDES, note: '照片上哪一边是北。缺省上。看图上的指北箭头定。' },

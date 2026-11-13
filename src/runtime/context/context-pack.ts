@@ -107,6 +107,7 @@ export function renderContextPack(pack: ContextPack): string {
       out.push('    全文:');
       for (const x of b.text) out.push(`      - ${yamlScalar(x)}`);
     }
+    if (b.questions) out.push(`    题: ${yamlScalar(b.questions)}`);
     if (b.drawn) out.push(`    你画的: ${yamlScalar(b.drawn)}`);
     out.push(`    开放: ${yamlScalar(b.ops.length ? b.ops.join('、') : '无')}`);
     if (b.did.length) {

@@ -2,6 +2,7 @@
  * 以板为主的话题:每一轮给老师的那段「板此刻的样子」(上下文包的 board:,形状在 schema 的 ContextPack.slate)。纯函数。
  * 文字每一轮都给;图只在文字说不清时给(孩子交板,src/brain/ 的 boards)。2026-11-13《画板为主设计》下篇「老师怎么看到板」:
  *   底       孩子拍的那张(路径,认出了课名就带上),没有照片就是白板
+ *   题       作业照片上认出的题号(分题:框写「第 3 题」就裁出那一道)
  *   全文     底上认出的正文:换底以后第一次认完那一轮给全,之后只写「未变」;还在认写「还在认」;这一轮刚发的照片不写(图随这一轮附上)
  *   你画的   老师上一次在板上画的(那张板卡的参数,图不算)
  *   开放     现在孩子能做的操作
@@ -23,7 +24,7 @@ export interface SlateInput {
   /** 这一轮孩子刚发了这张照片(图随这一轮附上,全文还没认) */
   fresh: boolean;
   /** 底上认出的东西(src/scenes/photo-words/store.ts 的那份);没认、白板 = null */
-  words: { state: 'running' | 'done' | 'failed'; lesson: string | null; full: readonly string[] } | null;
+  words: { state: 'running' | 'done' | 'failed'; lesson: string | null; full: readonly string[]; questions?: readonly string[] } | null;
   /** 这个话题板的日志 */
   events: readonly BoardEvent[];
   /** 老师上一次在这块底上画的板卡:画法与参数、开放的操作;还没画 = null */
@@ -40,7 +41,7 @@ const ago = (ms: number): string => `${Math.max(1, Math.round(ms / 1000))} 秒�
 export function drawnLine(kit: NonNullable<SlateInput['kit']>): string {
   // 圈、遮写的字词只说字(框是应用找的);写的字照「字 在 位置」
   const named = (v: string): string => v.split(';').map((x) => (x.includes('|') ? x.split('|')[0] || x.split('|')[1] : x)).join('、');
-  const parts = Object.entries(kit.params).filter(([k, v]) => v && k !== '图').map(([k, v]) => `${k} ${k === '圈' || k === '遮' ? named(v) : v.split(';').map((x) => x.replace(/\|$/, '').replace(/\|/g, ' 在 ')).join(';')}`);
+  const parts = Object.entries(kit.params).filter(([k, v]) => v && k !== '图').map(([k, v]) => `${k} ${k === '圈' || k === '遮' || (k === '框' && v.includes('|')) ? named(v) : v.split(';').map((x) => x.replace(/\|$/, '').replace(/\|/g, ' 在 ')).join(';')}`);
   return parts.length ? `${kit.kit}:${parts.join(';')}` : kit.kit;
 }
 
@@ -85,6 +86,7 @@ export function slateOf(x: SlateInput): { slate: NonNullable<ContextPack['slate'
   const slate: NonNullable<ContextPack['slate']> = {
     base: x.photo ? (lesson ? `${x.photo}(《${lesson}》)` : x.photo) : WHITE_BOARD,
     ...(text ? { text } : {}),
+    ...(x.words?.questions?.length ? { questions: `${x.words.questions.map((n) => `第${n}题`).join('、')}(框写题号就裁出那一道)` } : {}),
     ...(x.kit ? { drawn: drawnLine(x.kit) } : {}),
     ops: [...(x.kit ? x.kit.ops : x.ops)],
     did,

@@ -102,6 +102,8 @@ export const ContextPackSchema = z.object({
     .object({
       base: z.string().min(1),
       text: z.array(z.string()).optional(),
+      /** 作业照片上认出的题号(「第1题、第2题」);框写题号就裁出那一道 */
+      questions: z.string().optional(),
       drawn: z.string().optional(),
       ops: z.array(z.string()).default([]),
       did: z.array(z.string()).default([]),

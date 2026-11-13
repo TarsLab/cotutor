@@ -44,12 +44,19 @@ export interface PhotoLine {
   box: [number, number, number, number];
 }
 
-/** 认到这时为止的全部:挑出的字词、课名、全文(一行一个字符串,词之间空一格);要了行框的(FORMAT_BOXED)多一份带框的行 */
+/** 一道题:题号与它在照片上的框(0–1000) */
+export interface PhotoQuestion {
+  no: string;
+  box: [number, number, number, number];
+}
+
+/** 认到这时为止的全部:挑出的字词、课名、全文(一行一个字符串,词之间空一格);要了行框的(FORMAT_BOXED)多一份带框的行、每道题的框 */
 export interface PhotoProgress {
   items: PhotoItem[];
   lesson: string | null;
   full: string[];
   lines?: PhotoLine[];
+  questions?: PhotoQuestion[];
 }
 
 export type Recognized = ({ ok: true; model: string } | { ok: false; error: string }) & PhotoProgress & { ms: number };
@@ -77,7 +84,9 @@ const FULL_RULE = '3. 最后是全文:照片上的正文照原样一行写一行
 const FULL_RULE_BOXED = `3. 最后是全文:照片上的正文一行写一行,从上到下 {"full": "冬天来啦!一场大雪过后", "box": [左, 上, 右, 下]};不要拼音、页码、栏目名。
    - full:这一行的字照原样,带标点;照片上在哪儿换行就在哪儿断,不把两行并成一行。
    - box:这一行汉字在照片上的位置(不含上面的拼音),同样的千分比,紧贴着字。`;
-export const FORMAT_BOXED = FORMAT.replace(FULL_RULE, FULL_RULE_BOXED);
+/** 照片板还要每道题在哪(分题:老师一道一道裁着讲);接在全文后面,有题号才写 */
+const QUESTION_RULE = `4. 照片上有题号的(作业、练习),每道题一行 {"question": "3", "box": [左, 上, 右, 下]}:question 写题号的数字;box 框住这一整道题(题号、题目、图、要填的空、孩子写的答案都在里面),同样的千分比。大题里的小题不单列。没有题号不写。`;
+export const FORMAT_BOXED = `${FORMAT.replace(FULL_RULE, FULL_RULE_BOXED)}\n${QUESTION_RULE}`;
 
 /** 英文单词的格式:一项一个单词;kind 只分 word(单词表、要会写的)与 read(会认就行)、other */
 export const FORMAT_EN = `回答的格式:一行一段 JSON,不要别的字、不要代码块。按这个顺序写:
@@ -97,7 +106,7 @@ export const FORMAT_EN = `回答的格式:一行一段 JSON,不要别的字、�
 const FULL_RULE_EN = '3. 最后是全文:照片上的正文照原样一行写一行 {"full": "What colour is it? It\'s yellow."};不要页码、栏目名。';
 export const FORMAT_EN_BOXED = FORMAT_EN.replace(FULL_RULE_EN, `3. 最后是全文:照片上的正文一行写一行,从上到下 {"full": "What colour is it? It's yellow.", "box": [左, 上, 右, 下]};不要页码、栏目名。
    - full:这一行的字照原样,带标点和空格;照片上在哪儿换行就在哪儿断,不把两行并成一行。
-   - box:这一行在照片上的位置,同样的千分比,紧贴着字。`);
+   - box:这一行在照片上的位置,同样的千分比,紧贴着字。\n${QUESTION_RULE}`);
 
 /** 交给模型的整段(没有听写 activity 文件时):出厂的要求 + 格式 */
 export function photoPrompt(prompt?: readonly string[], lang: DictationLang = 'zh'): string {
@@ -155,6 +164,7 @@ export class LineReader implements PhotoProgress {
   lesson: string | null = null;
   full: string[] = [];
   lines: PhotoLine[] = [];
+  questions: PhotoQuestion[] = [];
   private buf = '';
   private seen = new Set<string>();
   private onProgress: (p: PhotoProgress) => void;
@@ -176,7 +186,7 @@ export class LineReader implements PhotoProgress {
     this.buf = '';
   }
   snapshot(): PhotoProgress {
-    return { items: [...this.items], lesson: this.lesson, full: [...this.full], ...(this.lines.length ? { lines: [...this.lines] } : {}) };
+    return { items: [...this.items], lesson: this.lesson, full: [...this.full], ...(this.lines.length ? { lines: [...this.lines] } : {}), ...(this.questions.length ? { questions: [...this.questions] } : {}) };
   }
   private line(raw: string): void {
     const s = raw.trim().replace(/,$/, '');
@@ -188,7 +198,12 @@ export class LineReader implements PhotoProgress {
       return;
     }
     if (!isObj(v)) return;
-    if ('lesson' in v && !('text' in v)) {
+    if ('question' in v && !('text' in v)) {
+      const no = String(v.question ?? '').replace(/[^0-9]/g, '');
+      const box = boxOf(v.box);
+      if (!no || !box || this.questions.some((q) => q.no === no)) return;
+      this.questions.push({ no, box });
+    } else if ('lesson' in v && !('text' in v)) {
       this.lesson = str(v.lesson);
     } else if ('full' in v && !('text' in v)) {
       const f = str(v.full);

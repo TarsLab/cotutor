@@ -6,7 +6,7 @@
  * 认的规则(提示词怎么拼、一行一段怎么解析)在 ./recognize.ts;看图的请求由调用的那层交进来(场景不引 media)。
  */
 import { readFile, rename, writeFile } from 'node:fs/promises';
-import { VISION_TIMEOUT_MS, type PhotoItem, type PhotoLine, type PhotoProgress, type Recognize } from './recognize.ts';
+import { VISION_TIMEOUT_MS, type PhotoItem, type PhotoLine, type PhotoProgress, type PhotoQuestion, type Recognize } from './recognize.ts';
 
 export interface WordsRecord {
   /** 开始认的时刻 */
@@ -19,6 +19,8 @@ export interface WordsRecord {
   full: string[];
   /** 正文一行一行的框(点正文里任意一个字用);认的时候要了行框才有 */
   lines?: PhotoLine[];
+  /** 每道题的框(作业照片,分题);认的时候要了行框才有 */
+  questions?: PhotoQuestion[];
   error?: string;
   model?: string;
   ms?: number;
@@ -73,7 +75,7 @@ export async function startWords(photoFile: string, recognize: Recognize, opts: 
   const mime = /\.png$/i.test(photoFile) ? 'image/png' : 'image/jpeg';
   const done = (async (): Promise<void> => {
     const r = await recognize({ data, mime }, (p) => { last = p; put({ at, state: 'running', ...p }); }).catch((err: unknown) => ({ ok: false as const, error: err instanceof Error ? err.message : String(err), ...last, ms: 0 }));
-    put({ at, state: r.ok ? 'done' : 'failed', items: r.items, lesson: r.lesson, full: r.full, ...(r.lines?.length ? { lines: r.lines } : {}), ms: r.ms, ...(r.ok ? { model: r.model } : { error: r.error }) });
+    put({ at, state: r.ok ? 'done' : 'failed', items: r.items, lesson: r.lesson, full: r.full, ...(r.lines?.length ? { lines: r.lines } : {}), ...(r.questions?.length ? { questions: r.questions } : {}), ms: r.ms, ...(r.ok ? { model: r.model } : { error: r.error }) });
     await queue;
   })();
   return { done };

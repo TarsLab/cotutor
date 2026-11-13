@@ -3,7 +3,7 @@
  * 方向盘照 2026-11-10 那次检查作业:「早晨面向太阳,前面是东,后面、左面、右面各是什么」;
  * 点阵照「分一分」:18 个贴纸平均分给 2 个、3 个、6 个小朋友。孩子的笔画不归整,读数只是大概。
  */
-import { COVER_ID, KID_INK, KITS, photoLocate, photoRings, pinyinStrip, pickEnglish, kitLookOnly, describeKit, elementBounds, kitMarks, kitOf, kitOps, kitParams, kitTouched, readKitLines, turnPoint, turnedSkeletons, type KitState } from '../src/chalk/index.ts';
+import { COVER_ID, KID_INK, KITS, photoFrame, photoLocate, photoRings, pinyinStrip, pickEnglish, kitLookOnly, describeKit, elementBounds, kitMarks, kitOf, kitOps, kitParams, kitTouched, readKitLines, turnPoint, turnedSkeletons, type KitState } from '../src/chalk/index.ts';
 import { sceneSchema } from '../src/chalk/scene-schema.ts';
 import { check, done } from './_check.ts';
 
@@ -186,6 +186,16 @@ check('做了没有:转过或画过才算', !kitTouched(null) && !kitTouched({})
   const cs = shot.build(kitParams(shot, { 图: 'a.jpg', 遮: '晒|300 500 340 525;极|' }), { aspect: 1 });
   const cov = cs.skeletons.filter((e) => e.id.startsWith(COVER_ID));
   check('画面:找到了的那处一块纸色的块盖在拼音上(还没找的不画),id 带字(舞台点到它就揭开)', cov.length === 1 && cov[0].id === `${COVER_ID}晒` && Number(cov[0].y) + Number(cov[0].height) <= 500 && cov[0].backgroundColor !== undefined, JSON.stringify(cov));
+}
+
+// ---- 照片的「框」写题号(分题) ----
+{
+  const f = (v: string): string => readKitLines(shot, [`框: ${v}`]).params['框'];
+  check('框:题号几种写法都认,存成「第N题|」;四个数照旧', f('第 3 题') === '第3题|' && f('3题') === '第3题|' && f('第三题') === '第3题|' && f('第3题|100 200 600 500') === '第3题|100 200 600 500' && f('243, 601, 927, 971') === '243 601 927 971', [f('第 3 题'), f('第三题')].join());
+  const qs = shot.build(kitParams(shot, { 图: 'a.jpg', 框: '第3题|100 200 600 500' }), { aspect: 1 });
+  const whole = shot.build(kitParams(shot, { 图: 'a.jpg', 框: '第3题|' }), { aspect: 1 });
+  check('框:题找到了裁那一道(多留一圈边);还没找到是整张', qs.frame![0] < 100 && qs.frame![0] > 70 && qs.frame![2] < 560 && JSON.stringify(whole.frame) === '[0,0,1000,1000]', JSON.stringify([qs.frame, whole.frame]));
+  check('photoFrame:题号与框', JSON.stringify(photoFrame('第3题|100 200 600 500')) === '{"question":"第3题","box":[100,200,600,500]}' && photoFrame('') === null && JSON.stringify(photoFrame('1 2 30 40')) === '{"question":null,"box":[1,2,30,40]}');
 }
 
 // ---- 白板:没有照片时老师写一个词、一道算式 ----

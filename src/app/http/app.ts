@@ -8,7 +8,7 @@
 import { existsSync } from 'node:fs';
 import { appendFile, mkdir, readFile, readdir, stat } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { join } from 'node:path';
+import { extname, join } from 'node:path';
 import { foldRuns, type TranscriptRow } from '../../brain/transcript.ts';
 import { RuntimeError } from '../../brain/index.ts';
 import { PHOTO_MAX_SIDE } from '../../ui/kid/photo-edit.ts';
@@ -22,7 +22,7 @@ import { NEUTRAL_COLOR, SUBJECT_COLORS, TUTOR_PALETTE, tutorColors } from '../..
 import { boardMarkOf, type BoardMarkId } from '../../ui/kid/board-mark.ts';
 import { buildReel, playRecordOk, reelCardTook, reelHolds, reelMissRuns, type PlayRecord, type Reel, type ReelCall } from '../../ui/kid/reel.ts';
 import type { CallReel } from '../../runtime/journal/recorder.ts';
-import { DATE_RE, FocusSchema, MESSAGE_FROM, listTutors, subjectLang, viaSendsLabel, type ConversationIndex, type ConversationMessage, type MemoryLine, type TutorExtra } from '../../schema/index.ts';
+import { DATE_RE, FocusSchema, canonicalSubject, MESSAGE_FROM, listTutors, subjectLang, viaSendsLabel, type ConversationIndex, type ConversationMessage, type MemoryLine, type TutorExtra } from '../../schema/index.ts';
 import type { BoardCard, Device } from '../../board/presentation.ts';
 import { ConfigError, patchConfig, reloadIfChanged, workspaceReport } from '../workspace.ts';
 import { UsageError } from '../../shared/errors.ts';
@@ -61,6 +61,7 @@ import { PARENT_HOME_PAGE } from '../../ui/parent/parent-home-page.ts';
 import { PARENT_SETTINGS_PAGE } from '../../ui/parent/parent-settings-page.ts';
 import { dictationRoute } from '../dictation/route.ts';
 import { kidWords, readWords } from '../../scenes/photo-words/store.ts';
+import { listTextbookPages, textbookPageFile } from '../../memory/textbook-pages.ts';
 import type { Look } from '../../scenes/look.ts';
 import { IndexError, capturePathOk, deleteThread, listDates, rateThread, readErrLog, readIndex, readTranscript, scanCards, undoVaultWrite, writeCapture, writeCardImage, writeCardState, type VaultWrite } from '../../runtime/journal/store.ts';
 import { memoryLineText } from '../../memory/vault-notes.ts';
@@ -929,6 +930,23 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       return { status: 200, file, contentType: IMAGE_TYPES[ext] };
     }
     // 照片板的「点字」:这张作业照片上认出的字词与框(认是 runner 在后台起的,流式落在照片旁边;舞台轮询)。只认 captures/ 里在的照片
+    // 课本页(vault 里教材那篇旁边同名文件夹里的图):以板为主的拍照屏上「选课本页」;只列这位老师学科的册子
+    if (p === '/api/kid/textbook-pages' && method === 'GET') {
+      const tutor = url.searchParams.get('tutor') ?? '';
+      const t = ws.config.tutors[tutor];
+      if (!t) return { status: 404, json: { error: 'not_found' } };
+      return { status: 200, json: { books: await listTextbookPages(ws.paths.textbooks, canonicalSubject(t.subject)) } };
+    }
+    if (p === '/api/kid/textbook-page' && (method === 'GET' || method === 'POST')) {
+      const book = method === 'GET' ? (url.searchParams.get('b') ?? '') : isObj(body) && typeof body.book === 'string' ? body.book : '';
+      const name = method === 'GET' ? (url.searchParams.get('f') ?? '') : isObj(body) && typeof body.file === 'string' ? body.file : '';
+      const file = await textbookPageFile(ws.paths.textbooks, book, name);
+      if (!file) return { status: 404, json: { error: 'not_found' } };
+      if (method === 'GET') return { status: 200, file, contentType: IMAGE_TYPES[extname(file).slice(1).toLowerCase()] };
+      // 选了这一页:拷进 captures/(同孩子拍的照片),回路径;发消息时放进 photos[]
+      const path = await writeCapture(ws, ctx.now(), await readFile(file), /\.png$/i.test(file) ? 'png' : 'jpg');
+      return { status: 200, json: { path } };
+    }
     if (p === '/api/kid/photo-words' && method === 'GET') {
       const rel = url.searchParams.get('p') ?? '';
       if (!(await capturePathOk(ws, rel))) return { status: 404, json: { error: 'not_found' } };

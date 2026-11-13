@@ -1147,6 +1147,16 @@ export function createMock(opts: MockOptions = {}): Mock {
       const d = lettersData(decodeURIComponent(lt[1]));
       return d ? { status: 200, json: d } : { status: 404, json: { error: 'not_found' } };
     }
+    // 课本页(vault 里教材旁边的图):语文老师有一册一页,就是假课本页;选了拷成一张「照片」,照假课本页认字
+    if (p === '/api/kid/textbook-pages' && method === 'GET') return { status: 200, json: { books: url.searchParams.get('tutor') === 'chinese-tutor' ? [{ book: '语文二年级上册', pages: [{ file: '005.png', n: 5 }] }] : [] } };
+    if (p === '/api/kid/textbook-page' && method === 'GET') return url.searchParams.get('f') === '005.png' ? { status: 200, contentType: 'image/svg+xml', html: MOCK_PAGE_SVG } : { status: 404, json: { error: 'not_found' } };
+    if (p === '/api/kid/textbook-page' && method === 'POST') {
+      if (!isObj(body) || body.file !== '005.png') return { status: 404, json: { error: 'not_found' } };
+      const path = `captures/${localDate(now())}/tb-${uploads.size + 1}.jpg`;
+      uploads.set(path, { type: 'image/svg+xml', data: Buffer.from(MOCK_PAGE_SVG) });
+      boardShots.add(path);
+      return { status: 200, json: { path } };
+    }
     // 照片板的「点字」:假课本页认出的字词;头两次问还在认(只有前三项),之后认完——看得到框一个一个出来
     if (p === '/api/kid/photo-words' && method === 'GET') {
       const rel = url.searchParams.get('p') ?? '';

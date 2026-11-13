@@ -171,6 +171,26 @@ type Look = import('../src/scenes/look.ts').Look;
   const log3 = await readBoard(loadWorkspace(root), T, date, thread);
   check('给过全文的那一轮在日志里记了 told', log3.filter((e) => e.k === 'turn').length === 3 && log3.some((e) => e.k === 'turn' && e.told === p1));
 
+  // 课本页:vault 里教材旁边同名文件夹里的图;只列这位老师学科的册子;选了拷进 captures/
+  {
+    const wsx = loadWorkspace(root);
+    const { mkdirSync } = await import('node:fs');
+    mkdirSync(join(wsx.paths.textbooks, '语文二年级上册'), { recursive: true });
+    mkdirSync(join(wsx.paths.textbooks, '数学二年级上册'), { recursive: true });
+    writeFileSync(join(wsx.paths.textbooks, '语文二年级上册', '023.jpg'), JPG);
+    writeFileSync(join(wsx.paths.textbooks, '语文二年级上册', '5.png'), JPG);
+    writeFileSync(join(wsx.paths.textbooks, '语文二年级上册', '说明.txt'), 'x');
+    const list = (await route('GET', `/api/kid/textbook-pages?tutor=${T}`, ctx)).json as { books: { book: string; pages: { file: string; n: number }[] }[] };
+    check('课本页:只列这位老师学科的册子、只要图,照页码排', JSON.stringify(list) === '{"books":[{"book":"语文二年级上册","pages":[{"file":"5.png","n":5},{"file":"023.jpg","n":23}]}]}', JSON.stringify(list));
+    check('数学老师:没有放图的册子不列', ((await route('GET', '/api/kid/textbook-pages?tutor=math-tutor', ctx)).json as { books: unknown[] }).books.length === 0);
+    const got = await route('GET', `/api/kid/textbook-page?b=${encodeURIComponent('语文二年级上册')}&f=023.jpg`, ctx);
+    const copy = await route('POST', '/api/kid/textbook-page', ctx, { book: '语文二年级上册', file: '023.jpg' });
+    const path = (copy.json as { path: string }).path;
+    check('看一页给图;选了拷进 captures/(同孩子拍的照片),回路径', got.status === 200 && Boolean(got.file?.endsWith('023.jpg')) && copy.status === 200 && path.startsWith('captures/') && readFileSync(join(root, path)).equals(JPG), JSON.stringify(copy.json));
+    const bad = await Promise.all([route('GET', `/api/kid/textbook-page?b=..&f=023.jpg`, ctx), route('GET', `/api/kid/textbook-page?b=${encodeURIComponent('语文二年级上册')}&f=${encodeURIComponent('../x.jpg')}`, ctx), route('POST', '/api/kid/textbook-page', ctx, { book: '语文二年级上册', file: '说明.txt' }), route('GET', '/api/kid/textbook-pages?tutor=nobody', ctx)]);
+    check('越界的路径、不是图、没这位老师:404', bad.every((r) => r.status === 404));
+  }
+
   // 别的话题:没有 board
   const free = await kidSend(ctx, T, { text: '你好', newThread: true });
   await wait();

@@ -73,7 +73,8 @@ const tap = async (x, y) => {
 const press = async (sel) => { const p = await center(sel); if (!p) return false; await tap(p.x, p.y); return true; };
 /** 按到写着这几个字的那颗(拍照屏的按钮在左栏) */
 const pressText = async (sel, text) => {
-  const p = await evaluate(`(() => { const el = [...document.querySelectorAll(${JSON.stringify(sel)})].find((b) => b.textContent.includes(${JSON.stringify(text)}) && b.getBoundingClientRect().width > 0); if (!el) return null; const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+  // 实时页左栏那几颗在前(板上那块空板在实时时收着,点它的中心点不到它)
+  const p = await evaluate(`(() => { const el = [...document.querySelectorAll(${JSON.stringify(sel)})].sort((a, b) => (b.closest('#lv-acts') ? 1 : 0) - (a.closest('#lv-acts') ? 1 : 0)).find((b) => b.textContent.includes(${JSON.stringify(text)}) && b.getBoundingClientRect().width > 0); if (!el) return null; const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
   if (!p) return false;
   await tap(p.x, p.y);
   return true;
@@ -215,12 +216,32 @@ try {
   // 今天点过的(真服务给 resume):先问接着还是重新开始;mock 的方砖不给 resume,直接到拍照屏
   if (await until(`[...document.querySelectorAll('#lv-acts .lv-go, .ask-go')].some((b) => b.textContent.includes('重新开始') || b.textContent.includes('不拍'))`, 6000) && (await evaluate(`[...document.querySelectorAll('#lv-acts .lv-go, .ask-go')].some((b) => b.textContent.includes('重新开始'))`))) await pressText('#lv-acts .lv-go, .ask-go', '重新开始');
   ok('再点:到拍照屏', Boolean(await until(`[...document.querySelectorAll('#lv-acts .lv-go, .bp-start .ask-go')].some((b) => b.textContent.includes('不拍,用白板'))`, 4000)));
+  for (let i = 0; i < 100 && (await day()).messages.some((m) => m.pending); i++) await sleep(200);
+  await until(`!document.body.classList.contains('pending')`, 10000);
   await pressText('#lv-acts .lv-go, .bp-start .ask-go', '不拍,用白板');
   ok('不拍:板是白板(没有照片)', Boolean(await until(`document.querySelector('#stage').classList.contains('bp') && document.querySelector('#st-frame')?.contentDocument?.querySelector('.kt-board')?.dataset.phase === 'ready'`, 10000)) && !(await photoHref()));
   ok('发的是方砖上的字,新话题', (() => { const m = sent.filter((x) => x.t === 'send').slice(-1)[0]; return m?.body?.via?.button === 'preview' && m.body.newThread === true && !m.body.photos; })(), JSON.stringify(sent.filter((x) => x.t === 'send').slice(-1)[0]?.body));
   await until(`!document.body.classList.contains('pending')`, 20000);
   ok('老师说完,白板还在', await stageOn());
   await shot('board-7-white.png');
+
+  // ---- 八、选课本页:拍照屏上「选课本页」→ 一页一格 → 点一页,当照片发、铺板 ----
+  await press('#st-x');
+  await until(`!document.querySelector('#tutor').classList.contains('on')`, 5000);
+  await until(`Boolean(document.querySelector('[data-tile="preview"]'))`, 8000);
+  const tile3 = await evaluate(`(() => { const t = [...document.querySelectorAll('.c-tutor')].find((c) => c.textContent.includes('语文老师')); const b = t && t.querySelector('[data-tile="preview"]'); b.scrollIntoView({ block: 'center' }); const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+  await tap(tile3.x, tile3.y);
+  ok('拍照屏多一颗「选课本页」(这位老师的学科有课本页)', Boolean(await until(`[...document.querySelectorAll('#lv-acts .lv-go, .bp-start .ask-go')].some((b) => b.textContent.includes('选课本页'))`, 6000)));
+  await pressText('#lv-acts .lv-go, .bp-start .ask-go', '选课本页');
+  ok('一页一格,写着页码', Boolean(await until(`document.querySelector('#tbk').classList.contains('on') && document.querySelector('#tbk .pg span')?.textContent === '第 5 页'`, 4000)));
+  await sleep(500);
+  await shot('board-8-pages.png');
+  const nSend = sent.filter((m) => m.t === 'send').length;
+  await press('#tbk .pg');
+  ok('点一页:当照片发出去(带首页的方砖),铺满一块板', Boolean(await until(`!document.querySelector('#tbk').classList.contains('on') && (document.querySelector('#st-frame')?.contentDocument?.querySelector('.kt-svg image')?.getAttribute('href') ?? '').includes('tb-')`, 10000)) && sent.filter((m) => m.t === 'send').length === nSend + 1 && sent.filter((m) => m.t === 'send').slice(-1)[0].body.photos?.[0]?.includes('tb-'), JSON.stringify(sent.filter((m) => m.t === 'send').slice(-1)[0]?.body));
+  ok('板的顶栏也有「课本」', (await evaluate(`!document.querySelector('#st-tb').hidden`)) === true);
+  ok('字词的底垫出来(照这一页认)', Boolean(await until(`(document.querySelector('#st-frame')?.contentDocument?.querySelectorAll('.kt-word').length ?? 0) >= 3`, 10000)));
+  await shot('board-8-page.png');
 } catch (err) {
   bad++;
   console.error('✗ 探针出错:', err instanceof Error ? err.stack : err);

@@ -281,6 +281,18 @@ ${BACK_TINT_CSS}
   #st-bp button { display:flex; align-items:center; gap:6px; height:40px; padding:0 14px; border:1.5px solid var(--line, #e5e1d8); border-radius:20px; background:#fff; font:inherit; font-size:16px; font-weight:600; color:var(--ink); cursor:pointer; }
   #st-bp button svg { width:20px; height:20px; }
   .bp-start .ask-row { flex-wrap:wrap; }
+  /* 选课本页:铺满一层,册名一行,下面一页一格(缩略图 + 页码) */
+  #tbk { position:fixed; inset:0; z-index:40; background:var(--paper); display:none; flex-direction:column; }
+  #tbk.on { display:flex; }
+  #tbk .hd { display:flex; align-items:center; justify-content:space-between; padding:calc(env(safe-area-inset-top) + 12px) 16px 12px; font-size:20px; border-bottom:1px solid #0000000f; }
+  #tbk-x { width:44px; height:44px; border:0; border-radius:50%; background:#0000000a; display:grid; place-items:center; cursor:pointer; }
+  #tbk .ls { flex:1; overflow:auto; padding:12px 16px calc(env(safe-area-inset-bottom) + 24px); }
+  #tbk h3 { margin:16px 0 10px; font-size:17px; color:var(--dim); }
+  #tbk .pgs { display:grid; grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); gap:12px; }
+  #tbk .pg { border:0; padding:0; background:#fff; border-radius:12px; box-shadow:0 2px 10px #0000001a; overflow:hidden; cursor:pointer; display:flex; flex-direction:column; }
+  #tbk .pg img { width:100%; aspect-ratio:3 / 4; object-fit:cover; background:#f3efe6; }
+  #tbk .pg span { padding:6px; font-size:15px; font-weight:600; color:var(--ink); }
+  #tbk .pg.busy { opacity:.5; }
   /* 孩子从纸上交的画:节前一张——图(点开看大图)、几笔、接着画 */
   .c.c-draw { flex-direction:row; align-items:center; gap:14px; padding:10px 12px; border:2px solid #7a4fc9; border-radius:16px; background:#fff; max-width:100%; align-self:flex-start; }
   .c-draw .dw-th { width:156px; height:104px; flex:none; border:1px solid var(--line); border-radius:10px; object-fit:contain; background:#fffdf8; cursor:zoom-in; }
@@ -593,7 +605,7 @@ __VOICE_CSS__
     <div id="wrap">
       <div id="bmark" hidden></div>
       <div id="board"></div>
-      <div id="stage"><div class="top"><span class="ttl" id="st-ttl"></span><span class="kd" id="st-kd"></span><span id="st-bp"><button type="button" id="st-cam"></button><button type="button" id="st-alb"></button></span><button id="st-x" type="button"></button></div><div id="st-body"></div><iframe id="st-frame" hidden title="stage"></iframe><div id="st-pick" hidden></div><div id="st-act" hidden><span class="note" id="st-note"></span><button id="st-go" type="button">交给老师</button></div><button id="cv-hold" class="vb-mini" type="button"></button><div id="cv-cap"></div></div>
+      <div id="stage"><div class="top"><span class="ttl" id="st-ttl"></span><span class="kd" id="st-kd"></span><span id="st-bp"><button type="button" id="st-tb" hidden></button><button type="button" id="st-cam"></button><button type="button" id="st-alb"></button></span><button id="st-x" type="button"></button></div><div id="st-body"></div><iframe id="st-frame" hidden title="stage"></iframe><div id="st-pick" hidden></div><div id="st-act" hidden><span class="note" id="st-note"></span><button id="st-go" type="button">交给老师</button></div><button id="cv-hold" class="vb-mini" type="button"></button><div id="cv-cap"></div></div>
       <div id="st-dim"></div>
     </div>
     <div id="lv"><div id="lv-av"></div><div id="lv-kid"></div><div id="lv-cap"><div class="lv-prev"></div><div class="lv-cur"></div></div><div id="lv-ask"><b></b><small></small></div><div id="lv-acts"></div><button id="lv-replay" type="button" hidden><span class="ic"></span><span class="tx"></span></button><button id="lv-hold" type="button"></button><button id="lv-today" type="button">回到今天 ›</button><div id="lv-tools"><button type="button" id="lv-paper"><span class="ic"></span>画板</button><button type="button" id="lv-cam"><span class="ic"></span>拍照</button><button type="button" id="lv-album"><span class="ic"></span>相册</button><button type="button" id="lv-type"><span class="ic"></span>打字</button></div></div>
@@ -629,6 +641,7 @@ __VOICE_CSS__
     <div class="tools" id="ps-pen-bar" hidden><button type="button" id="ps-p-undo">撤销</button><button type="button" id="ps-p-clear">清空</button><button type="button" class="ok" id="ps-p-ok">好了</button></div>
     <div class="foot" id="ps-foot"><button type="button" id="ps-cancel">取消</button><button type="button" id="ps-go">发给老师</button></div>
   </div>
+  <div id="tbk"><div class="hd"><b>选课本页</b><button type="button" id="tbk-x" aria-label="关上"></button></div><div class="ls"></div></div>
   <div id="lb"><div class="zoom"><img alt=""></div><button type="button" class="x" id="lb-x"></button><button type="button" class="nav l" id="lb-l">‹</button><button type="button" class="nav r" id="lb-r">›</button><div class="n" id="lb-n"></div></div>
 </section>
 <script>
@@ -721,7 +734,7 @@ ${BOARD_MARK_JS}
 
   // ---- 状态 ----
   /** 以板为主的 activity(头上 board: page):on = 这个话题的页面是板;base = 现在的底(照片路径,null 白板,undefined 还没定);label = 方砖上的字(不拍照直接开始时发它) */
-  const BP = { on: false, base: undefined, label: '' };
+  const BP = { on: false, base: undefined, label: '', books: [] };
   const S = { home: null, tutor: null, day: null, sections: [], played: new Set(), state: { section: -1, line: -1, status: 'idle' }, pending: false, waitSince: null, offline: false, bar: 'idle', pollTimer: null, stage: null, partial: null, thread: null, threadAt: null, hist: null, readonly: false, newThread: false, device: 'phone', via: null, cont: null, ask: null, talk: null, talkWait: false, reel: null, pendSaid: null, homeDraw: true, autoOpened: new Set() };
   // 实时的老师这一次(连、发、收、画在下面「实时的老师」那一块):on = 这位老师这一次走实时(左栏的样子);ready = 嘴连上了;
   // model = liveStep 的状态(只在 liveDispatch 里写);cap = 字幕(上一句、在说的、被打断的那句);heard = 每一轮(job)念到第几句
@@ -1127,6 +1140,7 @@ ${HOME_TILES_JS}
     // 口语课页拍好了口语单:先等孩子点「先热身,再打电话」(那一下起声音),发出去的第一条带 talk
     S.talk = intent.talk || null; S.talkWait = Boolean(intent.talk);
     BP.on = Boolean(intent.board) && !intent.ask; BP.base = undefined; BP.label = intent.label || '';
+    if (intent.board) bpBooks();
     // 先定走不走实时,再热麦克风:实时时麦克风的自检要开在实时那个 AudioContext 里(liveOpen)
     if (liveWanted(t)) liveOpen(intent); else liveClose();
     $('#hist').classList.remove('on'); $('#menu').classList.remove('on'); renderBar(); renderHeader();
@@ -1203,6 +1217,45 @@ ${HOME_TILES_JS}
         { cls: 'back', icon: 'album', s: '从相册选', go: () => bpPick(false) },
         { cls: 'back', icon: 'spark', s: '不拍,用白板', go: bpWhite }] });
   };
+  /** 这位老师学科的课本页(vault 里教材旁边的图):有就在拍照屏和板的顶栏多一颗「选课本页」 */
+  const bpBooks = () => {
+    const name = S.tutor && S.tutor.name;
+    BP.books = [];
+    $('#st-tb').hidden = true;
+    if (!name) return;
+    api('GET', '/api/kid/textbook-pages?tutor=' + encodeURIComponent(name)).then((j) => {
+      if (!S.tutor || S.tutor.name !== name || !j || !Array.isArray(j.books) || !j.books.length) return;
+      BP.books = j.books;
+      $('#st-tb').hidden = false;
+      const blank = $('#board .bp-start');
+      if (!blank) return;
+      const row = blank.querySelector('.ask-row');
+      if (row && !row.querySelector('.tb-go')) row.insertBefore(h('button', { type: 'button', class: 'ask-go back tb-go', style: 'color:' + tutorColor() + ';border-color:' + tutorColor(), on: { click: tbkOpen } }, h('span', { class: 't' }, h('span', { class: 'ic', html: ICON.album }), '选课本页')), row.children[1] || null);
+      if (blank._open && !blank._open.acts.some((a) => a.s === '选课本页')) { blank._open.acts.splice(1, 0, { cls: 'back', icon: 'album', s: '选课本页', go: tbkOpen }); LO.el = undefined; openSync(); }
+    }, () => {});
+  };
+  /** 选课本页:一册一段,一页一格;点一页 → 拷进 captures/ → 当孩子拍的照片发、铺板 */
+  const tbkOpen = () => {
+    if (!S.tutor || S.pending || S.readonly || !BP.books.length) return;
+    unlock();
+    const pick = async (book, page, el) => {
+      if (el.classList.contains('busy') || !S.tutor || S.pending || !canSend()) return;
+      el.classList.add('busy');
+      try {
+        const r = await api('POST', '/api/kid/textbook-page', { book, file: page.file });
+        $('#tbk').classList.remove('on');
+        const b = $('#board .blank'); if (b) b.remove();
+        send('', { photos: [r.path] });
+        if (BP.on) bpBase(r.path);
+      } catch { el.classList.remove('busy'); }
+    };
+    $('#tbk .ls').replaceChildren(...BP.books.flatMap((bk) => [h('h3', {}, bk.book), h('div', { class: 'pgs' }, ...bk.pages.map((pg) => { const el = h('button', { type: 'button', class: 'pg' }, h('img', { src: '/api/kid/textbook-page?b=' + encodeURIComponent(bk.book) + '&f=' + encodeURIComponent(pg.file), alt: '', loading: 'lazy' }), h('span', {}, pg.n != null ? '第 ' + pg.n + ' 页' : pg.file)); el.addEventListener('click', () => pick(bk.book, pg, el)); return el; }))]));
+    $('#tbk').classList.add('on');
+  };
+  $('#tbk-x').innerHTML = ICON.close;
+  $('#tbk-x').addEventListener('click', () => $('#tbk').classList.remove('on'));
+  $('#st-tb').innerHTML = ICON.album + '<span>课本</span>';
+  $('#st-tb').addEventListener('click', tbkOpen);
   /** 拍照 / 相册:一个现做的 file input(和输入条的相机同一套 wireFile),拍完进发照片屏;发出去时铺板(ps-go) */
   const bpPick = (camera) => {
     if (!S.tutor || S.pending || S.readonly) return;
@@ -1250,6 +1303,7 @@ ${HOME_TILES_JS}
   const bpSync = (mine) => {
     if (S.newThread || S.readonly || REEL) return;
     if (!mine.some((m) => m.board === 'page')) { BP.on = false; return; }
+    if (!BP.on) bpBooks();
     BP.on = true;
     if (BP.base === undefined) { BP.base = null; for (const m of mine) if (m.question !== null && Array.isArray(m.photos) && m.photos.length) BP.base = m.photos[m.photos.length - 1]; }
     if (S.stage) { $('#stage').classList.add('bp'); return; }

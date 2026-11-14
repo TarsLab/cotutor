@@ -273,6 +273,15 @@ ${BACK_TINT_CSS}
   #cv-hold, #cv-cap { display:none !important; }
   body.live #stage.cv #cv-hold { display:flex !important; position:absolute; z-index:2; left:calc(env(safe-area-inset-left) + 4px); bottom:calc(env(safe-area-inset-bottom) + 20px); }
   body.live.hand-left #stage.cv #cv-hold { left:auto; right:calc(env(safe-area-inset-right) + 4px); }
+  /* 以板为主(2026-11-14):老师是左边中间浮着的一张卡——大头像,底下一行跟着左栏那颗变(按住说话 / 在听…);左手的在右边。原来是左下 64px 的小圆,孩子按不准 */
+  body.live #stage.cv.bp #cv-hold { left:calc(env(safe-area-inset-left) + 16px); right:auto; top:50%; bottom:auto; translate:0 -50%; width:136px; height:auto; padding:14px 8px 12px; flex-direction:column; gap:8px; border-radius:30px; box-shadow:0 8px 28px #46371e33; }
+  body.live.hand-left #stage.cv.bp #cv-hold { left:auto; right:calc(env(safe-area-inset-right) + 16px); }
+  #stage.bp #cv-hold .vb-av { width:104px; height:104px; --vb-h1:-4px; --vb-h2:-12px; }
+  #stage.bp #cv-hold .vb-av > .av { width:88px; height:88px; font-size:40px; }
+  #stage.bp #cv-hold .vb-side { display:block; align-self:stretch; height:24px; }
+  #stage.bp #cv-hold .vb-big { justify-content:center; gap:4px; font-size:16px; font-weight:700; white-space:nowrap; }
+  #stage.bp #cv-hold .vb-big .vb-ic svg { width:18px; height:18px; }
+  #stage.bp #cv-hold .vb-small { display:none; }
   #stage.cv #cv-cap { display:block !important; position:absolute; z-index:2; top:calc(env(safe-area-inset-top) + 68px); left:50%; translate:-50% 0; width:max-content; max-width:min(720px, calc(100% - 200px)); box-sizing:border-box; padding:10px 18px; border-radius:16px; background:#fffffff2; box-shadow:0 4px 18px #0000001f; font-size:20px; line-height:1.45; font-weight:600; color:var(--ink); opacity:0; pointer-events:none; transition:opacity .3s; }
   #stage.cv #cv-cap.on { opacity:1; }
   /* 以板为主:板是页面;顶栏多两颗换底的钮(拍照、相册),左上的 × 是回首页 */
@@ -281,6 +290,23 @@ ${BACK_TINT_CSS}
   #stage.bp.bk #st-bp { display:none; }
   #st-bp button { display:flex; align-items:center; gap:6px; height:40px; padding:0 14px; border:1.5px solid var(--line, #e5e1d8); border-radius:20px; background:#fff; font:inherit; font-size:16px; font-weight:600; color:var(--ink); cursor:pointer; }
   #st-bp button svg { width:20px; height:20px; }
+  /* 以板为主:板铺到顶,顶栏是浮在板上的一层(只有按钮收触摸)、顶上一层纸色渐隐(2026-11-14 原来是一条 56px 的白栏);
+     左上的 × 换成和老师页一样的「‹ 语」胶囊(回首页,stageBackSync);老师板卡的题目有字才露,垫白底 */
+  #stage.bp .top { position:absolute; left:0; right:0; top:0; z-index:4; min-height:0; border:0; background:linear-gradient(rgba(246,243,236,.85), rgba(246,243,236,0)); padding:calc(env(safe-area-inset-top) + 12px) calc(env(safe-area-inset-right) + 220px) 24px calc(env(safe-area-inset-left) + 16px); pointer-events:none; }
+  #stage.bp .top > * { pointer-events:auto; }
+  #stage.bp .top .ttl { flex:0 1 auto; }
+  #stage.bp .top .ttl:empty { display:none; }
+  #stage.bp .top .ttl:not(:empty) { padding:10px 16px; border-radius:20px; background:#fffffff0; box-shadow:0 2px 10px #00000014; }
+  #stage.bp #st-bp { margin-left:auto; }
+  #stage.bp #st-frame { position:absolute; inset:0; height:100%; }
+  #st-x.st-back { display:flex; align-items:center; gap:2px; width:auto; height:48px; padding:0 4px 0 8px; border-radius:24px; background:#fffffff0; border:1px solid var(--line); box-shadow:0 4px 16px #46371e2e; color:var(--ink); }
+  #st-x.st-back .bk-ic { width:24px; height:24px; color:var(--dim); display:grid; place-items:center; }
+  #st-x.st-back .ct-logo { color:var(--ink); margin:0 8px 0 4px; }
+  #st-x.st-back .bk-ini { display:none; }
+  #st-x.st-back.tinted { background:var(--bk); border-color:var(--bk); color:#fff; }
+  #st-x.st-back.tinted .ct-logo { color:#fff; }
+  #st-x.st-back.tinted .bk-ic { color:#ffffffd9; }
+  #st-x.st-back.tinted .bk-ini { display:block; flex:none; margin:0 12px 0 -2px; font-size:23px; font-weight:800; line-height:1; color:#fff; }
   .bp-start .ask-row { flex-wrap:wrap; }
   /* 选课本页:铺满一层,册名一行,下面一页一格(缩略图 + 页码) */
   #tbk { position:fixed; inset:0; z-index:40; background:var(--paper); display:none; flex-direction:column; }
@@ -2269,6 +2295,16 @@ __WORD_DRAW_JS__
   // 孩子关:讲稿交给小课堂卡、还没放完的,关了接着念
   const closeByKid = () => { if (BP.on && !S.readonly) { closeTutor(); return; } const d = S.stage; const card = d && S.sections[d.section] ? S.sections[d.section].cards[d.card] : null; closeStage(); if (d && d.delegate && card && (!isHeavy(card) || card.kind === 'lecture')) resumeAfter(); };
   $('#st-x').addEventListener('click', closeByKid);
+  /** 以板为主(舞台带 bp):板是整页,左上的 × 换成老师页那颗「‹ 语」胶囊(照抄 #back,颜色跟着老师);别的舞台还是 × */
+  const stageBackSync = () => {
+    const bp = $('#stage').classList.contains('bp'), x = $('#st-x');
+    if (x.classList.contains('st-back') === bp) return;
+    x.classList.toggle('st-back', bp);
+    const b = $('#back');
+    if (bp) { x.innerHTML = b.innerHTML.replace('id="back-ic"', 'class="bk-ic"'); x.classList.toggle('tinted', b.classList.contains('tinted')); x.style.setProperty('--bk', b.style.getPropertyValue('--bk')); x.setAttribute('aria-label', '回首页'); }
+    else { x.innerHTML = ICON.close; x.classList.remove('tinted'); x.style.removeProperty('--bk'); x.removeAttribute('aria-label'); }
+  };
+  new MutationObserver(stageBackSync).observe($('#stage'), { attributes: true, attributeFilter: ['class'] });
   $('#st-dim').addEventListener('click', closeByKid);
   /** 选择题:点一项 → 本地改状态、重画、PUT 到服务端(失败不响,下次再点再存) */
   const pick = (secIdx, idx, i) => {
@@ -2650,15 +2686,45 @@ __WORD_DRAW_JS__
     R.clock = reelClock(R.d.reel, R.real);
     R.p = R.clock.toPlay(w);
   };
-  /** 弹窗(实录):孩子开着哪张就只读地开哪张,改了就重画(重卡重发一次 card);关了就关。点不动(body.rlk) */
+  /** 录像里的课本:孩子挪过窗就照他停下的那块看(写成老师的「看」,舞台照它移窗) */
+  const reelLook = (card, box) => {
+    if (!box || !card || card.kind !== 'kit' || !card.props || card.props.kit !== '课本') return card;
+    return { ...card, props: { ...card.props, params: { ...card.props.params, 看: '孩子在看|' + box.join(' ') } } };
+  };
+  /** 弹窗(实录):孩子开着哪张就只读地开哪张,改了就重画(重卡重发一次 card);关了就关。点不动(body.rlk)。
+   *  以板为主的话题(reel.owns):板是整页——老师的板卡没开着时是应用自己铺的那块(课本目录、照片、白板,bpShow 照孩子端铺),孩子挪的窗跟着(f.bview) */
   const reelStage = (f, rebuilt) => {
     const R = S.reel;
+    BP.on = Boolean((R.d.reel.owns || []).length);
     const i = f.stage ? S.sections.findIndex((x) => x.job === f.stage.job) : -1;
     const want = i >= 0 && S.sections[i].cards[f.stage.card] ? f.stage.job + '/' + f.stage.card : '';
-    if (!want) { if (S.stage) { closeStage(); R.now = ''; } R.stageKey = ''; return; }
-    const card = S.sections[i].cards[f.stage.card];
-    const sk = JSON.stringify(card.state === undefined ? null : card.state);
-    if (R.stageKey !== want || !S.stage) { if (S.stage) closeStage(); openStage(i, f.stage.card, { delegate: true }); R.stageKey = want; R.stageState = sk; return; }
+    if (!want) {
+      R.stageKey = '';
+      if (f.own) {
+        const key = JSON.stringify([f.own, f.bview]);
+        if (R.ownKey === key && S.stage && S.stage.own) return;
+        R.ownKey = key; R.now = '';
+        const own = reelLook(f.own, f.bview);
+        BP.book = own.props.kit === '课本'; BP.base = boardBase(own);
+        bpShow(own);
+        return;
+      }
+      R.ownKey = '';
+      if (S.stage) { closeStage(); R.now = ''; }
+      return;
+    }
+    R.ownKey = '';
+    const card0 = S.sections[i].cards[f.stage.card];
+    const card = reelLook(card0, f.bview);
+    // 换成带孩子那扇窗的一份(录像里的 S.sections 是 reelDraw 现拼的,下次重拼又是原样):舞台要卡(ready)时拿的就是它
+    if (card !== card0) S.sections[i].cards[f.stage.card] = card;
+    const sk = JSON.stringify([card0.state === undefined ? null : card0.state, f.bview]);
+    if (R.stageKey !== want || !S.stage) {
+      if (S.stage) closeStage();
+      if (card.kind === 'kit' && card.props.kit === '课本') BP.book = true;
+      openStage(i, f.stage.card, { delegate: true });
+      R.stageKey = want; R.stageState = sk; return;
+    }
     S.stage.section = i;
     if (sk === R.stageState && !rebuilt) return;
     R.stageState = sk;

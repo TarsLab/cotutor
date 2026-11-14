@@ -213,4 +213,26 @@ check('时长的写法', reelDuration(23400) === '23 秒' && reelDuration(130000
   check('实时的轮没有通话的录像:当不是实时的,写完那一刻整节铺上、不念', noCall.says.length === 0 && noCall.tracks.length === 1 && noCall.tracks[0].at === T + 2300 + 4000);
 }
 
+{
+  // 以板为主(2026-11-14 家长看到的录像是一块空板):应用自己铺的板(服务端给 owns)老师的板卡没开着时就在板上;
+  // 孩子在课本上挪的窗从通话里的 {t:'board', k:'view', box} 来,只认这块板铺上以后的;孩子开口不收板卡
+  const book = { kind: 'kit', props: { kit: '课本', params: { 书: 'a.pdf', 课: '目录', 看: '', 页: '3-4' }, ops: ['点字'] } };
+  const P1 = msg('P1', { live: true, text: '预习', timing: { startedAt: iso(T) }, section: { cards: [{ kind: 'kit', props: { kit: '课本', params: { 书: 'a.pdf', 课: '日月潭' } } }], lines: [line('我们看日月潭', 0)] } as unknown as BoardSection });
+  const P2 = msg('P2', { live: true, text: '我要预习日月潭', timing: { startedAt: iso(T + 30000) } });
+  const callP = { audio: '2026-11-14.live/183345.wav', startAt: T, playing: [], msgs: [
+    [100, 'o', { t: 'turn', job: 'P1', thread: 'th' }],
+    [5000, 'i', { t: 'board', body: { k: 'view', thread: 'th', base: 'a.pdf#目录', box: [-387, 101, 1298, 901] } }],
+    [28000, 'i', { t: 'hold' }], [29500, 'i', { t: 'release', body: {} }], [30000, 'o', { t: 'turn', job: 'P2', thread: 'th' }],
+    [40000, 'i', { t: 'board', body: { k: 'view', thread: 'th', base: 'a.pdf#日月潭', box: [0, 500, 1000, 1200] } }],
+  ] };
+  const plays: PlayRecord[] = [{ at: T + 20000, k: 'stage', job: 'P1', card: 0, open: true }];
+  const r = buildReel(input([P1, P2], { calls: [callP as unknown as NonNullable<ReelInput['calls']>[number]], plays, owns: [{ at: T, card: book }] }))!;
+  const f1 = reelFrameAt(r, T + 2000), f2 = reelFrameAt(r, T + 6000), f3 = reelFrameAt(r, T + 35000), f4 = reelFrameAt(r, T + 41000);
+  check('以板为主:一开始板上是应用铺的课本目录,孩子还没挪窗', f1.stage === null && JSON.stringify(f1.own) === JSON.stringify(book) && f1.bview === null, JSON.stringify(f1.own));
+  check('以板为主:孩子挪了窗 → 录像照他停下的那块看', JSON.stringify(f2.bview) === '[-387,101,1298,901]');
+  check('以板为主:老师的课本卡开了盖过应用的那块;孩子开口(29 秒)以后板卡还开着,挪窗只认它开了以后的', f3.stage?.job === 'P1' && f3.own === null && f3.bview === null && JSON.stringify(f4.bview) === '[0,500,1000,1200]', JSON.stringify([f3.stage, f3.bview, f4.bview]));
+  const plain = buildReel(input([P1, P2], { calls: [callP as unknown as NonNullable<ReelInput['calls']>[number]], plays }))!;
+  check('不是以板为主:没有 owns / bviews,弹窗照旧到孩子开口就收', plain.owns === undefined && reelFrameAt(plain, T + 2000).own === null && reelFrameAt(plain, T + 35000).stage === null);
+}
+
 done();

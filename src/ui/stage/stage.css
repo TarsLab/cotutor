@@ -63,9 +63,9 @@ html, body, #root { margin: 0; height: 100%; background: #fffdf8; font: 18px/1.5
 .kt-word.kt-hit { fill: rgba(28, 126, 214, .3); stroke: #1c7ed6; }
 .kt-word.kt-loose { transition: none; }
 
-/* ---- 课本(book.tsx):窗占满板(顶上给页面的顶栏留一条);一课的几页在随窗变换的容器里,孩子拖、捏都是改这个容器的 transform;类名带 bk- ---- */
+/* ---- 课本(book.tsx):窗占满板(页面的顶栏浮在上面,不留一条,2026-11-14);一课的几页在随窗变换的容器里,孩子拖、捏都是改这个容器的 transform;类名带 bk- ---- */
 .bk-board { background: #f4f1ea; overflow: hidden; }
-.bk-view { position: absolute; inset: 64px 0 0 0; overflow: hidden; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.bk-view { position: absolute; inset: 0; overflow: hidden; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .bk-paper { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
 .bk-page { position: absolute; display: block; background: #ffffff; box-shadow: 0 1px 6px rgba(0, 0, 0, .14); }
 .bk-sharp { position: absolute; display: none; pointer-events: none; }

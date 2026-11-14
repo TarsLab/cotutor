@@ -153,6 +153,12 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
     const [vw, vh] = vsize();
     return clamp({ cx: (b[0] + b[2]) / 2, cy: (b[1] + b[3]) / 2, s: Math.min(vw / (b[2] - b[0]), vh / (b[3] - b[1])) });
   };
+  /** 老师没写「看」:页宽铺满窗、第一页的顶贴着窗顶(2026-11-14:原来整页塞进窗,横屏两边各空一大块;顶栏浮在上面,不占地方) */
+  const pageTop = (): Cam => {
+    const [vw, vh] = vsize();
+    const s = vw / BOOK_W;
+    return clamp({ s, cx: BOOK_W / 2, cy: vh / 2 / s });
+  };
   const moveTo = (to: Cam, animate: boolean): void => {
     cancelAnimationFrame(glide.current);
     const from = { ...cam.current };
@@ -290,8 +296,8 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
       cur.current = { marks: (state?.marks ?? []).slice(0, KIT_MARK_MAX), aspect };
       revealed.current = new Set();
       paintInk();
-      const frame = def?.build(kp, { aspect }).frame;
-      cam.current = camFor(frame ? [frame[0], frame[1], frame[0] + frame[2], frame[1] + frame[3]] : [0, 0, BOOK_W, Math.min(sheets[0].height, BOOK_W * 0.8)]);
+      const frame = bookSpots(kp['看'])[0]?.box ? def?.build(kp, { aspect }).frame : null;
+      cam.current = frame ? camFor([frame[0], frame[1], frame[0] + frame[2], frame[1] + frame[3]]) : pageTop();
       apply();
       setPhase('ready');
       emitted.current = id;

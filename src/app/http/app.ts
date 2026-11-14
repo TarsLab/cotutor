@@ -20,7 +20,7 @@ import { parseEvents } from '../../runtime/journal/events.ts';
 import { type RunEvent } from '../../schema/index.ts';
 import { NEUTRAL_COLOR, SUBJECT_COLORS, TUTOR_PALETTE, tutorColors } from '../../ui/shared/tutor-color.ts';
 import { boardMarkOf, type BoardMarkId } from '../../ui/kid/board-mark.ts';
-import { buildReel, playRecordOk, reelCardTook, reelHolds, reelMissRuns, type PlayRecord, type Reel, type ReelCall } from '../../ui/kid/reel.ts';
+import { buildReel, playRecordOk, reelCardTook, reelHolds, reelMissRuns, type PlayRecord, type Reel, type ReelCall, type ReelOwn } from '../../ui/kid/reel.ts';
 import type { CallReel } from '../../runtime/journal/recorder.ts';
 import { DATE_RE, FocusSchema, canonicalSubject, MESSAGE_FROM, listTutors, subjectLang, viaSendsLabel, type ConversationIndex, type ConversationMessage, type MemoryLine, type TutorExtra } from '../../schema/index.ts';
 import type { BoardCard, Device } from '../../board/presentation.ts';
@@ -63,6 +63,7 @@ import { dictationRoute } from '../dictation/route.ts';
 import { kidWords, readWords } from '../../scenes/photo-words/store.ts';
 import { listTextbookPages, textbookPageFile } from '../../memory/textbook-pages.ts';
 import { bookFile, bookIndex, listBooks, pickBook } from '../../memory/textbook-pdf.ts';
+import { readBoard } from '../../runtime/journal/board-log.ts';
 import { bookLesson } from '../../board/board-page.ts';
 import { bookPages } from '../../chalk/index.ts';
 import type { Look } from '../../scenes/look.ts';
@@ -373,7 +374,8 @@ export async function parentReel(ctx: AppContext, tutor: string, date: string, t
   const cards = Object.fromEntries(Object.entries(states).filter(([job]) => jobs.has(job)));
   const plays = await readPlays(ctx.ws, tutor, date, jobs);
   const calls = mine.some((m) => m.live) ? await liveCalls(ctx, tutor, date, jobs) : [];
-  const reel = buildReel({ messages: mine, events, cards, now: ctx.now().getTime(), plays, calls });
+  const owns = await reelOwns(ctx.ws, tutor, date, thread, mine);
+  const reel = buildReel({ messages: mine, events, cards, now: ctx.now().getTime(), plays, calls, owns });
   if (!reel) return null;
   const day = await parentDay(ctx, tutor, date);
   const kid = await kidDay(ctx, tutor, date);
@@ -382,6 +384,38 @@ export async function parentReel(ctx: AppContext, tutor: string, date: string, t
   const face = { name: tutor, display: t?.display ?? tutor, avatar: t ? shownAvatar(t) : null, subject: t?.subject ?? null, color: tutorColors(ctx.ws.config.tutors)[tutor] ?? NEUTRAL_COLOR, mark: boardMarkOf(t?.subject) };
   const live = date === localDate(ctx.now()) || mine.some((m) => m.result === 'running');
   return { tutor, date, thread, reel, messages: day.messages.filter((m) => m.thread === thread), kid: kid.messages.filter((m) => m.thread === thread), device, face, live, realtime: mine.some((m) => m.live) };
+}
+
+/** 课本做底的那张卡(孩子端 bpOpenBook 铺的):这本书的这一课(null = 目录);读不出、没有这一课 → null */
+async function bookBaseCard(ws: Workspace, name: string, lesson: string | null): Promise<{ kind: string; props: Record<string, unknown> } | null> {
+  const ix = await bookIndex(ws.paths.textbooks, join(ws.root, '.cotutor', 'textbooks'), name).catch(() => null);
+  const at = ix ? bookLesson(ix, lesson) : null;
+  if (!at?.pages.length) return null;
+  const range = at.pages.length > 1 ? `${at.pages[0].n}-${at.pages[at.pages.length - 1].n}` : String(at.pages[0].n);
+  return { kind: 'kit', props: { kit: '课本', params: { 课: at.title, 看: '', 圈: '', 遮: '', 书: name, 页: range }, ops: ['点字'] } };
+}
+
+/**
+ * 以板为主的话题,录像里应用自己铺的板(孩子端 kid-page 的 bpOpenBook / bpBase;它们不经实时那条连接,录像原来不知道,2026-11-14 家长看到的是一块空板):
+ * 课本做底 = 板的日志里最早那块「册子#课」,从第一条起;照片板 = 孩子每发一张照片起换成它;一张都没发 = 白板
+ */
+async function reelOwns(ws: Workspace, tutor: string, date: string, thread: string, mine: readonly ConversationMessage[]): Promise<ReelOwn[]> {
+  if (!mine.some((m) => m.board === 'page')) return [];
+  const at = (m: ConversationMessage): number => { const t = Date.parse(m.timing?.startedAt ?? ''); return Number.isNaN(t) ? Date.parse(m.at) : t; };
+  const from = at(mine[0]);
+  const bases = (await readBoard(ws, tutor, date, thread)).flatMap((e) => (e.k === 'turn' ? [e.told ?? ''] : e.k === 'view' ? [e.base] : []));
+  const book = bases.find((b) => /\.pdf#/i.test(b));
+  if (book) {
+    const cut = book.lastIndexOf('#');
+    const card = await bookBaseCard(ws, book.slice(0, cut), book.slice(cut + 1) || null);
+    return card ? [{ at: from, card }] : [];
+  }
+  const out: ReelOwn[] = [];
+  for (const m of mine) {
+    const photo = m.from === 'kid' && m.photos?.length ? m.photos[m.photos.length - 1] : null;
+    if (photo) out.push({ at: at(m), card: { kind: 'kit', props: { kit: '照片', params: { 图: photo }, ops: ['看'] } } });
+  }
+  return out.length ? out : [{ at: from, card: { kind: 'kit', props: { kit: '白板', params: { 写: '' }, ops: ['看'] } } }];
 }
 
 /** 这一天实时老师的通话录像(<日期>.live/<时分秒>.reel.json,src/runtime/live/call.ts 落的)里有这几轮的;声音是同名的 .wav。坏的、没声音的跳过 */
@@ -961,11 +995,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       const t = ws.config.tutors[url.searchParams.get('tutor') ?? ''];
       if (!t) return { status: 404, json: { error: 'not_found' } };
       const name = pickBook(await listBooks(ws.paths.textbooks, canonicalSubject(t.subject) || null), ctx.now());
-      const ix = name ? await bookIndex(ws.paths.textbooks, join(ws.root, '.cotutor', 'textbooks'), name).catch(() => null) : null;
-      const at = ix ? bookLesson(ix, null) : null;
-      if (!name || !at?.pages.length) return { status: 200, json: { card: null } };
-      const range = at.pages.length > 1 ? `${at.pages[0].n}-${at.pages[at.pages.length - 1].n}` : String(at.pages[0].n);
-      return { status: 200, json: { card: { kind: 'kit', props: { kit: '课本', params: { 课: at.title, 看: '', 圈: '', 遮: '', 书: name, 页: range }, ops: ['点字'] } } } };
+      return { status: 200, json: { card: name ? await bookBaseCard(ws, name, null) : null } };
     }
     if (p === '/api/kid/textbook/lines' && method === 'GET') {
       const name = url.searchParams.get('b') ?? '';

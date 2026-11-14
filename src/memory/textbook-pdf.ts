@@ -1,0 +1,118 @@
+/**
+ * 课本 PDF(2026-11-14):vault 的 `教材/` 下家长放的教材 PDF(从国家中小学智慧教育平台这类网站下的,个人学习用)。
+ * 这里只读:列出这位老师学科的册子、挑这学期的那一册、读 PDF 的文字层做成索引(textbook-index.ts)存进 `.cotutor/textbooks/<指纹>.json`。
+ * 索引能重新生成(不进备份);PDF 换了(指纹变了)就重做。整本 126 页读一遍约 1 秒,只在第一次用到时读。
+ *
+ * pdf.js 不是运行时依赖(装 cotutor 不多带 35 MB):打包时把它的几个压缩文件拷进 dist/stage/pdf/(scripts/build-stage.mjs),
+ * 服务端和舞台用同一份;仓库里直跑时退回 node_modules 里的 pdfjs-dist(devDependencies)。
+ */
+import { createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
+import { mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { BOOK_INDEX_VERSION, type BookIndex, type PdfItem, type PdfPage } from '../schema/index.ts';
+import { buildBookIndex } from './textbook-index.ts';
+
+/** 册子的文件名:不带路径分隔、不以点开头、是 .pdf */
+const SAFE = /^[^/\\.][^/\\]{0,160}\.pdf$/i;
+
+/** 教材目录下的 PDF;subject 给了就只要文件名里带这个学科的(「语文二年级上册-人教统编版.pdf」) */
+export async function listBooks(dir: string, subject: string | null): Promise<string[]> {
+  const names = await readdir(dir).catch(() => [] as string[]);
+  return names.filter((n) => SAFE.test(n) && (!subject || n.includes(subject))).sort();
+}
+
+/** 这学期的那一册:2–7 月是下册,其余是上册;文件名里没写上下册的、或只有一册,取第一册 */
+export function pickBook(names: readonly string[], now: Date): string | null {
+  if (!names.length) return null;
+  const half = now.getMonth() + 1 >= 2 && now.getMonth() + 1 <= 7 ? '下册' : '上册';
+  return names.find((n) => n.includes(half)) ?? names[0];
+}
+
+/** 一册的文件路径;名字不对、不在 = null */
+export async function bookFile(dir: string, name: string): Promise<string | null> {
+  if (!SAFE.test(name)) return null;
+  const p = join(dir, name);
+  return (await stat(p).catch(() => null))?.isFile() ? p : null;
+}
+
+type Pdfjs = typeof import('pdfjs-dist');
+let pdfjs: Promise<Pdfjs> | null = null;
+
+/** pdf.js:先找打包好的(dist/stage/pdf/;npm 包里这个文件在 dist/memory/,仓库里在 src/memory/),没有再找 node_modules */
+export function loadPdfjs(): Promise<Pdfjs> {
+  pdfjs ??= (async () => {
+    for (const rel of ['../stage/pdf/pdf.min.mjs', '../../dist/stage/pdf/pdf.min.mjs']) {
+      const u = new URL(rel, import.meta.url);
+      if (existsSync(fileURLToPath(u))) return (await import(u.href)) as Pdfjs;
+    }
+    const spec = 'pdfjs-dist/legacy/build/pdf.min.mjs';
+    return (await import(spec)) as Pdfjs;
+  })();
+  return pdfjs;
+}
+
+/** 读 PDF 每一页的文字(PdfItem:基线从页顶量) */
+export async function readPdfPages(data: Uint8Array): Promise<PdfPage[]> {
+  const lib = await loadPdfjs();
+  const task = lib.getDocument({ data, disableFontFace: true, verbosity: 0 });
+  const doc = await task.promise;
+  try {
+    const out: PdfPage[] = [];
+    for (let n = 1; n <= doc.numPages; n++) {
+      const page = await doc.getPage(n);
+      const vp = page.getViewport({ scale: 1 });
+      const tc = await page.getTextContent();
+      const items: PdfItem[] = [];
+      for (const it of tc.items) {
+        if (!('str' in it) || !it.str.trim()) continue;
+        const [a, b, , , e, f] = it.transform as number[];
+        items.push({ s: it.str, f: it.fontName, x: Math.round(e * 100) / 100, y: Math.round((vp.height - f) * 100) / 100, z: Math.round(Math.hypot(a, b) * 100) / 100, w: Math.round(it.width * 100) / 100 });
+      }
+      out.push({ n, w: vp.width, h: vp.height, items });
+      page.cleanup();
+    }
+    return out;
+  } finally {
+    await task.destroy();
+  }
+}
+
+/** 同一个文件(路径 + 大小 + 改动时间)这个进程里只读一次 */
+const memo = new Map<string, Promise<BookIndex | null>>();
+
+/**
+ * 一册的索引:缓存里有、版本对、指纹对就用;不然读 PDF 现做,写进缓存。文件不在 = null;PDF 读不了抛(调用的那层给家长说一句)。
+ * cacheDir = `<workspace>/.cotutor/textbooks`
+ */
+export async function bookIndex(dir: string, cacheDir: string, name: string): Promise<BookIndex | null> {
+  const file = await bookFile(dir, name);
+  if (!file) return null;
+  const st = await stat(file);
+  const key = `${file}|${st.size}|${st.mtimeMs}`;
+  let hit = memo.get(key);
+  if (!hit) {
+    hit = (async () => {
+      const data = await readFile(file);
+      const sha = createHash('sha1').update(data).digest('hex').slice(0, 16);
+      const cache = join(cacheDir, `${sha}.json`);
+      const old = await readFile(cache, 'utf8').then((s) => JSON.parse(s) as BookIndex).catch(() => null);
+      if (old && old.v === BOOK_INDEX_VERSION && old.sha === sha) return { ...old, file: name };
+      const index = buildBookIndex(await readPdfPages(new Uint8Array(data)), { file: name, sha, title: name.replace(/\.pdf$/i, '') });
+      await mkdir(cacheDir, { recursive: true });
+      const tmp = `${cache}.${process.pid}.tmp`;
+      await writeFile(tmp, JSON.stringify(index));
+      await rename(tmp, cache);
+      return index;
+    })();
+    memo.set(key, hit);
+    hit.catch(() => memo.delete(key));
+  }
+  return hit;
+}
+
+/** 测试用:清掉进程里记着的 */
+export function forgetBooks(): void {
+  memo.clear();
+}

@@ -35,6 +35,10 @@ export const FONTS_DIR = fontsDir();
 export const MIME: Record<string, string> = {
   html: 'text/html; charset=utf-8',
   js: 'text/javascript; charset=utf-8',
+  // pdf.js(dist/stage/pdf/):模块、字符映射表、标准字体
+  mjs: 'text/javascript; charset=utf-8',
+  bcmap: 'application/octet-stream',
+  pfb: 'application/octet-stream',
   css: 'text/css; charset=utf-8',
   json: 'application/json; charset=utf-8',
   mp3: 'audio/mpeg',

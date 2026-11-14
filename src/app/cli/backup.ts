@@ -18,7 +18,7 @@ const META = 'backup.json';
 const VAULT_DIR = '_vault';
 const TOP_SKIP = new Set(['.git', '.claude', '.sandbox', 'evals', 'node_modules']);
 /** .cotutor 里能重新生成的缓存;别的(设备表、孩子端流水、出厂 hash)留着 */
-const COTUTOR_SKIP = new Set(['qwen', 'live-preview', 'qr', 'board']);
+const COTUTOR_SKIP = new Set(['qwen', 'live-preview', 'qr', 'board', 'textbooks']);
 const SKIP_EXT = /\.(wav|mp4|tmp)$/i;
 const AUDIO = /\.wav$/i;
 const VAULT_MAX_FILES = 5000;

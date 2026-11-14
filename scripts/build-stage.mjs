@@ -12,6 +12,8 @@
  * 画板卡的编辑器再由 main.tsx 的 lazy import 单独成块。chunk 是 stage.js 的相对 import,
  * 服务端 `/stage/<文件>` 本来就整目录给(src/app/http/stage.ts),不用另配路由。
  *
+ * pdf.js(课本)原样拷进 dist/stage/pdf/,不进 stage.js:只有铺课本时才取。
+ *
  * 跑法:pnpm run build:stage(prepublishOnly 也跑);开发时缺了 doctor 点名。
  */
 import { build } from 'esbuild';
@@ -60,6 +62,14 @@ await writeFile(
 // 字体:运行时从这里给(src/app/http/stage.ts 的 fontsDir),不再找 node_modules 里的 excalidraw
 await rm(join(out, 'fonts'), { recursive: true, force: true });
 await cp(join(pkgDir('@excalidraw/excalidraw'), 'dist', 'prod', 'fonts'), join(out, 'fonts'), { recursive: true });
+// pdf.js(课本做底,2026-11-14):不打进 stage.js,原样拷到 dist/stage/pdf/。舞台铺课本时才 import('/stage/pdf/pdf.min.mjs'),
+// 服务端读课本的文字层也用这一份(src/memory/textbook-pdf.ts 的 loadPdfjs);pdfjs-dist 只在 devDependencies,装 cotutor 不带它
+const pdfOut = join(out, 'pdf');
+await rm(pdfOut, { recursive: true, force: true });
+await mkdir(pdfOut, { recursive: true });
+for (const f of ['pdf.min.mjs', 'pdf.worker.min.mjs']) await cp(join(pkgDir('pdfjs-dist'), 'legacy', 'build', f), join(pdfOut, f));
+await cp(join(pkgDir('pdfjs-dist'), 'cmaps'), join(pdfOut, 'cmaps'), { recursive: true });
+await cp(join(pkgDir('pdfjs-dist'), 'standard_fonts'), join(pdfOut, 'standard_fonts'), { recursive: true });
 // 打开舞台立刻要下的 = 入口 + 它的静态 import 链(其余 chunk 由 excalidraw / 画板的 import() 按需取)
 const outs = r.metafile.outputs;
 const entry = Object.keys(outs).find((f) => outs[f].entryPoint?.endsWith('main.tsx'));

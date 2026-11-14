@@ -9,7 +9,7 @@ import { check, done } from './_check.ts';
 
 const kit = kitOf('方向盘')!;
 const grid = kitOf('点阵')!;
-check('四种画法在册:照片、白板、点阵、方向盘', KITS.map((k) => k.name).join() === '照片,白板,点阵,方向盘' && kitOf('没有这种') === undefined);
+check('五种画法在册:照片、课本、白板、点阵、方向盘', KITS.map((k) => k.name).join() === '照片,课本,白板,点阵,方向盘' && kitOf('没有这种') === undefined);
 check('每种教具都列了孩子能做的操作', kit.ops.join() === '转,圈' && grid.ops.join() === '切,圈,涂,添');
 
 // ---- 参数与操作 ----

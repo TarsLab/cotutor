@@ -6,7 +6,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { check, done } from './_check.ts';
 import { keysHome } from './_keys.ts';
-import { compatibleLine, qianwenKeys, qianwenLine, DASHSCOPE_HOST, TOKEN_PLAN_HOST } from '../src/shared/qianwen.ts';
+import { compatibleLine, planDown, planFallbackFetch, planRefusal, qianwenKeys, qianwenLine, resetPlanDown, DASHSCOPE_HOST, TOKEN_PLAN_HOST } from '../src/shared/qianwen.ts';
 import { ttsModelOf, ttsTarget } from '../src/media/tts.ts';
 
 const both = { plan: 'sk-sp-p', payg: 'sk-ws-g' };
@@ -53,5 +53,35 @@ const t5 = ttsTarget('qwen-audio-3.0-tts-plus', { HOME: bare });
 check('配音:一把 key 都没有 → 说去家长端填', 'error' in t5 && t5.error.includes('没有百炼的 key'), JSON.stringify(t5));
 const t6 = ttsTarget('qwen-audio-3.0-tts-plus', { HOME: bare, COTUTOR_TTS_ENDPOINT: 'http://127.0.0.1:1/tts' });
 check('配音:COTUTOR_TTS_ENDPOINT(测试)直接用它,没 key 也行', 'url' in t6 && t6.url === 'http://127.0.0.1:1/tts', JSON.stringify(t6));
+
+// ---- Token Plan 拒了(2026-11-14 开发机整天 403 AccessDenied.Unpurchased,老师一句没回):同一个请求改发按量,一小时内都走按量 ----
+{
+  const deny = '{"error":{"message":"Access to model denied.","type":"AccessDenied.Unpurchased","code":"AccessDenied.Unpurchased"}}';
+  check('算拒了:403 Unpurchased、429 的额度用完、401 key;不算:限流 429、500、400', planRefusal(403, deny) && planRefusal(429, '{"code":"AllocationQuota.FreeTierOnly"}') && planRefusal(401, '{"code":"InvalidApiKey"}') && !planRefusal(429, '{"code":"Throttling.RateQuota"}') && !planRefusal(500, '') && !planRefusal(400, '{"code":"InvalidParameter"}'));
+  resetPlanDown();
+  const warn = console.warn;
+  const warned: string[] = [];
+  console.warn = (m: string) => { warned.push(String(m)); };
+  const seen: { url: string; auth: string | null; body: string }[] = [];
+  const wire = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    seen.push({ url, auth: new Headers(init?.headers).get('authorization'), body: String(init?.body) });
+    return url.includes(TOKEN_PLAN_HOST) ? new Response(deny, { status: 403 }) : new Response('{"ok":1}', { status: 200 });
+  }) as typeof fetch;
+  const from = `https://${TOKEN_PLAN_HOST}/compatible-mode/v1`;
+  const f = planFallbackFetch(from, () => compatibleLine('qwen3.8-max', { HOME: home }), wire);
+  const res = await f(`${from}/chat/completions`, { method: 'POST', headers: { authorization: 'Bearer sk-sp-a', 'content-type': 'application/json' }, body: '{"model":"qwen3.8-max"}' });
+  check('拒了:改发按量那条线(业务空间域名、按量 key、同一个请求体),回按量的回答', res.status === 200 && seen.length === 2 && seen[1].url === 'https://llm-x.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions' && seen[1].auth === 'Bearer sk-ws-b' && seen[1].body === '{"model":"qwen3.8-max"}', JSON.stringify(seen));
+  check('拒了以后:一小时内两把 key 里不认 Token Plan,脑直接走按量;本进程说一次', planDown() && qianwenKeys({ HOME: home }).plan === null && compatibleLine('qwen3.8-max', { HOME: home })?.plan === false && warned.length === 1 && warned[0].includes('Token Plan'), JSON.stringify(warned));
+  check('拒了以后:过了一小时再试 Token Plan', !planDown(Date.now() + 3600_001));
+  resetPlanDown();
+  const only = keysHome({ plan: 'sk-sp-a' });
+  const g = planFallbackFetch(from, () => compatibleLine('qwen3.8-max', { HOME: only }), wire);
+  seen.length = 0;
+  const res2 = await g(`${from}/chat/completions`, { method: 'POST', body: '{}' });
+  check('没有按量 key:照原样回 Token Plan 的错(错误码给家长看)', res2.status === 403 && seen.length === 1);
+  console.warn = warn;
+  resetPlanDown();
+}
 
 done();

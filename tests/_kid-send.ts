@@ -24,6 +24,7 @@ export async function kidSend(ctx: AppContext, tutor: string, body: unknown, opt
     send: (o) => { if (o.t === 'err') out ??= { status: Number(o.status), json: { error: o.error } }; },
     started: (s) => { out ??= { status: 202, json: { tutor, date: s.date, job: s.job, thread: s.thread } }; },
     lines: () => {},
+    failed: () => {},
     settled: () => {},
     timer: (t) => t.unref(),
     ended: () => false,

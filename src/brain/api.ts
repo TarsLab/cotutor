@@ -29,6 +29,7 @@ import { createPartialReader } from './stream.ts';
 import { parseTranscript, toolCalls, toolSummary } from './transcript.ts';
 import { isApiRuntime, type ApiRuntime, type CotutorConfig, type Policy } from '../schema/index.ts';
 import { readOnlyTools } from './api-tools.ts';
+import { planFallbackFetch } from '../shared/qianwen.ts';
 import type { BrainHooks, BrainRequest, BrainResult, BrainRun } from './index.ts';
 
 /** 计划里记的 cli 名:API 的轮次按它分流 */
@@ -265,7 +266,10 @@ export class ApiBrain {
         }
         const user = await userMessage(text, [...attach, ...boards], root, warnings);
         const tier = effortOf(runtime.model, req.effort, req.tools);
-        const alibaba = createAlibaba({ apiKey: line?.key ?? 'sk-endpoint', baseURL: this.endpoint ?? line!.baseURL, includeUsage: true, ...(tier ? { fetch: effortFetch(tier) } : {}) });
+        // Token Plan 拒了就同一个请求改发按量(src/shared/qianwen.ts 的 planFallbackFetch),这一小时都走按量
+        const wire = tier ? effortFetch(tier) : fetch;
+        const sendVia = line?.plan && !this.endpoint ? planFallbackFetch(line.baseURL, () => this.line(runtime.model), wire) : tier ? wire : undefined;
+        const alibaba = createAlibaba({ apiKey: line?.key ?? 'sk-endpoint', baseURL: this.endpoint ?? line!.baseURL, includeUsage: true, ...(sendVia ? { fetch: sendVia } : {}) });
         // 断流看门狗:stall.ms 没有一块流到就停(工具在本进程里跑,几毫秒的事,不另算)
         const abort = new AbortController();
         let stalled = false;

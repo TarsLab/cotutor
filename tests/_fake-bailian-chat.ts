@@ -31,6 +31,8 @@ const textOf = (c: unknown): string => (typeof c === 'string' ? c : Array.isArra
 export interface FakeReply {
   text: string;
   status?: number;
+  /** 回 HTTP 错误时的错误码(缺省 fake) */
+  code?: string;
   reasoning?: string;
   tool?: { name: string; args: Record<string, unknown> };
   lineMs?: number;
@@ -55,7 +57,7 @@ export async function startFakeChat(opts: { reply?: (body: ChatBody) => FakeRepl
       const kid = said.trim().split('\n').at(-1) ?? '';
       const scripted = opts.reply?.(body) ?? null;
       if (scripted?.status) {
-        res.writeHead(scripted.status, { 'content-type': 'application/json' }).end(JSON.stringify({ error: { message: 'fake failure', type: 'invalid_request_error', code: 'fake' } }));
+        res.writeHead(scripted.status, { 'content-type': 'application/json' }).end(JSON.stringify({ error: { message: 'fake failure', type: 'invalid_request_error', code: scripted.code ?? 'fake' } }));
         return;
       }
       if (said.includes('ZHTTP401')) {

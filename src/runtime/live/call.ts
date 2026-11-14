@@ -46,6 +46,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Runner } from '../runner.ts';
+import { needsParent, troubleKind } from '../../shared/qianwen.ts';
 import { localDate } from '../../shared/time.ts';
 import { catchCue, chatCue, readCue, type CatchKind, type ChatAsk } from '../../realtime/cues.ts';
 import { judge } from '../../realtime/listen.ts';
@@ -266,6 +267,7 @@ export class LiveCall {
         this.send({ t: 'turn', job: st.job, thread: st.thread });
       },
       lines: (job, lines) => { if (this.d.job === job) this.d.lines(lines); },
+      failed: (job, why) => this.brainFailed(job, why),
       settled: () => this.maybeSwap(),
       timer: (t) => this.timers.push(t),
       ended: () => this.ended,
@@ -726,6 +728,17 @@ export class LiveCall {
       if (this.said) this.afterDone = go; else go();
     }
     if (text !== undefined) void this.toBrain(seq, { ...body, text });
+  }
+
+  /**
+   * 脑这一轮没成、一句也没写出来:孩子不能对着不出声的老师一直说。嘴说一句(cues 的 away / retry),不说错、不说原因;
+   * 已经念了几句的、孩子又开口换了一轮的(d.job 不是它)不说
+   */
+  private brainFailed(job: string, why: string): void {
+    if (this.ended || this.d.job !== job || this.d.queuedLines > 0 || !this.session) return;
+    const cue = catchCue(needsParent(troubleKind(why)) ? 'away' : 'retry', this.lang())!;
+    const go = (): void => this.ask({ kind: 'catch' }, cue);
+    if (this.said) this.afterDone = go; else go();
   }
 
   /** 孩子那句的转写回来了:空的改说没听清、不交给脑;不空交给脑 */

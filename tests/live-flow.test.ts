@@ -218,6 +218,17 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
     check('拍照:嘴先说「我看一看图片」、上下文包带它(caught)、照片交给脑(消息记 photos、上下文包带 photos:)、嘴的会话里没塞图', up.status === 201 && okPhoto && c.responses[rp]?.instructions === catchCue('photo') && promptP.includes('    caught: ') && mp?.photos?.join() === photo && promptP.includes(`  photos:\n    - ${JSON.stringify(photo)}`) && c.images === 0, JSON.stringify({ status: up.status, catch: c.responses[rp], photos: mp?.photos }));
   }
 
+  // ---- 脑这一轮没成、一句没写(2026-11-14 Token Plan 拒了一下午):嘴说一句;要家长动手的叫爸爸妈妈,别的请他再说一遍 ----
+  for (const [say, kind] of [['老师被拒', 'away'], ['老师卡住', 'retry']] as const) {
+    await until(() => ctx.runner.running('chinese-tutor') === null, 15000);
+    await sleep(300);
+    const n = k.msgs.length, r = c.responses.length;
+    k.ws.send(JSON.stringify({ t: 'send', body: { text: say } }));
+    const ok = await until(() => c.responses.length === r + 1, 10000);
+    await sleep(300);
+    check(`脑没成(${say}):嘴说 ${kind} 那句(一次),孩子端照常收到 turn`, ok && c.responses[r]?.instructions === catchCue(kind) && c.responses.length === r + 1 && k.msgs.slice(n).some((m) => m.t === 'turn'), JSON.stringify(c.responses.slice(r)));
+  }
+
   // ---- 挂断:落录像 ----
   k.ws.send(JSON.stringify({ t: 'bye' }));
   const okEnd = await until(() => finished.length === 1 && k.closed !== null);

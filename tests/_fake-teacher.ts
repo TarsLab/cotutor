@@ -73,6 +73,9 @@ export function teacherReply(body: ChatBody): FakeReply {
   const asked = (process.env.FAKE_BOOKKEEP_ASKED ?? '').split('|').filter(Boolean);
   if (bk) parts.push(msg.includes('记账坏') || process.env.FAKE_BOOKKEEP_BAD === '1' ? `## 记账\n- thread: ${bk[1]}\n  summary: 没名字` : `## 记账\n- thread: ${bk[1]}\n  name: 三角形的角\n  textbook: 人教数学一下#1 认识图形(二)\n${asked.length ? `  asked:\n${asked.map((q) => `    - ${q}`).join('\n')}\n` : ''}  summary: 讲了三角形有三个角,孩子一开始说四个。\n  steps: 看图 → 数角 → 选一选\n  observations:\n    - 角和边会混`);
   if (body.model === 'fake-fail') return { text: '', status: 400 };
+  // 百炼拒了(2026-11-14 Token Plan 整天 403 AccessDenied.Unpurchased)、流断了(503):嘴说一句,不让孩子对着不出声的老师
+  if (msg.includes('老师被拒')) return { text: '', status: 403, code: 'AccessDenied.Unpurchased' };
+  if (msg.includes('老师卡住')) return { text: '', status: 503, code: 'ServiceUnavailable' };
   return { text: parts.join('\n\n'), reasoning: '想一想', ...(tool ? { tool } : {}), ...(body.model === 'fake-stream' ? { lineMs: 80 } : {}) };
 }
 

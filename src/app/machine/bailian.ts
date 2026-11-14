@@ -17,7 +17,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname } from 'node:path';
-import { bailianFile } from '../../shared/qianwen.ts';
+import { bailianFile, needsParent, troubleKind, type TroubleKind } from '../../shared/qianwen.ts';
 import { dashscopeAuth } from '../../realtime/bailian.ts';
 import { askRealtime, probeRealtime, unclearWhy } from '../../realtime/preview.ts';
 import type { Who } from '../http/access.ts';
@@ -36,7 +36,8 @@ export interface BailianStatus {
   workspaceId: string | null;
 }
 
-export type TroubleKind = 'key' | 'money' | 'space' | 'network' | 'other';
+export type { TroubleKind } from '../../shared/qianwen.ts';
+export { troubleKind } from '../../shared/qianwen.ts';
 
 /** 谁报的:嘴连不上、通话中百炼报错、脑的请求失败 */
 export type TroubleSource = 'mouth' | 'call' | 'brain';
@@ -59,17 +60,7 @@ const TROUBLE_TEXT: Record<TroubleKind, { message: string; fix: string }> = {
   other: { message: '百炼这几次都没连上', fix: '过一会儿再看;一直这样,到家长端「首页」点试连。' },
 };
 
-/** 按错误码分类;官方表里没有的算 other */
-export function troubleKind(why: string): TroubleKind {
-  if (/InvalidApiKey|invalid_api_key|\b401\b/i.test(why)) return 'key';
-  if (/Arrearage|BillOverdue|AllocationQuota|CommodityNotPurchased|Unpurchased|insufficient_quota/i.test(why)) return 'money';
-  if (/AccessDenied|\b403\b/i.test(why)) return 'space';
-  if (/^network$|^timeout$|请求或流断了/.test(why)) return 'network';
-  return 'other';
-}
-
-/** 这几类等不好,要家长动手,一次就算;网络和别的可能只是抖一下,连着两次才算 */
-const needsParent = (kind: TroubleKind): boolean => kind === 'key' || kind === 'money' || kind === 'space';
+/** 要家长动手的那几类(needsParent)一次就算;网络和别的可能只是抖一下,连着两次才算 */
 const STRIKES = 2;
 /** 脑和通话中的错没法自己再试(再试要花钱),多久没再犯就算过去了;还在坏的话孩子下一次用又会记上 */
 const EVENT_TTL_MS = 3600_000;

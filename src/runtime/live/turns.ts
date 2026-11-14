@@ -26,6 +26,8 @@ export interface TurnsDeps {
   started(s: SendStarted): void;
   /** 一轮写完了,正式的那一节的讲稿(流式时没发出来的由调用方按序号补) */
   lines(job: string, lines: { i: number; text: string; play?: boolean; echo?: Echo; call?: true }[]): void;
+  /** 一轮没成(脑报错、断流、进程没了):why 是记在话题里的原因(api:HTTP 403 …),不知道是空串 */
+  failed(job: string, why: string): void;
   /** 一轮写完了(成没成都算)、排着的也发出去了 */
   settled(): void;
   /** 定时器交给调用方收(挂电话时清) */
@@ -95,7 +97,8 @@ export class Turns {
         const m = index.messages.find((x) => x.job === job) ?? (await readIndex(runner.ws, tutor, started.date)).messages.find((x) => x.job === job);
         const sec = m?.section;
         if (sec) this.deps.lines(job, sec.lines.map((l, i) => ({ i, text: l.text, ...lineFlags(l, sec.cards) })));
-      }, () => {})
+        else if (m?.result === 'error') this.deps.failed(job, m.error ?? '');
+      }, () => { this.deps.failed(job, ''); })
       .finally(() => {
         if (this.running === started) this.running = null;
         this.flushWaiting();

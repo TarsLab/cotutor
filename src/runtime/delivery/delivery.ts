@@ -50,6 +50,10 @@ export class Delivery {
   get job(): string | null {
     return this.current;
   }
+  /** 这一轮已经交给排队的讲稿句数(0 = 脑还一句没写出来) */
+  get queuedLines(): number {
+    return this.queued;
+  }
   get asked(): boolean {
     return this.askedNow;
   }

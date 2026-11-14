@@ -70,13 +70,41 @@ export function bailianWorkspaceId(env: NodeJS.ProcessEnv = process.env): string
 /** 业务空间的域名(北京地域);公网域名连 realtime 1 秒就断、配音不认 */
 export const workspaceHost = (workspaceId: string): string => `${workspaceId}.cn-beijing.maas.aliyuncs.com`;
 
-/** 本机的两把 key(env 只取 HOME,测试拿它指别的家);放错了套(bailian.json 里放了 `sk-sp-`)就挪到对的那格 */
+/** 百炼报错按错误码分几类(官方错误码表);表里没有的算 other。家长端的说法在 src/app/machine/bailian.ts */
+export type TroubleKind = 'key' | 'money' | 'space' | 'network' | 'other';
+export function troubleKind(why: string): TroubleKind {
+  if (/InvalidApiKey|invalid_api_key|\b401\b/i.test(why)) return 'key';
+  if (/Arrearage|BillOverdue|AllocationQuota|CommodityNotPurchased|Unpurchased|insufficient_quota/i.test(why)) return 'money';
+  if (/AccessDenied|\b403\b/i.test(why)) return 'space';
+  if (/^network$|^timeout$|请求或流断了/.test(why)) return 'network';
+  return 'other';
+}
+/** 这几类等不好,要家长动手(换 key、充钱、核对业务空间) */
+export const needsParent = (kind: TroubleKind): boolean => kind === 'key' || kind === 'money' || kind === 'space';
+
+/**
+ * Token Plan 拒了(订阅到期、Credits 用完、key 失效;2026-11-14 开发机上整天 403 AccessDenied.Unpurchased,老师一句没回):
+ * 本进程一小时内不再走它,全走按量;过了一小时再试(续上了就回来),重起 serve 也回来。
+ */
+const PLAN_DOWN_MS = 3600_000;
+let planDownUntil = 0;
+/** Token Plan 这次的错算不算「拒了」(要换线的那几类);限流、断流不算 */
+export const planRefusal = (status: number, body: string): boolean => (status === 401 || status === 403 || status === 429) && needsParent(troubleKind(`${status} ${body}`));
+export function refusePlan(why: string, now = Date.now()): void {
+  if (now >= planDownUntil) console.warn(`cotutor: Token Plan 拒了(${why.slice(0, 120)}),这一小时改走百炼按量`);
+  planDownUntil = now + PLAN_DOWN_MS;
+}
+export const planDown = (now = Date.now()): boolean => now < planDownUntil;
+/** 测试用:当作 Token Plan 没拒过 */
+export function resetPlanDown(): void { planDownUntil = 0; }
+
+/** 本机的两把 key(env 只取 HOME,测试拿它指别的家);放错了套(bailian.json 里放了 `sk-sp-`)就挪到对的那格;Token Plan 刚拒过就当没有它 */
 export function qianwenKeys(env: NodeJS.ProcessEnv = process.env): QianwenKeys {
   const home = env.HOME || homedir();
-  const plan = tokenPlanKey(home);
+  const plan = planDown() ? null : tokenPlanKey(home);
   const payg = cotutorBailian(home).apiKey;
   return {
-    plan: plan && isPlanKey(plan) ? plan : payg && isPlanKey(payg) ? payg : null,
+    plan: plan && isPlanKey(plan) ? plan : !planDown() && payg && isPlanKey(payg) ? payg : null,
     payg: payg && !isPlanKey(payg) ? payg : null,
   };
 }
@@ -111,6 +139,36 @@ export function compatibleLine(model: string, env: NodeJS.ProcessEnv = process.e
   const ws = bailianWorkspaceId(env);
   return { baseURL: compatibleBase(ws ? workspaceHost(ws) : line.host), key: line.key, plan: false };
 }
+/**
+ * 兼容接口的 fetch:走 Token Plan 时它拒了(planRefusal)就记下(refusePlan),同一个请求改发按量那条线(again 给;没有按量 key 就照原样回)。
+ * 拒的时候还没流出一个字,换线重发孩子听不出来
+ */
+export function planFallbackFetch(from: string, again: () => { baseURL: string; key: string; plan: boolean } | null, base: typeof fetch = fetch): typeof fetch {
+  return async (input, init) => {
+    const res = await base(input, init);
+    if (res.ok) return res;
+    const body = await res.clone().text().catch(() => '');
+    if (!planRefusal(res.status, body)) return res;
+    refusePlan(`HTTP ${res.status} ${/"code"\s*:\s*"([A-Za-z0-9_.-]{2,64})"/.exec(body)?.[1] ?? ''}`.trim());
+    const next = again();
+    if (!next || next.plan) return res;
+    const url = String(input instanceof Request ? input.url : input);
+    if (!url.startsWith(from)) return res;
+    const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
+    headers.set('Authorization', `Bearer ${next.key}`);
+    return base(next.baseURL + url.slice(from.length), { ...init, headers });
+  };
+}
+
+/** 直接发到 https://<线的域名>/… 的(看图、画图)用的 fetch:走 Token Plan 时拒了就改发按量,同上 */
+export function lineFetch(model: string, line: QianwenLine, env: NodeJS.ProcessEnv = process.env): typeof fetch {
+  if (!line.plan) return fetch;
+  return planFallbackFetch(`https://${line.host}`, () => {
+    const l = qianwenLine(model, qianwenKeys(env));
+    return l ? { baseURL: `https://${l.host}`, key: l.key, plan: l.plan } : null;
+  });
+}
+
 export const imageUrl = (host: string): string => `https://${host}/api/v1/services/aigc/multimodal-generation/generation`;
 export const ttsUrl = (host: string): string => `https://${host}/api/v1/services/audio/tts/SpeechSynthesizer`;
 

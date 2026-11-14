@@ -6,7 +6,7 @@
  * - 给 onDelta:一块一块交出去(拍照认词要边认边出),读不懂的行跳过
  * 怎么写提示词、回的字怎么解析是场景的事(scenes/),这里只管请求。
  */
-import { chatUrl, qianwenKeys, qianwenLine, readStream } from '../shared/qianwen.ts';
+import { chatUrl, qianwenKeys, qianwenLine, readStream, lineFetch } from '../shared/qianwen.ts';
 
 export type Seen = { ok: true; text: string; ms: number } | { ok: false; error: string; ms: number };
 
@@ -43,7 +43,7 @@ export async function lookAt(o: LookAt): Promise<Seen> {
   const line = qianwenLine(o.model, qianwenKeys(env));
   if (!line) return fail('no_key');
   try {
-    const res = await fetch(o.endpoint ?? chatUrl(line.host), {
+    const res = await (o.endpoint ? fetch : lineFetch(o.model, line, env))(o.endpoint ?? chatUrl(line.host), {
       method: 'POST',
       headers: { authorization: `Bearer ${line.key}`, 'content-type': 'application/json' },
       body: JSON.stringify({ model: o.model, stream: true, ...o.params, messages: [{ role: 'user', content: [{ type: 'image_url', image_url: { url: `data:${o.image.mime};base64,${o.image.data.toString('base64')}` } }, { type: 'text', text: o.prompt }] }] }),

@@ -43,13 +43,26 @@ let pdfjs: Promise<Pdfjs> | null = null;
 /** pdf.js:先找打包好的(dist/stage/pdf/;npm 包里这个文件在 dist/memory/,仓库里在 src/memory/),没有再找 node_modules */
 export function loadPdfjs(): Promise<Pdfjs> {
   pdfjs ??= (async () => {
-    for (const rel of ['../stage/pdf/pdf.min.mjs', '../../dist/stage/pdf/pdf.min.mjs']) {
-      const u = new URL(rel, import.meta.url);
-      if (existsSync(fileURLToPath(u))) return (await import(u.href)) as Pdfjs;
+    // 载入时 pdf.js 想给画图补 DOMMatrix、Path2D(要 @napi-rs/canvas,没装),打几行 Warning:只取文字用不上,别混进服务的日志
+    const log = console.log, warn = console.warn;
+    const quiet = (f: typeof console.log) => (...a: unknown[]) => { if (!(typeof a[0] === 'string' && a[0].startsWith('Warning: Cannot'))) f(...a); };
+    console.log = quiet(log); console.warn = quiet(warn);
+    try {
+      for (const rel of ['../stage/pdf/', '../../dist/stage/pdf/']) {
+        const dir = new URL(rel, import.meta.url);
+        if (!existsSync(fileURLToPath(new URL('pdf.min.mjs', dir)))) continue;
+        const lib = (await import(new URL('pdf.min.mjs', dir).href)) as Pdfjs;
+        // Node 里是假 worker:照这个地址在本进程里 import(不写它就去找不带 .min 的 pdf.worker.mjs,没拷)
+        lib.GlobalWorkerOptions.workerSrc = new URL('pdf.worker.min.mjs', dir).href;
+        return lib;
+      }
+      const spec = 'pdfjs-dist/legacy/build/pdf.min.mjs';
+      return (await import(spec)) as Pdfjs;
+    } finally {
+      console.log = log; console.warn = warn;
     }
-    const spec = 'pdfjs-dist/legacy/build/pdf.min.mjs';
-    return (await import(spec)) as Pdfjs;
   })();
+  pdfjs.catch(() => { pdfjs = null; });
   return pdfjs;
 }
 

@@ -278,6 +278,7 @@ ${BACK_TINT_CSS}
   /* 以板为主:板是页面;顶栏多两颗换底的钮(拍照、相册),左上的 × 是回首页 */
   #st-bp { display:none; }
   #stage.bp #st-bp { display:flex; gap:8px; flex:none; }
+  #stage.bp.bk #st-bp { display:none; }
   #st-bp button { display:flex; align-items:center; gap:6px; height:40px; padding:0 14px; border:1.5px solid var(--line, #e5e1d8); border-radius:20px; background:#fff; font:inherit; font-size:16px; font-weight:600; color:var(--ink); cursor:pointer; }
   #st-bp button svg { width:20px; height:20px; }
   .bp-start .ask-row { flex-wrap:wrap; }
@@ -734,7 +735,7 @@ ${BOARD_MARK_JS}
 
   // ---- 状态 ----
   /** 以板为主的 activity(头上 board: page):on = 这个话题的页面是板;base = 现在的底(照片路径,null 白板,undefined 还没定);label = 方砖上的字(不拍照直接开始时发它) */
-  const BP = { on: false, base: undefined, label: '', books: [] };
+  const BP = { on: false, book: false, asking: false, base: undefined, label: '', books: [] };
   const S = { home: null, tutor: null, day: null, sections: [], played: new Set(), state: { section: -1, line: -1, status: 'idle' }, pending: false, waitSince: null, offline: false, bar: 'idle', pollTimer: null, stage: null, partial: null, thread: null, threadAt: null, hist: null, readonly: false, newThread: false, device: 'phone', via: null, cont: null, ask: null, talk: null, talkWait: false, reel: null, pendSaid: null, homeDraw: true, autoOpened: new Set() };
   // 实时的老师这一次(连、发、收、画在下面「实时的老师」那一块):on = 这位老师这一次走实时(左栏的样子);ready = 嘴连上了;
   // model = liveStep 的状态(只在 liveDispatch 里写);cap = 字幕(上一句、在说的、被打断的那句);heard = 每一轮(job)念到第几句
@@ -792,6 +793,8 @@ ${BOARD_MARK_JS}
     const via = { home: S.home.home, button: b.id };
     // 今天同一个入口聊过的(b.resume):新话题在空白板上放一个胶囊;activity、小课堂先问接着那个还是重新开始
     if (b.kind === 'new') openTutor(t, { kind: 'new', via, resume: b.resume });
+    // 以板为主、垫课本的 activity(语文预习):不拍照,直接开话题、铺课本的目录
+    else if (b.kind === 'start' && b.board === 'page' && b.base === 'textbook') openTutor(t, b.resume ? { kind: 'new', via, board: true, book: true, label: b.label, ask: { label: b.label, resume: b.resume, send: b.label, board: true, book: true } } : { kind: 'new', via, board: true, book: true, label: b.label, send: b.label });
     // 以板为主的 activity:先到拍照屏,带着照片(或白板)开话题
     else if (b.kind === 'start' && b.board === 'page') openTutor(t, b.resume ? { kind: 'new', via, board: true, label: b.label, ask: { label: b.label, resume: b.resume, send: b.label, board: true } } : { kind: 'new', via, board: true, label: b.label });
     else if (b.kind === 'start') openTutor(t, b.resume ? { kind: 'new', via, ask: { label: b.label, resume: b.resume, send: b.label } } : { kind: 'new', via, send: b.label });
@@ -858,7 +861,7 @@ ${BOARD_MARK_JS}
   };
   // ---- 常驻的三块方砖(预习、检查作业、复习;服务端照老师家里的 activity 文件给,src/ui/kid/home-tiles.ts):新话题下面一行;点了和 activity 按钮一样 ----
 ${HOME_TILES_JS}
-  const tileButton = (t, x) => h('button', { type: 'button', class: 'bt bt-tile', 'data-tile': x.id, style: '--sc:' + colorOf(t), on: { click: () => pickButton(t, { id: x.id, kind: 'start', label: x.label, resume: x.resume, board: x.board }) } },
+  const tileButton = (t, x) => h('button', { type: 'button', class: 'bt bt-tile', 'data-tile': x.id, style: '--sc:' + colorOf(t), on: { click: () => pickButton(t, { id: x.id, kind: 'start', label: x.label, resume: x.resume, board: x.board, base: x.base }) } },
     h('span', { class: 'ta', html: tileArt(t.mark, x.id) }), h('span', { class: 'btx' }, x.label));
   const tilesRow = (t, tiles) => (Array.isArray(tiles) && tiles.length ? h('div', { class: 'tls' }, ...tiles.map((x) => tileButton(t, x))) : null);
   /** 挨着的几个小课堂收进一格(平板上两张海报并排,手机上一张一行) */
@@ -1139,8 +1142,8 @@ ${HOME_TILES_JS}
     S.via = intent.via || null; S.cont = intent.cont || null; S.lecture = intent.lecture ? { ...intent.lecture, watch: null, sent: false, marks: [], flying: [], log: [] } : null; S.ask = intent.ask || null;
     // 口语课页拍好了口语单:先等孩子点「先热身,再打电话」(那一下起声音),发出去的第一条带 talk
     S.talk = intent.talk || null; S.talkWait = Boolean(intent.talk);
-    BP.on = Boolean(intent.board) && !intent.ask; BP.base = undefined; BP.label = intent.label || '';
-    if (intent.board) bpBooks();
+    BP.on = Boolean(intent.board) && !intent.ask; BP.book = Boolean(intent.book); BP.base = undefined; BP.label = intent.label || '';
+    if (intent.board && !intent.book) bpBooks();
     // 先定走不走实时,再热麦克风:实时时麦克风的自检要开在实时那个 AudioContext 里(liveOpen)
     if (liveWanted(t)) liveOpen(intent); else liveClose();
     $('#hist').classList.remove('on'); $('#menu').classList.remove('on'); renderBar(); renderHeader();
@@ -1148,6 +1151,7 @@ ${HOME_TILES_JS}
     $('#board').replaceChildren(); pin.on = false;
     if (S.ask) $('#board').append(askBoard(S.ask));
     else if (S.talkWait) $('#board').append(talkBoard());
+    else if (BP.on && BP.book) bpOpenBook();
     else if (BP.on) $('#board').append(bpStartBoard());
     else if (S.newThread && !intent.send && !S.lecture) $('#board').append(blankBoard('想问什么?', intent.resume));
     $('#tutor').classList.add('on');
@@ -1202,6 +1206,7 @@ ${HOME_TILES_JS}
   const startFresh = (ask) => {
     S.ask = null;
     const b = $('#board .blank'); if (b) b.remove();
+    if (ask.board && ask.book) { BP.on = true; BP.book = true; BP.base = undefined; BP.label = ask.label; renderBar(); bpOpenBook(); send(ask.send); return; }
     if (ask.board) { BP.on = true; BP.base = undefined; BP.label = ask.label; renderBar(); $('#board').append(bpStartBoard()); return; }
     if (ask.lecture) { S.lecture = { ...ask.lecture, watch: null, sent: false, marks: [], flying: [], log: [] }; renderBar(); renderHeader(); openLecture(); }
     else { renderBar(); send(ask.send); }
@@ -1291,26 +1296,53 @@ ${HOME_TILES_JS}
     $('#st-ttl').textContent = ''; $('#st-ttl').classList.remove('open');
     $('#st-kd').hidden = true;
     $('#stage').classList.add('cv', 'bp', 'on');
+    $('#stage').classList.toggle('bk', BP.book);
     if (wasKit) { renderGo(); postStage(stageCard(card)); } else renderStage();
   };
+  /** 课本做底(base: textbook):向服务端要这一科课本的目录那张课本卡,铺上(老师的卡先到了就不铺);没有课本就空着,老师会说 */
+  const bpOpenBook = () => {
+    const name = S.tutor && S.tutor.name;
+    if (!name || BP.asking) return;
+    BP.asking = true;
+    api('GET', '/api/kid/textbook/base?tutor=' + encodeURIComponent(name)).then((j) => {
+      BP.asking = false;
+      if (!S.tutor || S.tutor.name !== name || !BP.on || !BP.book || !j || !j.card) return;
+      if (S.stage && !S.stage.own) return;
+      BP.base = bookBase(j.card);
+      bpShow(j.card);
+    }, () => { BP.asking = false; });
+  };
+  /** 课本卡的底在板的日志里的名字:「册子#课」 */
+  const bookBase = (card) => { const p = card && card.props && card.props.params; return p && typeof p['书'] === 'string' && p['书'] ? p['书'] + '#' + (p['课'] || '目录') : null; };
+  /** 板的底:照片板是那张照片,课本是「册子#课」 */
+  const boardBase = (card) => (card && card.props && card.props.kit === '课本' ? bookBase(card) : card && card.props && card.props.params && typeof card.props.params['图'] === 'string' ? card.props.params['图'] : null);
   /** 孩子点了一个字:田字格照弹(pickShow);以板为主的话题里报给服务端记进板的日志(嘴念这个字、老师下一轮知道) */
   const bpPicked = (card, text, k) => {
     if (!BP.on || !S.thread || S.readonly || REEL) return;
-    const base = card && card.props && card.props.params && typeof card.props.params['图'] === 'string' ? card.props.params['图'] : null;
+    const base = boardBase(card);
     if (base) lvSend({ t: 'board', body: { k: k || 'pick', thread: S.thread, text, base } });
+  };
+  /** 课本上孩子挪完了窗:报给服务端(说成一句给老师);不弹、不念 */
+  const bpView = (card, box) => {
+    if (!BP.on || !S.thread || S.readonly || REEL || !Array.isArray(box) || box.length !== 4) return;
+    const base = bookBase(card);
+    if (base) lvSend({ t: 'board', body: { k: 'view', thread: S.thread, base, box } });
   };
   /** 拉了今天的话题以后:这个话题以板为主就把板摆出来(回到这个话题、刷新页面):老师最后那张板卡,没有就是底本身 */
   const bpSync = (mine) => {
     if (S.newThread || S.readonly || REEL) return;
     if (!mine.some((m) => m.board === 'page')) { BP.on = false; return; }
-    if (!BP.on) bpBooks();
+    // 回到这个话题、刷新了页面:老师出过课本卡就是课本做底
+    if (!BP.book && S.sections.some((sec) => sec.cards.some((c) => c.kind === 'kit' && c.props.kit === '课本'))) BP.book = true;
+    if (!BP.on && !BP.book) bpBooks();
     BP.on = true;
-    if (BP.base === undefined) { BP.base = null; for (const m of mine) if (m.question !== null && Array.isArray(m.photos) && m.photos.length) BP.base = m.photos[m.photos.length - 1]; }
+    if (BP.base === undefined && !BP.book) { BP.base = null; for (const m of mine) if (m.question !== null && Array.isArray(m.photos) && m.photos.length) BP.base = m.photos[m.photos.length - 1]; }
     if (S.stage) { $('#stage').classList.add('bp'); return; }
     for (let i = S.sections.length - 1; i >= 0; i--) {
       const k = S.sections[i].cards.map((c) => c.kind).lastIndexOf('kit');
       if (k >= 0 && !(S.sections[i].cards[k].props.kit === '照片' && S.sections[i].cards[k].props.params && S.sections[i].cards[k].props.params['图'] !== BP.base)) { openStage(i, k); return; }
     }
+    if (BP.book) { bpOpenBook(); return; }
     bpBase(BP.base);
   };
   /** 板上的拍照、相册:换一页 */
@@ -1335,7 +1367,7 @@ ${HOME_TILES_JS}
     $('#lv-acts').replaceChildren(...(o ? o.acts.map(lvGo) : []));
   }
   new MutationObserver(openSync).observe($('#board'), { childList: true });
-  const closeTutor = () => { liveDispatch({ type: 'reset' }); liveClose(); hideLecture(); S.lecture = null; reelStop(); clearTimeout(S.pollTimer); dispatch({ type: 'halt' }); psClose(); $('#menu').classList.remove('on'); $('#lb').classList.remove('on'); S.tutor = null; S.via = null; S.cont = null; S.ask = null; BP.on = false; BP.base = undefined; $('#tutor').classList.remove('on'); document.body.classList.remove('pending', 'speaking'); S.homeDraw = true; loadHome(); };
+  const closeTutor = () => { liveDispatch({ type: 'reset' }); liveClose(); hideLecture(); S.lecture = null; reelStop(); clearTimeout(S.pollTimer); dispatch({ type: 'halt' }); psClose(); $('#menu').classList.remove('on'); $('#lb').classList.remove('on'); S.tutor = null; S.via = null; S.cont = null; S.ask = null; BP.on = false; BP.book = false; BP.base = undefined; $('#tutor').classList.remove('on'); document.body.classList.remove('pending', 'speaking'); S.homeDraw = true; loadHome(); };
   $('#back').addEventListener('click', closeTutor);
   $('#back-ic').innerHTML = ICON.back;
 
@@ -2138,6 +2170,7 @@ __WORD_DRAW_JS__
     $('#st-kd').hidden = isFullStage(card) || !(KIND_NAME[card.kind] || card.kind);
     $('#stage').classList.toggle('cv', isFullStage(card));
     $('#stage').classList.toggle('bp', BP.on);
+    $('#stage').classList.toggle('bk', BP.on && BP.book);
     renderStage();
     $('#stage').classList.add('on');
     setNow(secIdx, idx);
@@ -2197,6 +2230,7 @@ __WORD_DRAW_JS__
     else if (m.type === 'snap') { const w = CV.snapWait; CV.snapWait = null; if (w) w(m.image); }
     else if (m.type === 'pick') { if (card.kind === 'kit') { pickShow(m.text); bpPicked(card, m.text); } }
     else if (m.type === 'reveal') { if (card.kind === 'kit') bpPicked(card, m.text, 'reveal'); }
+    else if (m.type === 'view') { if (card.kind === 'kit') bpView(card, m.box); }
     else if (m.type === 'cleared') { if (!card.submitted) canvasCleared(card, m); }
     else if (m.type === 'phase') {
       S.stage.playing = { phase: m.phase, line: m.line };

@@ -62,7 +62,8 @@ import { PARENT_SETTINGS_PAGE } from '../../ui/parent/parent-settings-page.ts';
 import { dictationRoute } from '../dictation/route.ts';
 import { kidWords, readWords } from '../../scenes/photo-words/store.ts';
 import { listTextbookPages, textbookPageFile } from '../../memory/textbook-pages.ts';
-import { bookFile, bookIndex } from '../../memory/textbook-pdf.ts';
+import { bookFile, bookIndex, listBooks, pickBook } from '../../memory/textbook-pdf.ts';
+import { bookLesson } from '../../board/board-page.ts';
 import { bookPages } from '../../chalk/index.ts';
 import type { Look } from '../../scenes/look.ts';
 import { IndexError, capturePathOk, deleteThread, listDates, rateThread, readErrLog, readIndex, readTranscript, scanCards, undoVaultWrite, writeCapture, writeCardImage, writeCardState, type VaultWrite } from '../../runtime/journal/store.ts';
@@ -954,6 +955,17 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       const file = await bookFile(ws.paths.textbooks, url.searchParams.get('b') ?? '');
       if (!file) return { status: 404, json: { error: 'not_found' } };
       return { status: 200, file, contentType: 'application/pdf' };
+    }
+    // 课本做底的话题刚开:这位老师学科、这学期那一册的目录,一张课本卡(孩子端先铺它,老师翻到哪一课再换);没有课本 = card: null
+    if (p === '/api/kid/textbook/base' && method === 'GET') {
+      const t = ws.config.tutors[url.searchParams.get('tutor') ?? ''];
+      if (!t) return { status: 404, json: { error: 'not_found' } };
+      const name = pickBook(await listBooks(ws.paths.textbooks, canonicalSubject(t.subject) || null), ctx.now());
+      const ix = name ? await bookIndex(ws.paths.textbooks, join(ws.root, '.cotutor', 'textbooks'), name).catch(() => null) : null;
+      const at = ix ? bookLesson(ix, null) : null;
+      if (!name || !at?.pages.length) return { status: 200, json: { card: null } };
+      const range = at.pages.length > 1 ? `${at.pages[0].n}-${at.pages[at.pages.length - 1].n}` : String(at.pages[0].n);
+      return { status: 200, json: { card: { kind: 'kit', props: { kit: '课本', params: { 课: at.title, 看: '', 圈: '', 遮: '', 书: name, 页: range }, ops: ['点字'] } } } };
     }
     if (p === '/api/kid/textbook/lines' && method === 'GET') {
       const name = url.searchParams.get('b') ?? '';

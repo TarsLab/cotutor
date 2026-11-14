@@ -16,6 +16,7 @@ const backOf = (v: unknown): LectureBack | null => {
 };
 import type { CanvasCleared, CanvasStageHandle } from './canvas.tsx';
 import { KitStage, type KitStageHandle } from './kit.tsx';
+import { BookStage } from './book.tsx';
 import type { KitState } from '../../chalk/index.ts';
 import '@excalidraw/excalidraw/dist/prod/index.css';
 import { STAGE_SOURCE, type FromStage, type ToStage } from './protocol.ts';
@@ -74,6 +75,7 @@ function App(): JSX.Element {
   const onKitState = useCallback((state: KitState) => post({ type: 'state', state }), []);
   const onKitPick = useCallback((text: string) => post({ type: 'pick', text }), []);
   const onKitReveal = useCallback((text: string) => post({ type: 'reveal', text }), []);
+  const onBookView = useCallback((box: [number, number, number, number]) => post({ type: 'view', box }), []);
   const onKitSubmit = useCallback((state: KitState, image?: string) => post({ type: 'submit', state, ...(image ? { image } : {}) }), []);
   const onLectureDone = useCallback((w: LectureWatch) => post({ type: 'lecture', event: 'finished', ...w }), []);
   const onLectureClose = useCallback((w: LectureWatch) => post({ type: 'lecture', event: 'close', ...w }), []);
@@ -105,6 +107,8 @@ function App(): JSX.Element {
   }
   if (card.kind === 'kit') {
     const p = card.props as { kit?: unknown; params?: unknown; ops?: unknown };
+    // 课本做底:pdf.js 现画、窗能挪能放大(book.tsx);别的画法烤成一幅图(kit.tsx)
+    if (p.kit === '课本') return <BookStage ref={kit} id={card.id} kit="课本" params={p.params && typeof p.params === 'object' ? (p.params as Record<string, unknown>) : {}} ops={p.ops} state={(card.state ?? null) as KitState | null} onPick={onKitPick} onReveal={onKitReveal} onView={onBookView} readonly={card.readonly === true} hand={card.hand === 'left' ? 'left' : 'right'} onState={onKitState} onSubmit={onKitSubmit} onError={onError} />;
     return <KitStage ref={kit} id={card.id} kit={String(p.kit ?? '')} params={p.params && typeof p.params === 'object' ? (p.params as Record<string, unknown>) : {}} ops={p.ops} state={(card.state ?? null) as KitState | null} imageUrl={typeof card.imageUrl === 'string' ? card.imageUrl : undefined} wordsUrl={typeof card.wordsUrl === 'string' ? card.wordsUrl : undefined} onPick={onKitPick} onReveal={onKitReveal} readonly={card.readonly === true} hand={card.hand === 'left' ? 'left' : 'right'} onState={onKitState} onSubmit={onKitSubmit} onError={onError} />;
   }
   return <div className="stage-wait">{String(card.props.title ?? card.props.text ?? '')}</div>;

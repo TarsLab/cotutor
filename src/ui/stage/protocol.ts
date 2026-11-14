@@ -24,6 +24,8 @@ export type FromStage =
   | { source: typeof STAGE_SOURCE; type: 'pick'; text: string }
   /** 照片板上点开了一块盖住的拼音(老师写的「遮」) */
   | { source: typeof STAGE_SOURCE; type: 'reveal'; text: string }
+  /** 课本:孩子自己挪了窗、放大了,停下来的地方(场景坐标 [左, 上, 右, 下]);页面报给服务端说成一句给老师 */
+  | { source: typeof STAGE_SOURCE; type: 'view'; box: [number, number, number, number] }
   | { source: typeof STAGE_SOURCE; type: 'submit'; state: unknown; /** 画板导出的 png(data URL),页面转存;教具不导图 */ image?: string }
   /** 画板清空了(要点两下):清空的时刻、那一版第一笔画完的时刻、几笔、清空前的图(jpeg data URL,页面转存进 captures/) */
   | { source: typeof STAGE_SOURCE; type: 'cleared'; at: number; from?: number; strokes: number; image?: string }

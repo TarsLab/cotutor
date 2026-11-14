@@ -171,6 +171,9 @@ const P = (c: BoardCard): Record<string, string> => c.props.params as Record<str
   const got = await route('GET', `/api/kid/textbook/pdf?b=${encodeURIComponent('语文一年级下册.pdf')}`, ctx);
   const lines = (await route('GET', `/api/kid/textbook/lines?b=${encodeURIComponent('语文一年级下册.pdf')}&p=2-3`, ctx)).json as { pages: { n: number; lines: { text: string }[] }[] };
   check('孩子端取课本:PDF 给文件;几页的行和字只给要的那几页', got.status === 200 && got.contentType === 'application/pdf' && Boolean(got.file?.endsWith('语文一年级下册.pdf')) && lines.pages.map((p) => p.n).join() === '2,3' && lines.pages[0].lines.some((l) => l.text === '小鱼在水里吹泡泡。'));
+  const baseCard = (await route('GET', `/api/kid/textbook/base?tutor=${T}`, ctx)).json as { card: { props: { kit: string; params: Record<string, string>; ops: string[] } } | null };
+  check('课本话题刚开:孩子端要的目录那张课本卡(这一科这学期那一册、目录那几页)', baseCard.card?.props.kit === '课本' && baseCard.card.props.params['课'] === '目录' && baseCard.card.props.params['页'] === '1' && baseCard.card.props.params['书'] === '语文一年级下册.pdf' && baseCard.card.props.ops.join() === '点字', JSON.stringify(baseCard));
+  check('英语老师没有课本:card 是 null;没有这位老师 404', ((await route('GET', '/api/kid/textbook/base?tutor=english-tutor', ctx)).json as { card: unknown }).card === null && (await route('GET', '/api/kid/textbook/base?tutor=nobody', ctx)).status === 404);
   const nf = await Promise.all([route('GET', `/api/kid/textbook/pdf?b=${encodeURIComponent('../cotutor.json')}`, ctx), route('GET', '/api/kid/textbook/pdf?b=x.pdf', ctx), route('GET', `/api/kid/textbook/lines?b=${encodeURIComponent('语文一年级下册.pdf')}&p=x`, ctx)]);
   check('越界、不在、页写错:404', nf.every((r) => r.status === 404));
   await teacher.close();

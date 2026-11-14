@@ -63,6 +63,17 @@ html, body, #root { margin: 0; height: 100%; background: #fffdf8; font: 18px/1.5
 .kt-word.kt-hit { fill: rgba(28, 126, 214, .3); stroke: #1c7ed6; }
 .kt-word.kt-loose { transition: none; }
 
+/* ---- 课本(book.tsx):窗占满板(顶上给页面的顶栏留一条);一课的几页在随窗变换的容器里,孩子拖、捏都是改这个容器的 transform;类名带 bk- ---- */
+.bk-board { background: #f4f1ea; overflow: hidden; }
+.bk-view { position: absolute; inset: 64px 0 0 0; overflow: hidden; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.bk-paper { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+.bk-page { position: absolute; display: block; background: #ffffff; box-shadow: 0 1px 6px rgba(0, 0, 0, .14); }
+.bk-sharp { position: absolute; display: none; pointer-events: none; }
+.bk-svg { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+.bk-hit { fill: rgba(28, 126, 214, .22); stroke: #1c7ed6; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.bk-ring { stroke-dasharray: 1; stroke-dashoffset: 1; animation: bk-draw .7s ease-out forwards; }
+@keyframes bk-draw { to { stroke-dashoffset: 0; } }
+
 /* ---- 小课堂:左边一条竖栏(回去、课名、圈一圈 / 擦掉),画面占满中间,下面字幕、一行控制(播放、进度条、时间、去问老师) ---- */
 /* 底色就是课包板子的纸色(#fffdf8):画面四周不留白框,也不画分割线,竖向的地方都给画面 */
 .lc { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); background: #fffdf8; }

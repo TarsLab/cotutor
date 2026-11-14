@@ -43,6 +43,8 @@ export function teacherReply(body: ChatBody): FakeReply {
   if (msg.includes('放课')) parts.push('```lecture\n2026-09-18-po13-jian-8 0:19-0:30\n再看一遍拆开那一捆。\n```\n\n我们回到那里再看一遍。[[play]]\n\n拿走 8 根,这一捆还剩几根?');
   // 课本做底(tests/board-book.test.ts):翻到一课,先看第 1 段,再看第 2 段、圈一个词;「不存在的课」翻不到
   if (msg.includes('预习小鱼')) parts.push('我们来预习《小鱼吹泡泡》。\n\n```课本\n课: 小鱼吹泡泡\n看: 第 1 段\n```\n\n你先读一读第一段。\n\n```课本\n看: 第 2 段\n圈: 井沿、没有这个词\n```\n\n再看第二段,井沿在哪里?');
+  // 真课本的页面探针(scripts/probe-book-page.mjs,家长放的人教统编版二年级上册)
+  if (msg.includes('预习坐井观天')) parts.push('我们来预习《坐井观天》。\n\n```课本\n课: 坐井观天\n看: 第 6–7 段\n圈: 井沿\n```\n\n青蛙和小鸟又说了什么?你读一读这两段。');
   if (msg.includes('不存在的课')) parts.push('```课本\n课: 坐井观天\n```\n\n我们翻到这一课。');
   if (msg.includes('方向盘')) parts.push('我们把它画下来。\n\n```方向盘\n操作: 转\n把「东」转到小人的前面。\n```\n\n这是一个方向盘,中间的小人就是你。\n\n你把「东」转到小人的前面。');
   if (msg.includes('热身') || msg.includes('口语课')) parts.push('```word\n🦆 duck\nd-u-ck\n```\n\n我们先热热身!我先来:duck! [[echo duck]]\n\n小声一点:duck… [[echo duck]]\n\n你先说:鸭子英文怎么说? [[say duck]]\n\n热身好啦!老师给你打个电话。 [[call]]\n\n这句不该念。');

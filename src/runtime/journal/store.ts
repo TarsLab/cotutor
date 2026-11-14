@@ -138,8 +138,10 @@ export async function writeCardState(ws: Workspace, tutor: string, date: string,
   const files = conversationFiles(ws.dirs.conversations, tutor, date);
   await mkdir(files.cardsDir(job), { recursive: true });
   const target = files.card(job, n);
-  await writeFile(`${target}.tmp`, `${JSON.stringify(file, null, 2)}\n`);
-  await rename(`${target}.tmp`, target);
+  // 临时文件各用各的名字:同一张卡连着两次写(舞台铺好、换卡各回一次状态)撞在一个 .tmp 上,后一次 rename 就找不到它
+  const tmp = `${target}.${process.pid}.${Math.random().toString(36).slice(2, 8)}.tmp`;
+  await writeFile(tmp, `${JSON.stringify(file, null, 2)}\n`);
+  await rename(tmp, target);
 }
 
 /** 画板导出的 png:<date>.<job>.cards/<n>.png;返回相对 conversations/<老师>/ 的名字 */

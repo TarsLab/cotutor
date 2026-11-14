@@ -360,6 +360,13 @@ export const COMMANDS: readonly CommandSpec[] = [
     examples: ['cotutor show math-tutor 1620-1 2026-09-12 --json'],
   },
   {
+    name: 'reel', group: 'debug', summary: '一段录像写成时间线(给人读、给 AI 助手分析),可截孩子的屏幕',
+    usage: ['cotutor reel <链接> [--shots <目录>] [--json]', 'cotutor reel <老师> <话题> [<日期>] [--shots <目录>] [--json]'], maxArgs: 3, workspace: true, sandbox: true, json: true,
+    flags: [{ name: 'shots', value: '<目录>', desc: '在要紧的时刻(孩子开口、老师写好、开卡、翻课本、点字、没成)各截一张孩子的屏幕(要本机 Chrome)' }],
+    notes: ['链接是家长端录像顶上「复制链接」拷的;也可以写老师和话题(链接里的 thread=),日期缺省今天', '时间线有孩子的原话,只打印在这台电脑上'],
+    examples: ['cotutor reel chinese-tutor 1833-9 2026-11-14', "cotutor reel 'https://localhost/parent?tutor=chinese-tutor&date=2026-11-14&thread=1833-9' --shots /tmp/reel"],
+  },
+  {
     name: 'trace', group: 'debug', summary: '回放一轮的事件',
     usage: ['cotutor trace <老师> <job> [<日期>] [--lane <道>] [--json]'], maxArgs: 3, workspace: true, sandbox: true, json: true,
     flags: [LANE],

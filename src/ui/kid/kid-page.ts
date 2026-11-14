@@ -2977,6 +2977,8 @@ __WORD_DRAW_JS__
     marks: () => { const R = S.reel; return R ? R.d.reel.marks.map((m) => ({ kind: m.kind, label: m.label, at: m.at, p: R.clock.toPlay(m.at), ...(m.to ? { pTo: R.clock.toPlay(m.to) } : {}) })) : []; },
     play: (on) => reelPlay(on),
     seek: (p) => reelSeek(p),
+    /** 跳到当时的墙钟那一刻(cotutor reel --shots 照时间线截图用) */
+    seekWall: (w) => { const R = S.reel; if (R && R.clock) reelSeek(R.clock.toPlay(w)); },
     speeds: REEL_SPEEDS,
     /** 章:孩子每开口一次是一轮 */
     chapters: () => {
@@ -3071,7 +3073,8 @@ __WORD_DRAW_JS__
     if (host) host.cotutorReelReady(reelApi, { size: S.reel.size });
     // 焦点在孩子的屏幕里时按键也认:交给外面的录像栏,它认了就不让这一页再处理
     if (host) document.addEventListener('keydown', (e) => { try { if (host.cotutorReelKey && host.cotutorReelKey({ key: e.key, shiftKey: e.shiftKey, metaKey: e.metaKey, ctrlKey: e.ctrlKey, altKey: e.altKey })) e.preventDefault(); } catch {} });
-    else reelDock.open(reelApi, { toast });
+    // ?bare=1:只要孩子的屏幕、不要录像栏(cotutor reel --shots 截图)
+    else if (!new URLSearchParams(location.search).has('bare')) reelDock.open(reelApi, { toast });
   };
 
 __REEL_DOCK_JS__

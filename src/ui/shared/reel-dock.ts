@@ -10,7 +10,7 @@
  *                  end = 章尾(上一章 / 下一章落在这里),没给就是下一章开头之前,最后一章是末尾
  *   speeds?      → 倍速轮哪几档,缺省 1 / 1.5 / 2
  *   play(on) / seek(p) / drag(p) / real(on) / speed(x) / stop()
- * open(把手, {exit, toast, title}):title 写在左上角「退出录像」旁边(是谁的哪件事);开着时整页深底(html.rl-dark)。
+ * open(把手, {exit, toast, title, link}):title 写在左上角「退出录像」旁边(是谁的哪件事);link 给了就出「复制链接」(交给 AI 分析:cotutor reel <链接>);开着时整页深底(html.rl-dark)。
  *
  * 时间和视频一样:左下角是放到哪 / 一共要放多久,下面一行小字是当时几点;经过里每条写录像里的位置。
  * 上半占满宽度:按孩子屏幕的尺寸等比缩到铺满,窗口不够高才按高度缩;录像栏能收成一行(播放、细进度条、时间),顶上的小横条点或上下拉。
@@ -134,6 +134,8 @@ export const REEL_DOCK_CSS = `
   #rl-keyb { flex:none; height:32px; padding:0 12px; border:1px solid #4a4845; border-radius:16px; background:transparent; color:#f4f2ec; font-size:13px; cursor:pointer; white-space:nowrap; }
   #rl-keyb kbd, #rl-keys kbd { font-family:ui-monospace,Menlo,monospace; font-size:12px; border:1px solid #9b978e; border-radius:4px; padding:0 4px; }
   @media (max-width:600px), (hover:none) and (pointer:coarse) { #rl-keyb { display:none; } }
+  #rl-link { flex:none; height:32px; padding:0 12px; border:1px solid #4a4845; border-radius:16px; background:transparent; color:#f4f2ec; font-size:13px; cursor:pointer; white-space:nowrap; }
+  #rl-link[hidden] { display:none; }
   /* 快捷键那张表 */
   #rl-keys { position:fixed; inset:0; z-index:20; background:#000a; display:grid; place-items:center; }
   #rl-keys[hidden] { display:none; }
@@ -158,7 +160,7 @@ export const REEL_DOCK_CSS = `
   html.rl-dark #rl-seek::-moz-range-thumb { width:18px; height:18px; border:0; border-radius:50%; background:#fff; box-shadow:0 0 0 3px #1c1c1c; }
 `;
 
-export const REEL_DOCK_HTML = `<div id="rl-top"><button id="rl-x" type="button" hidden aria-label="退出录像"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>退出录像</button><span id="rl-ttl"></span><span id="rl-only">孩子的屏幕 · 只看,点不动</span><button id="rl-keyb" type="button" aria-haspopup="dialog">快捷键 <kbd>?</kbd></button></div>
+export const REEL_DOCK_HTML = `<div id="rl-top"><button id="rl-x" type="button" hidden aria-label="退出录像"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>退出录像</button><span id="rl-ttl"></span><span id="rl-only">孩子的屏幕 · 只看,点不动</span><button id="rl-link" type="button" hidden title="拷下这段录像的链接:给 AI 助手分析就说「cotutor reel 这个链接」">复制链接</button><button id="rl-keyb" type="button" aria-haspopup="dialog">快捷键 <kbd>?</kbd></button></div>
     <div id="rl-keys" hidden role="dialog" aria-label="快捷键"><div class="pn"><div class="hd"><b>快捷键</b><button id="rl-keys-x" type="button" aria-label="关上">✕</button></div><div class="cols"><dl><dt><kbd>空格</kbd> 或 <kbd>K</kbd></dt><dd>放 / 停</dd><dt><kbd>⇧ ←</kbd> 或 <kbd>[</kbd></dt><dd>上一章,落在那一章讲完</dd><dt><kbd>⇧ →</kbd> 或 <kbd>]</kbd></dt><dd>下一章,落在那一章讲完</dd><dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>往回 / 往前 5 秒</dd><dt><kbd>Home</kbd> <kbd>End</kbd></dt><dd>开头 / 最后一帧</dd><dt><kbd>S</kbd></dt><dd>跳过空白 开 / 关</dd><dt><kbd>⇧ ,</kbd> <kbd>⇧ .</kbd></dt><dd>慢一档 / 快一档</dd><dt><kbd>E</kbd></dt><dd>经过 展开 / 收起</dd><dt><kbd>Esc</kbd></dt><dd>退出录像</dd><dt><kbd>?</kbd></dt><dd>这一张</dd></dl><div class="mk"><b>耳机、键盘上的媒体键、iPad 控制中心</b><dl><dt><kbd>⏯</kbd></dt><dd>放 / 停</dd><dt><kbd>⏮</kbd></dt><dd>上一章(章尾)</dd><dt><kbd>⏭</kbd></dt><dd>下一章(章尾)</dd></dl><p>iPad 只在录像真在出声时才把这几个键交给这一页,停着或放到没声音的地方时可能不认。在孩子的屏幕里点过也照样认;在输入框里打字时不接管。</p></div></div></div></div>
     <div id="reel" hidden>
       <button id="rl-grab" type="button" aria-label="收起录像栏" aria-expanded="true"><i></i></button>
@@ -319,6 +321,15 @@ export const REEL_DOCK_JS = `
     q('#rl-prev').addEventListener('click', () => jump(-1));
     q('#rl-next').addEventListener('click', () => jump(1));
     q('#rl-keyb').addEventListener('click', () => keys(true));
+    /** 复制链接:剪贴板只在安全上下文里有,没有就退回选中再拷 */
+    q('#rl-link').addEventListener('click', () => {
+      const url = typeof O.link === 'function' ? O.link() : O.link;
+      if (!url) return;
+      const said = () => { if (O.toast) O.toast('链接拷好了:交给 AI 助手,说「cotutor reel 这个链接」'); };
+      const old = () => { const t = document.createElement('textarea'); t.value = url; t.style.position = 'fixed'; t.style.opacity = '0'; document.body.append(t); t.select(); try { document.execCommand('copy'); said(); } catch (x) {} t.remove(); };
+      try { if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(url).then(said, old); return; } } catch (x) {}
+      old();
+    });
     q('#rl-keys-x').addEventListener('click', () => keys(false));
     q('#rl-keys').addEventListener('click', (e) => { if (e.target === q('#rl-keys')) keys(false); });
     q('#rl-play').addEventListener('click', toggle);
@@ -352,6 +363,7 @@ export const REEL_DOCK_JS = `
         const st = api.get();
         q('#rl-speed').textContent = st.speed + '×';
         q('#rl-x').hidden = !O.exit;
+        q('#rl-link').hidden = !O.link;
         q('#rl-ttl').textContent = O.title || '';
         document.documentElement.classList.add('rl-dark');
         media(true);

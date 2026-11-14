@@ -473,12 +473,20 @@ ${REEL_DOCK_JS}
     S.reel = { tutor: t, thread, date: date || S.pdate || null };
     window.cotutorReelReady = (api, info) => {
       if (!S.reel) return;
-      reelDock.open(api, { exit: closeReel, toast, title: reelTitle(t, thread, S.reel.date) });
+      reelDock.open(api, { exit: closeReel, toast, title: reelTitle(t, thread, S.reel.date), link: reelLink });
       reelDock.frame(info && info.size ? info.size : [1180, 820]);
     };
     window.cotutorReelFail = () => { closeReel(); toast('这个话题没有录像'); };
     $('#rl').hidden = false; $('#rl-screen').hidden = false;
     $('#rl-frame').src = '/reel?' + new URLSearchParams({ tutor: t.name, date: S.reel.date || 'today', thread, end: '1' });
+    // 地址栏跟着录像:拷下来就是这段录像(重开、交给 AI 助手 cotutor reel 都认)
+    try { history.replaceState(null, '', reelLink()); } catch {}
+  };
+  /** 这段录像的链接:家长端打开它就开这段录像;日期写死(「今天」过了零点就不是这天了) */
+  const reelLink = () => {
+    if (!S.reel) return '';
+    const q = new URLSearchParams({ tutor: S.reel.tutor.name, date: S.reel.date || (S.home && S.home.today) || '', thread: S.reel.thread });
+    return location.origin + location.pathname + '?' + q;
   };
   const closeReel = () => {
     if (!S.reel) return;
@@ -488,6 +496,7 @@ ${REEL_DOCK_JS}
     fr.src = 'about:blank';
     try { audio.pause(); } catch {}
     $('#rl').hidden = true; $('#rl-screen').hidden = true;
+    try { history.replaceState(null, '', location.pathname + (S.pdate ? '?date=' + encodeURIComponent(S.pdate) : '')); } catch {}
     loadHome();
   };
 

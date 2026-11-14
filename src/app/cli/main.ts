@@ -771,6 +771,25 @@ export async function main(argv: string[]): Promise<void> {
         process.stdout.write(`${out.join('\n')}\n`);
         return;
       }
+      case 'reel': {
+        const { formatReelReport, parseReelRef, reelReport, reelShots } = await import('./reel.ts');
+        const { localDate } = await import('../../shared/time.ts');
+        const ref = parseReelRef(positionals, localDate(new Date()));
+        if ('error' in ref) throw new ArgError(ref.error);
+        const ws = loadWorkspace(workspace);
+        const { createContext } = await import('../http/app.ts');
+        const ctx = createContext(ws);
+        await ctx.reload();
+        const r = await reelReport(ctx, ref);
+        if (!r) throw new UsageError(`${ref.tutor} ${ref.date} 没有 ${ref.thread} 这段录像(话题对不对?日期缺省今天)`);
+        if (typeof flags.shots === 'string') {
+          const { resolve } = await import('node:path');
+          const n = await reelShots(ctx, r, resolve(flags.shots), (s) => { if (!json) process.stderr.write(`\r${s}`); });
+          if (!json && n) process.stderr.write('\n');
+        }
+        process.stdout.write(json ? `${JSON.stringify(r, null, 2)}\n` : formatReelReport(r));
+        return;
+      }
       case 'replay': {
         const [tutor, jobArg, dateArg] = positionals;
         if (!tutor || !jobArg) throw new ArgError(`replay 需要老师名和 job,如 cotutor replay math-tutor 1620-1 2026-09-12(日期缺省今天)`);

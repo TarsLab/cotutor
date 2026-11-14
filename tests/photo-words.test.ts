@@ -6,6 +6,7 @@ import { existsSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } fr
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { check, done } from './_check.ts';
+import { pinPhotoPreview } from './_photo-preview.ts';
 import { kidSend } from './_kid-send.ts';
 import { FAKE_RUNTIMES, startFakeTeacher } from './_fake-teacher.ts';
 
@@ -96,6 +97,7 @@ const fakeLook = (gate?: Promise<void>): Look => async (o) => {
 {
   const teacher = await startFakeTeacher();
   const { root } = await initWorkspace({ slug: 'words', name: '小字', dir: join(home, 'ws-words') });
+  pinPhotoPreview(root);
   const cfgFile = join(root, 'cotutor.json');
   const cfg = JSON.parse(readFileSync(cfgFile, 'utf8')) as { runtimes: unknown; tutors: Record<string, { runtime?: string }> };
   cfg.runtimes = { ...FAKE_RUNTIMES };

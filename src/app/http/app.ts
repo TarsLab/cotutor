@@ -62,6 +62,8 @@ import { PARENT_SETTINGS_PAGE } from '../../ui/parent/parent-settings-page.ts';
 import { dictationRoute } from '../dictation/route.ts';
 import { kidWords, readWords } from '../../scenes/photo-words/store.ts';
 import { listTextbookPages, textbookPageFile } from '../../memory/textbook-pages.ts';
+import { bookFile, bookIndex } from '../../memory/textbook-pdf.ts';
+import { bookPages } from '../../chalk/index.ts';
 import type { Look } from '../../scenes/look.ts';
 import { IndexError, capturePathOk, deleteThread, listDates, rateThread, readErrLog, readIndex, readTranscript, scanCards, undoVaultWrite, writeCapture, writeCardImage, writeCardState, type VaultWrite } from '../../runtime/journal/store.ts';
 import { memoryLineText } from '../../memory/vault-notes.ts';
@@ -946,6 +948,19 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       // 选了这一页:拷进 captures/(同孩子拍的照片),回路径;发消息时放进 photos[]
       const path = await writeCapture(ws, ctx.now(), await readFile(file), /\.png$/i.test(file) ? 'png' : 'jpg');
       return { status: 200, json: { path } };
+    }
+    // 课本(语文预习,base: textbook):PDF 本身(舞台的 pdf.js 分段取,Range 由 sendFile 管)与几页的行和字(点字、找位置);b = 册子的文件名,p = PDF 的几页(59-60)
+    if (p === '/api/kid/textbook/pdf' && method === 'GET') {
+      const file = await bookFile(ws.paths.textbooks, url.searchParams.get('b') ?? '');
+      if (!file) return { status: 404, json: { error: 'not_found' } };
+      return { status: 200, file, contentType: 'application/pdf' };
+    }
+    if (p === '/api/kid/textbook/lines' && method === 'GET') {
+      const name = url.searchParams.get('b') ?? '';
+      const want = bookPages(url.searchParams.get('p') ?? '');
+      const ix = want.length ? await bookIndex(ws.paths.textbooks, join(ws.root, '.cotutor', 'textbooks'), name).catch(() => null) : null;
+      if (!ix) return { status: 404, json: { error: 'not_found' } };
+      return { status: 200, json: { pages: ix.pages.filter((x) => want.includes(x.n)) } };
     }
     if (p === '/api/kid/photo-words' && method === 'GET') {
       const rel = url.searchParams.get('p') ?? '';

@@ -10,6 +10,7 @@ import { check, done } from './_check.ts';
 import { kidSend } from './_kid-send.ts';
 import { FAKE_RUNTIMES, startFakeTeacher } from './_fake-teacher.ts';
 import { writeKeys } from './_keys.ts';
+import { pinPhotoPreview } from './_photo-preview.ts';
 
 const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-board-page-')));
 process.env.HOME = home;
@@ -118,6 +119,8 @@ type Look = import('../src/scenes/look.ts').Look;
   cfg.runtimes = { ...FAKE_RUNTIMES };
   for (const t of Object.values(cfg.tutors)) delete t.runtime;
   writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
+  // 拍照的以板为主(出厂的语文预习 2026-11-14 改成了课本做底,见 tests/board-book.test.ts)
+  pinPhotoPreview(root);
   let now = new Date(2026, 10, 13, 19, 5);
   const ctx = createContext(loadWorkspace(root), { now: () => now, look });
   const T = 'chinese-tutor';

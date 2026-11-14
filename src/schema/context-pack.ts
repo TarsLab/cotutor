@@ -97,6 +97,7 @@ export const ContextPackSchema = z.object({
    * 以板为主的话题:板此刻的样子,每一轮都带(应用写的,不是孩子端原样转发的;src/runtime/context/board-pack.ts)。
    * base 底(照片的路径与认出的课名,或「白板」)· text 底上认出的全文(换底后第一次认完给全,之后只写「未变」;还没认完不写)·
    * drawn 你在板上画着的 · ops 现在开放给孩子的操作 · did 孩子从上一轮到现在做的(合并过)· recent 他最近点的那一项(30 秒内,孩子说「这个」时指它)
+   * view 课本做底时孩子现在看着哪里(他自己移过、放大过才有;没动过就是你让他看的那一块)
    */
   slate: z
     .object({
@@ -108,6 +109,7 @@ export const ContextPackSchema = z.object({
       ops: z.array(z.string()).default([]),
       did: z.array(z.string()).default([]),
       recent: z.string().optional(),
+      view: z.string().optional(),
     })
     .optional(),
   /** 孩子从左栏的纸交来的画:一句话说它是 photos 第几张、几笔、各颜色几笔、画了多久、清空过几次(清掉的那几版是 photos 第几张) */

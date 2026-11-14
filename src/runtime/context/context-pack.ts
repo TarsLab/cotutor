@@ -115,6 +115,7 @@ export function renderContextPack(pack: ContextPack): string {
       for (const x of b.did) out.push(`      - ${yamlScalar(x)}`);
     }
     if (b.recent) out.push(`    最近点的: ${yamlScalar(b.recent)}`);
+    if (b.view) out.push(`    孩子在看: ${yamlScalar(b.view)}`);
   }
   if (p.cards?.length) {
     out.push('  cards:');

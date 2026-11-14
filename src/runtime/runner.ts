@@ -54,9 +54,10 @@ import type { Look } from '../scenes/look.ts';
 import { photoPromptFrom, recognizeWith } from '../scenes/photo-words/recognize.ts';
 import { readWords, startWords } from '../scenes/photo-words/store.ts';
 import { appendBoard, readBoard } from './journal/board-log.ts';
-import { boardPageSection, type BoardPageOpts } from '../board/board-page.ts';
-import { slateOf } from './context/board-pack.ts';
-import { kitOf, kitOps, kitParams, photoLocate, pickable } from '../chalk/index.ts';
+import { boardPageSection, bookLesson, type BoardPageOpts, type BookBase } from '../board/board-page.ts';
+import { bookSlateParts, slateOf } from './context/board-pack.ts';
+import { BOOK_KIT, BOOK_TOC, bookSheets, bookView, kitOf, kitOps, kitParams, lessonBlocks, photoLocate, pickable } from '../chalk/index.ts';
+import { bookFile, bookIndex, listBooks, pickBook } from '../memory/textbook-pdf.ts';
 
 export class BusyError extends Error {
   constructor(tutor: string, job: string) {
@@ -135,6 +136,9 @@ interface Active {
 }
 
 export type { PackReport } from '../memory/context.ts';
+
+/** 课本索引的缓存(相对 workspace 根;能重新生成,不进备份) */
+const BOOK_CACHE = '.cotutor/textbooks';
 
 /** API 运行时的长话题:上一轮结束时上下文(tokens.context)过了这么多,这一轮整段压缩(2026-10-29 定 32k) */
 export const COMPACT_TOKENS = 32_000;
@@ -385,17 +389,34 @@ export class Runner {
    * 点字 {k:'pick', thread, text, base}:回这个字词的念法(认字时模型写好的「傍,傍晚的傍」,嘴照念);认出的字词里没有它(正文里的字)就念它自己。
    * 话题不是今天以板为主的、底不在 captures/、字不是一到四个汉字:回 null,什么都不记
    */
-  async boardEvent(tutor: string, date: string, body: unknown): Promise<{ thread: string; say: string | null } | null> {
+  async boardEvent(tutor: string, date: string, body: unknown): Promise<{ thread: string; say: string | null; still?: false } | null> {
     const ws = this.getWs();
     if (!body || typeof body !== 'object') return null;
     const b = body as Record<string, unknown>;
-    if ((b.k !== 'pick' && b.k !== 'reveal') || typeof b.thread !== 'string' || typeof b.text !== 'string' || typeof b.base !== 'string' || !pickable(b.text)) return null;
-    if (!(await capturePathOk(ws, b.base))) return null;
+    if (typeof b.thread !== 'string' || typeof b.base !== 'string') return null;
+    // 课本做底:base 是「册子#课」;窗挪到哪儿了 {k:'view', box}(场景坐标),应用照课本说成一句记下,不念、不催
+    const book = /^([^#]+\.pdf)#(.+)$/i.exec(b.base);
+    if (b.k === 'view') {
+      const box = Array.isArray(b.box) && b.box.length === 4 && b.box.every((n) => typeof n === 'number' && Number.isFinite(n)) ? (b.box as [number, number, number, number]) : null;
+      if (!book || !box) return null;
+    } else if ((b.k !== 'pick' && b.k !== 'reveal') || typeof b.text !== 'string' || !pickable(b.text)) return null;
+    if (book ? !(await bookFile(ws.paths.textbooks, book[1])) : !(await capturePathOk(ws, b.base))) return null;
     const index = await readIndex(ws, tutor, date);
     const ths = threads(index.messages);
     if (index.messages.find((_, i) => ths[i] === b.thread)?.board !== 'page') return null;
     const now = (this.opts.now ?? (() => new Date()))();
+    if (b.k === 'view') {
+      const ix = await bookIndex(ws.paths.textbooks, join(ws.root, BOOK_CACHE), book![1]).catch(() => null);
+      const at = ix ? bookLesson(ix, book![2]) : null;
+      if (!at) return null;
+      const sheets = bookSheets(at.pages);
+      const text = bookView(at.pages, sheets, lessonBlocks(at.pages), b.box as [number, number, number, number]).slice(0, 80);
+      await appendBoard(ws, tutor, date, b.thread, { at: now.toISOString(), k: 'view', text, base: b.base });
+      return { thread: b.thread, say: null, still: false };
+    }
+    if (typeof b.text !== 'string') return null;
     await appendBoard(ws, tutor, date, b.thread, { at: now.toISOString(), k: b.k, text: b.text, base: b.base });
+    if (book) return { thread: b.thread, say: b.k === 'reveal' ? null : b.text };
     // 揭开拼音:露出来就够了,嘴不念(他在自己认)
     if (b.k === 'reveal') return { thread: b.thread, say: null };
     const item = (await readWords(join(ws.root, b.base)))?.items.find((x) => x.text === b.text);
@@ -405,6 +426,36 @@ export class Runner {
   /** 板书落到板上之前替老师把住的(src/board/board-page.ts);这一轮没定(工作台、旧路径)就原样 */
   private fitBoard(section: BoardSection, active: Active): ReturnType<typeof boardPageSection> {
     return active.board ? boardPageSection(section, active.board) : { section, dropped: [], unfound: [] };
+  }
+
+  /**
+   * 课本做底(activity 头上 base: textbook):这位老师学科、这学期的那一册教材 PDF 的索引;板上现在是哪一课(这个话题里老师最后一张课本卡的课)。
+   * 教材目录下没有这一科的 PDF、PDF 读不了:book = null,problem 说一句(给老师的底、家长端)
+   */
+  private async bookOn(ws: Workspace, tutor: string, now: Date, thread: readonly ConversationMessage[]): Promise<{ book: BookBase | null; problem?: string }> {
+    const subject = canonicalSubject(ws.config.tutors[tutor]?.subject);
+    const name = pickBook(await listBooks(ws.paths.textbooks, subject || null), now);
+    if (!name) return { book: null, problem: `教材文件夹里没有${subject || '这一科'}的课本 PDF` };
+    const index = await bookIndex(ws.paths.textbooks, join(ws.root, BOOK_CACHE), name).catch((e: unknown) => { void e; return null; });
+    if (!index) return { book: null, problem: `课本《${name}》读不出来` };
+    let lesson: string | null = null;
+    for (const m of thread) {
+      if (m.result !== 'ok') continue;
+      for (const c of m.section?.cards ?? []) {
+        const p = c.kind === 'kit' && (c.props as { kit?: unknown }).kit === BOOK_KIT ? (c.props as { params?: Record<string, unknown> }).params : undefined;
+        if (p && typeof p['课'] === 'string' && p['课']) lesson = p['课'];
+      }
+    }
+    return { book: { file: name, index, lesson }, ...(index.problems.length ? { problem: `课本《${name}》:${index.problems.join(';')}` } : {}) };
+  }
+
+  /** 课本做底时的「板此刻的样子」:底是这一课(还没翻就是目录),全文是这一课分好段的正文 */
+  private async bookSlate(ws: Workspace, tutor: string, date: string, thread: string, b: { book: BookBase | null; problem?: string }, now: Date): Promise<{ slate: NonNullable<ContextPack['slate']>; told?: string }> {
+    const events = await readBoard(ws, tutor, date, thread);
+    if (!b.book) return slateOf({ photo: null, fresh: false, words: null, events, kit: null, ops: [], now: now.getTime(), book: { show: `课本:${b.problem ?? '没有'}(请家长放进 vault 的教材文件夹)`, key: '#', text: [] } });
+    const at = bookLesson(b.book.index, b.book.lesson) ?? { title: BOOK_TOC, pages: [] };
+    const { show, text } = bookSlateParts(b.book.index, at);
+    return slateOf({ photo: null, fresh: false, words: null, events, kit: null, ops: ['点字', '圈', '画'], now: now.getTime(), book: { show, key: `${b.book.file}#${at.title}`, text } });
   }
 
   /** 这块底上认出的字与行框 → 找字词的函数(照片板的「圈: 蚕」用);还没认出来就不给 */
@@ -618,11 +669,15 @@ export class Runner {
     if (input.home) pack.home = input.home;
     // 以板为主的话题(activity 头上 board: page;记在话题第一条):每一轮带板此刻的样子
     const first = fresh ? null : index.messages.find((_, i) => known[i] === thread);
-    const boardPage = !input.bookkeep && policy.board !== 'off' && (fresh ? Boolean(activityRun && (await readActivity(ws, tutor, activityRun.name))?.board === 'page') : first?.board === 'page');
+    const actDef = threadRun ? await readActivity(ws, tutor, threadRun.name) : null;
+    const boardPage = !input.bookkeep && policy.board !== 'off' && (fresh ? Boolean(activityRun && actDef?.board === 'page') : first?.board === 'page');
+    // 课本做底(base: textbook):不看照片,底是这一科的课本 PDF
+    const bookBase = boardPage && actDef?.base === 'textbook' ? await this.bookOn(ws, tutor, now, fresh ? [] : index.messages.filter((_, i) => known[i] === thread)) : null;
+    if (bookBase?.problem) activityWarn.push(bookBase.problem);
     // 这块底:这一条带的照片,或这个话题里孩子最近发的那张;照片板没写「图」就是它
-    const basePhoto = photos.length ? photos[photos.length - 1] : [...index.messages].reverse().find((m, i) => known[index.messages.length - 1 - i] === thread && !fresh && m.from === 'kid' && m.photos?.length)?.photos?.slice(-1)[0] ?? null;
-    active.board = { page: boardPage, photo: basePhoto, ...(await this.locateOn(ws, basePhoto)) };
-    const slate = boardPage ? await this.slateFor(ws, tutor, date, { messages: index.messages, ths: known, thread, photos, activity: threadRun?.name ?? null, now }) : null;
+    const basePhoto = bookBase ? null : photos.length ? photos[photos.length - 1] : [...index.messages].reverse().find((m, i) => known[index.messages.length - 1 - i] === thread && !fresh && m.from === 'kid' && m.photos?.length)?.photos?.slice(-1)[0] ?? null;
+    active.board = { page: boardPage, photo: basePhoto, ...(bookBase?.book ? { book: bookBase.book } : await this.locateOn(ws, basePhoto)) };
+    const slate = bookBase ? await this.bookSlate(ws, tutor, date, thread, bookBase, now) : boardPage ? await this.slateFor(ws, tutor, date, { messages: index.messages, ths: known, thread, photos, activity: threadRun?.name ?? null, now }) : null;
     if (slate) pack.slate = slate.slate;
     // 小课堂:课包现读;读不出来(删了、坏了)就不带,这条照发,家长端提醒
     const lecture = input.lecture ? await readLecture(ws, input.lecture.bundle) : null;
@@ -832,7 +887,7 @@ export class Runner {
       if (active.board && !active.board.locate) active.board = { ...active.board, ...(await this.locateOn(ws, active.board.photo)) };
       const fit = this.fitBoard(kidView.section, active);
       kidView.section = fit.section;
-      if (fit.unfound.length) kidView.warnings.push(`照片板写的「${fit.unfound.join('」「')}」在认出的字、题里找不到,没画(题找不到就是整张)`);
+      if (fit.unfound.length) kidView.warnings.push(active.board?.book ? `课本卡写的「${fit.unfound.join('」「')}」在课本里找不到,没画(课找不到就还是板上那一课)` : `照片板写的「${fit.unfound.join('」「')}」在认出的字、题里找不到,没画(题找不到就是整张)`);
       if (fit.dropped.length) kidView.warnings.push(active.board?.page ? `以板为主:这一节只上板一张板卡,别的没给孩子看(${fit.dropped.map((c) => `${c.kind} ${cardLabel(c)}`.trim()).join(';')})` : `照片板没写「图」,孩子还没发照片,画不出来,没给孩子看`);
     }
     // 整块出的(没走流式):卡与句这时才第一次见到,也发一遍

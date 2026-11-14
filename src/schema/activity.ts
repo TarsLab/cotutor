@@ -66,6 +66,14 @@ export const ACTIVITY_BOARDS: Readonly<Record<string, string>> = {
 };
 export type ActivityBoard = 'page';
 
+/**
+ * 头上的 `base:`(写了 board: page 才有):板上垫什么。不写 = 孩子拍的照片(进来先到拍照屏)。
+ * textbook = vault 里的教材 PDF(2026-11-14《语文预习:PDF 课本与镜头交互》):不拍照、不选相册,进来铺这一册的目录,老师照孩子说的课翻到那一课
+ */
+export const ACTIVITY_BASES: Readonly<Record<string, string>> = {
+  textbook: '课本:vault 的教材/ 下这一科的 PDF,不拍照',
+};
+
 /** 应用认的节标题;工具人那节是 `<工具人>收到什么` */
 export const ACTIVITY_SECTIONS = { params: '家长填的', state: '应用算的', gates: '应用拦的', tutor: '老师怎么带' } as const;
 export const ACTIVITY_TOOL_SECTION_RE = /^(.+?)收到什么$/;
@@ -130,6 +138,8 @@ export const ActivitySchema = z.object({
   page: z.string().optional(),
   /** 头上的 `board:`:page = 以板为主(见 ACTIVITY_BOARDS);没写 = 照卡片流 */
   board: z.string().optional(),
+  /** 头上的 `base:`:板上垫什么(见 ACTIVITY_BASES);没写 = 孩子拍的照片 */
+  base: z.string().optional(),
   /** 「老师怎么带」那节的原文(没剥注释、没裁);没有这节就是 null(这个 activity 不起老师,如听写) */
   tutor: z.object({ text: z.string(), line: z.number().int() }).nullable(),
   tools: z.array(ActivityToolSchema),

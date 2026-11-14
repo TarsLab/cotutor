@@ -8,6 +8,7 @@ import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { check, done } from './_check.ts';
+import { pinPhotoPreview } from './_photo-preview.ts';
 import { FAKE_RUNTIMES, startFakeTeacher } from './_fake-teacher.ts';
 import { startFakeRealtime } from './_fake-realtime.ts';
 import { writeKeys } from './_keys.ts';
@@ -42,6 +43,7 @@ const look: Look = async (o) => { o.onDelta?.(`${LINES.join('\n')}\n`); return {
 const fake = await startFakeRealtime();
 const wsRoot = join(home, 'ws');
 await initWorkspace({ slug: 'ray', name: 'Ray', dir: wsRoot });
+pinPhotoPreview(wsRoot);
 const cfgFile = join(wsRoot, 'cotutor.json');
 const cfg = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, any>;
 cfg.runtimes = { ...FAKE_RUNTIMES };

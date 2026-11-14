@@ -41,6 +41,9 @@ export function teacherReply(body: ChatBody): FakeReply {
   if (msg.includes('想要小课堂')) parts.push('```scene\n2026-09-09-guilv\n```\n\n```text\n# 找规律\n75、70、65、__\n```\n\n每次少几?\n\n## 想要小课堂\n- 题面: 找规律填数 75、70、65、__\n  讲法: 每次少 5;用交错数列分行讲');
   if (msg.includes('画图')) parts.push('说得真清楚,画家开始画了。\n\n```paint\n题: 图上画了谁?他们在干什么?\n词: 播种、羞愧\n角色: 小熊:棕色,戴黄草帽\n1. 早上,小熊在地里播种。\n2. 中午,小猴躺在树下睡大觉。\n3. 夏天,小熊的地里结满西瓜。\n4. 小猴低着头,脸红红的。\n```\n\n你猜画家会怎么画?');
   if (msg.includes('放课')) parts.push('```lecture\n2026-09-18-po13-jian-8 0:19-0:30\n再看一遍拆开那一捆。\n```\n\n我们回到那里再看一遍。[[play]]\n\n拿走 8 根,这一捆还剩几根?');
+  // 课本做底(tests/board-book.test.ts):翻到一课,先看第 1 段,再看第 2 段、圈一个词;「不存在的课」翻不到
+  if (msg.includes('预习小鱼')) parts.push('我们来预习《小鱼吹泡泡》。\n\n```课本\n课: 小鱼吹泡泡\n看: 第 1 段\n```\n\n你先读一读第一段。\n\n```课本\n看: 第 2 段\n圈: 井沿、没有这个词\n```\n\n再看第二段,井沿在哪里?');
+  if (msg.includes('不存在的课')) parts.push('```课本\n课: 坐井观天\n```\n\n我们翻到这一课。');
   if (msg.includes('方向盘')) parts.push('我们把它画下来。\n\n```方向盘\n操作: 转\n把「东」转到小人的前面。\n```\n\n这是一个方向盘,中间的小人就是你。\n\n你把「东」转到小人的前面。');
   if (msg.includes('热身') || msg.includes('口语课')) parts.push('```word\n🦆 duck\nd-u-ck\n```\n\n我们先热热身!我先来:duck! [[echo duck]]\n\n小声一点:duck… [[echo duck]]\n\n你先说:鸭子英文怎么说? [[say duck]]\n\n热身好啦!老师给你打个电话。 [[call]]\n\n这句不该念。');
   if (msg.includes('直接打电话')) parts.push('好,那我们现在就打电话! [[call]]');

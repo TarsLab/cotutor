@@ -36,7 +36,7 @@ import { mockLiveUpgrade } from './mock-live.ts';
 import { DRAW_ONLY_TEXT, PAPER_KEY_RE, paperDrawing, type PaperState } from '../../board/paper.ts';
 import { CanvasStateSchema } from '../../board/cards/canvas.ts';
 // 回给页面的形状直接用真服务的(app.ts):真接口加字段、改字段,这里不跟就红(2026-10-17;以前 mock 自己拼对象,motto 这种真服务没有的字段只在 mock 下显示)
-import type { KidDay, KidHistory, KidHome, KidTutor, Overview, OverviewThread, OverviewTutor } from '../http/app.ts';
+import type { KidDay, KidHome, KidTodayItem, KidTutor, Overview, OverviewThread, OverviewTutor } from '../http/app.ts';
 
 /** 看完小课堂的第一问,mock 老师这样答:对着画的地方说,放课里拆开那一捆的那一段;视频的放轮着分那一段 */
 const MOCK_VIDEO_LECTURE_REPLY = [
@@ -77,7 +77,7 @@ import { type CardStates } from '../../schema/index.ts';
 import { lanAddresses, listenInfo, localName, siteUrl } from '../cli/serve.ts';
 import { qrPage, type ListenInfo } from '../../ui/parent/qr-page.ts';
 import { USER_CERT_DIR } from '../workspace.ts';
-import { kidThreads, type KidMessage } from '../../runtime/kid-view.ts';
+import { startsThread, type KidMessage } from '../../runtime/kid-view.ts';
 import { ICON_SIZES, appIconPng, webManifest } from '../../ui/shared/icon.ts';
 import { faviconResponse } from '../../ui/shared/favicon.ts';
 import { kidPage } from '../../ui/kid/kid-page.ts';
@@ -753,16 +753,30 @@ export function createMock(opts: MockOptions = {}): Mock {
       if (c.kind !== 'tutor') return { ...stripSecrets({ cards: [c], lines: [] }).cards[0], owner: owners.get(c) ?? null }; // 同真服务:答案(听写卡的字)不下发;非老师卡带归属
       const name = String(c.props.tutor);
       const list = messages.get(name) ?? [];
-      const asked = list.find((m) => m.question !== null && m.thread === list[list.length - 1]?.thread);
-      // mock 的话题都是新话题进去的:今天孩子问过的那个,挂在新话题按钮上(空白板上的胶囊)
-      const resumes = asked ? new Map([['free', { thread: asked.thread, title: (asked.question ?? '').slice(0, 10), at: list[list.length - 1]?.at ?? '' }]]) : undefined;
       const alive = (date: string, thread: string): boolean => (date === yesterday() && (past.get(name) ?? []).some((m) => m.thread === thread)) || (date === localDate(d) && list.some((m) => m.thread === thread));
       // 方砖:三门主科出厂都有预习、检查作业、复习(真服务看老师家里有没有那个 activity 文件)
       const main = ['语文', '数学', '英语'].includes(canonicalSubject(MOCK_TUTORS.find((t) => t.name === name)?.subject) ?? '');
-      return { kind: 'tutor', props: { tutor: name, tiles: main ? kidTiles(HOME_TILE_IDS, { usable: () => true, ...(name === 'chinese-tutor' ? { boards: new Set(['预习']) } : {}) }) : [], buttons: kidButtons((c.props.buttons ?? []) as TutorButton[], { resumes, alive, lecture: (id) => Boolean(mockLecture(id)), today: localDate(d) }).map((b) => { const l = b.kind === 'lecture' ? mockLecture(b.bundle) : null; return l ? { ...b, title: l.title, ms: l.ms, ...(l.video ? { video: true as const } : {}) } : b; }) } };
+      return { kind: 'tutor', props: { tutor: name, tiles: main ? kidTiles(HOME_TILE_IDS, { usable: () => true, ...(name === 'chinese-tutor' ? { boards: new Set(['预习']) } : {}) }) : [], buttons: kidButtons((c.props.buttons ?? []) as TutorButton[], { alive, lecture: (id) => Boolean(mockLecture(id)), today: localDate(d) }).map((b) => { const l = b.kind === 'lecture' ? mockLecture(b.bundle) : null; return l ? { ...b, title: l.title, ms: l.ms, ...(l.video ? { video: true as const } : {}) } : b; }) } };
     });
     // figshot:和配了 figshot 的 workspace 一样给端口;这台电脑上 figshot 没开着,页面照样藏着这张卡
-    return { title, date: localDate(d), tutors: tutorsJson(), home: mockHomeId(), cards, figshot: { port: 8477 }, hand: 'right', ready: scenario !== 'nokey' };
+    return { title, date: localDate(d), tutors: tutorsJson(), home: mockHomeId(), cards, figshot: { port: 8477 }, hand: 'right', ready: scenario !== 'nokey', today: mockToday() };
+  };
+  /** 首页「今天」:同真服务(app.ts 的 kidToday)——开了头的话题,新的在前;预览图存在内存里,没有就拿孩子发的最后一张照片 */
+  const previews = new Map<string, { data: Buffer; at: number }>();
+  const mockToday = (): KidTodayItem[] => {
+    const out: KidTodayItem[] = [];
+    for (const name of MOCK_TUTORS.map((t) => t.name)) {
+      const by = new Map<string, MockMessage[]>();
+      for (const m of messages.get(name) ?? []) by.set(m.thread, [...(by.get(m.thread) ?? []), m]);
+      for (const [thread, ms] of by) {
+        if (!ms.some((m) => startsThread({ from: m.question !== null ? 'kid' : 'system', photos: m.photos, section: m.section }))) continue;
+        const said = ms.find((m) => m.question)?.question ?? '';
+        const photo = ms.flatMap((m) => m.photos ?? []).pop();
+        const pv = previews.get(`${name}|${thread}`);
+        out.push({ tutor: name, thread, at: ms[ms.length - 1].at, label: Array.from(said).slice(0, 12).join(''), image: pv ? `/api/kid/conversations/${name}/preview?thread=${encodeURIComponent(thread)}&v=${pv.at}` : photo ? `/api/kid/image?p=${encodeURIComponent(photo)}` : null });
+      }
+    }
+    return out.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
   };
   const mockHomeId = (): string => `${yesterday()}-2130`;
   let dictationRoot: string | null = null;
@@ -1004,7 +1018,7 @@ export function createMock(opts: MockOptions = {}): Mock {
       return { status: 200, json: { tutor: name, thread, rating } };
     }
     const pk = p;
-    const kid = /^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/(today|messages|history|photos|play|paper|\d{4}-\d{2}-\d{2})$/.exec(pk);
+    const kid = /^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/(today|messages|preview|photos|play|paper|\d{4}-\d{2}-\d{2})$/.exec(pk);
     if (kid) {
       const [, name, tail] = kid;
       const t = MOCK_TUTORS.find((x) => x.name === name);
@@ -1047,14 +1061,16 @@ export function createMock(opts: MockOptions = {}): Mock {
         const out: KidDay = { tutor: name, date, messages: await Promise.all(shown.map(kidMessage)), pending: pending ? pending.job : null, thread: shown.length ? shown[shown.length - 1].thread : null };
         return { status: 200, json: out };
       }
-      if (tail === 'history' && method === 'GET') {
-        const days: KidHistory['days'] = [];
-        const todayThreads = kidThreads(await Promise.all((messages.get(name) ?? []).map(kidMessage))).reverse();
-        if (todayThreads.length) days.push({ date, threads: todayThreads });
-        const old = past.get(name) ?? [];
-        if (old.length) days.push({ date: yesterday(), threads: kidThreads(old) });
-        const out: KidHistory = { tutor: name, today: date, days };
-        return { status: 200, json: out };
+      // 话题的预览图:同真服务,存在内存里
+      if (tail === 'preview' && method === 'PUT') {
+        const m = isObj(body) && typeof body.image === 'string' ? /^data:image\/jpeg;base64,(.+)$/.exec(body.image) : null;
+        if (!m || !isObj(body) || typeof body.thread !== 'string' || !list.some((x) => x.thread === body.thread)) return { status: 400, json: { error: 'bad_request' } };
+        previews.set(`${name}|${body.thread}`, { data: Buffer.from(m[1], 'base64'), at: Date.now() });
+        return { status: 200, json: { ok: true } };
+      }
+      if (tail === 'preview' && method === 'GET') {
+        const pv = previews.get(`${name}|${url.searchParams.get('thread') ?? ''}`);
+        return pv ? { status: 200, body: pv.data, contentType: 'image/jpeg' } : { status: 404, json: { error: 'not_found' } };
       }
       if (/^\d{4}-/.test(tail) && method === 'GET') {
         if (tail > date) return { status: 400, json: { error: 'bad_request' } };

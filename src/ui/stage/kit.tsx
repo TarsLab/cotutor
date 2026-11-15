@@ -16,6 +16,8 @@ import { mountBaked, type MountedLesson } from './chalk/render.ts';
 
 export interface KitStageHandle {
   submit(): void;
+  /** 板此刻的样子(data URL,png 或 jpeg);导不出 null。话题的预览图用(main.tsx 再缩成小 jpeg) */
+  peek(): Promise<string | null>;
 }
 
 export interface KitStageProps {
@@ -404,6 +406,7 @@ export const KitStage = forwardRef<KitStageHandle, KitStageProps>(function KitSt
       const st: KitState = { turn: { ...(s.turn ?? {}) }, moves: s.moves ?? 0, marks: s.marks ?? [], ...(s.aspect ? { aspect: s.aspect } : {}), ...(s.picked?.length ? { picked: [...s.picked] } : {}) };
       void snapshot().then((image) => onSubmit(st, image), () => onSubmit(st));
     },
+    async peek() { return (await snapshot()) ?? null; },
   }), [onSubmit, snapshot]);
 
   // ---- 笔 ----

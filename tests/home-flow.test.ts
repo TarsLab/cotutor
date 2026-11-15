@@ -55,7 +55,7 @@ const wait = async (tutor: string): Promise<void> => {
 };
 const kidSend = (tutor: string, body: unknown) => liveSend(ctx, tutor, body);
 type Btn = { id: string | number; kind: string; label: string; date?: string; thread?: string; brief?: string };
-type KidHome = { home: string | null; cards: { kind: string; props: { tutor?: string; buttons?: Btn[]; chars?: string } }[]; figshot: { port: number } | null };
+type KidHome = { home: string | null; cards: { kind: string; props: { tutor?: string; buttons?: Btn[]; chars?: string } }[]; figshot: { port: number } | null; today: { tutor: string; thread: string }[] };
 const kidHome = async (): Promise<KidHome> => (await route('GET', '/api/kid/home', ctx)).json as KidHome;
 const buttonsOf = (h: KidHome, tutor: string): Btn[] => h.cards.find((c) => c.kind === 'tutor' && c.props.tutor === tutor)?.props.buttons ?? [];
 const draft = (text: string): void => {
@@ -215,7 +215,7 @@ for: 2026-09-18
   check('老页面的「接着刚才的」(via recent)服务端照旧认:接今天那个话题,孩子自己的话', m3.thread === j1 && m3.text === '小蝌蚪后来呢' && m3.via?.button === 'recent');
 
   // 方砖(预习、检查作业、复习):出厂的老师家里都有,不经发布常驻;点了 = 那个 activity、发方砖上的字;关掉的不出、点了 400
-  type Tile = { id: string; label: string; resume?: { thread: string } };
+  type Tile = { id: string; label: string };
   const tilesOf = (h: KidHome, tutor: string): Tile[] => (h.cards.find((c) => c.kind === 'tutor' && c.props.tutor === tutor)?.props as { tiles?: Tile[] } | undefined)?.tiles ?? [];
   const ht = await kidHome();
   check('方砖:三位老师都有预习、检查作业、复习(牌上的先后)', ['chinese-tutor', 'math-tutor', 'english-tutor'].every((n) => tilesOf(ht, n).map((x) => `${x.id}:${x.label}`).join() === 'preview:预习,check:检查作业,review:复习'), JSON.stringify(tilesOf(ht, 'english-tutor')));
@@ -223,7 +223,8 @@ for: 2026-09-18
   await wait('english-tutor');
   const mt = (await readIndex(ctx.ws, 'english-tutor', '2026-09-17')).messages.find((m) => m.job === (sTile.json as { job: string }).job);
   check('点方砖:新话题、发方砖上的字、记 via、话题照 activity「检查作业」(参数缺省)', sTile.status < 300 && mt?.text === '检查作业' && mt.via?.button === 'check' && mt.activity?.name === '检查作业' && mt.thread === mt.job, JSON.stringify([sTile.status, sTile.json, mt]));
-  check('今天点过的方砖带 resume(先问接着还是重新开始);别的方砖不带', tilesOf(await kidHome(), 'english-tutor').map((x) => x.resume?.thread ?? '-').join() === `-,${mt?.thread},-`);
+  const ht2 = await kidHome();
+  check('方砖不带 resume(今天聊过的在首页「今天」接);只说了方砖的字、没出图的话题不上「今天」', tilesOf(ht2, 'english-tutor').every((x) => !('resume' in x)) && !ht2.today.some((x) => x.thread === mt?.thread), JSON.stringify(ht2.today));
   withTutor('english-tutor', { tiles: { check: false } });
   check('关掉的方砖不出', tilesOf(await kidHome(), 'english-tutor').map((x) => x.id).join() === 'preview,review');
   check('关掉的方砖点了 400(孩子端刷新首页)', (await kidSend('english-tutor', { text: '', via: { home: h1.home, button: 'check' } })).status === 400);

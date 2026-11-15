@@ -205,30 +205,68 @@ export function parentConversation(index: { messages: readonly ConversationMessa
   return out;
 }
 
-export interface KidThread {
+/** 首页「今天」的一格:今天开了头的一个话题(startedThreads) */
+export interface KidTodayThread {
   thread: string;
-  /** 话题第一条的时间 */
+  /** 话题最后一条的时间(新的在前) */
   at: string;
-  /** 话题名:孩子的第一句话截 20 字;没有孩子的话 → 「老师主动说的」 */
-  title: string;
-  /** 老师讲了几节 */
-  sections: number;
-  /** 一共几张卡 */
-  cards: number;
+  /** 从哪进来的:方砖、按钮上的字(预习、检查作业);自由话题是孩子的第一句(截 12 字) */
+  label: string;
+  /** 课本翻到的那一课(老师最后那张带「课」的课本卡) */
+  lesson?: string;
+  /** 孩子最后发的一张照片(captures/…):还没有预览图时拿它当图 */
+  photo?: string;
 }
 
+/** 首页「今天」那一格的字最多几个 */
+const TODAY_LABEL_MAX = 12;
+
 /**
- * 「以前的」列表:一天的孩子端条目按话题分组。一句孩子的话都没有的话题不列;还在跑的、出错的轮不算节。
+ * 这一轮让话题开了头没有(2026-11-15,Jack):有孩子参与的图出现了——孩子发了照片、画了画;老师出了板卡(课本只算翻到一课的,目录不算)、
+ * 图片、画图、画板。只说话、只铺了目录的不算开头:孩子端不列(首页「今天」),记录照存,家长照看。
  */
-export function kidThreads(messages: readonly KidMessage[]): KidThread[] {
-  const by = new Map<string, KidThread & { asked: boolean }>();
-  for (const m of messages) {
-    const t = by.get(m.thread) ?? { thread: m.thread, at: m.at, title: '', sections: 0, cards: 0, asked: false };
-    if (m.question && !t.asked) { t.asked = true; t.title = m.question.trim().slice(0, 20); }
-    if (m.reply !== null || (m.section && !m.pending)) { t.sections++; t.cards += m.section?.cards.length ?? 0; }
-    by.set(m.thread, t);
+export function startsThread(m: { from: ConversationMessage['from']; photos?: readonly string[]; drawing?: unknown; section?: { cards: readonly { kind: string; props: Record<string, unknown> }[] } | null }): boolean {
+  if (m.from === 'kid' && (m.photos?.length || m.drawing)) return true;
+  for (const c of m.section?.cards ?? []) {
+    if (c.kind === 'image' || c.kind === 'paint' || c.kind === 'canvas') return true;
+    if (c.kind !== 'kit') continue;
+    const p = c.props as { kit?: unknown; params?: Record<string, unknown> };
+    if (p.kit !== '课本') return true;
+    if (typeof p.params?.['课'] === 'string' && p.params['课'].trim()) return true;
   }
-  return [...by.values()].filter((t) => t.asked).map(({ asked: _a, ...t }) => t);
+  return false;
+}
+
+/** 一天的索引 → 开了头的话题,新的在前;记账、整理记忆那种系统起的话题不算 */
+export function startedThreads(messages: readonly ConversationMessage[]): KidTodayThread[] {
+  const ths = threads(messages);
+  const by = new Map<string, { t: KidTodayThread; started: boolean; system: boolean; said: string[] }>();
+  messages.forEach((m, i) => {
+    let e = by.get(ths[i]);
+    if (!e) {
+      // 新话题按钮上的字(「新话题」)不说明什么:那种用孩子的第一句
+      const free = !m.via || m.via.button === 'new' || m.via.button === 'recent';
+      const label = (free ? '' : m.via!.label.trim()) || m.activity?.name || '';
+      e = { t: { thread: ths[i], at: m.at, label }, started: false, system: m.from === 'system', said: [] };
+      by.set(ths[i], e);
+    }
+    if (m.bookkeep || m.tidy) return;
+    if (m.at > e.t.at) e.t.at = m.at;
+    if (m.from === 'kid' && m.text.trim()) e.said.push(m.text.replace(/\s+/g, ' ').trim());
+    if (m.from === 'kid' && m.photos?.length) e.t.photo = m.photos[m.photos.length - 1];
+    if (startsThread(m)) e.started = true;
+    for (const c of m.section?.cards ?? []) {
+      const p = c.props as { kit?: unknown; params?: Record<string, unknown> };
+      if (c.kind === 'kit' && p.kit === '课本' && typeof p.params?.['课'] === 'string' && p.params['课'].trim()) e.t.lesson = p.params['课'].trim();
+    }
+  });
+  const out: KidTodayThread[] = [];
+  for (const e of by.values()) {
+    if (!e.started || e.system) continue;
+    if (!e.t.label) { const cps = Array.from(e.said[0] ?? ''); e.t.label = cps.length > TODAY_LABEL_MAX ? `${cps.slice(0, TODAY_LABEL_MAX).join('')}…` : cps.join(''); }
+    out.push(e.t);
+  }
+  return out.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
 }
 
 /**

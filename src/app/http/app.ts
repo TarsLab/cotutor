@@ -15,7 +15,8 @@ import { PHOTO_MAX_SIDE } from '../../ui/kid/photo-edit.ts';
 import { currentThread, lastJobOf, sameRuntime } from '../../runtime/journal/conversation.ts';
 import { localDate, weekOf } from '../../shared/time.ts';
 import { conversationFiles, threads } from '../../schema/index.ts';
-import { kidConversation, kidThreads, submittedCards, parentConversation, type KidMessage, type KidThread, type ParentMessage } from '../../runtime/kid-view.ts';
+import { kidConversation, startedThreads, submittedCards, parentConversation, type KidMessage, type KidTodayThread, type ParentMessage } from '../../runtime/kid-view.ts';
+import { previewOf, writePreview } from '../../runtime/journal/preview.ts';
 import { parseEvents } from '../../runtime/journal/events.ts';
 import { type RunEvent } from '../../schema/index.ts';
 import { NEUTRAL_COLOR, SUBJECT_COLORS, TUTOR_PALETTE, tutorColors } from '../../ui/shared/tutor-color.ts';
@@ -229,6 +230,29 @@ export interface KidHome {
   hand: 'right' | 'left';
   /** 百炼配好了:没配孩子端只出「老师们还没到」,家长端配 */
   ready: boolean;
+  /** 首页「今天」:今天开了头的话题(几位老师的混在一起,新的在前);点一格回到那个话题接着聊 */
+  today: KidTodayItem[];
+}
+
+/** 首页「今天」的一格:image = 预览图(没有就是孩子最后发的照片;都没有 null,孩子端画老师的颜色) */
+export interface KidTodayItem extends Omit<KidTodayThread, 'photo'> {
+  tutor: string;
+  image: string | null;
+}
+
+/** 这几位老师今天开了头的话题 */
+export async function kidToday(ws: Workspace, tutors: readonly string[], date: string): Promise<KidTodayItem[]> {
+  const out: KidTodayItem[] = [];
+  for (const tutor of tutors) {
+    const index = await readIndex(ws, tutor, date).catch(() => null);
+    if (!index) continue;
+    for (const { photo, ...t } of startedThreads(index.messages)) {
+      const pv = await previewOf(ws, tutor, date, t.thread);
+      const image = pv ? `/api/kid/conversations/${tutor}/preview?thread=${encodeURIComponent(t.thread)}&date=${date}&v=${pv.mtime}` : photo ? `/api/kid/image?p=${encodeURIComponent(photo)}` : null;
+      out.push({ ...t, tutor, image });
+    }
+  }
+  return out.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
 }
 
 export async function kidHome(ctx: AppContext, now: Date): Promise<KidHome> {
@@ -236,7 +260,8 @@ export async function kidHome(ctx: AppContext, now: Date): Promise<KidHome> {
   const date = localDate(now);
   const view = await kidHomeView(ws, now);
   const figshot = ws.config.figshot ? { port: ws.config.figshot.port } : null;
-  return { title: ws.config.title, date, tutors: await kidTutors(ctx), home: view.home, cards: view.cards, figshot, hand: ws.config.kid.hand ?? 'right', ready: ctx.bailian.status().ready && !ctx.bailian.blocked() };
+  const names = view.cards.flatMap((c) => (c.kind === 'tutor' ? [String(c.props.tutor)] : []));
+  return { title: ws.config.title, date, tutors: await kidTutors(ctx), home: view.home, cards: view.cards, figshot, hand: ws.config.kid.hand ?? 'right', ready: ctx.bailian.status().ready && !ctx.bailian.blocked(), today: await kidToday(ws, names, date) };
 }
 
 export interface KidDay {
@@ -247,26 +272,6 @@ export interface KidDay {
   pending: string | null;
   /** 当前话题(末条消息所在);还没说过话 → null */
   thread: string | null;
-}
-
-/** 「以前的」:最近 days 天每天的话题列表(今天也在),新的在前;没有孩子问过的话题不列 */
-export interface KidHistory {
-  tutor: string;
-  today: string;
-  days: { date: string; threads: KidThread[] }[];
-}
-
-export async function kidHistory(ctx: AppContext, tutor: string, days: number): Promise<KidHistory> {
-  const today = localDate(ctx.now());
-  const floor = localDate(new Date(ctx.now().getTime() - (days - 1) * 86400000));
-  const dates = (await listDates(ctx.ws, tutor)).filter((d) => d >= floor && d <= today).sort().reverse();
-  const out: KidHistory['days'] = [];
-  for (const date of dates) {
-    const index = await readIndex(ctx.ws, tutor, date);
-    const list = kidThreads(kidConversation(index)).reverse();
-    if (list.length) out.push({ date, threads: list });
-  }
-  return { tutor, today, days: out };
 }
 
 export async function kidDay(ctx: AppContext, tutor: string, date: string): Promise<KidDay> {
@@ -851,7 +856,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       await appendFile(join(ws.root, '.cotutor', 'voice-diag.jsonl'), `${JSON.stringify(row)}\n`).catch(() => {});
       return { status: 200, json: { ok: true } };
     }
-    const kid =/^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/(today|messages|history|photos|play|paper|\d{4}-\d{2}-\d{2})$/.exec(p);
+    const kid =/^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/(today|messages|preview|photos|play|paper|\d{4}-\d{2}-\d{2})$/.exec(p);
     if (kid) {
       const [, tutor, tail] = kid;
       const t = ws.config.tutors[tutor];
@@ -891,9 +896,15 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         if (tail > date || Number.isNaN(Date.parse(tail))) return { status: 400, json: { error: 'bad_request' } };
         return { status: 200, json: await kidDay(ctx, tutor, tail) };
       }
-      if (tail === 'history' && method === 'GET') {
-        const days = Math.min(365, Math.max(1, Number(url.searchParams.get('days') ?? 30) || 30));
-        return { status: 200, json: await kidHistory(ctx, tutor, days) };
+      // 话题的预览图(首页「今天」那一格):PUT {thread, image} 孩子端板停下来时交一张(只收今天的话题);GET ?thread=&date= 取
+      if (tail === 'preview' && method === 'PUT') {
+        if (!isObj(body) || typeof body.thread !== 'string') return { status: 400, json: { error: 'bad_request' } };
+        return (await writePreview(ws, tutor, date, body.thread, body.image)) ? { status: 200, json: { ok: true } } : { status: 400, json: { error: 'bad_request' } };
+      }
+      if (tail === 'preview' && method === 'GET') {
+        const d = url.searchParams.get('date') ?? date;
+        const pv = DATE_RE.test(d) ? await previewOf(ws, tutor, d, url.searchParams.get('thread') ?? '') : null;
+        return pv ? { status: 200, file: pv.file, contentType: 'image/jpeg', cacheControl: 'no-cache' } : { status: 404, json: { error: 'not_found' } };
       }
       // 孩子端发一条只走实时那条连接(/api/live/<老师>/ws,src/runtime/live/turns.ts);2026-11-04 删了 HTTP 的发
       return { status: 405, json: { error: 'method_not_allowed' } };

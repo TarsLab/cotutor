@@ -32,6 +32,24 @@ type Card = Extract<ToStage, { type: 'card' }>;
 type Outgoing = FromStage extends infer U ? (U extends FromStage ? Omit<U, 'source'> : never) : never;
 
 const noop = (): void => {};
+/** 话题预览图的长边(首页「今天」那一格两三百像素宽,按 2 倍屏) */
+const PEEK_SIDE = 480;
+/** 一张图(data URL)缩成长边 side 的 jpeg;本来就小的照原尺寸转 */
+async function shrinkJpeg(url: string, side: number): Promise<string | null> {
+  const img = new Image();
+  img.src = url;
+  await img.decode();
+  const k = Math.min(1, side / Math.max(img.naturalWidth, img.naturalHeight));
+  const cv = document.createElement('canvas');
+  cv.width = Math.max(1, Math.round(img.naturalWidth * k));
+  cv.height = Math.max(1, Math.round(img.naturalHeight * k));
+  const g = cv.getContext('2d');
+  if (!g) return null;
+  g.fillStyle = '#ffffff';
+  g.fillRect(0, 0, cv.width, cv.height);
+  g.drawImage(img, 0, 0, cv.width, cv.height);
+  return cv.toDataURL('image/jpeg', 0.78);
+}
 const post = (m: Outgoing): void => { window.parent.postMessage({ source: STAGE_SOURCE, ...m }, '*'); };
 
 function App(): JSX.Element {
@@ -55,6 +73,7 @@ function App(): JSX.Element {
       else if (m.type === 'control') {
         if (m.action === 'submit') { canvas.current?.submit(); kit.current?.submit(); }
         else if (m.action === 'snap') void (canvas.current ? canvas.current.snap() : Promise.resolve(null)).then((image) => post({ type: 'snap', image }));
+        else if (m.action === 'peek') void (canvas.current ? canvas.current.snap() : kit.current ? kit.current.peek() : Promise.resolve(null)).then((image) => (image ? shrinkJpeg(image, PEEK_SIDE) : null), () => null).then((image) => post({ type: 'peek', image }));
         else lecture.current?.control(m.action);
       }
     };

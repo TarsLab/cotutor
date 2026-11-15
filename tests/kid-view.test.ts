@@ -1,5 +1,5 @@
 /** 孩子视图:最终文本剥段后正文即板书(段落 = 讲稿,围栏 = 卡),每句按上限截;家长尾巴不进;答案剥掉;出错什么都没有。 */
-import { deriveKidView, kidConversation, kidSource, kidThreads, parentConversation, truncateReply } from '../src/runtime/kid-view.ts';
+import { deriveKidView, kidConversation, kidSource, parentConversation, startedThreads, truncateReply } from '../src/runtime/kid-view.ts';
 import { parseBoard } from '../src/board/parse.ts';
 import { parseTranscript } from '../src/brain/transcript.ts';
 import { check, done } from './_check.ts';
@@ -89,15 +89,28 @@ const okRun = (result: string): ReturnType<typeof parseTranscript> =>
   check('生成好的资产并到卡上;没资产的卡没有 assets', JSON.stringify(withAssets[4].section?.cards[1].assets) === '["2026-09-09.7.cards/1/1.mp3"]' && !('assets' in withAssets[4].section!.cards[0]) && !('state' in withAssets[4].section!.cards[1]));
 }
 {
-  // 「以前的」分组:按 thread 聚,名字 = 孩子第一句截 20 字;没有孩子问过的话题不列;pending / 出错的不算节
-  const sec = (n: number) => ({ cards: Array.from({ length: n }, () => ({ kind: 'text', props: {} })), lines: [] });
-  const list = kidThreads([
-    { job: '1', thread: '1', at: '2026-09-09T10:00', question: '这道题怎么做我完全不懂啊老师请你讲讲好不好', reply: '好', pending: false, artifacts: [], section: sec(3) },
-    { job: '2', thread: '1', at: '2026-09-09T10:05', question: '继续', reply: '再', pending: false, artifacts: [], section: sec(2) },
-    { job: '3', thread: '3', at: '2026-09-09T10:10', question: null, reply: '课包好了', pending: false, artifacts: [] },
-    { job: '4', thread: '4', at: '2026-09-09T10:20', question: '换个', reply: null, pending: true, artifacts: [] },
-  ]);
-  check('分组:两个话题(系统起的没孩子问 → 不列),名字截 20 字,节数与卡数,pending 不算节', list.length === 2 && list[0].thread === '1' && list[0].title === '这道题怎么做我完全不懂啊老师请你讲讲好不' && list[0].title.length === 20 && list[0].sections === 2 && list[0].cards === 5 && list[1].thread === '4' && list[1].sections === 0, JSON.stringify(list));
+  // 首页「今天」:开了头的话题(有孩子参与的图出现过)才列;只说话的、只铺了目录的、系统起的不列;新的在前
+  const base = { artifacts: [] as string[], result: 'ok' as const };
+  const kit = (kitName: string, params: Record<string, string> = {}) => ({ lines: [], cards: [{ kind: 'kit', props: { kit: kitName, params, ops: [] } }] });
+  const msgs = [
+    // 1:只说话
+    { ...base, job: '1', thread: '1', at: '2026-09-09T10:00', from: 'kid' as const, text: '我想问个问题', via: { home: 'h', button: 'new' as const, label: '新话题' }, kidText: '好', section: { lines: [], cards: [{ kind: 'choice', props: {} }] } },
+    // 2:预习,先铺目录(不算),再翻到一课(算)
+    { ...base, job: '2', thread: '2', at: '2026-09-09T10:10', from: 'kid' as const, text: '预习', via: { home: 'h', button: 'preview', label: '预习' }, kidText: '看目录', section: kit('课本', { 书: 'b', 课: '' }) },
+    { ...base, job: '3', thread: '2', at: '2026-09-09T10:12', from: 'kid' as const, text: '坐井观天', kidText: '翻到了', section: kit('课本', { 书: 'b', 课: '坐井观天' }) },
+    // 4:检查作业,孩子发了照片
+    { ...base, job: '4', thread: '4', at: '2026-09-09T10:20', from: 'kid' as const, text: '检查作业', via: { home: 'h', button: 'check', label: '检查作业' }, photos: ['captures/2026-09-09/1020-1.jpg'], kidText: '看看' },
+    // 5:新话题,老师出了点阵
+    { ...base, job: '5', thread: '5', at: '2026-09-09T10:30', from: 'kid' as const, text: '三乘五等于多少呀老师你帮我看看', via: { home: 'h', button: 'new' as const, label: '新话题' }, kidText: '摆一摆', section: kit('点阵', { 行: '3', 列: '5' }) },
+    // 6:只铺了目录
+    { ...base, job: '6', thread: '6', at: '2026-09-09T10:40', from: 'kid' as const, text: '预习', via: { home: 'h', button: 'preview', label: '预习' }, kidText: '看目录', section: kit('课本', { 书: 'b' }) },
+    // 7:记账(系统起的)
+    { ...base, job: '7', thread: '7', at: '2026-09-09T21:00', from: 'system' as const, text: '记账', kidText: '记好了', photos: ['captures/x.jpg'] },
+  ];
+  const list = startedThreads(msgs as never);
+  check('只列开了头的:翻到一课的预习、发了照片的检查作业、出了点阵的新话题;新的在前', list.map((t) => t.thread).join() === '5,4,2', JSON.stringify(list));
+  check('名字:方砖的字;新话题用孩子的第一句(截 12 字)', list.find((t) => t.thread === '2')?.label === '预习' && list.find((t) => t.thread === '4')?.label === '检查作业' && list.find((t) => t.thread === '5')?.label === '三乘五等于多少呀老师你帮…', JSON.stringify(list));
+  check('课本翻到的那一课、孩子最后发的照片、最后一条的时间', list.find((t) => t.thread === '2')?.lesson === '坐井观天' && list.find((t) => t.thread === '2')?.at === '2026-09-09T10:12' && list.find((t) => t.thread === '4')?.photo === 'captures/2026-09-09/1020-1.jpg', JSON.stringify(list));
 }
 
 // 家长板书页的条目:和 kidConversation 对同一份索引,差集恰好是那几个字段与「答案不剥」

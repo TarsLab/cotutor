@@ -13,7 +13,7 @@ interface Day { messages: Msg[]; pending: string | null }
   const home = (await get('/api/kid/home')).json as { title: string; home: string; tutors: { name: string }[]; cards: HomeCard[] };
   const tc = home.cards.filter((c) => c.kind === 'tutor');
   check('首页:三位老师;老师卡置顶(语文、数学照原文,英语补一张),其余卡照原文顺序;听写卡没有字(中文一张、英文单词一张)', home.title === '小明的老师们' && home.tutors.length === 3 && home.tutors.every((t) => !('available' in t) && !('remaining' in t)) && home.home === '2026-09-09-2130' && tc.map((c) => c.props.tutor).join() === 'chinese-tutor,math-tutor,english-tutor' && home.cards.slice(3).map((c) => c.kind).join() === 'text,tianzige,dictation,dictation' && !JSON.stringify(home.cards[5]).includes('鼓励') && (home.cards[6].props as { lang?: string }).lang === 'en' && !JSON.stringify(home.cards[6]).includes('yellow'), JSON.stringify(home.cards.map((c) => c.kind)));
-  check('老师卡的按钮:新话题第一(今天聊过的挂在它的 resume 上,空白板上接)、然后是原文的开场与接着;没写的只有新话题;讲法不下发', tc[0].props.buttons?.map((b) => b.id).join() === 'new,0,1' && tc[0].props.buttons?.[0].resume?.title === '画蛇添足是什么意思?' && tc[0].props.buttons?.[2].kind === 'continue' && tc[0].props.buttons?.[2].date === '2026-09-09' && tc[2].props.buttons?.map((b) => b.id).join() === 'new' && !JSON.stringify(home).includes('第 22 课') && !JSON.stringify(home).includes('brief'), JSON.stringify(tc[0].props.buttons));
+  check('老师卡的按钮:新话题第一(不挂今天聊过的:那些在首页「今天」)、然后是原文的开场与接着;没写的只有新话题;讲法不下发', tc[0].props.buttons?.map((b) => b.id).join() === 'new,0,1' && !('resume' in (tc[0].props.buttons?.[0] ?? {})) && tc[0].props.buttons?.[2].kind === 'continue' && tc[0].props.buttons?.[2].date === '2026-09-09' && tc[2].props.buttons?.map((b) => b.id).join() === 'new' && !JSON.stringify(home).includes('第 22 课') && !JSON.stringify(home).includes('brief'), JSON.stringify(tc[0].props.buttons));
   const d0 = (await get('/api/kid/conversations/chinese-tutor/today')).json as Day;
   check('语文老师已讲过一节:卡 + 讲稿 + 标注 + 末句问句(脚本过真解析器)', d0.messages.length === 1 && d0.messages[0].section !== null && d0.messages[0].section.cards.map((c) => c.kind).join() === 'text,text,read,choice' && d0.messages[0].section.lines.length === 5 && d0.messages[0].section.lines[1].marks[0]?.card === 1 && d0.messages[0].section.lines[4].ask === true, JSON.stringify(d0.messages[0].section?.lines[1]));
   check('讲稿里念的句子不带方括号', !d0.messages[0].section!.lines.some((l) => l.text.includes('[')));
@@ -145,7 +145,7 @@ interface Day { messages: Msg[]; pending: string | null }
   check('想的期间见到过 partial 板书,卡数只增不减;想完 partial 没了、卡齐了', seen.length > 0 && seen.every((n, i) => i === 0 || n >= seen[i - 1]) && seen[0] < 3 && partialOk && !fin.pending && fin.section?.partial === undefined && fin.section?.cards.length === 3, JSON.stringify(seen));
 }
 {
-  // 话题:today 带 thread;newThread 开新话题、缺省接当前、指定旧话题;history 今天 + 昨天;昨天的日期路由只读;坏话题 400
+  // 话题:today 带 thread;newThread 开新话题、缺省接当前、指定旧话题;昨天的日期路由只读;坏话题 400
   const m = createMock({ delayMs: 0, now: () => new Date('2026-09-10T16:30:00') });
   type TDay = Omit<Day, 'messages'> & { thread: string | null; messages: (Msg & { thread: string })[] };
   const d0 = (await m.route('GET', '/api/kid/conversations/chinese-tutor/today')).json as TDay;
@@ -160,8 +160,7 @@ interface Day { messages: Msg[]; pending: string | null }
   const d1 = (await m.route('GET', '/api/kid/conversations/chinese-tutor/today')).json as TDay;
   check('新话题 = 自己的 job;缺省接当前(新)话题;指定旧话题回旧话题;today.thread = 末条的', j1.thread === j1.job && (r2.json as { thread: string }).thread === j1.thread && (r3.json as { thread: string }).thread === d0.thread && d1.thread === d0.thread && d1.messages.map((x) => x.thread).join() === [d0.thread, j1.thread, j1.thread, d0.thread].join(), JSON.stringify(d1.messages.map((x) => x.thread)));
   check('不存在的话题 400', (await m.kidSend('chinese-tutor', { text: 'x', thread: 'nope' })).status === 400);
-  const hist = (await m.route('GET', '/api/kid/conversations/chinese-tutor/history')).json as { today: string; days: { date: string; threads: { thread: string; title: string; sections: number }[] }[] };
-  check('history:今天两个话题(新的在前)+ 昨天一个', hist.today === '2026-09-10' && hist.days.length === 2 && hist.days[0].date === '2026-09-10' && hist.days[0].threads.map((t) => t.thread).join() === [j1.thread, d0.thread].join() && hist.days[0].threads[0].title === '换个' && hist.days[1].date === '2026-09-09' && hist.days[1].threads.length === 1 && hist.days[1].threads[0].title.startsWith('昨天问的'), JSON.stringify(hist));
+  check('「以前的」没有了(孩子端今天的话题在首页「今天」接)', (await m.route('GET', '/api/kid/conversations/chinese-tutor/history')).status >= 400);
   const yd = (await m.route('GET', '/api/kid/conversations/chinese-tutor/2026-09-09')).json as TDay;
   check('昨天的日期路由:一节板书、thread 在;未来日期 400;别的日期空', yd.messages.length === 1 && yd.messages[0].section !== null && yd.thread === yd.messages[0].thread && (await m.route('GET', '/api/kid/conversations/chinese-tutor/2026-09-11')).status === 400 && ((await m.route('GET', '/api/kid/conversations/chinese-tutor/2026-09-01')).json as TDay).messages.length === 0);
 }

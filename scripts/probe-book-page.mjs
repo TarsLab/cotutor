@@ -171,7 +171,8 @@ try {
   await mouse('mousePressed', 700, 600);
   for (let i = 1; i <= 12; i++) { await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 700, y: 600 - i * 30, button: 'left', buttons: 1 }); await sleep(16); }
   await mouse('mouseReleased', 700, 240);
-  await sleep(1800);
+  // 松手带惯性(book.tsx 的 fling):滑停了再过 SETTLE_MS 才报
+  await sleep(3500);
   const viewFrame = frames.slice(nView).find((f) => f.t === 'board' && f.body?.k === 'view');
   ok('拖着往下看:不落笔,停下报一次窗', Boolean(viewFrame) && viewFrame.body.box.length === 4 && (await bookState()).inks === 0, JSON.stringify(viewFrame?.body));
   const log = await readBoard(wsx, T, (await day()).date ?? new Date().toISOString().slice(0, 10), thread);

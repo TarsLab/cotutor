@@ -173,7 +173,24 @@ ${faviconLinks()}
   .c-figshot .tx span { font-size:15px; color:var(--dim); }
   .c-figshot .go { flex:none; height:48px; padding:0 22px; border-radius:24px; background:#c95a22; color:#fff; font-size:17px; font-weight:600; display:flex; align-items:center; }
   body.offline #rest { display:block; }
-  body.offline .c-tutor, body.gated .c-tutor, body.gated .c, body.gated .hcards { pointer-events:none; }
+  body.offline .c-tutor, body.gated .c-tutor, body.gated .c, body.gated .hcards, body.offline #today, body.gated #today { pointer-events:none; }
+  body.offline #today, body.gated #today { opacity:.45; filter:grayscale(1); }
+  /* 首页「今天」(2026-11-15):今天开了头的话题一格一张预览图(板停下来时的样子;还没有就是孩子拍的照片),横着划;点一格回到那个话题接着聊 */
+  #today { display:flex; flex-direction:column; gap:8px; }
+  #today[hidden] { display:none; }
+  #today .td-hd { font-size:15px; font-weight:600; color:var(--dim); padding-left:2px; }
+  #today .td-row { display:flex; gap:14px; overflow-x:auto; overscroll-behavior-x:contain; scroll-snap-type:x proximity; padding:4px 20px 10px; margin:0 -20px; scrollbar-width:none; }
+  #today .td-row::-webkit-scrollbar { display:none; }
+  .td { flex:0 0 auto; width:168px; display:flex; flex-direction:column; gap:6px; text-align:left; scroll-snap-align:start; scroll-margin-left:20px; -webkit-tap-highlight-color:transparent; }
+  .td .pic { position:relative; width:100%; aspect-ratio:4 / 3; border-radius:16px; overflow:hidden; background:color-mix(in srgb, var(--sc) 14%, #fff); border:1px solid var(--line); box-shadow:0 2px 10px #46371e14; }
+  .td .pic img { width:100%; height:100%; object-fit:cover; object-position:50% 0; display:block; }
+  .td .pic .av { position:absolute; left:8px; bottom:8px; width:36px; height:36px; }
+  .td .pic.none .av { left:50%; top:50%; bottom:auto; width:56px; height:56px; translate:-50% -50%; }
+  .td .lb { display:flex; align-items:baseline; gap:6px; min-width:0; padding:0 2px; }
+  .td .lb b { font-size:16px; font-weight:600; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+  .td .lb small { flex:none; font-size:13px; color:var(--dim); }
+  .td:active .pic { transform:scale(.97); filter:brightness(.95); transition:transform .06s, filter .06s; }
+  .td .pic { transition:transform .2s ease-out, filter .2s ease-out; }
   body.offline .c-tutor .av, body.gated .c-tutor .av { filter:grayscale(1); opacity:.4; }
   body.offline .c-tutor .av .ring circle, body.gated .c-tutor .av .ring circle { transform:rotate(126deg); }
   body.offline #ct-mark, body.gated #ct-mark { filter:grayscale(1); opacity:.4; }
@@ -188,7 +205,7 @@ ${BOARD_MARK_CSS}
   #main { flex:1; min-width:0; min-height:0; display:flex; flex-direction:column; }
   /* 没有顶栏:左上角一颗胶囊「‹ logo」(整颗点了回首页,放 logo,老师的脸在实时的左栏 / 手机的字幕行),右上角「更多」;浮在板书上面、舞台遮罩(z 4)下面,舞台开了就被压暗盖住 */
   .tb { position:absolute; top:calc(env(safe-area-inset-top) + 10px); z-index:3; display:flex; align-items:center; gap:10px; }
-  .tb.l { left:calc(env(safe-area-inset-left) + 12px); } .tb.r { right:calc(env(safe-area-inset-right) + 12px); }
+  .tb.l { left:calc(env(safe-area-inset-left) + 12px); }
   #back { display:flex; align-items:center; gap:2px; height:48px; padding:0 4px 0 8px; border-radius:24px; background:#fffffff0; border:1px solid var(--line); box-shadow:0 2px 10px #00000018; }
   #back .ct-logo { color:var(--ink); margin:0 8px 0 4px; }
   /* 胶囊带上老师:填这位老师的颜色、logo 后面接首字(同听写、口语课一份,tutor-face.ts) */
@@ -196,17 +213,6 @@ ${BACK_TINT_CSS}
   #back-ic { width:24px; height:24px; color:var(--dim); display:grid; place-items:center; }
   #c-mo { font-size:13px; color:var(--dim); background:#fffffff0; border:1px solid var(--line); border-radius:14px; padding:4px 12px; box-shadow:0 2px 10px #00000010; white-space:nowrap; }
   #c-mo[hidden] { display:none; }
-  .tb .hb { width:44px; height:44px; border-radius:50%; background:#fffffff0; border:1px solid var(--line); box-shadow:0 2px 10px #00000018; }
-  #menu { position:absolute; inset:0; display:none; z-index:30; }
-  #menu.on { display:block; }
-  #menu .dimmer { position:absolute; inset:0; background:#00000073; }
-  #menu .panel { position:absolute; top:calc(env(safe-area-inset-top) + 62px); right:calc(env(safe-area-inset-right) + 12px); width:min(320px, calc(100% - 24px)); background:var(--card); border-radius:20px; padding:8px; display:flex; flex-direction:column; gap:4px; box-shadow:0 8px 30px #00000033; }
-  #menu .panel button { display:flex; align-items:center; gap:14px; padding:14px; border-radius:14px; text-align:left; width:100%; }
-  #menu .panel button[hidden] { display:none; }
-  #menu .panel button.dim { opacity:.35; pointer-events:none; }
-  #menu .ic { flex:0 0 auto; width:44px; height:44px; border-radius:50%; background:var(--paper); color:var(--dim); display:grid; place-items:center; }
-  #menu .tx { display:flex; flex-direction:column; gap:2px; min-width:0; }
-  #menu .tx b { font-size:17px; font-weight:600; color:var(--ink); } #menu .tx small { font-size:13px; color:var(--dim); }
   .hb { width:40px; height:40px; display:grid; place-items:center; color:var(--dim); }
   .hb.on { color:var(--accent); }
   .hb.dim { opacity:.35; pointer-events:none; }
@@ -215,8 +221,6 @@ ${BACK_TINT_CSS}
   .blank .av { width:96px; height:96px; font-size:44px; margin-bottom:4px; }
   .blank .nm { font-size:26px; font-weight:700; color:var(--ink); }
   .blank b { font-size:22px; font-weight:600; color:var(--ink); }
-  .blank .resume { margin-top:24px; min-height:48px; padding:0 20px; border-radius:24px; border:1.5px solid; background:#fff; display:inline-flex; align-items:center; gap:10px; font:inherit; font-size:17px; font-weight:500; box-shadow:0 2px 10px #0000000f; cursor:pointer; max-width:100%; }
-  .blank .resume .ic { display:grid; } .blank .resume small { font-size:14px; color:var(--dim); }
   .blank.ask b { margin-top:14px; }
   .ask-row { display:flex; flex-wrap:wrap; justify-content:center; gap:16px; margin-top:20px; width:100%; }
   .ask-go { flex:0 1 300px; min-height:120px; border-radius:24px; padding:18px 22px; display:flex; flex-direction:column; align-items:flex-start; gap:6px; text-align:left; font:inherit; cursor:pointer; box-shadow:0 4px 16px #0000000f; }
@@ -224,21 +228,7 @@ ${BACK_TINT_CSS}
   .ask-go .t { display:flex; align-items:center; gap:8px; font-size:18px; font-weight:700; } .ask-go .ic { display:grid; }
   .ask-go .s { font-size:17px; color:var(--ink); } .ask-go.fresh .s { color:#fff; } .ask-go small { font-size:14px; color:var(--dim); }
   .blank small { font-size:15px; }
-  #hist { position:absolute; inset:0; display:none; z-index:30; }
-  #hist.on { display:block; }
-  #hist .dimmer { position:absolute; inset:0; background:#00000033; }
-  #hist .panel { position:absolute; top:0; right:0; bottom:0; width:100%; max-width:380px; background:var(--card); display:flex; flex-direction:column; box-shadow:-4px 0 20px #00000018; }
-  #hist .hd { display:flex; align-items:center; justify-content:space-between; padding:calc(env(safe-area-inset-top) + 12px) 12px 12px 20px; font-size:18px; font-weight:600; border-bottom:1px solid var(--line); }
-  #hist .ls { flex:1; overflow:auto; padding:8px 12px calc(env(safe-area-inset-bottom) + 24px); }
-  #hist .dt { font-size:13px; color:var(--dim); padding:14px 6px 6px; }
-  #hist .tr { display:flex; flex-direction:column; gap:4px; padding:12px 14px; border-radius:14px; background:var(--paper); margin-bottom:8px; cursor:pointer; border:2px solid transparent; }
-  #hist .tr.on { border-color:var(--accent); }
-  #hist .tr b { font-size:16px; font-weight:600; }
-  #hist .tr small { font-size:13px; color:var(--dim); }
-  #hist .empty { padding:40px 16px; text-align:center; color:var(--dim); }
   #pill[hidden] { display:none; }
-  #back-today { width:100%; height:56px; border-radius:28px; background:#fff; border:1px solid var(--line); box-shadow:0 2px 10px #00000010; font-size:17px; font-weight:600; color:var(--ink); }
-  #back-today[hidden] { display:none; }
   #pill .ic[hidden] { display:none; }
   #wrap { position:relative; flex:1; min-height:0; display:flex; flex-direction:column; }
   /* 板书顶上一条渐隐:滚上去的内容在两角按钮那一带淡成纸色,不和胶囊、话题标签叠字。只是盖一层颜色,不占位置、不收触摸;
@@ -439,9 +429,9 @@ __BRAND_CSS__
   /* ---- 按压反馈(全局关了系统的点击高亮,这里统一补):三种手感,按下快(60ms)、松开慢(200ms)。
      圆钮与胶囊:缩到 94% + 暗一档;深色屏上的钮:缩 + 变淡;大块面:缩到 98.5% + 暗一点;行内文字:变淡。
      板书里的卡在滚动容器里,按下延迟 80ms 才显(不然一滑整屏都在闪);卡里的小钮按着时卡自己不动。交互不是皮肤,写在页面里,主题不用跟 ---- */
-  #back, .tb .hb, #hist-x, #st-x, #st-go, #pill .ic, #go, #back-today, .c-tutor .bt,
+  #back, #st-x, #st-go, #pill .ic, #go, .c-tutor .bt,
   #ps .tools button, #ps .foot button, #ps-strip .x, #lb .x, #lb .nav,
-  #menu .panel button, #sheet label, #hist .tr, .so, .rd, .hz, .c-tutor .tt, #ps-strip .t,
+  #sheet label, .so, .rd, .hz, .c-tutor .tt, #ps-strip .t,
   #lv-tools button, #lv-tools .ic, #lv-replay, .lv-go { transition:transform .2s ease-out, filter .2s ease-out, opacity .2s ease-out, background-color .2s ease-out; }
   #board .pend { display:none; }
   #lay-probe { position:fixed; left:-10000px; top:0; visibility:hidden; pointer-events:none; }
@@ -449,16 +439,12 @@ __BRAND_CSS__
   /* ---- 弹层进出场:遮罩淡入,面板按来的方向动(菜单从右上角放大、相册面板从底下滑上来、以前的从右边滑进、卡的弹窗与看大图轻轻放大、发照片屏上浮)。
      进场靠 @starting-style,退场靠 display 的 allow-discrete 过渡(Safari 18 起);不认的浏览器就是瞬间出现 / 消失,和以前一样。
      用 scale / translate 独立属性,不碰 transform(横屏的舞台已经用 transform 居中了)。关着的时候不收触摸,退场那 200ms 里点得到后面 ---- */
-  #menu, #sheet, #hist, #ps, #lb, #stage, #st-dim { transition:opacity .2s ease-out, scale .24s cubic-bezier(.2,.8,.2,1), translate .24s cubic-bezier(.2,.8,.2,1), display .24s allow-discrete; }
-  #menu:not(.on), #sheet:not(.on), #hist:not(.on), #ps:not(.on), #lb:not(.on), #stage:not(.on), #stage:not(.on) ~ #st-dim { pointer-events:none; }
-  #menu .dimmer, #sheet .dimmer, #hist .dimmer { opacity:0; transition:opacity .2s ease-out; }
-  #menu.on .dimmer, #sheet.on .dimmer, #hist.on .dimmer { opacity:1; }
-  #menu .panel { opacity:0; scale:.9; transform-origin:top right; transition:opacity .16s ease-out, scale .24s cubic-bezier(.2,.8,.2,1); }
-  #menu.on .panel { opacity:1; scale:1; }
+  #sheet, #ps, #lb, #stage, #st-dim { transition:opacity .2s ease-out, scale .24s cubic-bezier(.2,.8,.2,1), translate .24s cubic-bezier(.2,.8,.2,1), display .24s allow-discrete; }
+  #sheet:not(.on), #ps:not(.on), #lb:not(.on), #stage:not(.on), #stage:not(.on) ~ #st-dim { pointer-events:none; }
+  #sheet .dimmer { opacity:0; transition:opacity .2s ease-out; }
+  #sheet.on .dimmer { opacity:1; }
   #sheet .panel { translate:0 100%; transition:translate .28s cubic-bezier(.2,.8,.2,1); }
   #sheet.on .panel { translate:0 0; }
-  #hist .panel { translate:100% 0; transition:translate .28s cubic-bezier(.2,.8,.2,1); }
-  #hist.on .panel { translate:0 0; }
   #stage, #lb { opacity:0; scale:.96; }
   #stage.on, #lb.on { opacity:1; scale:1; }
   #ps { opacity:0; translate:0 24px; }
@@ -466,29 +452,26 @@ __BRAND_CSS__
   #st-dim { opacity:0; }
   #stage.on ~ #st-dim { opacity:1; }
   @starting-style {
-    #menu.on .dimmer, #sheet.on .dimmer, #hist.on .dimmer, #stage.on ~ #st-dim { opacity:0; }
-    #menu.on .panel { opacity:0; scale:.9; }
+    #sheet.on .dimmer, #stage.on ~ #st-dim { opacity:0; }
     #sheet.on .panel { translate:0 100%; }
-    #hist.on .panel { translate:100% 0; }
     #stage.on, #lb.on { opacity:0; scale:.96; }
     #ps.on { opacity:0; translate:0 24px; }
   }
-  @media (prefers-reduced-motion:reduce) { #menu, #sheet, #hist, #ps, #lb, #stage, #st-dim, #menu .dimmer, #sheet .dimmer, #hist .dimmer, #menu .panel, #sheet .panel, #hist .panel { transition:none; } }
+  @media (prefers-reduced-motion:reduce) { #sheet, #ps, #lb, #stage, #st-dim, #sheet .dimmer, #sheet .panel { transition:none; } }
   @media (hover:hover) {
-    #back:hover, .tb .hb:hover, #hist-x:hover, #st-x:hover, #pill .ic:hover, #back-today:hover, #menu .panel button:hover, #sheet label:hover, #hist .tr:hover, .so:hover, .rd:hover, .c-tutor .bt:hover, #board .c:not(.c-tianzige):hover, #lv-tools button:hover .ic, #lv-replay:hover, .lv-go:hover { filter:brightness(.97); }
+    #back:hover, #st-x:hover, #pill .ic:hover, #sheet label:hover, .so:hover, .rd:hover, .c-tutor .bt:hover, #board .c:not(.c-tianzige):hover, #lv-tools button:hover .ic, #lv-replay:hover, .lv-go:hover { filter:brightness(.97); }
   }
-  #back:active, .tb .hb:active, #hist-x:active, #st-x:active, #st-go:active, #pill .ic:active, #go:active, #back-today:active, .c-tutor .bt:active, .blank .resume:active, .ask-go:active { transform:scale(.94); filter:brightness(.92); transition-duration:.06s; }
+  #back:active, #st-x:active, #st-go:active, #pill .ic:active, #go:active, .c-tutor .bt:active, .ask-go:active { transform:scale(.94); filter:brightness(.92); transition-duration:.06s; }
   #ps .tools button:active, #ps .foot button:active, #ps-strip .x:active, #lb .x:active, #lb .nav:active { transform:scale(.94); opacity:.65; transition-duration:.06s; }
   /* 左栏(实时老师页白纸)最底下那排:圆钮同输入条上的圆钮(缩到 94% + 暗一档),字跟着深一档;「再听一遍」是行内文字,变淡。合成的那颗按钮在 voice-ui.ts */
   #lv-tools button:active .ic { transform:scale(.94); filter:brightness(.92); transition-duration:.06s; }
   #lv-tools button:active { color:var(--ink); transition-duration:.06s; }
   #lv-replay:active { opacity:.55; transition-duration:.06s; }
-  #lv-today:active { opacity:.55; transition-duration:.06s; }
-  #menu .panel button:active, #sheet label:active, #hist .tr:active, .so:active, .rd:active, .hz:active, .c-tutor .tt:active, #ps-strip .t:active, .lv-go:active { transform:scale(.985); filter:brightness(.95); transition-duration:.06s; }
+  #sheet label:active, .so:active, .rd:active, .hz:active, .c-tutor .tt:active, #ps-strip .t:active, .lv-go:active { transform:scale(.985); filter:brightness(.95); transition-duration:.06s; }
   #board .c:not(.c-tianzige):active:not(:has(button:active, .hz:active)) { transform:scale(.985); filter:brightness(.96); transition-duration:.06s; transition-delay:.08s; }
   button:disabled, .hb.dim { opacity:.35; }
   button:disabled:active { transform:none; filter:none; }
-  @media (prefers-reduced-motion:reduce) { #back, .tb .hb, .so, .rd, .hz, #board .c, #hist .tr, #sheet label, #menu .panel button, #ps .tools button, #ps .foot button, .c-tutor .bt, .c-tutor .tt { transition:none; } *:active { transform:none !important; } }
+  @media (prefers-reduced-motion:reduce) { #back, .so, .rd, .hz, #board .c, #sheet label, #ps .tools button, #ps .foot button, .c-tutor .bt, .c-tutor .tt { transition:none; } *:active { transform:none !important; } }
 __VOICE_CSS__
   /* ---- 实时的老师:
      字幕行换成 #lv(类名带 lv-:卡是 .c,撞名会套上卡的边框)——竖屏、手机在输入条上方一行(小头像 + 在说的那句),横屏是左栏(大头像 + 字幕,在说的大、上一句淡),板是右边一块白板;
@@ -510,7 +493,7 @@ __VOICE_CSS__
   #lv-cap.done .lv-cur, #lv-cap .lv-cur.cut { color:#a39f96; font-weight:500; }
   /* 孩子刚说的那句、按住说话那颗按钮、拍照 / 相册 / 打字:只在平板横屏的左栏里(见下面「平板横屏」);竖屏、手机照旧输入条。
      一页一张脸:实时的脸是按钮里那颗(手机是 #lv-av),空板中间那颗不露 */
-  #lv-kid, #lv-hold, #lv-tools, #lv-today { display:none; }
+  #lv-kid, #lv-hold, #lv-tools { display:none; }
   /* 字幕重放:家长提醒着用的,不做大按钮——手机是字幕行右边一颗小钮,平板横屏是字幕下面一行小字「↺ 再听一遍」;放着时是「■ 停」 */
   #lv-replay { flex:none; width:40px; height:40px; border-radius:50%; display:grid; place-items:center; color:var(--dim); }
   #lv-replay[hidden] { display:none !important; }
@@ -552,8 +535,9 @@ __VOICE_CSS__
     #home { max-width:1040px; padding:calc(env(safe-area-inset-top) + 40px) 48px 40px; gap:24px; }
     #home h1 { font-size:22px; }
     #home .hcards { grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); }
-    .tb.l { left:calc(env(safe-area-inset-left) + 20px); } .tb.r { right:calc(env(safe-area-inset-right) + 20px); }
-    #menu .panel { right:calc(env(safe-area-inset-right) + 20px); }
+    #today .td-row { padding:4px 48px 10px; margin:0 -48px; }
+    .td { width:216px; scroll-margin-left:48px; }
+    .tb.l { left:calc(env(safe-area-inset-left) + 20px); }
     #board { width:100%; max-width:1040px; margin:0 auto; padding:calc(env(safe-area-inset-top) + 68px) 32px 24px; }
     #bar, #reel { width:100%; max-width:1040px; margin:0 auto; padding-left:32px; padding-right:32px; }
     /* 实时的老师(原型 https://claude.ai/artifact/RNjBdhuvRmnsBjKn521fkE 的 D 排):
@@ -598,7 +582,6 @@ __VOICE_CSS__
     body.live.nosend:not(.choose) #lv-hold, body.live.nosend:not(.choose) #lv-tools { display:none; }
     /* 看以前的话题(只能看):按钮灰着、按了晃一下(voice-view 的 readonly),底下一行「回到今天 ›」;底下那排不露 */
     body.live.nosend.ro:not(.choose) #lv-hold { display:flex; }
-    body.live.ro #lv-today { display:block; flex:none; align-self:center; margin:12px 0 clamp(36px, 13vh, 150px); padding:8px 16px; font-size:17px; color:var(--ink); }
     /* 先点上面一个(口语单拍好、今天点过同一个按钮):按钮灰着写「点上面开始」(voice-view 的 choose),底下那排淡着不接 */
     body.live.choose #lv-tools { opacity:.45; pointer-events:none; }
     body.live #bar { display:none; }
@@ -611,12 +594,12 @@ __VOICE_CSS__
     body.live.hand-left #stage { left:calc(env(safe-area-inset-left) + 16px); right:calc(env(safe-area-inset-right) + 376px); }
     body.live.hand-left #lv { left:auto; right:0; width:calc(env(safe-area-inset-right) + 360px); padding-top:calc(env(safe-area-inset-top) + 80px); padding-left:24px; padding-right:calc(env(safe-area-inset-right) + 24px); box-shadow:-1px 0 0 #efece4, -6px 0 24px #46371e0d; }
     body.live.hand-left #back { box-shadow:0 2px 10px #46371e2e; } body.live.hand-left #back:not(.tinted) { background:#fffffff0; }
-    body.live.hand-left .tb.r { z-index:6; }
     ${BOARD_MARK_HAND_LEFT_CSS}
   }
 </style>
 <div id="home">
   <div id="ttl"><span id="ct-mark" class="ct-draw">${titleLogo(false)}</span><h1 id="title">__TITLE__</h1></div>
+  <div id="today" hidden><div class="td-hd">今天</div><div class="td-row"></div></div>
   <div class="hcards" id="hcards"></div>
   <div class="deck" id="deck" hidden></div>
   <p id="rest">老师们休息中</p>
@@ -628,14 +611,13 @@ __VOICE_CSS__
 <section id="tutor">
   <div id="main">
     <div class="tb l"><button id="back" type="button" aria-label="回首页"><i id="back-ic"></i>__BACK_LOGO__</button><span id="c-mo" hidden></span></div>
-    <div class="tb r"><button class="hb" id="more-btn" type="button" aria-label="更多"></button></div>
     <div id="wrap">
       <div id="bmark" hidden></div>
       <div id="board"></div>
       <div id="stage"><div class="top"><span class="ttl" id="st-ttl"></span><span class="kd" id="st-kd"></span><span id="st-bp"><button type="button" id="st-tb" hidden></button><button type="button" id="st-cam"></button><button type="button" id="st-alb"></button></span><button id="st-x" type="button"></button></div><div id="st-body"></div><iframe id="st-frame" hidden title="stage"></iframe><div id="st-pick" hidden></div><div id="st-act" hidden><span class="note" id="st-note"></span><button id="st-go" type="button">交给老师</button></div><button id="cv-hold" class="vb-mini" type="button"></button><div id="cv-cap"></div></div>
       <div id="st-dim"></div>
     </div>
-    <div id="lv"><div id="lv-av"></div><div id="lv-kid"></div><div id="lv-cap"><div class="lv-prev"></div><div class="lv-cur"></div></div><div id="lv-ask"><b></b><small></small></div><div id="lv-acts"></div><button id="lv-replay" type="button" hidden><span class="ic"></span><span class="tx"></span></button><button id="lv-hold" type="button"></button><button id="lv-today" type="button">回到今天 ›</button><div id="lv-tools"><button type="button" id="lv-paper"><span class="ic"></span>画板</button><button type="button" id="lv-cam"><span class="ic"></span>拍照</button><button type="button" id="lv-album"><span class="ic"></span>相册</button><button type="button" id="lv-type"><span class="ic"></span>打字</button></div></div>
+    <div id="lv"><div id="lv-av"></div><div id="lv-kid"></div><div id="lv-cap"><div class="lv-prev"></div><div class="lv-cur"></div></div><div id="lv-ask"><b></b><small></small></div><div id="lv-acts"></div><button id="lv-replay" type="button" hidden><span class="ic"></span><span class="tx"></span></button><button id="lv-hold" type="button"></button><div id="lv-tools"><button type="button" id="lv-paper"><span class="ic"></span>画板</button><button type="button" id="lv-cam"><span class="ic"></span>拍照</button><button type="button" id="lv-album"><span class="ic"></span>相册</button><button type="button" id="lv-type"><span class="ic"></span>打字</button></div></div>
     <div id="bar">
       <div id="pill">
         <label class="ic" id="cam"><input type="file" accept="image/*" capture="environment"></label>
@@ -644,16 +626,10 @@ __VOICE_CSS__
         <button id="go" type="button" hidden></button>
         <button class="ic" id="plus" type="button"></button>
       </div>
-      <button id="back-today" type="button" hidden>回到今天</button>
     </div>
     __REEL_DOCK_HTML__
     <div id="hold"><div class="t"></div><span>松手发送,上移取消</span><div class="w"></div></div>
   </div>
-  <div id="hist"><div class="dimmer"></div><div class="panel"><div class="hd"><span>以前的</span><button class="hb" id="hist-x" type="button"></button></div><div class="ls"></div></div></div>
-  <div id="menu"><div class="dimmer"></div><div class="panel">
-    <button type="button" id="hist-btn"><span class="ic"></span><span class="tx"><b>以前的</b><small>看看以前聊过的话题</small></span></button>
-    <button type="button" id="new-btn" hidden><span class="ic"></span><span class="tx"><b>新话题</b><small>这个聊完了,换一个问</small></span></button>
-  </div></div>
   <div id="sheet"><div class="dimmer"></div><div class="panel"><div class="grab"></div><div class="opts">
     <label><span class="ic" id="ic-album"></span>相册<input type="file" accept="image/*" multiple></label>
     <label><span class="ic" id="ic-cam2"></span>拍照<input type="file" accept="image/*" capture="environment"></label>
@@ -727,8 +703,6 @@ ${pageDomJs(4000)}
     closeSm: SVG('<path d="M7 7l10 10M17 7L7 17"></path>', 14, 2.8),
     check: SVG('<path d="M5 12l5 5 9-10"></path>', 16, 3),
     lock: SVG('<rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path>', 14, 2.2),
-    more: SVG('<circle cx="5" cy="12" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="19" cy="12" r="1.6"></circle>', 24),
-    history: SVG('<circle cx="12" cy="12" r="8.5"></circle><path d="M12 7.5V12l3 2"></path>', 24),
     again: SVG('<path d="M4 12a8 8 0 1 0 2.4-5.7"></path><path d="M4 4v4.5h4.5"></path>', 20, 2),
     start: SVG('<path d="M8 5l11 7-11 7z" fill="currentColor"></path>', 18, 1.5),
     spark: SVG('<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"></path><path d="M19 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"></path>', 24, 1.8),
@@ -817,15 +791,15 @@ ${BOARD_MARK_JS}
   const BUTTON_ICON = { new: 'spark', start: 'start', continue: 'again', lecture: 'play' };
   const pickButton = (t, b) => {
     const via = { home: S.home.home, button: b.id };
-    // 今天同一个入口聊过的(b.resume):新话题在空白板上放一个胶囊;activity、小课堂先问接着那个还是重新开始
-    if (b.kind === 'new') openTutor(t, { kind: 'new', via, resume: b.resume });
+    // 每个按钮进去都是新话题;今天聊过的在首页「今天」那一行接(2026-11-15)
+    if (b.kind === 'new') openTutor(t, { kind: 'new', via });
     // 以板为主、垫课本的 activity(语文预习):不拍照,直接开话题、铺课本的目录
-    else if (b.kind === 'start' && b.board === 'page' && b.base === 'textbook') openTutor(t, b.resume ? { kind: 'new', via, board: true, book: true, label: b.label, ask: { label: b.label, resume: b.resume, send: b.label, board: true, book: true } } : { kind: 'new', via, board: true, book: true, label: b.label, send: b.label });
+    else if (b.kind === 'start' && b.board === 'page' && b.base === 'textbook') openTutor(t, { kind: 'new', via, board: true, book: true, label: b.label, send: b.label });
     // 以板为主的 activity:先到拍照屏,带着照片(或白板)开话题
-    else if (b.kind === 'start' && b.board === 'page') openTutor(t, b.resume ? { kind: 'new', via, board: true, label: b.label, ask: { label: b.label, resume: b.resume, send: b.label, board: true } } : { kind: 'new', via, board: true, label: b.label });
-    else if (b.kind === 'start') openTutor(t, b.resume ? { kind: 'new', via, ask: { label: b.label, resume: b.resume, send: b.label } } : { kind: 'new', via, send: b.label });
+    else if (b.kind === 'start' && b.board === 'page') openTutor(t, { kind: 'new', via, board: true, label: b.label });
+    else if (b.kind === 'start') openTutor(t, { kind: 'new', via, send: b.label });
     // 小课堂:新话题,先铺满放课;看完才能开口,开口那条带上 via 与看的情况
-    else if (b.kind === 'lecture') { const lecture = { bundle: b.bundle, title: b.title || b.label, ...(b.video ? { video: true } : {}) }; openTutor(t, b.resume ? { kind: 'new', via, ask: { label: b.label, resume: b.resume, lecture } } : { kind: 'new', via, lecture }); }
+    else if (b.kind === 'lecture') openTutor(t, { kind: 'new', via, lecture: { bundle: b.bundle, title: b.title || b.label, ...(b.video ? { video: true } : {}) } });
     else if (b.date === S.home.date) openTutor(t, { kind: 'thread', thread: b.thread, via, send: b.label });
     else openTutor(t, { kind: 'new', via, send: b.label, cont: b.date });
   };
@@ -887,7 +861,7 @@ ${BOARD_MARK_JS}
   };
   // ---- 常驻的三块方砖(预习、检查作业、复习;服务端照老师家里的 activity 文件给,src/ui/kid/home-tiles.ts):新话题下面一行;点了和 activity 按钮一样 ----
 ${HOME_TILES_JS}
-  const tileButton = (t, x) => h('button', { type: 'button', class: 'bt bt-tile', 'data-tile': x.id, style: '--sc:' + colorOf(t), on: { click: () => pickButton(t, { id: x.id, kind: 'start', label: x.label, resume: x.resume, board: x.board, base: x.base }) } },
+  const tileButton = (t, x) => h('button', { type: 'button', class: 'bt bt-tile', 'data-tile': x.id, style: '--sc:' + colorOf(t), on: { click: () => pickButton(t, { id: x.id, kind: 'start', label: x.label, board: x.board, base: x.base }) } },
     h('span', { class: 'ta', html: tileArt(t.mark, x.id) }), h('span', { class: 'btx' }, x.label));
   const tilesRow = (t, tiles) => (Array.isArray(tiles) && tiles.length ? h('div', { class: 'tls' }, ...tiles.map((x) => tileButton(t, x))) : null);
   /** 挨着的几个小课堂收进一格(平板上两张海报并排,手机上一张一行) */
@@ -1116,6 +1090,7 @@ ${HOME_TILES_JS}
       renderDeck(H, list, deal);
       if (deal) markSeen(H.home, K.order[K.order.length - 1]);
     }
+    renderToday(H);
     // 公共的卡(写在第一张老师卡前面的)在牌堆上面;归了老师的在那位老师的牌里
     $('#hcards').replaceChildren(...cards.filter((c) => c.kind !== 'tutor' && !c.owner).map((c, i) => renderCard(c, i, null, false)));
     renderFigshot(H);
@@ -1129,6 +1104,21 @@ ${HOME_TILES_JS}
     el.href = url;
     el.querySelector('.avs').replaceChildren(...H.tutors.slice(0, 3).map((t) => avatarEl(t)));
     fetch(url + 'api/health', { mode: 'no-cors', cache: 'no-store' }).then(() => { el.hidden = false; }, () => { el.hidden = true; });
+  };
+  /** 首页「今天」:服务端给的今天开了头的话题(新的在前);图没变的格子不重画(首页每次刷新都会走这里) */
+  const renderToday = (H) => {
+    const box = $('#today'), row = box.querySelector('.td-row');
+    const list = (Array.isArray(H.today) ? H.today : []).filter((x) => H.tutors.some((t) => t.name === x.tutor));
+    const sig = JSON.stringify(list.map((x) => [x.tutor, x.thread, x.image, x.label, x.lesson || '']));
+    box.hidden = !list.length || PREVIEW;
+    if (row.dataset.sig === sig) return;
+    row.dataset.sig = sig;
+    row.replaceChildren(...list.map((x) => {
+      const t = H.tutors.find((y) => y.name === x.tutor);
+      const pic = h('span', { class: 'pic' + (x.image ? '' : ' none') }, x.image ? h('img', { src: x.image, alt: '', loading: 'lazy', decoding: 'async' }) : null, avatarEl(t));
+      return h('button', { type: 'button', class: 'td', 'data-thread': x.thread, style: '--sc:' + colorOf(t), on: { click: () => openTutor(t, { kind: 'thread', thread: x.thread }) } },
+        pic, h('span', { class: 'lb' }, h('b', {}, x.lesson ? x.label + ' · ' + x.lesson : x.label), h('small', {}, clock(x.at))));
+    }));
   };
   const loadHome = async () => {
     try { S.home = await api('GET', '/api/kid/home'); setOffline(false); document.body.classList.toggle('hand-left', S.home.hand === 'left'); setGated(!REEL && S.home.ready === false); renderHome(); phIdle(); }
@@ -1165,21 +1155,20 @@ ${HOME_TILES_JS}
     intent = intent || { kind: 'new' };
     S.tutor = t; S.sections = []; S.played = new Set(); dispatch({ type: 'reset' }); S.pending = false; S.stage = null; S.partial = null; $('#stage').classList.remove('on', 'cv');
     S.thread = intent.kind === 'thread' ? intent.thread : null; S.threadAt = null; S.hist = null; S.readonly = false; S.newThread = intent.kind === 'new';
-    S.via = intent.via || null; S.cont = intent.cont || null; S.lecture = intent.lecture ? { ...intent.lecture, watch: null, sent: false, marks: [], flying: [], log: [] } : null; S.ask = intent.ask || null;
+    S.via = intent.via || null; S.cont = intent.cont || null; S.lecture = intent.lecture ? { ...intent.lecture, watch: null, sent: false, marks: [], flying: [], log: [] } : null;
     // 口语课页拍好了口语单:先等孩子点「先热身,再打电话」(那一下起声音),发出去的第一条带 talk
     S.talk = intent.talk || null; S.talkWait = Boolean(intent.talk);
-    BP.on = Boolean(intent.board) && !intent.ask; BP.book = Boolean(intent.book); BP.base = undefined; BP.label = intent.label || '';
+    BP.on = Boolean(intent.board); BP.book = Boolean(intent.book); BP.base = undefined; BP.label = intent.label || '';
     if (intent.board && !intent.book) bpBooks();
     // 先定走不走实时,再热麦克风:实时时麦克风的自检要开在实时那个 AudioContext 里(liveOpen)
     if (liveWanted(t)) liveOpen(intent); else liveClose();
-    $('#hist').classList.remove('on'); $('#menu').classList.remove('on'); renderBar(); renderHeader();
+    renderBar(); renderHeader();
     liveFace(t); tintBack(t); markBoard($('#bmark'), t);
     $('#board').replaceChildren(); pin.on = false;
-    if (S.ask) $('#board').append(askBoard(S.ask));
-    else if (S.talkWait) $('#board').append(talkBoard());
+    if (S.talkWait) $('#board').append(talkBoard());
     else if (BP.on && BP.book) bpOpenBook();
     else if (BP.on) $('#board').append(bpStartBoard());
-    else if (S.newThread && !intent.send && !S.lecture) $('#board').append(blankBoard('想问什么?', intent.resume));
+    else if (S.newThread && !intent.send && !S.lecture) $('#board').append(blankBoard('想问什么?'));
     $('#tutor').classList.add('on');
     setBar('idle');
     loadDay(true).then(() => { if (intent.send) send(intent.send); });
@@ -1187,27 +1176,12 @@ ${HOME_TILES_JS}
     viewKey = ''; viewNote();
   };
   /** 空板:没有顶栏了,老师是谁写在这里(头像、名字、口头禅),下面才是「想问什么」。
-   *  三种空板(这个、askBoard、talkBoard)都把老师要说的挂在 _open 上:实时时板上这块收着,左栏照它画(openSync) */
-  const blankBoard = (title, resume) => withOpen(h('div', { class: 'blank' }, S.tutor ? avatarEl(S.tutor, 'draw') : null, S.tutor ? h('span', { class: 'nm' }, S.tutor.display) : null, h('b', {}, title), S.tutor && S.tutor.firstQuestion ? h('small', {}, '比如:' + S.tutor.firstQuestion) : null, resume && S.tutor ? resumeChip(resume) : null),
-    { kind: 'new', big: title, small: S.tutor && S.tutor.firstQuestion ? '比如:' + S.tutor.firstQuestion : '', acts: resume && S.tutor ? [{ cls: 'back', icon: 'again', k: resume.title ? '接着刚才的' : '', s: resume.title || '接着刚才的', tm: clock(resume.at), go: () => resumeThread(resume.thread) }] : [] });
+   *  两种空板(这个、talkBoard)都把老师要说的挂在 _open 上:实时时板上这块收着,左栏照它画(openSync) */
+  const blankBoard = (title) => withOpen(h('div', { class: 'blank' }, S.tutor ? avatarEl(S.tutor, 'draw') : null, S.tutor ? h('span', { class: 'nm' }, S.tutor.display) : null, h('b', {}, title), S.tutor && S.tutor.firstQuestion ? h('small', {}, '比如:' + S.tutor.firstQuestion) : null),
+    { kind: 'new', big: title, small: S.tutor && S.tutor.firstQuestion ? '比如:' + S.tutor.firstQuestion : '', acts: [] });
   /** 空板挂上老师要说的(开场那句 big、下面一行 small、选择 acts:{cls, icon, k 上面的小字, s 大字, sub 下面的小字, tm 时刻, id, go}) */
   const withOpen = (el, o) => { el._open = o; return el; };
-  // ---- 接着今天的(设计稿 https://claude.ai/artifact/QkJBzLVbL7tgfEGKcDjaRm):首页不再有「接着刚才的」,进来都是新话题 ----
   const tutorColor = () => colorOf(S.tutor);
-  /** 回到今天的那个话题:照旧铺开、不重播(同「以前的」里点今天的一行) */
-  const resumeThread = (thread) => { S.ask = null; switchThread(null, thread); };
-  /** 新话题空白板上的胶囊:今天最后一个自由话题;孩子一开口(发出去)空白板连它一起收起 */
-  const resumeChip = (r) => h('button', { type: 'button', class: 'resume', style: 'color:' + tutorColor() + ';border-color:' + tutorColor(), on: { click: () => resumeThread(r.thread) } }, h('span', { class: 'ic', html: ICON.again }), h('span', {}, r.title ? '接着刚才的:' + r.title : '接着刚才的'), h('small', {}, clock(r.at)));
-  /** activity、小课堂今天点过同一个:先问接着那个,还是重新开始(不点就不开讲、不算一条) */
-  const askBoard = (ask) => withOpen(h('div', { class: 'blank ask' }, avatarEl(S.tutor, 'draw'), h('span', { class: 'nm' }, S.tutor.display), h('b', {}, '今天点过「' + ask.label + '」啦'),
-    h('div', { class: 'ask-row' },
-      h('button', { type: 'button', class: 'ask-go back', style: 'color:' + tutorColor() + ';border-color:' + tutorColor(), on: { click: () => resumeThread(ask.resume.thread) } },
-        h('span', { class: 't' }, h('span', { class: 'ic', html: ICON.again }), '接着刚才那个'), h('span', { class: 's' }, ask.resume.title || '刚开了个头'), h('small', {}, clock(ask.resume.at))),
-      h('button', { type: 'button', class: 'ask-go fresh', style: 'background:' + tutorColor(), on: { click: () => startFresh(ask) } },
-        h('span', { class: 't' }, h('span', { class: 'ic', html: ICON.spark }), ask.lecture ? '从头看一遍' : '重新开始'), h('span', { class: 's' }, ask.lecture ? ask.lecture.title : ask.label)))),
-    { kind: 'ask', big: '今天点过「' + ask.label + '」啦', small: '', acts: [
-      { cls: 'back', icon: 'again', k: '接着刚才那个', s: ask.resume.title || '刚开了个头', tm: clock(ask.resume.at), go: () => resumeThread(ask.resume.thread) },
-      { cls: 'fresh', icon: 'spark', k: ask.lecture ? '从头看一遍' : '重新开始', s: ask.lecture ? ask.lecture.title : ask.label, go: () => startFresh(ask) }] });
   /** 口语课页过来的:口语单拍好了,点一下开始(这一下点击起声音、开麦;不点不开讲) */
   const talkGo = () => {
     unlock(); if (LV.audio) LV.audio.wake().catch(() => {}); liveMicOn();
@@ -1228,14 +1202,6 @@ ${HOME_TILES_JS}
       if (LO.el === el) { LO.el = undefined; openSync(); }
     }, () => {});
     return el;
-  };
-  const startFresh = (ask) => {
-    S.ask = null;
-    const b = $('#board .blank'); if (b) b.remove();
-    if (ask.board && ask.book) { BP.on = true; BP.book = true; BP.base = undefined; BP.label = ask.label; renderBar(); bpOpenBook(); send(ask.send); return; }
-    if (ask.board) { BP.on = true; BP.base = undefined; BP.label = ask.label; renderBar(); $('#board').append(bpStartBoard()); return; }
-    if (ask.lecture) { S.lecture = { ...ask.lecture, watch: null, sent: false, marks: [], flying: [], log: [] }; renderBar(); renderHeader(); openLecture(); }
-    else { renderBar(); send(ask.send); }
   };
   // ---- 以板为主(《画板为主设计》):进来先拍照(或白板),照片一发就铺板,板一直在;老师的板卡落在这块板上,别的卡服务端不给;点回首页才结束 ----
   /** 拍照屏:拍一页、从相册选、不拍用白板(左栏照 _open 画同样三颗) */
@@ -1399,7 +1365,7 @@ ${HOME_TILES_JS}
     $('#lv-acts').replaceChildren(...(o ? o.acts.map(lvGo) : []));
   }
   new MutationObserver(openSync).observe($('#board'), { childList: true });
-  const closeTutor = () => { liveDispatch({ type: 'reset' }); liveClose(); hideLecture(); S.lecture = null; reelStop(); clearTimeout(S.pollTimer); dispatch({ type: 'halt' }); psClose(); $('#menu').classList.remove('on'); $('#lb').classList.remove('on'); S.tutor = null; S.via = null; S.cont = null; S.ask = null; BP.on = false; BP.book = false; BP.base = undefined; $('#tutor').classList.remove('on'); document.body.classList.remove('pending', 'speaking'); S.homeDraw = true; loadHome(); };
+  const closeTutor = () => { clearTimeout(PV.timer); liveDispatch({ type: 'reset' }); liveClose(); hideLecture(); S.lecture = null; reelStop(); clearTimeout(S.pollTimer); dispatch({ type: 'halt' }); psClose(); $('#lb').classList.remove('on'); S.tutor = null; S.via = null; S.cont = null; S.ask = null; BP.on = false; BP.book = false; BP.base = undefined; $('#tutor').classList.remove('on'); document.body.classList.remove('pending', 'speaking'); S.homeDraw = true; loadHome(); };
   $('#back').addEventListener('click', closeTutor);
   $('#back-ic').innerHTML = ICON.back;
 
@@ -2233,7 +2199,27 @@ __WORD_DRAW_JS__
   };
   const STAGE_SOURCE = 'cotutor-stage';
   const frame = $('#st-frame');
-  const postStage = (m) => { try { frame.contentWindow.postMessage({ source: STAGE_SOURCE, ...m }, '*'); } catch {} };
+  const postStage = (m) => { try { frame.contentWindow.postMessage({ source: STAGE_SOURCE, ...m }, '*'); } catch {} if (m.type === 'card') previewSoon(PV_CARD_MS); };
+  // ---- 话题的预览图(首页「今天」那一格,2026-11-15):板停下来一会儿问舞台要一张小图(peek)交给服务端,只留最新一张。
+  //      新卡铺上来等它画完(逐笔画)再要;孩子动了手停下来就要。录像、只读、家长预览不交;话题还没有 id(第一条还没回)先等 ----
+  const PV = { timer: 0, last: '', tries: 0 };
+  const PV_CARD_MS = 4000, PV_HAND_MS = 1500;
+  const previewSoon = (ms) => {
+    if (REEL || PREVIEW || S.readonly || !S.stage) return;
+    clearTimeout(PV.timer);
+    PV.tries = 0;
+    PV.timer = setTimeout(previewTake, ms || PV_HAND_MS);
+  };
+  const previewTake = () => {
+    if (!S.stage || !S.tutor || S.readonly) return;
+    if (!S.thread) { if (PV.tries++ < 6) PV.timer = setTimeout(previewTake, 2000); return; }
+    postStage({ type: 'control', action: 'peek' });
+  };
+  const previewGot = (image) => {
+    if (!image || image === PV.last || !S.tutor || !S.thread || S.readonly || REEL || PREVIEW) return;
+    PV.last = image;
+    api('PUT', CONV + S.tutor.name + '/preview', { thread: S.thread, image }).catch(() => {});
+  };
   const renderStage = () => {
     if (!S.stage) return;
     const card = stageCardNow();
@@ -2258,6 +2244,8 @@ __WORD_DRAW_JS__
     if (!m || m.source !== STAGE_SOURCE || !S.stage) return;
     const card = stageCardNow();
     if (!card) return;
+    if (m.type === 'peek') { previewGot(m.image); return; }
+    if (m.type === 'state' || m.type === 'view' || m.type === 'reveal' || m.type === 'cleared') previewSoon(PV_HAND_MS);
     if (m.type === 'ready') postStage(stageCard(card));
     else if (m.type === 'snap') { const w = CV.snapWait; CV.snapWait = null; if (w) w(m.image); }
     else if (m.type === 'pick') { if (card.kind === 'kit') { pickShow(m.text); bpPicked(card, m.text); } }
@@ -2580,65 +2568,23 @@ __WORD_DRAW_JS__
     else if (S.newThread && S.lecture) mo = '小课堂';
     else if (S.thread && S.day && S.thread !== S.day.thread) mo = '今天的话题 · ' + clock(S.threadAt);
     $('#c-mo').textContent = mo; $('#c-mo').hidden = !mo;
-    const nb = $('#new-btn');
-    nb.hidden = S.newThread || S.readonly || (!S.sections.length && !S.pending && !S.partial);
-    nb.classList.toggle('dim', S.pending);
   };
-  // 家长端的 chrome:只看(S.readonly:选择 / 填空 / 画板不开)、没有输入条、没有「回到今天」(回清单走左上角)、没有「更多」。
+  // 只看(S.readonly:录像、家长预览):选择 / 填空 / 画板不开、没有输入条。
   // 家长要试老师,到孩子端当一回孩子,用完回清单删那个话题(写进记忆、日记的一起撤)
   /** 能不能发消息:孩子端 = 不只读;家长端不发 */
-  const canSend = () => !S.readonly && !S.ask && !S.talkWait && !(S.lecture && !S.lecture.watch);
-  /** 空板上等孩子先点上面一个(今天点过同一个按钮、口语单拍好):点之前不发;实时左栏那颗灰着写「点上面开始」 */
-  const choosing = () => Boolean(S.ask || S.talkWait) && !S.readonly && !REEL;
-  const renderBar = () => { $('#pill').hidden = !canSend() && !REEL; document.body.classList.toggle('nosend', !canSend() && !REEL); document.body.classList.toggle('choose', choosing()); document.body.classList.toggle('ro', S.readonly && !REEL); $('#back-today').hidden = !S.readonly || REEL; voiceSync(); };
+  const canSend = () => !S.readonly && !S.talkWait && !(S.lecture && !S.lecture.watch);
+  /** 空板上等孩子先点上面一个(口语单拍好):点之前不发;实时左栏那颗灰着写「点上面开始」 */
+  const choosing = () => Boolean(S.talkWait) && !S.readonly && !REEL;
+  const renderBar = () => { $('#pill').hidden = !canSend() && !REEL; document.body.classList.toggle('nosend', !canSend() && !REEL); document.body.classList.toggle('choose', choosing()); document.body.classList.toggle('ro', S.readonly && !REEL); voiceSync(); };
   const resetBoard = () => { dispatch({ type: 'halt' }); if (S.stage) closeStage(); clearTimeout(S.pollTimer); S.sections = []; S.played = new Set(); dispatch({ type: 'reset' }); S.partial = null; pin.on = false; $('#board').replaceChildren(); };
   /** 换到某天的某个话题:今天的能接着聊;以前的只读回放(从第一句播) */
   const switchThread = (date, thread) => {
     resetBoard();
-    S.hist = date; S.readonly = Boolean(date); S.thread = thread; S.newThread = false; S.threadAt = null; S.via = null; S.cont = null; S.lecture = null; S.ask = null;
+    S.hist = date; S.readonly = Boolean(date); S.thread = thread; S.newThread = false; S.threadAt = null; S.via = null; S.cont = null; S.lecture = null;
     if (S.readonly) liveClose(); else if (!LV.on && liveWanted(S.tutor)) liveOpen();
     renderBar(); renderSubtitle(); renderHeader();
     loadDay(!S.readonly);
   };
-  $('#back-today').addEventListener('click', () => switchThread(null, null));
-  $('#lv-today').addEventListener('click', () => switchThread(null, null));
-  $('#more-btn').innerHTML = ICON.more;
-  const closeMenu = () => $('#menu').classList.remove('on');
-  $('#more-btn').addEventListener('click', () => $('#menu').classList.add('on'));
-  $('#menu .dimmer').addEventListener('click', closeMenu);
-  $('#new-btn .ic').innerHTML = ICON.spark;
-  $('#new-btn').addEventListener('click', () => {
-    closeMenu();
-    if (S.pending || S.readonly) return;
-    resetBoard();
-    S.newThread = true; S.thread = null; S.threadAt = null; S.lecture = null;
-    S.via = null; S.cont = null;
-    $('#board').append(blankBoard('换个话题吧,想问什么?'));
-    setBar('idle'); renderSubtitle(); renderHeader();
-  });
-  $('#hist-btn .ic').innerHTML = ICON.history;
-  $('#hist-x').innerHTML = ICON.close;
-  const closeHist = () => $('#hist').classList.remove('on');
-  $('#hist-x').addEventListener('click', closeHist);
-  $('#hist .dimmer').addEventListener('click', closeHist);
-  $('#hist-btn').addEventListener('click', async () => {
-    closeMenu();
-    if (!S.tutor) return;
-    const ls = $('#hist .ls'); ls.replaceChildren();
-    $('#hist').classList.add('on');
-    try {
-      const hst = await api('GET', CONV + S.tutor.name + '/history?days=30');
-      const nodes = [];
-      for (const dd of hst.days) {
-        nodes.push(h('div', { class: 'dt' }, dateLabel(dd.date, hst.today)));
-        for (const t of dd.threads) {
-          const open = t.thread === S.thread && (dd.date === hst.today ? !S.hist : S.hist === dd.date);
-          nodes.push(h('div', { class: 'tr' + (open ? ' on' : ''), on: { click: () => { closeHist(); if (!open) switchThread(dd.date === hst.today ? null : dd.date, t.thread); } } }, h('b', {}, t.title), h('small', {}, clock(t.at) + ' · ' + t.sections + ' 节 · ' + t.cards + ' 张卡' + (open ? ' · 正在看' : ''))));
-        }
-      }
-      ls.replaceChildren(...(nodes.length ? nodes : [h('div', { class: 'empty' }, '还没有以前的')]));
-    } catch { ls.replaceChildren(); }
-  });
   /**
    * 小课堂:看完后的第一条带看的情况与画的;问过以后再看一遍又画了,下一条带新画的(板书、实时都走这里)。
    * 画的一处带截图:先传成 captures/ 里的文件(同照片),换成路径;传不上就不带这张图。时刻换成离发出去多少毫秒(孩子端自己的钟,不用对钟)
@@ -3977,7 +3923,7 @@ __REEL_DOCK_JS__
   else loadHome().then(() => {
     let resume = null; try { resume = sessionStorage.getItem('kid-resume'); sessionStorage.removeItem('kid-resume'); } catch {}
     const open = debug.get('tutor') || resume;
-    // 地址栏里定落在哪的调试参数(tutor / new / hist / panel / step / stage)只管这一次打开:读完就去掉,只留 device。孩子之后从首页换了老师地址栏不跟着变,
+    // 地址栏里定落在哪的调试参数(tutor / new / hist / step / stage)只管这一次打开:读完就去掉,只留 device。孩子之后从首页换了老师地址栏不跟着变,
     // 留着的话刷新(或 Safari 自己重载、服务重启后的自动重载)永远回到地址栏里那位(2026-10-08 真机:在数学小课堂刷新跳到语文老师)
     try { const q = new URLSearchParams(); if (debug.get('device')) q.set('device', debug.get('device')); const rest = q.toString(); if (location.search !== (rest ? '?' + rest : '')) history.replaceState(null, '', location.pathname + (rest ? '?' + rest : '')); } catch {}
     if (open && S.home) {
@@ -3985,13 +3931,11 @@ __REEL_DOCK_JS__
       const talk = debug.get('talk');
       if (t && talk) openTutor(t, { kind: 'new', talk });
       else if (t) {
-        openTutor(t, { kind: 'today' });
-        // 调试:&new=1 新话题空白态;&hist=<日期>.<话题> 只读回放以前的;&panel=1 打开「以前的」面板
+        // 调试:&new=1 新话题空白态;&hist=<日期>.<话题> 只读回放以前的
+        openTutor(t, debug.get('new') ? { kind: 'new' } : { kind: 'today' });
         setTimeout(() => {
-          if (debug.get('new')) $('#new-btn').click();
           const hv = debug.get('hist');
           if (hv) { const [d, th] = hv.split('.'); switchThread(d, th); }
-          if (debug.get('panel')) $('#hist-btn').click();
           jumpTo();
         }, 400);
       }

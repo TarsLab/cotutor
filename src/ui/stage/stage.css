@@ -71,6 +71,8 @@ html, body, #root { margin: 0; height: 100%; background: #fffdf8; font: 18px/1.5
 .bk-sharp { position: absolute; display: none; pointer-events: none; }
 .bk-svg { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
 .bk-hit { fill: rgba(28, 126, 214, .22); stroke: #1c7ed6; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.bk-look { fill: #f59f00; opacity: 0; animation: bk-look 2.4s ease-out .3s; }
+@keyframes bk-look { 0% { opacity: 0; } 15% { opacity: 1; } 60% { opacity: 1; } 100% { opacity: 0; } }
 .bk-ring { stroke-dasharray: 1; stroke-dashoffset: 1; animation: bk-draw .7s ease-out forwards; }
 @keyframes bk-draw { to { stroke-dashoffset: 0; } }
 

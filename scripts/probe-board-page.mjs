@@ -7,8 +7,8 @@
  * 三、老师的照片板(不写图)落在同一块板上:板不关,顶栏换成老师的题目。
  * 四、点「变」→ 田字格浮出来;经实时那条连接报给服务端 {t:'board', body:{k:'pick', text:'变', thread, base}};假嘴念「变」。
  * 五、按住头像说一句 → 老师这一轮出了别的卡(服务端只上板卡):板还在。
- * 六、板上的「拍照」换一张 → 新照片铺上(换底),板不关;× 回到首页。
- * 七、再点「预习」→ 今天点过,选「重新开始」→ 拍照屏 →「不拍,用白板」→ 板是白板。
+ * 六、板上的「拍照」换一张 → 新照片铺上(换底),板不关;板停下来交了预览图;× 回到首页,「今天」那一行有这个话题、带预览图。
+ * 七、再点「预习」→ 直接到拍照屏(今天点过也不问)→「不拍,用白板」→ 板是白板。点「今天」那一格 → 回到那个话题,照片板摆出来。
  * iPad 横屏各截一张。用法:node scripts/probe-board-page.mjs [mock 根地址] [--out <截图目录>]
  *   缺省 http://127.0.0.1:8790(先 cotutor mock --http;探针会发消息,再跑要重起 mock)
  */
@@ -206,16 +206,24 @@ try {
   ok('换底的那条发在同一个话题', sent.filter((m) => m.t === 'send').slice(-1)[0]?.body?.thread === head.thread, JSON.stringify(sent.filter((m) => m.t === 'send').slice(-1)[0]?.body));
   for (let i = 0; i < 100 && (await day()).messages.some((m) => m.pending); i++) await sleep(200);
   await shot('board-6-swap.png');
+  await sleep(5000);
   await press('#st-x');
   ok('× 回到首页', Boolean(await until(`!document.querySelector('#tutor').classList.contains('on')`, 5000)));
+  const today = await until(`(() => { const b = document.querySelector('#today .td[data-thread=${JSON.stringify(head.thread)}]'); const img = b && b.querySelector('img'); return !document.querySelector('#today').hidden && img && img.complete && img.naturalWidth > 0 ? img.getAttribute('src') : null; })()`, 8000);
+  ok('首页「今天」:这个话题一格,带预览图(板交的)', Boolean(today && today.includes('/preview?thread=')), String(today));
+  await shot('board-6b-home.png');
+  // 点「今天」那一格:回到那个话题接着聊,照片板摆出来
+  const cell = await evaluate(`(() => { const b = document.querySelector('#today .td[data-thread=${JSON.stringify(head.thread)}]'); b.scrollIntoView({ block: 'center' }); const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+  await tap(cell.x, cell.y);
+  ok('点「今天」那一格:回到那个话题,照片板摆出来', Boolean(await until(`document.querySelector('#tutor').classList.contains('on') && document.querySelector('#stage').classList.contains('bp') && Boolean(document.querySelector('#st-frame')?.contentDocument?.querySelector('.kt-svg image'))`, 10000)));
+  await press('#st-x');
+  await until(`!document.querySelector('#tutor').classList.contains('on')`, 5000);
 
   // ---- 七、再点「预习」→ 重新开始 → 白板 ----
   await until(`Boolean(document.querySelector('[data-tile="preview"]'))`, 8000);
   const tile2 = await evaluate(`(() => { const t = [...document.querySelectorAll('.c-tutor')].find((c) => c.textContent.includes('语文老师')); const b = t && t.querySelector('[data-tile="preview"]'); if (!b) return null; b.scrollIntoView({ block: 'center' }); const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
   await tap(tile2.x, tile2.y);
-  // 今天点过的(真服务给 resume):先问接着还是重新开始;mock 的方砖不给 resume,直接到拍照屏
-  if (await until(`[...document.querySelectorAll('#lv-acts .lv-go, .ask-go')].some((b) => b.textContent.includes('重新开始') || b.textContent.includes('不拍'))`, 6000) && (await evaluate(`[...document.querySelectorAll('#lv-acts .lv-go, .ask-go')].some((b) => b.textContent.includes('重新开始'))`))) await pressText('#lv-acts .lv-go, .ask-go', '重新开始');
-  ok('再点:到拍照屏', Boolean(await until(`[...document.querySelectorAll('#lv-acts .lv-go, .bp-start .ask-go')].some((b) => b.textContent.includes('不拍,用白板'))`, 4000)));
+  ok('再点:直接到拍照屏(不问接着还是重新开始)', Boolean(await until(`[...document.querySelectorAll('#lv-acts .lv-go, .bp-start .ask-go')].some((b) => b.textContent.includes('不拍,用白板'))`, 4000)));
   for (let i = 0; i < 100 && (await day()).messages.some((m) => m.pending); i++) await sleep(200);
   await until(`!document.body.classList.contains('pending')`, 10000);
   await pressText('#lv-acts .lv-go, .bp-start .ask-go', '不拍,用白板');

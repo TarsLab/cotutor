@@ -556,7 +556,7 @@ try {
   check('「## 想要小课堂」进给家长的尾巴,孩子看不到', mh.parentText?.startsWith('## 想要小课堂\n- 题面: 找规律填数') === true && !mh.kidText?.includes('题面') && !JSON.stringify((await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json).includes('交错数列'), JSON.stringify(mh));
   check('没有起别的老师', !existsSync(join(root, 'conversations', 'scene-maker')) && !ctx.runner.running('helper'));
 
-  // ---- 话题:新话题不 resume 且不带旧卡;缺省接当前话题;指定今天的旧话题 resume 它自己的会话;history / 日期路由;卡的 turn 按话题 ----
+  // ---- 话题:新话题不 resume 且不带旧卡;缺省接当前话题;指定今天的旧话题 resume 它自己的会话;预览图 / 日期路由;卡的 turn 按话题 ----
   now = new Date(2026, 8, 9, 10, 20);
   type TMsg = { job: string; thread?: string; cards?: unknown[]; kidText?: string | null };
   type TDay = { index: { session: { id: string } | null; sessions: Record<string, { id: string }>; messages: TMsg[] } };
@@ -588,9 +588,13 @@ try {
   for (const text of ['系统一', '系统二']) { await ctx.runner.send('helper', { from: 'system', text }); await wait('helper'); }
   const smDay = ((await day('helper', '2026-09-09')).json as TDay).index;
   check('系统消息每条各开一个话题(没说 newThread 也开)', smDay.messages.length === 2 && smDay.messages.every((m) => m.thread === m.job));
-  const hist = (await route('GET', '/api/kid/conversations/math-tutor/history?days=30', ctx)).json as { today: string; days: { date: string; threads: { thread: string; title: string; sections: number; cards: number }[] }[] };
-  const todayH = hist.days.find((d) => d.date === '2026-09-09')!;
-  check('history:按天(新的在前),今天三个话题(新的在前;流式那几轮换了运行时,自成一个),名字是孩子第一句、节数与卡数', hist.today === '2026-09-09' && hist.days[0].date === '2026-09-09' && hist.days.some((d) => d.date === '2026-09-08') && todayH.threads.length === 3 && todayH.threads[0].thread === newThread && todayH.threads[0].title === '换个话题 板书' && todayH.threads[0].sections === 2 && todayH.threads[0].cards === 2 && todayH.threads[1].title === '流式 板书' && todayH.threads[2].thread === oldThread && todayH.threads[2].sections > 2, JSON.stringify(hist.days.map((d) => ({ date: d.date, n: d.threads.length, t: d.threads.map((t) => t.title) }))));
+  check('「以前的」没有了(孩子端今天的话题在首页「今天」接)', (await route('GET', '/api/kid/conversations/math-tutor/history?days=30', ctx)).status >= 400);
+  // 话题的预览图:只收今天这位老师的话题、只收 jpeg;取回来就是那张
+  const jpg = `data:image/jpeg;base64,${Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]).toString('base64')}`;
+  const pvUrl = '/api/kid/conversations/math-tutor/preview';
+  check('预览图:存今天的话题 200;不是 jpeg、没这个话题 400', (await route('PUT', pvUrl, ctx, { thread: newThread, image: jpg })).status === 200 && (await route('PUT', pvUrl, ctx, { thread: newThread, image: 'data:image/png;base64,AAAA' })).status === 400 && (await route('PUT', pvUrl, ctx, { thread: '0000-9', image: jpg })).status === 400);
+  const pvGet = await route('GET', `${pvUrl}?thread=${newThread}`, ctx);
+  check('预览图:取回 jpeg 文件;没存过的 404', pvGet.status === 200 && pvGet.contentType === 'image/jpeg' && readFileSync(pvGet.file!).length === 7 && (await route('GET', `${pvUrl}?thread=${oldThread}`, ctx)).status === 404, JSON.stringify(pvGet));
   const kdOld = (await route('GET', '/api/kid/conversations/math-tutor/2026-09-08', ctx)).json as { date: string; thread: string | null; messages: { thread: string }[] };
   check('日期路由给那天的孩子视图(带 thread);未来 / 坏日期 400;today 也带 thread', kdOld.date === '2026-09-08' && kdOld.messages.length > 0 && kdOld.messages.every((m) => typeof m.thread === 'string') && kdOld.thread === kdOld.messages[kdOld.messages.length - 1].thread && (await route('GET', '/api/kid/conversations/math-tutor/2027-01-01', ctx)).status === 400 && (await route('GET', '/api/kid/conversations/math-tutor/2026-13-01', ctx)).status === 400 && ((await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { thread: string }).thread === oldThread);
 

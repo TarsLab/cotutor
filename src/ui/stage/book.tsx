@@ -1,10 +1,12 @@
 /**
  * 课本做底的舞台(画法「课本」,src/chalk/kit/book.ts;2026-11-14《语文预习:PDF 课本与镜头交互》)。
  * 一课的几页从上往下连成一条(场景坐标:一页宽 1000),屏幕是看它的一扇窗:
- *  - 老师的卡写了「看」:窗移到那一块(近的滑过去,远的直接到);没写就不动——他眼前的就是老师要讲的。
- *  - 孩子手指拖动、两指捏着放大缩小;Apple Pencil(pointerType = pen)写画,手指永远不落笔;笔在纸上时别的手指(手掌)不算。
- *  - 轻点(手指或笔)一个字:本地照课本的行和字算出是哪个字(bookPick),告诉页面(pick)弹田字格;点在盖住的拼音上就揭开(reveal)。
- *  - 孩子挪完、放大完停下来:把窗(场景坐标)告诉页面(view),页面报给服务端说成一句「第 55 页:第 7 段」给老师。
+ *  - 窗只有两种大小(2026-11-15):页宽铺满、两倍,双击切换;不两指缩放、不滚轮缩放。页宽时手指只上下滚,两倍时上下左右都能挪,松手带惯性。
+ *  - 老师的卡写了「看」:窗滚到那一块(大小不变,近的滑过去,远的直接到),那一块亮一下;没写就不动——他眼前的就是老师要讲的。
+ *  - 只读(录像、家长看)照记录的窗摆:以前孩子缩放过的窗照样放得下(camFor)。
+ *  - Apple Pencil(pointerType = pen)写画,手指永远不落笔;笔在纸上时别的手指(手掌)不算。
+ *  - 轻点(手指或笔;手指的等一下看是不是双击)一个字:本地照课本的行和字算出是哪个字(bookPick),告诉页面(pick)弹田字格;点在盖住的拼音上就揭开(reveal)。
+ *  - 孩子挪完、切完大小停下来:把窗(场景坐标)告诉页面(view),页面报给服务端说成一句「第 55 页:第 7 段」给老师。
  * 画面:pdf.js(/stage/pdf/,不打进 stage.js)现画。每页先画一张中等清晰度的(移动、缩放时用它),停下来再把窗里那一块照屏幕的像素重画一张盖上去,放大了字也清楚。
  * 老师的记号(圈、盖拼音的块)和孩子的笔画是一层 SVG,和页面在同一个随窗变换的容器里,所以对得齐;孩子的笔画挂在书页上,老师下一张卡还是这一课就还在。
  * 类名带 bk-(舞台页也装孩子端的 theme.css);工具列用 kit.tsx 的 kt- 那几个,样子一样。
@@ -38,6 +40,13 @@ const GLIDE_MS = 600;
 const BASE_PX = 1600;
 /** 窗那一块重画时最多多少像素(iOS 一块画布的上限是 1677 万) */
 const SHARP_MAX_PX = 6_000_000;
+/** 两下轻点隔多久以内算双击 */
+const DOUBLE_MS = 280;
+/** 松手时快过这个(像素 / 毫秒)才带惯性;每 16 毫秒剩多少 */
+const FLING_MIN = 0.25;
+const FLING_KEEP = 0.95;
+/** 老师的「看」滚过去时,那一块上面留多少像素(顶栏浮在板上) */
+const LOOK_TOP_PX = 64;
 /** 交给老师的那张图的长边 */
 const SHOT_SIDE = 1024;
 /** 窗停下来多久交窗里的图(清楚的那一块多半已经重画好了) */
@@ -111,6 +120,12 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
   const touches = useRef(new Map<number, { x: number; y: number }>());
   const gesture = useRef<{ kind: 'tap' | 'pan' | 'pinch'; x0: number; y0: number; cam0: Cam; d0?: number; m0?: [number, number] } | null>(null);
   const moved = useRef(false);
+  /** 窗的大小:页宽铺满(1)、两倍(2) */
+  const zoom = useRef<1 | 2>(1);
+  /** 拖的最后几个点(松手算惯性) */
+  const trail = useRef<{ t: number; x: number; y: number }[]>([]);
+  /** 手指轻点了一下,等着看是不是双击 */
+  const lastTap = useRef<{ t: number; x: number; y: number; timer: number } | null>(null);
   /** 笔:正在画的一笔 */
   const pen = useRef<{ id: number; pts: [number, number][]; el: SVGPathElement; x0: number; y0: number } | null>(null);
   /** 孩子手上动着的时候老师的新窗先记着,手停了再去 */
@@ -140,8 +155,15 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
     const pageH = g?.sheets[0]?.height ?? BOOK_W * BOOK_ASPECT;
     return [Math.min(vw / BOOK_W, vh / pageH) * 0.9, (vw / BOOK_W) * 6];
   };
-  /** 窗不跑出这一条太远:中心留在条子里 */
+  /** 窗不跑出这一条:孩子的窗大小定死(页宽 × zoom),边贴着书页;只读的照以前,中心留在条子里 */
   const clamp = (c: Cam): Cam => {
+    if (!readonly) {
+      const [vw, vh] = vsize();
+      const h = geo.current?.height ?? BOOK_W;
+      const s = (vw / BOOK_W) * zoom.current;
+      const hw = vw / 2 / s, hh = vh / 2 / s;
+      return { s, cx: hw * 2 >= BOOK_W ? BOOK_W / 2 : Math.min(BOOK_W - hw, Math.max(hw, c.cx)), cy: hh * 2 >= h ? hh : Math.min(h - hh, Math.max(hh, c.cy)) };
+    }
     const [lo, hi] = sRange();
     const s = Math.min(hi, Math.max(lo, c.s));
     const h = geo.current?.height ?? BOOK_W;
@@ -159,6 +181,25 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
     const [vw, vh] = vsize();
     return clamp({ cx: (b[0] + b[2]) / 2, cy: (b[1] + b[3]) / 2, s: Math.min(vw / (b[2] - b[0]), vh / (b[3] - b[1])) });
   };
+  /** 老师的「看」:窗大小不变,滚到那一块——放得下就摆在窗中间,放不下就块顶贴着窗顶(让过顶栏);只读的照 camFor */
+  const lookAt = (b: Box): Cam => {
+    if (readonly) return camFor(b);
+    const [vw, vh] = vsize();
+    const s = (vw / BOOK_W) * zoom.current;
+    const fits = (b[3] - b[1]) * s <= vh - LOOK_TOP_PX * 2;
+    return clamp({ s, cx: (b[0] + b[2]) / 2, cy: fits ? (b[1] + b[3]) / 2 : b[1] - LOOK_TOP_PX / s + vh / 2 / s });
+  };
+  /** 老师要看的那一块左边亮一道竖条(孩子知道从哪看到哪;不盖字,跨页的块也不把页脚、页缝罩进去) */
+  const flashLook = (b: Box): void => {
+    if (readonly) return;
+    const hl = svg.current?.querySelector('.bk-hl');
+    if (!hl) return;
+    const r = el('rect', { x: String(Math.max(4, b[0] - 16)), y: String(b[1]), width: '8', height: String(Math.max(8, b[3] - b[1])), rx: '4', class: 'bk-look' });
+    hl.querySelector('.bk-look')?.remove();
+    hl.append(r);
+    window.setTimeout(() => r.remove(), 2600);
+  };
+  const goLook = (b: Box): void => { moveTo(lookAt(b), true); flashLook(b); };
   /** 老师没写「看」:页宽铺满窗、第一页的顶贴着窗顶(2026-11-14:原来整页塞进窗,横屏两边各空一大块;顶栏浮在上面,不占地方) */
   const pageTop = (): Cam => {
     const [vw, vh] = vsize();
@@ -336,8 +377,12 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
       revealed.current = new Set();
       paintInk();
       const frame = bookSpots(kp['看'])[0]?.box ? def?.build(kp, { aspect }).frame : null;
-      cam.current = frame ? camFor([frame[0], frame[1], frame[0] + frame[2], frame[1] + frame[3]]) : pageTop();
+      // 换了一课从页宽看起
+      zoom.current = 1;
+      const fb: Box | null = frame ? [frame[0], frame[1], frame[0] + frame[2], frame[1] + frame[3]] : null;
+      cam.current = fb ? lookAt(fb) : pageTop();
       apply();
+      if (fb) flashLook(fb);
       setPhase('ready');
       emitted.current = id;
       emit();
@@ -377,7 +422,7 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
     if (look?.box) {
       const f = def?.build(kp, { aspect: g.aspect }).frame;
       const b: Box | null = f ? [f[0], f[1], f[0] + f[2], f[1] + f[3]] : null;
-      if (b) { if (touches.current.size || pen.current) pendingFrame.current = b; else moveTo(camFor(b), true); }
+      if (b) { if (touches.current.size || pen.current) pendingFrame.current = b; else goLook(b); }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cardKey, phase]);
@@ -385,7 +430,7 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
   useEffect(() => {
     const ro = new ResizeObserver(() => { cam.current = clamp(cam.current); apply(); scheduleSharp(); });
     if (view.current) ro.observe(view.current);
-    return () => { ro.disconnect(); cancelAnimationFrame(glide.current); window.clearTimeout(settle.current); window.clearTimeout(shotTimer.current); sharpTask.current?.cancel(); };
+    return () => { ro.disconnect(); cancelAnimationFrame(glide.current); window.clearTimeout(settle.current); window.clearTimeout(shotTimer.current); window.clearTimeout(lastTap.current?.timer); sharpTask.current?.cancel(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -399,7 +444,7 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
   /** 挪完了:等一下再报(连着挪就只报最后一次),顺手把窗里那块画清楚;手上动着时老师要看的那块这时去 */
   const settled = (): void => {
     scheduleSharp();
-    if (pendingFrame.current) { const b = pendingFrame.current; pendingFrame.current = null; moveTo(camFor(b), true); return; }
+    if (pendingFrame.current) { const b = pendingFrame.current; pendingFrame.current = null; goLook(b); return; }
     if (!moved.current) return;
     moved.current = false;
     window.clearTimeout(reportTimer.current);
@@ -435,6 +480,59 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
     onPick?.(hit.c);
   };
 
+  /** 手指轻点:等一下看是不是双击;双击切窗的大小,不是双击就照轻点 */
+  const fingerTap = (x: number, y: number): void => {
+    if (readonly) { tap(x, y); return; }
+    const L = lastTap.current, now = performance.now();
+    if (L && now - L.t < DOUBLE_MS && Math.hypot(x - L.x, y - L.y) < TAP_PX * 4) {
+      window.clearTimeout(L.timer);
+      lastTap.current = null;
+      toggleZoom(x, y);
+      return;
+    }
+    if (L) { window.clearTimeout(L.timer); tap(L.x, L.y); }
+    lastTap.current = { t: now, x, y, timer: window.setTimeout(() => { lastTap.current = null; tap(x, y); }, DOUBLE_MS) };
+  };
+  /** 双击:页宽 ↔ 两倍,点的那一点留在手指底下 */
+  const toggleZoom = (x: number, y: number): void => {
+    const [ax, ay] = toScene(x, y);
+    zoom.current = zoom.current === 1 ? 2 : 1;
+    const r = view.current!.getBoundingClientRect();
+    const s = (r.width / BOOK_W) * zoom.current;
+    moveTo(clamp({ s, cx: ax - (x - r.left - r.width / 2) / s, cy: ay - (y - r.top - r.height / 2) / s }), true);
+    moved.current = true;
+    settled();
+  };
+  /** 松手还在动:顺着滑一段慢慢停,停了才算挪完 */
+  const fling = (): boolean => {
+    const tr = trail.current;
+    trail.current = [];
+    if (readonly || tr.length < 2) return false;
+    const a = tr[0], b = tr[tr.length - 1];
+    const dt = b.t - a.t;
+    if (dt <= 0 || performance.now() - b.t > 80) return false;
+    let vx = (b.x - a.x) / dt, vy = (b.y - a.y) / dt;
+    if (Math.hypot(vx, vy) < FLING_MIN) return false;
+    let t0 = performance.now();
+    const tick = (now: number): void => {
+      const dt = Math.min(48, now - t0);
+      t0 = now;
+      const c = cam.current;
+      const to = clamp({ ...c, cx: c.cx - (vx * dt) / c.s, cy: c.cy - (vy * dt) / c.s });
+      // 撞到边就不再往那边走
+      if (to.cx === c.cx) vx = 0;
+      if (to.cy === c.cy) vy = 0;
+      cam.current = to;
+      apply();
+      const k = Math.pow(FLING_KEEP, dt / 16);
+      vx *= k; vy *= k;
+      if (Math.hypot(vx, vy) > 0.02) glide.current = requestAnimationFrame(tick);
+      else settled();
+    };
+    glide.current = requestAnimationFrame(tick);
+    return true;
+  };
+
   const down = (e: React.PointerEvent): void => {
     if (phase !== 'ready') return;
     cancelAnimationFrame(glide.current);
@@ -448,12 +546,13 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
       pen.current = { id: e.pointerId, pts: [p], el: path, x0: e.clientX, y0: e.clientY };
       return;
     }
-    // 笔在纸上:别的手(手掌)不算
+    // 笔在纸上:别的手(手掌)不算;孩子的窗不两指缩放,第二根手指不算
     if (pen.current) return;
+    if (!readonly && touches.current.size) return;
     try { (e.currentTarget as Element).setPointerCapture(e.pointerId); } catch { /* 同上 */ }
     touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const pts = [...touches.current.values()];
-    if (pts.length === 1) gesture.current = { kind: 'tap', x0: e.clientX, y0: e.clientY, cam0: { ...cam.current } };
+    if (pts.length === 1) { gesture.current = { kind: 'tap', x0: e.clientX, y0: e.clientY, cam0: { ...cam.current } }; trail.current = []; }
     else if (pts.length === 2) {
       const [a, b] = pts;
       gesture.current = { kind: 'pinch', x0: 0, y0: 0, cam0: { ...cam.current }, d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, m0: [(a.x + b.x) / 2, (a.y + b.y) / 2] };
@@ -494,6 +593,7 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
     if (g.kind === 'tap' && Math.hypot(dx, dy) < TAP_PX) return;
     g.kind = 'pan';
     moved.current = true;
+    trail.current = [...trail.current, { t: performance.now(), x: e.clientX, y: e.clientY }].filter((p, _, all) => all[all.length - 1].t - p.t <= 100);
     cam.current = clamp({ ...g.cam0, cx: g.cam0.cx - dx / g.cam0.s, cy: g.cam0.cy - dy / g.cam0.s });
     apply();
   };
@@ -522,12 +622,23 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
     }
     if (left.length) return;
     gesture.current = null;
-    if (g?.kind === 'tap' && e.type === 'pointerup') tap(e.clientX, e.clientY);
+    if (g?.kind === 'tap' && e.type === 'pointerup') fingerTap(e.clientX, e.clientY);
+    if (g?.kind === 'pan' && e.type === 'pointerup' && fling()) return;
     settled();
   };
-  /** 电脑上:滚轮放大缩小(围着鼠标那一点) */
+  /** 电脑上:滚轮上下滚(两倍时也左右);只读的照以前滚轮放大缩小(围着鼠标那一点) */
   const wheel = (e: React.WheelEvent): void => {
     if (phase !== 'ready') return;
+    if (!readonly) {
+      if (e.ctrlKey) return;
+      const c = cam.current;
+      cam.current = clamp({ ...c, cx: c.cx + e.deltaX / c.s, cy: c.cy + e.deltaY / c.s });
+      apply();
+      moved.current = true;
+      window.clearTimeout(wheelTimer.current);
+      wheelTimer.current = window.setTimeout(settled, 200);
+      return;
+    }
     const [ax, ay] = toScene(e.clientX, e.clientY);
     const c = cam.current;
     const s = clamp({ ...c, s: c.s * Math.exp(-e.deltaY * 0.0015) }).s;
@@ -581,6 +692,7 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
       const s = cur.current;
       onSubmit({ marks: s.marks ?? [], ...(s.aspect ? { aspect: s.aspect } : {}) }, snapshot());
     },
+    peek() { return Promise.resolve(snapshot('image/jpeg') ?? null); },
   }), [onSubmit, snapshot]);
 
   return (

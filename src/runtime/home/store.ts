@@ -13,7 +13,7 @@ import { conversationFiles, threads } from '../../schema/index.ts';
 import { kidQuestions } from '../../memory/diary.ts';
 import { activityName, findActivityFile } from '../activities.ts';
 import { lintActivity, parseActivity, resolveParams } from '../activity.ts';
-import { arrangeHome, dropFixes, homeActivities, homeOwners, faceTutor, homeId, homeIssues, homeLectures, homeRefs, homeTutors, kidButtons, kidTiles, parseHome, threadKey, todayResumes, type Resume, type HomeCheckContext, type HomeDoc, type HomeIssue, type HomeTutorInfo, type KidHomeButton } from './home.ts';
+import { arrangeHome, dropFixes, homeActivities, homeOwners, faceTutor, homeId, homeIssues, homeLectures, homeRefs, homeTutors, kidButtons, kidTiles, parseHome, threadKey, type HomeCheckContext, type HomeDoc, type HomeIssue, type HomeTutorInfo, type KidHomeButton } from './home.ts';
 import type { BoardCard } from '../../board/presentation.ts';
 import { HOME_ID_RE, HOME_TILES, LECTURE_ACTIVITY, PublishedHomeSchema, tutorTiles, type Activity, type ActivityRun, type ActivityValue, type ContextPack, type ConversationIndex, type HomeTileId, type HomeVia, type MessageVia, type PublishedHome } from '../../schema/index.ts';
 import { listDates, readCardStates, readIndex } from '../journal/store.ts';
@@ -201,16 +201,6 @@ async function talkedSince(ws: Workspace, tutor: string, since: string, now: Dat
   return false;
 }
 
-/** 这位老师今天孩子能接着的话题(孩子端最后一条所在、孩子在里面说过话的) */
-/** 今天这位老师每个入口最近的话题;读不出来 → 空 */
-async function resumesOf(ws: Workspace, tutor: string, today: string): Promise<Map<string, Resume>> {
-  try {
-    return todayResumes((await readIndex(ws, tutor, today)).messages);
-  } catch {
-    return new Map();
-  }
-}
-
 /**
  * 孩子端的首页卡:source = 已发布的(缺省)/ 草稿(家长预览)/ 缺省。
  * 老师卡按 arrangeHome 排、按钮按 kidButtons 算;其余卡过 stripSecrets。
@@ -255,9 +245,7 @@ export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'pu
       continue;
     }
     const name = String(c.props.tutor);
-    const resumes = await resumesOf(ws, name, today);
     const buttons = kidButtons((c.props.buttons ?? []) as TutorButton[], {
-      resumes,
       alive: (date, thread) => alive.has(threadKey(name, date, thread)),
       lecture: (bundle) => Boolean(lectures.get(bundle)),
       activity: (a, params) => { const act = usable.get(`${name}/${a}`); return Boolean(act) && resolveParams(act!, params).issues.length === 0; },
@@ -278,7 +266,7 @@ export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'pu
       if (act.board === 'page') boards.add(t.activity);
       if (act.base === 'textbook') books.add(t.activity);
     }
-    out.push({ kind: 'tutor', props: { tutor: name, buttons, tiles: kidTiles(tiles, { usable: () => true, resumes, boards, books }), ...(news ? { news: true } : {}) } });
+    out.push({ kind: 'tutor', props: { tutor: name, buttons, tiles: kidTiles(tiles, { usable: () => true, boards, books }), ...(news ? { news: true } : {}) } });
   }
   return { home: id, cards: out };
 }

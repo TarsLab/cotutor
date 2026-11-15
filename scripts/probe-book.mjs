@@ -3,14 +3,15 @@
  * 课本做底的舞台(src/ui/stage/book.tsx)手动验收:不进 pnpm test,要本机 Chrome、一个跑着的 cotutor serve(它的 vault 教材/ 下放了课本 PDF)。不花钱、不起老师。
  * 直接开 /stage/,照页面那样 postMessage 发课本卡进去;卡的参数用服务端那几个函数现算(读课本索引、落板之前换框),和老师真出的卡一样:
  *  一、目录那张:pdf.js 现画,两页都画出来了(画布上有字)。
- *  二、老师翻到《坐井观天》看开头:窗对着开头。
- *  三、下一张看第 6–7 段、圈「井沿」:同一块板(不重铺),窗滑过去,第 6–7 段在窗里,圈画上了。
- *  四、手指往上拖:窗跟着走、不落笔;停下来报一次窗(view)。
- *  五、两指捏开:放大,不落笔;停下来窗里那一块重画清楚。
+ *  二、老师翻到《坐井观天》看开头:窗对着开头,页宽铺满,那一块亮一下。
+ *  三、下一张看第 6–7 段、圈「井沿」:同一块板(不重铺),窗滑过去(大小不变),第 6–7 段的开头在窗里,圈画上了。
+ *  四、手指往上拖:窗跟着走、不落笔、横着不动;停下来报一次窗(view)。
+ *  五、两指捏开:不缩放;双击:两倍,停下来窗里那一块重画清楚;再双击回页宽。
  *  六、笔(pointerType = pen)画一道:留下一笔、回状态。
  *  七、手指点「渴」:报 pick「渴」。
  *  八、老师下一张看第 1 段:窗滑回去,孩子画的那一笔还在。
  *  九、给老师看:交回板此刻的图(png)。
+ *  十、预览图:peek 回一张长边 480 的 jpeg(首页「今天」那一格)。
  * iPad 横屏各截一张(Page.captureScreenshot)。
  * 用法:node scripts/probe-book.mjs <服务根地址> --books <vault 的教材目录> [--book <文件名>] [--out <截图目录>]
  *   如:node scripts/probe-book.mjs http://127.0.0.1:5391 --books ~/ray-vault/教材
@@ -114,7 +115,9 @@ await sleep(400);
 const look1 = bookSpots(c1.props.params['看'])[0].box;
 let cam = await camera();
 const v1 = visible(cam);
-ok('翻到《坐井观天》:窗对着开头', look1 && v1[1] <= look1[1] + 5 && v1[3] >= look1[3] - 5, JSON.stringify({ look1, v1: v1.map(Math.round) }));
+const pageS = cam.w / 1000;
+ok('翻到《坐井观天》:窗对着开头,页宽铺满', look1 && v1[1] <= look1[1] + 5 && look1[1] < v1[3] && Math.abs(cam.s - pageS) < 0.01 && Math.abs(v1[0]) < 1, JSON.stringify({ look1, v1: v1.map(Math.round), s: cam.s }));
+ok('老师要看的那一块亮一下', (await evaluate(`document.querySelectorAll('.bk-look').length`)) === 1);
 await until(`(() => { const c = document.querySelectorAll('.bk-page')[0]; return c && c.width > 0; })()`, 10000);
 await sleep(800);
 console.log('  截图', await shot('2-开头.png'));
@@ -128,15 +131,16 @@ cam = await camera();
 const look2 = bookSpots(c2.props.params['看'])[0].box;
 const v2 = visible(cam);
 ok('第二张同一课:不重铺(页的画布还是那几张)', pagesBefore === (await evaluate(`[...document.querySelectorAll('.bk-page')].map((c) => c.width).join()`)));
-ok('窗滑到第 6–7 段(跨两页):整块在窗里', look2 && v2[1] <= look2[1] + 5 && v2[3] >= look2[3] - 5, JSON.stringify({ look2, v2: v2.map(Math.round) }));
+ok('窗滑到第 6–7 段(跨两页):大小不变,开头在窗里', look2 && v2[1] <= look2[1] + 5 && look2[1] < v2[3] && Math.abs(cam.s - pageS) < 0.01, JSON.stringify({ look2, v2: v2.map(Math.round) }));
 ok('圈上了「井沿」', (await evaluate(`document.querySelectorAll('.bk-ring').length`)) === 1);
 console.log('  截图', await shot('3-第6-7段.png'));
 
 // 四、手指往上拖
 const before = await camera();
-await drag({ x: 600, y: 600 }, { x: 600, y: 300 });
+await drag({ x: 600, y: 600 }, { x: 400, y: 300 });
+await sleep(1200);
 const after = await camera();
-ok('手指拖:窗往下走,不落笔', after.ty < before.ty - 200 && (await inks()) === 0, `${Math.round(before.ty)} → ${Math.round(after.ty)}`);
+ok('手指拖:窗往下走,横着不动,不落笔', after.ty < before.ty - 200 && after.tx === before.tx && (await inks()) === 0, `${Math.round(before.ty)} → ${Math.round(after.ty)}, tx ${before.tx} → ${after.tx}`);
 const v4 = await until(`window.__got.filter((m) => m.type === 'view').length >= 1`, 3000);
 const views = await got('view');
 ok('停下来报一次窗(view)', Boolean(v4) && views.length === 1 && views[0].box.length === 4, JSON.stringify(views));
@@ -151,11 +155,23 @@ const pinch = async (d0, d1) => {
   await send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
 };
 await pinch(120, 260);
+await sleep(400);
+ok('两指捏开:不缩放,不落笔', Math.abs((await camera()).s - s0) < 0.001 && (await inks()) === 0);
+const dbl = async (x, y) => { for (let k = 0; k < 2; k++) { await mouse('mouseMoved', x, y, { buttons: 0 }); await mouse('mousePressed', x, y); await sleep(40); await mouse('mouseReleased', x, y); await sleep(80); } };
+await dbl(600, 450);
+await sleep(900);
 const s1 = (await camera()).s;
-ok('两指捏开:放大了,不落笔', s1 > s0 * 1.5 && (await inks()) === 0, `${s0.toFixed(2)} → ${s1.toFixed(2)}`);
+ok('双击:两倍,不落笔、不点字', Math.abs(s1 - s0 * 2) < 0.01 && (await inks()) === 0 && (await got('pick')).length === 0, `${s0.toFixed(2)} → ${s1.toFixed(2)}`);
 const sharp = await until(`getComputedStyle(document.querySelector('.bk-sharp')).display === 'block'`, 5000, 200);
 ok('停下来:窗里那一块重画清楚', Boolean(sharp));
-console.log('  截图', await shot('5-放大.png'));
+console.log('  截图', await shot('5-两倍.png'));
+const z0 = await camera();
+await drag({ x: 700, y: 500 }, { x: 400, y: 500 });
+await sleep(1200);
+ok('两倍时能横着挪', (await camera()).tx < z0.tx - 100);
+await dbl(600, 450);
+await sleep(900);
+ok('再双击:回页宽', Math.abs((await camera()).s - s0) < 0.01 && Math.abs(visible(await camera())[0]) < 1);
 
 // 六、笔画一道
 cam = await camera();
@@ -178,7 +194,7 @@ await mouse('mouseMoved', kp.x, kp.y, { buttons: 0 });
 await mouse('mousePressed', kp.x, kp.y);
 await sleep(60);
 await mouse('mouseReleased', kp.x, kp.y);
-await sleep(200);
+await sleep(600);
 const picks = await got('pick');
 ok('手指点「渴」:报 pick「渴」', picks.length === 1 && picks[0].text === '渴', JSON.stringify(picks));
 console.log('  截图', await shot('7-点字.png'));
@@ -189,7 +205,7 @@ await sleep(1000);
 cam = await camera();
 const look8 = bookSpots((await evaluate('1') && card({ 看: '第 1 段' })).props.params['看'])[0].box;
 const v8 = visible(cam);
-ok('窗滑回第 1 段;孩子画的那一笔还在', v8[1] <= look8[1] + 5 && v8[3] >= look8[3] - 5 && (await inks()) === 1);
+ok('窗滑回第 1 段;孩子画的那一笔还在', v8[1] <= look8[1] + 5 && look8[1] < v8[3] && (await inks()) === 1);
 const lastState = (await got('state')).slice(-1)[0];
 ok('新卡的状态带着那一笔(笔画挂在书页上)', lastState?.state?.marks?.length === 1);
 
@@ -198,6 +214,13 @@ await evaluate(`window.postMessage({ source: 'cotutor-stage', type: 'control', a
 const sub = await until(`window.__got.find((m) => m.type === 'submit')`, 5000);
 ok('给老师看:交回一张 png 和状态', Boolean(sub?.image?.startsWith('data:image/png')) && sub.image.length > 5000 && sub.state.marks.length === 1, String(sub?.image?.length));
 if (sub?.image) writeFileSync(join(shots, '9-交的图.png'), Buffer.from(sub.image.split(',')[1], 'base64'));
+
+// 十、预览图(首页「今天」那一格):peek 回一张长边 480 的 jpeg
+await evaluate(`window.postMessage({ source: 'cotutor-stage', type: 'control', action: 'peek' }, '*'), true`);
+const peek = await until(`window.__got.find((m) => m.type === 'peek')`, 5000);
+const peekSize = peek?.image ? await evaluate(`new Promise((r) => { const i = new Image(); i.onload = () => r([i.naturalWidth, i.naturalHeight]); i.src = ${JSON.stringify(peek.image)}; })`) : null;
+ok('预览图:peek 回一张 jpeg,长边 480', Boolean(peek?.image?.startsWith('data:image/jpeg')) && Math.max(...(peekSize ?? [0])) === 480, JSON.stringify(peekSize));
+if (peek?.image) writeFileSync(join(shots, '10-预览图.jpg'), Buffer.from(peek.image.split(',')[1], 'base64'));
 
 ok('没有脚本报错', logs.length === 0, logs.slice(0, 3).join(' | '));
 console.log(`\n截图在 ${shots}`);

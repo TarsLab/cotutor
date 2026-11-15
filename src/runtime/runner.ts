@@ -10,6 +10,7 @@
  * 埋点(2026-09-11):每轮记 timing(这一轮起的时刻、首卡、脑回完、配音收尾,毫秒),家长视图每轮一行。
  * 2026-11-02 以前是 spawn 命令行(Qwen Code)读 stream-json;注释里还叫「进程」的地方指的就是脑这一轮。
  */
+import { jpegFromDataUrl } from '../shared/jpeg.ts';
 import { lecturePack, readLecture, storedMarks, type IncomingMark } from './lecture.ts';
 import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, sep } from 'node:path';
@@ -156,12 +157,7 @@ const BOOK_MARK_CHARS = 12;
 /** 课本窗里的图(舞台导的 jpeg,长边 1024)base64 最多多长:够一张清楚的图,挡住塞进来的大文件 */
 export const BOOK_SHOT_B64_MAX = 700_000;
 /** 舞台交来的图(data:image/jpeg;base64,…)→ 字节;不是 jpeg、太大回 null */
-const jpegBytes = (v: unknown): Buffer | null => {
-  const m = typeof v === 'string' ? /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(v) : null;
-  if (!m || m[1].length > BOOK_SHOT_B64_MAX) return null;
-  const buf = Buffer.from(m[1], 'base64');
-  return buf.length > 3 && buf[0] === 0xff && buf[1] === 0xd8 ? buf : null;
-};
+const jpegBytes = (v: unknown): Buffer | null => jpegFromDataUrl(v, BOOK_SHOT_B64_MAX);
 
 /** API 运行时的长话题:上一轮结束时上下文(tokens.context)过了这么多,这一轮整段压缩(2026-10-29 定 32k) */
 export const COMPACT_TOKENS = 32_000;

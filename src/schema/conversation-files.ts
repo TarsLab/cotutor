@@ -27,6 +27,8 @@ export interface ConversationFiles {
   board: (thread: string) => string;
   /** 课本做底时窗里最新的那张图 <date>.<话题>.shot.jpg;交给老师的那一轮挪成 shot(job) 那张 <date>.<job>.shot.jpg(附给脑的就是它) */
   shot: (threadOrJob: string) => string;
+  /** 话题的预览图 <date>.<话题>.preview.jpg:孩子端板停下来时舞台导的一张小图,首页「今天」那一格用它;只留最新一张 */
+  preview: (thread: string) => string;
 }
 
 /** conversations/<tutor>/<date>.json 与 <date>.<job>.log / .err.log / .mp3(整段配音)/ .<n>.mp3(讲稿第 n 句)/ .cards/<n>.json(卡的状态) */
@@ -47,6 +49,7 @@ export function conversationFiles(conversationsDir: string, tutor: string, date:
     brain: (thread) => `${base}.${thread}.brain.jsonl`,
     board: (thread) => `${base}.${thread}.board.jsonl`,
     shot: (id) => `${base}.${id}.shot.jpg`,
+    preview: (thread) => `${base}.${thread}.preview.jpg`,
   };
 }
 

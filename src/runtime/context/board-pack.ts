@@ -42,7 +42,7 @@ export interface SlateInput {
    * 课本做底(base: textbook)时代替 photo / words:show 给老师看的底(「课本《语文二年级上册》:《坐井观天》第 54–55 页」),
    * key 板的日志里这块底的名字(「册子#课」),text 这一课的正文(一块一行;目录是一单元一行)
    */
-  book?: { show: string; key: string; text: readonly string[] };
+  book?: { show: string; key: string; text: readonly string[]; /** 这一轮附了窗里的图(舞台交来的,孩子眼前那一块) */ shot?: boolean };
 }
 
 const ago = (ms: number): string => `${Math.max(1, Math.round(ms / 1000))} 秒前`;
@@ -51,7 +51,8 @@ const ago = (ms: number): string => `${Math.max(1, Math.round(ms / 1000))} 秒�
 export function drawnLine(kit: NonNullable<SlateInput['kit']>): string {
   // 圈、遮写的字词只说字(框是应用找的);写的字照「字 在 位置」
   const named = (v: string): string => v.split(';').map((x) => (x.includes('|') ? x.split('|')[0] || x.split('|')[1] : x)).join('、');
-  const parts = Object.entries(kit.params).filter(([k, v]) => v && k !== '图').map(([k, v]) => `${k} ${k === '圈' || k === '遮' || (k === '框' && v.includes('|')) ? named(v) : v.split(';').map((x) => x.replace(/\|$/, '').replace(/\|/g, ' 在 ')).join(';')}`);
+  // 课本的「书」「页」是应用填的;「看」「盖」也是「字|框」
+  const parts = Object.entries(kit.params).filter(([k, v]) => v && k !== '图' && !(kit.kit === '课本' && (k === '书' || k === '页'))).map(([k, v]) => `${k} ${k === '圈' || k === '遮' || k === '盖' || k === '看' || (k === '框' && v.includes('|')) ? named(v) : v.split(';').map((x) => x.replace(/\|$/, '').replace(/\|/g, ' 在 ')).join(';')}`);
   return parts.length ? `${kit.kit}:${parts.join(';')}` : kit.kit;
 }
 
@@ -74,12 +75,13 @@ export function slateOf(x: SlateInput): { slate: NonNullable<ContextPack['slate'
   const since = x.events.slice(from);
   const picked = since.filter(onBase).map((e) => e.text);
   const did = [pickLine(picked.filter((t) => !isEnglish(t)), '笔顺'), pickLine(picked.filter(isEnglish), '单词')].filter((s): s is string => Boolean(s));
-  // 遮了拼音的:揭了哪些、没揭哪些(这块底上揭过的都算)
-  const covered = x.kit?.params['遮'] ? x.kit.params['遮'].split(';').map((v) => v.split('|')[0]).filter(Boolean) : [];
-  if (covered.length) {
-    const opened = new Set(x.events.filter((e): e is BoardEvent & { k: 'reveal' } => e.k === 'reveal' && e.base === base).map((e) => e.text));
+  // 遮了拼音的、盖住印好的字的(课本):揭了哪些、没揭哪些(这块底上揭过的都算)
+  const opened = new Set(x.events.filter((e): e is BoardEvent & { k: 'reveal' } => e.k === 'reveal' && e.base === base).map((e) => e.text));
+  for (const [key, what] of [['遮', '揭开了拼音'], ['盖', '揭开了盖住的']] as const) {
+    const covered = x.kit?.params[key] ? x.kit.params[key].split(';').map((v) => v.split('|')[0]).filter(Boolean) : [];
+    if (!covered.length) continue;
     const yes = covered.filter((w) => opened.has(w)), no = covered.filter((w) => !opened.has(w));
-    did.push(`揭开了拼音:${yes.length ? yes.join('、') : '一个也没有'}${no.length ? `;没揭:${no.join('、')}` : ''}`);
+    did.push(`${what}:${yes.length ? yes.join('、') : '一个也没有'}${no.length ? `;没揭:${no.join('、')}` : ''}`);
   }
   const last = [...x.events].reverse().find(onBase);
   const lastMs = last ? x.now - Date.parse(last.at) : Infinity;
@@ -97,8 +99,9 @@ export function slateOf(x: SlateInput): { slate: NonNullable<ContextPack['slate'
     else if (x.words.full.length) { text = [...x.words.full]; told = x.photo; }
   }
   const lesson = x.words?.lesson;
-  // 孩子自己挪到哪儿了:上一轮以后最后停下的地方(老师上一轮让他看的那一块之后)
-  const view = x.book ? [...since].reverse().find((e): e is BoardEvent & { k: 'view' } => e.k === 'view' && e.base === base)?.text : undefined;
+  // 孩子眼前是哪一块:上一轮以后窗最后停下的地方(他自己挪的,或老师让他看的那一块移完);附了图的说一句
+  const stop = x.book ? [...since].reverse().find((e): e is BoardEvent & { k: 'view' | 'shot' } => (e.k === 'view' || e.k === 'shot') && e.base === base)?.text : undefined;
+  const view = stop && x.book?.shot ? `${stop}(这一块的图附在这一轮)` : stop;
   const slate: NonNullable<ContextPack['slate']> = {
     base: x.book ? x.book.show : x.photo ? (lesson ? `${x.photo}(《${lesson}》)` : x.photo) : WHITE_BOARD,
     ...(text ? { text } : {}),

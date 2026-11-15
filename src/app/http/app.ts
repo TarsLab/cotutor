@@ -65,7 +65,7 @@ import { listTextbookPages, textbookPageFile } from '../../memory/textbook-pages
 import { bookFile, bookIndex, listBooks, pickBook } from '../../memory/textbook-pdf.ts';
 import { readBoard } from '../../runtime/journal/board-log.ts';
 import { bookLesson } from '../../board/board-page.ts';
-import { bookPages } from '../../chalk/index.ts';
+import { bookOps, bookPages } from '../../chalk/index.ts';
 import type { Look } from '../../scenes/look.ts';
 import { IndexError, capturePathOk, deleteThread, listDates, rateThread, readErrLog, readIndex, readTranscript, scanCards, undoVaultWrite, writeCapture, writeCardImage, writeCardState, type VaultWrite } from '../../runtime/journal/store.ts';
 import { memoryLineText } from '../../memory/vault-notes.ts';
@@ -392,7 +392,7 @@ async function bookBaseCard(ws: Workspace, name: string, lesson: string | null):
   const at = ix ? bookLesson(ix, lesson) : null;
   if (!at?.pages.length) return null;
   const range = at.pages.length > 1 ? `${at.pages[0].n}-${at.pages[at.pages.length - 1].n}` : String(at.pages[0].n);
-  return { kind: 'kit', props: { kit: '课本', params: { 课: at.title, 看: '', 圈: '', 遮: '', 书: name, 页: range }, ops: ['点字'] } };
+  return { kind: 'kit', props: { kit: '课本', params: { 课: at.title, 看: '', 圈: '', 遮: '', 书: name, 页: range }, ops: bookOps(ix!.layout, ['点字']) } };
 }
 
 /**

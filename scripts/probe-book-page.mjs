@@ -186,7 +186,7 @@ try {
   for (let i = 0; i < 60 && (await day()).messages.some((m) => m.result === 'running'); i++) await sleep(250);
   const last = (await day()).messages.slice(-1)[0];
   const run = JSON.parse(readFileSync(join(wsRoot, 'conversations', T, `${(await day()).date}.${last.job}.run.json`), 'utf8'));
-  const pr = run.prompt.slice(run.prompt.indexOf('  board:'), run.prompt.indexOf('  board:') + 900);
+  const pr = run.prompt.slice(run.prompt.indexOf('  board:'), run.prompt.indexOf('  board:') + 2000);
   ok('下一轮的上下文包:底是这一课、全文分好段、点了「朋」、孩子在看', pr.includes('《坐井观天》第 54–55 页') && pr.includes('第1段 青蛙坐在井里') && pr.includes('朋') && pr.includes('孩子在看:'), pr);
   ok('页面没有脚本报错', errors.length === 0, errors.slice(0, 3).join(' | '));
   console.log(`\n截图在 ${shots}`);

@@ -72,7 +72,7 @@ export interface BookLesson {
 }
 
 /** 索引的版本:取字、分行的规则改了就加一,旧缓存重做 */
-export const BOOK_INDEX_VERSION = 2;
+export const BOOK_INDEX_VERSION = 3;
 
 /**
  * 一册怎么分块(src/chalk/kit/book.ts 的 lessonBlocks):prose = 课文(自然段、语文园地的栏目);

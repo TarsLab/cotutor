@@ -25,6 +25,8 @@ export interface ConversationFiles {
   brain: (thread: string) => string;
   /** 以板为主的话题里板的日志 <date>.<话题>.board.jsonl(src/runtime/journal/board-log.ts):孩子在板上做的事一件一行,应用记的(交给老师到哪了)也在;删话题按 <date>.<job>.* 一起删 */
   board: (thread: string) => string;
+  /** 课本做底时窗里最新的那张图 <date>.<话题>.shot.jpg;交给老师的那一轮挪成 shot(job) 那张 <date>.<job>.shot.jpg(附给脑的就是它) */
+  shot: (threadOrJob: string) => string;
 }
 
 /** conversations/<tutor>/<date>.json 与 <date>.<job>.log / .err.log / .mp3(整段配音)/ .<n>.mp3(讲稿第 n 句)/ .cards/<n>.json(卡的状态) */
@@ -44,6 +46,7 @@ export function conversationFiles(conversationsDir: string, tutor: string, date:
     cardAsset: (job, n, file) => `${base}.${job}.cards/${n}/${file}`,
     brain: (thread) => `${base}.${thread}.brain.jsonl`,
     board: (thread) => `${base}.${thread}.board.jsonl`,
+    shot: (id) => `${base}.${id}.shot.jpg`,
   };
 }
 

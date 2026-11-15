@@ -81,7 +81,9 @@ export async function readPdfPages(data: Uint8Array): Promise<PdfPage[]> {
       for (const it of tc.items) {
         if (!('str' in it) || !it.str.trim()) continue;
         const [a, b, , , e, f] = it.transform as number[];
-        items.push({ s: it.str, f: it.fontName, x: Math.round(e * 100) / 100, y: Math.round((vp.height - f) * 100) / 100, z: Math.round(Math.hypot(a, b) * 100) / 100, w: Math.round(it.width * 100) / 100 });
+        // 换到页面左上角起的坐标要经视口:页面框的原点不一定是 (0,0)(人教的 PDF 是 (8.5, 8.5),只用页高翻 y 时字的框整体偏右上 8.5pt)
+        const [x, y] = vp.convertToViewportPoint(e, f);
+        items.push({ s: it.str, f: it.fontName, x: Math.round(x * 100) / 100, y: Math.round(y * 100) / 100, z: Math.round(Math.hypot(a, b) * 100) / 100, w: Math.round(it.width * 100) / 100 });
       }
       out.push({ n, w: vp.width, h: vp.height, items });
       page.cleanup();

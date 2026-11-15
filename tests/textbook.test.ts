@@ -13,7 +13,7 @@ import { pickBook } from '../src/memory/textbook-pdf.ts';
 import { bookSlateParts } from '../src/runtime/context/board-pack.ts';
 import type { BoardCard, BoardSection } from '../src/schema/index.ts';
 import { H, W, pages } from './_book.ts';
-import { mathIndexOf, mathPages } from './_math-book.ts';
+import { MH, MW, mathIndexOf, mathPages } from './_math-book.ts';
 import { check, done } from './_check.ts';
 
 // ---- 拼音 ----
@@ -109,6 +109,16 @@ const kitCard = (params: Record<string, string>): BoardCard => ({ kind: 'kit', p
 const sec1 = { heading: null, lines: [{ text: '看例 2。', anchor: 0, marks: [], cues: [] }], cards: [kitCard({ 课: '5的乘法口诀', 看: '例 2|' })] } as unknown as BoardSection;
 const fitted = boardPageSection(sec1, { page: true, photo: null, book: { file: '数学二年级上册.pdf', index: mx, lesson: null } }).section.cards[0].props.params as Record<string, string>;
 check('落板之前:数学课本卡的「看: 例 2」照数学的分法换成框', fitted['页'] === '6' && bookSpots(fitted['看'])[0].text === '例2' && Boolean(bookSpots(fitted['看'])[0].box), JSON.stringify(fitted));
+const guide = bookLesson(mx, '校园小导游')!.pages;
+const gs = bookSheets(guide);
+const twelve = bookFind(guide, gs, '12');
+check('找字:在一行里的那一处优先(表头末尾的 1 接下一格的 2 凑出的「12」不算)', Boolean(twelve) && twelve![1] > gs[1].top + (310 * 1000) / MW, JSON.stringify(twelve));
+const sec2 = { heading: null, lines: [{ text: '先想一想。', anchor: 0, marks: [], cues: [] }], cards: [kitCard({ 课: '5的乘法口诀', 看: '例 2|', 盖: '5×1=5|;没有的式子|' })] } as unknown as BoardSection;
+const fit2 = boardPageSection(sec2, { page: true, photo: null, book: { file: '数学二年级上册.pdf', index: mx, lesson: null } });
+const cov = bookSpots((fit2.section.cards[0].props.params as Record<string, string>)['盖']);
+check('盖:写课本上印的算式,落板之前换成框;找不到的不画、记下来', cov.length === 1 && cov[0].text === '5×1=5' && Boolean(cov[0].box) && fit2.unfound.join() === '没有的式子', JSON.stringify({ cov, u: fit2.unfound }));
+const coverScene = kitOf(BOOK_KIT)!.build({ ...(fit2.section.cards[0].props.params as Record<string, string>) }, { aspect: MH / MW });
+check('盖的块整个盖住那几个字(拼音的「遮」只盖字头上一条)', coverScene.skeletons.some((s) => s.id === 'cover-5×1=5' && Number(s.y) < cov[0].box![1] && Number(s.y) + Number((s as { height?: number }).height) > cov[0].box![3]), JSON.stringify(coverScene.skeletons));
 const long = { ...mx, lessons: [{ title: '长', unit: null, no: null, kind: 'lesson' as const, from: 1, to: 30, pages: [1, 30] as [number, number] }], pages: Array.from({ length: 30 }, (_, k) => ({ n: k + 1, printed: k, w: 500, h: 700, lines: [] })) };
 check(`一课太长(数学一个小节十几页)只铺前 ${BOOK_MAX_PAGES} 页;「页」也最多这么多`, bookLesson(long, '长')?.pages.length === BOOK_MAX_PAGES && bookPages(`1-${BOOK_MAX_PAGES}`).length === BOOK_MAX_PAGES && bookPages(`1-${BOOK_MAX_PAGES + 1}`).length === 0);
 

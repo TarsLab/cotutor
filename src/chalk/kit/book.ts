@@ -268,7 +268,7 @@ function stream(pages: readonly BookPage[]): { c: string; n: number; i: number; 
   return pages.flatMap((p) => p.lines.flatMap((l, i) => (chrome(p, l) ? [] : l.chars.flatMap((ch, k) => (PUNCT.test(ch.c) ? [] : [{ c: ch.c, n: p.n, i, k }])))));
 }
 
-/** 一段原文在哪:不管标点、空格、换行;找到第一处(给了 within 先找和它挨着的),回这几个字所在的行与字 */
+/** 一段原文在哪:不管标点、空格、换行;找到第一处(在一行里的优先,给了 within 再先找和它挨着的),回这几个字所在的行与字 */
 function findText(pages: readonly BookPage[], sheets: readonly BookSheet[], text: string, within?: Box | null): { refs: { n: number; i: number }[]; box: Box } | null {
   const q = Array.from(text).filter((c) => !PUNCT.test(c)).join('');
   if (!q) return null;
@@ -286,7 +286,9 @@ function findText(pages: readonly BookPage[], sheets: readonly BookSheet[], text
     const refs = [...new Map(xs.map((x) => [`${x.n}.${x.i}`, { n: x.n, i: x.i }])).values()];
     return { refs, box: union(boxes)! };
   };
-  const all = hits.map(boxOf);
+  // 在一行里的那几处优先:短的(盖: 12)跨行拼出来的多半是巧合(表头末尾的 1 接下一格的 2);长的原话跨行时还是找得到
+  const found = hits.map(boxOf);
+  const all = found.some((h) => h.refs.length === 1) ? found.filter((h) => h.refs.length === 1) : found;
   if (within) {
     const inside = all.find((h) => h.box[0] < within[2] && h.box[2] > within[0] && h.box[1] < within[3] && h.box[3] > within[1]);
     if (inside) return inside;
@@ -407,6 +409,15 @@ export function bookView(pages: readonly BookPage[], sheets: readonly BookSheet[
   return [where, parts.join(',')].filter(Boolean).join(':') || '空白处';
 }
 
+/**
+ * 这一册的课本卡开放哪些操作:数学不开点字(点一个字弹田字格是语文的事,数学课本上点到字只会打岔);剩下的空了就是只看
+ */
+export function bookOps(layout: BookLayout, ops: readonly string[]): string[] {
+  if (layout !== 'math') return [...ops];
+  const out = ops.filter((o) => o !== '点字');
+  return out.length ? out : ['看'];
+}
+
 // ——— 画法 ———
 
 /** 「59-60」「59」→ [59, 60] */
@@ -478,7 +489,7 @@ export function bookFrame(box: Box | null, sheets: readonly BookSheet[]): [numbe
 
 export const book: Kit = {
   name: BOOK_KIT,
-  about: '课本:家长放在 vault 里的教材 PDF,一课的几页铺在板上。你说看哪里,应用把那一块移到孩子眼前;圈字、遮拼音写字,应用照课本找到它。孩子手指拖动、放大,点一个字看笔顺;用笔在上面圈、写。',
+  about: '课本:家长放在 vault 里的教材 PDF,一课的几页铺在板上。你说看哪里,应用把那一块移到孩子眼前;圈字、遮拼音、盖住印好的答案都写字,应用照课本找到它。孩子手指拖动、放大,点一个字看笔顺;用笔在上面圈、写。',
   ops: ['点字', '圈', '画', '看'],
   open: ['点字', '圈', '画'],
   params: [
@@ -486,6 +497,7 @@ export const book: Kit = {
     { key: '看', note: '让孩子看哪里:第 6–7 段、第 55 页、栏目名(日积月累、做一做)、例 2、练一练第 3 题,或课本上的一句原话。应用把它移到屏幕中间、字太小就放大。不写就不动(孩子正看着哪里就还是哪里)。', read: readLook, fallback: '' },
     { key: '圈', note: '圈出课本上的字词:写字(圈: 井沿),应用照课本找到它。几处用顿号隔开,最多 4 处。', read: readSpots('圈', RING_MAX), fallback: '' },
     { key: '遮', note: '要孩子自己认的字词:盖住头上的拼音,孩子点一下揭开。写字,几处用顿号隔开,最多 8 处。', read: readSpots('遮', COVER_MAX), fallback: '' },
+    { key: '盖', note: '盖住课本上印的字(例题里的算式、答案),请孩子先自己想,他点一下揭开。写课本上的原样(盖: 3×5=15),几处用顿号隔开,最多 8 处。', read: readSpots('盖', COVER_MAX), fallback: '' },
     { key: '书', note: '应用填:教材 PDF 的路径。你不用写。', read: readPdf, fallback: '' },
     { key: '页', note: '应用填:这一课在 PDF 的第几页到第几页。你不用写。', read: readRange, fallback: '' },
   ],
@@ -511,6 +523,13 @@ export const book: Kit = {
       const [x1, y1, x2, y2] = box;
       const h = y2 - y1;
       sk.push({ type: 'rectangle', id: `cover-${text}`, label: `盖住的拼音:${text}`, x: r1(x1 - h * 0.1), y: r1(y1 - h * 0.95), width: r1(x2 - x1 + h * 0.2), height: r1(h * 0.9), strokeColor: '#d9c9a3', strokeWidth: Math.max(1, u * 0.6), backgroundColor: '#f1e6c8', fillStyle: 'solid', roughness: 0, roundness: { type: 3 }, animateDuration: 150 });
+    }
+    // 盖字:那几个字整个盖住(纸色的块,比字宽出一点);孩子点它揭开(舞台按 id 前缀认)
+    for (const { text, box } of bookSpots(p['盖'])) {
+      if (!box) continue;
+      const [x1, y1, x2, y2] = box;
+      const h = y2 - y1;
+      sk.push({ type: 'rectangle', id: `cover-${text}`, label: `盖住的:${text}`, x: r1(x1 - h * 0.25), y: r1(y1 - h * 0.2), width: r1(x2 - x1 + h * 0.5), height: r1(h * 1.4), strokeColor: '#d9c9a3', strokeWidth: Math.max(1, u * 0.6), backgroundColor: '#f1e6c8', fillStyle: 'solid', roughness: 0, roundness: { type: 3 }, animateDuration: 150 });
     }
     return { skeletons: sk, groups: [], turns: [], frame, book: { src: p['书'] ?? '', pages, aspect: a, gap: BOOK_GAP } };
   },

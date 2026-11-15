@@ -4,12 +4,12 @@
  *    没有底(孩子还没发照片)的照片板画不出来,撤掉。
  * 1b. 照片板的「圈」「遮」写的是字词(圈: 蚕):照这块底上认出的字和行框找到它在哪(locate),换成框;找不到的那一处不画(unfound,给家长端记一行)。
  * 1c. 课本(activity 头上 base: textbook):课本卡没写「课」就是板上现在这一课(还没有就是目录);课名照目录换成这一册 PDF 的几页(书、页);
- *    「看」「圈」「遮」写的段、栏目、原话、字词照课本的索引换成框(src/chalk/kit/book.ts);找不到的那一处不画(unfound)。
+ *    「看」「圈」「遮」「盖」写的段、栏目、原话、字词照课本的索引换成框(src/chalk/kit/book.ts);找不到的那一处不画(unfound)。
  * 2. 以板为主的话题(activity 头上 board: page):板是页面,老师的卡只往板上画——一节只认最后一张板卡,别的卡不给孩子看。
  *    课本卡例外:一节里的几张都留着,按讲稿的先后一张一张落,就是窗一步一步移(「先看这一句……再看下面」)。
  * 撤掉的卡在讲稿里的引用(锚、敲黑板、[[cue]])跟着重排或撤掉;dropped 是撤掉的卡(给家长端记一行)。
  */
-import { BOOK_KIT, BOOK_MAX_PAGES, BOOK_TOC, bookFind, bookSheets, bookSpots, bookTarget, findLesson, lessonBlocks, photoFrame, photoRings } from '../chalk/index.ts';
+import { BOOK_KIT, BOOK_MAX_PAGES, BOOK_TOC, bookFind, bookOps, kitOf, kitOps, bookSheets, bookSpots, bookTarget, findLesson, lessonBlocks, photoFrame, photoRings } from '../chalk/index.ts';
 import type { BoardCard, BoardSection, BookIndex, BookPage } from '../schema/index.ts';
 
 /** 课本做底(activity 头上 base: textbook):这一册的索引、板上现在是哪一课(上一张课本卡的课;没有 = 还在目录) */
@@ -60,7 +60,7 @@ function fitBook(c: BoardCard, book: BookBase, lesson: string | null, unfound: s
     const t = bookTarget(pages, sheets, blocks, look.text);
     if (t) { within = t.box; out['看'] = `${t.label}|${t.box.join(' ')}`; } else { unfound.push(look.text); out['看'] = ''; }
   }
-  for (const key of ['圈', '遮']) {
+  for (const key of ['圈', '遮', '盖']) {
     const v = typeof p[key] === 'string' ? (p[key] as string) : '';
     if (!v) continue;
     out[key] = bookSpots(v).flatMap((x) => {
@@ -70,7 +70,9 @@ function fitBook(c: BoardCard, book: BookBase, lesson: string | null, unfound: s
       return [`${x.text}|${box.join(' ')}`];
     }).join(';');
   }
-  return { card: { ...c, props: { ...c.props, params: out } }, lesson: at.title };
+  const def = kitOf(BOOK_KIT);
+  const ops = def ? bookOps(book.index.layout, kitOps(def, c.props.ops)) : c.props.ops;
+  return { card: { ...c, props: { ...c.props, params: out, ...(ops ? { ops } : {}) } }, lesson: at.title };
 }
 
 /** 照片板的「圈」:写的字词换成框;找不到的那一处拿掉 */

@@ -12,6 +12,7 @@
  *   {t:'send', body} 不是说的(打字、拍照、交卡、首页按钮;舞台开着带 focus.card):body 同那条 POST · {t:'view', w, h} 屏幕多大 · {t:'bye'}
  *   {t:'staged'} 讲稿 [[play]] 的小课堂那一段放完了(或放不了、被关):后面的讲稿接着交给嘴
  *   {t:'board', body} 以板为主的话题里孩子在板上做了一件事(点字 {k:'pick', thread, text, base};课本上挪了窗 {k:'view', thread, base, box}):记进板的日志(Runner.boardEvent),不起脑;
+ *     课本的窗停下来以后舞台交的图 {k:'shot', thread, base, box, image} 也走这里:存下来等下一轮附给脑,不算孩子动了手;
  *   安静时嘴照念这个字词的念法(认字时写好的「傍,傍晚的傍」),老师正在说就不念;再点下一个,上一句掐掉。
  *   点过以后 STILL_MS 没动静(没开口、没再点),应用替他叫一次老师(app: still,带上他做了什么);连着只叫一次,孩子开口了才再叫
  *   边画边聊:画板开着时按头像说的,松手带 chat {canvas, image, ask}——只给嘴(图跟着声音进对话、嘴接住),不起脑;
@@ -1029,7 +1030,7 @@ export class LiveCall {
   private async board(body: unknown): Promise<void> {
     const { ctx, tutor } = this.deps;
     const r = await ctx.runner.boardEvent(tutor, localDate(ctx.now()), body).catch(() => null);
-    if (!r || this.ended) return;
+    if (!r || this.ended || r.shot) return;
     this.lastActive = Date.now();
     // 课本上挪窗、放大(view):他在自己读,不替他叫老师,先前点字起的那一下也取消
     if (r.still === false) { if (this.stillTimer) clearTimeout(this.stillTimer); this.stillTimer = null; } else this.stillArm(r.thread);
@@ -1153,6 +1154,7 @@ const handsIn = (body: Record<string, unknown>): boolean => body.action === 'sub
 const withoutImages = (m: Record<string, unknown>): Record<string, unknown> => {
   if (typeof m.image === 'string') return { ...m, image: true };
   if (isObj(m.chat) && typeof m.chat.image === 'string') return { ...m, chat: { ...m.chat, image: true } };
+  if (isObj(m.body) && typeof m.body.image === 'string') return { ...m, body: { ...m.body, image: true } };
   return m;
 };
 /** 孩子端交来的 ask:只留认得的字段 */

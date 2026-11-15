@@ -18,6 +18,11 @@ export const BoardEventSchema = z.discriminatedUnion('k', [
   z.object({ at: z.string().min(1), k: z.literal('turn'), job: z.string().min(1), told: z.string().optional() }),
   /** 课本做底:孩子自己挪了、放大了窗,停下来的地方(应用照课本说成一句:「第 55 页:第 7 段」);base = 「册子#课」 */
   z.object({ at: z.string().min(1), k: z.literal('view'), text: z.string().min(1).max(80), base: z.string().min(1) }),
+  /**
+   * 课本做底:窗停下来以后舞台交来的一张窗里的图(老师移完、孩子挪完、落了笔;src/ui/stage/book.tsx 的 shoot),text 是那一块的名字(同 view)。
+   * 图只留最新一张(<date>.<话题>.shot.jpg);下一轮交给老师时挪成那一轮的(<date>.<job>.shot.jpg)、附给脑
+   */
+  z.object({ at: z.string().min(1), k: z.literal('shot'), text: z.string().min(1).max(80), base: z.string().min(1) }),
   /** 孩子动了手以后一直没出声,应用替他叫了一次老师(下一轮 live.app: still) */
   z.object({ at: z.string().min(1), k: z.literal('still') }),
 ]);

@@ -1354,6 +1354,12 @@ ${HOME_TILES_JS}
     const base = bookBase(card);
     if (base) lvSend({ t: 'board', body: { k: 'view', thread: S.thread, base, box } });
   };
+  /** 课本的窗停下来以后舞台交来的窗里的图:交给服务端,下一轮附给老师(他看得见孩子眼前那块课本的图) */
+  const bpShot = (card, box, image) => {
+    if (!BP.on || !S.thread || S.readonly || REEL || !Array.isArray(box) || box.length !== 4 || typeof image !== 'string') return;
+    const base = bookBase(card);
+    if (base) lvSend({ t: 'board', body: { k: 'shot', thread: S.thread, base, box, image } });
+  };
   /** 拉了今天的话题以后:这个话题以板为主就把板摆出来(回到这个话题、刷新页面):老师最后那张板卡,没有就是底本身 */
   const bpSync = (mine) => {
     if (S.newThread || S.readonly || REEL) return;
@@ -2257,6 +2263,7 @@ __WORD_DRAW_JS__
     else if (m.type === 'pick') { if (card.kind === 'kit') { pickShow(m.text); bpPicked(card, m.text); } }
     else if (m.type === 'reveal') { if (card.kind === 'kit') bpPicked(card, m.text, 'reveal'); }
     else if (m.type === 'view') { if (card.kind === 'kit') bpView(card, m.box); }
+    else if (m.type === 'shot') { if (card.kind === 'kit') bpShot(card, m.box, m.image); }
     else if (m.type === 'cleared') { if (!card.submitted) canvasCleared(card, m); }
     else if (m.type === 'phase') {
       S.stage.playing = { phase: m.phase, line: m.line };

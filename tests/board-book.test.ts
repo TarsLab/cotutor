@@ -5,10 +5,11 @@
  * 书用 tests/_book.ts 造的那本;PDF 是个假文件,它的指纹对上一份事先写好的索引缓存(读 PDF 的那一层走 scripts/probe-textbook.mjs)。
  */
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { bookIndexOf } from './_book.ts';
+import { mathIndexOf } from './_math-book.ts';
 import { check, done } from './_check.ts';
 import { kidSend } from './_kid-send.ts';
 import { FAKE_RUNTIMES, startFakeTeacher } from './_fake-teacher.ts';
@@ -176,6 +177,66 @@ const P = (c: BoardCard): Record<string, string> => c.props.params as Record<str
   check('英语老师没有课本:card 是 null;没有这位老师 404', ((await route('GET', '/api/kid/textbook/base?tutor=english-tutor', ctx)).json as { card: unknown }).card === null && (await route('GET', '/api/kid/textbook/base?tutor=nobody', ctx)).status === 404);
   const nf = await Promise.all([route('GET', `/api/kid/textbook/pdf?b=${encodeURIComponent('../cotutor.json')}`, ctx), route('GET', '/api/kid/textbook/pdf?b=x.pdf', ctx), route('GET', `/api/kid/textbook/lines?b=${encodeURIComponent('语文一年级下册.pdf')}&p=x`, ctx)]);
   check('越界、不在、页写错:404', nf.every((r) => r.status === 404));
+
+  // ---- 数学:课本做底、不开点字;窗停下来以后舞台交的图,下一轮附给老师 ----
+  const M = 'math-tutor';
+  const mpdf = Buffer.from('%PDF-1.4 假的数学课本\n');
+  writeFileSync(join(ws.paths.textbooks, '数学一年级下册.pdf'), mpdf);
+  const msha = createHash('sha1').update(mpdf).digest('hex').slice(0, 16);
+  writeFileSync(join(root, '.cotutor', 'textbooks', `${msha}.json`), JSON.stringify({ ...mathIndexOf(), sha: msha }));
+  const mtile = h.cards.find((c) => c.props.tutor === M)?.props.tiles?.find((x) => x.id === 'preview');
+  const mcard = (await route('GET', `/api/kid/textbook/base?tutor=${M}`, ctx)).json as { card: { props: { params: Record<string, string>; ops: string[] } } | null };
+  check('数学「预习」方砖也垫课本;目录那张卡只看、不开点字', mtile?.board === 'page' && mtile.base === 'textbook' && mcard.card?.props.params['书'] === '数学一年级下册.pdf' && mcard.card.props.ops.join() === '看', JSON.stringify({ mtile, mcard }));
+  const mPrompt = (job: string): string => (JSON.parse(readFileSync(join(root, 'conversations', M, `${date}.${job}.run.json`), 'utf8')) as { prompt: string }).prompt;
+  const mIndex = (): { messages: { job: string; section?: BoardSection }[] } => JSON.parse(readFileSync(join(root, 'conversations', M, `${date}.json`), 'utf8'));
+  const mwait = async (): Promise<void> => { for (let i = 0; i < 200 && ctx.runner.running(M); i++) await new Promise((r) => setTimeout(r, 25)); await ctx.runner.flush(); };
+  now = new Date(2026, 10, 14, 11, 0);
+  const mt1 = await kidSend(ctx, M, { text: '', via: { home: h.home, button: 'preview' }, newThread: true });
+  await mwait();
+  const mth = String(mt1.json.thread);
+  const mp1 = mPrompt(String(mt1.json.job));
+  check('数学的目录:一个单元一行,后面是小节、课题;开放里没有点字', mp1.includes('二 1～6的表内乘法(3):1.乘法的初步认识(4)、·5的乘法口诀(5)、·6的乘法口诀(6)') && mp1.includes('开放: "圈、画"'), mp1.slice(mp1.indexOf('board:'), mp1.indexOf('board:') + 300));
+  now = new Date(2026, 10, 14, 11, 1);
+  const mt2 = await kidSend(ctx, M, { text: '我要预习乘法口诀', thread: mth });
+  await mwait();
+  const mc = mIndex().messages.find((m) => m.job === mt2.json.job)?.section?.cards[0];
+  check('翻到课题、看例 2:换成框;老师没写操作,数学不开点字', mc?.props.kit === '课本' && P(mc)['课'] === '5的乘法口诀' && bookSpots(P(mc)['看'])[0].text === '例2' && Boolean(bookSpots(P(mc)['看'])[0].box) && (mc.props.ops as string[]).join() === '圈,画', JSON.stringify(mc?.props));
+  const JPG = `data:image/jpeg;base64,${Buffer.from('ffd8ffe000104a46494600010100000100010000ffd9', 'hex').toString('base64')}`;
+  const mbase = '数学一年级下册.pdf#5的乘法口诀';
+  const shotFile = join(root, 'conversations', M, `${date}.${mth}.shot.jpg`);
+  const shot = await ctx.runner.boardEvent(M, date, { k: 'shot', thread: mth, base: mbase, box: [0, 0, 1000, 800], image: JPG });
+  check('窗里的图:存成这个话题最新的一张,记进板的日志(不念、不算孩子动了手)', shot?.shot === true && shot.say === null && existsSync(shotFile) && (await readBoard(ws, M, date, mth)).some((e) => e.k === 'shot' && e.base === mbase && e.text.includes('例2')), JSON.stringify(shot));
+  const badShots = await Promise.all([
+    ctx.runner.boardEvent(M, date, { k: 'shot', thread: mth, base: mbase, box: [0, 0, 1000, 800], image: 'data:image/png;base64,iVBORw0KGgo=' }),
+    ctx.runner.boardEvent(M, date, { k: 'shot', thread: mth, base: mbase, box: [0, 0, 1000, 800] }),
+    ctx.runner.boardEvent(T, date, { k: 'shot', thread, base, box: [0, 0, 1000, 800], image: JPG }),
+    ctx.runner.boardEvent(M, date, { k: 'shot', thread: mth, base: '数学一年级下册.pdf#目录', box: [0, 0, 1000, 800], image: JPG }),
+  ]);
+  check('不收:不是 jpeg、没有图;目录(字全在 board: 里);语文的课本先不收窗里的图', badShots.every((x) => x === null), JSON.stringify(badShots));
+  now = new Date(2026, 10, 14, 11, 2);
+  const mt3 = await kidSend(ctx, M, { text: '这是几个', thread: mth });
+  await mwait();
+  const mj3 = String(mt3.json.job);
+  const mp3 = mPrompt(mj3);
+  const hist = readFileSync(join(root, 'conversations', M, `${date}.${mth}.brain.jsonl`), 'utf8').trim().split('\n').map((l) => JSON.parse(l) as { user: { boards?: string[] } });
+  check('下一轮:图挪成这一轮的、附给老师;孩子在看注一句图附上了', !existsSync(shotFile) && existsSync(join(root, 'conversations', M, `${date}.${mj3}.shot.jpg`)) && (hist[hist.length - 1].user.boards ?? []).some((b) => b.endsWith(`${mj3}.shot.jpg`)) && mp3.includes('(这一块的图附在这一轮)'), JSON.stringify({ hist: hist.map((x) => x.user.boards), view: mp3.slice(mp3.indexOf('孩子在看'), mp3.indexOf('孩子在看') + 60) }));
+  now = new Date(2026, 10, 14, 11, 3);
+  const mt4 = await kidSend(ctx, M, { text: '还有呢', thread: mth });
+  await mwait();
+  const hist4 = readFileSync(join(root, 'conversations', M, `${date}.${mth}.brain.jsonl`), 'utf8').trim().split('\n').map((l) => JSON.parse(l) as { user: { boards?: string[] } });
+  check('再下一轮没有新的图:不附、不注', !(hist4[hist4.length - 1].user.boards ?? []).length && !mPrompt(String(mt4.json.job)).includes('图附在这一轮'));
+  // 盖住印好的算式,孩子点开
+  now = new Date(2026, 10, 14, 11, 4);
+  await kidSend(ctx, M, { text: '我先想一想', thread: mth });
+  await mwait();
+  const rv = await ctx.runner.boardEvent(M, date, { k: 'reveal', thread: mth, text: '5×1=5', base: mbase });
+  const rvBad = await ctx.runner.boardEvent(M, date, { k: 'reveal', thread: mth, text: '一二三四五六七八九十一二三', base: mbase });
+  check('揭开盖住的算式:课本上收下(不念);太长的不收', rv?.say === null && rvBad === null, JSON.stringify([rv, rvBad]));
+  now = new Date(2026, 10, 14, 11, 5);
+  const mt6 = await kidSend(ctx, M, { text: '是5', thread: mth });
+  await mwait();
+  const mp6 = mPrompt(String(mt6.json.job));
+  check('下一轮:你画的是这张课本卡(不写应用填的书、页),孩子做的里有揭开了盖住的', mp6.includes('你画的: "课本:课 5的乘法口诀;看 例2;盖 5×1=5"') && mp6.includes('揭开了盖住的:5×1=5') && !mp6.includes('书 数学'), mp6.slice(mp6.indexOf('你画的'), mp6.indexOf('你画的') + 160));
   await teacher.close();
 }
 

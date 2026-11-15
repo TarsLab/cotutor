@@ -177,10 +177,10 @@ function mathMark(p: BookPage, l: BookLine, body: number): MathMark | null {
   if (l.x1 > 0.16 * p.w) return /^\d{1,2}$/.test(l.text) && l.z >= 0.6 * body && l.z <= 0.72 * body ? { kind: 'problem', no: Number(l.text) } : null;
   const m = /^\d{1,2}/.exec(l.text);
   if (!m) return null;
-  const k = m[0].length;
-  if (k === l.chars.length) return l.z >= 0.78 * body ? { kind: 'example', no: Number(m[0]), skip: k } : { kind: 'problem', no: Number(m[0]) };
-  // 数和后面的字空开将近一个字:例题号(「17世纪」挨着,不是)
-  return l.chars[k].x1 - l.chars[k - 1].x2 >= 0.9 * l.z ? { kind: 'example', no: Number(m[0]), skip: k } : null;
+  if (m[0].length === l.chars.length) return l.z >= 0.78 * body ? { kind: 'example', no: Number(m[0]), skip: m[0].length } : { kind: 'problem', no: Number(m[0]) };
+  // 数和后面的字空开将近一个字:例题号(「17世纪」挨着,不是)。题目自己也可能数字起头(例 1「18袋饼干」排成「1 18袋饼干」):空开的地方在第一个数后面就是例 1
+  for (let k = 1; k <= m[0].length && k < l.chars.length; k++) if (l.chars[k].x1 - l.chars[k - 1].x2 >= 0.9 * l.z) return { kind: 'example', no: Number(m[0].slice(0, k)), skip: k };
+  return null;
 }
 
 /**

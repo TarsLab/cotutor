@@ -19,7 +19,8 @@ const OVER = 34;
 const INK = '#1e1e1e';
 /** 老师的线:强调红(做课包定的用色,skills/chalk-teaching) */
 const LINE = '#e03131';
-const ROWS_MAX = 5;
+/** 最多几行:二年级的乘法口诀学到 9 的口诀(9 行 9 个);2026-11-15 从 5 放宽(数学预习照课本画 6 串 6 颗,5 行画不下,卡解析不成) */
+const ROWS_MAX = 9;
 const COLS_MAX = 12;
 
 const int = (name: string, max: number) => (v: string): string => {
@@ -112,9 +113,9 @@ export const dots: Kit = {
   about: '几行圈圈,每行一样多。把东西画成圈圈,孩子画线切开、圈一圈、涂一份,数一份里有几个。讲平均分、几个几。',
   ops: ['切', '圈', '涂', '添'],
   params: [
-    { key: '行', note: '几行。1 到 5,缺省 2。', read: int('行', ROWS_MAX), fallback: '2' },
+    { key: '行', note: `几行。1 到 ${ROWS_MAX},缺省 2。`, read: int('行', ROWS_MAX), fallback: '2' },
     { key: '每行', note: '每行几个。1 到 12,缺省 9。', read: int('每行', COLS_MAX), fallback: '9' },
-    { key: '共', note: '一共几个。写了它就不用写行:照每行几个排,最后一行可以不满(17 个、每行 5 个 = 3 行多 2 个)。1 到 60。', read: int('共', ROWS_MAX * COLS_MAX), fallback: '' },
+    { key: '共', note: `一共几个。写了它就不用写行:照每行几个排,最后一行可以不满(17 个、每行 5 个 = 3 行多 2 个)。1 到 ${ROWS_MAX * COLS_MAX}。`, read: int('共', ROWS_MAX * COLS_MAX), fallback: '' },
     { key: '线', note: '板上已经有的线,是你画的。写「横 1、竖 3」:横 1 是第 1 行下面那道,竖 3 是第 3 列右边那道。不写就没有线。', read: readLines, fallback: '' },
   ],
   shorthand(line): Record<string, string> | null {

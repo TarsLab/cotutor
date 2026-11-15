@@ -49,7 +49,7 @@ export function teacherReply(body: ChatBody): FakeReply {
   // 真数学课本的页面探针(人教版数学二年级上册):6的乘法口诀从例 4 起
   if (msg.includes('预习6的乘法口诀')) parts.push('```课本\n课: 6的乘法口诀\n看: 例 4\n```\n\n我们先看例 4 的图。\n\n你看到了什么?');
   // 数学课本上换成点阵动手、再回到课本(盖住表里的 12,孩子点开)
-  if (msg.includes('摆一摆')) parts.push('我们在白板上摆一摆。\n\n```点阵\n3 行 6 个\n操作: 圈\n6 个圈成一串,一共几串?\n```\n\n这里有 3 串糖葫芦的山楂。\n\n你把 6 个圈成一串。');
+  if (msg.includes('摆一摆')) parts.push('我们在白板上摆一摆。\n\n```点阵\n6 行 6 个\n操作: 圈\n6 个圈成一串,一共几串?\n```\n\n这里有 6 串糖葫芦的山楂。\n\n你把 6 个圈成一串。');
   if (msg.includes('回课本')) parts.push('```课本\n看: 例 4\n盖: 12\n```\n\n我们回到课本上。\n\n表里盖住的数你先想一想,再点开看。');
   if (msg.includes('先想一想')) parts.push('```课本\n看: 例 2\n盖: 5×1=5\n```\n\n你先想一想,5 个 1 是多少?');
   if (msg.includes('预习乘法口诀')) parts.push('```课本\n课: 5的乘法口诀\n看: 例 2\n```\n\n我们先看例 2 的图。\n\n你看到了什么?');

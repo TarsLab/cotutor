@@ -90,9 +90,9 @@ check('找一课:课名里的数不当编号去掉(6的乘法口诀 ≠ 5的乘�
 const unit = bookLesson(mx, '1～6的表内乘法')!.pages;
 const mb = lessonBlocks(unit, 'math');
 const kinds = mb.map((b) => (b.kind === 'example' ? `例${b.no}` : b.kind === 'problem' ? `${b.head}${b.no}` : b.kind === 'section' ? `【${b.head}】` : b.kind === 'title' ? `#${b.text}` : b.kind)).join(' ');
-check('数学一课的块:标题(单元页的序号和单元名合成一个)、例题、栏目、栏目下面的题,按页的先后', kinds === '#二 1～6的表内乘法 other #1.乘法的初步认识 例1 【你知道吗？】 #5的乘法口诀 例2 【练一练】 练一练1 练一练2 练一练3 练一练4 #6的乘法口诀 例3', kinds);
+check('数学一课的块:标题(单元页的序号和单元名合成一个)、例题、栏目、栏目下面的题,按页的先后', kinds === '#二 1～6的表内乘法 other #1.乘法的初步认识 例1 【你知道吗？】 #5的乘法口诀 例2 【练一练】 练一练1 练一练2 练一练3 练一练4 #6的乘法口诀 例3 例4', kinds);
 const B = (k: string, no?: number) => mb.find((b) => b.kind === k && (no === undefined || b.no === no))!;
-check('例题号和题目同一行(空开一截)、单独一行都认;「17世纪」挨着字的不是例题', B('example', 1).text.startsWith('（1）小飞机里共有多少人？') && B('example', 2).text.startsWith('5×1=5') && B('section').text === '17世纪开始使用的乘号。', JSON.stringify(mb.map((b) => b.text)));
+check('例题号和题目同一行(空开一截)、单独一行都认;题目数字起头的(4 + 18袋饼干)也分得开;「17世纪」挨着字的不是例题', B('example', 4).text === '18袋饼干，每2袋一份。' && B('example', 1).text.startsWith('（1）小飞机里共有多少人？') && B('example', 2).text.startsWith('5×1=5') && B('section').text === '17世纪开始使用的乘号。', JSON.stringify(mb.map((b) => b.text)));
 check('题号比题目低一点也算这道题的;页顶的题号不当页码;并排的两道题各管各的那一栏', B('problem', 1).text === '算一算，说一说口诀。' && B('problem', 3).text === '填一填。 5×2=' && B('problem', 4).text === '连一连。 3×5=', JSON.stringify(mb.filter((b) => b.kind === 'problem').map((b) => b.text)));
 check('页脚(页码、挨着的单元名)不进任何一块;单元页上的引导语、图里的字另成一块,不并进标题', !mb.some((b) => b.text.includes('的表内乘法') && b.kind !== 'title') && mb[1].kind === 'other' && mb[1].text === '便利店 请提出用加法解决的问题，写出算式。', JSON.stringify(mb.slice(0, 2)));
 const ms = bookSheets(unit);

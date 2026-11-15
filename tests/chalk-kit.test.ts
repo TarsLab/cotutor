@@ -23,7 +23,7 @@ check('「操作: 圈」只开放这一种;写了这张卡没有的操作:抛,�
 check('存下来的参数、操作不对就退回缺省(老对话里的,不抛)', kitParams(kit, { 上: '天', 小人: 3 })['上'] === '北' && kitParams(kit, undefined)['小人'] === '有' && kitOps(kit, ['圈', '飞']).join() === '圈' && kitOps(kit, 'x').join() === '转,圈' && kitParams(grid, { 行: '99' })['行'] === '2');
 const g1 = readKitLines(grid, ['2 行 9 个', '线: 竖 3、竖 6', '操作: 切、涂', '再切一刀,分成 6 份。']);
 check('点阵:一行简写「2 行 9 个」、板上已有的线、操作、题目', g1.params['行'] === '2' && g1.params['每行'] === '9' && g1.params['线'] === '竖3 竖6' && g1.ops.join() === '切,涂' && g1.prompt === '再切一刀,分成 6 份。', JSON.stringify(g1));
-check('点阵:不写就是 2 行 9 个、没有线;行列写过了头、线写得不对:抛', readKitLines(grid, []).params['每行'] === '9' && readKitLines(grid, []).params['线'] === '' && errOf(() => readKitLines(grid, ['9 行 9 个'])).includes('1 到 5') && errOf(() => readKitLines(grid, ['线: 斜 1'])).includes('横 1'));
+check('点阵:不写就是 2 行 9 个、没有线;行列写过了头、线写得不对:抛', readKitLines(grid, []).params['每行'] === '9' && readKitLines(grid, []).params['线'] === '' && readKitLines(grid, ['9 行 9 个']).params['行'] === '9' && errOf(() => readKitLines(grid, ['10 行 9 个'])).includes('1 到 9') && errOf(() => readKitLines(grid, ['线: 斜 1'])).includes('横 1'));
 
 // ---- 方向盘的画面 ----
 const P = def.params;

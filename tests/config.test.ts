@@ -27,6 +27,8 @@ check('别的老师不受影响', resolvePolicy(layered, 'chinese-tutor').board 
 
 check('出厂老师带卡的清单(text 总在)', cfg.tutors['math-tutor'].cards?.join() === 'text,choice,image,lecture,canvas,kit,code' && Object.values(cfg.tutors).every((t) => t.cards?.includes('text')));
 check('cards 只认板书的种类:写错名字、写首页的老师卡都过不了契约;不写也行', !CotutorConfigSchema.safeParse({ ...raw, tutors: { ...raw.tutors, x: { display: 'x', cards: ['txt'] } } }).success && !CotutorConfigSchema.safeParse({ ...raw, tutors: { ...raw.tutors, x: { display: 'x', cards: ['tutor'] } } }).success && CotutorConfigSchema.safeParse({ ...raw, tutors: { ...raw.tutors, x: { display: 'x' } } }).success);
+const retired = CotutorConfigSchema.safeParse({ ...raw, tutors: { ...raw.tutors, x: { display: 'x', cards: ['text', 'paint', 'kit'] } } });
+check('cards 里不再有的卡(paint)读进来就丢掉,不拦整份配置', retired.success && retired.data.tutors.x.cards?.join() === 'text,kit', JSON.stringify(retired.error?.issues ?? null));
 const withHelper = CotutorConfigSchema.parse({ ...raw, tutors: { ...raw.tutors, helper: { display: '工具人', hidden: true }, 'off-tutor': { display: '关着的', enabled: false } } });
 const kidOnly = listTutors(withHelper, { kidOnly: true });
 check('孩子端不见 hidden 与关着的', kidOnly.length === 3 && !kidOnly.some((t) => t.name === 'helper' || t.name === 'off-tutor'));

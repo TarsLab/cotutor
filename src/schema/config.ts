@@ -65,6 +65,8 @@ export const POLICY_DEFAULTS: Policy = {
 /** 板书能用的卡(注册表顺序;tests/cards.test.ts 断言与 src/board/cards 的 kindsFor('board') 一致,这里不 import 卡,免得契约拖进卡的依赖) */
 export const BOARD_CARD_KINDS = ['text', 'read', 'choice', 'image', 'tianzige', 'word', 'lecture', 'canvas', 'kit', 'photo', 'code'] as const;
 export type BoardCardKind = (typeof BOARD_CARD_KINDS)[number];
+/** 不再有的卡:旧 cotutor.json 里老师的 cards 写着的读进来就丢掉,不报错(paint 2026-11-16 删);写错的名字照样过不了契约 */
+export const RETIRED_CARD_KINDS: readonly string[] = ['paint'];
 
 /** agent 名:与 agents/<name>.md 的 frontmatter name 一致,小写字母数字连字符 */
 export const AGENT_NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
@@ -100,7 +102,7 @@ export const TutorSchema = z.object({
   /** 孩子端不露(只和系统、家长打交道的工具人) */
   hidden: z.boolean().default(false).describe('孩子端不露(只和系统、家长打交道的工具人)'),
   /** 这位老师的板书写法里有哪几种卡(《卡片协议.md》「谁拿到哪些卡」);不写 = 全部。text 总是带着(写坏的卡退成它) */
-  cards: z.array(z.enum(BOARD_CARD_KINDS)).optional().describe(`这位老师的板书写法里讲哪几种卡(${BOARD_CARD_KINDS.join(' / ')});不写 = 全部,text 总是带着。只裁递给老师的写法,写了清单外的卡照常显示`),
+  cards: z.preprocess((v) => (Array.isArray(v) ? v.filter((k) => !RETIRED_CARD_KINDS.includes(k)) : v), z.array(z.enum(BOARD_CARD_KINDS))).optional().describe(`这位老师的板书写法里讲哪几种卡(${BOARD_CARD_KINDS.join(' / ')});不写 = 全部,text 总是带着。只裁递给老师的写法,写了清单外的卡照常显示`),
   policy: PolicyPatchSchema.optional().describe('覆盖 policyDefaults 的字段,没写的继承'),
   /** 这位老师用哪个运行时(runtimes 里的键);不配用 runtimes.default。要更大预算与时限的老师配一个自己的 */
   runtime: z.string().optional().describe('这位老师用的运行时(runtimes 里的键;不配用 default)——要换模型的老师配自己的'),

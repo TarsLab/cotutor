@@ -9,7 +9,7 @@
  *    课本卡例外:一节里的几张都留着,按讲稿的先后一张一张落,就是窗一步一步移(「先看这一句……再看下面」)。
  * 撤掉的卡在讲稿里的引用(锚、敲黑板、[[cue]])跟着重排或撤掉;dropped 是撤掉的卡(给家长端记一行)。
  */
-import { BOOK_KIT, BOOK_TOC, bookFind, bookSheets, bookSpots, bookTarget, findLesson, lessonBlocks, photoFrame, photoRings } from '../chalk/index.ts';
+import { BOOK_KIT, BOOK_MAX_PAGES, BOOK_TOC, bookFind, bookSheets, bookSpots, bookTarget, findLesson, lessonBlocks, photoFrame, photoRings } from '../chalk/index.ts';
 import type { BoardCard, BoardSection, BookIndex, BookPage } from '../schema/index.ts';
 
 /** 课本做底(activity 头上 base: textbook):这一册的索引、板上现在是哪一课(上一张课本卡的课;没有 = 还在目录) */
@@ -20,11 +20,11 @@ export interface BookBase {
   lesson: string | null;
 }
 
-/** 一课(或目录)铺哪几页;认不出 = null */
+/** 一课(或目录)铺哪几页(最多 BOOK_MAX_PAGES 页,数学一个小节能有十几页);认不出 = null */
 export function bookLesson(index: BookIndex, name: string | null): { title: string; pages: BookPage[] } | null {
   if (!name || name === BOOK_TOC) return index.toc.length ? { title: BOOK_TOC, pages: index.pages.filter((p) => index.toc.includes(p.n)) } : null;
   const l = findLesson(index.lessons, name);
-  return l ? { title: l.title, pages: index.pages.filter((p) => p.n >= l.pages[0] && p.n <= l.pages[1]) } : null;
+  return l ? { title: l.title, pages: index.pages.filter((p) => p.n >= l.pages[0] && p.n <= l.pages[1]).slice(0, BOOK_MAX_PAGES) } : null;
 }
 
 export interface BoardPageOpts {
@@ -52,7 +52,7 @@ function fitBook(c: BoardCard, book: BookBase, lesson: string | null, unfound: s
   if (!at) return { card: c, lesson };
   const pages = at.pages;
   const sheets = bookSheets(pages);
-  const blocks = lessonBlocks(pages);
+  const blocks = lessonBlocks(pages, book.index.layout);
   const out: Record<string, unknown> = { ...p, 课: at.title, 书: book.file, 页: pages.length > 1 ? `${pages[0].n}-${pages[pages.length - 1].n}` : String(pages[0]?.n ?? '') };
   const look = bookSpots(typeof p['看'] === 'string' ? p['看'] : '')[0];
   let within: [number, number, number, number] | null = look?.box ?? null;

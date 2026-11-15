@@ -8,7 +8,7 @@
  * 这个文件是纯函数:索引(BookPage)由服务端读好给进来(落板之前换框、上下文包)或舞台拉来(点字)。
  */
 
-import type { BookLesson, BookLine, BookPage } from '../../schema/index.ts';
+import { MATH_COLUMNS, bodySize, mathHeading, type BookLayout, type BookLesson, type BookLine, type BookPage } from '../../schema/index.ts';
 import type { ChalkSkeleton } from '../types.ts';
 import type { Kit, KitEnv, KitScene } from './types.ts';
 
@@ -22,6 +22,8 @@ export const BOOK_ASPECT = 1.413;
 export const BOOK_KIT = '课本';
 /** 刚进来、还没定哪一课时板上铺的那几页 */
 export const BOOK_TOC = '目录';
+/** 一张课本卡最多铺几页(数学一个小节能有十几页,多的不铺,老师写下一层的课题) */
+export const BOOK_MAX_PAGES = 13;
 
 const RED = '#e03131';
 const RING_MAX = 4;
@@ -57,7 +59,8 @@ export const lineBox = (sh: BookSheet, l: BookLine): Box => toScene(sh, l.x1, l.
 
 // ——— 找一课 ———
 
-const bare = (s: string): string => s.replace(/[《》「」""“”\s·.。,,、::]/g, '').replace(/^第?\d{1,2}课?/, '');
+// 课名前的编号要隔开才去掉(「11 坐井观天」「第11课」「1.乘法的初步认识」);「6的乘法口诀」的 6 是课名的一部分
+const bare = (s: string): string => s.trim().replace(/^[《「]?第?\s*\d{1,2}\s*(?:课|[.．、]|\s)\s*/, '').replace(/[《》「」""“”\s·.。,,、::]/g, '');
 
 /** 课名(「坐井观天」「11 坐井观天」「《语文园地八》」)→ 目录里的一项;认不出 = null。先找一模一样的,再找包含的(短的那个在长的里) */
 export function findLesson(lessons: readonly BookLesson[], name: string): BookLesson | null {
@@ -71,9 +74,12 @@ export function findLesson(lessons: readonly BookLesson[], name: string): BookLe
 /** 统编版语文园地里的栏目名(一行只有它、靠左):按它分节 */
 export const SECTION_NAMES: readonly string[] = ['识字加油站', '字词句运用', '书写提示', '日积月累', '口语交际', '我爱阅读', '快乐读书吧', '我的发现', '展示台', '写话', '查字典', '和大人一起读', '读读写写', '读一读,记一记'];
 
-/** 一课里的一块:标题、一段(no 从 1 起)、一个栏目(head)、别的(认字栏、写字栏、课后题、注释) */
+/**
+ * 一课里的一块:标题、一段(no 从 1 起)、一个栏目(head)、别的(认字栏、写字栏、课后题、注释)。
+ * 数学(layout: math):标题(单元、小节、课题)、例题(example,no 是例几)、栏目(做一做、练一练,section)、栏目下面的一道题(problem,no 是题号,head 是哪个栏目)
+ */
 export interface BookBlock {
-  kind: 'title' | 'para' | 'section' | 'other';
+  kind: 'title' | 'para' | 'section' | 'other' | 'example' | 'problem';
   no?: number;
   head?: string;
   text: string;
@@ -83,16 +89,28 @@ export interface BookBlock {
 
 interface At { p: BookPage; l: BookLine; i: number }
 
+/** 页脚:页码;和页码同一条基线的小字(数学的页脚是「16 1～6的表内乘法」、偶数页另起的单元名) */
+function footer(p: BookPage, l: BookLine): boolean {
+  if (l.y1 <= p.h - 70) return false;
+  if (/^\d{1,3}$/.test(l.text)) return true;
+  if (p.printed === null || l.z > 12.5) return false;
+  const no = String(p.printed);
+  return p.lines.some((o) => o.y1 > p.h - 70 && Math.abs(o.y1 - l.y1) < 2 && o.text.startsWith(no));
+}
+
 /** 页眉(单元名)、页脚(页码、「仅供个人学习使用」)不算正文 */
-const chrome = (p: BookPage, l: BookLine): boolean => (l.y1 < 45 && /单元|^\d+$/.test(l.text)) || (l.y1 > p.h - 70 && /^\d{1,3}$/.test(l.text)) || /仅供个人学习使用/.test(l.text);
+// 页顶的数只在它就是这一页的页码时算页眉:数学的题号常印在页顶(第 5 题从这一页开头)
+const chrome = (p: BookPage, l: BookLine): boolean => (l.y1 < 45 && (/单元/.test(l.text) || (p.printed !== null && l.text === String(p.printed)))) || footer(p, l) || /仅供个人学习使用/.test(l.text);
 const median = (xs: number[]): number => { const s = [...xs].sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : 0; };
 const headOf = (t: string): string | null => { const s = t.replace(/^◎/, '').replace(/\s/g, ''); return SECTION_NAMES.find((h) => h.replace(/,/g, '，') === s || h === s) ?? null; };
 
 /**
  * 一课的结构:有栏目名(语文园地)就按栏目分;没有就找课文正文——字最多的那种字体字号、行距一样连着的一串行,跨页接着——再按缩进分自然段
  * (段首比这一栏的左边缩进一个字以上);一行都很短(诗)就一行一段。别的行(认字栏、写字栏、课后题)各成一块 other。
+ * 数学课本(layout: math)另有分法,见 mathBlocks。
  */
-export function lessonBlocks(pages: readonly BookPage[]): BookBlock[] {
+export function lessonBlocks(pages: readonly BookPage[], layout: BookLayout = 'prose'): BookBlock[] {
+  if (layout === 'math') return mathBlocks(pages);
   const all: At[] = pages.flatMap((p) => p.lines.map((l, i) => ({ p, l, i })).filter((x) => !chrome(x.p, x.l)));
   const ref = (x: At) => ({ n: x.p.n, i: x.i });
   const heads = all.filter((x) => headOf(x.l.text));
@@ -141,6 +159,87 @@ export function lessonBlocks(pages: readonly BookPage[]): BookBlock[] {
   paras.forEach((ls, k) => out.push({ kind: 'para', no: k + 1, text: ls.map((x) => x.l.text).join(''), refs: ls.map(ref) }));
   for (const x of all.slice(first)) if (!inRun.has(x)) out.push({ kind: 'other', text: withPinyin(x.l), refs: [ref(x)] });
   return out;
+}
+
+type MathMark = { kind: 'title' } | { kind: 'section'; head: string } | { kind: 'example'; no: number; skip: number } | { kind: 'problem'; no: number };
+
+/**
+ * 数学课本里一行是不是一块的开头(2026-11-15 照人教版数学二年级上册):
+ *  - 标题:小节、课题(schema 的 mathHeading),单元页上的大字(正文的 1.4 倍以上);
+ *  - 栏目名独占一行(做一做、练一练……);
+ *  - 例题号:贴着左边距的一两位数,单独一行(比正文小一号)或后面空开一截接着题目(「1 把下面的气球分类。」);
+ *  - 题号:做一做、练一练下面更小的数(不到正文的八成),单独一行;两道题并排时右边那道的题号不贴左边距,认字号(正文的六到七成,图里的数比这大)。
+ */
+function mathMark(p: BookPage, l: BookLine, body: number): MathMark | null {
+  const head = l.text.replace(/^整理和.习$/, '整理和复习');
+  if (MATH_COLUMNS.test(l.text)) return { kind: 'section', head };
+  if (mathHeading(l, p.w, body) || (l.z >= 1.4 * body && /\p{Script=Han}/u.test(l.text) && l.chars.length <= 16)) return { kind: 'title' };
+  if (l.x1 > 0.16 * p.w) return /^\d{1,2}$/.test(l.text) && l.z >= 0.6 * body && l.z <= 0.72 * body ? { kind: 'problem', no: Number(l.text) } : null;
+  const m = /^\d{1,2}/.exec(l.text);
+  if (!m) return null;
+  const k = m[0].length;
+  if (k === l.chars.length) return l.z >= 0.78 * body ? { kind: 'example', no: Number(m[0]), skip: k } : { kind: 'problem', no: Number(m[0]) };
+  // 数和后面的字空开将近一个字:例题号(「17世纪」挨着,不是)
+  return l.chars[k].x1 - l.chars[k - 1].x2 >= 0.9 * l.z ? { kind: 'example', no: Number(m[0]), skip: k } : null;
+}
+
+/**
+ * 数学课本一课的结构:先认出每页的标记行(标题、栏目名、例题号、题号),别的行归给基线在它上面(差不到半个字)的最后一个标记;
+ * 页顶在第一个标记以上的接着上一页的那一块。题记着自己在哪个栏目下(head);例题、标题之后不在栏目里。
+ */
+function mathBlocks(pages: readonly BookPage[]): BookBlock[] {
+  const body = bodySize(pages.flatMap((p) => p.lines));
+  const base = (l: BookLine): number => l.y2 - 0.12 * l.z;
+  const out: BookBlock[] = [];
+  let last: BookBlock | null = null;
+  let column: string | null = null;
+  const intro = new Map<BookBlock, BookBlock>();
+  for (const p of pages) {
+    const ls = p.lines.map((l, i) => ({ l, i })).filter((x) => !chrome(p, x.l));
+    const marks: { b: BookBlock; y: number; x: number; z: number }[] = [];
+    const rest: typeof ls = [];
+    for (const x of ls) {
+      const m = mathMark(p, x.l, body);
+      if (!m) { rest.push(x); continue; }
+      const ref = [{ n: p.n, i: x.i }];
+      let b: BookBlock;
+      if (m.kind === 'title') { b = { kind: 'title', text: x.l.text, refs: ref }; column = null; }
+      else if (m.kind === 'section') { b = { kind: 'section', head: m.head, text: '', refs: ref }; column = m.head; }
+      else if (m.kind === 'example') { b = { kind: 'example', no: m.no, text: x.l.chars.slice(m.skip).map((c) => c.c).join(''), refs: ref }; column = null; }
+      else b = { kind: 'problem', no: m.no, ...(column ? { head: column } : {}), text: '', refs: ref };
+      marks.push({ b, y: base(x.l), x: x.l.x1, z: x.l.z });
+    }
+    marks.sort((a, b) => a.y - b.y);
+    // 单元页上的大号序号和单元名(「二」「1～6的表内乘法」)挨着,合成一个标题
+    for (let k = marks.length - 1; k > 0; k--) {
+      const a = marks[k - 1], b = marks[k];
+      if (a.b.kind === 'title' && b.b.kind === 'title' && b.y - a.y < 1.2 * Math.max(a.z, b.z)) {
+        a.b.text = `${a.b.text} ${b.b.text}`;
+        a.b.refs.push(...b.b.refs);
+        marks.splice(k, 1);
+      }
+    }
+    for (const x of rest) {
+      // 归给在它上面、又不在右半栏的标记里最下面的那个(并排的两道题各管各的那一栏);一样高取靠右的
+      const up = marks.filter((m) => m.y <= base(x.l) + 0.5 * x.l.z && m.x <= x.l.x1 + 0.25 * p.w);
+      const near = up.reduce<(typeof up)[number] | null>((a, m) => (!a || m.y > a.y + 0.5 * m.z || (Math.abs(m.y - a.y) <= 0.5 * m.z && m.x > a.x) ? m : a), null);
+      let owner: BookBlock | null = near?.b ?? last;
+      // 标题只放标题那一行:后面的字(单元页上的引导语、图里的字)另成一块
+      if (owner?.kind === 'title') {
+        const t = owner;
+        owner = intro.get(t) ?? null;
+        if (!owner) { owner = { kind: 'other', text: '', refs: [] }; intro.set(t, owner); out.push(owner); }
+      }
+      if (!owner) { owner = { kind: 'other', text: '', refs: [] }; out.push(owner); last = owner; }
+      owner.text = owner.text ? `${owner.text} ${x.l.text}` : x.l.text;
+      owner.refs.push({ n: p.n, i: x.i });
+    }
+    for (const m of marks) out.push(m.b);
+    if (marks.length) last = marks[marks.length - 1].b;
+  }
+  // 按每块最先的那一行排(一页里接上一页的那几行、题号下面先于题号排的那一行都算进去了)
+  const first = (b: BookBlock): number => Math.min(...b.refs.map((r) => r.n * 10000 + r.i));
+  return out.sort((a, b) => first(a) - first(b));
 }
 
 /** 一行短的、几乎每个字都带拼音的(认字栏、识字加油站的词):给老师看时带上读音「观(guān)沿(yán)」;别的只给字 */
@@ -209,10 +308,13 @@ export function bookFind(pages: readonly BookPage[], sheets: readonly BookSheet[
 
 const RANGE = /^第?\s*(\d{1,2})\s*(?:[-–—~～到至]\s*第?\s*(\d{1,2}))?\s*(?:自然)?段$/;
 const PAGE = /^第?\s*(\d{1,3})\s*页$/;
+const EXAMPLE = /^例\s*(\d{1,2})$/;
+const PROBLEM = /^(做一做|练一练|试一试|整理和复习)?\s*的?\s*第?\s*(\d{1,2})\s*(?:题|小题)$/;
 
 /**
  * 老师的「看」→ 那一块(场景坐标)与给人看的名字。认这几种写法:
- *  第 6 段 / 第 6–7 段(一课的自然段)· 第 55 页(印的页码,整页)· 栏目名(日积月累)· 标题 / 开头 · 课本上的一句原话(取它所在的几行)
+ *  第 6 段 / 第 6–7 段(一课的自然段)· 第 55 页(印的页码,整页)· 栏目名(日积月累;数学的做一做、练一练连着下面的题)· 标题 / 开头 · 课本上的一句原话(取它所在的几行)
+ *  数学:例 2 · 练一练第 3 题(只写「第 3 题」是这一课里第一个第 3 题)。同名的栏目、例题有几处取第一处,要别的那处写原话
  * 认不出 = null(应用不动窗,给家长端记一行)。
  */
 export function bookTarget(pages: readonly BookPage[], sheets: readonly BookSheet[], blocks: readonly BookBlock[], what: string): { label: string; box: Box } | null {
@@ -229,13 +331,32 @@ export function bookTarget(pages: readonly BookPage[], sheets: readonly BookShee
     const p = pages.find((x) => x.printed === Number(pg[1])), sh = p ? sheetOf(sheets, p.n) : undefined;
     return sh ? { label: `第${pg[1]}页`, box: [0, r1(sh.top), BOOK_W, r1(sh.top + sh.height)] } : null;
   }
+  const ex = EXAMPLE.exec(q.replace(/\s/g, ''));
+  if (ex) {
+    const b = blocks.find((x) => x.kind === 'example' && x.no === Number(ex[1]));
+    const box = b ? refsBox(pages, sheets, b.refs) : null;
+    return box ? { label: `例${ex[1]}`, box } : null;
+  }
+  const pr = PROBLEM.exec(q.replace(/\s/g, ''));
+  if (pr) {
+    const b = blocks.find((x) => x.kind === 'problem' && x.no === Number(pr[2]) && (!pr[1] || x.head === pr[1]));
+    const box = b ? refsBox(pages, sheets, b.refs) : null;
+    return box ? { label: `${b!.head ?? ''}第${pr[2]}题`, box } : null;
+  }
   if (/^(标题|题目|开头|课题)$/.test(q)) {
     const t = blocks.filter((x) => x.kind === 'title' || (x.kind === 'para' && x.no === 1));
     const box = refsBox(pages, sheets, t.flatMap((x) => x.refs));
     return box ? { label: '开头', box } : null;
   }
   const sec = blocks.find((x) => x.kind === 'section' && (x.head === q || x.head!.includes(q) || (q.length >= 2 && q.includes(x.head!))));
-  if (sec) { const box = refsBox(pages, sheets, sec.refs); return box ? { label: sec.head!, box } : null; }
+  if (sec) {
+    // 数学的栏目连着下面的题
+    const k = blocks.indexOf(sec);
+    let end = k + 1;
+    while (end < blocks.length && blocks[end].kind === 'problem') end++;
+    const box = refsBox(pages, sheets, blocks.slice(k, end).flatMap((x) => x.refs));
+    return box ? { label: sec.head!, box } : null;
+  }
   const hit = findText(pages, sheets, q);
   if (!hit) return null;
   return { label: q.length > 12 ? `${Array.from(q).slice(0, 12).join('')}…` : q, box: refsBox(pages, sheets, hit.refs)! };
@@ -275,7 +396,12 @@ export function bookView(pages: readonly BookPage[], sheets: readonly BookSheet[
   const printed = [...new Set(sheets.filter((s) => s.top < box[3] && s.top + s.height > box[1]).map((s) => pages.find((p) => p.n === s.n)?.printed).filter((n): n is number => typeof n === 'number'))];
   const where = printed.length ? `第 ${printed.length > 1 ? `${printed[0]}–${printed[printed.length - 1]}` : printed[0]} 页` : '';
   const paras = blocks.filter((b) => b.kind === 'para' && seen(b.refs)).map((b) => b.no!);
-  const secs = blocks.filter((b) => b.kind === 'section' && seen(b.refs)).map((b) => b.head!);
+  // 数学:例几、栏目;栏目名没露出来、只露出下面的题,说是哪个栏目第几题
+  const named = blocks.filter((b) => (b.kind === 'section' || b.kind === 'example') && seen(b.refs)).map((b) => (b.kind === 'example' ? `例${b.no}` : b.head!));
+  const probs = new Map<string, number[]>();
+  for (const b of blocks) if (b.kind === 'problem' && seen(b.refs) && !named.includes(b.head ?? '')) probs.set(b.head ?? '', [...(probs.get(b.head ?? '') ?? []), b.no!]);
+  const qs = [...probs].map(([h, ns]) => `${h}第 ${ns.length > 1 ? `${ns[0]}–${ns[ns.length - 1]}` : ns[0]} 题`);
+  const secs = [...new Set(named), ...qs];
   const others = blocks.filter((b) => b.kind === 'other' && seen(b.refs)).length;
   const parts = [paras.length ? `第 ${paras.length > 1 ? `${paras[0]}–${paras[paras.length - 1]}` : paras[0]} 段` : '', secs.join('、'), others && !paras.length && !secs.length ? '课文后面的部分' : ''].filter(Boolean);
   return [where, parts.join(',')].filter(Boolean).join(':') || '空白处';
@@ -288,7 +414,7 @@ export function bookPages(v: string | undefined): number[] {
   const m = /^(\d{1,4})(?:-(\d{1,4}))?$/.exec((v ?? '').trim());
   if (!m) return [];
   const a = Number(m[1]), b = Number(m[2] ?? m[1]);
-  if (b < a || b - a > 12) return [];
+  if (b < a || b - a >= BOOK_MAX_PAGES) return [];
   return Array.from({ length: b - a + 1 }, (_, k) => a + k);
 }
 
@@ -331,7 +457,7 @@ function readSpots(name: string, max: number) {
 function readLook(v: string): string {
   const spot = bookSpots(v.replace(/[;;]/g, ''))[0];
   const text = spot?.text.trim() ?? '';
-  if (!text || Array.from(text).length > 40) throw new Error('课本的「看」写一处:第 6–7 段、第 55 页、栏目名(日积月累),或课本上的一句原话');
+  if (!text || Array.from(text).length > 40) throw new Error('课本的「看」写一处:第 6–7 段、第 55 页、栏目名(日积月累、做一做)、例 2、练一练第 3 题,或课本上的一句原话');
   return spot.box ? `${text}|${spot.box.join(' ')}` : `${text}|`;
 }
 
@@ -357,7 +483,7 @@ export const book: Kit = {
   open: ['点字', '圈', '画'],
   params: [
     { key: '课', note: '哪一课:课名或语文园地几(课: 坐井观天)。不写就是板上现在这一课;第一次写,应用就把这一课的几页铺上。', read: (v) => v.trim().slice(0, 20), fallback: '' },
-    { key: '看', note: '让孩子看哪里:第 6–7 段、第 55 页、栏目名(日积月累),或课本上的一句原话。应用把它移到屏幕中间、字太小就放大。不写就不动(孩子正看着哪里就还是哪里)。', read: readLook, fallback: '' },
+    { key: '看', note: '让孩子看哪里:第 6–7 段、第 55 页、栏目名(日积月累、做一做)、例 2、练一练第 3 题,或课本上的一句原话。应用把它移到屏幕中间、字太小就放大。不写就不动(孩子正看着哪里就还是哪里)。', read: readLook, fallback: '' },
     { key: '圈', note: '圈出课本上的字词:写字(圈: 井沿),应用照课本找到它。几处用顿号隔开,最多 4 处。', read: readSpots('圈', RING_MAX), fallback: '' },
     { key: '遮', note: '要孩子自己认的字词:盖住头上的拼音,孩子点一下揭开。写字,几处用顿号隔开,最多 8 处。', read: readSpots('遮', COVER_MAX), fallback: '' },
     { key: '书', note: '应用填:教材 PDF 的路径。你不用写。', read: readPdf, fallback: '' },

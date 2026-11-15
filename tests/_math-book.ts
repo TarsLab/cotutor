@@ -1,0 +1,88 @@
+/**
+ * 测试用的一本数学小书(照人教版数学二年级上册的排法造的,字是编的):PDF 第 1 页是目录,印刷页码 = PDF 页 − 1。
+ *   目录没有点线:大号的一、二,单元名,页码各自一段;没序号的「校园小导游」是单元之间的综合实践。
+ *   页脚:单数页页码在右;双数页页码在左,后面挨着单元名(「4 1～6的表内乘法」,单元名拆成几段)。
+ *   一 分类与整理 1–2 页:例 1(题号和题目同一行、空开一截)、做一做第 1 题。
+ *   二 1～6的表内乘法 3–6 页:单元页上有图里的字(便利店,不是课题);小节「1.乘法的初步认识」4 页起,例 1、你知道吗(「17世纪」不是例题);
+ *     课题「5的乘法口诀」5 页(例 2 的题号单独一行)、练一练第 1–2 题;6 页页顶并排的第 3、4 题,课题「6的乘法口诀」、例 3。
+ *   校园小导游 7–8 页:课题「认识东、南、西、北」;8 页页顶又印一次「校园小导游」(不算一课)。
+ * tests/textbook.test.ts 用。
+ */
+import { buildBookIndex } from '../src/memory/textbook-index.ts';
+import type { BookIndex, PdfItem, PdfPage } from '../src/schema/index.ts';
+
+export const MW = 521.6, MH = 737;
+const it = (s: string, x: number, y: number, z: number, f = 'body'): PdfItem => ({ s, f, x, y, z, w: Array.from(s).reduce((a, c) => a + (c.charCodeAt(0) < 0x2000 ? 0.55 : 1), 0) * z });
+/** 页脚:单数页页码在右;双数页在左,后面挨着单元名(拆成几段,和真书一样) */
+function foot(printed: number, unit: string): PdfItem[] {
+  if (printed % 2) return [it(String(printed), 470, 697, 10.5, 'num')];
+  const out = [it(String(printed), 59, 697, 10.5, 'num')];
+  let x = 90;
+  for (const part of unit.match(/\d+|[^\d]+/g) ?? []) { out.push(it(part, x, 697, 10.5, 'foot')); x += out[out.length - 1].w; }
+  return out;
+}
+const page = (n: number, unit: string, items: PdfItem[]): PdfPage => ({ n, w: MW, h: MH, items: [...items, ...foot(n - 1, unit)] });
+/** 例题号(14 号)和题目(16 号)同一条基线,空开一截 */
+const example = (no: string, text: string, y: number): PdfItem[] => [it(no, 72.64, y, 14, 'ex'), it(text, 109.69, y, 16)];
+/** 题号(10.5 号)单独一段,题目比它稍高一点 */
+const problem = (no: string, text: string, y: number, x = 62): PdfItem[] => [it(no, x, y, 10.5, 'ex'), it(text, x + 27, y + 3, 16)];
+
+const toc: PdfPage = { n: 1, w: MW, h: MH, items: [
+  it('目录', 90, 62, 18, 'h'),
+  it('一', 79, 169, 21, 'h'), it('分类与整理', 236, 182, 18, 'h'), it('1', 456, 179, 10.5, 'num'),
+  it('二', 79, 226, 21, 'h'), it('1～6 的表内乘法', 215, 239, 18, 'h'), it('3', 450, 236, 10.5, 'num'),
+  it('校园小导游', 236, 352, 18, 'h'), it('7', 450, 349, 10.5, 'num'),
+] };
+const U1 = '分类与整理', U2 = '1～6的表内乘法', A = '校园小导游';
+export const mathPages: PdfPage[] = [
+  toc,
+  page(2, U1, [
+    it('一', 91, 63, 42, 'h'), it('分类与整理', 211, 78, 24, 'h'),
+    ...example('1', '把下面的气球分类。', 143),
+    it('按形状分类，每种气球各有几个？', 110, 334, 16),
+  ]),
+  page(3, U1, [
+    it('做一做', 101, 190, 14, 'h'),
+    ...problem('1', '按形状分一分，再涂一涂。', 227),
+  ]),
+  page(4, U2, [
+    it('二', 86, 63, 42, 'h'), it('1～6的表内乘法', 172, 78, 24, 'h'),
+    it('便利店', 409, 540, 18, 'pic'),
+    it('请提出用加法解决的问题，写出算式。', 93, 620, 12),
+  ]),
+  page(5, U2, [
+    it('1.乘法的初步认识', 187, 60, 21, 'h'),
+    ...example('1', '（1）小飞机里共有多少人？', 113),
+    it('3+3+3+3+3=15', 314, 235, 16, 'num'),
+    it('上面的加法算式有什么共同特点？', 110, 540, 16),
+    it('你知道吗？', 105, 551, 14, 'h'),
+    it('17', 75.77, 594, 14, 'num'), it('世纪开始使用的乘号。', 90.81, 594, 14),
+  ]),
+  page(6, U2, [
+    it('5的乘法口诀', 90, 120, 18, 'h'),
+    it('2', 68.39, 168, 14, 'ex'),
+    it('5×1=5', 179, 285, 16, 'num'), it('一五得五', 364, 287, 16),
+    it('练一练', 134, 400, 18, 'h'),
+    ...problem('1', '算一算，说一说口诀。', 457),
+    ...problem('2', '照样子连一连，再说一说。', 517),
+  ]),
+  page(7, U2, [
+    ...problem('3', '填一填。', 45),
+    ...problem('4', '连一连。', 45, 296),
+    it('5×2=', 94, 90, 16, 'num'), it('3×5=', 330, 90, 16, 'num'),
+    it('6的乘法口诀', 90, 300, 18, 'h'),
+    ...example('3', '一共坐了多少人？想一想怎样算。', 350),
+  ]),
+  page(8, A, [
+    it('校园小导游', 211, 78, 24, 'h'),
+    it('认识东、南、西、北', 90, 150, 18, 'h'),
+    it('早上，面向太阳，前面是东方。', 94, 200, 16),
+  ]),
+  page(9, A, [
+    it('校园小导游', 90, 62, 18, 'h'),
+    it('画一画你们学校的示意图，再说一说。', 94, 120, 16),
+  ]),
+];
+
+/** 这本小书的索引(文件名「数学二年级上册.pdf」,layout 是 math) */
+export const mathIndexOf = (): BookIndex => buildBookIndex(mathPages, { file: '数学二年级上册.pdf', sha: 'm', title: '数学二年级上册' });

@@ -56,8 +56,9 @@ export interface BookPage {
 
 /**
  * 目录里的一项:一课、一个语文园地,或一课下面的一首诗(parent 是那一课)。
+ * 数学(layout: math):一个单元(no 是「二」)、单元之间没编号的综合实践(校园小导游);单元下面页里的小节(1.乘法的初步认识)、课题(6的乘法口诀),parent 是上一层。
  * from / to 是印刷页码(to = 下一项开始的前一页);pages 是对应的 PDF 页 [头, 尾]。
- * kind:lesson = 有编号的一课;garden = ◎ 开头的(语文园地、快乐读书吧);other = 识字表这类附录。
+ * kind:lesson = 有编号的一课、一个单元和它下面的;garden = ◎ 开头的(语文园地、快乐读书吧)、数学的综合实践;other = 识字表这类附录。
  */
 export interface BookLesson {
   title: string;
@@ -71,7 +72,13 @@ export interface BookLesson {
 }
 
 /** 索引的版本:取字、分行的规则改了就加一,旧缓存重做 */
-export const BOOK_INDEX_VERSION = 1;
+export const BOOK_INDEX_VERSION = 2;
+
+/**
+ * 一册怎么分块(src/chalk/kit/book.ts 的 lessonBlocks):prose = 课文(自然段、语文园地的栏目);
+ * math = 数学课本(例题、做一做 / 练一练这些栏目和下面的题)。照文件名定:带「数学」的是 math
+ */
+export type BookLayout = 'prose' | 'math';
 
 export interface BookIndex {
   v: number;
@@ -81,10 +88,33 @@ export interface BookIndex {
   sha: string;
   /** 册名:文件名去掉扩展名 */
   title: string;
+  layout: BookLayout;
   pages: BookPage[];
   /** 目录在 PDF 的哪几页(刚进预习、还没定哪一课时铺的就是它) */
   toc: number[];
   lessons: BookLesson[];
   /** 自检发现的问题(拼音解不出、没有页码、没有目录……);有问题这一册照样能看,但给家长端报一行 */
   problems: string[];
+}
+
+// ——— 数学课本的版式(读目录的 src/memory/textbook-index.ts 与分块的 src/chalk/kit/book.ts 都用) ———
+
+/** 数学课本的栏目名:和课题一个字号,不算课题(整理和复习的「复」有的字体取出来是乱码) */
+export const MATH_COLUMNS = /^(做一做|练一练|试一试|整理和.习|你知道吗[?？]?|成长小档案|小讲堂|自我评价|后记)$/;
+
+/** 正文的字号:六个字以上的汉字行里字最多的那种 */
+export function bodySize(lines: readonly BookLine[]): number {
+  const w = new Map<number, number>();
+  for (const l of lines) if (l.chars.length >= 6 && /\p{Script=Han}/u.test(l.text)) w.set(l.z, (w.get(l.z) ?? 0) + l.chars.length);
+  return [...w].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 16;
+}
+
+/** 数学课本里一行是不是标题:section = 小节(1.乘法的初步认识),topic = 课题(6的乘法口诀);不是 = null */
+export function mathHeading(l: BookLine, pageW: number, body: number): 'section' | 'topic' | null {
+  const t = l.text;
+  // 标题不以括号起头、不以标点收尾(题目「用乘法口诀求商。」「（）六十二」字号也可能大)
+  if (!/\p{Script=Han}/u.test(t) || MATH_COLUMNS.test(t) || l.chars.length > 16 || /^[（(]/.test(t) || /[。？！：，?!:,]$/.test(t)) return null;
+  if (l.z >= 1.2 * body && /^\d{1,2}[.．]\S/.test(t)) return 'section';
+  if (l.z >= 1.1 * body && l.z < 1.25 * body && l.x1 < 0.3 * pageW) return 'topic';
+  return null;
 }

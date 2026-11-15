@@ -410,7 +410,7 @@ export class Runner {
       const at = ix ? bookLesson(ix, book![2]) : null;
       if (!at) return null;
       const sheets = bookSheets(at.pages);
-      const text = bookView(at.pages, sheets, lessonBlocks(at.pages), b.box as [number, number, number, number]).slice(0, 80);
+      const text = bookView(at.pages, sheets, lessonBlocks(at.pages, ix!.layout), b.box as [number, number, number, number]).slice(0, 80);
       await appendBoard(ws, tutor, date, b.thread, { at: now.toISOString(), k: 'view', text, base: b.base });
       return { thread: b.thread, say: null, still: false };
     }

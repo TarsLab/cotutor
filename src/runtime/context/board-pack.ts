@@ -124,28 +124,41 @@ export function slateOf(x: SlateInput): { slate: NonNullable<ContextPack['slate'
 /**
  * 课本做底时给老师看的底与全文(SlateInput.book 的 show、text):
  * 一课 = 分好的段(「第3段 小鸟回答说……」)、栏目(「【日积月累】……」)、课文后面的认字栏和课后题(带读音的写读音),换页处插一行「—— 第 55 页 ——」;
- * 目录 = 一单元一行,课名后面是印的页码(老师照孩子说的课写「课: 坐井观天」)。
+ * 数学 = 标题(「标题:6的乘法口诀」)、例题(「例4 ……」)、栏目(「【练一练】」)和下面的题(「第3题 ……」);图上的东西读不到,只有字。
+ * 目录 = 一单元一行,课名后面是印的页码(老师照孩子说的课写「课: 坐井观天」);数学一个单元一行,后面是它下面的小节、课题(课题前带点)。
  */
 export function bookSlateParts(index: BookIndex, at: { title: string; pages: readonly BookPage[] }): { show: string; text: string[] } {
   if (at.title === BOOK_TOC) {
+    const show = `课本《${index.title}》:目录(还没翻到哪一课)`;
+    if (index.layout === 'math') {
+      const tops = new Map<string, string[]>();
+      const top = new Set(index.lessons.filter((l) => !l.parent).map((l) => l.title));
+      for (const l of index.lessons) {
+        const at = `${l.title}(${l.from})`;
+        if (!l.parent) tops.set(`${l.no ? `${l.no} ` : ''}${at}`, []);
+        else [...tops.values()].pop()?.push(top.has(l.parent) ? at : `·${at}`);
+      }
+      return { show, text: [...tops].map(([t, xs]) => (xs.length ? `${t}:${xs.join('、')}` : t)) };
+    }
     const units = new Map<string, string[]>();
     for (const l of index.lessons) {
       const u = l.unit ?? '附录';
       units.set(u, [...(units.get(u) ?? []), `${l.parent ? '·' : ''}${l.no ? `${l.no} ` : ''}${l.title}(${l.from})`]);
     }
-    return { show: `课本《${index.title}》:目录(还没翻到哪一课)`, text: [...units].map(([u, xs]) => `${u}:${xs.join('、')}`) };
+    return { show, text: [...units].map(([u, xs]) => `${u}:${xs.join('、')}`) };
   }
   const printed = at.pages.map((p) => p.printed).filter((n): n is number => n !== null);
   const range = printed.length ? `第 ${printed[0]}${printed.length > 1 ? `–${printed[printed.length - 1]}` : ''} 页` : '';
+  const math = index.layout === 'math';
   const text: string[] = [];
   let page: number | null = null;
-  for (const b of lessonBlocks(at.pages)) {
+  for (const b of lessonBlocks(at.pages, index.layout)) {
     const n = b.refs[0]?.n ?? null;
     const pr = at.pages.find((p) => p.n === n)?.printed ?? null;
     if (n !== page && page !== null && pr !== null) text.push(`—— 第 ${pr} 页 ——`);
     page = n;
-    if (b.kind === 'title') continue;
-    text.push(b.kind === 'para' ? `第${b.no}段 ${b.text}` : b.kind === 'section' ? `【${b.head}】${b.text}` : b.text);
+    if (b.kind === 'title') { if (math) text.push(`标题:${b.text}`); continue; }
+    text.push(b.kind === 'para' ? `第${b.no}段 ${b.text}` : b.kind === 'section' ? `【${b.head}】${b.text}` : b.kind === 'example' ? `例${b.no} ${b.text}` : b.kind === 'problem' ? `第${b.no}题 ${b.text}` : b.text);
   }
   return { show: `课本《${index.title}》:《${at.title}》${range}`, text };
 }

@@ -84,7 +84,7 @@ try {
   const refs = await shippedActivities(root);
   const common = ['预习', '检查作业', '复习'];
   for (const tutor of ['chinese-tutor', 'math-tutor', 'english-tutor']) {
-    for (const name of [...common, ...(tutor === 'chinese-tutor' ? ['写话'] : [])]) {
+    for (const name of common) {
       const file = refs.find((r) => r.tutor === tutor && r.name === name)!.file;
       const parsed = lintActivity(readFileSync(file, 'utf8'), { fileName: name, tutorCards: [] });
       check(`${tutor}/${name} 独立提示词与卡通过检查`, parsed.issues.length === 0 && !!renderTutorSection(parsed.activity, { cards: parsed.activity.cards })?.includes('二年级'), JSON.stringify(parsed.issues));

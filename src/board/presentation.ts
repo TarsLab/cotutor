@@ -71,8 +71,6 @@ export function cardTexts(card: BoardCard): string[] {
       return []; // 田字格里是 SVG 路径不是文字,标注落不上;讲稿里的 [鼓] 去别的卡找
     case 'word':
       return [str(p.word)]; // [apple] 落到这张卡上(讲到时亮这张);格里是笔顺不是文字,页面不画标注
-    case 'paint':
-      return [str(p.ask), ...strs(p.panels), ...strs(p.words)];
     case 'photo':
       return [str(p.text)];
     default:
@@ -197,9 +195,9 @@ export function penFor(card: BoardCard, phrase: string): PenName {
 /** 一行最多几张:明写的并排(课文件 / 老师的 same)能到 3 张;按宽度排的最多 2 张(半宽 + 半宽) */
 export const MAX_CARDS_PER_ROW = 3;
 
-/** 独占一行的卡:标题行、提问卡、画板、教具、小课堂、画图、拍给我看(选择题量得下就能半宽,2026-10-01) */
+/** 独占一行的卡:标题行、提问卡、画板、教具、小课堂、拍给我看(选择题量得下就能半宽,2026-10-01) */
 export function standsAlone(card: BoardCard): boolean {
-  return isHeading(card) || isAskCard(card) || card.kind === 'canvas' || card.kind === 'kit' || card.kind === 'lecture' || card.kind === 'paint' || card.kind === 'photo';
+  return isHeading(card) || isAskCard(card) || card.kind === 'canvas' || card.kind === 'kit' || card.kind === 'lecture' || card.kind === 'photo';
 }
 
 const HALF_KINDS = ['text', 'read', 'code', 'tianzige', 'word', 'choice'];
@@ -464,7 +462,7 @@ export function toneMark(syl: string): string {
 /** 舞台顶栏的名字:文字卡的标题 / 正文、选择题的问题、其余第一段有字的;截 24 字 */
 export function cardTitle(card: BoardCard): string {
   const p = card.props || {};
-  const first = card.kind === 'paint' ? '画家画的' : str(p.title) || str(p.question) || str(p.show) || str(p.text) || str(p.caption) || str(p.prompt) || strs(p.segments)[0] || cardTexts(card).find((t) => t.trim()) || (card.kind === 'image' ? '图' : card.kind === 'canvas' ? '画一画' : card.kind === 'kit' ? str(p.kit) : card.kind === 'tianzige' ? str(p.chars) : '');
+  const first = str(p.title) || str(p.question) || str(p.show) || str(p.text) || str(p.caption) || str(p.prompt) || strs(p.segments)[0] || cardTexts(card).find((t) => t.trim()) || (card.kind === 'image' ? '图' : card.kind === 'canvas' ? '画一画' : card.kind === 'kit' ? str(p.kit) : card.kind === 'tianzige' ? str(p.chars) : '');
   const cps = Array.from(first.trim().replace(/\s+/g, ' '));
   return cps.length > 24 ? `${cps.slice(0, 24).join('')}…` : cps.join('');
 }

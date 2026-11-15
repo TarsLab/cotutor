@@ -223,12 +223,12 @@ const TODAY_LABEL_MAX = 12;
 
 /**
  * 这一轮让话题开了头没有(2026-11-15,Jack):有孩子参与的图出现了——孩子发了照片、画了画;老师出了板卡(课本只算翻到一课的,目录不算)、
- * 图片、画图、画板。只说话、只铺了目录的不算开头:孩子端不列(首页「今天」),记录照存,家长照看。
+ * 图片、画板。只说话、只铺了目录的不算开头:孩子端不列(首页「今天」),记录照存,家长照看。
  */
 export function startsThread(m: { from: ConversationMessage['from']; photos?: readonly string[]; drawing?: unknown; section?: { cards: readonly { kind: string; props: Record<string, unknown> }[] } | null }): boolean {
   if (m.from === 'kid' && (m.photos?.length || m.drawing)) return true;
   for (const c of m.section?.cards ?? []) {
-    if (c.kind === 'image' || c.kind === 'paint' || c.kind === 'canvas') return true;
+    if (c.kind === 'image' || c.kind === 'canvas') return true;
     if (c.kind !== 'kit') continue;
     const p = c.props as { kit?: unknown; params?: Record<string, unknown> };
     if (p.kit !== '课本') return true;

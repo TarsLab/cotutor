@@ -206,7 +206,7 @@ export const COMMANDS: readonly CommandSpec[] = [
     maxArgs: Infinity, workspace: true, sandbox: true, json: true,
     notes: ['只动点名的这几份;你那份存成旁边的 .bak,换之前还自动备份一份', '自家加的老师、activity 没有出厂那份,换不了'],
     effects: ['盖掉家长改过的老师文件:家长明确说要回出厂的才跑'],
-    examples: ['cotutor reset math-tutor', 'cotutor reset chinese-tutor/你说我画'],
+    examples: ['cotutor reset math-tutor', 'cotutor reset chinese-tutor/看图说话'],
   },
   {
     // refresh 的旧名:0.4.x 的 cotutor update 换完程序,会用新程序跑 upgrade --workspace <孩子>,所以一直要认;不进帮助
@@ -266,7 +266,7 @@ export const COMMANDS: readonly CommandSpec[] = [
     ],
     notes: ['activity 文件在 agents/<老师>/activities/<名>.md', 'check 不花钱;eval 照 <名>.例子.md 跑真老师 + 模拟孩子,落 evals/'],
     effects: ['eval 花钱'],
-    examples: ['cotutor activity check', 'cotutor activity eval chinese-tutor 你说我画 --runs 1'],
+    examples: ['cotutor activity check', 'cotutor activity eval chinese-tutor 看图说话 --runs 1'],
   },
   {
     name: 'chalk', group: 'custom', summary: '做小课堂的课包',

@@ -6,8 +6,8 @@ import { check, done } from './_check.ts';
 
 {
   check('有状态的卡:choice / lecture / canvas / kit;text / read / image / code 没有', CARD_KINDS.filter((k) => k.state).map((k) => k.name).join() === 'choice,lecture,canvas,kit');
-  check('十四种卡登记在册:板书十二种 + 首页的老师卡与听写卡', CARD_KINDS.map((k) => k.name).join() === 'text,read,choice,image,tianzige,word,lecture,canvas,kit,paint,photo,code,tutor,dictation' && cardKind('choice')?.name === 'choice' && cardKind('widget') === undefined);
-  check('用在哪:板书十二种;首页 = 老师卡 + 听写卡 + 一段字 / 点读 / 图片 / 田字格 / 单词', kindsFor('board').map((k) => k.name).join() === 'text,read,choice,image,tianzige,word,lecture,canvas,kit,paint,photo,code' && kindsFor('home').map((k) => k.name).join() === 'text,read,image,tianzige,word,tutor,dictation');
+  check('十三种卡登记在册:板书十一种 + 首页的老师卡与听写卡', CARD_KINDS.map((k) => k.name).join() === 'text,read,choice,image,tianzige,word,lecture,canvas,kit,photo,code,tutor,dictation' && cardKind('choice')?.name === 'choice' && cardKind('widget') === undefined);
+  check('用在哪:板书十一种;首页 = 老师卡 + 听写卡 + 一段字 / 点读 / 图片 / 田字格 / 单词', kindsFor('board').map((k) => k.name).join() === 'text,read,choice,image,tianzige,word,lecture,canvas,kit,photo,code' && kindsFor('home').map((k) => k.name).join() === 'text,read,image,tianzige,word,tutor,dictation');
   check('契约里的板书种类表与注册表对得上(schema 不 import 卡,靠这条锁住)', BOARD_CARD_KINDS.join() === kindsFor('board').map((k) => k.name).join());
   check('老师的卡:没写 = null(全部);写了 = 注册表顺序、text 总在、首页的卡不算', tutorCardKinds(undefined) === null && tutorCardKinds(['canvas', 'read'])?.join() === 'text,read,canvas' && tutorCardKinds(['choice', 'tutor', 'text'])?.join() === 'text,choice' && tutorCardKinds([])?.join() === 'text');
   const tut = parseCard('tutor chinese-tutor', '- 我要预习小蝌蚪找妈妈\n讲法: 先读课文\n讲法: 再认字\n新话题\n接着 2026-09-16 1930-1 接着写看图写话', 'home');

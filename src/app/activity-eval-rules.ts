@@ -4,7 +4,6 @@
  * 纯函数:解析、判分;跑在 src/app/activity-eval.ts。
  */
 import type { BoardSection } from '../board/presentation.ts';
-import type { ActivityValue } from '../schema/index.ts';
 
 export interface ActivityExample {
   name: string;
@@ -35,13 +34,7 @@ export interface ExampleIssue {
 /** 认得的判:名字 → 一句话。带参数的写成「名字: 参数」 */
 export const GRADERS: Readonly<Record<string, string>> = {
   每节有讲稿: '每一轮至少有一句非空讲稿;只有卡、空回复或没有轮次都不通过',
-  出画图卡: '最后写了画图卡',
-  不出画图卡: '一张画图卡都没写',
-  画图卡前放过整段: '第一张画图卡之前,有一节放过三行以上的 read 卡,孩子在它后面开过口',
   放过整段: '有一节放过三行以上的 read 卡(连成的一段)',
-  分幅没有看不见的词: '画图卡的分幅里没有「高兴」「羞愧」这种看不见的词',
-  分幅至少: '每张画图卡至少这么多幅(「分幅至少: 3」;三四件事挤成两幅就不过)',
-  画图卡带题干和词: '每张画图卡都写了「题:」和「词:」(我来出题)',
   每节末句是问句: '有卡的每一节(讲解),最后一句讲稿以问号结尾;没卡的随口问答不查(守则:问答一两句、没有卡)',
   一节一问: '有卡的每一节,讲稿里最多一个问号(看图说话:一节只问一个问题)',
   收尾不问: '最后一轮的末句不是问句(守则「答完就停」:答案出来了、孩子说懂了,一句收住,不再考他)',
@@ -49,7 +42,7 @@ export const GRADERS: Readonly<Record<string, string>> = {
   说到: '老师的讲稿里出现过这几个说法(「说到: 你画的」;同「问到」,不要求是问句)',
   放课里一段: '写过 lecture 卡(放小课堂里的一段)',
   一节最多一段: '每一节最多一张 lecture 卡',
-  问到: '老师的讲稿里出现过这个词(「问到: 画家」)',
+  问到: '老师的讲稿里出现过这个词(「问到: 在哪里」)',
   并排: '有一张 read 卡同时有这两句里的字(「并排: 睡大觉 | 浇了水」)',
   卡上有: '老师写的卡上出现过这几个说法(「卡上有: 先看清」,如顺口溜)',
   出拍给我看卡: '写过拍给我看卡(photo):要孩子拍照片发来时',
@@ -57,11 +50,7 @@ export const GRADERS: Readonly<Record<string, string>> = {
   不出教具卡: '没写过板卡(kit):作业全对,说一句就收,不讲题时',
   请动手就开放: '末句请孩子在板上动手(点一点、圈出来、切一刀…)的每一轮,板上开放了对应的操作(这一轮的板卡,没出就是板上原来那张):《画板为主设计》「话接不接得上」',
   问就上板: '讲稿里有问号的每一轮都带一张板卡或画板卡(请孩子拍照的那一轮不算):讲题不只用嘴问',
-  词落到幅: '参数「词」里至少这么多个原样出现在分幅里(「词落到幅: 2」);只适合画得出来的词,「羞愧」「满满」老师会照规矩换成看得见的样子',
 };
-
-/** 分幅里不该有的:心里的、看不见的 */
-export const INVISIBLE_WORDS = ['高兴', '开心', '难过', '伤心', '生气', '害怕', '羞愧', '着急', '得意', '后悔', '觉得', '心里', '想着'];
 
 const DEFAULT_TURNS = 12;
 const KEYS = '故事: / 人设: / 孩子: / 照片: / 课: / 看: / 画: / 参数: / 最多轮: / 判:';
@@ -184,15 +173,11 @@ export function askedOps(turns: readonly EvalTurn[]): { turn: number; want: stri
   return out;
 }
 
-const paintCards = (s: BoardSection | null): BoardSection['cards'] => (s?.cards ?? []).filter((c) => c.kind === 'paint');
-const panelsOf = (c: BoardSection['cards'][number]): string[] => (Array.isArray((c.props as { panels?: unknown }).panels) ? ((c.props as { panels: unknown[] }).panels as string[]) : []);
 const segmentsOf = (c: BoardSection['cards'][number]): string[] => (c.kind === 'read' && Array.isArray((c.props as { segments?: unknown }).segments) ? ((c.props as { segments: unknown[] }).segments as string[]) : []);
 const listArg = (arg: string): string[] => arg.split(/[、,，;；]/).map((x) => x.trim()).filter(Boolean);
 
-/** 判一次跑下来的这些轮;params 是这个话题的参数(词落到幅用) */
-export function gradeRun(checks: readonly string[], turns: readonly EvalTurn[], params: Readonly<Record<string, ActivityValue>> = {}): GradeResult[] {
-  const firstPaint = turns.findIndex((t) => paintCards(t.section).length > 0);
-  const allPanels = turns.flatMap((t) => paintCards(t.section).flatMap(panelsOf));
+/** 判一次跑下来的这些轮 */
+export function gradeRun(checks: readonly string[], turns: readonly EvalTurn[]): GradeResult[] {
   const lines = turns.flatMap((t) => t.section?.lines.map((l) => l.text) ?? []);
   return checks.map((check): GradeResult => {
     const [name, ...rest] = check.split(/[:：]/);
@@ -202,32 +187,9 @@ export function gradeRun(checks: readonly string[], turns: readonly EvalTurn[], 
         const silent = turns.findIndex((t) => !t.section?.lines.some((l) => l.text.trim()));
         return { check, pass: turns.length > 0 && silent < 0, ...(!turns.length ? { why: '没有老师回复' } : silent >= 0 ? { why: `第 ${silent + 1} 轮没有讲稿` } : {}) };
       }
-      case '出画图卡':
-        return { check, pass: firstPaint >= 0, ...(firstPaint < 0 ? { why: `${turns.length} 轮都没写画图卡` } : {}) };
-      case '不出画图卡':
-        return { check, pass: firstPaint < 0, ...(firstPaint >= 0 ? { why: `第 ${firstPaint + 1} 轮写了画图卡` } : {}) };
-      case '画图卡前放过整段': {
-        if (firstPaint < 0) return { check, pass: true, why: '没写画图卡,不用判' };
-        // 整段那一节之后(含画图卡那一轮孩子说的话)孩子开过口:轮 k 的孩子话在轮 k 的老师那节之前,所以整段要在画图卡那一轮之前
-        const story = turns.slice(0, firstPaint).some((t) => (t.section?.cards ?? []).some((c) => segmentsOf(c).length >= 3));
-        return { check, pass: story, ...(story ? {} : { why: `第 ${firstPaint + 1} 轮写画图卡之前没放过整段` }) };
-      }
       case '放过整段': {
         const ok = turns.some((t) => (t.section?.cards ?? []).some((c) => segmentsOf(c).length >= 3));
         return { check, pass: ok, ...(ok ? {} : { why: `${turns.length} 轮都没放过三行以上的 read 卡` }) };
-      }
-      case '分幅至少': {
-        const need = Number(arg) || 1;
-        const bad = turns.flatMap((t, k) => paintCards(t.section).filter((c) => panelsOf(c).length < need).map((c) => `第 ${k + 1} 轮的画图卡 ${panelsOf(c).length} 幅`));
-        return { check, pass: !bad.length, ...(bad.length ? { why: `${bad.join(';')},要至少 ${need} 幅` } : {}) };
-      }
-      case '画图卡带题干和词': {
-        const bad = turns.flatMap((t, k) => paintCards(t.section).filter((c) => !(c.props as { ask?: unknown }).ask || !((c.props as { words?: unknown[] }).words ?? []).length).map(() => `第 ${k + 1} 轮的画图卡`));
-        return { check, pass: !bad.length, ...(bad.length ? { why: `${bad.join(';')}没写题干或词` } : {}) };
-      }
-      case '分幅没有看不见的词': {
-        const bad = allPanels.flatMap((p) => INVISIBLE_WORDS.filter((w) => p.includes(w)).map((w) => `「${w}」在「${p}」`));
-        return { check, pass: !bad.length, ...(bad.length ? { why: bad.join(';') } : {}) };
       }
       case '每节末句是问句': {
         const bad = turns.flatMap((t, k) => {
@@ -297,12 +259,6 @@ export function gradeRun(checks: readonly string[], turns: readonly EvalTurn[], 
         const [a, b] = arg.split('|').map((x) => x.trim());
         const ok = Boolean(a && b) && turns.some((t) => (t.section?.cards ?? []).some((c) => { const seg = segmentsOf(c).join('\n'); return seg.includes(a) && seg.includes(b); }));
         return { check, pass: ok, ...(ok ? {} : { why: `没有一张 read 卡同时有「${a}」和「${b}」` }) };
-      }
-      case '词落到幅': {
-        const words = Array.isArray(params.词) ? params.词 : [];
-        const need = Number(arg) || words.length;
-        const hit = words.filter((w) => allPanels.some((p) => p.includes(w)));
-        return { check, pass: hit.length >= need, ...(hit.length >= need ? {} : { why: `落到幅的词 ${hit.length} 个(${hit.join('、') || '无'}),要 ${need} 个` }) };
       }
       default:
         return { check, pass: false, why: '不认得这条判' };

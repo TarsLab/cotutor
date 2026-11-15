@@ -1424,9 +1424,7 @@ ${pageDomJs(4000)}
 
     const useBox = h('section', { class: 'blk' },
       h('div', { class: 'hd' }, h('h2', {}, '用量'), h('span', { class: 'sub' }, '近 7 天,按运行时')),
-      ...(d.usage.length ? d.usage.slice(0, 4).map((u) => h('div', { class: 'meter' }, h('div', { class: 't' }, h('b', { class: 'num' }, u.runtime), h('span', {}, u.turns + ' 轮 · ' + kTok(u.tokensIn) + ' / ' + kTok(u.tokensOut) + ' token')))) : [h('p', { class: 'note' }, '七天里没跑过老师')]),
-      h('div', { class: 'rule' }),
-      h('div', { class: 'meter' }, h('div', { class: 't' }, h('b', {}, '画图 · 今天'), h('span', {}, d.paint.today + ' 张'))));
+      ...(d.usage.length ? d.usage.slice(0, 4).map((u) => h('div', { class: 'meter' }, h('div', { class: 't' }, h('b', { class: 'num' }, u.runtime), h('span', {}, u.turns + ' 轮 · ' + kTok(u.tokensIn) + ' / ' + kTok(u.tokensOut) + ' token')))) : [h('p', { class: 'note' }, '七天里没跑过老师')]));
 
     const tbl = h('div', { class: 'tbl' }, h('div', { class: 'tr th' }, h('span', {}, '老师'), h('span', {}, '运行时'), h('span', { class: 'r' }, '轮'), h('span', { class: 'r' }, '首句中位'), h('span', { class: 'r' }, '最近'), h('span', {}, '孩子端')),
       ...d.tutors.filter((r) => r.enabled).map((r) => {
@@ -1826,7 +1824,7 @@ ${pageDomJs(4000)}
     return [
       h('div', { class: 'srow' }, fx.length ? h('span', { class: 'st err' }, fx.length + ' 处要改') : h('span', { class: 'st ok' }, '都对得上'), nt.length ? h('span', { class: 'st warn' }, nt.length + ' 条提醒') : null, h('span', { class: 'note' }, r.issues.length ? '点一条跳到那一行' : '边改边查,不落盘')),
       r.issues.length ? h('div', { class: 'ilist' }, ...r.issues.map((i) => h('button', { type: 'button', class: 'iss' + (i.level === 'fix' ? ' fix' : ''), on: { click: () => { if (i.line) jumpTo(i.line); } } }, h('b', { class: 'num' }, i.line ? '第 ' + i.line + ' 行' : '整份'), h('span', {}, i.text)))) : null,
-      h('div', { class: 'kv2' }, ...kv('家长填的', s.params.map(param).join(' · ')), ...kv('应用算的', s.state.join(' · ')), ...kv('应用拦的', s.gates.join(' · ')), ...kv('卡', s.cards.join(' ')), ...kv('工具人', s.tools.map((t) => t.tool + (t.slots.length ? '(' + t.slots.join(' ') + ')' : '')).join(' · ')), ...(s.page ? kv('不起老师', '进' + s.page) : [])),
+      h('div', { class: 'kv2' }, ...kv('家长填的', s.params.map(param).join(' · ')), ...kv('卡', s.cards.join(' ')), ...kv('工具人', s.tools.map((t) => t.tool + (t.slots.length ? '(' + t.slots.join(' ') + ')' : '')).join(' · ')), ...(s.page ? kv('不起老师', '进' + s.page) : [])),
       rule(),
       h('h3', {}, '首页上用到它的'),
       ...(r.buttons.length ? r.buttons.map((b) => h('div', { class: 'hb' }, h('span', { class: 'tx' }, h('b', {}, (b.kind === 'lecture' ? '小课堂 · ' : '') + b.label), h('small', {}, b.detail)), h('span', { class: 'st ' + (b.ok ? 'ok' : 'err') }, b.ok ? '对得上' : '孩子端不出'))) : [h('p', { class: 'note' }, '已发布的首页上没有按钮用它。')]),

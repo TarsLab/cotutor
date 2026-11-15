@@ -4,8 +4,6 @@
  *
  * 头上平铺 `name` / `description` / `cards`(这个 activity 要用的卡,空格隔开);正文按 `## ` 节分读者,标题就是读者:
  *   ## 家长填的       ```参数    一行一个:`名: 类型[,可空][,缺省 X][,A 到 B] —— 说明`
- *   ## 应用算的       ```应用算  一行一个:`名: 类型 —— 说明`(名字是应用会算的,见 ACTIVITY_STATE)
- *   ## 应用拦的       ```应用拦  一行一条:`规则 —— 说明`(规则是应用认得的,见 ACTIVITY_GATES)
  *   ## 老师怎么带     给有脸的老师;参数不插值,只用 `{{有 名}}` … `{{/有}}` 裁段
  *   ## <工具人>收到什么  ```<工具人> 一段模板,`{{插槽}}` 由应用填;```<工具人>不要 可选
  * 别的节只给人看,应用不读。这里是解析出来的形状;解析与检查在 src/runtime/activity.ts。
@@ -15,20 +13,6 @@ import { z } from 'zod';
 /** 家长填的参数能是哪几种 */
 export const ACTIVITY_PARAM_TYPES = ['字', '词表', '数', '日期', '课包'] as const;
 export type ActivityParamType = (typeof ACTIVITY_PARAM_TYPES)[number];
-
-/** 应用会算的值(名 → 类型);activity 文件「应用算的」只能列这里有的 */
-export const ACTIVITY_STATE: Readonly<Record<string, ActivityParamType>> = {
-  /** 这个话题还能画几张:参数「最多画」减已画;没填最多画 = 不限,不写(src/runtime/activity-state.ts) */
-  还能画: '数',
-  /** 上一张画图卡没画的原因(「应用拦的」哪一条没过);画了就是空的 */
-  缺: '字',
-};
-
-/** 应用认得的拦法(规则名 → 一句话);判断在 src/runtime/activity.ts gatePasses,画图前由 src/runtime/activity-state.ts 接上。activity 文件「应用拦的」只能列这里有的 */
-export const ACTIVITY_GATES: Readonly<Record<string, string>> = {
-  连说过一遍: '话题里有一张三行以上的 read 卡,孩子在它后面开过口',
-  还能画: '还能画大于 0;不限时照过',
-};
 
 /** 工具人模板里的插槽 `{{名}}` */
 export const ACTIVITY_SLOT = /\{\{([^{}\s]+)\}\}/g;
@@ -43,7 +27,6 @@ export function fillSlots(template: string, values: Readonly<Record<string, stri
 
 /** 工具人与它认得的插槽(都要在模板里出现) */
 export const ACTIVITY_TOOLS: Readonly<Record<string, { slots: readonly string[] }>> = {
-  画家: { slots: ['版式', '角色', '分幅'] },
   /** 听写的拍照认词(src/scenes/photo-words/recognize.ts):格式 = 回什么格式,应用接(FORMAT / FORMAT_EN) */
   认字: { slots: ['格式'] },
 };
@@ -75,7 +58,7 @@ export const ACTIVITY_BASES: Readonly<Record<string, string>> = {
 };
 
 /** 应用认的节标题;工具人那节是 `<工具人>收到什么` */
-export const ACTIVITY_SECTIONS = { params: '家长填的', state: '应用算的', gates: '应用拦的', tutor: '老师怎么带' } as const;
+export const ACTIVITY_SECTIONS = { params: '家长填的', tutor: '老师怎么带' } as const;
 export const ACTIVITY_TOOL_SECTION_RE = /^(.+?)收到什么$/;
 /** 首页按钮下面已经占用的行名,参数不能叫这些 */
 export const ACTIVITY_RESERVED_PARAMS = ['讲法', '留到'] as const;
@@ -98,21 +81,6 @@ export const ActivityParamSchema = z.object({
 });
 export type ActivityParam = z.infer<typeof ActivityParamSchema>;
 
-export const ActivityStateSchema = z.object({
-  name: z.string().min(1),
-  type: z.enum(ACTIVITY_PARAM_TYPES),
-  note: z.string().optional(),
-  line: z.number().int(),
-});
-export type ActivityState = z.infer<typeof ActivityStateSchema>;
-
-export const ActivityGateSchema = z.object({
-  rule: z.string().min(1),
-  note: z.string().optional(),
-  line: z.number().int(),
-});
-export type ActivityGate = z.infer<typeof ActivityGateSchema>;
-
 export const ActivityToolSchema = z.object({
   tool: z.string().min(1),
   /** ```<工具人> 围栏里的模板,原样(插槽没填) */
@@ -132,8 +100,6 @@ export const ActivitySchema = z.object({
   /** 头上 `cards:` 写的卡(原文,检查时对注册表) */
   cards: z.array(z.string()),
   params: z.array(ActivityParamSchema),
-  state: z.array(ActivityStateSchema),
-  gates: z.array(ActivityGateSchema),
   /** 头上的 `page:`:不起老师、进这一页(见 ACTIVITY_PAGES);没写 = 起老师 */
   page: z.string().optional(),
   /** 头上的 `board:`:page = 以板为主(见 ACTIVITY_BOARDS);没写 = 照卡片流 */
@@ -146,7 +112,7 @@ export const ActivitySchema = z.object({
 });
 export type Activity = z.infer<typeof ActivitySchema>;
 
-/** 参数与应用算的值:词表是一串词,数是整数,别的是一段字 */
+/** 参数的值:词表是一串词,数是整数,别的是一段字 */
 export const ActivityValueSchema = z.union([z.string(), z.number(), z.array(z.string())]);
 export type ActivityValue = z.infer<typeof ActivityValueSchema>;
 

@@ -546,7 +546,7 @@ export async function main(argv: string[]): Promise<void> {
       }
       case 'reset': {
         // 只把点名的出厂老师 / activity 换回出厂那份(工作台「恢复出厂」同一条路),别的不碰;现在那份存 .bak
-        if (!positionals.length) throw new ArgError('reset 要说换回哪几份,如 cotutor reset math-tutor 或 cotutor reset chinese-tutor/你说我画');
+        if (!positionals.length) throw new ArgError('reset 要说换回哪几份,如 cotutor reset math-tutor 或 cotutor reset chinese-tutor/看图说话');
         const { root } = resolveRoot(workspace);
         const said = await backupBeforeUpgrade(root);
         if (said && !json) process.stdout.write(`${said}\n`);
@@ -626,11 +626,11 @@ export async function main(argv: string[]): Promise<void> {
       }
       case 'activity': {
         const sub = positionals[0];
-        if (sub !== 'check' && sub !== 'eval') throw new ArgError(`activity 后面跟 check / eval,如 cotutor activity check chinese-tutor 你说我画`);
+        if (sub !== 'check' && sub !== 'eval') throw new ArgError(`activity 后面跟 check / eval,如 cotutor activity check chinese-tutor 看图说话`);
         const ws = loadWorkspace(workspace);
         const [, tutor, name] = positionals;
         if (sub === 'eval') {
-          if (!tutor || !name) throw new ArgError(`activity eval 要老师和名字,如 cotutor activity eval chinese-tutor 你说我画`);
+          if (!tutor || !name) throw new ArgError(`activity eval 要老师和名字,如 cotutor activity eval chinese-tutor 看图说话`);
           const runs = typeof flags.runs === 'string' ? Number(flags.runs) : 3;
           if (!Number.isInteger(runs) || runs < 1 || runs > 10) throw new UsageError('--runs 要是 1–10 的整数');
           const { evalActivity, makeKidModel } = await import('../activity-eval.ts');
@@ -638,7 +638,7 @@ export async function main(argv: string[]): Promise<void> {
             runs,
             ...(typeof flags.only === 'string' ? { only: flags.only } : {}),
             kid: makeKidModel(typeof flags['kid-model'] === 'string' ? { model: flags['kid-model'] } : {}),
-            onTurn: json ? undefined : (e) => process.stdout.write(`  ${e.example} #${e.run} 第 ${e.turn} 轮  孩子:${e.kid}\n      老师:${e.said.slice(0, 90)}${e.said.length > 90 ? '…' : ''}${e.paint ? '  [画图卡]' : ''}\n`),
+            onTurn: json ? undefined : (e) => process.stdout.write(`  ${e.example} #${e.run} 第 ${e.turn} 轮  孩子:${e.kid}\n      老师:${e.said.slice(0, 90)}${e.said.length > 90 ? '…' : ''}\n`),
           });
           if (json) process.stdout.write(`${JSON.stringify(redactDeep(r), null, 2)}\n`);
           else {
@@ -658,13 +658,13 @@ export async function main(argv: string[]): Promise<void> {
         const results = await checkActivities(ws.root, ws.config.tutors, { tutor, name });
         if (!results.length) throw new UsageError(tutor ? `agents/${tutor}/activities/ 里没有${name ? ` ${name}.md` : ' activity 文件'}` : '这个 workspace 里还没有 activity 文件(cotutor refresh 补出厂的)');
         const fixes = results.reduce((n, r) => n + r.issues.filter((i) => i.level === 'fix').length, 0);
-        if (json) process.stdout.write(`${JSON.stringify(redactDeep({ ok: fixes === 0, activities: results.map((r) => ({ tutor: r.tutor, name: r.name, file: r.file, issues: r.issues, params: r.activity?.params ?? [], state: r.activity?.state ?? [], gates: r.activity?.gates ?? [], tools: r.activity?.tools.map((t) => t.tool) ?? [] })) }), null, 2)}\n`);
+        if (json) process.stdout.write(`${JSON.stringify(redactDeep({ ok: fixes === 0, activities: results.map((r) => ({ tutor: r.tutor, name: r.name, file: r.file, issues: r.issues, params: r.activity?.params ?? [], tools: r.activity?.tools.map((t) => t.tool) ?? [] })) }), null, 2)}\n`);
         else {
           for (const r of results) {
             const bad = r.issues.filter((i) => i.level === 'fix').length;
             const a = r.activity;
             process.stdout.write(`${bad ? '✗' : '✓'} ${r.tutor}/${r.name}  ${redactHome(r.file)}\n`);
-            if (a) process.stdout.write(`    家长填的:${a.params.map((p) => `${p.name}(${p.type}${p.optional ? ',可空' : ''}${p.default !== undefined ? `,缺省 ${p.default}` : ''})`).join(' ') || '无'} · 应用算的:${a.state.map((x) => x.name).join(' ') || '无'} · 应用拦的:${a.gates.map((g) => g.rule).join(' ') || '无'} · 工具人:${a.tools.map((t) => t.tool).join(' ') || '无'}\n`);
+            if (a) process.stdout.write(`    家长填的:${a.params.map((p) => `${p.name}(${p.type}${p.optional ? ',可空' : ''}${p.default !== undefined ? `,缺省 ${p.default}` : ''})`).join(' ') || '无'} · 工具人:${a.tools.map((t) => t.tool).join(' ') || '无'}\n`);
             for (const i of r.issues) process.stdout.write(`    ${i.level === 'fix' ? '要改' : '提醒'}${i.line ? ` 第 ${i.line} 行` : ''}:${i.text}\n`);
           }
           process.stdout.write(fixes ? `有 ${fixes} 条要改\n` : '都对得上\n');

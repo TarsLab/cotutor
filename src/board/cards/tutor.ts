@@ -104,7 +104,7 @@ export const tutor: CardKind<TutorProps> = {
         buttons.push({ kind: 'lecture', bundle: m[1], label: m[2].trim() });
       } else if (ACTIVITY_LINE.test(line)) {
         const m = /^activity\s+(\S+)(?:\s+(.+))?$/.exec(line);
-        if (!m) throw new Error(`「${line}」:activity 要写成「activity <名> [孩子看到的字]」,如「activity 你说我画」`);
+        if (!m) throw new Error(`「${line}」:activity 要写成「activity <名> [孩子看到的字]」,如「activity 看图说话」`);
         buttons.push({ kind: 'activity', activity: m[1], label: (m[2] ?? m[1]).trim(), params: {} });
       } else buttons.push({ kind: 'start', label: line });
       const cps = Array.from(buttons[buttons.length - 1].label).length;

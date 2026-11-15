@@ -23,7 +23,7 @@ import { cardAssets, cardLabel, describeCard, tutorCardKinds } from '../board/ca
 import { boardGuideFor, cardGuidesFor } from '../board/cards/docs.ts';
 import { activityCards, parseActivity, renderTutorSection } from './activity.ts';
 import { findActivityFile } from './activities.ts';
-import { activityState, paintGate, paintTool, readActivity, threadActivity } from './activity-state.ts';
+import { readActivity, threadActivity } from './activity-state.ts';
 import { createBrain, getRuntime, type BrainExecutor, type BrainRequest, type RunPlan, type ToolSet } from '../brain/index.ts';
 import { lineFlags, parseBoard } from '../board/parse.ts';
 import { readyBeats, beatsOf, type BoardSection, type Device } from '../board/presentation.ts';
@@ -48,8 +48,6 @@ import { continueContext } from './home/store.ts';
 import { kidInput, type KidAccept } from './kid-input.ts';
 import { compatibleLine } from '../shared/qianwen.ts';
 import { DRAW_ONLY_TEXT, drawingPackLine } from '../board/paper.ts';
-import { makeDraw, type Draw } from '../media/draw.ts';
-import { paintLines, startPaints } from '../scenes/paint/painter.ts';
 import { lookAt } from '../media/vision.ts';
 import type { Look } from '../scenes/look.ts';
 import { photoPromptFrom, recognizeWith } from '../scenes/photo-words/recognize.ts';
@@ -99,7 +97,7 @@ export interface SendInput {
   drawing?: NonNullable<ConversationMessage['drawing']>;
   /** 这条是回放(app/replay.ts):原轮的 job,记进消息;调用方已经把 Runner 指到 evals/ */
   replayOf?: string;
-  /** cotutor activity eval 跑的一轮:不写记忆(画照画,画家由 eval 换成假的) */
+  /** cotutor activity eval 跑的一轮:不写记忆 */
   eval?: true;
   /** 孩子看完小课堂后的第一条:上下文包带 lecture:(课的每句、看的情况、画过的几处),消息记 lecture;again = 问过以后再看一遍又画了 */
   lecture?: { bundle: string; watchedMs: number; finished: boolean; pauses: number; again?: boolean; marks?: IncomingMark[]; log?: { t: number; pos: number; play: boolean }[] };
@@ -213,12 +211,12 @@ export async function gatherContext(ws: Workspace, tutor: string, input: { from:
 }
 
 /**
- * activity 的那两段:`activity:`(名字、参数、应用算的)每条都带;
+ * activity 的那两段:`activity:`(名字、参数)每条都带;
  * 「老师怎么带」那节(按参数与这个话题的卡裁过、剥了注释)+ 这个 activity 多带的卡的写法,作为一条笔记放进话题第一条(<cotutor-activity>),
  * 续话题没改过写「未变」(同守则)。文件不在、读不了 → activityGuide 写「缺」,老师照自己的文件做。返回给这轮的提醒。
  */
-export async function attachActivity(ws: Workspace, tutor: string, pack: ContextPack, run: ActivityRun, where: { date: string; messages: readonly ConversationMessage[]; thread: string; now: number }, inSystem = false): Promise<string[]> {
-  pack.activity = { name: run.name, params: run.params, state: {} };
+export async function attachActivity(ws: Workspace, tutor: string, pack: ContextPack, run: ActivityRun, inSystem = false): Promise<string[]> {
+  pack.activity = { name: run.name, params: run.params };
   const path = relative(ws.root, findActivityFile(ws.root, tutor, run.name)).split(sep).join('/');
   const text = await readFile(join(ws.root, path), 'utf8').catch(() => null);
   if (text === null) {
@@ -226,7 +224,6 @@ export async function attachActivity(ws: Workspace, tutor: string, pack: Context
     return [`activity ${run.name}:${path} 不在,老师没拿到「老师怎么带」`];
   }
   const a = parseActivity(text).activity;
-  pack.activity.state = await activityState(ws, tutor, where.date, where.messages, where.thread, run, a, where.now);
   // activity 已经是这个会话的系统提示:不再在第一条里带原文
   if (inSystem) {
     pack.activityGuide = ACTIVITY_IN_SYSTEM;
@@ -343,7 +340,7 @@ export async function packDryRun(ws: Workspace, tutor: string, input: { from: Me
   // 和 send 同一条规矩:孩子的话不带工具时,只有工具才用得上的路径不进包
   if (policy.tools !== 'on' && input.from === 'kid') { delete pack.refs; delete pack.vault; }
   const parts = await systemParts(ws, tutor, policy, pack, act);
-  if (input.activity) await attachActivity(ws, tutor, pack, input.activity, { date: localDate(input.at), messages: [], thread: '', now: input.at.getTime() }, parts.activityInSystem);
+  if (input.activity) await attachActivity(ws, tutor, pack, input.activity, parts.activityInSystem);
   return { prompt: buildContextPack(pack, input.text, policy.contextPack), pack, report };
 }
 
@@ -365,7 +362,7 @@ export class Runner {
   /** 还在后台跑的资产生成(测试与关服前 flush) */
   private readonly background = new Set<Promise<void>>();
   private readonly getWs: () => Workspace;
-  private readonly opts: { now?: () => Date; env?: NodeJS.ProcessEnv; draw?: Draw; look?: Look };
+  private readonly opts: { now?: () => Date; env?: NodeJS.ProcessEnv; look?: Look };
   private readonly listeners = new Set<(e: RunEventEnvelope) => void>();
   /** noteEvent 每个事件文件一条追加链 */
   private readonly notes = new Map<string, Promise<void>>();
@@ -379,14 +376,11 @@ export class Runner {
   get ws(): Workspace {
     return this.getWs();
   }
-  /** 画图卡交给谁画(测试与 mock 注入假的) */
-  readonly draw: Draw;
   /** 认照片上的字词交给谁看(测试注入假的);COTUTOR_VISION_ENDPOINT:测试与探针指到假百炼 */
   private readonly look: Look;
-  constructor(getWs: () => Workspace, opts: { now?: () => Date; env?: NodeJS.ProcessEnv; draw?: Draw; look?: Look } = {}) {
+  constructor(getWs: () => Workspace, opts: { now?: () => Date; env?: NodeJS.ProcessEnv; look?: Look } = {}) {
     this.getWs = getWs;
     this.opts = opts;
-    this.draw = opts.draw ?? makeDraw({ env: opts.env });
     const env0 = opts.env ?? process.env;
     const vision = env0.COTUTOR_VISION_ENDPOINT || undefined;
     // 脑指到了假百炼(测试、探针)而看图没指:不连真的,当没认成
@@ -657,7 +651,7 @@ export class Runner {
     const policy = resolvePolicy(ws.config, tutor);
     const { systemBody, activityInSystem } = await systemParts(ws, tutor, policy, gathered, act);
     const activityRun = input.bookkeep ? null : threadRun;
-    const activityWarn = activityRun ? await attachActivity(ws, tutor, gathered, activityRun, { date, messages: index.messages, thread, now: now.getTime() }, activityInSystem) : [];
+    const activityWarn = activityRun ? await attachActivity(ws, tutor, gathered, activityRun, activityInSystem) : [];
     // 家长笔记原文:新会话整篇带;续会话时这个话题带过、没改的只写「未变」
     const notes = noteVersions(gathered);
     const pack = session && !compact ? dropSeenNotes(gathered, seenNotes(index.messages, thread)) : gathered;
@@ -692,11 +686,6 @@ export class Runner {
     // 不带的那轮,只有工具才用得上的路径(refs / vault)不进包
     const tools: ToolSet = policy.tools === 'on' ? 'on' : input.from !== 'kid' || seen.length > 0 || drawings > 0 ? 'read' : 'off';
     if (tools === 'off') { delete pack.refs; delete pack.vault; }
-    // 画图卡:这个话题上一节有画图卡,告诉老师画好没有(老师看不到图)
-    if (!fresh && !input.bookkeep) {
-      const prevAt = index.messages.map((m, i) => ({ m, th: known[i] })).reverse().find((x) => x.th === thread && x.m.result === 'ok' && x.m.section);
-      if (prevAt?.m.section?.cards.some((c) => c.kind === 'paint')) for (const line of await paintLines(ws, tutor, date, prevAt.m.job, prevAt.m.section)) cards.push({ card: line.slice(0, line.indexOf(' ')), text: line.slice(line.indexOf(' ') + 1) });
-    }
     if (cards.length) pack.cards = cards.map((c) => `${c.card} ${c.pack ?? c.text}`);
     if (seen.length) { pack.photos = seen; pack.photoFiles = seen.map((p) => join(ws.root, p)); }
     // 纸上的画排在 photos 最后:它自己,再是清掉的那几版
@@ -1007,15 +996,6 @@ export class Runner {
         this.background.add(bg);
         void bg.finally(() => this.background.delete(bg));
       }
-    }
-    // 画图卡:后台画,一张一张排着;回放不画
-    if (kidView.section?.cards.some((c) => c.kind === 'paint')) {
-      const clock = (): number => (this.opts.now?.() ?? new Date()).getTime();
-      const gate = await paintGate(ws, tutor, date, job, clock).catch(() => null);
-      const painter = await paintTool(ws, tutor, date, job).catch(() => null);
-      const bg = startPaints(ws, tutor, date, job, kidView.section, { draw: this.draw, now: this.opts.now, replay: Boolean(latest.messages.find((m) => m.job === job)?.replayOf), ...(gate ? { gate } : {}), painter });
-      this.background.add(bg);
-      void bg.finally(() => this.background.delete(bg));
     }
     return next;
   }

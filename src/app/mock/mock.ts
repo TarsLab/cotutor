@@ -131,11 +131,7 @@ function withMockLooks(section: BoardSection, tutor: string, i: number): BoardSe
   return { ...section, cards, lines };
 }
 
-/** 孩子发出后几毫秒内画图卡算「画家在画」(含老师想的那几秒;真的 qwen-image-2.0-pro 约 15 秒) */
-const MOCK_PAINT_MS = 20000;
-/** 画图卡的占位图:方的 2×2 四格,每格一个圆圈数字 */
 const MOCK_PLAN_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500"><rect width="800" height="500" fill="#f4f1ea"/><text x="330" y="80" font-size="26" font-family="sans-serif" fill="#333">安全疏散示意图</text><text x="712" y="52" font-size="24" font-family="sans-serif" fill="#333">北</text><path d="M724 100V62M714 76l10-16 10 16" fill="none" stroke="#c0392b" stroke-width="4"/><rect x="100" y="120" width="100" height="120" fill="#cfe3d2" stroke="#333" stroke-width="2"/><text x="150" y="172" font-size="22" font-family="sans-serif" fill="#333" text-anchor="middle">体育</text><text x="150" y="204" font-size="22" font-family="sans-serif" fill="#333" text-anchor="middle">库房</text><rect x="200" y="120" width="100" height="120" fill="#e6e8b8" stroke="#333" stroke-width="2"/><text x="250" y="172" font-size="22" font-family="sans-serif" fill="#333" text-anchor="middle">美术</text><text x="250" y="204" font-size="22" font-family="sans-serif" fill="#333" text-anchor="middle">教室</text><rect x="300" y="120" width="100" height="120" fill="#eeeeee" stroke="#333" stroke-width="2"/><text x="350" y="188" font-size="22" font-family="sans-serif" fill="#333" text-anchor="middle">楼梯</text><rect x="400" y="120" width="100" height="120" fill="#d5dbee" stroke="#333" stroke-width="2"/><text x="450" y="172" font-size="22" font-family="sans-serif" fill="#333" text-anchor="middle">心理</text><text x="450" y="204" font-size="22" font-family="sans-serif" fill="#333" text-anchor="middle">辅导室</text><rect x="500" y="120" width="100" height="120" fill="#f1ead9" stroke="#333" stroke-width="2"/><text x="550" y="172" font-size="22" font-family="sans-serif" fill="#333" text-anchor="middle">卫生</text><text x="550" y="204" font-size="22" font-family="sans-serif" fill="#333" text-anchor="middle">保健室</text><rect x="600" y="120" width="100" height="120" fill="#e3cdc3" stroke="#333" stroke-width="2"/><text x="650" y="188" font-size="22" font-family="sans-serif" fill="#333" text-anchor="middle">教室一</text><text x="60" y="290" font-size="22" font-family="sans-serif" fill="#333">西门</text><text x="380" y="420" font-size="22" font-family="sans-serif" fill="#333">南门</text><path d="M700 280H130M150 268l-20 12 20 12" fill="none" stroke="#333" stroke-width="3"/></svg>';
-const MOCK_PAINT_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#fbfaf6"/>${[[24, 24, '#dcecf7'], [524, 24, '#fdeccb'], [24, 524, '#e3f1d8'], [524, 524, '#f6dde4']].map(([x, y, c], i) => `<rect x="${x}" y="${y}" width="476" height="476" rx="24" fill="${c}" stroke="#8a8781" stroke-width="3"/><rect x="${x}" y="${Number(y) + 300}" width="476" height="176" fill="#a9d18e"/><circle cx="${Number(x) + 238}" cy="${Number(y) + 250}" r="70" fill="#9a6235"/><circle cx="${Number(x) + 62}" cy="${Number(y) + 62}" r="34" fill="#fff" stroke="#1f8a4c" stroke-width="6"/><text x="${Number(x) + 62}" y="${Number(y) + 76}" font-size="40" text-anchor="middle" fill="#1f8a4c" font-family="sans-serif" font-weight="700">${i + 1}</text>`).join('')}</svg>`;
 
 /**
  * 照片板的「点字」用的假课本页(800 × 1000):一排识字、一排写字、两个词语;字的位置是定死的,MOCK_PAGE_WORDS 的框照它算(千分比)。
@@ -267,31 +263,6 @@ gǔ lì
 鼓是敲鼓的鼓,励是[努力]的力多一个厂字头,一个人在厂下面使劲。
 
 你想再看一遍哪个字?点一下它就再写一遍。`,
-      // 你说我画:出题版的画图卡;mock 不真画,刚出来几秒是「画家在画」,之后给一张占位的四格
-      `你说得清清楚楚,四个词都放好了。
-
-~~~read
-春天的早上,小熊和小猴在地里种西瓜。
-小熊把种子埋进土里,小猴坐在树下吃桃子。
-中午太阳很大,小熊给小苗浇水,小猴躺在树下睡大觉。
-过了一个夏天,小熊的地里结满了大西瓜,小猴的地里只长了草。
-小熊推着满满一车西瓜,送给小猴一个,小猴低着头,脸红红的。
-~~~
-
-这是你出的题,画家开始画了。
-
-~~~paint
-题: 图上画了谁?他们分别在干什么?结果又是怎样的?用上词语宝库里的词,写几句话。
-词: 播种、睡大觉、满满、羞愧
-角色: 小熊:棕色,戴黄色草帽,穿绿色背带裤
-角色: 小猴:黄褐色,穿红背心
-1. 春天的早上,地里。小熊弯着腰把西瓜种子埋进土里;小猴坐在树下吃桃子。
-2. 中午,大太阳。小熊提着水壶给小苗浇水;小猴躺在树荫下睡大觉。
-3. 夏天,小熊的地里结满大西瓜,小熊抱着一个笑着;小猴的地里只长了草。
-4. 小熊推着满满一车西瓜,递给小猴一个;小猴低着头,脸红红的。
-~~~
-
-你猜,画家会把小猴画成什么样子?`,
     ],
   },
   {
@@ -711,15 +682,6 @@ export function createMock(opts: MockOptions = {}): Mock {
   /** 话题打星(家长端清单上):<老师>/<话题> → 1–5;记过账的话题(同样的键) */
   const ratings = new Map<string, number>();
   const booked = new Set<string>();
-  /** 孩子这回发的消息是真钟几点发的(mock 的 now 可能是假钟;画图卡「在画」按它算,种子里的直接是画好的) */
-  const sentAt = new Map<string, number>();
-  /** 画图卡(mock 不真画):发出后 MOCK_PAINT_MS 内是「画家在画」,之后给一张占位的四格(/api/kid/image 认 mock-paint/);家长端多一行 note */
-  const mockPaints = (section: BoardSection, m: MockMessage, parent = false): BoardSection => {
-    if (!section.cards.some((c) => c.kind === 'paint')) return section;
-    const t = sentAt.get(m.job);
-    const drawing = t !== undefined && Date.now() - t < MOCK_PAINT_MS;
-    return { ...section, cards: section.cards.map((c, n) => (c.kind !== 'paint' ? c : { ...c, props: { ...c.props, drawn: drawing ? 'drawing' : 'done', ...(drawing ? {} : { pic: `mock-paint/${m.job}-${n}.png` }), ...(parent ? { note: drawing ? '在画(mock)' : '画好了:qwen-image-2.0-pro,15 秒(mock 的占位图)' } : {}) } })) };
-  };
   /** 下发孩子端的形状:答案剥掉、状态并到卡上、小课堂卡补那一段的起止(样本课包在仓库里) */
   const kidMessage = async (m: MockMessage): Promise<KidMessage> => {
     const { states, action: _a, submitted: _s, lectureWatch: _w, lectureLog: _l, drawing, ...rest } = m;
@@ -729,7 +691,7 @@ export function createMock(opts: MockOptions = {}): Mock {
     // 卡的配音同真服务挂在 assets 上(<job>.cards/<n>/<段号>.mp3),都是静音(见 /api/audio)
     const voiced = (c: BoardCard, i: number) => { const a = cardAssets(c); return a.length ? { assets: a.map((x) => `mock.${m.job}.cards/${i}/${x.file}`) } : {}; };
     const withState = m.section ? { ...m.section, cards: m.section.cards.map((c, i) => ({ ...c, ...voiced(c, i), ...(done.has(`${m.job}/${i}`) ? { submitted: true } : {}), ...(states && i in states ? { state: states[i] } : {}) })) } : null;
-    const section = withState ? mockPaints(await enrichLectures(MOCK_LECTURE_DIRS, stripSecrets(withState)), m) : null;
+    const section = withState ? await enrichLectures(MOCK_LECTURE_DIRS, stripSecrets(withState)) : null;
     return { ...rest, ...(drawing && rest.question !== null ? { drawing: { image: drawing.image, strokes: drawing.strokes, ...(drawing.ms !== undefined ? { ms: drawing.ms } : {}) } } : {}), section };
   };
   // 学科色同真服务:按老师的先后定(src/ui/shared/tutor-color.ts)
@@ -944,7 +906,7 @@ export function createMock(opts: MockOptions = {}): Mock {
       const out = await Promise.all(list.map(async (m, i) => {
         const { states, ...rest } = m;
         const withState = (c: BoardSection['cards'][number], k: number) => (states && k in states ? { ...c, state: states[k] } : c);
-        const section = m.section ? mockPaints(await enrichLectures(MOCK_LECTURE_DIRS, { ...m.section, cards: m.section.cards.map(withState) }), m, true) : null;
+        const section = m.section ? await enrichLectures(MOCK_LECTURE_DIRS, { ...m.section, cards: m.section.cards.map(withState) }) : null;
         return { ...rest, from: 'kid' as const, section, ...(i === 0 && !m.pending ? { parentText: '## 家长\n第一遍就答上了,后面那句是我故意留的:看他会不会自己往下想。', remembered: [`${date} 讲故事时爱抢着说结局,可以先让他猜`] } : {}) };
       }));
       const pending = list.find((m) => m.pending);
@@ -1124,7 +1086,6 @@ export function createMock(opts: MockOptions = {}): Mock {
         }
         const lt = lec ? mockLecture(lec.bundle) : null;
         const marks = lt ? storedMarks(lt, marksIn, photos.length) : [];
-        sentAt.set(job, Date.now());
         // 新话题的第一条:话题还没有时画的那张纸归它(同真服务的 adoptPaper)
         if (thread === job && papers.has(`${name}|new`) && !papers.has(`${name}|${thread}`)) { papers.set(`${name}|${thread}`, papers.get(`${name}|new`)!); papers.delete(`${name}|new`); }
         const boardFirst = thread === job && name === 'chinese-tutor' && typeof button === 'object' && button !== null && button.kind === 'activity' && button.activity === '预习';
@@ -1183,9 +1144,8 @@ export function createMock(opts: MockOptions = {}): Mock {
       return { status: 200, json: n <= 2 ? { state: 'running', items: MOCK_PAGE_WORDS.slice(0, 3), lines: [] } : { state: 'done', items: MOCK_PAGE_WORDS, lines: MOCK_PAGE_LINES } };
     }
     if (p === '/api/kid/image') {
-      // 图片卡:任何路径都给一张占位 svg(写着路径),前端能看到版式;画图卡(mock-paint/)给一张方的四格
+      // 图片卡:任何路径都给一张占位 svg(写着路径),前端能看到版式
       const rel = url.searchParams.get('p') ?? '';
-      if (rel.startsWith('mock-paint/')) return { status: 200, contentType: 'image/svg+xml', html: MOCK_PAINT_SVG };
       const up = uploads.get(rel);
       if (up) return { status: 200, contentType: up.type, body: up.data };
       // 照片底板(板卡的「照片」)用的假作业:一排六间屋子的平面图,800 × 500

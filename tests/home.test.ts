@@ -100,12 +100,12 @@ const tutors: Record<string, HomeTutorInfo> = {
   check('孩子端按钮:新话题、文件里的;应用不再加「接着刚才的」;找不到的接着不出现;讲法不下发', kb.map((b) => b.id).join() === 'new,0,1' && !JSON.stringify(kb).includes('brief') && !JSON.stringify(kb).includes('接着刚才的'), JSON.stringify(kb));
   const pv = kidButtons(buttons, { alive, keepBriefs: true });
   check('家长预览留讲法', pv.map((b) => b.id).join() === 'new,0,1' && JSON.stringify(pv).includes('念给他听'));
-  const acts = [{ kind: 'lecture', label: '分一分', bundle: 'b1' }, { kind: 'lecture', label: '看图', bundle: 'b1', activity: '看图说话' }, { kind: 'activity', label: '画', activity: '你说我画', params: {} }] as never[];
+  const acts = [{ kind: 'lecture', label: '分一分', bundle: 'b1' }, { kind: 'lecture', label: '看图', bundle: 'b1', activity: '看图说话' }, { kind: 'activity', label: '预', activity: '预习', params: {} }] as never[];
   const only = (names: string[]) => kidButtons(acts, { alive, activity: (n) => names.includes(n) }).map((b) => b.label).slice(1).join();
-  check('activity 文件不在的按钮不出:小课堂看完照「小课堂」,挂了的照挂的', only(['小课堂', '看图说话', '你说我画']) === '分一分,看图,画' && only(['看图说话']) === '看图' && only(['小课堂']) === '分一分');
+  check('activity 文件不在的按钮不出:小课堂看完照「小课堂」,挂了的照挂的', only(['小课堂', '看图说话', '预习']) === '分一分,看图,预' && only(['看图说话']) === '看图' && only(['小课堂']) === '分一分');
   const seen: string[] = [];
-  kidButtons([{ kind: 'activity', label: '出题', activity: '你说我画', params: { 词: '春风' } }, { kind: 'lecture', label: '课', bundle: 'b1' }] as never[], { alive, activity: (n, p) => { seen.push(n + JSON.stringify(p)); return true; } });
-  check('判断用不用得了时带上按钮的参数(小课堂挂的不带)', seen.join(' ') === '你说我画{"词":"春风"} 小课堂{}', seen.join(' '));
+  kidButtons([{ kind: 'activity', label: '出题', activity: '预习', params: { 范围: '春风' } }, { kind: 'lecture', label: '课', bundle: 'b1' }] as never[], { alive, activity: (n, p) => { seen.push(n + JSON.stringify(p)); return true; } });
+  check('判断用不用得了时带上按钮的参数(小课堂挂的不带)', seen.join(' ') === '预习{"范围":"春风"} 小课堂{}', seen.join(' '));
   const taken = new Set(['2026-09-17-2130', '2026-09-17-2130-2']);
   check('发布 id:时分,同一分钟加序号', homeId(new Date(2026, 8, 17, 21, 30), (x) => taken.has(x)) === '2026-09-17-2130-3' && homeId(new Date(2026, 8, 17, 8, 5), () => false) === '2026-09-17-0805');
 }

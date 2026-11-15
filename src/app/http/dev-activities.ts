@@ -129,7 +129,7 @@ export function activitySections(text: string): { title: string; reader: string;
     if (!m) return;
     const title = m[1];
     const tool = ACTIVITY_TOOL_SECTION_RE.exec(title)?.[1];
-    const reader = title === ACTIVITY_SECTIONS.tutor ? '老师的系统提示' : tool ? (tool in ACTIVITY_TOOLS ? (tool === '画家' ? '百炼文生图' : tool === '认字' ? '拍照认词' : tool) : tool) : '给你';
+    const reader = title === ACTIVITY_SECTIONS.tutor ? '老师的系统提示' : tool ? (tool in ACTIVITY_TOOLS ? (tool === '认字' ? '拍照认词' : tool) : tool) : '给你';
     out.push({ title, reader, line: i + 1 });
   });
   return out;
@@ -164,8 +164,6 @@ export interface DevActivityCheck {
   issues: ActivityIssue[];
   summary: {
     params: { name: string; type: string; optional: boolean; default?: string; min?: number; max?: number }[];
-    state: string[];
-    gates: string[];
     cards: string[];
     tools: { tool: string; slots: readonly string[] }[];
     page: string | null;
@@ -214,8 +212,6 @@ export async function checkDevActivity(ws: Workspace, tutor: string, name: strin
 function summaryOf(a: Activity): DevActivityCheck['summary'] {
   return {
     params: a.params.map((x) => ({ name: x.name, type: x.type, optional: x.optional, ...(x.default !== undefined ? { default: x.default } : {}), ...(x.min !== undefined ? { min: x.min } : {}), ...(x.max !== undefined ? { max: x.max } : {}) })),
-    state: a.state.map((x) => x.name),
-    gates: a.gates.map((x) => x.rule),
     cards: a.cards,
     tools: a.tools.map((t) => ({ tool: t.tool, slots: ACTIVITY_TOOLS[t.tool]?.slots ?? [] })),
     page: a.page ? (ACTIVITY_PAGES[a.page] ?? a.page) : null,

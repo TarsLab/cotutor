@@ -63,7 +63,7 @@ export const POLICY_DEFAULTS: Policy = {
 };
 
 /** 板书能用的卡(注册表顺序;tests/cards.test.ts 断言与 src/board/cards 的 kindsFor('board') 一致,这里不 import 卡,免得契约拖进卡的依赖) */
-export const BOARD_CARD_KINDS = ['text', 'read', 'choice', 'image', 'tianzige', 'word', 'lecture', 'canvas', 'kit', 'paint', 'photo', 'code'] as const;
+export const BOARD_CARD_KINDS = ['text', 'read', 'choice', 'image', 'tianzige', 'word', 'lecture', 'canvas', 'kit', 'photo', 'code'] as const;
 export type BoardCardKind = (typeof BOARD_CARD_KINDS)[number];
 
 /** agent 名:与 agents/<name>.md 的 frontmatter name 一致,小写字母数字连字符 */
@@ -279,27 +279,6 @@ export const DictationSchema = z.object({
 });
 export type DictationConfig = z.infer<typeof DictationSchema>;
 
-/**
- * 你说我画:画图卡(paint)用哪个文生图模型、画多大、画成什么样(一天几张的上限 10-21 去掉了,老配置里的 daily 不认)。
- * 画风在 activity 文件「画家收到什么」那节;PAINT_PROMPT_DEFAULT 是出厂那节的画风,不在 activity 话题里画照它。版式、角色、分幅由应用接(src/scenes/paint/prompt.ts)。
- * 2026-10-11 拿「小熊和小猴种西瓜」四格试:qwen-image-2.0 4 秒、qwen-image-2.0-pro 15 秒,四格里角色都对得上;pro 的表情(低头、脸红)更到位。
- * 2026-10-13 缺省换 qwen-image-3.0-pro:千问 Token Plan 有它(一张约 50 Credits),2.0 系列没有;同一个四格 10 秒,画风照提示词,角色分到哪格有几处没对上。
- * 2026-10-21「除了圆圈数字」挪进多格的版式:写在画风里一幅的图也收到,宇宙那张散着画了 ①③Ⓐ。
- */
-export const PAINT_PROMPT_DEFAULT = [
-  '儿童绘本插画,水彩加干净的线条,颜色明亮柔和,像小学语文练习册里的看图写话插图。',
-  '人物是可爱的卡通形象,表情和动作夸张一点,一眼看得出在干什么、心情怎样。',
-  '画面里不要任何文字、对话气泡、拟声词。',
-];
-/** 反向提示词(百炼限 500 字符):画家不要的;activity 文件「画家收到什么」没写就用它 */
-export const PAINT_NEGATIVE = '文字,字母,水印,对话气泡,拟声词,写实照片,恐怖,血腥,武器,畸形的手,多余的肢体,格子数量不对';
-export const PAINT_DEFAULT = { model: 'qwen-image-3.0-pro', size: '1280*1280' };
-export const PaintSchema = z.object({
-  model: z.string().min(1).default(PAINT_DEFAULT.model).describe('画图用的千问文生图模型(同步接口):qwen-image-3.0-pro 约 10–20 秒,Token Plan 有它;qwen-image-2.0-pro(约 15 秒)、qwen-image-2.0(约 4 秒)只有百炼按量'),
-  size: z.string().regex(/^\d{3,4}\*\d{3,4}$/).default(PAINT_DEFAULT.size).describe('图多大,「宽*高」;四格是方的,缺省 1280*1280(总像素在 512*512 到 2048*2048 之间)'),
-});
-export type PaintConfig = z.infer<typeof PaintSchema>;
-
 export const CotutorConfigSchema = z
   .object({
     version: z.literal(1),
@@ -332,7 +311,6 @@ export const CotutorConfigSchema = z
       .optional()
       .describe('给老师换样子(figshot pick):它在这台电脑的哪个端口(缺省 8477)。配了孩子端首页多一张「给老师们换个样子」,figshot 没开着就不出现;不配就没有这张卡'),
     dictation: DictationSchema.default(DICTATION_DEFAULT).describe('听写(/dictation):拍照认词表用的模型(改了不用重起服务);挑词的要求在听写 activity 文件「认字收到什么」'),
-    paint: PaintSchema.default(PAINT_DEFAULT).describe('你说我画:画图卡(paint)用的文生图模型、尺寸(改了不用重起服务);画风在 activity 文件「画家收到什么」'),
     talk: TalkSchema.default(TALK_DEFAULT).describe('口语课(/talk):孩子拍一张今天学的,改好口语单交给英语老师的实时页(先热身、再打电话);enabled 出厂 false'),
     live: LiveSchema.default(LIVE_DEFAULT).describe('实时老师:有脸的老师都由 realtime 模型开口、脑在后面写板书(讲稿不配音、嘴照念);voices 挑嘴的音色;要百炼按量 key 与业务空间 id'),
   })

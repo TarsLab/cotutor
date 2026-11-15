@@ -110,9 +110,9 @@ try {
   // activity:只看,改了不存,最后撤销
   await click('#side a[data-tab=activity]');
   ok('activity:列表与原文出来了', await waitFor(`document.querySelectorAll('#activity .ai').length > 0 && document.querySelector('#activity .eta') !== null`));
-  if (await evaluate(`[...document.querySelectorAll('#activity .ai')].some((b) => b.textContent.includes('你说我画'))`)) {
-    await clickEl(`[...document.querySelectorAll('#activity .ai')].find((b) => b.textContent.includes('你说我画'))`);
-    await waitFor(`document.querySelector('#activity .ehead h2')?.textContent === '你说我画'`);
+  if (await evaluate(`[...document.querySelectorAll('#activity .ai')].some((b) => b.textContent.includes('看图说话'))`)) {
+    await clickEl(`[...document.querySelectorAll('#activity .ai')].find((b) => b.textContent.includes('看图说话'))`);
+    await waitFor(`document.querySelector('#activity .ehead h2')?.textContent === '看图说话'`);
   }
   ok('activity:检查跑完、节出来了', await waitFor(`document.querySelector('#activity .aside .srow .st') !== null && document.querySelectorAll('#activity .secs button').length > 1`));
   ok('activity:原文与底色层同高(折行对得齐)', await evaluate(`(() => { const ta = document.querySelector('#activity .eta'); const bd = document.querySelector('#activity .bd'); return Math.abs(ta.offsetHeight - bd.scrollHeight) <= 2 && bd.children.length === ta.value.split('\\n').length; })()`));

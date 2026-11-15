@@ -115,10 +115,10 @@ export const ContextPackSchema = z.object({
   /** 孩子从左栏的纸交来的画:一句话说它是 photos 第几张、几笔、各颜色几笔、画了多久、清空过几次(清掉的那几版是 photos 第几张) */
   drawing: z.string().optional(),
   /**
-   * 孩子从首页的 activity 进来的话题:哪个 activity、家长填的参数(点的那一刻,补了缺省)、应用算的值。
-   * 话题里每条都带;放在 YAML 块最后,键序固定(name、params、state;参数照文件「家长填的」的顺序)
+   * 孩子从首页的 activity 进来的话题:哪个 activity、家长填的参数(点的那一刻,补了缺省)。
+   * 话题里每条都带;放在 YAML 块最后,键序固定(name、params;参数照文件「家长填的」的顺序)
    */
-  activity: z.object({ name: z.string().min(1), params: z.record(z.string(), ActivityValueSchema).default({}), state: z.record(z.string(), ActivityValueSchema).default({}) }).optional(),
+  activity: z.object({ name: z.string().min(1), params: z.record(z.string(), ActivityValueSchema).default({}) }).optional(),
   /** 这条消息带的作业照片(相对 workspace 根,一行一张;老师先 Read 再答;R5) */
   photos: z.array(z.string()).optional(),
   /** photos 里同一批照片的绝对路径,顺序一一对应:Read 工具只认绝对路径,老师的 cwd 在 agents/<名>/,不给就得先 find 一轮(2026-09-18 真跑) */

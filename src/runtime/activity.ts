@@ -5,24 +5,19 @@
 import {
   ACTIVITY_BASES,
   ACTIVITY_BOARDS,
-  ACTIVITY_GATES,
   ACTIVITY_PAGES,
   ACTIVITY_PARAM_TYPES,
   ACTIVITY_RESERVED_PARAMS,
   ACTIVITY_SECTIONS,
   ACTIVITY_SLOT,
-  ACTIVITY_STATE,
   ACTIVITY_TOOLS,
   ACTIVITY_TOOL_SECTION_RE,
   BOARD_CARD_KINDS,
   type Activity,
-  type ActivityGate,
   type ActivityParam,
   type ActivityParamType,
-  type ActivityState,
   type ActivityTool,
   type ActivityValue,
-  type ConversationMessage,
 } from '../schema/index.ts';
 import { parseAgentFile } from './agent-file.ts';
 import { GUARD_CLOSE, GUARD_OPEN, applyGuards } from '../board/card-guards.ts';
@@ -122,21 +117,6 @@ function parseParam(l: Line, issues: ActivityIssue[]): ActivityParam | null {
   return p;
 }
 
-function parseState(l: Line, issues: ActivityIssue[]): ActivityState | null {
-  const n = namedLine(l.text);
-  if (!n || !isType(n.spec)) {
-    issues.push({ level: 'fix', text: `「${l.text.trim()}」:应用算的写成「名: 类型 —— 说明」,如「还能画: 数 —— 这个话题还能画几张」`, line: l.no });
-    return null;
-  }
-  return { name: n.name, type: n.spec, line: l.no, ...(n.note ? { note: n.note } : {}) };
-}
-
-function parseGate(l: Line): ActivityGate {
-  const [rule, ...rest] = l.text.trim().split(NOTE_SEP);
-  const note = rest.join('——').trim();
-  return { rule: rule.trim(), line: l.no, ...(note ? { note } : {}) };
-}
-
 const contentLines = (f: Fence): Line[] => f.lines.filter((l) => l.text.trim());
 
 /** 去掉一段行的头尾空行,拼回原文 */
@@ -191,8 +171,6 @@ export function parseActivity(text: string): ParsedActivity {
     ...(frontmatter.board?.trim() ? { board: frontmatter.board.trim() } : {}),
     ...(frontmatter.base?.trim() ? { base: frontmatter.base.trim() } : {}),
     params: [],
-    state: [],
-    gates: [],
     tutor: null,
     tools: [],
   };
@@ -219,17 +197,6 @@ export function parseActivity(text: string): ParsedActivity {
         const p = parseParam(l, issues);
         if (p) activity.params.push(p);
       }
-    } else if (s.title === ACTIVITY_SECTIONS.state) {
-      const fs = pick('应用算');
-      if (!fs.length) issues.push({ level: 'fix', text: '「## 应用算的」里要有一个 ```应用算 围栏,一行一个', line: s.no });
-      for (const l of fs.flatMap(contentLines)) {
-        const st = parseState(l, issues);
-        if (st) activity.state.push(st);
-      }
-    } else if (s.title === ACTIVITY_SECTIONS.gates) {
-      const fs = pick('应用拦');
-      if (!fs.length) issues.push({ level: 'fix', text: '「## 应用拦的」里要有一个 ```应用拦 围栏,一行一条', line: s.no });
-      activity.gates.push(...fs.flatMap(contentLines).map(parseGate));
     } else if (tool !== undefined) {
       if (!ACTIVITY_TOOLS[tool]) {
         issues.push({ level: 'fix', text: `没有「${tool}」这个工具人:只有 ${Object.keys(ACTIVITY_TOOLS).join('、')}`, line: s.no });
@@ -263,7 +230,7 @@ export function activityCards(a: Activity, tutorCards?: readonly string[]): stri
   return [...new Set(['text', ...base, ...a.cards.filter(isCardKind)])];
 }
 
-/** 对注册表查:参数、应用算的、应用拦的、裁段的名字、正文用的卡、插槽、第一句与收 */
+/** 对注册表查:参数、裁段的名字、正文用的卡、插槽、第一句与收 */
 export function checkActivity(a: Activity, opts: CheckOptions = {}): ActivityIssue[] {
   const issues: ActivityIssue[] = [];
   const fix = (text: string, line?: number): void => void issues.push({ level: 'fix', text, ...(line ? { line } : {}) });
@@ -289,22 +256,6 @@ export function checkActivity(a: Activity, opts: CheckOptions = {}): ActivityIss
       }
       if (p.type === '日期' && !/^\d{4}-\d{2}-\d{2}$/.test(p.default)) fix(`参数「${p.name}」是日期,缺省要写成 2026-10-12 这样`, p.line);
     }
-  }
-
-  const stateSeen = new Set<string>();
-  for (const s of a.state) {
-    const want = ACTIVITY_STATE[s.name];
-    if (stateSeen.has(s.name)) fix(`应用算的「${s.name}」写了两次`, s.line);
-    stateSeen.add(s.name);
-    if (!want) fix(`应用不会算「${s.name}」:只有 ${Object.keys(ACTIVITY_STATE).join('、')}`, s.line);
-    else if (want !== s.type) fix(`应用算的「${s.name}」是${want},这里写成了${s.type}`, s.line);
-  }
-
-  const gateSeen = new Set<string>();
-  for (const g of a.gates) {
-    if (gateSeen.has(g.rule)) fix(`应用拦的「${g.rule}」写了两次`, g.line);
-    gateSeen.add(g.rule);
-    if (!ACTIVITY_GATES[g.rule]) fix(`应用不认得「${g.rule}」这条拦法:只有 ${Object.keys(ACTIVITY_GATES).join('、')}(拦法只能加在代码里,这里只能删)`, g.line);
   }
 
   if (a.board !== undefined && !ACTIVITY_BOARDS[a.board]) fix(`头上 board 写的「${a.board}」不认得:只有 ${Object.keys(ACTIVITY_BOARDS).join('、')}`);
@@ -408,36 +359,4 @@ export function resolveParams(a: Activity, raw: Readonly<Record<string, string>>
     else values[p.name] = text;
   }
   return { values, issues };
-}
-
-/** 拦法要看的:这个话题的消息(文件顺序)、这一轮的 job、应用算好的值 */
-export interface GateInput {
-  thread: readonly Pick<ConversationMessage, 'job' | 'from' | 'action' | 'section'>[];
-  job: string;
-  state: Readonly<Record<string, ActivityValue>>;
-}
-
-/** 整段放出来的那张 read 卡:三行以上 */
-const STORY_LINES = 3;
-
-/** 一条拦法过没过(规则名见 ACTIVITY_GATES;不认得的当过,activity check 会报) */
-export function gatePasses(rule: string, input: GateInput): boolean {
-  // 没有还能画 = 家长没设最多画,不限
-  if (rule === '还能画') return typeof input.state.还能画 !== 'number' || input.state.还能画 > 0;
-  if (rule === '连说过一遍') {
-    const at = input.thread.findIndex((m) => m.job === input.job);
-    const end = at < 0 ? input.thread.length - 1 : at;
-    // 这一轮之前的某一节放过整段(三行以上的 read 卡),它后面孩子开过口(继续、交答案不算)
-    for (let i = 0; i < end; i++) {
-      const story = input.thread[i].section?.cards.some((c) => c.kind === 'read' && Array.isArray((c.props as { segments?: unknown }).segments) && (c.props as { segments: unknown[] }).segments.length >= STORY_LINES);
-      if (story && input.thread.slice(i + 1, end + 1).some((m) => m.from === 'kid' && !m.action)) return true;
-    }
-    return false;
-  }
-  return true;
-}
-
-/** 按 activity 文件「应用拦的」的顺序,第一条没过的规则名;都过了 → null */
-export function failingGate(a: Pick<Activity, 'gates'>, input: GateInput): string | null {
-  return a.gates.find((g) => !gatePasses(g.rule, input))?.rule ?? null;
 }

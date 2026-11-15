@@ -10,7 +10,7 @@
  *  plan          计划文件
  *  timetable     课程表(vault 里的 markdown 表)
  *  theme         主题清单(themes/<name>/theme.json:底色槽、字形槽、笔)
- *  activity      activity 文件(agents/<老师>/activities/<名>.md:家长填的、应用算的、应用拦的、老师怎么带、工具人收到什么)
+ *  activity      activity 文件(agents/<老师>/activities/<名>.md:家长填的、老师怎么带、工具人收到什么)
  *  board-log     以板为主的话题里板的日志(一件事一行)
  *  textbook      课本:vault 里教材 PDF 的索引(字、行、拼音、目录、页码)
  * 运行时校验用 zod,失败信息经 explainIssues 变成修复指南。

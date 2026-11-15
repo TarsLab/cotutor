@@ -7,7 +7,6 @@ import { localDate, localMinute, weekOf } from '../../shared/time.ts';
 import type { ConversationMessage } from '../../schema/conversation.ts';
 import { listTutors } from '../../schema/config.ts';
 import type { Workspace } from '../../schema/index.ts';
-import { paintedToday } from '../../scenes/paint/painter.ts';
 import { readIndex } from '../../runtime/journal/store.ts';
 import { readDevices, readKidLog, type KidDevice, type KidLogLine } from '../../runtime/journal/kid-log.ts';
 import { deviceLabel } from '../../schema/kid-device.ts';
@@ -78,7 +77,6 @@ export interface DevOverview {
   tutors: DevTutorRow[];
   /** 近七天,按运行时分:几轮、老师用的 token(没报的轮只算轮数) */
   usage: { runtime: string; turns: number; tokensIn: number; tokensOut: number }[];
-  paint: { today: number };
   issues: DevIssue[];
   /** 近 30 天开过的设备,最近开的在前;更早的折起来 */
   devices: DevDevice[];
@@ -163,7 +161,6 @@ export async function devOverview(ws: Workspace, now: Date = new Date()): Promis
     slow,
     tutors: rows,
     usage: [...usage.values()].sort((a, b) => b.turns - a.turns),
-    paint: { today: await paintedToday(ws, today, now.getTime()).catch(() => 0) },
     issues: issues.slice(0, MAX_ISSUES),
     devices: kid.devices,
     olderDevices: kid.older,

@@ -13,7 +13,6 @@ import { word } from './word.ts';
 import { image } from './image.ts';
 import type { CardKind, CardPlace } from './kind.ts';
 import { read } from './read.ts';
-import { paint } from './paint.ts';
 import { photo } from './photo.ts';
 import { lecture } from './lecture.ts';
 import { text } from './text.ts';
@@ -29,7 +28,6 @@ export { image, IMAGE_EXT, type ImageProps } from './image.ts';
 export { lecture, type LectureProps, type LectureState } from './lecture.ts';
 export { canvas, type CanvasProps, type CanvasState } from './canvas.ts';
 export { kit, KIT_PROMPT_MAX, type KitProps } from './kit.ts';
-export { paint, PaintPropsSchema, PAINT_PANELS_MAX, type PaintCast, type PaintProps } from './paint.ts';
 export { tianzige, HAN, TIANZIGE_MAX, type TianzigeProps } from './tianzige.ts';
 export { word, wordChunks, WORD_MAX, WORD_MAX_WORDS, WORD_RE, type WordProps } from './word.ts';
 export { tutor, BUTTON_LABEL_MAX, TUTOR_BUTTONS_MAX, TutorButtonSchema, type TutorButton, type TutorProps } from './tutor.ts';
@@ -37,7 +35,7 @@ export { dictation, dictationEmoji, dictationWordLang, DictationPropsSchema, DIC
 
 /** 全部种类:先板书的十二种(注册表顺序即技能里的顺序),再首页专属的 */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const CARD_KINDS: readonly CardKind<any>[] = [text, read, choice, image, tianzige, word, lecture, canvas, kit, paint, photo, code, tutor, dictation];
+export const CARD_KINDS: readonly CardKind<any>[] = [text, read, choice, image, tianzige, word, lecture, canvas, kit, photo, code, tutor, dictation];
 
 export function cardKind(name: string): CardKind | undefined {
   return CARD_KINDS.find((k) => k.name === name) as CardKind | undefined;
@@ -64,7 +62,7 @@ export function tutorCardKinds(cards: readonly string[] | undefined): string[] |
 }
 
 /** 正文是「字」的卡:老师把讲稿的 [词] 标注语法写进这些卡时,把括号剥掉(2026-09-11 真跑:孩子看到了「[直角边]」);choice 的 - [ ] / - [x] 不动 */
-const TEXTUAL = new Set(['text', 'read', 'choice', 'image', 'word', 'paint']);
+const TEXTUAL = new Set(['text', 'read', 'choice', 'image', 'word']);
 const MARK_IN_CARD = /\[([^\[\]\n]+)\]/g;
 function unmark(body: string): { body: string; had: boolean } {
   let had = false;

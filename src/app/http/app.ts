@@ -75,8 +75,6 @@ import { IMAGE_EXT, parseCardState, stripSecrets } from '../../board/cards/index
 import { isAbsolute, resolve, sep } from 'node:path';
 import { bundleAsset, stageAsset, stageIndex, stageVersion } from './stage.ts';
 import { themeFiles } from './theme.ts';
-import { enrichPaints } from '../../scenes/paint/painter.ts';
-import type { Draw } from '../../media/draw.ts';
 import { enrichLectures, inspectLecture, bakeSectionSoon, ensureBaked, lectureFrameSvg, parseRing, parseSvgMs } from '../../runtime/lecture.ts';
 import { tianzigeData } from '../../ui/kid/tianzige.ts';
 import { lettersData } from '../../ui/kid/letters.ts';
@@ -123,7 +121,7 @@ export interface AppContext {
   mouthHealth(why: string | null, midCall?: boolean): Promise<void>;
 }
 
-export function createContext(ws: Workspace, opts: { now?: () => Date; env?: NodeJS.ProcessEnv; draw?: Draw; look?: Look; access?: Access; bailian?: Bailian } = {}): AppContext {
+export function createContext(ws: Workspace, opts: { now?: () => Date; env?: NodeJS.ProcessEnv; look?: Look; access?: Access; bailian?: Bailian } = {}): AppContext {
   let configText: string | null = null;
   const ctx: AppContext = {
     ws,
@@ -286,7 +284,7 @@ export async function kidDay(ctx: AppContext, tutor: string, date: string): Prom
     if (m) m.section = stripSecrets(partial);
   }
   // 小课堂卡:课读不读得出、那一段的起止,每次现读
-  for (const m of messages) if (m.section) { bakeSectionSoon(ctx.ws.dirs.bundles, m.section); m.section = await enrichPaints(ctx.ws, tutor, date, m.job, m.at, await enrichLectures(ctx.ws, m.section)); }
+  for (const m of messages) if (m.section) { bakeSectionSoon(ctx.ws.dirs.bundles, m.section); m.section = await enrichLectures(ctx.ws, m.section); }
   return { tutor, date, messages, pending: active && active.date === date ? active.job : null, thread: currentThread(index) };
 }
 
@@ -309,7 +307,7 @@ export async function parentDay(ctx: AppContext, tutor: string, date: string): P
     const m = messages.find((x) => x.job === active!.job);
     if (m) m.section = partial;
   }
-  for (const m of messages) if (m.section) { bakeSectionSoon(ctx.ws.dirs.bundles, m.section); m.section = await enrichPaints(ctx.ws, tutor, date, m.job, m.at, await enrichLectures(ctx.ws, m.section), { parent: true }); }
+  for (const m of messages) if (m.section) { bakeSectionSoon(ctx.ws.dirs.bundles, m.section); m.section = await enrichLectures(ctx.ws, m.section); }
   // 「做了」旁注带上孩子在弹窗里想了多久、改过几次(有实录才有):这张卡从同一话题上一条消息到这条之间的弹窗
   const plays = await readPlays(ctx.ws, tutor, date);
   if (plays.length) {

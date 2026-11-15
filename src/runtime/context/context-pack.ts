@@ -129,11 +129,11 @@ export function renderContextPack(pack: ContextPack): string {
     out.push('  photoFiles:');
     for (const c of p.photoFiles) out.push(`    - ${yamlScalar(c)}`);
   }
-  // activity 放最后、键序固定:剩几张这种每条会变的,离孩子的话最近
+  // activity 放最后、键序固定
   if (p.activity) {
     const a = p.activity;
     out.push('  activity:', `    name: ${yamlScalar(a.name)}`);
-    for (const [key, values] of [['params', a.params], ['state', a.state]] as const) {
+    for (const [key, values] of [['params', a.params]] as const) {
       const entries = Object.entries(values);
       if (!entries.length) continue;
       out.push(`    ${key}:`);

@@ -57,7 +57,6 @@ try {
   check('用量按运行时:记 token,记账任务也算;老数据只记了钱数的轮只算轮数', qwen?.turns === 3 && qwen.tokensIn === 3500 && qwen.tokensOut === 140 && claude?.turns === 2 && claude.tokensIn === 0 && !('costUsd' in claude), JSON.stringify(ov.usage));
   check('要看一眼:新的在前,慢 / 出错 / 提醒各一条', ov.issues.map((i) => i.kind).join(',') === 'slow,warn,error' && ov.issues[0].detail.startsWith('首句就绪 38') && ov.issues[2].detail === 'max_wall_time', JSON.stringify(ov.issues));
   check('最近一轮给「看原文」直达', ov.last?.tutor === 'math-tutor' && ov.last.job === '1544-2');
-  check('画图:今天 0 张,只数不带上限', ov.paint.today === 0 && !('daily' in ov.paint));
 
   // ---- 孩子端的流水:设备卡、页面出错合成一条、改名 ----
   {

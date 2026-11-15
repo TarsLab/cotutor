@@ -5,24 +5,18 @@ import { boardSkillDoc, boardSyntaxDoc } from '../src/board/cards/docs.ts';
 import { check, done } from './_check.ts';
 
 {
-  check('有状态的卡:choice / lecture / canvas / kit;text / read / image / code 没有', CARD_KINDS.filter((k) => k.state).map((k) => k.name).join() === 'choice,lecture,canvas,kit');
-  check('十三种卡登记在册:板书十一种 + 首页的老师卡与听写卡', CARD_KINDS.map((k) => k.name).join() === 'text,read,choice,image,tianzige,word,lecture,canvas,kit,photo,code,tutor,dictation' && cardKind('choice')?.name === 'choice' && cardKind('widget') === undefined);
-  check('用在哪:板书十一种;首页 = 老师卡 + 听写卡 + 一段字 / 点读 / 图片 / 田字格 / 单词', kindsFor('board').map((k) => k.name).join() === 'text,read,choice,image,tianzige,word,lecture,canvas,kit,photo,code' && kindsFor('home').map((k) => k.name).join() === 'text,read,image,tianzige,word,tutor,dictation');
+  check('有状态的卡:choice / lecture / kit;text / read / image / code 没有', CARD_KINDS.filter((k) => k.state).map((k) => k.name).join() === 'choice,lecture,kit');
+  check('十二种卡登记在册:板书十种 + 首页的老师卡与听写卡', CARD_KINDS.map((k) => k.name).join() === 'text,read,choice,image,tianzige,word,lecture,kit,photo,code,tutor,dictation' && cardKind('choice')?.name === 'choice' && cardKind('widget') === undefined);
+  check('用在哪:板书十种;首页 = 老师卡 + 听写卡 + 一段字 / 点读 / 图片 / 田字格 / 单词', kindsFor('board').map((k) => k.name).join() === 'text,read,choice,image,tianzige,word,lecture,kit,photo,code' && kindsFor('home').map((k) => k.name).join() === 'text,read,image,tianzige,word,tutor,dictation');
   check('契约里的板书种类表与注册表对得上(schema 不 import 卡,靠这条锁住)', BOARD_CARD_KINDS.join() === kindsFor('board').map((k) => k.name).join());
-  check('老师的卡:没写 = null(全部);写了 = 注册表顺序、text 总在、首页的卡不算', tutorCardKinds(undefined) === null && tutorCardKinds(['canvas', 'read'])?.join() === 'text,read,canvas' && tutorCardKinds(['choice', 'tutor', 'text'])?.join() === 'text,choice' && tutorCardKinds([])?.join() === 'text');
+  check('老师的卡:没写 = null(全部);写了 = 注册表顺序、text 总在、首页的卡不算', tutorCardKinds(undefined) === null && tutorCardKinds(['kit', 'read'])?.join() === 'text,read,kit' && tutorCardKinds(['choice', 'tutor', 'text'])?.join() === 'text,choice' && tutorCardKinds([])?.join() === 'text');
   const tut = parseCard('tutor chinese-tutor', '- 我要预习小蝌蚪找妈妈\n讲法: 先读课文\n讲法: 再认字\n新话题\n接着 2026-09-16 1930-1 接着写看图写话', 'home');
   check('老师卡:列表号去掉、讲法挂上一个按钮(多行拼起来)、「新话题」不算、接着带日期与话题', tut.card.kind === 'tutor' && JSON.stringify(tut.card.props) === JSON.stringify({ tutor: 'chinese-tutor', buttons: [{ kind: 'start', label: '我要预习小蝌蚪找妈妈', brief: '先读课文\n再认字' }, { kind: 'continue', label: '接着写看图写话', date: '2026-09-16', thread: '1930-1' }] }) && !tut.warning, JSON.stringify(tut));
   check('老师卡剥讲法', JSON.stringify(stripSecrets({ cards: [tut.card], lines: [] }).cards[0].props.buttons) === '[{"kind":"start","label":"我要预习小蝌蚪找妈妈"},{"kind":"continue","label":"接着写看图写话","date":"2026-09-16","thread":"1930-1"}]');
   const tooMany = parseCard('tutor math-tutor', 'a\nb\nc\nd\ne', 'home');
   check('老师卡:5 个按钮、没写老师、两位老师、坏老师名 → 文字卡 + fallback', tooMany.fallback === true && tooMany.warning?.includes('最多 4 个') === true && parseCard('tutor', 'a', 'home').fallback === true && parseCard('tutor a-tutor b-tutor', 'a', 'home').fallback === true && parseCard('tutor 数学', 'a', 'home').fallback === true, JSON.stringify(tooMany));
   check('老师卡写在板书里 → 文字卡 + warning;选择题写在首页 → 文字卡 + warning;首页里不认识的标签也退文字卡', parseCard('tutor math-tutor', 'a').card.kind === 'text' && parseCard('tutor math-tutor', 'a').warning?.includes('首页的卡') === true && parseCard('choice', '问?\n- [x] a', 'home').warning?.includes('首页放不了') === true && parseCard('widget', 'x', 'home').card.kind === 'text' && parseCard('widget', 'x', 'home').fallback === true && parseCard('widget', 'x').card.kind === 'code');
-  const cv = parseCard('canvas', '画一个三角形,标出它的一条高。');
-  check('canvas:只有题目 → 空白画板', cv.card.kind === 'canvas' && cv.card.props.base === null && cv.card.props.prompt === '画一个三角形,标出它的一条高。');
-  check('canvas:照片不再做底(2026-11-13,归到照片板):第一行是图片路径 → 退成文字,说用照片板;http 地址当题目', parseCard('canvas', 'captures/2026-09-14/1620-1.jpg\n把算错的那道圈出来。').card.kind === 'text' && /照片/.test(parseCard('canvas', 'captures/2026-09-14/1620-1.jpg\n题').warning ?? '') && parseCard('canvas', 'https://x/a.jpg\n题').card.props.base === null);
-  check('canvas:课包 id 做底 + 后面的题目;标签后的词也是题目', JSON.stringify(parseCard('canvas', '2026-09-04-guilv5\n把第二个空圈出来').card.props) === '{"base":{"bundle":"2026-09-04-guilv5"},"prompt":"把第二个空圈出来"}' && parseCard('canvas 画蛇', '').card.props.prompt === '画蛇');
-  const cvj = parseCard('canvas', '{"skeletons":[{"type":"rectangle","x":0,"y":0,"width":10,"height":10}]}');
-  check('canvas:行内骨架 JSON 做底;坏 JSON / 没 skeletons / 全空 → 文字卡', (cvj.card.props.base as { skeletons: unknown[] }).skeletons.length === 1 && parseCard('canvas', '{bad').card.kind === 'text' && parseCard('canvas', '{"a":1}').card.kind === 'text' && parseCard('canvas', '').card.kind === 'text');
-  check('canvas 状态与 describe:笔数 + 图的路径;没画', parseCardState(cv.card, { ink: [{ id: 'a' }] }).ok && !parseCardState(cv.card, { ink: 'x' }).ok && describeCard(cv.card, { ink: [{ id: 'a' }, { id: 'b' }], image: 'conversations/math-tutor/2026-09-10.1.cards/0.png' }) === 'canvas「画一个三角形,标出它的一条高。」 画了 2 笔,图:conversations/math-tutor/2026-09-10.1.cards/0.png(用 read_file 看)' && describeCard(cv.card, { ink: [] }) === 'canvas「画一个三角形,标出它的一条高。」 还没画');
+  check('canvas 卡删了(2026-11-16):写了当不认识的标签,原样显示成代码卡', parseCard('canvas', '画一条蛇').card.kind === 'code');
   // 板卡(cards/kit/card.md):标签是画法的名字、参数行、这一步开放的操作、其余是题目;交回来的是图加几句提示
   const kt = parseCard('方向盘', '操作: 转\n把「东」转到小人的前面。');
   check('kit:标签是画法的名字;参数补缺省、开放的操作记下', kt.card.kind === 'kit' && JSON.stringify(kt.card.props) === '{"kit":"方向盘","params":{"上":"北","小人":"有"},"ops":["转"],"prompt":"把「东」转到小人的前面。"}' && !kt.warning, JSON.stringify(kt));
@@ -41,7 +35,7 @@ import { check, done } from './_check.ts';
   check('卡里写了讲稿的 [词] 语法:括号剥掉 + warning(孩子端不显示括号)', br.card.props.text === '两条短边叫直角边,最长的一条叫斜边' && br.card.props.title === '认边' && br.warning?.includes('方括号') === true, JSON.stringify(br));
   const brc = parseCard('choice', '[斜边]是多少?\n- [ ] 6\n- [x] 5');
   check('choice 的 - [ ] / - [x] 不被当成标注剥掉;问题里的括号剥', brc.card.props.question === '斜边是多少?' && JSON.stringify(brc.card.props.answer) === '[1]' && (brc.card.props.options as string[]).join() === '6,5', JSON.stringify(brc));
-  check('code / canvas 的正文不动方括号(JSON 里有 [ ])', parseCard('python', 'a = [1, 2]').card.props.text === 'a = [1, 2]' && !parseCard('canvas', '{"skeletons":[{"type":"rectangle","x":0,"y":0,"width":10,"height":10}]}').warning && parseCard('text', '一段没有括号的话').warning === undefined);
+  check('code 的正文不动方括号', parseCard('python', 'a = [1, 2]').card.props.text === 'a = [1, 2]' && parseCard('text', '一段没有括号的话').warning === undefined);
   check('要预生成资产的:点读、单词卡(这个词)', CARD_KINDS.filter((k) => k.assets).map((k) => k.name).join() === 'read,word');
   const wd = parseCard('word', '🍎 apple 苹果\nap-ple');
   check('word:emoji、词、分段;中文悄悄去掉不报;资产一段 1.mp3 念这个词;标题是词', wd.card.kind === 'word' && JSON.stringify(wd.card.props) === '{"word":"apple","chunks":["ap","ple"],"emoji":"🍎"}' && !wd.warning && JSON.stringify(cardAssets(wd.card)) === '[{"file":"1.mp3","text":"apple"}]' && cardLabel(wd.card) === 'apple', JSON.stringify(wd));

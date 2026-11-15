@@ -8,7 +8,7 @@ import { stripSecrets } from '../board/cards/index.ts';
 import { type Bookkeeping, type ConversationMessage } from '../schema/index.ts';
 import { parseBoard } from '../board/parse.ts';
 import { threads, type CardAssets, type CardStates } from '../schema/index.ts';
-import type { BoardSection, KidDrawing, KidLecture } from '../board/presentation.ts';
+import type { BoardSection, KidLecture } from '../board/presentation.ts';
 import { parseSections } from '../board/sections.ts';
 import type { Transcript } from '../brain/transcript.ts';
 
@@ -104,8 +104,6 @@ export interface KidMessage {
   photos?: string[];
   /** 这条是看完小课堂后的第一条:哪份课包、课名、画过的几处(节前的小课堂卡与画的卡从这里画);again = 再看一遍又画的那条,节前只画画的卡 */
   lecture?: KidLecture;
-  /** 孩子从左栏的纸交的画:节前一张孩子的画卡 */
-  drawing?: KidDrawing;
   /** 孩子的话怎么上板:交卡不写;首页按钮发的(正文就是按钮上的字)不写,从按钮进来后孩子自己说的照写 */
   action?: 'submit';
   fromHome?: true;
@@ -116,11 +114,6 @@ export interface KidMessage {
 }
 
 /** 索引里的小课堂 → 孩子端(画不带那段话)/ 家长端(带) */
-/** 孩子的画卡要的:图、几笔、画了多久 */
-function drawingView(d: NonNullable<ConversationMessage['drawing']>): KidDrawing {
-  return { image: d.image, strokes: d.strokes, ...(d.ms !== undefined ? { ms: d.ms } : {}) };
-}
-
 function lectureView(l: NonNullable<ConversationMessage['lecture']>, parent: boolean): KidLecture {
   return { bundle: l.bundle, title: l.title, ...(l.again ? { again: true as const } : {}), ...(l.video ? { video: true as const } : {}), ...(l.marks?.length ? { marks: l.marks.map((m) => ({ atMs: m.atMs, svgMs: m.svgMs, strokes: m.strokes, ...(m.image ? { image: m.image } : {}), ...(parent && m.text ? { text: m.text } : {}) })) } : {}) };
 }
@@ -150,7 +143,7 @@ export function kidConversation(index: { messages: readonly ConversationMessage[
     if (question === null && reply === null && !pending) continue;
     const withState = cardsWithState(m, states, assets, submitted);
     const section = m.result === 'ok' && withState ? stripSecrets(withState) : undefined;
-    out.push({ job: m.job, thread: ths[i], at: m.at, question, reply, pending, artifacts: reply ? [...m.artifacts] : [], ...(section ? { section } : {}), ...(question !== null && m.photos?.length ? { photos: [...m.photos] } : {}), ...(question !== null && m.drawing ? { drawing: drawingView(m.drawing) } : {}), ...(m.lecture ? { lecture: lectureView(m.lecture, false) } : {}), ...(question !== null && m.action ? { action: m.action } : {}), ...(question !== null && m.via && question.trim() === m.via.label.trim() ? { fromHome: true as const } : {}), ...(m.live ? { live: true as const } : {}), ...(m.board ? { board: m.board } : {}) });
+    out.push({ job: m.job, thread: ths[i], at: m.at, question, reply, pending, artifacts: reply ? [...m.artifacts] : [], ...(section ? { section } : {}), ...(question !== null && m.photos?.length ? { photos: [...m.photos] } : {}), ...(m.lecture ? { lecture: lectureView(m.lecture, false) } : {}), ...(question !== null && m.action ? { action: m.action } : {}), ...(question !== null && m.via && question.trim() === m.via.label.trim() ? { fromHome: true as const } : {}), ...(m.live ? { live: true as const } : {}), ...(m.board ? { board: m.board } : {}) });
   }
   return out;
 }
@@ -189,7 +182,6 @@ export function parentConversation(index: { messages: readonly ConversationMessa
       job: m.job, thread: ths[i], at: m.at, from: m.from, question: m.text, reply, pending, artifacts: reply ? [...m.artifacts] : [],
       ...(section ? { section } : {}),
       ...(m.photos?.length ? { photos: [...m.photos] } : {}),
-      ...(m.drawing ? { drawing: drawingView(m.drawing) } : {}),
       ...(m.via ? { via: m.via } : {}),
       ...(m.action ? { action: m.action } : {}),
       ...(m.cards?.length ? { cards: m.cards } : {}),
@@ -222,13 +214,13 @@ export interface KidTodayThread {
 const TODAY_LABEL_MAX = 12;
 
 /**
- * 这一轮让话题开了头没有(2026-11-15,Jack):有孩子参与的图出现了——孩子发了照片、画了画;老师出了板卡(课本只算翻到一课的,目录不算)、
- * 图片、画板。只说话、只铺了目录的不算开头:孩子端不列(首页「今天」),记录照存,家长照看。
+ * 这一轮让话题开了头没有(2026-11-15,Jack):有孩子参与的图出现了——孩子发了照片;老师出了板卡(课本只算翻到一课的,目录不算)、
+ * 图片。只说话、只铺了目录的不算开头:孩子端不列(首页「今天」),记录照存,家长照看。
  */
-export function startsThread(m: { from: ConversationMessage['from']; photos?: readonly string[]; drawing?: unknown; section?: { cards: readonly { kind: string; props: Record<string, unknown> }[] } | null }): boolean {
-  if (m.from === 'kid' && (m.photos?.length || m.drawing)) return true;
+export function startsThread(m: { from: ConversationMessage['from']; photos?: readonly string[]; section?: { cards: readonly { kind: string; props: Record<string, unknown> }[] } | null }): boolean {
+  if (m.from === 'kid' && m.photos?.length) return true;
   for (const c of m.section?.cards ?? []) {
-    if (c.kind === 'image' || c.kind === 'canvas') return true;
+    if (c.kind === 'image') return true;
     if (c.kind !== 'kit') continue;
     const p = c.props as { kit?: unknown; params?: Record<string, unknown> };
     if (p.kit !== '课本') return true;

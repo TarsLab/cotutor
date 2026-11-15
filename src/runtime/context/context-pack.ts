@@ -80,7 +80,7 @@ export function renderContextPack(pack: ContextPack): string {
   }
   if (p.live) {
     const l = p.live;
-    if (!l.caught && l.cut === undefined && !l.warmup?.length && l.phone === undefined && !l.app && !l.draw?.length) out.push('  live: true');
+    if (!l.caught && l.cut === undefined && !l.warmup?.length && l.phone === undefined && !l.app) out.push('  live: true');
     else {
       out.push('  live:');
       if (l.caught) out.push(`    caught: ${yamlScalar(l.caught)}`);
@@ -91,13 +91,8 @@ export function renderContextPack(pack: ContextPack): string {
         out.push('    warmup:');
         for (const x of l.warmup) out.push(`      - ${yamlScalar(x)}`);
       }
-      if (l.draw?.length) {
-        out.push('    draw:');
-        for (const x of l.draw) out.push(`      - ${yamlScalar(x)}`);
-      }
     }
   }
-  if (p.drawing) out.push(`  drawing: ${yamlScalar(p.drawing)}`);
   // 以板为主的话题:板此刻的样子(键是给老师看的中文;和 board: off 不会同时有)
   if (p.slate && p.board !== 'off') {
     const b = p.slate;

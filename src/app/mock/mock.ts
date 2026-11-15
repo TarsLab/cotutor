@@ -33,8 +33,6 @@ import { handleDictation, type DictationDeps } from '../dictation/route.ts';
 import type { PhotoItem, PhotoProgress, Recognize } from '../dictation/recognize.ts';
 import { lettersData } from '../../ui/kid/letters.ts';
 import { mockLiveUpgrade } from './mock-live.ts';
-import { DRAW_ONLY_TEXT, PAPER_KEY_RE, paperDrawing, type PaperState } from '../../board/paper.ts';
-import { CanvasStateSchema } from '../../board/cards/canvas.ts';
 // 回给页面的形状直接用真服务的(app.ts):真接口加字段、改字段,这里不跟就红(2026-10-17;以前 mock 自己拼对象,motto 这种真服务没有的字段只在 mock 下显示)
 import type { KidDay, KidHome, KidTodayItem, KidTutor, Overview, OverviewThread, OverviewTutor } from '../http/app.ts';
 
@@ -242,13 +240,7 @@ export const MOCK_TUTORS: MockTutor[] = [
 做到了,就停下来
 ~~~
 
-说得好,这就是画蛇添足要提醒我们的:[做到了,就停下来]。
-
-~~~canvas
-画一条蛇,不要给它添脚。
-~~~
-
-你来画一条蛇,画好了给我看看。`,
+说得好,这就是画蛇添足要提醒我们的:[做到了,就停下来]。`,
       `~~~tianzige
 鼓励
 gǔ lì
@@ -522,8 +514,6 @@ interface MockMessage {
   lectureLog?: { t: number; pos: number; play: boolean }[];
   /** 实时的一轮(mock 的假嘴发的) */
   live?: true;
-  /** 孩子从左栏的纸交的画(摘要按 mock 内存里那张纸算) */
-  drawing?: ConversationMessage['drawing'];
   /** 话题第一条:以板为主(语文老师的「预习」方砖进来的,同真服务) */
   board?: 'page';
 }
@@ -648,9 +638,7 @@ export function createMock(opts: MockOptions = {}): Mock {
   const yesterday = (): string => localDate(new Date(now().getTime() - 86400000));
   const title = opts.title ?? '小明的老师们';
   const messages = new Map<string, MockMessage[]>();
-  /** 左栏的纸:老师|话题 → 那张纸;不落盘 */
-  const papers = new Map<string, PaperState>();
-  /** 孩子端传上来的图(照片、纸上交的画、清空前那几版):路径 → 字节,看大图、画卡缩略图给真图;别的路径照旧占位 */
+  /** 孩子端传上来的图(照片、交的板):路径 → 字节,看大图、画卡缩略图给真图;别的路径照旧占位 */
   const uploads = new Map<string, { type: string; data: Buffer }>();
   /** 以前的:昨天每位讲过课的老师有一个话题(拿脚本最后一节充数),只读回放用 */
   const past = new Map<string, MockMessage[]>();
@@ -684,7 +672,7 @@ export function createMock(opts: MockOptions = {}): Mock {
   const booked = new Set<string>();
   /** 下发孩子端的形状:答案剥掉、状态并到卡上、小课堂卡补那一段的起止(样本课包在仓库里) */
   const kidMessage = async (m: MockMessage): Promise<KidMessage> => {
-    const { states, action: _a, submitted: _s, lectureWatch: _w, lectureLog: _l, drawing, ...rest } = m;
+    const { states, action: _a, submitted: _s, lectureWatch: _w, lectureLog: _l, ...rest } = m;
     if (rest.lecture?.marks) rest.lecture = { ...rest.lecture, marks: rest.lecture.marks.map(({ text: _t, ...k }) => k) };
     const mine = [...messages.values()].find((l) => l.includes(m)) ?? [];
     const done = new Set(mine.flatMap((x) => (x.submitted ? [x.submitted] : [])));
@@ -692,7 +680,7 @@ export function createMock(opts: MockOptions = {}): Mock {
     const voiced = (c: BoardCard, i: number) => { const a = cardAssets(c); return a.length ? { assets: a.map((x) => `mock.${m.job}.cards/${i}/${x.file}`) } : {}; };
     const withState = m.section ? { ...m.section, cards: m.section.cards.map((c, i) => ({ ...c, ...voiced(c, i), ...(done.has(`${m.job}/${i}`) ? { submitted: true } : {}), ...(states && i in states ? { state: states[i] } : {}) })) } : null;
     const section = withState ? await enrichLectures(MOCK_LECTURE_DIRS, stripSecrets(withState)) : null;
-    return { ...rest, ...(drawing && rest.question !== null ? { drawing: { image: drawing.image, strokes: drawing.strokes, ...(drawing.ms !== undefined ? { ms: drawing.ms } : {}) } } : {}), section };
+    return { ...rest, section };
   };
   // 学科色同真服务:按老师的先后定(src/ui/shared/tutor-color.ts)
   const colors = tutorColors(Object.fromEntries(MOCK_TUTORS.map((t) => [t.name, { subject: t.subject }])));
@@ -980,7 +968,7 @@ export function createMock(opts: MockOptions = {}): Mock {
       return { status: 200, json: { tutor: name, thread, rating } };
     }
     const pk = p;
-    const kid = /^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/(today|messages|preview|photos|play|paper|\d{4}-\d{2}-\d{2})$/.exec(pk);
+    const kid = /^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/(today|messages|preview|photos|play|\d{4}-\d{2}-\d{2})$/.exec(pk);
     if (kid) {
       const [, name, tail] = kid;
       const t = MOCK_TUTORS.find((x) => x.name === name);
@@ -1004,18 +992,6 @@ export function createMock(opts: MockOptions = {}): Mock {
         const path = `captures/${date}/${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}-${list.length + 1 + uploads.size}.${up && up[1] === 'image/png' ? 'png' : 'jpg'}`;
         if (up) uploads.set(path, { type: up[1], data: Buffer.from(up[2], 'base64') });
         return { status: 201, json: { path } };
-      }
-      // 左栏的纸:同真服务(app.ts 的 paperRoute),存在内存里
-      if (tail === 'paper') {
-        const key = method === 'GET' ? (url.searchParams.get('key') ?? '') : isObj(body) && typeof body.key === 'string' ? body.key : '';
-        if (!PAPER_KEY_RE.test(key)) return { status: 400, json: { error: 'bad_request' } };
-        if (method === 'GET') return { status: 200, json: { key, state: papers.get(`${name}|${key}`) ?? { ink: [] } } };
-        if (method !== 'PUT') return { status: 405, json: { error: 'method_not_allowed' } };
-        const r = CanvasStateSchema.safeParse(isObj(body) ? body.state : null);
-        if (!r.success) return { status: 400, json: { error: 'bad_state' } };
-        papers.set(`${name}|${key}`, { ink: r.data.ink, ...(r.data.cleared?.length ? { cleared: r.data.cleared } : {}) });
-        if (isObj(body) && body.from === 'new' && key !== 'new') papers.delete(`${name}|new`);
-        return { status: 200, json: { ok: true, key } };
       }
       if (tail === 'today' && method === 'GET') {
         const shown = (messages.get(name) ?? []);
@@ -1067,14 +1043,11 @@ export function createMock(opts: MockOptions = {}): Mock {
           if (button.kind === 'continue' && button.date === date) { wantThread = button.thread; newThread = false; }
           else { newThread = true; wantThread = undefined; }
         }
-        const drawIn = isObj(body.drawing) && typeof body.drawing.key === 'string' && PAPER_KEY_RE.test(body.drawing.key) && typeof body.drawing.image === 'string' ? { key: body.drawing.key, image: body.drawing.image } : null;
-        if (body.drawing !== undefined && !drawIn) return { status: 400, json: { error: 'bad_request' } };
-        const drawing = drawIn ? paperDrawing(papers.get(`${name}|${drawIn.key}`) ?? { ink: [] }, drawIn.image) : null;
-        if (!said.trim() && !action && !photos.length && !drawing) return { status: 400, json: { error: 'bad_request' } };
+        if (!said.trim() && !action && !photos.length) return { status: 400, json: { error: 'bad_request' } };
         if (list.some((m) => m.pending)) return { status: 409, json: { error: 'busy' } };
         const focusCard = isObj(body.focus) && typeof body.focus.card === 'string' ? body.focus.card : null;
         if (action === 'submit' && focusCard && list.some((x) => x.submitted === focusCard)) return { status: 409, json: { error: 'submitted' } };
-        const text = said.trim() || (action === 'submit' ? '(交了答案,没说话)' : photos.length === 1 ? '(拍了一张)' : photos.length ? `(拍了 ${photos.length} 张)` : DRAW_ONLY_TEXT);
+        const text = said.trim() || (action === 'submit' ? '(交了答案,没说话)' : photos.length === 1 ? '(拍了一张)' : photos.length ? `(拍了 ${photos.length} 张)` : '');
         const job = nextJob();
         // 话题:newThread → 自己的 job;指定的要在今天的列表里;缺省接当前(末条)的
         let thread = job;
@@ -1086,11 +1059,9 @@ export function createMock(opts: MockOptions = {}): Mock {
         }
         const lt = lec ? mockLecture(lec.bundle) : null;
         const marks = lt ? storedMarks(lt, marksIn, photos.length) : [];
-        // 新话题的第一条:话题还没有时画的那张纸归它(同真服务的 adoptPaper)
-        if (thread === job && papers.has(`${name}|new`) && !papers.has(`${name}|${thread}`)) { papers.set(`${name}|${thread}`, papers.get(`${name}|new`)!); papers.delete(`${name}|new`); }
         const boardFirst = thread === job && name === 'chinese-tutor' && typeof button === 'object' && button !== null && button.kind === 'activity' && button.activity === '预习';
         if (boardFirst || list.find((x) => x.thread === thread)?.board === 'page') for (const ph of photos) boardShots.add(ph);
-        const m: MockMessage = { job, thread, at: now().toISOString(), question: text, ...(boardFirst ? { board: 'page' as const } : {}), reply: null, pending: true, artifacts: [], section: null, ...(body.live === true ? { live: true as const } : {}), ...(action ? { action } : {}), ...(action === 'submit' && focusCard ? { submitted: focusCard } : {}), ...(photos.length ? { photos } : {}), ...(drawing ? { drawing } : {}), ...(lec ? { lecture: { bundle: lec.bundle, title: lt?.title ?? lec.bundle, ...(lec.again ? { again: true as const } : {}), ...(lt?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}) }, lectureWatch: { watchedMs: lec.watchedMs, finished: lec.finished, pauses: lec.pauses }, ...(logIn.length ? { lectureLog: logIn } : {}) } : {}) };
+        const m: MockMessage = { job, thread, at: now().toISOString(), question: text, ...(boardFirst ? { board: 'page' as const } : {}), reply: null, pending: true, artifacts: [], section: null, ...(body.live === true ? { live: true as const } : {}), ...(action ? { action } : {}), ...(action === 'submit' && focusCard ? { submitted: focusCard } : {}), ...(photos.length ? { photos } : {}), ...(lec ? { lecture: { bundle: lec.bundle, title: lt?.title ?? lec.bundle, ...(lec.again ? { again: true as const } : {}), ...(lt?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}) }, lectureWatch: { watchedMs: lec.watchedMs, finished: lec.finished, pauses: lec.pauses }, ...(logIn.length ? { lectureLog: logIn } : {}) } : {}) };
         list.push(m);
         const done = think(t, m, cursor).then(() => { inflight.delete(m.job); });
         inflight.set(m.job, done);

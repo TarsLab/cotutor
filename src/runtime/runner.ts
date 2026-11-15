@@ -47,7 +47,6 @@ import { DubQueue } from '../media/tts.ts';
 import { continueContext } from './home/store.ts';
 import { kidInput, type KidAccept } from './kid-input.ts';
 import { compatibleLine } from '../shared/qianwen.ts';
-import { DRAW_ONLY_TEXT, drawingPackLine } from '../board/paper.ts';
 import { lookAt } from '../media/vision.ts';
 import type { Look } from '../scenes/look.ts';
 import { photoPromptFrom, recognizeWith } from '../scenes/photo-words/recognize.ts';
@@ -93,8 +92,6 @@ export interface SendInput {
   tidy?: boolean;
   /** 这条带的作业照片(相对 workspace 根,已由路由验过在 captures/ 里;R5):进上下文包 photos: 段,老师自己 Read 看图;文字可以空 */
   photos?: string[];
-  /** 孩子从左栏的纸交的画(路由已验过图在 captures/、摘要按纸上的笔迹算好):图与清掉的那几版排在照片后面进 photos:,上下文包 drawing: 一句;消息记 drawing */
-  drawing?: NonNullable<ConversationMessage['drawing']>;
   /** 这条是回放(app/replay.ts):原轮的 job,记进消息;调用方已经把 Runner 指到 evals/ */
   replayOf?: string;
   /** cotutor activity eval 跑的一轮:不写记忆 */
@@ -559,10 +556,8 @@ export class Runner {
     const photos = input.photos?.filter(Boolean) ?? [];
     // 小课堂画的一处带一张截图:和照片一样进上下文包 photos:(排在孩子拍的后面),这一轮带工具读图;消息的 photos 只记孩子拍的
     const shots = input.lecture?.marks?.flatMap((m) => (m.image ? [m.image] : [])) ?? [];
-    // 纸上交的画:那张画与清空前存的那几版也给老师 Read,排在照片与小课堂截图后面
-    const drawn = input.drawing ? [input.drawing.image, ...(input.drawing.cleared ?? [])] : [];
-    const seen = [...photos, ...shots, ...drawn];
-    const text = input.text.trim() || (input.action === 'submit' ? '(交了答案,没说话)' : photos.length ? (photos.length === 1 ? '(拍了一张)' : `(拍了 ${photos.length} 张)`) : input.drawing ? DRAW_ONLY_TEXT : '');
+    const seen = [...photos, ...shots];
+    const text = input.text.trim() || (input.action === 'submit' ? '(交了答案,没说话)' : photos.length ? (photos.length === 1 ? '(拍了一张)' : `(拍了 ${photos.length} 张)`) : '');
     if (!text) throw new UsageError('消息是空的');
     const busy = this.active.get(tutor);
     if (busy) throw new BusyError(tutor, busy.job);
@@ -658,12 +653,10 @@ export class Runner {
     // 入口文件是可选的(2026-10-30,《vault重构方案》§8:ray 的三篇都是空壳,讲法偏好家长写在首页按钮里):缺了不再每轮提醒,doctor 里提示一次
     if (policy.board === 'off') pack.board = 'off';
     // 这个话题里上一轮之后孩子在卡上做的事:逐张 describe 进上下文包,也记进这条消息(家长视图「孩子在板书上做的」);新话题不带
-    // 画板交上来的图(状态里是相对 workspace 根的路径):包里那行换成绝对路径(Read 只认绝对路径,老师的 cwd 在 agents/<名>/),消息里照旧记相对的
     const changed = fresh || input.bookkeep ? [] : changedCards(index, await readCardStates(ws, tutor, date), thread);
-    let drawings = 0;
     /** 教具卡交上来的图:随这一轮直接附给老师(同作业照片),不经读图工具 */
     const kitImages: string[] = [];
-    const cards: { card: string; text: string; pack?: string }[] = await Promise.all(changed.map(async (c) => {
+    const cards: { card: string; text: string }[] = await Promise.all(changed.map(async (c) => {
       const card = index.messages.find((m) => m.job === c.job)?.section?.cards[c.n];
       const id = cardId(c.job, c.n);
       if (!card) return { card: id, text: JSON.stringify(c.file.state) };
@@ -672,24 +665,15 @@ export class Runner {
         if (typeof img === 'string') kitImages.push(join(ws.root, img));
         return { card: id, text: describeCard(card, c.file.state) };
       }
-      const st = card.kind === 'canvas' ? (c.file.state as { image?: unknown; cleared?: { image?: unknown }[] } | null) : null;
-      const image = typeof st?.image === 'string' ? st.image : undefined;
-      // 清空前存的那几版也是图,一样换绝对路径、一样要 Read
-      const cleared = Array.isArray(st?.cleared) ? st.cleared : [];
-      if (!image && !cleared.some((x) => typeof x?.image === 'string')) return { card: id, text: describeCard(card, c.file.state) };
-      drawings++;
-      const abs = { ...(st as object), ...(image ? { image: join(ws.root, image) } : {}), cleared: cleared.map((x) => (typeof x?.image === 'string' ? { ...x, image: join(ws.root, x.image) } : x)) };
-      return { card: id, text: describeCard(card, c.file.state), pack: describeCard(card, abs) };
+      return { card: id, text: describeCard(card, c.file.state) };
     }));
-    // 这轮带不带工具(policy.tools,2026-10-04):孩子说的话缺省不带,只凭上下文包答;带照片的、交了画的(要 Read 看图)、
+    // 这轮带不带工具(policy.tools,2026-10-04):孩子说的话缺省不带,只凭上下文包答;带照片的(要 Read 看图)、
     // 系统任务带只读的(以前是整份白名单,照片里一句话就能让老师拿 Bash 读写 workspace 外);policy.tools: on 的老师总是整份。
     // 不带的那轮,只有工具才用得上的路径(refs / vault)不进包
-    const tools: ToolSet = policy.tools === 'on' ? 'on' : input.from !== 'kid' || seen.length > 0 || drawings > 0 ? 'read' : 'off';
+    const tools: ToolSet = policy.tools === 'on' ? 'on' : input.from !== 'kid' || seen.length > 0 ? 'read' : 'off';
     if (tools === 'off') { delete pack.refs; delete pack.vault; }
-    if (cards.length) pack.cards = cards.map((c) => `${c.card} ${c.pack ?? c.text}`);
+    if (cards.length) pack.cards = cards.map((c) => `${c.card} ${c.text}`);
     if (seen.length) { pack.photos = seen; pack.photoFiles = seen.map((p) => join(ws.root, p)); }
-    // 纸上的画排在 photos 最后:它自己,再是清掉的那几版
-    if (input.drawing) pack.drawing = drawingPackLine(input.drawing, seen.length - (input.drawing.cleared?.length ?? 0));
     if (input.home) pack.home = input.home;
     // 以板为主的话题(activity 头上 board: page;记在话题第一条):每一轮带板此刻的样子
     const first = fresh ? null : index.messages.find((_, i) => known[i] === thread);
@@ -714,14 +698,14 @@ export class Runner {
     if (continued) pack.continue = continued;
     if (input.live) {
       const l = input.live;
-      pack.live = { ...(l.caught ? { caught: l.caught } : {}), ...(l.cut !== undefined ? { cut: l.cut } : {}), ...(l.warmup?.length ? { warmup: l.warmup } : {}), ...(l.phone !== undefined ? { phone: l.phone } : {}), ...(l.app ? { app: l.app } : {}), ...(l.draw?.length ? { draw: l.draw } : {}) };
+      pack.live = { ...(l.caught ? { caught: l.caught } : {}), ...(l.cut !== undefined ? { cut: l.cut } : {}), ...(l.warmup?.length ? { warmup: l.warmup } : {}), ...(l.phone !== undefined ? { phone: l.phone } : {}), ...(l.app ? { app: l.app } : {}) };
     }
     const prompt = buildContextPack(pack, text, policy.contextPack);
     const req: BrainRequest = { agent: tutor, prompt, systemBody, runtime: input.runtime ?? t.runtime, effort: policy.effort, tools, readDirs: readDirsOf(ws), session, ...(compact ? { compact: { digest: threadDigest(index.messages.filter((_, i) => known[i] === thread)) } } : {}), ...(pack.photoFiles?.length ? { images: pack.photoFiles } : {}), ...(kitImages.length ? { boards: kitImages } : {}) };
     const plan = this.brain.plan(req);
 
     // 原声:落在这轮旁边(删话题一起删);写不下就当没有,消息照发
-    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards: cards.map(({ card, text }) => ({ card, text })) } : {}), ...(photos.length ? { photos } : {}), ...(input.drawing ? { drawing: input.drawing } : {}), ...(input.device ? { device: input.device } : {}), ...(input.deviceId ? { deviceId: input.deviceId } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.tidy ? { tidy: true as const } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(input.eval ? { eval: true as const } : {}), ...(input.live ? { live: true as const } : {}), ...(input.via ? { via: input.via } : {}), ...(continued && input.continues ? { continues: { date: input.continues.date, thread: input.continues.thread } } : {}), ...(input.lecture ? { lecture: { bundle: input.lecture.bundle, title: lecture?.title ?? input.lecture.bundle, watchedMs: input.lecture.watchedMs, finished: input.lecture.finished, pauses: input.lecture.pauses, ...(input.lecture.again ? { again: true as const } : {}), ...(lecture?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}), ...(input.lecture.log?.length ? { log: input.lecture.log } : {}) } } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(fresh && activityRun ? { activity: activityRun } : {}), ...(fresh && boardPage ? { board: 'page' as const } : {}), ...(fresh && input.talk ? { talk: input.talk } : {}), ...(compact ? { compacted: true as const } : {}), ...(lectureWarn.length || activityWarn.length ? { warnings: [...lectureWarn, ...activityWarn] } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
+    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards: cards.map(({ card, text }) => ({ card, text })) } : {}), ...(photos.length ? { photos } : {}), ...(input.device ? { device: input.device } : {}), ...(input.deviceId ? { deviceId: input.deviceId } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.tidy ? { tidy: true as const } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(input.eval ? { eval: true as const } : {}), ...(input.live ? { live: true as const } : {}), ...(input.via ? { via: input.via } : {}), ...(continued && input.continues ? { continues: { date: input.continues.date, thread: input.continues.thread } } : {}), ...(input.lecture ? { lecture: { bundle: input.lecture.bundle, title: lecture?.title ?? input.lecture.bundle, watchedMs: input.lecture.watchedMs, finished: input.lecture.finished, pauses: input.lecture.pauses, ...(input.lecture.again ? { again: true as const } : {}), ...(lecture?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}), ...(input.lecture.log?.length ? { log: input.lecture.log } : {}) } } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(fresh && activityRun ? { activity: activityRun } : {}), ...(fresh && boardPage ? { board: 'page' as const } : {}), ...(fresh && input.talk ? { talk: input.talk } : {}), ...(compact ? { compacted: true as const } : {}), ...(lectureWarn.length || activityWarn.length ? { warnings: [...lectureWarn, ...activityWarn] } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
     await writeIndex(ws, started);
     // 板的日志记一笔:这一轮把板交给了老师(下一轮「孩子做的」从这之后算;给了全文的下一轮写「未变」)
     if (slate) await appendBoard(ws, tutor, date, thread, { at: now.toISOString(), k: 'turn', job, ...(slate.told ? { told: slate.told } : {}) });

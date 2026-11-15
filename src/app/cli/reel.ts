@@ -142,7 +142,6 @@ export async function reelReport(ctx: AppContext, ref: ReelRef): Promise<ReelRep
         m.action === 'submit' ? '交给老师' : '',
         m.photos?.length ? `发了 ${m.photos.length} 张照片` : '',
         m.cards?.length ? `带上卡上做的 ${m.cards.length} 张` : '',
-        m.drawing ? '交了一张画' : '',
       ].filter(Boolean).join(' ');
       add(at, 'kid', `孩子:${what || '(空)'}`, m.job);
     } else add(at, 'kid', `应用替孩子叫老师:${quote(m.text, 120)}`, m.job);

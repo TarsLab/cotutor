@@ -2,9 +2,9 @@
 /**
  * 作业照片线(R5)的手动验收(不进 pnpm test,要本机 Chrome;老师是假 CLI,不花钱):
  * 自己起一个临时 workspace(运行时指假老师 tests/_fake-teacher.ts)+ 一个 HTTP 的 serve →
- * 把服务自己画的 /icon-192.png 当「照片」传上去(POST …/photos)→ 只带照片发一条 → 假老师「看图」:Read 那张、板书出照片板(那张做底)+ 一张空白的画板卡
- *(2026-11-13 起孩子的照片不再用 image 卡再给他看、不再给画板卡做底,都归到照片板)→
- * 用 Chrome DevTools 协议开孩子端:直开画板舞台(白纸,没有底图)→ 画一笔「给老师看」→ .cards/<n>.png 落盘;家长端那轮的问句下有缩略图。
+ * 把服务自己画的 /icon-192.png 当「照片」传上去(POST …/photos)→ 只带照片发一条 → 假老师「看图」:Read 那张、板书出照片板(那张做底)
+ *(2026-11-13 起孩子的照片不再用 image 卡再给他看,归到照片板)→
+ * 用 Chrome DevTools 协议开孩子端:节头不挂照片;家长端那轮的问句下有缩略图。
  * 再走发照片屏:相册选 2 张 → 裁一张、画一笔(没有配一句话那条了)→ 一条消息两张 jpg;板上哪一节的节头都不挂照片。
  * 老师都走实时:嘴是假百炼;发消息都经实时那条连接(_live-send.mjs),板上只有实时一种画法(节头是老师写的,孩子的照片由老师的图片卡放上板;答拍给我看卡的见 probe-photo-card)。
  *
@@ -65,15 +65,13 @@ try {
   for (let i = 0; i < 80; i++) { today = (await api('GET', '/api/kid/conversations/math-tutor/today')).json; if (today && !today.pending && today.messages.every((m) => !m.pending)) break; await sleep(250); }
   const msg = today?.messages.find((m) => m.job === sent.json?.job);
   const cards = msg?.section?.cards ?? [];
-  const canvasIdx = cards.findIndex((c) => c.kind === 'canvas');
-  ok('孩子端条目:问句「(拍了一张)」带 photos;照片板拿那张做底,画板卡是白纸', msg?.question === '(拍了一张)' && msg?.photos?.[0] === photo && cards.some((c) => c.kind === 'kit' && c.props.params?.['图'] === photo) && canvasIdx >= 0 && !cards[canvasIdx].props.base, JSON.stringify({ q: msg?.question, photos: msg?.photos, kinds: cards.map((c) => c.kind) }));
+  ok('孩子端条目:问句「(拍了一张)」带 photos;照片板拿那张做底', msg?.question === '(拍了一张)' && msg?.photos?.[0] === photo && cards.some((c) => c.kind === 'kit' && c.props.params?.['图'] === photo), JSON.stringify({ q: msg?.question, photos: msg?.photos, kinds: cards.map((c) => c.kind) }));
   const parentDay = (await api('GET', '/api/conversations/math-tutor/today')).json;
   const pm = parentDay?.index?.messages.find((m) => m.job === sent.json?.job);
   ok('家长端索引:消息带 photos、转录里 Read 了那张', pm?.photos?.[0] === photo && JSON.stringify(parentDay?.runs?.[pm?.job] ?? []).includes(photo), JSON.stringify(pm?.photos));
 
-  // ---- Chrome:直开画板舞台(白纸)→ 画一笔给老师看 ----
-  const secIdx = 0;
-  const url = `${base}/?tutor=math-tutor&stage=${secIdx}.${canvasIdx}`;
+  // ---- Chrome:开老师页 ----
+  const url = `${base}/?tutor=math-tutor`;
   browser = spawn(chrome, [...QUIET_ARGS, '--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', `--remote-debugging-port=${cdp}`, '--window-size=1180,820', `--user-data-dir=${join(home, 'chrome')}`, url], { stdio: 'ignore' });
   let wsUrl = null;
   for (let i = 0; i < 40 && !wsUrl; i++) { try { const list = await (await fetch(`http://127.0.0.1:${cdp}/json`)).json(); wsUrl = list.find((t) => t.type === 'page' && t.url.startsWith('http'))?.webSocketDebuggerUrl ?? null; } catch {} if (!wsUrl) await sleep(250); }
@@ -86,24 +84,9 @@ try {
   const evaluate = async (expression) => { const r = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }); if (r.result?.exceptionDetails) throw new Error(JSON.stringify(r.result.exceptionDetails.exception?.description ?? r.result.exceptionDetails)); return r.result?.result?.value; };
   await send('Runtime.enable');
   const until = async (expr, ms = 8000) => { for (let t = 0; t < ms; t += 200) { if (await evaluate(expr)) return true; await sleep(200); } return false; };
-  await until(`Boolean(document.querySelector('#st-frame')?.contentWindow?.__excalidraw)`, 20000);
-  const scene = await evaluate(`(() => { const a = document.querySelector('#st-frame').contentWindow.__excalidraw; return { images: a.getSceneElements().filter((e) => e.type === 'image').length }; })()`);
-  ok('画板舞台:白纸,没有照片做底', scene?.images === 0, JSON.stringify(scene));
+  await until(`document.querySelector('#tutor')?.classList.contains('on')`, 20000);
   const head = await evaluate(`document.querySelectorAll('#board .sh img').length + document.querySelectorAll('#board .c-image img').length`);
   ok('孩子端:节头不挂照片,也没有放孩子照片的图片卡', head === 0, String(head));
-  const drew = await evaluate(`(async () => {
-    const d = document.querySelector('#st-frame').contentDocument;
-    const cv = d.querySelector('.canvas-board .excalidraw__canvas.interactive') || d.querySelector('.canvas-board canvas');
-    const r = cv.getBoundingClientRect();
-    const ev = (type, x, y) => cv.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, clientX: r.left + x, clientY: r.top + y, pointerId: 1, pointerType: 'pen', isPrimary: true, buttons: type === 'pointerup' ? 0 : 1, button: 0, pressure: 0.5 }));
-    ev('pointerdown', 120, 120); for (const p of [[160, 140], [200, 170], [240, 190]]) { ev('pointermove', ...p); await new Promise((r) => setTimeout(r, 12)); } ev('pointerup', 240, 190);
-    await new Promise((r) => setTimeout(r, 900));
-    return document.querySelector('#st-note')?.textContent ?? '';
-  })()`);
-  ok('照片上画了一笔 → 「画了 1 笔」', /画了 1 笔/.test(drew), drew);
-  const submitted = await evaluate(`(async () => { document.querySelector('#st-go').click(); for (let i = 0; i < 60; i++) { await new Promise((r) => setTimeout(r, 250)); const img = document.querySelector('#board .c-canvas .th:not(.base) img'); if (img) return img.getAttribute('src'); } return null; })()`);
-  const pngFile = join(root, 'conversations', 'math-tutor', `${today.date}.${sent.json.job}.cards`, `${canvasIdx}.png`);
-  ok('给老师看 → .cards/<n>.png 落盘(底图恢复原色一起导出)、紧凑态换成孩子画的', typeof submitted === 'string' && submitted.includes('.cards') && existsSync(pngFile) && readFileSync(pngFile).length > 2000, JSON.stringify({ submitted, size: existsSync(pngFile) ? readFileSync(pngFile).length : 0 }));
   await send('Page.navigate', { url: `${base}/dev?tutor=math-tutor` });
   let thumbs = null;
   for (let i = 0; i < 40 && !thumbs; i++) { thumbs = await evaluate(`(() => { const im = document.querySelector('.ask .q .photos img'); return im ? im.getAttribute('src') : null; })()`); if (!thumbs) await sleep(250); }

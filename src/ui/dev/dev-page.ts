@@ -815,9 +815,6 @@ ${pageDomJs(4000)}
       body.append(h('div', {}, h('b', {}, p.title || p.bundle), p.ready === false ? h('span', { class: 'meta2' }, ' · 课读不出来') : null),
         p.text ? h('p', {}, p.text) : null,
         h('div', { class: 'meta2' }, '课 ' + p.bundle + (typeof p.from === 'number' ? ' · ' + Math.floor(p.from / 60000) + ':' + String(Math.floor(p.from / 1000) % 60).padStart(2, '0') + (typeof p.to === 'number' ? '–' + Math.floor(p.to / 60000) + ':' + String(Math.floor(p.to / 1000) % 60).padStart(2, '0') : '') : '')));
-    } else if (card.kind === 'canvas') {
-      body.append(h('div', {}, p.prompt || '(没写题目)'),
-        h('div', { class: 'meta2' }, p.base && p.base.bundle ? '底图课包 ' + p.base.bundle : p.base && p.base.skeletons ? '行内骨架 ' + p.base.skeletons.length + ' 个' : '空白画板'));
     } else if (card.kind === 'kit') {
       body.append(h('div', {}, p.prompt || '(没写题目)'),
         h('div', { class: 'meta2' }, (p.kit || '') + (p.params ? ' · ' + Object.entries(p.params).map(([k, v]) => k + ' ' + v).join(' · ') : '')));

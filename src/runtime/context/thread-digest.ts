@@ -20,7 +20,6 @@ export function threadDigest(messages: readonly ConversationMessage[]): string {
       const did = [
         m.text.trim(),
         m.photos?.length ? `(拍了 ${m.photos.length} 张照片)` : '',
-        m.drawing ? '(交了一张画)' : '',
         m.lecture ? `(看完小课堂「${m.lecture.title}」)` : '',
         ...(m.cards ?? []).map((c) => `(卡 ${c.card}:${c.text})`),
       ].filter(Boolean);

@@ -21,7 +21,7 @@
  * 每种卡的紧凑态只读;点卡开舞台(盖住板书那块,顶栏是卡的名字 + 关闭,讲稿暂停):选择题在舞台里点大按钮,选了就 PUT 状态,
  * 「交给老师」= 发一条 {text:'', action:'submit', focus:{card}};舞台开着时发的消息都带 focus.card。「继续」2026-10-08 去掉了。
  * 状态存服务端,重开页面从 section.cards[n].state 读回;卡上永远不画对错。
- * 重卡(小课堂 / 画板)的舞台在 iframe 里装 /stage/?card=<id>(舞台包,src/ui/stage/),postMessage 协议见 src/ui/stage/protocol.ts:
+ * 重卡(小课堂 / 板)的舞台在 iframe 里装 /stage/?card=<id>(舞台包,src/ui/stage/),postMessage 协议见 src/ui/stage/protocol.ts:
  * 页面发 card(props + state + 课包 URL),包回 phase / state / submit / close;小课堂那一段在舞台上放(课里的字与播放按钮在舞台里),放完接着念;
  * 讲稿 [[play]] 锚到小课堂卡 → 念完那句铺满放那一段,放完停在末帧、接着念。
  * 点读段:card.assets 里有 <段号>.mp3 的放服务端配的,还没配好的等它到(拉今天会补上);填空舞台逐空打字、「交给老师」;图片舞台双指缩放。
@@ -54,7 +54,6 @@ const INLINE = {
   reel: new URL('./reel.ts', import.meta.url),
   'live-board': new URL('../../runtime/delivery/player.ts', import.meta.url),
   'voice-view': new URL('./voice-view.ts', import.meta.url),
-  'canvas-chat': new URL('../../board/canvas-chat.ts', import.meta.url),
 } as const;
 
 function libSource(name: keyof typeof INLINE): string {
@@ -238,8 +237,8 @@ ${BACK_TINT_CSS}
   /* 舞台的遮罩:板书与顶栏压暗,点一下 = 点 ×;字幕行与输入条不盖(舞台开着孩子照样能说话) */
   #st-dim { position:absolute; left:0; right:0; bottom:0; top:-100vh; z-index:4; background:#00000073; display:none; }
   #stage.on ~ #st-dim { display:block; }
-  /* ---- 画板铺满:画板卡与左栏的纸都铺满整屏、盖住左栏;顶栏 × · 题目一行(点开看全)· 给老师看(轻点只交画,按住说 = 画和这句话一起给老师);
-     工具一列在舞台里,最底下浮着老师的小头像(按住说话 = 边画边聊,给嘴);嘴说的话在画布顶上浮一条,说完几秒淡掉 ---- */
+  /* ---- 板铺满:铺满整屏、盖住左栏;顶栏 × · 题目一行(点开看全)· 给老师看(轻点只交板,按住说 = 板和这句话一起给老师);
+     工具一列在舞台里,最底下浮着老师的小头像(按住说话);嘴说的话在板顶上浮一条,说完几秒淡掉 ---- */
   #stage.cv, body.live #stage.cv, body.live.hand-left #stage.cv { position:fixed; inset:0; width:auto; transform:none; border-radius:0; box-shadow:none; z-index:20; }
   #stage.cv .top { min-height:56px; box-sizing:border-box; padding:calc(env(safe-area-inset-top) + 6px) calc(env(safe-area-inset-right) + 220px) 6px calc(env(safe-area-inset-left) + 12px); gap:12px; }
   #stage.cv #st-x { order:-1; }
@@ -328,11 +327,6 @@ ${BACK_TINT_CSS}
   #tbk .pg span { padding:6px; font-size:15px; font-weight:600; color:var(--ink); }
   #tbk .pg.busy { opacity:.5; }
   /* 孩子从纸上交的画:节前一张——图(点开看大图)、几笔、接着画 */
-  .c.c-draw { flex-direction:row; align-items:center; gap:14px; padding:10px 12px; border:2px solid #7a4fc9; border-radius:16px; background:#fff; max-width:100%; align-self:flex-start; }
-  .c-draw .dw-th { width:156px; height:104px; flex:none; border:1px solid var(--line); border-radius:10px; object-fit:contain; background:#fffdf8; cursor:zoom-in; }
-  .c-draw .dw-t { display:flex; flex-direction:column; gap:2px; }
-  .c-draw .dw-t small { font-size:13px; font-weight:700; color:#7a4fc9; }
-  .c-draw .dw-t b { font-size:20px; }
   #board { flex:1; min-height:0; overflow:auto; padding:calc(env(safe-area-inset-top) + 68px) 16px 24px; display:flex; flex-direction:column; gap:12px; -webkit-overflow-scrolling:touch; scroll-behavior:smooth; }
   /* 输入条 */
   #bar { padding:8px 16px calc(env(safe-area-inset-bottom) + 12px); }
@@ -340,7 +334,7 @@ ${BACK_TINT_CSS}
   #pill .ic { color:var(--ink); display:grid; place-items:center; width:32px; height:44px; }
   /* 一直听(口语课与 live.listen):输入条里的麦克风(点它关麦 / 开麦,外圈跟着音量) */
   #pill #lv-mic { display:none; }
-  /* 交给老师了(选择、画板):锁住,不能改、不能再交 */
+  /* 交给老师了(选择、板):锁住,不能改、不能再交 */
   .c > .lk { display:inline-flex; align-items:center; gap:4px; align-self:flex-end; font-size:14px; color:var(--dim); }
   body.live.lv-open #pill #lv-mic { display:grid; width:44px; border-radius:50%; color:#2a5ea8; box-shadow:0 0 0 calc(var(--lv, 0) * 10px) #3d7fd933; transition:box-shadow .1s; }
   body.live.lv-open #pill #lv-mic.hear { background:#3d7fd9; color:#fff; }
@@ -634,7 +628,7 @@ __VOICE_CSS__
       <div id="stage"><div class="top"><span class="ttl" id="st-ttl"></span><span class="kd" id="st-kd"></span><span id="st-bp"><button type="button" id="st-tb" hidden></button><button type="button" id="st-cam"></button><button type="button" id="st-alb"></button></span><button id="st-x" type="button"></button></div><div id="st-body"></div><iframe id="st-frame" hidden title="stage"></iframe><div id="st-pick" hidden></div><div id="st-act" hidden><span class="note" id="st-note"></span><button id="st-go" type="button">交给老师</button></div><button id="cv-hold" class="vb-mini" type="button"></button><div id="cv-cap"></div></div>
       <div id="st-dim"></div>
     </div>
-    <div id="lv"><div id="lv-av"></div><div id="lv-kid"></div><div id="lv-cap"><div class="lv-prev"></div><div class="lv-cur"></div></div><div id="lv-ask"><b></b><small></small></div><div id="lv-acts"></div><button id="lv-replay" type="button" hidden><span class="ic"></span><span class="tx"></span></button><button id="lv-hold" type="button"></button><div id="lv-tools"><button type="button" id="lv-paper"><span class="ic"></span>画板</button><button type="button" id="lv-cam"><span class="ic"></span>拍照</button><button type="button" id="lv-album"><span class="ic"></span>相册</button><button type="button" id="lv-type"><span class="ic"></span>打字</button></div></div>
+    <div id="lv"><div id="lv-av"></div><div id="lv-kid"></div><div id="lv-cap"><div class="lv-prev"></div><div class="lv-cur"></div></div><div id="lv-ask"><b></b><small></small></div><div id="lv-acts"></div><button id="lv-replay" type="button" hidden><span class="ic"></span><span class="tx"></span></button><button id="lv-hold" type="button"></button><div id="lv-tools"><button type="button" id="lv-cam"><span class="ic"></span>拍照</button><button type="button" id="lv-album"><span class="ic"></span>相册</button><button type="button" id="lv-type"><span class="ic"></span>打字</button></div></div>
     <div id="bar">
       <div id="pill">
         <label class="ic" id="cam"><input type="file" accept="image/*" capture="environment"></label>
@@ -650,7 +644,6 @@ __VOICE_CSS__
   <div id="sheet"><div class="dimmer"></div><div class="panel"><div class="grab"></div><div class="opts">
     <label><span class="ic" id="ic-album"></span>相册<input type="file" accept="image/*" multiple></label>
     <label><span class="ic" id="ic-cam2"></span>拍照<input type="file" accept="image/*" capture="environment"></label>
-    <button type="button" id="sheet-paper"><span class="ic" id="ic-paper"></span>画板</button>
   </div></div></div>
   <div id="ps">
     <div id="ps-top"><span id="ps-to"></span></div>
@@ -672,7 +665,6 @@ __BOARD_JS__
 __PHOTO_JS__
 __REEL_JS__
 __LIVE_JS__
-__CANVAS_CHAT_JS__
 __AUDIO_JS__
 __VOICE_VIEW_JS__
 __VOICE_JS__
@@ -712,7 +704,6 @@ ${pageDomJs(4000)}
     send: SVG('<path d="M12 19V5M5 12l7-7 7 7"></path>', 20, 2.4),
     micMd: SVG('<rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path>', 22, 2),
     keyboard: SVG('<rect x="3" y="6" width="18" height="13" rx="2"></rect><path d="M7 10h1M11 10h1M15 10h1M8 15h8"></path>', 26, 1.8),
-    paper: SVG('<path d="M15 4l5 5-9 9H6v-5z"></path><path d="M13 6l5 5"></path><path d="M3 21c2-1.5 4-1.5 6 0s4 1.5 6 0"></path>', 26, 1.8),
     kit: SVG('<circle cx="12" cy="12" r="9"></circle><path d="M12 3v3M12 18v3M3 12h3M18 12h3"></path><path d="M9 15l2-5 4-1-2 5z"></path>', 30, 1.8),
     micOff: SVG('<rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3M4 4l16 16"></path>', 22, 2),
     album: __ALBUM_28__,
@@ -760,7 +751,7 @@ ${BOARD_MARK_JS}
   /** 按住说话那颗按钮(平板横屏左栏;头像 + 声音):样子是 voice-view.ts 的 voiceView 给的、画法在 voice-ui.ts,
    *  这里只在一处(voiceSync)把状态凑好交过去、把音量喂进去。hint = 刚才那一下的提示(留 2 秒);photo = 这一轮发的是照片;loudAt = 按着时最近一次有声音;
    *  reelHold / reelSpeak = 录像里孩子的屏幕这一刻(按着没有、嘴在不在出声) */
-  /** 两颗按住说话的按钮一起变:左栏那颗、画板铺满时工具列底下那颗小的;探针、录像读的是大的那颗 */
+  /** 两颗按住说话的按钮一起变:左栏那颗、板铺满时工具列底下那颗小的;探针、录像读的是大的那颗 */
   const vbPair = (a, b) => ({ el: a.el, set: (v) => { a.set(v); b.set(v); }, shake: () => { a.shake(); b.shake(); }, nod: () => { a.nod(); b.nod(); }, avatar: (n) => { a.avatar(n); b.avatar(n.cloneNode(true)); }, side: (x) => { a.side(x); b.side(x); }, color: (c) => { a.color(c); b.color(c); }, level: (w, v) => { a.level(w, v); b.level(w, v); }, tutorSource: (fn) => { a.tutorSource(fn); b.tutorSource(fn); }, drawn: a.drawn });
   const VB = { btn: vbPair(voiceButton($('#lv-hold'), { side: 'left' }), voiceButton($('#cv-hold'), { side: 'left' })), hint: '', hintT: 0, loudAt: 0, photo: false, silentT: 0, side: 'left', reelHold: null, reelSpeak: false };
   VB.btn.tutorSource(() => (LV.audio && LV.audio.outLevel ? LV.audio.outLevel() : 0));
@@ -1421,15 +1412,6 @@ ${HOME_TILES_JS}
         const ready = lectureReady(c);
         return box('lecture', h('div', { class: 'sp' }, p.title || p.bundle || ''), p.text ? h('div', { class: 'tx' }, p.text) : null, h('div', { class: 'th' }, ready ? (p.video ? lcVideoStill(p.bundle, p.end) : lcStill(p.bundle, p.still || 0, null, 'lc-still')) : '课还没放进来', ready ? h('span', { class: 'pl' }, lcClock(p.start) + '–' + lcClock(p.end) + ' ▷') : null));
       }
-      case 'canvas': {
-        const n = inkCount(c);
-        // 交过了:紧凑态是孩子画的那张图(真服务给 png 的相对路径,mock 存的是 data URL)
-        const img = c.state && typeof c.state.image === 'string' ? c.state.image : null;
-        // 照片做底、还没交过:卡上先是那张照片(淡一档)
-        const base = !img && p.base && typeof p.base.image === 'string' ? p.base.image : null;
-        const src = img ? (img.startsWith('data:') ? img : '/api/kid/image?p=' + encodeURIComponent(img)) : base ? '/api/kid/image?p=' + encodeURIComponent(base) : null;
-        return box('canvas', h('div', { class: 'cp' }, p.prompt || '画一画'), src ? h('div', { class: 'th' + (base ? ' base' : '') }, h('img', { src, alt: '', loading: 'lazy' }), h('span', { class: 'pl' }, n ? '画了 ' + n + ' 笔' : '点开画一画 ✎')) : h('div', { class: 'cb' }, n ? '已经画了 ' + n + ' 笔,点开接着画' : '点开画一画 ✎'));
-      }
       case 'kit': {
         // 教具(cards/kit/card.md):题目 + 哪种教具;做过了写着转过了、画了几笔。落下时自己铺满打开(autoStage),这张是关掉以后再点开的入口
         const did = stateSummary(c).join('、');
@@ -1789,11 +1771,8 @@ __WORD_DRAW_JS__
   // ---- 一个话题一节(板上只有实时一种画法,2026-11-04;以前的话题也这样画):节头是脑写的那张「# 标题」卡,孩子的话不当节头(在左栏 #lv-kid);
   //      答拍给我看卡的照片与话放进那张卡(photoAnsEl),别的卡没有答案栏 ----
   /** 孩子从纸上交的画:节前一张——图(点开看大图)、几笔、「接着画」打开这个话题的纸(只读、家长端、录像里不出) */
-  const drawHead = (s) => !s.drawing ? null : h('div', { class: 'c c-draw' },
-    h('img', { class: 'dw-th', src: '/api/kid/image?p=' + encodeURIComponent(s.drawing.image), alt: '', loading: 'lazy', on: { click: (e) => { e.stopPropagation(); openLb([s.drawing.image], 0); } } }),
-    h('div', { class: 'dw-t' }, h('small', {}, '我画的'), h('b', {}, '画了 ' + s.drawing.strokes + ' 笔')));
   /** 节头是脑写的那张卡(liveHeadEl,随卡画);板上第一节没写节头,只挂时间 */
-  const headEls = (s, i) => [i === 0 && !s.head && s.at ? h('div', { class: 'sh lh' }, h('span', { class: 'ln' }), h('span', { class: 'tm' }, clock(s.at))) : null, ...lectureHead(s), drawHead(s)];
+  const headEls = (s, i) => [i === 0 && !s.head && s.at ? h('div', { class: 'sh lh' }, h('span', { class: 'ln' }), h('span', { class: 'tm' }, clock(s.at))) : null, ...lectureHead(s)];
   /** 脑写的节头(只有一行「# 标题」的文字卡):一行摘要 —— 线 —— 板上第一节带时间;一轮中间的也照这样断成新一节 */
   const liveHeadEl = (title, i, k) => { const s = S.sections[i]; return h('div', { class: 'sh lh', 'data-card': k }, h('span', { class: 't' }, title), h('span', { class: 'ln' }), i === 0 && k === 0 && s && s.at ? h('span', { class: 'tm' }, clock(s.at)) : null); };
   /** 卡落下:讲稿里标这张卡的 [词] 都画上(不等念到、卡和讲稿不同步),田字格、单词卡写一遍(这一页只写一次);animate = false 是重画、回来看,只画不写 */
@@ -1989,81 +1968,19 @@ __WORD_DRAW_JS__
   S.layHalf = halfWidth();
 
   // ---- 舞台:点卡放大,交互都在这里 ----
-  const KIND_NAME = { text: '', read: '点读', choice: '选一选', image: '看图', tianzige: '田字格', dictation: '听写', word: '单词', lecture: '小课堂', canvas: '画一画', kit: '', code: '' };
-  const GO_LABEL = { canvas: '给老师看', kit: '给老师看' };
-  // ---- 画板:画板卡铺满;边画边聊:画板开着时按头像说的给嘴(看得见画),
-  //      「给老师看」轻点只交画、按住说 = 画和这句话一起给脑;嘴什么时候主动说一句照 canvas-chat.ts 的规矩(已内联),孩子端定、服务端再看一眼安不安静。
-  //      左栏的「画板」不再是一张空白的纸(2026-11-11):点它 = 对老师说想画,板上先画什么由老师定(出一张画板卡或教具卡) ----
-  const CV = { chat: null, strokes: [], timer: 0, snapWait: null, snapP: null, capT: 0, give: null, asking: null };
+  const KIND_NAME = { text: '', read: '点读', choice: '选一选', image: '看图', tianzige: '田字格', dictation: '听写', word: '单词', lecture: '小课堂', kit: '', code: '' };
+  const GO_LABEL = { kit: '给老师看' };
+  // ---- 铺满的舞台(教具):「给老师看」轻点只交板、按住说 = 板和这句话一起给脑;嘴说的话浮在板顶上 ----
+  const CV = { capT: 0, give: null };
   /** 舞台上那张卡 */
   const stageCardNow = () => (!S.stage ? null : S.stage.own ? S.stage.own : S.sections[S.stage.section] ? S.sections[S.stage.section].cards[S.stage.card] : null);
-  /** 画板开着、还能画(画板卡没交);只读、家长端、录像里不算 */
-  const canvasNow = () => { const c = stageCardNow(); return c && c.kind === 'canvas' && !c.submitted && !S.readonly && !REEL ? c : null; };
-  /** 舞台存回来的只有笔迹;清空前存的那几版(cleared)在页面这份状态里,并上 */
-  const withCleared = (prev, next) => (prev && Array.isArray(prev.cleared) && prev.cleared.length ? { ...next, cleared: prev.cleared } : next);
-  /** 画板开了:边画边聊从这一刻算(点开 20 秒内不说) */
-  const canvasOpened = () => {
-    const c = stageCardNow();
-    CV.chat = canvasChatInit(Date.now());
-    CV.strokes = c && c.state && Array.isArray(c.state.ink) ? canvasStrokes(c.state.ink) : [];
-    clearInterval(CV.timer); CV.timer = 0;
-    if (LV.on && canvasNow()) CV.timer = setInterval(canvasTick, 1000);
-  };
-  const canvasClosed = () => {
-    clearInterval(CV.timer); CV.timer = 0; CV.chat = null; CV.strokes = [];
-    if (CV.asking) { clearTimeout(CV.asking.timer); CV.asking = null; }
-    if (CV.snapWait) { const w = CV.snapWait; CV.snapWait = null; w(null); }
+  /** 舞台关了:等着的交板作废,浮着的字幕收起 */
+  const stageClosed = () => {
     if (CV.give) { const g = CV.give; CV.give = null; g(null); }
     clearTimeout(CV.capT); CV.capT = 0; $('#cv-cap').classList.remove('on');
     $('#stage').classList.remove('cv'); $('#st-go').classList.remove('holding');
   };
-  /** 这一刻的画(长边 768 的 jpeg data URL):问舞台要,1.5 秒没回就算没有 */
-  const canvasSnap = () => new Promise((resolve) => {
-    if (!canvasNow()) { resolve(null); return; }
-    if (CV.snapWait) { const w = CV.snapWait; CV.snapWait = null; w(null); }
-    let t = 0;
-    const done = (img) => { clearTimeout(t); resolve(img || null); };
-    t = setTimeout(() => { if (CV.snapWait === done) CV.snapWait = null; resolve(null); }, 1500);
-    CV.snapWait = done;
-    postStage({ type: 'control', action: 'snap' });
-  });
-  /** 给嘴的题(cue.ts 的 ChatAsk):题目、说哪个颜色、问不问、画了多久、各颜色几笔在哪、清空过几次 */
-  const canvasAsk = (due) => {
-    const c = canvasNow();
-    const sum = canvasSummary(CV.strokes);
-    const cleared = c && c.state && Array.isArray(c.state.cleared) ? c.state.cleared : [];
-    const starts = cleared.map((x) => x.from || x.at).concat(sum.firstAt ? [sum.firstAt] : []).filter((x) => x > 0);
-    const ms = starts.length && sum.lastAt ? sum.lastAt - Math.min(...starts) : 0;
-    return { ...(c && c.props && c.props.prompt ? { prompt: c.props.prompt } : {}), ...(due ? { color: due.color, ask: due.ask } : {}), minutes: canvasMinutesText(ms), colors: sum.colors, cleared: cleared.length };
-  };
-  /**
-   * 每秒看一眼该不该主动说一句(canvasChatDue);该说就要一张图交给嘴。这一句先挂着(CV.asking),服务端回 {t:'chat', said} 才记成说过,
-   * 回 skipped(不安静)或 6 秒没回就作废——不然没说出去的也占了一句、算成没回
-   */
-  const canvasTick = () => {
-    if (!canvasNow() || !CV.chat || !LV.on || !LV.ready || LV.model.open) return;
-    const busy = LV.model.status !== 'quiet' || S.pending || Boolean(press) || LV.letGo || Boolean(CV.snapWait) || Boolean(CV.give) || Boolean(CV.asking);
-    const now = Date.now();
-    const due = canvasChatDue(CV.chat, now, CV.strokes, busy);
-    if (!due.say) return;
-    const id = S.stage.id;
-    const asking = { id, due, at: now, strokes: CV.strokes.slice(), timer: 0 };
-    CV.asking = asking;
-    asking.timer = setTimeout(() => { if (CV.asking === asking) CV.asking = null; }, 6000);
-    canvasSnap().then((img) => {
-      if (CV.asking !== asking) return;
-      if (img && canvasNow() && S.stage && S.stage.id === id && LV.model.status === 'quiet' && !press && !LV.letGo) lvSend({ t: 'chat', canvas: id, image: img, ask: canvasAsk(due) });
-      else { clearTimeout(asking.timer); CV.asking = null; }
-    });
-  };
-  /** 服务端回了主动说的那一句:said = 嘴说了,记下;skipped = 不安静没说,作废 */
-  const canvasChatAck = (m) => {
-    const a = CV.asking;
-    if (!a || m.canvas !== a.id) return;
-    clearTimeout(a.timer); CV.asking = null;
-    if (m.said && CV.chat && S.stage && S.stage.id === a.id) CV.chat = canvasChatSaid(CV.chat, a.at, a.due, a.strokes);
-  };
-  /** 画板铺满时嘴说的话:画布顶上浮一条,说完 4 秒淡掉 */
+  /** 铺满的舞台上嘴说的话:板顶上浮一条,说完 4 秒淡掉 */
   const cvCap = () => {
     const el = $('#cv-cap');
     if (!$('#stage').classList.contains('cv')) { el.classList.remove('on'); return; }
@@ -2072,33 +1989,13 @@ __WORD_DRAW_JS__
   };
   /** 板上有孩子还没交的笔迹(板卡上画了、转了,还没交):他这时开口,这一句连板此刻的图一起交(《画板为主设计》下篇「图什么时候附」) */
   const kitInk = () => { const c = stageCardNow(); return c && c.kind === 'kit' && !c.submitted && S.stage && !S.stage.own && !S.readonly && !REEL && c.state && (((c.state.marks || []).length > 0) || c.state.moves > 0) ? c : null; };
-  /** 「给老师看」:让舞台导出 png;画板卡存状态(连图),回这一条要带的(交卡的 action + focus);舞台关掉。8 秒没导出来算了 */
-  const canvasGive = () => new Promise((resolve) => {
+  /** 「给老师看」:让舞台导出 png;存状态(连图),回这一条要带的(交卡的 action + focus)。8 秒没导出来算了 */
+  const stageGive = () => new Promise((resolve) => {
     if (CV.give) { const g = CV.give; CV.give = null; g(null); }
     CV.give = resolve;
     postStage({ type: 'control', action: 'submit' });
     setTimeout(() => { if (CV.give === resolve) { CV.give = null; resolve(null); } }, 8000);
   });
-  /** 清空了(舞台先导出了那一版):图传进 captures/,记进这张的 cleared;边画边聊重新算 */
-  const canvasCleared = (card, m) => {
-    if (CV.chat) CV.chat = canvasChatCleared(CV.chat, m.at || Date.now());
-    const entry = { at: m.at || Date.now(), strokes: m.strokes || 0, ...(m.from ? { from: m.from } : {}) };
-    // 先记下是哪一张:图传上去要一会儿,这时舞台可能关了、换了一张;存回清空的那张(按 job 与第几张)
-    const tutor = S.tutor ? S.tutor.name : null;
-    const where = { job: S.sections[S.stage.section].job, idx: S.stage.card };
-    const put = (image) => {
-      if (!S.tutor || S.tutor.name !== tutor) return;
-      const add = (st) => ({ ...(st || { ink: [] }), cleared: [...(st && Array.isArray(st.cleared) ? st.cleared : []), { ...entry, ...(image ? { image } : {}) }].slice(-50) });
-      const sec = S.sections.find((x) => x.job === where.job);
-      const c = sec ? sec.cards[where.idx] : card;
-      if (!c || c.submitted) return;
-      c.state = add(c.state);
-      if (c !== card) card.state = c.state;
-      saveState(where.job, where.idx, c.state);
-    };
-    if (!m.image || !S.tutor) { put(null); return; }
-    api('POST', CONV + S.tutor.name + '/photos', { image: m.image }).then((r) => put(r && r.path), () => put(null));
-  };
   /**
    * 落下就自己打开的卡(教具:老师先画好,孩子不用找、不用点):只在今天能说话的实时页、刚落下的那一刻开一次;
    * 回来看、以前的话题、录像、家长端不开(那里点卡才开)。舞台已经开着(孩子正在别的卡上)就不抢
@@ -2165,11 +2062,11 @@ __WORD_DRAW_JS__
     const card = S.sections[secIdx] && S.sections[secIdx].cards[idx];
     if (!card) return;
     if (card.kind === 'lecture' && !lectureReady(card)) return; // 课包读不出来:紧凑态写着「课还没放进来」,不开
-    if (S.readonly && hasState(card) && !opts.delegate) return; // 以前的只能看:选择 / 填空 / 画板不开,免得改了当时的答案
+    if (S.readonly && hasState(card) && !opts.delegate) return; // 以前的只能看:选择 / 板不开,免得改了当时的答案
     S.stage = { section: secIdx, card: idx, id: S.sections[secIdx].job + '/' + idx, playing: null, delegate: Boolean(opts.delegate), autoplay: Boolean(opts.autoplay) };
     playRec({ k: 'stage', job: S.sections[secIdx].job, card: idx, open: true });
-    // 画板、教具铺满:题目一行写在顶栏,点开看全
-    $('#st-ttl').textContent = card.kind === 'canvas' ? (card.props.prompt || '画一画') : stageTitle(card);
+    // 教具铺满:题目一行写在顶栏,点开看全
+    $('#st-ttl').textContent = stageTitle(card);
     $('#st-ttl').classList.remove('open');
     $('#st-kd').textContent = KIND_NAME[card.kind] || card.kind;
     $('#st-kd').hidden = isFullStage(card) || !(KIND_NAME[card.kind] || card.kind);
@@ -2179,7 +2076,6 @@ __WORD_DRAW_JS__
     renderStage();
     $('#stage').classList.add('on');
     setNow(secIdx, idx);
-    if (card.kind === 'canvas') canvasOpened();
   };
   /** 照片板的「点字」:孩子点中了一个字词 → 田字格浮在板上,一笔一笔写一遍(点格子再写一遍);再点别的字换成那个,× 收起来。老师不开口 */
   const pickHide = () => { const box = $('#st-pick'); for (const b of box.querySelectorAll('.hz')) tianzigeReset(b); box.replaceChildren(); box.hidden = true; };
@@ -2241,8 +2137,8 @@ __WORD_DRAW_JS__
   };
   /** 发给舞台包的这张卡(ready 时发;看录像时孩子改了卡再发一次,包按新状态重画) */
   const stageCard = (card) => {
-    const b = card.kind === 'lecture' ? card.props.bundle : card.kind === 'canvas' && card.props.base && card.props.base.bundle ? card.props.base.bundle : null;
-    const im = card.kind === 'canvas' && card.props.base && typeof card.props.base.image === 'string' ? card.props.base.image : card.kind === 'kit' && card.props.kit === '照片' && card.props.params && typeof card.props.params['图'] === 'string' ? card.props.params['图'] : null;
+    const b = card.kind === 'lecture' ? card.props.bundle : null;
+    const im = card.kind === 'kit' && card.props.kit === '照片' && card.props.params && typeof card.props.params['图'] === 'string' ? card.props.params['图'] : null;
     return { type: 'card', id: S.stage.id, kind: card.kind, props: card.props, state: card.state === undefined ? null : card.state, readonly: Boolean(card.submitted) || (card.kind === 'kit' && S.readonly), ...(isFullStage(card) ? { full: true, hand: document.body.classList.contains('hand-left') ? 'left' : 'right' } : {}), bundleUrl: b ? lcBundleUrl(b, card.kind === 'lecture' && card.props.video === true) : undefined, imageUrl: im ? '/api/kid/image?p=' + encodeURIComponent(im) : undefined, wordsUrl: im && card.kind === 'kit' && Array.isArray(card.props.ops) && card.props.ops.includes('点字') ? '/api/kid/photo-words?p=' + encodeURIComponent(im) : undefined, autoplay: S.stage.autoplay };
   };
   /** 舞台包说话:ready → 把卡发过去;phase → 记下在放还是放完;state → 存;done 且是讲稿委托的 → 关舞台接着念 */
@@ -2252,14 +2148,12 @@ __WORD_DRAW_JS__
     const card = stageCardNow();
     if (!card) return;
     if (m.type === 'peek') { previewGot(m.image); return; }
-    if (m.type === 'state' || m.type === 'view' || m.type === 'reveal' || m.type === 'cleared') previewSoon(PV_HAND_MS);
+    if (m.type === 'state' || m.type === 'view' || m.type === 'reveal') previewSoon(PV_HAND_MS);
     if (m.type === 'ready') postStage(stageCard(card));
-    else if (m.type === 'snap') { const w = CV.snapWait; CV.snapWait = null; if (w) w(m.image); }
     else if (m.type === 'pick') { if (card.kind === 'kit') { pickShow(m.text); bpPicked(card, m.text); } }
     else if (m.type === 'reveal') { if (card.kind === 'kit') bpPicked(card, m.text, 'reveal'); }
     else if (m.type === 'view') { if (card.kind === 'kit') bpView(card, m.box); }
     else if (m.type === 'shot') { if (card.kind === 'kit') bpShot(card, m.box, m.image); }
-    else if (m.type === 'cleared') { if (!card.submitted) canvasCleared(card, m); }
     else if (m.type === 'phase') {
       S.stage.playing = { phase: m.phase, line: m.line };
       // 小课堂卡(仲裁表「交给小课堂」):那一段放完,舞台不关、停在末帧,嘴接着念
@@ -2268,8 +2162,7 @@ __WORD_DRAW_JS__
     }
     else if (m.type === 'state') {
       if (card.submitted || S.stage.own) return;
-      card.state = withCleared(card.state, m.state);
-      if (card.kind === 'canvas') CV.strokes = canvasStrokes(Array.isArray(m.state && m.state.ink) ? m.state.ink : []);
+      card.state = m.state;
       renderGo();
       repaintCard(S.stage.section, S.stage.card); saveState(S.sections[S.stage.section].job, S.stage.card, card.state);
     }
@@ -2278,7 +2171,7 @@ __WORD_DRAW_JS__
       const done = CV.give; CV.give = null;
       const finish = (patch) => { if (done) done(patch); else if (patch) send('', patch); };
       if (card.submitted || S.stage.own) { finish(null); return; }
-      card.state = withCleared(card.state, m.state); card.submitted = true;
+      card.state = m.state; card.submitted = true;
       const id = S.stage.id; const secI = S.stage.section, job = S.sections[secI].job; const idx = S.stage.card;
       // 教具:交了不关——板留着等老师(只看),老师的下一张还是教具就在这块板上接着画(swapStage);老师这一轮换了别的卡才关,只说话板留着(stageDone)
       if (opensItself(card)) { S.stage.waiting = true; renderGo(); postStage(stageCard(card)); }
@@ -2292,7 +2185,7 @@ __WORD_DRAW_JS__
   const closeStage = () => { if (S.stage && S.sections[S.stage.section]) playRec({ k: 'stage', job: S.sections[S.stage.section].job, card: S.stage.card, open: false });
     // 单词卡舞台:自动那一遍停下,慢念也停
     for (const v of document.querySelectorAll('#st-body video')) { try { v.pause(); } catch {} }
-    wordRun++; if (S.stage && !S.reel && S.sections[S.stage.section] && (S.sections[S.stage.section].cards[S.stage.card] || {}).kind === 'word') silence(); S.stage = null; pickHide(); frame.src = 'about:blank'; canvasClosed(); $('#stage').classList.remove('on', 'bp'); renderSubtitle(); setNow(null, null); };
+    wordRun++; if (S.stage && !S.reel && S.sections[S.stage.section] && (S.sections[S.stage.section].cards[S.stage.card] || {}).kind === 'word') silence(); S.stage = null; pickHide(); frame.src = 'about:blank'; stageClosed(); $('#stage').classList.remove('on', 'bp'); renderSubtitle(); setNow(null, null); };
   $('#st-x').innerHTML = ICON.close;
   // 孩子关:讲稿交给小课堂卡、还没放完的,关了接着念
   const closeByKid = () => { if (BP.on && !S.readonly) { closeTutor(); return; } const d = S.stage; const card = d && S.sections[d.section] ? S.sections[d.section].cards[d.card] : null; closeStage(); if (d && d.delegate && card && (!isHeavy(card) || card.kind === 'lecture')) resumeAfter(); };
@@ -2318,12 +2211,12 @@ __WORD_DRAW_JS__
     saveState(S.sections[secIdx].job, idx, card.state);
   };
   const saveState = (job, idx, state) => { if (!S.tutor || S.readonly) return; api('PUT', CONV + S.tutor.name + '/cards/' + job + '/' + idx, state).catch(() => {}); };
-  /** 「交给老师」/「给老师看」点一下;画板的按住说在 bindGive(按住说话那几颗旁边) */
+  /** 「交给老师」/「给老师看」点一下;板的按住说在 bindGive(按住说话那几颗旁边) */
   const giveTap = () => {
     if (!S.stage) return;
     const card = stageCardNow();
     if (!card || card.submitted) return;
-    if (isHeavy(card)) { if (isFullStage(card) && !stateSummary(card).length) return; postStage({ type: 'control', action: 'submit' }); return; } // 画板:让舞台包导出 png 再交;教具:舞台把整份状态交回来
+    if (isHeavy(card)) { if (isFullStage(card) && !stateSummary(card).length) return; postStage({ type: 'control', action: 'submit' }); return; } // 教具:舞台导出 png、把整份状态交回来
     if (!stateSummary(card).length) return;
     if (card.submitted) return;
     const id = S.stage.id, secI = S.stage.section, idx = S.stage.card;
@@ -2573,7 +2466,7 @@ __WORD_DRAW_JS__
     else if (S.thread && S.day && S.thread !== S.day.thread) mo = '今天的话题 · ' + clock(S.threadAt);
     $('#c-mo').textContent = mo; $('#c-mo').hidden = !mo;
   };
-  // 只看(S.readonly:录像、家长预览):选择 / 填空 / 画板不开、没有输入条。
+  // 只看(S.readonly:录像、家长预览):选择 / 板不开、没有输入条。
   // 家长要试老师,到孩子端当一回孩子,用完回清单删那个话题(写进记忆、日记的一起撤)
   /** 能不能发消息:孩子端 = 不只读;家长端不发 */
   const canSend = () => !S.readonly && !S.talkWait && !(S.lecture && !S.lecture.watch);
@@ -3166,7 +3059,7 @@ __REEL_DOCK_JS__
     for (const f of r.effects) {
       switch (f.kind) {
         case 'hold': LV.playLine = null; LV.endLine = null; lvSend({ t: 'hold' }); break;
-        case 'release': lvSend({ t: 'release', body: data, ...(LV.chatNext ? { chat: LV.chatNext } : {}) }); break;
+        case 'release': lvSend({ t: 'release', body: data }); break;
         case 'hush': lvSend({ t: 'hush' }); break;
         case 'send': lvSend({ t: 'send', body: data }); break;
         case 'enqueue': if (LV.audio) LV.audio.play(data); liveDrainWatch(); break;
@@ -3425,7 +3318,6 @@ __REEL_DOCK_JS__
       // 转写是空的(按了没说清):嘴说没听清,不会有这一轮
       case 'kid': if (!String(m.text || '').trim()) { S.pending = false; renderSubtitle(); } else if (LV.model.open) { S.pending = true; if (!S.waitSince) S.waitSince = Date.now(); renderSubtitle(); } break;
       case 'turn': liveTurn(m); break;
-      case 'chat': canvasChatAck(m); break;
       case 'flush': liveDispatch({ type: 'flush' }); break;
       case 'err': S.pending = false; renderSubtitle(); break;
       default: break;
@@ -3473,7 +3365,7 @@ __REEL_DOCK_JS__
       LV.audio = makeAudio();
       LV.audio.muted = false;
       // 按着才推;一直听时推不推看 liveGate(关麦、卡的声音、小课堂时不推)
-      // 松了手、还在等画(边画边聊要那张图、给老师看在导出上传):状态还是按着,声音不再推
+      // 松了手、还在等板(给老师看在导出上传):状态还是按着,声音不再推
       LV.audio.onChunk = (ab) => { if (((LV.model.status === 'holding' && !LV.letGo) || liveGateSync()) && LV.ws && LV.ws.readyState === 1) LV.ws.send(ab); };
       LV.audio.onLevel = (v) => {
         if (LV.model.status === 'holding') {
@@ -3547,10 +3439,9 @@ __REEL_DOCK_JS__
   const liveDiagSend = (d) => { if (!d) return; const { mark: _m, ...row } = d; row.peak = Math.round(row.peak * 100) / 100; try { fetch('/api/kid/voice-diag', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(row), keepalive: true }).catch(() => {}); } catch {} };
   /** 按满 150 毫秒:嘴、卡的声音停(liveStep),告诉服务端 hold,开始推声音(常开那路麦克风接到采音节点上,第一次要等它开好) */
   const liveHold = () => {
-    // 画板开着:按的是「给老师看」= 画和这句话给脑;按头像 = 边画边聊,给嘴,先要一张这一刻的画
-    LV.holdKind = press && press.give ? 'give' : canvasNow() && !LV.model.open ? 'chat' : null;
+    // 按的是「给老师看」= 板和这句话给脑
+    LV.holdKind = press && press.give ? 'give' : null;
     LV.letGo = false;
-    CV.snapP = LV.holdKind === 'chat' ? canvasSnap() : null;
     $('#st-go').classList.toggle('holding', LV.holdKind === 'give');
     setBar(barNext(S.bar, 'holdStart'));
     dispatch({ type: 'halt' });
@@ -3569,7 +3460,6 @@ __REEL_DOCK_JS__
     const long = Date.now() - LV.holdAt >= 400;
     const keep = !cancelled && hold.audio && long;
     const kind = LV.holdKind; LV.holdKind = null;
-    const snapP = CV.snapP; CV.snapP = null;
     $('#st-go').classList.remove('holding');
     const d = LV.diag; LV.diag = null;
     if (d) { d.mark(sys ? 'cancel' : 'up', keep ? 'sent' : cancelled ? 'slide' : !long ? 'short' : 'nomic'); liveDiagSend(d); }
@@ -3585,25 +3475,12 @@ __REEL_DOCK_JS__
       renderSubtitle();
       return;
     }
-    // 边画边聊:等那张画(最多 1.5 秒),松手带 chat;嘴接住,不起脑(板上不等老师)
-    // 等画的这一会儿(LV.letGo):声音不推、别的按钮不接,发出去才放开
-    if (kind === 'chat' && canvasNow() && S.stage) {
-      const canvas = S.stage.id;
-      LV.letGo = true;
-      Promise.resolve(snapP).then((img) => {
-        LV.letGo = false;
-        LV.chatNext = { canvas, ...(img ? { image: img } : {}), ask: canvasAsk(null) };
-        liveDispatch({ type: 'release' }, liveBody());
-        LV.chatNext = null;
-        if (CV.chat) CV.chat = canvasChatAnswered(CV.chat, Date.now());
-      });
-      return;
-    }
-    // 「给老师看」按住说:舞台导出、存好 / 传好那张画,这一句带着它交给脑(没说清服务端照交画);画没交成这一下作废
+    // 「给老师看」按住说:舞台导出、存好那张板,这一句带着它交给脑(没说清服务端照交板);板没交成这一下作废
     // 板上有他新画的(没交):按头像说话也一样,话连板此刻的图一起交;只点字、没画就不附图
-    if ((kind === 'give' && (canvasNow() || kitInk())) || (kind !== 'give' && kitInk())) {
+    if (kitInk()) {
+      // 等板导出的这一会儿(LV.letGo):声音不推、别的按钮不接,发出去才放开
       LV.letGo = true;
-      canvasGive().then((patch) => {
+      stageGive().then((patch) => {
         LV.letGo = false;
         if (!patch) { liveDispatch({ type: 'cancel' }); renderSubtitle(); return; }
         liveDispatch({ type: 'release' }, { ...liveBody(), ...patch });
@@ -3680,16 +3557,16 @@ __REEL_DOCK_JS__
     // 点了一下没按住:晃一下提示,不打字(打字是下面那颗)
     voiceHint('tap');
   });
-  // 画板铺满时工具列底下那颗小头像:同左栏那颗;画板开着按住说 = 边画边聊,给嘴
+  // 板铺满时工具列底下那颗小头像:同左栏那颗
   bindHold($('#cv-hold'), 80, () => voiceHint('tap'));
   /**
-   * 「给老师看」(画板):轻点 = 只交画;按住说(满 300 毫秒,比头像长一点,免得点一下成了按住)= 画和这句话一起给老师。
-   * 嘴没连上、一直听、老师在想、不是画板:只能点(点了照旧交)
+   * 「给老师看」(板):轻点 = 只交板;按住说(满 300 毫秒,比头像长一点,免得点一下成了按住)= 板和这句话一起给老师。
+   * 嘴没连上、一直听、老师在想、板上没画:只能点(点了照旧交)
    */
   const bindGive = (el) => {
     let tapAt = 0;
     el.addEventListener('pointerdown', (e) => {
-      if (el.disabled || press || LV.letGo || !(canvasNow() || kitInk()) || !LV.on || !LV.ready || LV.model.open || S.bar === 'typing' || document.body.classList.contains('pending')) return;
+      if (el.disabled || press || LV.letGo || !kitInk() || !LV.on || !LV.ready || LV.model.open || S.bar === 'typing' || document.body.classList.contains('pending')) return;
       e.preventDefault(); unlock();
       if (LV.audio) LV.audio.wake().catch(() => {});
       press = { y: e.clientY, cancelled: false, held: false, live: false, give: true, cancelPx: 80, onTap: giveTap, timer: setTimeout(() => { if (!press || !press.give) return; press.held = true; press.live = true; liveHold(); }, 300) };
@@ -3712,13 +3589,6 @@ __REEL_DOCK_JS__
     el.addEventListener('click', () => { if (Date.now() - tapAt < 800 || LV.letGo) return; giveTap(); });
   };
   bindGive($('#st-go'));
-  // 画板:左栏第一颗;手机、竖屏在加号那张单子里。点它 = 对老师说一句想画(WANT_BOARD),老师定板上先画什么、出一张画板卡或教具卡;
-  // 不再打开一张空白的纸——孩子先画的几笔怎么解释都行,老师猜不准(2026-11-10 ray:33 笔画了一分钟,老师回的是「画了 33 笔,很认真」)
-  const WANT_BOARD = '我想在画板上画给你看。';
-  const wantBoard = () => { if (!S.tutor || S.readonly || !LV.on || S.stage || S.pending) return; send(WANT_BOARD); };
-  $('#lv-paper .ic').innerHTML = ICON.paper; $('#ic-paper').innerHTML = ICON.paper;
-  $('#lv-paper').addEventListener('click', wantBoard);
-  $('#sheet-paper').addEventListener('click', () => { $('#sheet').classList.remove('on'); wantBoard(); });
   // 左栏最底下那排:拍照、相册走输入条与加号面板的那两个 file input(wireFile),打字同点输入条中间那段
   $('#lv-cam .ic').innerHTML = ICON.cameraLg; $('#lv-album .ic').innerHTML = ICON.album; $('#lv-type .ic').innerHTML = ICON.keyboard;
   $('#lv-cam').addEventListener('click', () => $('#cam input').click());
@@ -3960,7 +3830,7 @@ __REEL_DOCK_JS__
 </html>
 `;
 
-const KID_PAGE_SRC = PAGE.replace('__BOARD_JS__', () => libSource('kid-board')).replace('__WORD_DRAW_JS__', () => wordDrawJs()).replace('__PHOTO_JS__', () => libSource('photo-edit')).replace('__REEL_JS__', () => libSource('reel')).replace('__LIVE_JS__', () => libSource('live-board')).replace('__CANVAS_CHAT_JS__', () => libSource('canvas-chat')).replace('__AUDIO_JS__', () => AUDIO_CLIENT_JS).replace('__VOICE_VIEW_JS__', () => libSource('voice-view')).replace('__VOICE_JS__', () => VOICE_JS).replace('__VOICE_CSS__', () => VOICE_CSS).replace('__REEL_DOCK_CSS__', () => REEL_DOCK_CSS).replace('__REEL_DOCK_HTML__', () => REEL_DOCK_HTML).replace('__REEL_DOCK_JS__', () => REEL_DOCK_JS).replace('__NEUTRAL_COLOR__', () => JSON.stringify(NEUTRAL_COLOR)).replace('__BRAND_CSS__', () => BRAND_CSS).replace('__BACK_LOGO__', () => BACK_LOGO).replace('__BRAND_JS__', () => BRAND_JS)
+const KID_PAGE_SRC = PAGE.replace('__BOARD_JS__', () => libSource('kid-board')).replace('__WORD_DRAW_JS__', () => wordDrawJs()).replace('__PHOTO_JS__', () => libSource('photo-edit')).replace('__REEL_JS__', () => libSource('reel')).replace('__LIVE_JS__', () => libSource('live-board')).replace('__AUDIO_JS__', () => AUDIO_CLIENT_JS).replace('__VOICE_VIEW_JS__', () => libSource('voice-view')).replace('__VOICE_JS__', () => VOICE_JS).replace('__VOICE_CSS__', () => VOICE_CSS).replace('__REEL_DOCK_CSS__', () => REEL_DOCK_CSS).replace('__REEL_DOCK_HTML__', () => REEL_DOCK_HTML).replace('__REEL_DOCK_JS__', () => REEL_DOCK_JS).replace('__NEUTRAL_COLOR__', () => JSON.stringify(NEUTRAL_COLOR)).replace('__BRAND_CSS__', () => BRAND_CSS).replace('__BACK_LOGO__', () => BACK_LOGO).replace('__BRAND_JS__', () => BRAND_JS)
   .replace('__CAMERA_22__', () => JSON.stringify(cameraSvg(22))).replace('__CAMERA_28__', () => JSON.stringify(cameraSvg(28))).replace('__CAMERA_20__', () => JSON.stringify(cameraSvg(20))).replace('__ALBUM_28__', () => JSON.stringify(albumSvg(28)));
 export const KID_PAGE = KID_PAGE_SRC.replace('__PAGE_V__', createHash('sha1').update(KID_PAGE_SRC).digest('hex').slice(0, 8));
 

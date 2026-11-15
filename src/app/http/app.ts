@@ -80,8 +80,6 @@ import { tianzigeData } from '../../ui/kid/tianzige.ts';
 import { lettersData } from '../../ui/kid/letters.ts';
 import { fixtureOf, rawView } from './raw-view.ts';
 import { DeviceSchema } from '../../schema/index.ts';
-import { CanvasStateSchema } from '../../board/cards/canvas.ts';
-import { PAPER_KEY_RE, dropPaper, readPaper, writePaper } from '../../board/paper.ts';
 import { addTutorFile, readTutorFile, removeTutorFile, writeTutorFile } from '../cli/tutors.ts';
 import type { MouthIndex } from '../../runtime/journal/mouth-index.ts';
 
@@ -596,8 +594,8 @@ async function putCardState(ctx: AppContext, ws: Workspace, tutor: string, job: 
   // 交过的卡锁住了,不能再改
   if (submittedCards(index).has(`${job}/${n}`)) return { status: 409, json: { error: 'submitted' } };
   let state = body;
-  // 画板、教具:「给老师看」时带一张板的图
-  if ((target.kind === 'canvas' || target.kind === 'kit') && isObj(body) && typeof body.image === 'string') {
+  // 教具:「给老师看」时带一张板的图
+  if (target.kind === 'kit' && isObj(body) && typeof body.image === 'string') {
     const { image, ...rest } = body;
     const m = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(image);
     if (!m || m[1].length > 8_000_000) return { status: 400, json: { error: 'bad_state' } };
@@ -606,15 +604,11 @@ async function putCardState(ctx: AppContext, ws: Workspace, tutor: string, job: 
   }
   const r = parseCardState(target, state);
   if (!r.ok) return { status: 400, json: { error: 'bad_state' } };
-  // 画板清空前存的那几版:图只认 captures/ 里在的(先 POST photos 拿到的),别的路径不给老师 Read
-  if (target.kind === 'canvas' && isObj(r.state) && Array.isArray(r.state.cleared)) {
-    for (const c of r.state.cleared as { image?: string }[]) if (c.image && !(await capturePathOk(ws, c.image))) delete c.image;
-  }
   const last = index.messages[index.messages.length - 1];
   // turn = 这张卡所在话题的末条 job:下一条发给同一话题时才算「上一轮之后改过的」
   const mine = threads(index.messages)[index.messages.findIndex((m) => m.job === job)];
   await writeCardState(ws, tutor, date, job, n, { at: ctx.now().toISOString(), turn: lastJobOf(index, mine) ?? last.job, state: r.state });
-  // 录像的实录:孩子的每一次存都记一条(选了又改、填空的过程、画板一笔一笔)
+  // 录像的实录:孩子的每一次存都记一条(选了又改、填空的过程、板上一笔一笔)
   await appendFile(conversationFiles(ws.dirs.conversations, tutor, date).play(job), `${JSON.stringify({ at: ctx.now().getTime(), k: 'card', job, card: n, state: r.state })}\n`).catch(() => {});
   return { status: 200, json: { ok: true, card: `${job}/${n}`, state: r.state } };
 }
@@ -642,23 +636,6 @@ async function uploadPhoto(ws: Workspace, body: unknown, now: Date): Promise<Rou
   if (!data.length || data.length > PHOTO_MAX_BYTES) return { status: 413, json: { error: 'too_large', message: `一张最多 ${PHOTO_MAX_BYTES / 1_000_000} MB,页面该先缩到长边 ${PHOTO_MAX_SIDE}` } };
   const path = await writeCapture(ws, now, data, m[1] === 'png' ? 'png' : 'jpg');
   return { status: 201, json: { path } };
-}
-
-/** 左栏的纸:读 / 存一张;key 是话题 id 或 new */
-async function paperRoute(ctx: AppContext, tutor: string, date: string, method: string, url: URL, body: unknown): Promise<RouteResult> {
-  const ws = ctx.ws;
-  const key = method === 'GET' ? (url.searchParams.get('key') ?? '') : isObj(body) && typeof body.key === 'string' ? body.key : '';
-  if (method !== 'GET' && method !== 'PUT') return { status: 405, json: { error: 'method_not_allowed' } };
-  if (!PAPER_KEY_RE.test(key)) return { status: 400, json: { error: 'bad_request' } };
-  if (method === 'GET') return { status: 200, json: { key, state: await readPaper(ws, tutor, date, key) } };
-  const r = CanvasStateSchema.safeParse(isObj(body) ? body.state : null);
-  if (!r.success) return { status: 400, json: { error: 'bad_state' } };
-  const cleared = [];
-  for (const c of r.data.cleared ?? []) cleared.push(c.image && !(await capturePathOk(ws, c.image)) ? { ...c, image: undefined } : c);
-  await writePaper(ws, tutor, date, key, { ink: r.data.ink, ...(cleared.length ? { cleared } : {}) }, ctx.now());
-  // 话题有了,孩子端把 new 那张存到话题名下:new 那张删掉(服务端第一条已经改过名的话,这里没有可删的)
-  if (isObj(body) && body.from === 'new' && key !== 'new') await dropPaper(ws, tutor, date, 'new');
-  return { status: 200, json: { ok: true, key } };
 }
 
 /** 请求从哪来(createHandler 从请求头取):设备 cookie、来源地址 */
@@ -854,7 +831,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       await appendFile(join(ws.root, '.cotutor', 'voice-diag.jsonl'), `${JSON.stringify(row)}\n`).catch(() => {});
       return { status: 200, json: { ok: true } };
     }
-    const kid =/^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/(today|messages|preview|photos|play|paper|\d{4}-\d{2}-\d{2})$/.exec(p);
+    const kid =/^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/(today|messages|preview|photos|play|\d{4}-\d{2}-\d{2})$/.exec(p);
     if (kid) {
       const [, tutor, tail] = kid;
       const t = ws.config.tutors[tutor];
@@ -885,7 +862,6 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       // 作业照片(R5):先传图拿 path,再连 path 一起发消息;不起老师、不计上限
       if (tail === 'photos') return method === 'POST' ? uploadPhoto(ws, body, ctx.now()) : { status: 405, json: { error: 'method_not_allowed' } };
       // 左栏的纸:GET ?key=<话题 | new> 读;PUT {key, state} 存(清掉那几版的图只认 captures/ 里在的)。不起老师
-      if (tail === 'paper') return paperRoute(ctx, tutor, date, method, url, body);
       if (tail === 'today' && method === 'GET') {
         return { status: 200, json: await kidDay(ctx, tutor, date) };
       }

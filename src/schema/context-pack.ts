@@ -81,7 +81,6 @@ export const ContextPackSchema = z.object({
    * 这一轮走实时:嘴(realtime 模型)已经替老师接住了孩子,讲稿交给嘴照念、不配音。caught = 嘴接住时说的那句;cut = 上一轮的讲稿念到第几句被孩子打断(1 起;0 = 一句都没念到就被打断了;没打断不写)。
    * 口语课:warmup = 热身的摸底,一拍一行(应用按转写记);phone = 打电话打了几分钟(0 起,还没打不写);
    * app = 这一轮不是孩子说的:call = 你念了 [[call]],现在开始打电话;quiet = 热身里孩子连着两拍没开口;still = 板上孩子动了手以后一直没出声,应用替他叫你一次。
-   * draw = 边画边聊:这张画画着的时候孩子说的和你(嘴)说的,一句一行,按先后
    */
   live: z
     .object({
@@ -90,7 +89,6 @@ export const ContextPackSchema = z.object({
       warmup: z.array(z.string()).optional(),
       phone: z.number().int().nonnegative().optional(),
       app: z.enum(['call', 'quiet', 'still']).optional(),
-      draw: z.array(z.string()).optional(),
     })
     .optional(),
   /**
@@ -112,8 +110,6 @@ export const ContextPackSchema = z.object({
       view: z.string().optional(),
     })
     .optional(),
-  /** 孩子从左栏的纸交来的画:一句话说它是 photos 第几张、几笔、各颜色几笔、画了多久、清空过几次(清掉的那几版是 photos 第几张) */
-  drawing: z.string().optional(),
   /**
    * 孩子从首页的 activity 进来的话题:哪个 activity、家长填的参数(点的那一刻,补了缺省)。
    * 话题里每条都带;放在 YAML 块最后,键序固定(name、params;参数照文件「家长填的」的顺序)

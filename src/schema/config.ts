@@ -63,10 +63,10 @@ export const POLICY_DEFAULTS: Policy = {
 };
 
 /** 板书能用的卡(注册表顺序;tests/cards.test.ts 断言与 src/board/cards 的 kindsFor('board') 一致,这里不 import 卡,免得契约拖进卡的依赖) */
-export const BOARD_CARD_KINDS = ['text', 'read', 'choice', 'image', 'tianzige', 'word', 'lecture', 'canvas', 'kit', 'photo', 'code'] as const;
+export const BOARD_CARD_KINDS = ['text', 'read', 'choice', 'image', 'tianzige', 'word', 'lecture', 'kit', 'photo', 'code'] as const;
 export type BoardCardKind = (typeof BOARD_CARD_KINDS)[number];
-/** 不再有的卡:旧 cotutor.json 里老师的 cards 写着的读进来就丢掉,不报错(paint 2026-11-16 删);写错的名字照样过不了契约 */
-export const RETIRED_CARD_KINDS: readonly string[] = ['paint'];
+/** 不再有的卡:旧 cotutor.json 里老师的 cards 写着的读进来就丢掉,不报错(paint、canvas 2026-11-16 删);写错的名字照样过不了契约 */
+export const RETIRED_CARD_KINDS: readonly string[] = ['paint', 'canvas'];
 
 /** agent 名:与 agents/<name>.md 的 frontmatter name 一致,小写字母数字连字符 */
 export const AGENT_NAME_RE = /^[a-z0-9][a-z0-9-]*$/;

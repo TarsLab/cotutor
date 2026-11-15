@@ -64,7 +64,6 @@ export function cardTexts(card: BoardCard): string[] {
       return [str(p.caption)];
     case 'lecture':
       return [str(p.title), str(p.text)];
-    case 'canvas':
     case 'kit':
       return [str(p.prompt)];
     case 'tianzige':
@@ -149,7 +148,6 @@ export function tintFor(card: BoardCard): string {
     case 'text':
       return isAskCard(card) ? 'plum' : style === 'formula' ? 'paper' : str(p.title) ? 'sky' : 'sand';
     case 'choice':
-    case 'canvas':
     case 'kit':
     case 'photo':
       return 'plum';
@@ -195,9 +193,9 @@ export function penFor(card: BoardCard, phrase: string): PenName {
 /** 一行最多几张:明写的并排(课文件 / 老师的 same)能到 3 张;按宽度排的最多 2 张(半宽 + 半宽) */
 export const MAX_CARDS_PER_ROW = 3;
 
-/** 独占一行的卡:标题行、提问卡、画板、教具、小课堂、拍给我看(选择题量得下就能半宽,2026-10-01) */
+/** 独占一行的卡:标题行、提问卡、教具、小课堂、拍给我看(选择题量得下就能半宽,2026-10-01) */
 export function standsAlone(card: BoardCard): boolean {
-  return isHeading(card) || isAskCard(card) || card.kind === 'canvas' || card.kind === 'kit' || card.kind === 'lecture' || card.kind === 'photo';
+  return isHeading(card) || isAskCard(card) || card.kind === 'kit' || card.kind === 'lecture' || card.kind === 'photo';
 }
 
 const HALF_KINDS = ['text', 'read', 'code', 'tianzige', 'word', 'choice'];
@@ -387,7 +385,7 @@ export function penPath(pen: PenName, w: number, h: number, seed: string): strin
 
 /** 有舞台交互(能改状态、能「交给老师」)的种类;其余点开只是放大看 */
 export function hasState(card: BoardCard): boolean {
-  return card.kind === 'choice' || card.kind === 'canvas' || (card.kind === 'kit' && !kitLookOnly(card));
+  return card.kind === 'choice' || (card.kind === 'kit' && !kitLookOnly(card));
 }
 
 /** 没有东西要交回来的板卡(「操作: 看」:老师把答案写在照片上;「操作: 点字」:孩子自己点字看笔顺):没有「给老师看」(同 src/chalk/kit 的 kitLookOnly;这里内联进页面,不引它) */
@@ -396,20 +394,14 @@ export function kitLookOnly(card: BoardCard): boolean {
   return card.kind === 'kit' && Array.isArray(ops) && ops.length > 0 && ops.every((x) => x === '看' || x === '点字');
 }
 
-/** 画板上画了几笔(状态里的 ink 元素数) */
-export function inkCount(card: BoardCard): number {
-  const st = card.state as { ink?: unknown } | undefined;
-  return Array.isArray(st?.ink) ? st.ink.length : 0;
-}
-
 /** 重卡:舞台在 iframe 里的舞台包(/stage/)开,页面只管顶栏、字幕行、输入条 */
 export function isHeavy(card: BoardCard): boolean {
-  return card.kind === 'canvas' || card.kind === 'lecture' || card.kind === 'kit';
+  return card.kind === 'lecture' || card.kind === 'kit';
 }
 
-/** 铺满整屏的舞台(盖住左栏,顶栏是题目和「给老师看」):画板、教具 */
+/** 铺满整屏的舞台(盖住左栏,顶栏是题目和「给老师看」):教具 */
 export function isFullStage(card: BoardCard): boolean {
-  return card.kind === 'canvas' || card.kind === 'kit';
+  return card.kind === 'kit';
 }
 
 /** 落下就自己打开的卡:教具(老师先画好,孩子不用找、不用点) */
@@ -438,7 +430,6 @@ export function segmentAudio(card: BoardCard, k: number): string | null {
 /** 孩子在这张卡上做了什么(「交给老师」能不能按):选择题是选项;没做 → [] */
 export function stateSummary(card: BoardCard): string[] {
   if (card.kind === 'choice') return pickedLabels(card);
-  if (card.kind === 'canvas') return inkCount(card) ? [`画了 ${inkCount(card)} 笔`] : [];
   if (card.kind === 'kit') { const d = kitDone(card); return [...(d.moves ? ['转过了'] : []), ...(d.marks ? [`画了 ${d.marks} 笔`] : [])]; }
   return [];
 }
@@ -462,7 +453,7 @@ export function toneMark(syl: string): string {
 /** 舞台顶栏的名字:文字卡的标题 / 正文、选择题的问题、其余第一段有字的;截 24 字 */
 export function cardTitle(card: BoardCard): string {
   const p = card.props || {};
-  const first = str(p.title) || str(p.question) || str(p.show) || str(p.text) || str(p.caption) || str(p.prompt) || strs(p.segments)[0] || cardTexts(card).find((t) => t.trim()) || (card.kind === 'image' ? '图' : card.kind === 'canvas' ? '画一画' : card.kind === 'kit' ? str(p.kit) : card.kind === 'tianzige' ? str(p.chars) : '');
+  const first = str(p.title) || str(p.question) || str(p.show) || str(p.text) || str(p.caption) || str(p.prompt) || strs(p.segments)[0] || cardTexts(card).find((t) => t.trim()) || (card.kind === 'image' ? '图' : card.kind === 'kit' ? str(p.kit) : card.kind === 'tianzige' ? str(p.chars) : '');
   const cps = Array.from(first.trim().replace(/\s+/g, ' '));
   return cps.length > 24 ? `${cps.slice(0, 24).join('')}…` : cps.join('');
 }
@@ -498,13 +489,6 @@ export interface KidLecture {
   marks?: { atMs: number; svgMs: number; strokes: [number, number][][]; text?: string; image?: string }[];
 }
 
-/** 孩子从纸上交的画在板上那张卡:图(相对 workspace 根)、几笔、画了多久 */
-export interface KidDrawing {
-  image: string;
-  strokes: number;
-  ms?: number;
-}
-
 export interface BoardMessage {
   job: string;
   at?: string;
@@ -516,8 +500,6 @@ export interface BoardMessage {
   photos?: string[];
   /** 看完小课堂后的第一条:这一节前面是小课堂卡 */
   lecture?: KidLecture;
-  /** 孩子从左栏的纸交的画:这一节前面是孩子的画卡 */
-  drawing?: KidDrawing;
   /** 孩子这条不是说的话:submit = 交卡(答案在卡上) */
   action?: 'submit';
   /** 按住说话的(索引里带 voice):板上去口头禅、一行截断 */
@@ -542,8 +524,6 @@ export interface BoardEntry extends BoardSection {
   partial?: boolean;
   /** 这一节答的是看完小课堂后的第一问:节前画小课堂卡 */
   lecture?: KidLecture;
-  /** 这一节答的是孩子从纸上交的画:节前一张孩子的画卡 */
-  drawing?: KidDrawing;
   /** 孩子引出这一节的那句话;saidOn = 它答的是哪一节的哪张问题卡。节头不是它(看 head):它给左栏用,答拍给我看卡的还进那张卡 */
   said?: KidSaid;
   saidOn?: { job: string; card: number };
@@ -581,8 +561,6 @@ export function askCard(section: Pick<BoardSection, 'cards' | 'lines' | 'partial
 
 /** 只发了照片、没说话时服务端补的那句(runner.ts:「(拍了一张)」「(拍了 N 张)」) */
 const PHOTO_ONLY = /^\(拍了(?:一| \d+ )张\)$/;
-/** 只从纸上交了画、没说话时服务端补的那句(src/board/paper.ts 的 DRAW_ONLY_TEXT):不当孩子说的话,板上有那张画卡 */
-const DRAW_ONLY = /^\(画了一张,没说话\)$/;
 
 /**
  * 每条孩子的话放在板上哪:交卡、首页按钮、空的不放;答的是上一节的问题卡就进那张卡的答案栏(on),
@@ -597,7 +575,7 @@ export function kidSaid(messages: readonly BoardMessage[]): Map<string, { said: 
     // 答拍给我看卡的照片跟着话进答案栏;只发了照片没说话(服务端补的「(拍了一张)」)就只有照片
     const photos = card !== null && prev!.section!.cards[card].kind === 'photo' && m.photos?.length ? m.photos : null;
     const words = photos && PHOTO_ONLY.test(q) ? '' : q;
-    if ((q || photos) && !m.action && !m.fromHome && !(m.drawing && DRAW_ONLY.test(q))) {
+    if ((q || photos) && !m.action && !m.fromHome) {
       out.set(m.job, { said: { text: words, full: words, ...(photos ? { photos } : {}) }, on: prev && card !== null ? { job: prev.job, card } : null });
     }
     if (m.section && !m.section.partial && !m.pending && (m.section.cards.length || m.section.lines.length)) prev = m;
@@ -614,7 +592,7 @@ export function sectionsFromMessages(messages: readonly BoardMessage[]): BoardEn
   const says = kidSaid(messages);
   for (const m of messages) {
     const k = says.get(m.job);
-    const at = { ...(m.at ? { at: m.at } : {}), ...(m.lecture ? { lecture: m.lecture } : {}), ...(m.drawing ? { drawing: m.drawing } : {}), ...(k ? { said: k.said, ...(k.on ? { saidOn: k.on } : {}) } : {}), ...liveHead(m.section ?? { cards: [] }) };
+    const at = { ...(m.at ? { at: m.at } : {}), ...(m.lecture ? { lecture: m.lecture } : {}), ...(k ? { said: k.said, ...(k.on ? { saidOn: k.on } : {}) } : {}), ...liveHead(m.section ?? { cards: [] }) };
     if (m.pending) {
       if (m.section && m.section.partial && (m.section.cards.length || m.section.lines.length)) out.push({ job: m.job, ...at, cards: m.section.cards, lines: m.section.lines, partial: true, ready: m.section.ready ?? 0, ...(m.section.layout ? { layout: m.section.layout } : {}) });
       continue;

@@ -9,7 +9,7 @@
  * **splitting: true**(2026-09-11):整包 8 MB,但其中 mermaid / cytoscape / katex 这些是 excalidraw
  * 自己用 `import()` 懒加载的,不拆就被 esbuild 全部内联进一个文件,开个场景卡也得先下 8 MB。
  * 拆开之后打开舞台只要 stage.js + 它静态依赖的那几个 chunk(约 1.3 MB),其余按需取;
- * 画板卡的编辑器再由 main.tsx 的 lazy import 单独成块。chunk 是 stage.js 的相对 import,
+ * chunk 是 stage.js 的相对 import,
  * 服务端 `/stage/<文件>` 本来就整目录给(src/app/http/stage.ts),不用另配路由。
  *
  * pdf.js(课本)原样拷进 dist/stage/pdf/,不进 stage.js:只有铺课本时才取。
@@ -70,7 +70,7 @@ await mkdir(pdfOut, { recursive: true });
 for (const f of ['pdf.min.mjs', 'pdf.worker.min.mjs']) await cp(join(pkgDir('pdfjs-dist'), 'legacy', 'build', f), join(pdfOut, f));
 await cp(join(pkgDir('pdfjs-dist'), 'cmaps'), join(pdfOut, 'cmaps'), { recursive: true });
 await cp(join(pkgDir('pdfjs-dist'), 'standard_fonts'), join(pdfOut, 'standard_fonts'), { recursive: true });
-// 打开舞台立刻要下的 = 入口 + 它的静态 import 链(其余 chunk 由 excalidraw / 画板的 import() 按需取)
+// 打开舞台立刻要下的 = 入口 + 它的静态 import 链(其余 chunk 由 excalidraw 与做课包的 import() 按需取)
 const outs = r.metafile.outputs;
 const entry = Object.keys(outs).find((f) => outs[f].entryPoint?.endsWith('main.tsx'));
 const eager = new Set();

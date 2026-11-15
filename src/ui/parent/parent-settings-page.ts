@@ -1,7 +1,7 @@
 /**
  * 家长端「设置」(/parent/settings):设一次就不常动的。备份和诊断信息也放这(parent-setup.ts)。孩子的平板上,按住说话那一栏放哪边(cotutor.json 的 kid.hand)。
  * 两张示意图(不是截图,页面现画的 SVG):横着的平板,窄的一栏是老师头像 + 按住说话,宽的一边是写字的白纸;点一张就存。
- * 孩子端首页的接口带着它(/api/kid/home 的 hand),孩子下次进老师页就换过来;画板那一列工具跟着一起挪。
+ * 孩子端首页的接口带着它(/api/kid/home 的 hand),孩子下次进老师页就换过来;板上那一列工具跟着一起挪。
  * 零依赖内联脚本,只走 /api/parent/settings(GET 读,PATCH {kid: {hand}} 改)。
  * 用 String.raw:脚本里的反斜杠原样留着;脚本里不写反引号和 ${。
  */
@@ -65,7 +65,7 @@ ${BRAND_CSS}
     <div class="grp">
       <div class="q" id="hand-q">按住说话那一栏放哪边</div>
       <div class="hands" id="hands" role="radiogroup" aria-labelledby="hand-q"></div>
-      <div class="note">平板横着用的时候,老师页上那一栏(老师的头像、按住说话)放在这边,另一边留给写字;画板上那一列工具也跟着放这边。孩子下次进老师页就换过来。</div>
+      <div class="note">平板横着用的时候,老师页上那一栏(老师的头像、按住说话)放在这边,另一边留给写字;板上那一列工具也跟着放这边。孩子下次进老师页就换过来。</div>
     </div>
   </div>
   <div>

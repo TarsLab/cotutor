@@ -96,7 +96,7 @@ try {
     const guideOf = async (w: ReturnType<typeof loadWorkspace>, tutor: string): Promise<string> => (await boardGuideOf(w, tutor)) ?? '';
     const mathGuide = await guideOf(loadWorkspace(root), 'math-tutor');
     check('上下文包:板书写法已在系统提示里', (r.pack.boardGuide ?? '').startsWith('已在你的系统提示里'), String(r.pack.boardGuide));
-    check('按老师裁的板书写法:数学有选择题、画板、作业照片,没有田字格 / 单词 / 点读', mathGuide.startsWith('# 板书怎么写') && mathGuide.includes('### choice') && mathGuide.includes('### canvas') && mathGuide.includes('## 作业照片') && !mathGuide.includes('### tianzige') && !mathGuide.includes('### word') && !mathGuide.includes('### read'), mathGuide.slice(0, 200));
+    check('按老师裁的板书写法:数学有选择题、板、作业照片,没有田字格 / 单词 / 点读', mathGuide.startsWith('# 板书怎么写') && mathGuide.includes('### choice') && mathGuide.includes('### kit') && mathGuide.includes('## 作业照片') && !mathGuide.includes('### tianzige') && !mathGuide.includes('### word') && !mathGuide.includes('### read'), mathGuide.slice(0, 200));
     const ws2 = loadWorkspace(root);
     ws2.config.tutors['math-tutor'].cards = ['text', 'choice'];
     const g2 = await guideOf(ws2, 'math-tutor');
@@ -664,7 +664,7 @@ try {
   const phRun = JSON.parse(readFileSync(join(root, 'conversations', 'math-tutor', `${phDate}.${phJ.job}.run.json`), 'utf8')) as { prompt: string };
   check('消息:text「(拍了一张)」、photos 记下;上下文包 photos: 段一行一张、photoFiles: 给同一张的绝对路径(Read 只认绝对路径);老师 Read 了那张', phM.result === 'ok' && phM.text === '(拍了一张)' && phM.photos?.join() === phOne && phRun.prompt.includes(`  photos:\n    - ${JSON.stringify(phOne)}\n  photoFiles:\n    - ${JSON.stringify(join(root, phOne))}\n<cotutor-rules`) && phRun.prompt.endsWith('</vault-note>\n---\n(拍了一张)\n') && phM.kidText?.includes('看到照片:' + phOne) === true, JSON.stringify({ text: phM.text, photos: phM.photos, kid: phM.kidText, prompt: phRun.prompt.slice(-200) }));
   const phCards: { kind: string; props: Record<string, unknown> }[] = phM.section?.cards ?? [];
-  check('板书:照片板拿那张照片做底(孩子的照片不再用 image 卡、canvas 卡做底)', phCards.some((c) => c.kind === 'kit' && (c.props.params as Record<string, string>)?.['图'] === phOne) && phCards.some((c) => c.kind === 'canvas' && c.props.base === null), JSON.stringify(phCards));
+  check('板书:照片板拿那张照片做底(孩子的照片不再用 image 卡)', phCards.some((c) => c.kind === 'kit' && (c.props.params as Record<string, string>)?.['图'] === phOne), JSON.stringify(phCards));
   {
     // 孩子的话缺省不带工具;带照片的那条要 Read 看图,照旧带白名单,vault 的路径也在
     check('孩子带照片的那条:带只读工具、上下文包有 vault:', toolsOf(phRun.prompt)?.join() === 'read_file,glob,grep_search' && phRun.prompt.includes('\n  vault:'), String(toolsOf(phRun.prompt)));
@@ -687,20 +687,6 @@ try {
   await wait('math-tutor');
   const phM2 = ((await day('math-tutor', phDate)).json as PhotoDay).index.messages.find((m) => m.job === (phR2.json as { job: string }).job)!;
   check('家长端带字带图:text 照写、photos 记下,接着同一话题', phR2.status === 202 && phM2.text === '这道呢' && phM2.photos?.join() === phTwo && (phR2.json as { thread: string }).thread === phJ.thread, JSON.stringify(phM2));
-  {
-    // 交了画板:那轮没带照片也要 Read 看图——带只读工具,包里那行是图的绝对路径;消息里记的照旧是相对路径(家长看的)
-    // 10-21 Ray 交画那轮工具表是空的,qwen 把 Read 写成了正文,嘴念了 25 秒
-    const cvN = phCards.findIndex((c) => c.kind === 'canvas');
-    const PNG = 'data:image/png;base64,' + Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).toString('base64');
-    const cvPut = await route('PUT', `/api/kid/conversations/math-tutor/cards/${phJ.job}/${cvN}`, ctx, { ink: [{ id: 'a' }, { id: 'b' }], image: PNG });
-    const cvRel = `conversations/math-tutor/${phDate}.${phJ.job}.cards/${cvN}.png`;
-    const cvR = await kidSend(ctx, 'math-tutor', { text: '画好了' });
-    await wait('math-tutor');
-    const cvJob = (cvR.json as { job: string }).job;
-    const cvRun = JSON.parse(readFileSync(join(root, 'conversations', 'math-tutor', `${phDate}.${cvJob}.run.json`), 'utf8')) as { prompt: string; argv: string[] };
-    const cvM = ((await day('math-tutor', phDate)).json as { index: { messages: { job: string; cards?: { card: string; text: string }[] }[] } }).index.messages.find((m) => m.job === cvJob)!;
-    check('交了画板的那条:带只读工具,包里是图的绝对路径,消息里是相对的', cvPut.status === 200 && existsSync(join(root, cvRel)) && cvR.status === 202 && toolsOf(cvRun.prompt)?.join() === 'read_file,glob,grep_search' && cvRun.prompt.includes(`画了 2 笔,图:${JSON.stringify(join(root, cvRel)).slice(1, -1)}(用 read_file 看)`) && cvM.cards?.[0]?.text.endsWith(`画了 2 笔,图:${cvRel}(用 read_file 看)`) === true, JSON.stringify({ put: cvPut.status, tools: toolsOf(cvRun.prompt), cards: cvM.cards, prompt: cvRun.prompt.slice(0, 600) }));
-  }
   {
     // 板卡:老师先画(方向盘),孩子转了交回来——包里是请他做的操作和应用算的大概,板的图直接附在这一轮(不经读图工具,不带工具)
     const ktR = await kidSend(ctx, 'math-tutor', { text: '面向东后面是什么 方向盘' });

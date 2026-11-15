@@ -3,7 +3,6 @@
  * 协议同 src/runtime/live/call.ts:松手(或打字、拍照、交卡)马上接住一句 → 发一条消息给 mock 的老师(照脚本出节,带 live)→ 老师写完,讲稿一句一句「念」:
  * 字幕 + 静音的声音(按字数估长短,孩子端照常排着放),read 按孩子端的排法算好时刻发;按下 = 打断(清了,没念的不念)。
  * 讲稿的 [[play]]:那句念完先停,孩子端放完小课堂那一段(staged)再接着念。没有转写:按住说的当成「(按住说的话)」。
- * 边画边聊:画板开着时按头像说的(松手带 chat)只接住一句、不交给老师;孩子端觉得该说一句了({t:'chat'})安静时说一句、不安静回 skipped。
  */
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
@@ -16,9 +15,6 @@ import type { Mock } from './mock.ts';
 
 /** 按住说的那句(mock 没有转写) */
 export const MOCK_LIVE_SAID = '(按住说的话)';
-/** 边画边聊时假嘴说的(mock 不看图):接住孩子画着说的一句、主动说的一句(带上孩子端定的颜色) */
-export const MOCK_CHAT_REPLY = '嗯,你画得好认真,接着画吧。';
-export const mockChatLook = (color: unknown): string => (typeof color === 'string' && color ? `${color}色画了好多,像一大片。这是什么呀?` : '这一张画了好多,你画的是哪里呀?');
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 
@@ -86,14 +82,7 @@ export function mockLiveUpgrade(mock: Mock) {
           if (!holding) return;
           holding = false;
           send({ t: 'kid', text: MOCK_LIVE_SAID });
-          // 边画边聊:只接住,不交给老师
-          if (isObj(x.chat) && typeof x.chat.canvas === 'string') { say('catch', MOCK_CHAT_REPLY); break; }
           void begin({ ...(isObj(x.body) ? x.body : {}), text: MOCK_LIVE_SAID }, null);
-          break;
-        case 'chat':
-          if (holding || playEnd > Date.now() || typeof x.canvas !== 'string') { send({ t: 'chat', canvas: x.canvas, skipped: true }); break; }
-          say('catch', mockChatLook(isObj(x.ask) ? x.ask.color : null));
-          send({ t: 'chat', canvas: x.canvas, said: true });
           break;
         case 'hush': holding = false; interrupt(); break;
         // 以板为主:孩子点了一个字,安静时假嘴念它(真服务念认字时写好的念法)

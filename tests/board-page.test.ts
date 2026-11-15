@@ -141,7 +141,7 @@ type Look = import('../src/scenes/look.ts').Look;
   check('点方砖带着照片进来:话题第一条记 board: page', first.status === 202 && m1?.board === 'page', JSON.stringify(first));
   const pr1 = promptOf(job1);
   check('第一轮的 board::底是这张、点字开着;全文还没认(照片随这一轮附上)', pr1.includes(`\n  board:\n    底: "${p1}"\n    开放: "点字"\n`) && !pr1.includes('全文'), pr1.slice(pr1.indexOf('board:'), pr1.indexOf('board:') + 120));
-  check('假老师看图回了照片板和画板卡:以板为主只上照片板,画板卡不给孩子看、家长端记一行', (m1?.section?.cards.length ?? 0) === 1 && m1?.section?.cards[0].kind === 'kit' && (m1?.warnings ?? []).some((w) => w.includes("以板为主")), JSON.stringify(m1));
+  check('假老师看图回了照片板:以板为主只上这一张', (m1?.section?.cards.length ?? 0) === 1 && m1?.section?.cards[0].kind === 'kit', JSON.stringify(m1));
 
   // 点字:记进日志,回嘴要念的
   now = new Date(2026, 10, 13, 19, 6);

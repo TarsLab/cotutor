@@ -229,7 +229,7 @@ export function gradeRun(checks: readonly string[], turns: readonly EvalTurn[]):
         return { check, pass: !bad.length, ...(bad.length ? { why: bad.map((x) => `第 ${x.turn} 轮请他${x.want},板上开放的是${x.open.length ? x.open.join('、') : '没有'}`).join(';') } : {}) };
       }
       case '问就上板': {
-        const bare = turns.filter((t) => (t.section?.lines ?? []).some((l) => /[??]/.test(l.text)) && !(t.section?.cards ?? []).some((c) => c.kind === 'kit' || c.kind === 'canvas' || c.kind === 'photo'));
+        const bare = turns.filter((t) => (t.section?.lines ?? []).some((l) => /[??]/.test(l.text)) && !(t.section?.cards ?? []).some((c) => c.kind === 'kit' || c.kind === 'photo'));
         return { check, pass: !bare.length, ...(bare.length ? { why: `有 ${bare.length} 轮只用嘴问、没出板:「${bare[0].section?.lines.find((l) => /[??]/.test(l.text))?.text ?? ''}」` } : {}) };
       }
       case '卡上有': {

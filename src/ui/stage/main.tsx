@@ -1,10 +1,10 @@
 /**
  * 舞台包入口(打成 dist/stage/stage.js,页面在 iframe 里装 /stage/?card=<id>):等页面发 card,按 kind 装组件;
- * 小课堂(孩子从首页看的整堂、老师放的一段)= lecture.tsx;画板卡 = excalidraw 编辑器(步 10);教具卡 = kit.tsx(老师先画好的图,孩子转、圈)。所有对外说话都走 postMessage(protocol.ts)。
+ * 小课堂(孩子从首页看的整堂、老师放的一段)= lecture.tsx;教具卡 = kit.tsx(老师先画好的图,孩子转、圈)。所有对外说话都走 postMessage(protocol.ts)。
  * ?chalk=bake|snap 是做课包时 CDP 开的(chalk/tool.ts),不是孩子端。
  * 界面上没有错误文案:装不上就发 error,页面关掉舞台、什么都不显示。
  */
-import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { LectureStage, type LectureBack, type LectureStageHandle, type LectureWatch, type StageMark, type WatchEntry } from './lecture.tsx';
 
@@ -14,19 +14,11 @@ const backOf = (v: unknown): LectureBack | null => {
   const b = v as Record<string, unknown>;
   return typeof b.color === 'string' && typeof b.initial === 'string' && b.initial ? { color: b.color, initial: b.initial } : null;
 };
-import type { CanvasCleared, CanvasStageHandle } from './canvas.tsx';
 import { KitStage, type KitStageHandle } from './kit.tsx';
 import { BookStage } from './book.tsx';
 import type { KitState } from '../../chalk/index.ts';
-import '@excalidraw/excalidraw/dist/prod/index.css';
 import { STAGE_SOURCE, type FromStage, type ToStage } from './protocol.ts';
 import './stage.css';
-
-/**
- * 画板的编辑器按需装(esbuild splitting 把它单独成块):只有画板卡要它,
- * 小课堂与轻卡的舞台不该为它等。装载中显示一句「画板准备中」——这不是错误文案,是等待。
- */
-const CanvasStage = lazy(async () => ({ default: (await import('./canvas.tsx')).CanvasStage }));
 
 type Card = Extract<ToStage, { type: 'card' }>;
 type Outgoing = FromStage extends infer U ? (U extends FromStage ? Omit<U, 'source'> : never) : never;
@@ -54,7 +46,6 @@ const post = (m: Outgoing): void => { window.parent.postMessage({ source: STAGE_
 
 function App(): JSX.Element {
   const [card, setCard] = useState<Card | null>(null);
-  const canvas = useRef<CanvasStageHandle>(null);
   const kit = useRef<KitStageHandle>(null);
   const lecture = useRef<LectureStageHandle>(null);
   /** 录像的 follow 比播放器先到(卡刚到、还没挂上):记着最后那条,挂上了交给它(它自己再等课装好) */
@@ -71,9 +62,8 @@ function App(): JSX.Element {
       if (m.type === 'card') setCard(m);
       else if (m.type === 'follow') { if (lecture.current) lecture.current.follow(m.ms, m.playing, m.rate, m.marks as StageMark[]); else pendingFollow.current = m; }
       else if (m.type === 'control') {
-        if (m.action === 'submit') { canvas.current?.submit(); kit.current?.submit(); }
-        else if (m.action === 'snap') void (canvas.current ? canvas.current.snap() : Promise.resolve(null)).then((image) => post({ type: 'snap', image }));
-        else if (m.action === 'peek') void (canvas.current ? canvas.current.snap() : kit.current ? kit.current.peek() : Promise.resolve(null)).then((image) => (image ? shrinkJpeg(image, PEEK_SIDE) : null), () => null).then((image) => post({ type: 'peek', image }));
+        if (m.action === 'submit') kit.current?.submit();
+        else if (m.action === 'peek') void (kit.current ? kit.current.peek() : Promise.resolve(null)).then((image) => (image ? shrinkJpeg(image, PEEK_SIDE) : null), () => null).then((image) => post({ type: 'peek', image }));
         else lecture.current?.control(m.action);
       }
     };
@@ -88,9 +78,6 @@ function App(): JSX.Element {
   });
 
   const onError = useCallback((message: string) => post({ type: 'error', message }), []);
-  const onInk = useCallback((ink: Record<string, unknown>[]) => post({ type: 'state', state: { ink } }), []);
-  const onSubmit = useCallback((ink: Record<string, unknown>[], image: string) => post({ type: 'submit', state: { ink }, image }), []);
-  const onCleared = useCallback((c: CanvasCleared) => post({ type: 'cleared', ...c }), []);
   const onKitState = useCallback((state: KitState) => post({ type: 'state', state }), []);
   const onKitPick = useCallback((text: string) => post({ type: 'pick', text }), []);
   const onKitReveal = useCallback((text: string) => post({ type: 'reveal', text }), []);
@@ -115,16 +102,6 @@ function App(): JSX.Element {
     return <LectureStage ref={lecture} bundleUrl={card.bundleUrl} title={String(card.props.title ?? '')} marks={[]} range={range} autoplay={card.autoplay} video={card.props.video === true} onPhase={onLecturePhase} onMarks={noop} onFinished={noop} onClose={noop} onError={onError} />;
   }
   if (card.kind === 'lecture' && card.bundleUrl) return <LectureStage ref={lecture} follow={card.props.follow === true} back={backOf(card.props.back)} onLog={onWatch} bundleUrl={card.bundleUrl} title={String(card.props.title ?? '')} marks={Array.isArray(card.props.marks) ? (card.props.marks as StageMark[]) : []} at={typeof card.props.at === 'number' ? card.props.at : undefined} view={card.props.view === true} video={card.props.video === true} onMarks={onMarks} onFinished={onLectureDone} onClose={onLectureClose} onAsk={onLectureAsk} onError={onError} />;
-  if (card.kind === 'canvas') {
-    const st = (card.state ?? {}) as { ink?: Record<string, unknown>[] };
-    const base = (card.props.base ?? null) as { bundle: string } | { skeletons: Record<string, unknown>[] } | { image: string } | null;
-    return (
-      <Suspense fallback={<div className="stage-wait">画板准备中…</div>}>
-        {/* key 跟着笔数:页面重发 card(家长看录像时孩子又画了一笔)就按新笔迹重装;孩子端平时只在 ready 发一次,不受影响 */}
-        <CanvasStage key={Array.isArray(st.ink) ? st.ink.length : 0} ref={canvas} base={base} bundleUrl={card.bundleUrl} imageUrl={card.imageUrl} prompt={typeof card.props.prompt === 'string' ? card.props.prompt : undefined} ink={Array.isArray(st.ink) ? st.ink : []} readonly={card.readonly === true} full={card.full === true} hand={card.hand === 'left' ? 'left' : 'right'} onState={onInk} onSubmit={onSubmit} onCleared={onCleared} onError={onError} />
-      </Suspense>
-    );
-  }
   if (card.kind === 'kit') {
     const p = card.props as { kit?: unknown; params?: unknown; ops?: unknown };
     // 课本做底:pdf.js 现画、窗能挪能放大(book.tsx);别的画法烤成一幅图(kit.tsx)

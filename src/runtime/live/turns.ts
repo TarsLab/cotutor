@@ -7,7 +7,6 @@
 import { lineFlags } from '../../board/parse.ts';
 import { localDate } from '../../shared/time.ts';
 import type { ContextPack } from '../../schema/index.ts';
-import { adoptPaper } from '../../board/paper.ts';
 import { BusyError, type Runner, type SendStarted } from '../runner.ts';
 import { readIndex } from '../journal/store.ts';
 import type { Echo } from '../delivery/queue.ts';
@@ -88,8 +87,6 @@ export class Turns {
     this.running = started;
     this.deps.started(started);
     this.last = started.thread;
-    // 新话题的第一条:话题还没有时画的那张纸归它
-    if (started.thread === started.job) void adoptPaper(runner.ws, tutor, started.date, started.thread);
     const job = started.job;
     void started.done
       .then(async (index) => {

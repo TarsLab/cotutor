@@ -2,7 +2,7 @@
  * 孩子端发一条的验与拼:孩子端只走实时那条连接(src/runtime/live/turns.ts;HTTP 的发 2026-11-04 删了),经 Runner.accept 进来。
  * 验正文、话题、首页按钮、小课堂、activity、照片,拼成 Runner.send 的入参;不对回 reject(状态码 + 错误名),连接上回 {t:'err'}。不起老师。
  */
-import { FocusSchema, HomeViaSchema, DeviceSchema, type ActivityValue, type ConversationMessage } from '../schema/index.ts';
+import { FocusSchema, HomeViaSchema, DeviceSchema, type ActivityValue } from '../schema/index.ts';
 import { BUNDLE_ID_RE } from '../board/cards/kind.ts';
 import { threads } from '../schema/index.ts';
 import { submittedCards } from './kid-view.ts';
@@ -11,7 +11,6 @@ import type { Workspace } from '../schema/index.ts';
 import { messageVia, resolveVia } from './home/store.ts';
 import { validDevice } from './journal/kid-log.ts';
 import type { IncomingMark } from './lecture.ts';
-import { PAPER_KEY_RE, paperDrawing, readPaper } from '../board/paper.ts';
 import type { SendInput } from './runner.ts';
 import { capturePathOk, readIndex } from './journal/store.ts';
 import { talkRun } from './talk-run.ts';
@@ -37,13 +36,6 @@ export async function kidInput(ws: Workspace, tutor: string, body: unknown, date
   if (action === null) return reject(400, 'bad_request');
   const photos = await photosOf(ws, body.photos);
   if (photos === null) return reject(400, 'bad_request');
-  // 左栏的纸交的画:{key, image};图得在 captures/ 里,摘要按那张纸上的笔迹算
-  let drawing: NonNullable<ConversationMessage['drawing']> | undefined;
-  if (body.drawing !== undefined) {
-    const d = body.drawing;
-    if (!isObj(d) || typeof d.key !== 'string' || !PAPER_KEY_RE.test(d.key) || typeof d.image !== 'string' || !(await capturePathOk(ws, d.image))) return reject(400, 'bad_request');
-    drawing = paperDrawing(await readPaper(ws, tutor, date, d.key), d.image);
-  }
   const thread = body.thread === undefined ? undefined : typeof body.thread === 'string' && /^\d{4}-\d+$/.test(body.thread) ? body.thread : null;
   if (thread === null) return reject(400, 'bad_request');
   const today = await readIndex(ws, tutor, date);
@@ -115,8 +107,8 @@ export async function kidInput(ws: Workspace, tutor: string, body: unknown, date
     activity = t.run;
     talk = t.id;
   }
-  if (!text.trim() && !action && !photos?.length && !drawing) return reject(400, 'bad_request');
-  return { input: { ...(talk ? { talk } : {}), from: 'kid', text, focus: focus?.data, action, newThread, thread: pick, device: device?.data, ...(validDevice(deviceId) ? { deviceId: deviceId! } : {}), photos, ...(drawing ? { drawing } : {}), ...(via && button ? { via: messageVia(via.data!, button) } : {}), ...(home ? { home } : {}), ...(continues ? { continues } : {}), ...(activity ? { activity } : {}), ...(lecture ? { lecture } : {}) } };
+  if (!text.trim() && !action && !photos?.length) return reject(400, 'bad_request');
+  return { input: { ...(talk ? { talk } : {}), from: 'kid', text, focus: focus?.data, action, newThread, thread: pick, device: device?.data, ...(validDevice(deviceId) ? { deviceId: deviceId! } : {}), photos, ...(via && button ? { via: messageVia(via.data!, button) } : {}), ...(home ? { home } : {}), ...(continues ? { continues } : {}), ...(activity ? { activity } : {}), ...(lecture ? { lecture } : {}) } };
 }
 
 /** 消息里的 photos[]:都得是 captures/ 里在的文件(相对 workspace 根);不合法 → null */

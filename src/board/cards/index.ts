@@ -31,7 +31,7 @@ export { word, wordChunks, WORD_MAX, WORD_MAX_WORDS, WORD_RE, type WordProps } f
 export { tutor, BUTTON_LABEL_MAX, TUTOR_BUTTONS_MAX, TutorButtonSchema, type TutorButton, type TutorProps } from './tutor.ts';
 export { dictation, dictationEmoji, dictationWordLang, DictationPropsSchema, DICTATION_EN_MAX, DICTATION_SAY_MAX, DICTATION_WORD_MAX, DICTATION_WORDS_MAX, EN_WORD_RE, type DictationLang, type DictationProps, type DictationWord } from './dictation.ts';
 
-/** 全部种类:先板书的十一种(注册表顺序即技能里的顺序),再首页专属的 */
+/** 全部种类:先板书的十种(注册表顺序即技能里的顺序),再首页专属的 */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const CARD_KINDS: readonly CardKind<any>[] = [text, read, choice, image, tianzige, word, lecture, kit, photo, code, tutor, dictation];
 
@@ -93,7 +93,7 @@ export function parseCard(tag: string, body: string, place: CardPlace = 'board')
   const kind = asKit ? kit as unknown as CardKind : cardKind(name.toLowerCase());
   if (asKit) mods.unshift(name);
   if (!kind) return place === 'board' ? { card: { kind: 'code', props: code.parse(body, [name]) } } : asText(`不认识的卡:${name}`);
-  if (!usableIn(kind, place)) return asText(place === 'board' ? `${name} 是首页的卡,板书里不能用` : `首页放不了 ${name} 卡(它要交给某位老师,只能在板书里)`);
+  if (!usableIn(kind, place)) return asText(place === 'board' ? `${name} 是首页的卡,板书里不能用` : `首页只放老师卡(tutor)和听写卡(dictation),${name} 卡放不了`);
   const um = TEXTUAL.has(kind.name) ? unmark(body) : { body, had: false };
   try {
     const props = kind.props.parse(kind.parse(um.body, mods)) as Record<string, unknown>;

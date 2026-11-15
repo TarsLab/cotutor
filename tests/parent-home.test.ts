@@ -63,7 +63,7 @@ for: 2026-10-10
   check('没词也没卡:不动', setTutorDictation(MD, 'math-tutor', []) === MD);
   const o1 = orderTutors(MD, ['math-tutor', 'chinese-tutor']);
   const kinds = parseHome(o1).cards.map((c) => (c.kind === 'tutor' ? c.props.tutor : c.kind)).join();
-  check('调先后:数学在前;田字格跟着语文走;公共的一段字还在最前', kinds === 'text,math-tutor,chinese-tutor,tianzige', kinds);
+  check('调先后:数学在前;语文后面那块跟着语文走;最前面那块还在最前(首页放不了的卡改原文时照样搬,解析出来是退成的文字卡)', kinds === 'text,math-tutor,chinese-tutor,text', kinds);
   const o2 = orderTutors(MD, ['english-tutor']);
   check('排一位还没老师卡的:补一张空的排最前,别的照原来的先后', parseHome(o2).cards.filter((c) => c.kind === 'tutor').map((c) => c.props.tutor).join() === 'english-tutor,chinese-tutor,math-tutor', o2);
 }

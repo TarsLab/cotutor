@@ -7,7 +7,7 @@ import { check, done } from './_check.ts';
 {
   check('有状态的卡:choice / lecture / kit;text / read / image / code 没有', CARD_KINDS.filter((k) => k.state).map((k) => k.name).join() === 'choice,lecture,kit');
   check('十二种卡登记在册:板书十种 + 首页的老师卡与听写卡', CARD_KINDS.map((k) => k.name).join() === 'text,read,choice,image,tianzige,word,lecture,kit,photo,code,tutor,dictation' && cardKind('choice')?.name === 'choice' && cardKind('widget') === undefined);
-  check('用在哪:板书十种;首页 = 老师卡 + 听写卡 + 一段字 / 点读 / 图片 / 田字格 / 单词', kindsFor('board').map((k) => k.name).join() === 'text,read,choice,image,tianzige,word,lecture,kit,photo,code' && kindsFor('home').map((k) => k.name).join() === 'text,read,image,tianzige,word,tutor,dictation');
+  check('用在哪:板书十种;首页只有老师卡与听写卡', kindsFor('board').map((k) => k.name).join() === 'text,read,choice,image,tianzige,word,lecture,kit,photo,code' && kindsFor('home').map((k) => k.name).join() === 'tutor,dictation');
   check('契约里的板书种类表与注册表对得上(schema 不 import 卡,靠这条锁住)', BOARD_CARD_KINDS.join() === kindsFor('board').map((k) => k.name).join());
   check('老师的卡:没写 = null(全部);写了 = 注册表顺序、text 总在、首页的卡不算', tutorCardKinds(undefined) === null && tutorCardKinds(['kit', 'read'])?.join() === 'text,read,kit' && tutorCardKinds(['choice', 'tutor', 'text'])?.join() === 'text,choice' && tutorCardKinds([])?.join() === 'text');
   const tut = parseCard('tutor chinese-tutor', '- 我要预习小蝌蚪找妈妈\n讲法: 先读课文\n讲法: 再认字\n新话题\n接着 2026-09-16 1930-1 接着写看图写话', 'home');
@@ -15,7 +15,7 @@ import { check, done } from './_check.ts';
   check('老师卡剥讲法', JSON.stringify(stripSecrets({ cards: [tut.card], lines: [] }).cards[0].props.buttons) === '[{"kind":"start","label":"我要预习小蝌蚪找妈妈"},{"kind":"continue","label":"接着写看图写话","date":"2026-09-16","thread":"1930-1"}]');
   const tooMany = parseCard('tutor math-tutor', 'a\nb\nc\nd\ne', 'home');
   check('老师卡:5 个按钮、没写老师、两位老师、坏老师名 → 文字卡 + fallback', tooMany.fallback === true && tooMany.warning?.includes('最多 4 个') === true && parseCard('tutor', 'a', 'home').fallback === true && parseCard('tutor a-tutor b-tutor', 'a', 'home').fallback === true && parseCard('tutor 数学', 'a', 'home').fallback === true, JSON.stringify(tooMany));
-  check('老师卡写在板书里 → 文字卡 + warning;选择题写在首页 → 文字卡 + warning;首页里不认识的标签也退文字卡', parseCard('tutor math-tutor', 'a').card.kind === 'text' && parseCard('tutor math-tutor', 'a').warning?.includes('首页的卡') === true && parseCard('choice', '问?\n- [x] a', 'home').warning?.includes('首页放不了') === true && parseCard('widget', 'x', 'home').card.kind === 'text' && parseCard('widget', 'x', 'home').fallback === true && parseCard('widget', 'x').card.kind === 'code');
+  check('老师卡写在板书里 → 文字卡 + warning;选择题、一段字写在首页 → 文字卡 + warning;首页里不认识的标签也退文字卡', parseCard('tutor math-tutor', 'a').card.kind === 'text' && parseCard('tutor math-tutor', 'a').warning?.includes('首页的卡') === true && parseCard('choice', '问?\n- [x] a', 'home').warning?.includes('choice 卡放不了') === true && parseCard('text', '今晚先读课文', 'home').fallback === true && parseCard('widget', 'x', 'home').card.kind === 'text' && parseCard('widget', 'x', 'home').fallback === true && parseCard('widget', 'x').card.kind === 'code');
   check('canvas 卡删了(2026-11-16):写了当不认识的标签,原样显示成代码卡', parseCard('canvas', '画一条蛇').card.kind === 'code');
   // 板卡(cards/kit/card.md):标签是画法的名字、参数行、这一步开放的操作、其余是题目;交回来的是图加几句提示
   const kt = parseCard('方向盘', '操作: 转\n把「东」转到小人的前面。');

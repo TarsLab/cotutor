@@ -179,7 +179,7 @@ export function historyFile(ws: Workspace, id: string): string | null {
   return HOME_ID_RE.test(id) ? join(homeFiles(ws).history, `${id}.md`) : null;
 }
 
-/** 首页上的一张卡;非老师卡带 owner(写在哪张老师卡后面归哪位,听写卡写了念的老师归那位;null = 公共的) */
+/** 首页上的一张卡:老师卡或听写卡;听写卡带 owner(写了念的老师归那位,没写归写在它前面的那张老师卡;null = 公共的) */
 export type KidHomeCard = BoardCard & { owner?: string | null };
 
 export interface KidHomeView {
@@ -240,10 +240,12 @@ export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'pu
   const owners = new Map(cards.map((c, i) => [c, ownerOf[i]]));
   const out: KidHomeCard[] = [];
   for (const c of arrangeHome(cards, tutors)) {
-    if (c.kind !== 'tutor') {
+    // 首页只认老师卡与听写卡(2026-11-16);以前发布的那份里别的卡不下发
+    if (c.kind === 'dictation') {
       out.push({ ...stripSecrets({ cards: [c], lines: [] }).cards[0], owner: owners.get(c) ?? null });
       continue;
     }
+    if (c.kind !== 'tutor') continue;
     const name = String(c.props.tutor);
     const buttons = kidButtons((c.props.buttons ?? []) as TutorButton[], {
       alive: (date, thread) => alive.has(threadKey(name, date, thread)),
@@ -253,7 +255,7 @@ export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'pu
       today,
     }).map((b) => { const l = b.kind === 'lecture' ? lectures.get(b.bundle) : null; return l ? { ...b, title: l.title, ms: l.clock.total, ...(l.video ? { video: true as const } : {}) } : b; });
     // 橙点:这份首页给他排了按钮或卡,而发布以来孩子还没找过他
-    const arranged = buttons.some((b) => typeof b.id === 'number') || cards.some((x) => x.kind !== 'tutor' && owners.get(x) === name);
+    const arranged = buttons.some((b) => typeof b.id === 'number') || cards.some((x) => x.kind === 'dictation' && owners.get(x) === name);
     const news = Boolean(publishedAt && arranged && !(await talkedSince(ws, name, publishedAt, now)));
     // 常驻的方砖(预习、检查作业、复习):不经发布,家里有那个 activity、没关掉就在
     const tiles: HomeTileId[] = [];

@@ -50,7 +50,6 @@ export function wordChunks(word: string, line: string): string[] | undefined {
 
 export const word: CardKind<WordProps> = {
   name: 'word',
-  where: ['board', 'home'],
   props: WordPropsSchema,
   parse(body) {
     const lines = bodyLines(body);

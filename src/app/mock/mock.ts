@@ -538,16 +538,6 @@ for: ${today}
 小课堂 2026-10-06-pingjunfen 平均分怎么分
 \`\`\`
 
-\`\`\`text
-# 今晚
-先读课文,再练两道题
-\`\`\`
-
-\`\`\`tianzige
-塘脑袋
-táng nǎo dai
-\`\`\`
-
 \`\`\`dictation chinese-tutor
 春天
 鼓励 鼓励,老师鼓励我的鼓励

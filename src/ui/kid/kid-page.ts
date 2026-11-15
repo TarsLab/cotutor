@@ -157,7 +157,6 @@ ${faviconLinks()}
   #deck .pc-ix { position:absolute; right:12px; bottom:10px; width:28px; height:28px; transform:rotate(180deg); }
   #deck .pc-ix .av { width:100%; height:100%; font-size:11px; }
   #deck .pc .kc { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; align-items:start; }
-  #deck .pc .kcards { margin-top:4px; }
   /* 家长端预览里正在改的那颗 */
   #deck .pc .bt.pv-sel { outline:4px solid var(--ink); outline-offset:3px; }
   body.offline #deck .pc, body.gated #deck .pc { pointer-events:none; }
@@ -1010,16 +1009,14 @@ ${HOME_TILES_JS}
         el.dataset.sig = sig;
         el.style.borderColor = colorOf(t);
         const extras = extrasFor(t, H);
-        const others = owned.filter((c) => c.kind !== 'dictation');
         el.replaceChildren(...[
           h('div', { class: 'pc-hd' }, deal ? avatarEl(t, 'draw', 0.1 + slot * 0.12) : avatarEl(t), h('span', { class: 'nm' }, t.display)),
           // 新话题(第一颗)、方砖一行、家长排的按钮
           h('div', { class: 'kc' }, h('div', { class: 'bts' }, ...((runs) => [runs[0], tilesRow(t, tiles), ...runs.slice(1)])(buttonRuns(t, buttons))), extras.length ? h('div', { class: 'bts extras' }, ...extras) : null),
-          others.length ? h('div', { class: 'hcards kcards' }, ...others.map((c, i) => renderCard(c, i, null, false))) : null,
           h('span', { class: 'pc-ix' }, avatarEl(t)),
           h('span', { class: 'veil' }),
         ].filter(Boolean));
-        // 归他的卡里有图:图到了牌会变高,重量一次
+        // 牌里有图(头像):图到了牌可能变高,重量一次
         for (const img of el.querySelectorAll('img')) if (!img.complete) img.addEventListener('load', layoutDeck, { once: true });
       } else el.querySelector('.pc-hd .av').classList.remove('draw'); // 之后的刷新摘掉(动画早放完了,摘了也不会重放)
       el.classList.toggle('front', n === front);
@@ -1099,7 +1096,7 @@ ${HOME_TILES_JS}
       if (deal) markSeen(H.home, K.order[K.order.length - 1]);
     }
     renderToday(H);
-    // 公共的卡(写在第一张老师卡前面的)在牌堆上面;归了老师的在那位老师的牌里
+    // 公共的听写卡(写在第一张老师卡前面、没写念的老师)在牌堆上面;归了老师的在那位老师的牌里(听写按钮)
     $('#hcards').replaceChildren(...cards.filter((c) => c.kind !== 'tutor' && !c.owner).map((c, i) => renderCard(c, i, null, false)));
     renderFigshot(H);
   };

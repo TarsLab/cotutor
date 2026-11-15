@@ -132,8 +132,8 @@ for: 2026-09-18
 - [x] a
 \`\`\`
 
-\`\`\`tianzige
-塘脑袋
+\`\`\`dictation
+春天
 \`\`\`
 
 ## 为什么这么排
@@ -142,7 +142,7 @@ for: 2026-09-18
 `;
   draft(BAD);
   const c1 = await run(['home', 'check']);
-  check('check:要改两条(首页放不了选择题、接着的话题找不到)带行号,exit 1;缺的老师说会补', c1.code === 1 && c1.out.includes('要改 2 条') && c1.out.includes('✗ 第 16 行 首页放不了 choice') && c1.out.includes('2026-09-15 没有话题 0900-1') && c1.out.includes('英语老师 english-tutor(没写,应用补):✨ 新话题') && c1.out.includes('▶ 我要预习小蝌蚪找妈妈(讲法 16 字)') && c1.out.includes('tianzige「塘脑袋」'), c1.out);
+  check('check:要改两条(首页放不了选择题、接着的话题找不到)带行号,exit 1;缺的老师说会补', c1.code === 1 && c1.out.includes('要改 2 条') && c1.out.includes('✗ 第 16 行 首页只放老师卡(tutor)和听写卡(dictation),choice 卡放不了') && c1.out.includes('2026-09-15 没有话题 0900-1') && c1.out.includes('英语老师 english-tutor(没写,应用补):✨ 新话题') && c1.out.includes('▶ 我要预习小蝌蚪找妈妈(讲法 16 字)') && c1.out.includes('dictation「'), c1.out);
   const p1 = await run(['home', 'publish']);
   check('publish:有要改的不发,exit 1,没有 published.json', p1.code === 1 && p1.out.includes('没发布') && !existsSync(join(root, 'home', 'published.json')), p1.out);
 
@@ -154,20 +154,20 @@ for: 2026-09-18
   const f2 = await publishHome(ctx.ws, { now });
   check('同一分钟再发:id 加序号', f2.ok && f2.home?.id === '2026-09-17-2130-2', JSON.stringify({ ok: f2.ok, id: f2.home?.id }));
   const { home: pub } = await readPublished(ctx.ws);
-  check('published.json:卡照文件顺序、讲法在、家长段在、source 指历史', pub?.cards.map((c) => c.kind).join() === 'tutor,tutor,tianzige' && JSON.stringify(pub.cards[0].props).includes('第 22 课') && pub.note.includes('为什么这么排') && pub.source === 'home/history/2026-09-17-2130-2.md' && pub.for === '2026-09-18', JSON.stringify(pub));
+  check('published.json:卡照文件顺序、讲法在、家长段在、source 指历史', pub?.cards.map((c) => c.kind).join() === 'tutor,tutor,dictation' && JSON.stringify(pub.cards[0].props).includes('第 22 课') && pub.note.includes('为什么这么排') && pub.source === 'home/history/2026-09-17-2130-2.md' && pub.for === '2026-09-18', JSON.stringify(pub));
 
   const h1 = await kidHome();
   const zh = buttonsOf(h1, 'chinese-tutor');
-  check('孩子端首页:发布的 id、老师卡置顶、英语补上、讲法不下发', h1.home === '2026-09-17-2130-2' && h1.cards.map((c) => c.props.tutor ?? c.kind).join() === 'chinese-tutor,math-tutor,english-tutor,tianzige' && zh.map((b) => b.id).join() === 'new,0,1' && zh[2].kind === 'continue' && zh[2].thread === t16 && !JSON.stringify(h1).includes('第 22 课') && !JSON.stringify(h1).includes('brief'), JSON.stringify(h1));
+  check('孩子端首页:发布的 id、老师卡置顶、英语补上、讲法不下发', h1.home === '2026-09-17-2130-2' && h1.cards.map((c) => c.props.tutor ?? c.kind).join() === 'chinese-tutor,math-tutor,english-tutor,dictation' && zh.map((b) => b.id).join() === 'new,0,1' && zh[2].kind === 'continue' && zh[2].thread === t16 && !JSON.stringify(h1).includes('第 22 课') && !JSON.stringify(h1).includes('brief'), JSON.stringify(h1));
 
   // ---- 只展开一位老师:非老师卡的归属、橙点 ----
   type HC = { kind: string; owner?: string | null; props: { tutor?: string; news?: boolean } };
   const hc = h1.cards as HC[];
   const newsOf = (h: KidHome): string => (h.cards as HC[]).filter((c) => c.kind === 'tutor' && c.props.news).map((c) => c.props.tutor).join();
-  check('归属:跟在数学老师卡后面的田字格归数学', hc.find((c) => c.kind === 'tianzige')?.owner === 'math-tutor', JSON.stringify(hc.filter((c) => c.kind !== 'tutor')));
+  check('归属:跟在数学老师卡后面、没写念的老师的听写卡归数学', hc.find((c) => c.kind === 'dictation')?.owner === 'math-tutor', JSON.stringify(hc.filter((c) => c.kind !== 'tutor')));
   check('橙点:家长排了按钮、发布以来孩子还没找过的(语文、数学)亮;补的英语不亮', newsOf(h1) === 'chinese-tutor,math-tutor', newsOf(h1));
   const ck = await run(['home', 'check', '--published']);
-  check('home check 说每张卡归谁', ck.out.includes('tianzige「塘脑袋」 → 数学老师的卡里'), ck.out);
+  check('home check 说每张卡归谁', /dictation「[^」]*」 → 数学老师的卡里/.test(ck.out), ck.out);
   {
     const { homeOwners } = await import('../src/runtime/home/home.ts');
     const T = (tutor: string) => ({ kind: 'tutor', props: { tutor, buttons: [] } });

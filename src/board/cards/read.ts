@@ -7,7 +7,6 @@ export type ReadProps = z.infer<typeof ReadPropsSchema>;
 
 export const read: CardKind<ReadProps> = {
   name: 'read',
-  where: ['board', 'home'],
   props: ReadPropsSchema,
   parse(body) {
     const segments = bodyLines(body);

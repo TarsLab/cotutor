@@ -23,8 +23,8 @@ const DRAFT = [
   '再练两道退位减法',
   '```',
   '',
-  '```tianzige',
-  '塘脑袋',
+  '```dictation',
+  '春天',
   '```',
   '',
   '```choice',
@@ -55,10 +55,10 @@ const tutors: Record<string, HomeTutorInfo> = {
 {
   const doc = parseHome(DRAFT);
   check('frontmatter:for 认,别的键提醒(带行号)', doc.for === '2026-09-18' && doc.issues.some((i) => i.level === 'note' && i.line === 3 && i.text.includes('author')), JSON.stringify(doc.issues));
-  check('卡按文件顺序、开头行号对得上原文', doc.cards.map((c) => c.kind).join() === 'tutor,tutor,tianzige,text,tutor,tutor' && doc.cardLines.join() === '6,14,18,22,27,31', JSON.stringify(doc.cardLines));
+  check('卡按文件顺序、开头行号对得上原文', doc.cards.map((c) => c.kind).join() === 'tutor,tutor,dictation,text,tutor,tutor' && doc.cardLines.join() === '6,14,18,22,27,31', JSON.stringify(doc.cardLines));
   check('家长段 = 第一个 H2 起', doc.note.startsWith('## 为什么这么排') && doc.note.includes('第 1 段'));
   check('围栏外的普通行:提醒,带行号', doc.issues.some((i) => i.level === 'note' && i.line === 12 && i.text.includes('第 12 行')), JSON.stringify(doc.issues));
-  check('只板书的卡写在首页:要改,指到那张卡', doc.issues.some((i) => i.level === 'fix' && i.card === 3 && i.line === 22 && i.text.includes('首页放不了 choice')), JSON.stringify(doc.issues));
+  check('不是老师卡、听写卡的写在首页:要改,指到那张卡', doc.issues.some((i) => i.level === 'fix' && i.card === 3 && i.line === 22 && i.text.includes('choice 卡放不了')), JSON.stringify(doc.issues));
   check('引用:接着按钮指的话题', JSON.stringify(homeRefs(doc)) === '[{"tutor":"chinese-tutor","date":"2026-09-16","thread":"1930-1"}]');
 
   const issues = homeIssues(doc, { tutors, threads: new Set(), today: '2026-09-17' });
@@ -80,12 +80,12 @@ const tutors: Record<string, HomeTutorInfo> = {
   check('frontmatter 没闭合:要改', unclosed.issues.some((i) => i.level === 'fix' && i.line === 1));
 
   const forced = dropFixes(doc.cards, issues);
-  check('--force:坏的卡丢掉,只坏了按钮的卡只丢那个按钮', forced.cards.map((c) => c.kind).join() === 'tutor,tutor,tianzige' && (forced.cards[0].props.buttons as TutorButton[]).map((b) => b.label).join() === '我要预习小蝌蚪找妈妈' && forced.dropped.length === 4, JSON.stringify(forced));
+  check('--force:坏的卡丢掉,只坏了按钮的卡只丢那个按钮', forced.cards.map((c) => c.kind).join() === 'tutor,tutor,dictation' && (forced.cards[0].props.buttons as TutorButton[]).map((b) => b.label).join() === '我要预习小蝌蚪找妈妈' && forced.dropped.length === 4, JSON.stringify(forced));
 
   const face = homeTutors(tutors);
   check('首页的老师:有脸、开着、不藏,cotutor.json 顺序', face.join() === 'chinese-tutor,math-tutor,english-tutor');
   const arranged = arrangeHome(doc.cards, face);
-  check('排法:老师卡置顶(文件顺序),重复与工具人丢掉,没写的补一张空的,其余卡照文件顺序', arranged.map((c) => (c.kind === 'tutor' ? c.props.tutor : c.kind)).join() === 'chinese-tutor,math-tutor,english-tutor,tianzige,text' && JSON.stringify(arranged[2].props.buttons) === '[]');
+  check('排法:老师卡置顶(文件顺序),重复与工具人丢掉,没写的补一张空的,其余卡照文件顺序', arranged.map((c) => (c.kind === 'tutor' ? c.props.tutor : c.kind)).join() === 'chinese-tutor,math-tutor,english-tutor,dictation,text' && JSON.stringify(arranged[2].props.buttons) === '[]');
   check('缺省首页 = 每位老师一张空卡', arrangeHome([], face).map((c) => c.props.tutor).join() === face.join());
 }
 

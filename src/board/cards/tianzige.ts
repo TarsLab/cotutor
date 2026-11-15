@@ -45,7 +45,6 @@ function readPinyin(line: string, n: number): { pinyin: string[] } | { why: stri
 
 export const tianzige: CardKind<TianzigeProps> = {
   name: 'tianzige',
-  where: ['board', 'home'],
   props: TianzigePropsSchema,
   parse(body) {
     const { chars, pinyin } = split(body);

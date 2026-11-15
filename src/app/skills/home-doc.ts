@@ -1,6 +1,6 @@
 /**
  * cotutor-home 技能的生成部分:references/ 整个由这里现生成,scripts/gen-skills.ts 写进包根 skills/cotutor-home/,
- * tests/skills.test.ts 断言入库的和生成的一致。首页语法.md 从首页能用的卡的 card.md 拼(首页专属的全文,和板书共用的只给一句 + 指向 cotutor-board),
+ * tests/skills.test.ts 断言入库的和生成的一致。首页语法.md 从首页能用的卡(老师卡、听写卡)的 card.md 拼,
  * <kind>.md 是首页专属卡的协议全文,命令.md 从 CLI 用法文本取。SKILL.md 本体(流程、铁律)是手写的。
  */
 import { commandsReference } from '../cli/usage.ts';
@@ -12,9 +12,9 @@ export const HOME_SKILL = 'cotutor-home';
 const EXPECT_RE = /^\s*<!--\s*expect\b.*?-->\s*\n?/gm;
 const HOME_COMMANDS = ['home', 'show', 'rate', 'bookkeep'];
 
-/** 只用在首页的种类(板书里不能用的) */
+/** 首页能用的种类:老师卡、听写卡(2026-11-16 起只有这两种) */
 function homeOnly(): string[] {
-  return kindsFor('home').filter((k) => !(k.where ?? ['board']).includes('board')).map((k) => k.name);
+  return kindsFor('home').map((k) => k.name);
 }
 
 export function homeSyntaxDoc(dir = PACKAGE_CARDS_DIR): string {
@@ -23,13 +23,6 @@ export function homeSyntaxDoc(dir = PACKAGE_CARDS_DIR): string {
     const d = readCardDoc(kind, dir);
     return [`### ${d.headline}`, d.sections['是什么'], d.sections['写法'], d.sections['例子']?.replace(EXPECT_RE, '')].filter((x) => x && x.trim()).join('\n\n');
   });
-  const shared = kindsFor('home')
-    .filter((k) => !only.includes(k.name))
-    .map((k) => {
-      const d = readCardDoc(k.name, dir);
-      const what = (d.sections['是什么'] ?? '').split('\n').find((l) => l.trim()) ?? '';
-      return `- \`${k.name}\`:${what} 写法见 ../../cotutor-board/references/${k.name}.md(首页上没有讲稿,那里说「讲到这张卡时」的动作不会发生;孩子点了照样能用)。`;
-    });
   return `# 首页怎么写(机器生成,别改)
 
 首页文件是 workspace 的 home/draft.md,和板书同一个解析器:
@@ -43,15 +36,11 @@ export function homeSyntaxDoc(dir = PACKAGE_CARDS_DIR): string {
 
 老师卡的按钮最多 ${TUTOR_BUTTONS_MAX} 个,每个最多 ${BUTTON_LABEL_MAX} 个字。
 
-## 首页专属的卡
+## 首页的卡
+
+首页只放两种卡:老师卡和听写卡。别的卡(一段字、点读、图片、田字格、单词、选择题……)都放不了,写了检查报「要改」。
 
 ${own.join('\n\n')}
-
-## 和板书共用的卡
-
-${shared.join('\n')}
-
-只能用在板书里的卡(选择题、填空、讲解动画、代码)首页放不了——它们做完要交给某位老师。
 
 ## 一份完整的草稿
 
@@ -70,10 +59,6 @@ for: 2026-09-18
 \`\`\`tutor math-tutor
 再练两道退位减法
 讲法: 出 52−7、80−3,先让他说怎么想,跨十那一步慢一点
-\`\`\`
-
-\`\`\`tianzige
-塘脑袋
 \`\`\`
 
 ## 为什么这么排

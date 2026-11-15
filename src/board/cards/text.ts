@@ -38,7 +38,6 @@ function answerLines(text: string): { kept: string; dropped: number } {
 
 export const text: CardKind<TextProps> = {
   name: 'text',
-  where: ['board', 'home'],
   props: TextPropsSchema,
   parse(body, mods) {
     const style = mods.map((m) => m.toLowerCase()).find((m): m is TextStyle => (TEXT_STYLES as readonly string[]).includes(m));

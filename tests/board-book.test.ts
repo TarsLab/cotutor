@@ -143,7 +143,7 @@ const P = (c: BoardCard): Record<string, string> => c.props.params as Record<str
   // 孩子在板上:点字(嘴念这个字)、挪窗(记成一句、不念、不催)
   const base = '语文一年级下册.pdf#小鱼吹泡泡';
   const pick = await ctx.runner.boardEvent(T, date, { k: 'pick', thread, text: '泡', base });
-  const view = await ctx.runner.boardEvent(T, date, { k: 'view', thread, base, box: [0, 1500, 1000, 2100] });
+  const view = await ctx.runner.boardEvent(T, date, { k: 'view', thread, base, box: [0, 1385, 1000, 1985] });
   check('点字:嘴念这个字;挪窗:不念、不起「替他叫老师」', pick?.say === '泡' && view?.say === null && view?.still === false, JSON.stringify([pick, view]));
   const bad = await Promise.all([
     ctx.runner.boardEvent(T, date, { k: 'view', thread, base, box: [0, 1] }),

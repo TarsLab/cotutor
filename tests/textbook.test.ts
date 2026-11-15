@@ -6,7 +6,7 @@
  *   《古诗两首》3–4 页,下面两首各一页;语文园地一 5–7 页,按栏目分(第 7 页空着);识字表在最后。
  * 数学(2026-11-15)用 tests/_math-book.ts 照人教版数学排的那本:目录没有点线、单元下面的小节和课题从页里读、例题、栏目和题。
  */
-import { BOOK_KIT, BOOK_MAX_PAGES, bookFind, bookFrame, bookPages, bookPick, bookSheets, bookSpots, bookTarget, bookView, findLesson, kitOf, lessonBlocks, readKitLines } from '../src/chalk/index.ts';
+import { BOOK_KIT, BOOK_MAX_PAGES, bookCut, bookFind, bookFrame, bookPages, bookPick, bookSheets, bookSpots, bookTarget, bookView, findLesson, kitOf, lessonBlocks, readKitLines } from '../src/chalk/index.ts';
 import { bookLesson, boardPageSection } from '../src/board/board-page.ts';
 import { buildBookIndex, decodePinyin, pageLines, printedOf } from '../src/memory/textbook-index.ts';
 import { pickBook } from '../src/memory/textbook-pdf.ts';
@@ -76,6 +76,12 @@ const filled = { ...r.params, 书: '语文一年级下册.pdf', 页: '2-3', 看:
 const scene = kit.build(filled, { aspect: H / W });
 check('画面:底是那两页、窗对着第 2 段、圈和盖拼音的块(id 以 cover- 起头)', scene.book?.src === '语文一年级下册.pdf' && scene.book.pages.join() === '2,3' && scene.frame![1] < t2!.box[1] && scene.frame![1] + scene.frame![3] > t2!.box[3] && scene.skeletons.some((s) => s.type === 'ellipse' && s.label === '老师圈的:井沿') && scene.skeletons.some((s) => s.id === 'cover-圆'), JSON.stringify(scene.frame));
 check('没写看:窗在第一页上面;要看的太小就放大到页宽的三分之一为止', bookFrame(null, sheets)[1] === 0 && bookFrame([500, 500, 520, 520], sheets)[2] >= 333);
+// 页底没有字的那一条不铺、页和页直接连着;没写「裁」的旧卡照原来整页排、中间空一条
+const cut = bookCut(ix.pages);
+const joined = bookSheets(fish, undefined, cut);
+const lowest = Math.max(...ix.pages.flatMap((p) => p.lines.map((l) => (l.y2 * 1000) / p.w)));
+check('裁页底:整册一个数,印得最低的那行字还在;裁了的页直接连着,字的位置在页里不变', cut > 0 && cut === bookCut(ix.pages) && (H * 1000) / W - cut > lowest && joined[1].top === joined[0].height && joined[0].height === sheets[0].height - cut && bookFind(fish, joined, '井沿')?.[0] === bookFind(fish, sheets, '井沿')?.[0]);
+check('没写裁的卡照原来排(页之间空着);写了的连着', scene.book?.gap === 30 && kit.build({ ...filled, 裁: String(cut) }, { aspect: H / W }).book?.gap === 0 && sheets[1].top === sheets[0].height + 30);
 check('页、圈的存法读回来', bookPages('59-60').join() === '59,60' && bookPages('x').length === 0 && bookSpots('井沿|1 2 3 4;泡泡|')[1].box === null && bookSpots('井沿|1 2 3 4')[0].box?.join() === '1,2,3,4');
 check('孩子画了:说在第几页哪一截,圈住什么看图', kit.read(filled, { marks: [[[100, 1200], [200, 1250]]], aspect: H / W }, scene).includes('PDF 第 2 页下面'));
 

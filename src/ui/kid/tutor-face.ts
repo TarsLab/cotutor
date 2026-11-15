@@ -55,7 +55,7 @@ export const TUTOR_FACE_JS = `
     var av = document.createElement('span'); av.className = 'tfav'; av.style.color = t.color;
     av.innerHTML = '<svg class="ring" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="44"></circle></svg>';
     var face = document.createElement('span'); face.className = 'face';
-    if (t.avatar && /[.](png|jpe?g|webp|svg)$/i.test(t.avatar)) { var img = document.createElement('img'); img.src = '/api/kid/avatar/' + encodeURIComponent(t.name); img.alt = ''; face.append(img); }
+    if (t.avatar && /[.](png|jpe?g|webp|svg)$/i.test(t.avatar)) { var img = document.createElement('img'); img.src = '/api/kid/avatar/' + encodeURIComponent(t.name); img.alt = ''; img.draggable = false; face.append(img); }
     else face.textContent = t.avatar || (t.subject || t.display || '?').slice(0, 1);
     av.append(face);
     return av;
@@ -81,7 +81,7 @@ export const TUTOR_FACE_CSS = `
   .tfav .ring { position:absolute; left:0; top:0; width:100%; height:100%; overflow:visible; pointer-events:none; }
   .tfav .ring circle { fill:none; stroke:currentColor; stroke-width:8; stroke-linecap:round; stroke-dasharray:221.17 55.29; transform-origin:50px 50px; transform:rotate(36deg); }
   .tfav .face { position:absolute; left:15%; top:15%; width:70%; height:70%; border-radius:50%; background:#fff; overflow:hidden; display:grid; place-items:center; font-size:.76em; line-height:1; color:inherit; }
-  .tfav img { width:100%; height:100%; object-fit:cover; }
+  .tfav img { width:100%; height:100%; object-fit:cover; pointer-events:none; -webkit-user-drag:none; -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
   .bk-slot { width:100px; height:48px; flex:none; }
   .layer-x { width:48px; height:48px; border-radius:50%; background:#fffffff0; border:1px solid var(--line); box-shadow:0 2px 10px #00000018; display:grid; place-items:center; color:var(--dim); flex:none; cursor:pointer; }
   .layer-x svg { width:24px; height:24px; }

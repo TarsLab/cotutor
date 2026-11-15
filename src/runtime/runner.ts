@@ -57,7 +57,7 @@ import { readWords, startWords } from '../scenes/photo-words/store.ts';
 import { appendBoard, readBoard } from './journal/board-log.ts';
 import { boardPageSection, bookLesson, type BoardPageOpts, type BookBase } from '../board/board-page.ts';
 import { bookSlateParts, slateOf } from './context/board-pack.ts';
-import { BOOK_KIT, BOOK_TOC, bookOps, bookSheets, bookView, kitOf, kitOps, kitParams, lessonBlocks, photoLocate, pickable } from '../chalk/index.ts';
+import { BOOK_KIT, BOOK_TOC, bookCut, bookOps, bookSheets, bookView, kitOf, kitOps, kitParams, lessonBlocks, photoLocate, pickable } from '../chalk/index.ts';
 import { bookFile, bookIndex, listBooks, pickBook } from '../memory/textbook-pdf.ts';
 
 export class BusyError extends Error {
@@ -433,7 +433,7 @@ export class Runner {
       if (!at) return null;
       // 窗里的图先只给数学(例题的数在图上);语文的课文就是字,每轮多一张图只多花钱。目录的字全在 board: 里,不要图
       if (shot && (ix!.layout !== 'math' || at.title === BOOK_TOC)) return null;
-      const sheets = bookSheets(at.pages);
+      const sheets = bookSheets(at.pages, undefined, bookCut(ix!.pages));
       const text = bookView(at.pages, sheets, lessonBlocks(at.pages, ix!.layout), b.box as [number, number, number, number]).slice(0, 80);
       if (shot) {
         const file = conversationFiles(ws.dirs.conversations, tutor, date).shot(b.thread);

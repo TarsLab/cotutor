@@ -9,7 +9,7 @@
  *    课本卡例外:一节里的几张都留着,按讲稿的先后一张一张落,就是窗一步一步移(「先看这一句……再看下面」)。
  * 撤掉的卡在讲稿里的引用(锚、敲黑板、[[cue]])跟着重排或撤掉;dropped 是撤掉的卡(给家长端记一行)。
  */
-import { BOOK_KIT, BOOK_MAX_PAGES, BOOK_TOC, bookFind, bookOps, kitOf, kitOps, bookSheets, bookSpots, bookTarget, findLesson, lessonBlocks, photoFrame, photoRings } from '../chalk/index.ts';
+import { BOOK_KIT, BOOK_MAX_PAGES, BOOK_TOC, bookCut, bookFind, bookOps, kitOf, kitOps, bookSheets, bookSpots, bookTarget, findLesson, lessonBlocks, photoFrame, photoRings } from '../chalk/index.ts';
 import type { BoardCard, BoardSection, BookIndex, BookPage } from '../schema/index.ts';
 
 /** 课本做底(activity 头上 base: textbook):这一册的索引、板上现在是哪一课(上一张课本卡的课;没有 = 还在目录) */
@@ -51,9 +51,10 @@ function fitBook(c: BoardCard, book: BookBase, lesson: string | null, unfound: s
   if (!at && asked) { unfound.push(asked); at = bookLesson(book.index, lesson); }
   if (!at) return { card: c, lesson };
   const pages = at.pages;
-  const sheets = bookSheets(pages);
+  const cut = bookCut(book.index.pages);
+  const sheets = bookSheets(pages, undefined, cut);
   const blocks = lessonBlocks(pages, book.index.layout);
-  const out: Record<string, unknown> = { ...p, 课: at.title, 书: book.file, 页: pages.length > 1 ? `${pages[0].n}-${pages[pages.length - 1].n}` : String(pages[0]?.n ?? '') };
+  const out: Record<string, unknown> = { ...p, 课: at.title, 书: book.file, 页: pages.length > 1 ? `${pages[0].n}-${pages[pages.length - 1].n}` : String(pages[0]?.n ?? ''), 裁: cut > 0 ? String(cut) : '' };
   const look = bookSpots(typeof p['看'] === 'string' ? p['看'] : '')[0];
   let within: [number, number, number, number] | null = look?.box ?? null;
   if (look && !look.box) {

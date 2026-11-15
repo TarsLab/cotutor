@@ -7,6 +7,7 @@
  *  三、手指点板上的一个字:田字格浮出来;经实时那条连接报 {k:'pick', base:'<册子>#坐井观天'};服务端记进板的日志。
  *  四、手指拖着往下看:报 {k:'view', box};服务端说成一句(「第 55 页:…」)记进板的日志。
  *  五、孩子再说一句:那一轮的上下文包里有这一课分好段的全文、他点了什么、「孩子在看」。
+ *  六、笔画一道:「擦掉」贴着屏幕边出现、「给老师看」出现;擦掉了都收起。
  * iPad 横屏各截一张。
  * 用法:node scripts/probe-book-page.mjs --pdf <课本 PDF> [--out <截图目录>]
  */
@@ -41,7 +42,7 @@ const { startFakeTeacher } = await import(join(repo, 'tests', '_fake-teacher.ts'
 const { readBoard } = await import(join(repo, 'src', 'runtime', 'journal', 'board-log.ts'));
 const { bookIndex } = await import(join(repo, 'src', 'memory', 'textbook-pdf.ts'));
 const { bookLesson } = await import(join(repo, 'src', 'board', 'board-page.ts'));
-const { bookFind, bookSheets } = await import(join(repo, 'src', 'chalk', 'index.ts'));
+const { bookCut, bookFind, bookSheets } = await import(join(repo, 'src', 'chalk', 'index.ts'));
 
 const fake = await startFakeRealtime();
 fake.audioMs = 300;
@@ -146,7 +147,7 @@ try {
   const cam = await camera();
   const ix = await bookIndex(wsx.paths.textbooks, join(tmp, 'cache'), name);
   const at = bookLesson(ix, '坐井观天');
-  const sheets = bookSheets(at.pages);
+  const sheets = bookSheets(at.pages, undefined, bookCut(ix.pages));
   const v = [-cam.tx / cam.s, -cam.ty / cam.s, (cam.w - cam.tx) / cam.s, (cam.h - cam.ty) / cam.s];
   const p6 = bookFind(at.pages, sheets, '青蛙笑了');
   ok('老师的课本卡落下:板换成这一课(两页),「井沿」圈上了,窗里是第 6 段', Boolean(landed) && (await bookState()).pages === 2 && p6 && v[1] <= p6[1] && v[3] >= p6[3], JSON.stringify({ st: await bookState(), v: v.map(Math.round), p6 }));
@@ -189,6 +190,24 @@ try {
   const run = JSON.parse(readFileSync(join(wsRoot, 'conversations', T, `${(await day()).date}.${last.job}.run.json`), 'utf8'));
   const pr = run.prompt.slice(run.prompt.indexOf('  board:'), run.prompt.indexOf('  board:') + 2000);
   ok('下一轮的上下文包:底是这一课、全文分好段、点了「朋」、孩子在看', pr.includes('《坐井观天》第 54–55 页') && pr.includes('第1段 青蛙坐在井里') && pr.includes('朋') && pr.includes('孩子在看:'), pr);
+  // 六、笔画一道:「擦掉」贴着屏幕边冒出来(课本铺满屏宽,没有工具那一栏),「给老师看」这才出现;擦掉了两颗都收起
+  for (let i = 0; i < 60 && (await day()).messages.some((m) => m.result === 'running'); i++) await sleep(250);
+  await sleep(1500);
+  const goShown = () => evaluate(`(() => { const g = document.querySelector('#st-go'); return Boolean(g) && getComputedStyle(g).display !== 'none' && g.getBoundingClientRect().width > 0; })()`);
+  const wipeBox = () => stageEval(`(d, fr) => { const w = d.querySelector('.bk-wipe'); if (!w) return null; const r = w.getBoundingClientRect(); return { x: fr.left + r.left + r.width / 2, y: fr.top + r.top + r.height / 2, left: r.left }; }`);
+  const before = { go: await goShown(), wipe: await wipeBox(), col: await stageEval(`(d) => Boolean(d.querySelector('.kt-tools'))`), view: await stageEval(`(d) => d.querySelector('.bk-view').getBoundingClientRect().left`) };
+  const pen = (type, x, y) => send('Input.dispatchMouseEvent', { type, x, y, button: 'left', buttons: type === 'mouseReleased' ? 0 : 1, clickCount: 1, pointerType: 'pen' });
+  await pen('mousePressed', 500, 420);
+  for (let i = 1; i <= 10; i++) { await pen('mouseMoved', 500 + i * 22, 420 + (i % 2) * 6); await sleep(16); }
+  await pen('mouseReleased', 720, 420);
+  await sleep(900);
+  const after = { go: await goShown(), wipe: await wipeBox(), inks: (await bookState()).inks };
+  ok('没动笔:没有工具栏、课本贴着屏幕左边、没有「擦掉」和「给老师看」', before.col === false && before.view === 0 && before.wipe === null && before.go === false, JSON.stringify(before));
+  ok('画了一笔:「擦掉」贴着屏幕边出现,「给老师看」出现', after.inks === 1 && after.wipe?.left === 0 && after.go === true, JSON.stringify(after));
+  console.log('  ', await shot('5-动了笔.png'));
+  if (after.wipe) await tapAt(after.wipe.x, after.wipe.y);
+  await sleep(600);
+  ok('擦掉:笔画没了,两颗钮收起', (await bookState()).inks === 0 && (await wipeBox()) === null && (await goShown()) === false);
   ok('页面没有脚本报错', errors.length === 0, errors.slice(0, 3).join(' | '));
   console.log(`\n截图在 ${shots}`);
   ws.close();

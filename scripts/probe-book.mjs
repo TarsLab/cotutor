@@ -22,7 +22,7 @@ import { join } from 'node:path';
 import { QUIET_ARGS } from './_quiet.mjs';
 import { bookIndex, listBooks, pickBook } from '../src/memory/textbook-pdf.ts';
 import { boardPageSection, bookLesson } from '../src/board/board-page.ts';
-import { bookFind, bookSheets, bookSpots } from '../src/chalk/index.ts';
+import { bookCut, bookFind, bookSheets, bookSpots } from '../src/chalk/index.ts';
 
 const args = process.argv.slice(2);
 const opt = (k) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : undefined; };
@@ -183,7 +183,7 @@ ok('笔画一道:留下一笔、回状态', (await inks()) === 1 && states.lengt
 
 // 七、手指点「渴」
 const at = bookLesson(ix, '坐井观天');
-const sheets = bookSheets(at.pages);
+const sheets = bookSheets(at.pages, undefined, bookCut(ix.pages));
 const ke = bookFind(at.pages, sheets, '渴');
 // 先让「渴」在窗里:发一张看它的卡(窗滑过去)
 await post(card({ 看: '口渴了' }), 'p/3');

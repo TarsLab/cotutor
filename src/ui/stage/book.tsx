@@ -9,7 +9,7 @@
  *  - 孩子挪完、切完大小停下来:把窗(场景坐标)告诉页面(view),页面报给服务端说成一句「第 55 页:第 7 段」给老师。
  * 画面:pdf.js(/stage/pdf/,不打进 stage.js)现画。每页先画一张中等清晰度的(移动、缩放时用它),停下来再把窗里那一块照屏幕的像素重画一张盖上去,放大了字也清楚。
  * 老师的记号(圈、盖拼音的块)和孩子的笔画是一层 SVG,和页面在同一个随窗变换的容器里,所以对得齐;孩子的笔画挂在书页上,老师下一张卡还是这一课就还在。
- * 类名带 bk-(舞台页也装孩子端的 theme.css);工具列用 kit.tsx 的 kt- 那几个,样子一样。
+ * 类名带 bk-(舞台页也装孩子端的 theme.css);没有工具那一栏(2026-11-15,课本铺满屏宽):只有一颗「擦掉」浮在屏幕边上(.bk-wipe)。
  */
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type * as Pdfjs from 'pdfjs-dist';
@@ -143,7 +143,9 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
   const canPick = open.includes('点字');
   const pdfUrl = kp['书'] ? `/api/kid/textbook/pdf?b=${encodeURIComponent(kp['书'])}` : '';
   const pages = bookPages(kp['页']);
-  const geoKey = `${kp['书']}|${pages.join(',')}`;
+  /** 每页底下不铺的那一条(场景坐标;应用照这一册算好写在卡上,bookCut);有它页和页就直接连着 */
+  const cut = Number(kp['裁']) || 0;
+  const geoKey = `${kp['书']}|${pages.join(',')}|${cut}`;
 
   // ---- 窗 ----
   /** 窗的大小(CSS 像素) */
@@ -288,7 +290,7 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
       part.width = Math.max(1, Math.round((ix1 - ix0) * k));
       part.height = Math.max(1, Math.round((iy1 - iy0) * k));
       const vp = page.getViewport({ scale: sh.s * k });
-      const task = page.render({ canvas: part, viewport: vp, transform: [1, 0, 0, 1, -ix0 * k, (sh.top - iy0) * k], background: '#ffffff' });
+      const task = page.render({ canvas: part, viewport: vp, transform: [1, 0, 0, 1, -ix0 * k, (sh.top - iy0) * k], background: '#ffffff', annotationMode: 0 });
       sharpTask.current = { cancel: () => { cancelled = true; task.cancel(); } };
       try { await task.promise; } catch { return; }
       ctx.drawImage(part, Math.round((ix0 - x0) * k), Math.round((iy0 - y0) * k));
@@ -352,7 +354,7 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
       const dims: { n: number; w: number; h: number }[] = [];
       for (const n of pages) { const pg = await doc.getPage(n); const vp = pg.getViewport({ scale: 1 }); dims.push({ n, w: vp.width, h: vp.height }); }
       if (cancelled) return;
-      const sheets = bookSheets(dims).map((sh, i) => ({ ...sh, w: dims[i].w, h: dims[i].h }));
+      const sheets = bookSheets(dims, undefined, cut).map((sh, i) => ({ ...sh, w: dims[i].w, h: dims[i].h }));
       const height = sheets.length ? sheets[sheets.length - 1].top + sheets[sheets.length - 1].height : BOOK_W;
       const aspect = Math.round((dims[0].h / dims[0].w) * 10000) / 10000;
       const [vw] = vsize();
@@ -364,7 +366,7 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
       for (const old of Array.from(host.querySelectorAll('.bk-page'))) old.remove();
       for (const sh of sheets) {
         const cv = document.createElement('canvas');
-        cv.className = 'bk-page';
+        cv.className = cut > 0 ? 'bk-page bk-joined' : 'bk-page';
         Object.assign(cv.style, { left: '0px', top: `${sh.top}px`, width: `${BOOK_W}px`, height: `${sh.height}px` });
         host.prepend(cv);
         base.set(sh.n, cv);
@@ -394,8 +396,9 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
         const k = px / sh.w;
         const vp = pg.getViewport({ scale: k });
         const cv = base.get(sh.n)!;
-        cv.width = Math.round(vp.width); cv.height = Math.round(vp.height);
-        await pg.render({ canvas: cv, viewport: vp }).promise.catch(() => {});
+        // 画布只有铺出来的那么高(页底裁掉的那一条不画);批注不画:平台盖在页顶的社标是一条水印批注
+        cv.width = Math.round(vp.width); cv.height = Math.round(sh.height / sh.s * k);
+        await pg.render({ canvas: cv, viewport: vp, annotationMode: 0 }).promise.catch(() => {});
         geo.current?.drawn.add(sh.n);
       }
       scheduleSharp();
@@ -697,9 +700,6 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
 
   return (
     <div className={`kt-wrap${hand === 'left' ? ' kt-hand-left' : ''}`}>
-      {readonly || !canMark ? null : <div className="kt-tools">
-        <button type="button" className="kt-btn kt-wipe" onClick={wipe} disabled={phase !== 'ready' || !marks} aria-label="擦掉">{icon(WIPE)}<span>擦掉</span></button>
-      </div>}
       <div className="kt-board bk-board" data-phase={phase} data-marks={marks}>
         <div className="bk-view" ref={view} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onWheel={wheel}>
           <div className="bk-paper" ref={paper}>
@@ -711,6 +711,8 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
             </svg>
           </div>
         </div>
+        {/* 课本铺满屏宽,没有工具那一栏:「擦掉」贴着屏幕边、在页面那张老师签的正下方,画了才出现 */}
+        {readonly || !canMark || !marks || phase !== 'ready' ? null : <button type="button" className="bk-wipe" onClick={wipe} aria-label="擦掉">{icon(WIPE)}<span>擦掉</span></button>}
         {phase === 'loading' && <div className="stage-wait">翻课本…</div>}
       </div>
     </div>

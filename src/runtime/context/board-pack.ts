@@ -52,7 +52,7 @@ export function drawnLine(kit: NonNullable<SlateInput['kit']>): string {
   // 圈、遮写的字词只说字(框是应用找的);写的字照「字 在 位置」
   const named = (v: string): string => v.split(';').map((x) => (x.includes('|') ? x.split('|')[0] || x.split('|')[1] : x)).join('、');
   // 课本的「书」「页」是应用填的;「看」「盖」也是「字|框」
-  const parts = Object.entries(kit.params).filter(([k, v]) => v && k !== '图' && !(kit.kit === '课本' && (k === '书' || k === '页'))).map(([k, v]) => `${k} ${k === '圈' || k === '遮' || k === '盖' || k === '看' || (k === '框' && v.includes('|')) ? named(v) : v.split(';').map((x) => x.replace(/\|$/, '').replace(/\|/g, ' 在 ')).join(';')}`);
+  const parts = Object.entries(kit.params).filter(([k, v]) => v && k !== '图' && !(kit.kit === '课本' && (k === '书' || k === '页' || k === '裁'))).map(([k, v]) => `${k} ${k === '圈' || k === '遮' || k === '盖' || k === '看' || (k === '框' && v.includes('|')) ? named(v) : v.split(';').map((x) => x.replace(/\|$/, '').replace(/\|/g, ' 在 ')).join(';')}`);
   return parts.length ? `${kit.kit}:${parts.join(';')}` : kit.kit;
 }
 

@@ -92,7 +92,8 @@ ${faviconLinks()}
   .av .ring { position:absolute; left:0; top:0; width:100%; height:100%; overflow:visible; pointer-events:none; }
   .av .ring circle { fill:none; stroke:currentColor; stroke-width:7; stroke-linecap:round; stroke-dasharray:221.17 55.29; transform-origin:50px 50px; transform:rotate(36deg); transition:transform .45s cubic-bezier(.3,1.6,.5,1); }
   .av .face { position:absolute; left:15%; top:15%; width:70%; height:70%; border-radius:50%; background:var(--card); overflow:hidden; display:grid; place-items:center; font-size:.76em; line-height:1; }
-  .av img { width:100%; height:100%; object-fit:cover; }
+  /* 头像是按住说话的钮:iPad 的 Safari 长按图片会把图「拎起来」拖、弹存图的菜单——图不收触摸(落在钮上)、不许拖、不弹菜单 */
+  .av img { width:100%; height:100%; object-fit:cover; pointer-events:none; -webkit-user-drag:none; -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
   /* 画出来:从右上起笔逆时针一笔写出 C,写完头像冒出来(首页打开、回到首页、空白板;--d 是首页几位老师错开的那一下) */
   .av.draw .ring circle { animation:av-draw .9s cubic-bezier(.6,0,.3,1) var(--d, 0s) backwards; }
   .av.draw .face { animation:av-pop .5s ease-out calc(var(--d, 0s) + .35s) backwards; }
@@ -247,7 +248,7 @@ ${BACK_TINT_CSS}
   #stage.cv #st-act { position:absolute; top:env(safe-area-inset-top); right:env(safe-area-inset-right); height:56px; box-sizing:border-box; padding:0 12px; border-top:0; gap:10px; }
   #stage.cv #st-note { font-size:14px; }
   /* 照片板的「点字」:孩子点中的字词,田字格浮在板上面(不挡工具那一列:右手时在右上,左手时在左上) */
-  #st-pick { position:absolute; z-index:3; top:calc(env(safe-area-inset-top) + 72px); right:calc(env(safe-area-inset-right) + 16px); padding:14px 14px 12px; background:#fff; border-radius:24px; box-shadow:0 10px 36px rgba(60,50,30,.22), 0 0 0 1px rgba(60,50,30,.06); animation:st-pick-in .22s cubic-bezier(.2,.8,.2,1); }
+  #st-pick { position:absolute; z-index:3; top:calc(env(safe-area-inset-top) + 72px); right:calc(env(safe-area-inset-right) + 16px); padding:54px 14px 12px; background:#fff; border-radius:24px; box-shadow:0 10px 36px rgba(60,50,30,.22), 0 0 0 1px rgba(60,50,30,.06); animation:st-pick-in .22s cubic-bezier(.2,.8,.2,1); }
   #st-pick[hidden] { display:none; }
   body.hand-left #st-pick { right:auto; left:calc(env(safe-area-inset-left) + 16px); }
   #st-pick .c.c-tianzige { margin:0; padding:0; background:none; border:0; box-shadow:none; flex-wrap:nowrap; }
@@ -255,8 +256,8 @@ ${BACK_TINT_CSS}
   #st-pick .hz .n { font-size:13px; }
   #st-pick .c.c-word { margin:0; padding:4px 8px; background:none; border:0; box-shadow:none; max-width:min(520px, 60vw); overflow:hidden; }
   #st-pick .c.c-word svg { max-width:100%; height:auto; }
-  #st-pick-x { position:absolute; top:-12px; right:-12px; width:40px; height:40px; border-radius:50%; border:0; background:var(--ink); color:#fff; display:grid; place-items:center; cursor:pointer; }
-  body.hand-left #st-pick-x { right:auto; left:-12px; }
+  #st-pick-x { position:absolute; top:6px; right:6px; width:44px; height:44px; border-radius:50%; border:0; background:var(--grey, #eeece6); color:var(--ink); display:grid; place-items:center; cursor:pointer; }
+  body.hand-left #st-pick-x { right:auto; left:6px; }
   @keyframes st-pick-in { from { opacity:0; scale:.9; } to { opacity:1; scale:1; } }
   @media (max-width: 760px) { #st-pick .hz { width:112px; height:112px; } }
   #st-go.holding { background:#3d7fd9; border-color:#3d7fd9; color:#fff; }
@@ -280,15 +281,31 @@ ${BACK_TINT_CSS}
   #stage.bp.bk #st-bp { display:none; }
   #st-bp button { display:flex; align-items:center; gap:6px; height:40px; padding:0 14px; border:1.5px solid var(--line, #e5e1d8); border-radius:20px; background:#fff; font:inherit; font-size:16px; font-weight:600; color:var(--ink); cursor:pointer; }
   #st-bp button svg { width:20px; height:20px; }
-  /* 以板为主:板铺到顶,顶栏是浮在板上的一层(只有按钮收触摸)、顶上一层纸色渐隐(2026-11-14 原来是一条 56px 的白栏);
+  /* 以板为主:板铺到顶,顶栏是浮在板上的一层(只有按钮收触摸;2026-11-14 原来是一条 56px 的白栏,11-15 去掉顶上那层纸色渐隐:它把课本头两行和「给老师看」都罩虚了,几颗钮各自垫实底);
      左上的 × 换成和老师页一样的「‹ 语」胶囊(回首页,stageBackSync);老师板卡的题目有字才露,垫白底 */
-  #stage.bp .top { position:absolute; left:0; right:0; top:0; z-index:4; min-height:0; border:0; background:linear-gradient(rgba(246,243,236,.85), rgba(246,243,236,0)); padding:calc(env(safe-area-inset-top) + 12px) calc(env(safe-area-inset-right) + 220px) 24px calc(env(safe-area-inset-left) + 16px); pointer-events:none; }
+  #stage.bp .top { position:absolute; left:0; right:0; top:0; z-index:4; min-height:0; border:0; background:none; padding:calc(env(safe-area-inset-top) + 12px) calc(env(safe-area-inset-right) + 220px) 24px calc(env(safe-area-inset-left) + 16px); pointer-events:none; }
   #stage.bp .top > * { pointer-events:auto; }
   #stage.bp .top .ttl { flex:0 1 auto; }
   #stage.bp .top .ttl:empty { display:none; }
   #stage.bp .top .ttl:not(:empty) { padding:10px 16px; border-radius:20px; background:#fffffff0; box-shadow:0 2px 10px #00000014; }
   #stage.bp #st-bp { margin-left:auto; }
   #stage.bp #st-frame { position:absolute; inset:0; height:100%; }
+  /* 「给老师看」(2026-11-15):没东西可交就不出现(原来是半透明的一颗,像是坏了);能交了是实心的学科色。旁边那行小字垫白底 */
+  #stage.bp #st-act { top:calc(env(safe-area-inset-top) + 10px); right:calc(env(safe-area-inset-right) + 4px); }
+  #stage.bp #st-go { height:52px; border-radius:26px; background:var(--bk, var(--accent)); font-size:18px; font-weight:700; box-shadow:0 6px 20px #46371e40; }
+  #stage.bp #st-go:disabled { display:none; }
+  #stage.bp #st-go.holding { background:#3d7fd9; }
+  #stage.bp #st-note:not(:empty) { flex:none; padding:6px 12px; border-radius:14px; background:#fffffff0; }
+  /* 课本做底(2026-11-15):课本铺满屏宽,老师贴着屏幕边(一张只有外侧圆角的签),落在课本自己的页边里、不压正文;「擦掉」在舞台里、贴在它正下方(stage.css 的 .bk-wipe)。
+     老师说的话是底下一条字幕,不压在正文头上 */
+  body.live #stage.cv.bp.bk #cv-hold { left:0; width:88px; padding:12px 0 22px; gap:12px; border-left:0; border-radius:0 24px 24px 0; }
+  body.live.hand-left #stage.cv.bp.bk #cv-hold { left:auto; right:0; border-left:1.5px solid #e2dfd6; border-right:0; border-radius:24px 0 0 24px; }
+  #stage.bp.bk #cv-hold .vb-av { width:68px; height:68px; --vb-h1:-3px; --vb-h2:-8px; }
+  #stage.bp.bk #cv-hold .vb-av > .av { width:60px; height:60px; font-size:28px; }
+  #stage.bp.bk #cv-hold .vb-side { height:22px; }
+  #stage.bp.bk #cv-hold .vb-big { gap:3px; font-size:13px; }
+  #stage.bp.bk #cv-hold .vb-big .vb-ic svg { width:14px; height:14px; }
+  #stage.cv.bp.bk #cv-cap { top:auto; bottom:calc(env(safe-area-inset-bottom) + 20px); padding:12px 22px; border-radius:18px; background:#2b2b2beb; color:#fff; }
   #st-x.st-back { display:flex; align-items:center; gap:2px; width:auto; height:48px; padding:0 4px 0 8px; border-radius:24px; background:#fffffff0; border:1px solid var(--line); box-shadow:0 4px 16px #46371e2e; color:var(--ink); }
   #st-x.st-back .bk-ic { width:24px; height:24px; color:var(--dim); display:grid; place-items:center; }
   #st-x.st-back .ct-logo { color:var(--ink); margin:0 8px 0 4px; }
@@ -726,7 +743,7 @@ ${BOARD_MARK_JS}
     const el = h('span', { class: 'av ' + (cls || ''), style: 'color:' + colorOf(t) + (delay ? ';--d:' + delay + 's' : '') });
     el.innerHTML = AV_RING;
     const face = h('span', { class: 'face' });
-    if (t.avatar && /\.(png|jpe?g|webp|svg)$/i.test(t.avatar)) face.append(h('img', { src: '/api/kid/avatar/' + t.name, alt: '' }));
+    if (t.avatar && /\.(png|jpe?g|webp|svg)$/i.test(t.avatar)) face.append(h('img', { src: '/api/kid/avatar/' + t.name, alt: '', draggable: 'false' }));
     else face.textContent = t.avatar || (t.subject || t.display || '?').slice(0, 1);
     el.append(face);
     return el;
@@ -2118,7 +2135,7 @@ __WORD_DRAW_JS__
     if (S.sections[old.section]) playRec({ k: 'stage', job: S.sections[old.section].job, card: old.card, open: false });
     S.stage = { section: secIdx, card: idx, id: S.sections[secIdx].job + '/' + idx, playing: null, delegate: false, autoplay: false };
     playRec({ k: 'stage', job: S.sections[secIdx].job, card: idx, open: true });
-    $('#st-ttl').textContent = cardTitle(card); $('#st-ttl').classList.remove('open');
+    $('#st-ttl').textContent = stageTitle(card); $('#st-ttl').classList.remove('open');
     pickHide();
     renderGo();
     setNow(secIdx, idx);
@@ -2140,6 +2157,8 @@ __WORD_DRAW_JS__
     S.stage.heard = true;
     renderGo();
   };
+  /** 舞台顶栏的题目:课本卡写这一课的名字(原来写的是「课本」,孩子看不出翻到哪了) */
+  const stageTitle = (card) => { const p = card.kind === 'kit' && card.props.kit === '课本' && card.props.params; return (p && typeof p['课'] === 'string' && p['课']) || cardTitle(card); };
   /** 舞台顶栏右边那一块:「给老师看」能不能按、旁边那行小字;交过的锁住,教具等老师时写「老师在看」 */
   const renderGo = () => {
     const card = stageCardNow();
@@ -2162,7 +2181,7 @@ __WORD_DRAW_JS__
     S.stage = { section: secIdx, card: idx, id: S.sections[secIdx].job + '/' + idx, playing: null, delegate: Boolean(opts.delegate), autoplay: Boolean(opts.autoplay) };
     playRec({ k: 'stage', job: S.sections[secIdx].job, card: idx, open: true });
     // 画板、教具铺满:题目一行写在顶栏,点开看全
-    $('#st-ttl').textContent = card.kind === 'canvas' ? (card.props.prompt || '画一画') : cardTitle(card);
+    $('#st-ttl').textContent = card.kind === 'canvas' ? (card.props.prompt || '画一画') : stageTitle(card);
     $('#st-ttl').classList.remove('open');
     $('#st-kd').textContent = KIND_NAME[card.kind] || card.kind;
     $('#st-kd').hidden = isFullStage(card) || !(KIND_NAME[card.kind] || card.kind);
@@ -2296,8 +2315,8 @@ __WORD_DRAW_JS__
     if (x.classList.contains('st-back') === bp) return;
     x.classList.toggle('st-back', bp);
     const b = $('#back');
-    if (bp) { x.innerHTML = b.innerHTML.replace('id="back-ic"', 'class="bk-ic"'); x.classList.toggle('tinted', b.classList.contains('tinted')); x.style.setProperty('--bk', b.style.getPropertyValue('--bk')); x.setAttribute('aria-label', '回首页'); }
-    else { x.innerHTML = ICON.close; x.classList.remove('tinted'); x.style.removeProperty('--bk'); x.removeAttribute('aria-label'); }
+    if (bp) { x.innerHTML = b.innerHTML.replace('id="back-ic"', 'class="bk-ic"'); x.classList.toggle('tinted', b.classList.contains('tinted')); x.style.setProperty('--bk', b.style.getPropertyValue('--bk')); $('#stage').style.setProperty('--bk', b.classList.contains('tinted') ? b.style.getPropertyValue('--bk') : ''); x.setAttribute('aria-label', '回首页'); }
+    else { x.innerHTML = ICON.close; x.classList.remove('tinted'); x.style.removeProperty('--bk'); $('#stage').style.removeProperty('--bk'); x.removeAttribute('aria-label'); }
   };
   new MutationObserver(stageBackSync).observe($('#stage'), { attributes: true, attributeFilter: ['class'] });
   $('#st-dim').addEventListener('click', closeByKid);

@@ -13,7 +13,7 @@ import { white } from './white.ts';
 import type { Kit, KitState } from './types.ts';
 
 export { KIT_MARK_MAX, KIT_MARK_POINTS, KIT_PICK_CHARS, KIT_PICK_MAX } from './types.ts';
-export { BOOK_ASPECT, BOOK_GAP, BOOK_KIT, BOOK_MAX_PAGES, BOOK_TOC, BOOK_W, SECTION_NAMES, bookFind, bookFrame, bookHeight, bookOps, bookPages, bookPick, bookSheets, bookSpots, bookTarget, bookView, findLesson, lessonBlocks, lineBox, type BookBlock, type BookSheet } from './book.ts';
+export { BOOK_ASPECT, BOOK_GAP, BOOK_KIT, BOOK_MAX_PAGES, BOOK_TOC, BOOK_W, SECTION_NAMES, bookCut, bookFind, bookFrame, bookHeight, bookOps, bookPages, bookPick, bookSheets, bookSpots, bookTarget, bookView, findLesson, lessonBlocks, lineBox, type BookBlock, type BookSheet } from './book.ts';
 export { COVER_ID, PHOTO_PICK, photoFrame, photoLocate, photoPick, pickEnglish, photoRings, pickable, pinyinStrip, type PhotoLine, type PhotoWord } from './photo.ts';
 export type { Kit, KitEnv, KitParam, KitScene, KitState, KitTurn } from './types.ts';
 export { kitMarks, markPhrases, turnOf, turnPoint, turnedSkeletons, type KitMark } from './marks.ts';

@@ -3,7 +3,8 @@
  * 老师说看哪里(`看: 第 6–7 段`、`看: 日积月累`、`看: 小鸟回答说`),应用照课本的索引算出那一块在哪、窗移过去;孩子用手指拖、捏着放大,Apple Pencil 写画。
  * 字的位置来自 PDF 的文字层(src/memory/textbook-index.ts),不认图:圈字、遮拼音、点字都照它找,不用老师估坐标。
  *
- * 场景坐标:一页的宽是 1000,高 = 1000 × 页的高宽比;几页从上往下排,页和页之间空 BOOK_GAP。老师的记号、孩子的笔画、窗(frame)都在这套坐标里,
+ * 场景坐标:一页的宽是 1000,高 = 1000 × 页的高宽比;几页从上往下排。每页底下没有字的那一条裁掉(bookCut:教育平台盖的「仅供个人学习使用」就印在那里),
+ * 页和页直接连着;没写「裁」的卡(2026-11-15 以前的)照原来整页排、页和页之间空 BOOK_GAP。老师的记号、孩子的笔画、窗(frame)都在这套坐标里,
  * 所以窗怎么动、换几张卡,孩子画在第 55 页上的那一笔都还在那里。
  * 这个文件是纯函数:索引(BookPage)由服务端读好给进来(落板之前换框、上下文包)或舞台拉来(点字)。
  */
@@ -14,7 +15,7 @@ import type { Kit, KitEnv, KitScene } from './types.ts';
 
 /** 一页的宽(场景坐标) */
 export const BOOK_W = 1000;
-/** 页和页之间空多少 */
+/** 页和页之间空多少(没裁页底的旧卡;裁了的直接连着) */
 export const BOOK_GAP = 30;
 /** 没量过高宽比时取的数:16 开的课本(人教版 521.6 × 737 pt) */
 export const BOOK_ASPECT = 1.413;
@@ -35,16 +36,40 @@ type Box = [number, number, number, number];
 /** 一页在场景里的位置:top 是页顶,s 是 PDF 的点到场景坐标的倍数 */
 export interface BookSheet { n: number; top: number; s: number; height: number }
 
-/** 几页从上往下排(页的宽高比照各页自己的;只给页号时都按 aspect) */
-export function bookSheets(pages: readonly { n: number; w?: number; h?: number }[], aspect = BOOK_ASPECT): BookSheet[] {
+/** 几页从上往下排(页的宽高比照各页自己的;只给页号时都按 aspect);cut 是每页底下裁掉多少(场景坐标),裁了页和页就直接连着 */
+export function bookSheets(pages: readonly { n: number; w?: number; h?: number }[], aspect = BOOK_ASPECT, cut = 0): BookSheet[] {
   let top = 0;
   return pages.map((p) => {
     const s = p.w ? BOOK_W / p.w : 1;
-    const height = p.w && p.h ? (BOOK_W * p.h) / p.w : BOOK_W * aspect;
+    const full = p.w && p.h ? (BOOK_W * p.h) / p.w : BOOK_W * aspect;
+    const height = cut > 0 ? Math.max(full / 2, full - cut) : full;
     const sh = { n: p.n, top, s, height };
-    top += height + BOOK_GAP;
+    top += height + (cut > 0 ? 0 : BOOK_GAP);
     return sh;
   });
+}
+
+const cuts = new WeakMap<readonly BookPage[], number>();
+/** 页底的字和页边之间留的一点(PDF 的点) */
+const CUT_KEEP = 3;
+
+/**
+ * 这一册每页底下裁掉多少(场景坐标):整册里印得最低的那行字(页码)以下。给整册的页(index.pages),一册一个数,每一课都一样。
+ * 国家中小学智慧教育平台下载的课本每页底边盖着一行「仅供个人学习使用」,不在文字层里(认不出来),但总在页码下面;没盖的书裁掉的只是白边。
+ * 只是显示时不铺这一条,vault 里的 PDF 不改。
+ */
+export function bookCut(pages: readonly BookPage[]): number {
+  const had = cuts.get(pages);
+  if (had !== undefined) return had;
+  let cut = Infinity;
+  for (const p of pages) {
+    if (!p.lines.length || !p.w) continue;
+    const low = Math.max(...p.lines.map((l) => l.y2));
+    cut = Math.min(cut, ((p.h - low - CUT_KEEP) * BOOK_W) / p.w);
+  }
+  const out = Number.isFinite(cut) ? Math.max(0, r1(cut)) : 0;
+  cuts.set(pages, out);
+  return out;
 }
 
 /** 这一长条有多高 */
@@ -444,6 +469,12 @@ function readPdf(v: string): string {
   return s;
 }
 
+function readCut(v: string): string {
+  const n = Number(v.trim());
+  if (!Number.isFinite(n) || n < 0 || n > BOOK_W) throw new Error('课本的「裁」由应用填');
+  return n > 0 ? String(r1(n)) : '';
+}
+
 function readRange(v: string): string {
   const p = bookPages(v.replace(/\s/g, '').replace(/[–—~～到至]/, '-'));
   if (!p.length) throw new Error('课本的「页」由应用填:PDF 的第几页到第几页,如 59-60');
@@ -500,11 +531,13 @@ export const book: Kit = {
     { key: '盖', note: '盖住课本上印的字(例题里的算式、答案),请孩子先自己想,他点一下揭开。写课本上的原样(盖: 3×5=15),几处用顿号隔开,最多 8 处。', read: readSpots('盖', COVER_MAX), fallback: '' },
     { key: '书', note: '应用填:教材 PDF 的路径。你不用写。', read: readPdf, fallback: '' },
     { key: '页', note: '应用填:这一课在 PDF 的第几页到第几页。你不用写。', read: readRange, fallback: '' },
+    { key: '裁', note: '应用填:每页底下不铺的那一条。你不用写。', read: readCut, fallback: '' },
   ],
   build(p, env?: KitEnv): KitScene {
     const a = env?.aspect && env.aspect > 0 ? env.aspect : BOOK_ASPECT;
     const pages = bookPages(p['页']);
-    const sheets = bookSheets(pages.map((n) => ({ n })), a);
+    const cut = Number(p['裁']) || 0;
+    const sheets = bookSheets(pages.map((n) => ({ n })), a, cut);
     const look = bookSpots(p['看'])[0];
     const frame = bookFrame(look?.box ?? null, sheets);
     // 记号照窗的大小:窗越小(放得越大)线越细,铺到屏幕上一样粗
@@ -531,7 +564,7 @@ export const book: Kit = {
       const h = y2 - y1;
       sk.push({ type: 'rectangle', id: `cover-${text}`, label: `盖住的:${text}`, x: r1(x1 - h * 0.25), y: r1(y1 - h * 0.2), width: r1(x2 - x1 + h * 0.5), height: r1(h * 1.4), strokeColor: '#d9c9a3', strokeWidth: Math.max(1, u * 0.6), backgroundColor: '#f1e6c8', fillStyle: 'solid', roughness: 0, roundness: { type: 3 }, animateDuration: 150 });
     }
-    return { skeletons: sk, groups: [], turns: [], frame, book: { src: p['书'] ?? '', pages, aspect: a, gap: BOOK_GAP } };
+    return { skeletons: sk, groups: [], turns: [], frame, book: { src: p['书'] ?? '', pages, aspect: a, gap: cut > 0 ? 0 : BOOK_GAP } };
   },
   read(p, state) {
     const marks = (state.marks ?? []).filter((s) => s.length);
@@ -539,7 +572,7 @@ export const book: Kit = {
     const looked = picked.length ? `点开看了笔顺:${picked.map((w) => `「${w}」`).join('')}` : '';
     if (!marks.length) return looked || '还没画';
     const a = state.aspect && state.aspect > 0 ? state.aspect : BOOK_ASPECT;
-    const sheets = bookSheets(bookPages(p['页']).map((n) => ({ n })), a);
+    const sheets = bookSheets(bookPages(p['页']).map((n) => ({ n })), a, Number(p['裁']) || 0);
     // 画在哪一页的哪一截(上、中、下):具体圈住了什么看图
     const where = (y: number): string => {
       const sh = sheets.find((s) => y >= s.top && y <= s.top + s.height + BOOK_GAP) ?? sheets[sheets.length - 1];

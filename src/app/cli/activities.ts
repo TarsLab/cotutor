@@ -5,20 +5,26 @@
  */
 import { existsSync } from 'node:fs';
 import { readFile, readdir, mkdir, writeFile, lstat, unlink } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import { lintActivity, type ActivityIssue } from '../../runtime/activity.ts';
 import type { Activity } from '../../schema/index.ts';
 import { PACKAGE_AGENTS_DIR, PACKAGE_VERSION } from './skeleton.ts';
 import { lineDiff, readManifest, sha256, writeManifest, type ShippedManifest, type TutorState } from './tutors.ts';
 import { UsageError } from '../workspace.ts';
 import { workspaceGradePack } from './grades.ts';
-import { ACTIVITIES_DIR, ACTIVITY_RENAMES, EXAMPLES_SUFFIX, activityFile, activityRunFor, listActivities, type ActivityRef } from '../../runtime/activities.ts';
+import { ACTIVITIES_DIR, ACTIVITY_RENAMES, DICTATION_NAME, EXAMPLES_SUFFIX, activityFile, activityRunFor, dictationFile, listActivities, listDictations, type ActivityRef } from '../../runtime/activities.ts';
 
 // 读的那一半在 src/runtime/activities.ts;照旧从这里转出
 export { ACTIVITIES_DIR, EXAMPLES_SUFFIX, activityFile, activityRunFor, listActivities, type ActivityRef };
 
-/** 出厂的 activity 与它们的例子文件 */
-export const shippedActivities = async (root?: string): Promise<ActivityRef[]> => listActivities(root ? (await workspaceGradePack(root)).agentsDir : PACKAGE_AGENTS_DIR, undefined, { examples: true });
+/** 出厂的 activity 与它们的例子文件,还有老师家里的听写.md(不是 activity,同一套出厂、升级) */
+export const shippedActivities = async (root?: string): Promise<ActivityRef[]> => {
+  const dir = root ? (await workspaceGradePack(root)).agentsDir : PACKAGE_AGENTS_DIR;
+  return [...(await listActivities(dir, undefined, { examples: true })), ...(await listDictations(dir))];
+};
+
+/** 出厂件在 workspace 里的那份 */
+const refFile = (root: string, a: ActivityRef): string => (a.home ? dictationFile(root, a.tutor) : activityFile(root, a.tutor, a.name));
 
 const keyOf = (a: { tutor: string; name: string }): string => `${a.tutor}/${a.name}`;
 
@@ -31,7 +37,7 @@ export interface ActivityStatus {
 
 async function readState(root: string, a: ActivityRef, manifest: ShippedManifest): Promise<ActivityStatus> {
   const key = keyOf(a);
-  const file = activityFile(root, a.tutor, a.name);
+  const file = refFile(root, a);
   if (!(await lstat(file).catch(() => null))) return { key, state: 'missing', file };
   let text: string;
   try {
@@ -52,7 +58,7 @@ export async function activityStatuses(root: string): Promise<ActivityStatus[]> 
 }
 
 async function installOne(root: string, a: ActivityRef, manifest: ShippedManifest): Promise<void> {
-  const file = activityFile(root, a.tutor, a.name);
+  const file = refFile(root, a);
   await mkdir(dirname(file), { recursive: true });
   const text = await readFile(a.file, 'utf8');
   await writeFile(file, text);
@@ -101,6 +107,25 @@ async function migrateRenames(root: string, manifest: ShippedManifest): Promise<
   return out;
 }
 
+/**
+ * 听写不是 activity 了(2026-11-17):workspace 里 activities/听写.md 挪到老师的家 agents/<老师>/听写.md;键「老师/听写」不变,
+ * 出厂记录照旧(没改过的接着换新版,改过的照旧算自定义,内容不动)。新位置已经有了就不动旧的
+ */
+async function migrateDictations(root: string): Promise<string[]> {
+  const out: string[] = [];
+  const tutors = (await readdir(join(root, 'agents'), { withFileTypes: true }).catch(() => [])).filter((d) => d.isDirectory()).map((d) => d.name).sort();
+  for (const t of tutors) {
+    const src = activityFile(root, t, DICTATION_NAME);
+    const dst = dictationFile(root, t);
+    const text = await readFile(src, 'utf8').catch(() => null);
+    if (text === null || existsSync(dst)) continue;
+    await writeFile(dst, text);
+    await unlink(src);
+    out.push(`${t}/${DICTATION_NAME}`);
+  }
+  return out;
+}
+
 export interface ActivityInstallStep {
   item: string;
   action: 'created' | 'exists' | 'kept' | 'replaced';
@@ -113,12 +138,14 @@ export async function installActivities(root: string): Promise<ActivityInstallSt
   const manifest = await readManifest(root);
   // 改过名的先挪:不然 init 会在旧名旁边再拷一份新名的
   const renamed = await migrateRenames(root, manifest);
+  const moved = await migrateDictations(root);
   let touched = !manifest.teachingPack || renamed.length > 0;
   manifest.teachingPack ??= { grade: (await workspaceGradePack(root)).grade };
   for (const r of renamed) steps.push({ item: `agents/${r.key.replace('/', `/${ACTIVITIES_DIR}/`)}.md`, action: 'replaced', note: `改了名(原来叫「${r.from}」)` });
+  for (const k of moved) steps.push({ item: `agents/${k}.md`, action: 'replaced', note: '从 activities/ 挪过来(听写不是 activity 了)' });
   for (const a of await shippedActivities(root)) {
     const s = await readState(root, a, manifest);
-    const item = `agents/${a.tutor}/${ACTIVITIES_DIR}/${a.name}.md`;
+    const item = relative(root, refFile(root, a));
     if (s.state === 'missing' || s.state === 'broken') {
       await installOne(root, a, manifest);
       touched = true;
@@ -131,7 +158,7 @@ export async function installActivities(root: string): Promise<ActivityInstallSt
 
 export interface ActivityUpgradeStep {
   key: string;
-  action: 'upgraded' | 'latest' | 'kept-custom' | 'forced' | 'installed' | 'renamed';
+  action: 'upgraded' | 'latest' | 'kept-custom' | 'forced' | 'installed' | 'renamed' | 'moved';
   basedOn?: string;
   diff?: string[];
   /** renamed:原来的名字 */
@@ -143,6 +170,7 @@ export async function upgradeActivities(root: string, opts: { force?: string[] }
   const manifest = await readManifest(root);
   manifest.teachingPack ??= { grade: (await workspaceGradePack(root)).grade };
   const steps: ActivityUpgradeStep[] = (await migrateRenames(root, manifest)).map((r) => ({ key: r.key, action: 'renamed', from: r.from }));
+  for (const k of await migrateDictations(root)) steps.push({ key: k, action: 'moved' });
   for (const a of await shippedActivities(root)) {
     const s = await readState(root, a, manifest);
     if (s.state === 'latest') steps.push({ key: s.key, action: 'latest', basedOn: s.basedOn });
@@ -170,7 +198,7 @@ export async function restoreActivity(root: string, tutor: string, name: string)
   const ref = (await shippedActivities(root)).find((a) => a.tutor === tutor && a.name === name);
   if (!ref) throw new UsageError(`${tutor}/${name} 不是出厂的 activity,没有出厂那份可换`);
   const manifest = await readManifest(root);
-  const file = activityFile(root, tutor, name);
+  const file = refFile(root, ref);
   const cur = await readFile(file, 'utf8').catch(() => null);
   let bak: string | null = null;
   if (cur !== null && cur !== (await readFile(ref.file, 'utf8'))) {

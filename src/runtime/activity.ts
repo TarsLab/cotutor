@@ -5,7 +5,6 @@
 import {
   ACTIVITY_BASES,
   ACTIVITY_OLD_BOARD,
-  ACTIVITY_PAGES,
   ACTIVITY_LISTENS,
   ACTIVITY_REPLIES,
   ACTIVITY_PARAM_TYPES,
@@ -173,7 +172,6 @@ export function parseActivity(text: string): ParsedActivity {
     name: frontmatter.name ?? '',
     description: frontmatter.description ?? '',
     cards: cardsWritten.filter((c) => !(oldBoard && c === 'kit')),
-    ...(frontmatter.page?.trim() ? { page: frontmatter.page.trim() } : {}),
     ...(frontmatter.base?.trim() ? { base: frontmatter.base.trim() } : oldBoard ? { base: 'photo' } : {}),
     ...(frontmatter.listen?.trim() ? { listen: frontmatter.listen.trim() } : {}),
     ...(frontmatter.reply?.trim() ? { reply: frontmatter.reply.trim() } : {}),
@@ -268,15 +266,10 @@ export function checkActivity(a: Activity, opts: CheckOptions = {}): ActivityIss
 
   if (a.old?.length) issues.push({ level: 'note', text: `头上的「${a.old.join('」「')}」不用再写了:铺页的写 base: photo(孩子拍的作业)或 base: textbook(课本),老师在讲稿里写动作(cards/动作怎么写.md)${a.base ? `。现在照 base: ${a.base} 读` : ''}` });
   if (a.base !== undefined && !ACTIVITY_BASES[a.base]) fix(`头上 base 写的「${a.base}」不认得:只有 ${Object.keys(ACTIVITY_BASES).join('、')}`);
-  if (a.base !== undefined && a.page !== undefined) fix('头上的 base 和 page 只能写一个:page 不起老师,不铺页');
   if (a.listen !== undefined && !ACTIVITY_LISTENS[a.listen]) fix(`头上 listen 写的「${a.listen}」不认得:只有 ${Object.keys(ACTIVITY_LISTENS).join('、')}(不写 = 照老师的,缺省按住说)`);
-  if (a.listen !== undefined && a.page !== undefined) fix('头上写了 page(不起老师),listen 用不上');
   if (a.reply !== undefined && !ACTIVITY_REPLIES[a.reply]) fix(`头上 reply 写的「${a.reply}」不认得:只有 ${Object.keys(ACTIVITY_REPLIES).join('、')}(不写 = 脑先答)`);
-  if (a.reply !== undefined && a.page !== undefined) fix('头上写了 page(不起老师),reply 用不上');
-  if (a.page !== undefined && !ACTIVITY_PAGES[a.page]) fix(`头上 page 写的「${a.page}」不认得:只有 ${Object.keys(ACTIVITY_PAGES).join('、')}`);
-  if (a.page !== undefined && a.tutor) fix(`头上写了 page: ${a.page}(不起老师,进那一页),「## 老师怎么带」用不上:删掉那节,或删掉 page`, a.tutor.line);
-  else if (!a.tutor && a.page === undefined) issues.push({ level: 'note', text: '没有「## 老师怎么带」:这个 activity 不起老师' });
-  else if (a.tutor) {
+  if (!a.tutor) fix('没有「## 老师怎么带」:这一节是老师的系统提示,activity 都要有');
+  else {
     const rows = a.tutor.text.split('\n');
     const at = (i: number): number => a.tutor!.line + i;
     const open: number[] = [];

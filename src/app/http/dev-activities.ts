@@ -12,15 +12,13 @@ import { sha256 } from '../cli/tutors.ts';
 import type { Workspace } from '../../schema/index.ts';
 import { lintActivity, renderTutorSection, resolveParams, type ActivityIssue } from '../../runtime/activity.ts';
 import type { TutorButton } from '../../board/cards/index.ts';
-import { ACTIVITY_PAGES, ACTIVITY_SECTIONS, ACTIVITY_TOOLS, ACTIVITY_TOOL_SECTION_RE, BOARD_CARD_KINDS, LECTURE_ACTIVITY, type Activity } from '../../schema/index.ts';
+import { ACTIVITY_SECTIONS, ACTIVITY_TOOLS, ACTIVITY_TOOL_SECTION_RE, BOARD_CARD_KINDS, LECTURE_ACTIVITY, type Activity } from '../../schema/index.ts';
 import { readPublished } from '../../runtime/home/store.ts';
 
 export interface DevActivityRow {
   tutor: string;
   name: string;
   description: string;
-  /** 不起老师、进一页的(听写):那一页 */
-  page: string | null;
   state: ActivityStatus['state'];
   basedOn?: string;
   fixes: number;
@@ -84,7 +82,6 @@ export async function listDevActivities(ws: Workspace): Promise<DevActivityRow[]
       tutor: r.tutor,
       name: r.name,
       description: activity.description,
-      page: activity.page ? (ACTIVITY_PAGES[activity.page] ?? activity.page) : null,
       state: st.state,
       ...(st.basedOn ? { basedOn: st.basedOn } : {}),
       fixes: issues.filter((i) => i.level === 'fix').length,
@@ -166,7 +163,6 @@ export interface DevActivityCheck {
     params: { name: string; type: string; optional: boolean; default?: string; min?: number; max?: number }[];
     cards: string[];
     tools: { tool: string; slots: readonly string[] }[];
-    page: string | null;
   };
   sections: { title: string; reader: string; line: number }[];
   buttons: DevActivityButton[];
@@ -214,7 +210,6 @@ function summaryOf(a: Activity): DevActivityCheck['summary'] {
     params: a.params.map((x) => ({ name: x.name, type: x.type, optional: x.optional, ...(x.default !== undefined ? { default: x.default } : {}), ...(x.min !== undefined ? { min: x.min } : {}), ...(x.max !== undefined ? { max: x.max } : {}) })),
     cards: a.cards,
     tools: a.tools.map((t) => ({ tool: t.tool, slots: ACTIVITY_TOOLS[t.tool]?.slots ?? [] })),
-    page: a.page ? (ACTIVITY_PAGES[a.page] ?? a.page) : null,
   };
 }
 

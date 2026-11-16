@@ -246,8 +246,8 @@ export const SHIPPED_CARD_VOICES: Readonly<Record<string, string>> = {
 export const cardVoice = (tutors: Readonly<Record<string, { voice?: string }>>, tutor: string): string | undefined => tutors[tutor]?.voice ?? SHIPPED_CARD_VOICES[tutor];
 
 /**
- * 听写:拍照认词表用哪个模型。挑词的要求在听写 activity 文件「认字收到什么」;
- * 下面两份是出厂那节的原文,workspace 里没有听写 activity 文件时照它。回什么格式(一行一段 JSON)由应用填(src/scenes/photo-words/recognize.ts 的 FORMAT)。
+ * 听写:拍照认词表用哪个模型。挑词的要求在老师家里听写.md 的「认字收到什么」;
+ * 下面两份是出厂那节的原文,workspace 里没有听写.md 时照它。回什么格式(一行一段 JSON)由应用填(src/scenes/photo-words/recognize.ts 的 FORMAT)。
  */
 export const DICTATION_PROMPT_DEFAULT = [
   '这是一张照片:小学语文课本的一页(课文、写字、词语表、读读写写、识字),或者老师发的听写单。按照片中的内容和难度识别,不推断孩子年级。',
@@ -275,7 +275,7 @@ export const DICTATION_PROMPT_EN_DEFAULT = [
 ];
 export const DICTATION_DEFAULT = { model: 'qwen3.8-max' };
 export const DictationSchema = z.object({
-  model: z.string().min(1).default(DICTATION_DEFAULT.model).describe('拍照认词表用的百炼视觉模型(兼容接口,流式);挑词的要求在听写 activity 文件「认字收到什么」'),
+  model: z.string().min(1).default(DICTATION_DEFAULT.model).describe('拍照认词表用的百炼视觉模型(兼容接口,流式);挑词的要求在老师家里听写.md 的「认字收到什么」'),
 });
 export type DictationConfig = z.infer<typeof DictationSchema>;
 
@@ -310,7 +310,7 @@ export const CotutorConfigSchema = z
       .object({ port: z.number().int().min(1).max(65535).default(8477) })
       .optional()
       .describe('给老师换样子(figshot pick):它在这台电脑的哪个端口(缺省 8477)。配了孩子端首页多一张「给老师们换个样子」,figshot 没开着就不出现;不配就没有这张卡'),
-    dictation: DictationSchema.default(DICTATION_DEFAULT).describe('听写(/dictation):拍照认词表用的模型(改了不用重起服务);挑词的要求在听写 activity 文件「认字收到什么」'),
+    dictation: DictationSchema.default(DICTATION_DEFAULT).describe('听写(/dictation):拍照认词表用的模型(改了不用重起服务);挑词的要求在老师家里听写.md 的「认字收到什么」'),
     live: LiveSchema.default(LIVE_DEFAULT).describe('实时老师:有脸的老师都由 realtime 模型开口、脑在后面写板书(讲稿不配音、嘴照念);voices 挑嘴的音色;要百炼按量 key 与业务空间 id'),
   })
   .superRefine((c, ctx) => {

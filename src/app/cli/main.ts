@@ -604,7 +604,7 @@ export async function main(argv: string[]): Promise<void> {
         else {
           for (const s of layoutSteps) process.stdout.write(`${s.action === 'kept' ? '!' : '✓'} ${s.item.padEnd(24)} ${s.note ?? ''}\n`);
           if (link.action !== 'exists') process.stdout.write(`${link.action === 'kept' ? '!' : '✓'} ${link.item.padEnd(24)} ${link.note ?? ''}\n`);
-          const word: Record<string, string> = { upgraded: '已换新', latest: '已是最新', 'kept-custom': '自定义,保留', forced: '已覆盖(原文 .bak)', installed: '补上了', retired: '不再出厂,删了', renamed: '改了名' };
+          const word: Record<string, string> = { upgraded: '已换新', latest: '已是最新', 'kept-custom': '自定义,保留', forced: '已覆盖(原文 .bak)', installed: '补上了', retired: '不再出厂,删了', renamed: '改了名', moved: '从 activities/ 挪到老师的家里(听写不是 activity 了)' };
           for (const s of skillSteps) process.stdout.write(`${s.action === 'kept-custom' ? '!' : '✓'} skill ${s.name.padEnd(18)} ${word[s.action]}${s.basedOn && s.action !== 'latest' ? `(基于 ${s.basedOn})` : ''}${s.machine ? '(机器件)' : ''}\n`);
           for (const s of themeSteps) process.stdout.write(`${s.action === 'kept-custom' ? '!' : '✓'} theme ${s.name.padEnd(18)} ${word[s.action]}${s.basedOn && s.action !== 'latest' ? `(基于 ${s.basedOn})` : ''}${s.action === 'kept-custom' ? '(themes/ 里改过的主题不动)' : ''}\n`);
           for (const f of retired) process.stdout.write(`! ${f.padEnd(24)} 不再读了(一科通用的做法并进了每个 activity);改过的话,把要的挪进 activity 的「老师怎么带」,再删掉它\n`);

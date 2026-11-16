@@ -71,12 +71,12 @@ const sec = (cards: BoardCard[]): BoardSection => ({ heading: null, lines: cards
   const file = (head: string): string => `---\nname: 试\ndescription: 试\n${head}\n---\n\n## 老师怎么带\n\n你是老师。\n第一句: 好。\n收: 好。\n`;
   const issues = (head: string, level = 'fix'): string[] => checkActivity(parseActivity(file(head)).activity).filter((i) => i.level === level).map((i) => i.text);
   check('base: textbook、base: photo 读得出', parseActivity(file('base: textbook')).activity.base === 'textbook' && parseActivity(file('base: photo')).activity.base === 'photo' && !issues('base: textbook').length && !issues('base: photo').length);
-  check('base 写了不认得的、和 page 一起写:都要改', issues('base: 课本').some((t) => t.includes('不认得')) && issues('base: photo\npage: dictation').some((t) => t.includes('只能写一个')));
+  check('base 写了不认得的:要改', issues('base: 课本').some((t) => t.includes('不认得')));
   const old = parseActivity(file('board: page\ncards: kit')).activity;
   check('旧的头还认:board: page 没写 base 的当 base: photo,cards 里的 kit 丢掉;check 提一句(不算要改)', old.base === 'photo' && !old.cards.includes('kit') && !issues('board: page\ncards: kit').length && issues('board: page\ncards: kit', 'note').some((t) => t.includes('不用再写了') && t.includes('base: photo')), JSON.stringify(old));
   check('旧的 board: page + base: textbook:照 base: textbook', parseActivity(file('board: page\nbase: textbook')).activity.base === 'textbook');
-  check('reply: mouth 读得出;写错、和 page 一起写:要改', parseActivity(file('base: photo\nreply: mouth')).activity.reply === 'mouth' && !issues('reply: mouth').length && issues('reply: 嘴').some((t) => t.includes('不认得')) && issues('reply: mouth\npage: dictation').some((t) => t.includes('reply 用不上')));
-  check('listen: open 读得出;写错、和 page 一起写:要改', parseActivity(file('base: photo\nlisten: open')).activity.listen === 'open' && !issues('listen: open').length && issues('listen: 一直').some((t) => t.includes('不认得')) && issues('listen: open\npage: dictation').some((t) => t.includes('listen 用不上')));
+  check('reply: mouth 读得出;写错要改', parseActivity(file('base: photo\nreply: mouth')).activity.reply === 'mouth' && !issues('reply: mouth').length && issues('reply: 嘴').some((t) => t.includes('不认得')));
+  check('listen: open 读得出;写错要改', parseActivity(file('base: photo\nlisten: open')).activity.listen === 'open' && !issues('listen: open').length && issues('listen: 一直').some((t) => t.includes('不认得')));
 }
 
 // ---- 全流程 ----

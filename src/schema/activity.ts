@@ -2,7 +2,7 @@
  * activity 文件:孩子从首页一个按钮进去的一种做法。一个 activity 一个文件,归一位老师,
  * 放在老师的家 `agents/<老师>/activities/<名>.md`(仓里在 grades/grade-<n>/ 下同一个相对位置,init 拷进去,hash 记 shipped.json)。
  *
- * 头上平铺 `name` / `description` / `cards`(这个 activity 要用的卡,空格隔开)/ `base`(铺哪种页)/ `listen`(一直听)/ `reply`(谁先答)/ `page`(不起老师、进一页);正文按 `## ` 节分读者,标题就是读者:
+ * 头上平铺 `name` / `description` / `cards`(这个 activity 要用的卡,空格隔开)/ `base`(铺哪种页)/ `listen`(一直听)/ `reply`(谁先答);正文按 `## ` 节分读者,标题就是读者:
  *   ## 家长填的       ```参数    一行一个:`名: 类型[,可空][,缺省 X][,A 到 B] —— 说明`
  *   ## 老师怎么带     给有脸的老师;参数不插值,只用 `{{有 名}}` … `{{/有}}` 裁段
  *   ## <工具人>收到什么  ```<工具人> 一段模板,`{{插槽}}` 由应用填;```<工具人>不要 可选
@@ -27,17 +27,8 @@ export function fillSlots(template: string, values: Readonly<Record<string, stri
 
 /** 工具人与它认得的插槽(都要在模板里出现) */
 export const ACTIVITY_TOOLS: Readonly<Record<string, { slots: readonly string[] }>> = {
-  /** 听写的拍照认词(src/scenes/photo-words/recognize.ts):格式 = 回什么格式,应用接(FORMAT / FORMAT_EN) */
+  /** 照片上认字(src/scenes/photo-words/recognize.ts;照片页、听写的拍照认词):格式 = 回什么格式,应用接(FORMAT / FORMAT_EN) */
   认字: { slots: ['格式'] },
-};
-
-/**
- * 不起老师的会话、按钮进一页的 activity(头上 `page:`):名字、音色、牌还是那位老师的。
- * dictation = 中文听写页,dictation-en = 英文单词听写页(四线三格)
- */
-export const ACTIVITY_PAGES: Readonly<Record<string, string>> = {
-  dictation: '中文听写页 /dictation',
-  'dictation-en': '英文单词听写页 /dictation?lang=en',
 };
 
 /**
@@ -118,8 +109,6 @@ export const ActivitySchema = z.object({
   /** 头上 `cards:` 写的卡(原文,检查时对注册表) */
   cards: z.array(z.string()),
   params: z.array(ActivityParamSchema),
-  /** 头上的 `page:`:不起老师、进这一页(见 ACTIVITY_PAGES);没写 = 起老师 */
-  page: z.string().optional(),
   /** 头上的 `base:`:铺哪种页(见 ACTIVITY_BASES);没写 = 不铺页(卡片流) */
   base: z.string().optional(),
   /** 头上的 `listen:`:孩子怎么说话(见 ACTIVITY_LISTENS);没写 = 照老师的 */
@@ -128,7 +117,7 @@ export const ActivitySchema = z.object({
   reply: z.string().optional(),
   /** 头上还写着旧的东西(board: page、cards 里的 kit):照新的读了,check 提一句 */
   old: z.array(z.string()).optional(),
-  /** 「老师怎么带」那节的原文(没剥注释、没裁);没有这节就是 null(这个 activity 不起老师,如听写) */
+  /** 「老师怎么带」那节的原文(没剥注释、没裁);没有这节就是 null(要改:activity 都起老师。听写 2026-11-17 起不是 activity,读的也是这个形状,只用认字那节) */
   tutor: z.object({ text: z.string(), line: z.number().int() }).nullable(),
   tools: z.array(ActivityToolSchema),
 });

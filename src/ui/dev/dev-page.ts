@@ -769,7 +769,7 @@ ${pageDomJs(4000)}
       if (!seen.has(id)) { seen.add(id); list.push({ id, text: m.text }); }
     }
     // 新话题都从一个 activity 开始(2026-11-16 起没有自由话题):每个 activity 一行「＋ 新话题:<名>」
-    const acts = (state.acts || []).filter((a) => a.tutor === state.tutor && !a.page);
+    const acts = (state.acts || []).filter((a) => a.tutor === state.tutor);
     $('#thread-pick').replaceChildren(
       ...(list.length ? [h('option', { value: '' }, '接着当前话题')] : []),
       ...acts.map((a) => h('option', { value: 'act:' + a.name }, '＋ 新话题:' + a.name)),
@@ -1677,7 +1677,7 @@ ${pageDomJs(4000)}
     const item = (r) => {
       const on = sameDoc(act.cur, r);
       const tag = r.fixes ? [r.fixes + ' 处要改', 'err'] : STATE_TAG[r.state] || [r.state, ''];
-      const sub = r.page ? '不起老师 · 进' + r.page.split(' ')[0] : ['首页 ' + r.buttons, r.examples ? '例子 ' + r.examples : null].filter(Boolean).join(' · ');
+      const sub = ['首页 ' + r.buttons, r.examples ? '例子 ' + r.examples : null].filter(Boolean).join(' · ');
       return h('button', { type: 'button', class: 'ai' + (on ? ' on' : ''), title: r.description, on: { click: () => openActivity(r.tutor, r.name, false, r.kind) } },
         h('span', { class: 'tx' }, h('b', {}, r.name), h('small', {}, sub)), h('span', { class: 'st ' + tag[1] }, tag[0]));
     };
@@ -1803,7 +1803,7 @@ ${pageDomJs(4000)}
     return [
       h('div', { class: 'srow' }, fx.length ? h('span', { class: 'st err' }, fx.length + ' 处要改') : h('span', { class: 'st ok' }, '都对得上'), nt.length ? h('span', { class: 'st warn' }, nt.length + ' 条提醒') : null, h('span', { class: 'note' }, r.issues.length ? '点一条跳到那一行' : '边改边查,不落盘')),
       r.issues.length ? h('div', { class: 'ilist' }, ...r.issues.map((i) => h('button', { type: 'button', class: 'iss' + (i.level === 'fix' ? ' fix' : ''), on: { click: () => { if (i.line) jumpTo(i.line); } } }, h('b', { class: 'num' }, i.line ? '第 ' + i.line + ' 行' : '整份'), h('span', {}, i.text)))) : null,
-      h('div', { class: 'kv2' }, ...kv('家长填的', s.params.map(param).join(' · ')), ...kv('卡', s.cards.join(' ')), ...kv('工具人', s.tools.map((t) => t.tool + (t.slots.length ? '(' + t.slots.join(' ') + ')' : '')).join(' · ')), ...(s.page ? kv('不起老师', '进' + s.page) : [])),
+      h('div', { class: 'kv2' }, ...kv('家长填的', s.params.map(param).join(' · ')), ...kv('卡', s.cards.join(' ')), ...kv('工具人', s.tools.map((t) => t.tool + (t.slots.length ? '(' + t.slots.join(' ') + ')' : '')).join(' · '))),
       rule(),
       h('h3', {}, '首页上用到它的'),
       ...(r.buttons.length ? r.buttons.map((b) => h('div', { class: 'hb' }, h('span', { class: 'tx' }, h('b', {}, (b.kind === 'lecture' ? '小课堂 · ' : '') + b.label), h('small', {}, b.detail)), h('span', { class: 'st ' + (b.ok ? 'ok' : 'err') }, b.ok ? '对得上' : '孩子端不出'))) : [h('p', { class: 'note' }, '已发布的首页上没有按钮用它。')]),
@@ -1833,7 +1833,7 @@ ${pageDomJs(4000)}
           h('input', { type: 'text', value: cur[p.name] || '', placeholder: p.default !== undefined ? '缺省 ' + p.default : p.optional ? '可空' : '要填', on: { change: (e) => { act.params = Object.assign({}, previewParams(), { [p.name]: e.target.value.trim() }); if (!act.params[p.name]) delete act.params[p.name]; act.pick = 'own'; runCheck(); } } })))));
       }
     }
-    if (pv.text === null) out.push(h('p', { class: 'note' }, s.page ? '不起老师:孩子点了进' + s.page + '。' : '没有「老师怎么带」这一节,这个 activity 不起老师。'));
+    if (pv.text === null) out.push(h('p', { class: 'note' }, '没有「老师怎么带」这一节:要写上,activity 都起老师。'));
     else {
       out.push(h('div', { class: 'chips' },
         h('span', { class: 'tag' }, '老师那节 ' + pv.chars.toLocaleString() + ' 字'),

@@ -117,6 +117,29 @@ try {
     check('再 upgrade 一次不再挪', !(await upgradeActivities(old)).some((s) => s.action === 'renamed'));
   }
 
+  // 2026-11-17 听写不是 activity 了:老 workspace 里 activities/听写.md 挪到老师的家 agents/<老师>/听写.md;没改过的换新,改过的内容不动
+  {
+    const old = join(testHome, 'dictation-moved');
+    await initWorkspace({ slug: 'kid', dir: old, grade: 2 });
+    const home = (t: string): string => join(old, 'agents', t, '听写.md');
+    const inActs = (t: string): string => join(old, 'agents', t, 'activities', '听写.md');
+    const om = await readManifest(old);
+    const oldZh = readFileSync(home('chinese-tutor'), 'utf8').replace('lang: zh', 'page: dictation');
+    writeFileSync(inActs('chinese-tutor'), oldZh);
+    rmSync(home('chinese-tutor'));
+    om.activities!['chinese-tutor/听写'] = { hash: sha256(oldZh), version: '0.1.0' };
+    const mineEn = readFileSync(home('english-tutor'), 'utf8').replace('lang: en', 'page: dictation-en') + '\n家长加的一句\n';
+    writeFileSync(inActs('english-tutor'), mineEn);
+    rmSync(home('english-tutor'));
+    om.activities!['english-tutor/听写'] = { hash: sha256('不一样'), version: '0.1.0' };
+    await writeManifest(old, om);
+    const steps = await upgradeActivities(old);
+    const shippedZh = readFileSync((await shippedActivities(old)).find((r) => r.tutor === 'chinese-tutor' && r.home)!.file, 'utf8');
+    check('upgrade 把 activities/听写.md 挪到老师的家里,activities/ 下不留', steps.filter((s) => s.action === 'moved').map((s) => s.key).sort().join() === 'chinese-tutor/听写,english-tutor/听写' && !existsSync(inActs('chinese-tutor')) && !existsSync(inActs('english-tutor')), JSON.stringify(steps.filter((s) => s.action === 'moved')));
+    check('没改过的换成新版(头上 lang),改过的内容不动、算自定义', readFileSync(home('chinese-tutor'), 'utf8') === shippedZh && readFileSync(home('english-tutor'), 'utf8') === mineEn && steps.find((s) => s.key === 'english-tutor/听写' && s.action !== 'moved')?.action === 'kept-custom');
+    check('再 upgrade 一次不再挪', !(await upgradeActivities(old)).some((s) => s.action === 'moved'));
+  }
+
   const { readLecture } = await import('../src/runtime/lecture.ts');
   const { default: sample } = await import('../grades/grade-2/examples/2026-10-27-pingjunfen.ts');
   const sampleDir = join(source.dir, 'examples', sample.id);

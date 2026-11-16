@@ -16,6 +16,21 @@ export interface ActivityRef {
   name: string;
   /** 文件的绝对路径 */
   file: string;
+  /** 在老师的家里(agents/<老师>/<名>.md),不在 activities/ 下:听写(不是 activity,只跟着出厂、升级) */
+  home?: true;
+}
+
+/**
+ * 听写(2026-11-17《多模态教学harness-开发计划》阶段 5 任务 4,Jack 定的):小测验,不经老师,不是 activity。
+ * 老师的家里一份 `听写.md`,应用只读它的「认字收到什么」(拍照认词;头上 `lang: en` 是英文单词听写)。以前在 activities/ 下,refresh 挪过来
+ */
+export const DICTATION_NAME = '听写';
+export const dictationFile = (root: string, tutor: string): string => join(root, 'agents', tutor, `${DICTATION_NAME}.md`);
+
+/** 某个根下(包的 agents/,或 workspace 的 agents/)每位老师家里的听写.md */
+export async function listDictations(agentsDir: string): Promise<ActivityRef[]> {
+  const tutors = (await readdir(agentsDir, { withFileTypes: true }).catch(() => [])).filter((d) => d.isDirectory()).map((d) => d.name).sort();
+  return tutors.filter((t) => existsSync(join(agentsDir, t, `${DICTATION_NAME}.md`))).map((t) => ({ tutor: t, name: DICTATION_NAME, file: join(agentsDir, t, `${DICTATION_NAME}.md`), home: true as const }));
 }
 
 /** 例子文件(cotutor activity eval 用):和 activity 放在一起,`<名>.例子.md`;跟着 activity 一起出厂,检查时不当 activity */

@@ -33,7 +33,8 @@ import { synthesize } from '../../media/tts.ts';
 import { judgeChar, type CharJudge, type InkPoint } from '../../scenes/dictation/match.ts';
 import { photoPromptFrom, recognizePhoto, type Recognize } from './recognize.ts';
 import { readFile } from 'node:fs/promises';
-import { listActivities } from '../../runtime/activities.ts';
+import { listDictations } from '../../runtime/activities.ts';
+import { parseFrontmatter } from '../../shared/frontmatter.ts';
 import { parseActivity } from '../../runtime/activity.ts';
 import { DICTATION_PAGE } from '../../ui/dictation/page.ts';
 import { DICTATION_EN_PAGE } from '../../ui/dictation/en-page.ts';
@@ -104,7 +105,7 @@ export function dictationDeps(ctx: AppContext): DictationDeps {
     async medians(ch) {
       return (await tianzigeData(ch))?.medians ?? null;
     },
-    // 每次现读(家长改了要求不用重起服务):听写 activity 文件「认字收到什么」;没有这份文件照出厂的要求
+    // 每次现读(家长改了要求不用重起服务):老师家里听写.md 的「认字收到什么」;没有这份文件照出厂的要求
     recognize: async (image, onProgress, lang) => {
       const tpl = await dictationTemplate(ws().root, lang ?? 'zh');
       return recognizePhoto(image, onProgress, { model: ws().config.dictation.model, lang, ...(tpl ? { text: photoPromptFrom(tpl, lang) } : {}) });
@@ -113,14 +114,16 @@ export function dictationDeps(ctx: AppContext): DictationDeps {
 }
 
 /**
- * 认词的要求:workspace 里头上写着这一页(page: dictation / dictation-en)、有「认字收到什么」的那份听写 activity(按老师排第一份);
- * 没有 → null(照出厂的要求)
+ * 认词的要求:老师家里的听写.md(agents/<老师>/听写.md,不是 activity)里「认字收到什么」那段;头上 `lang: en` 的是英文单词听写
+ * (2026-11-17 以前在 activities/ 下、头上写 page: dictation-en,refresh 挪过来,改过的头照旧认)。按老师排第一份;没有 → null(照出厂的要求)
  */
 export async function dictationTemplate(root: string, lang: DictationLang): Promise<string | null> {
-  const page = lang === 'en' ? 'dictation-en' : 'dictation';
-  for (const r of await listActivities(join(root, 'agents'))) {
-    const a = parseActivity(await readFile(r.file, 'utf8').catch(() => '')).activity;
-    const t = a.page === page ? a.tools.find((x) => x.tool === '认字') : undefined;
+  for (const r of await listDictations(join(root, 'agents'))) {
+    const text = await readFile(r.file, 'utf8').catch(() => '');
+    const fm = parseFrontmatter(text).frontmatter;
+    const en = fm.lang?.trim() === 'en' || fm.page?.trim() === 'dictation-en';
+    if (en !== (lang === 'en')) continue;
+    const t = parseActivity(text).activity.tools.find((x) => x.tool === '认字');
     if (t) return t.prompt;
   }
   return null;

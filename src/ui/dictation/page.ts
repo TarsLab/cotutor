@@ -614,7 +614,7 @@ ${BTN_JS}
     P.frame.style.transform = 'translate(' + Math.round(tx) + 'px,' + Math.round(ty) + 'px) scale(' + z.toFixed(3) + ')';
     P.frame.style.setProperty('--z', z.toFixed(3));
   };
-  /** 默认选不选:模型说了算(听写 activity 的认词要求里写怎么挑) */
+  /** 默认选不选:模型说了算(老师家里听写.md 的认词要求里写怎么挑) */
   var defaultOn = function (it) { return typeof it.pick === 'boolean' ? it.pick : it.kind !== 'read' && it.kind !== 'other'; };
   var keyOf = function (k) { return 'i' + k; };
   var drawBoxes = function () {

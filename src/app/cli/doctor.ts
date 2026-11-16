@@ -305,7 +305,7 @@ export async function doctorWorkspace(
         const { activityStatuses, checkActivities } = await import('./activities.ts');
         const states = new Map((teachingPack ? await activityStatuses(root) : []).map((s) => [s.key, s]));
         const label: Record<string, string> = { latest: '出厂件,最新', upgradable: '出厂件,包已更新', custom: '自定义', untracked: '自定义(没有出厂记录)', missing: '缺', broken: '读不到' };
-        for (const s of states.values()) if (s.state === 'missing') push({ name: `activity.${s.key}`, ok: false, required: false, detail: `agents/${s.key.replace('/', '/activities/')}.md 不在`, fix: 'cotutor init 补拷', cmd: initCmd() });
+        for (const s of states.values()) if (s.state === 'missing') push({ name: `activity.${s.key}`, ok: false, required: false, detail: `${relative(root, s.file)} 不在`, fix: 'cotutor init 补拷', cmd: initCmd() });
         // 学科色:手改 cotutor.json 写的颜色,新话题气泡的白字要压得住
         for (const [name, t] of Object.entries(ws.config.tutors)) {
           if (!t.color) continue;

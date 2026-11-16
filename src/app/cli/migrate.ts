@@ -90,7 +90,7 @@ export async function configGaps(raw: unknown, agentsDir?: string): Promise<Conf
 
 /** 补缺时会整段补上的配置段:出厂模板写了、写进文件才好改的 */
 const SECTIONS = ['dictation'] as const;
-const SECTION_WHAT: Record<(typeof SECTIONS)[number], string> = { dictation: '听写拍照认词用的模型,补上就能在文件里改(挑词的要求在听写 activity 文件)' };
+const SECTION_WHAT: Record<(typeof SECTIONS)[number], string> = { dictation: '听写拍照认词用的模型,补上就能在文件里改(挑词的要求在老师家里的听写.md)' };
 
 /** 不再用的出厂段:老模板写进去的,应用已经不读(契约照样放过,只是留着让人以为还管用) */
 const RETIRED = ['tts'] as const;

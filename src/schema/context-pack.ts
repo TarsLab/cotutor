@@ -72,13 +72,15 @@ export const ContextPackSchema = z.object({
   /**
    * 这一轮走实时:嘴(realtime 模型)已经替老师接住了孩子,讲稿交给嘴照念、不配音。caught = 嘴接住时说的那句;cut = 上一轮的讲稿念到第几句被孩子打断(1 起;0 = 一句都没念到就被打断了;没打断不写)。
    * echo = 你请孩子说的那几拍(讲稿的 [[请 说 …]]),一拍一行(应用按转写记,src/board/echo.ts);
-   * app = 这一轮不是孩子说的:quiet = 你请他说,他连着两拍没开口;still = 页上孩子动了手以后一直没出声,应用替他叫你一次;pen = 孩子在页上写完停了笔,应用替他交给你(src/runtime/live/pen.ts)。
+   * mouth = 嘴先答的 activity 里,上一轮以后嘴替你接的那几句(孩子说的、嘴说的,一句一行);
+   * app = 这一轮不是孩子说的:quiet = 你请他说,他没开口(连着两拍,或最后那句请他说的);still = 页上孩子动了手以后一直没出声,应用替他叫你一次;pen = 孩子在页上写完停了笔,应用替他交给你(src/runtime/live/pen.ts)。
    */
   live: z
     .object({
       caught: z.string().optional(),
       cut: z.number().int().nonnegative().optional(),
       echo: z.array(z.string()).optional(),
+      mouth: z.array(z.string()).optional(),
       app: z.enum(['quiet', 'still', 'pen']).optional(),
     })
     .optional(),

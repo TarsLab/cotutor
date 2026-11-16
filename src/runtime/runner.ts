@@ -112,6 +112,8 @@ export interface SendStarted {
   job: string;
   /** 这条消息所在的话题 */
   thread: string;
+  /** 这节课的 activity 头上写了 reply: mouth:孩子作答以后嘴先答(实时那条线照它走,src/runtime/live/call.ts) */
+  reply?: 'mouth';
   plan: RunPlan;
   /** 老师说完(进程退出、索引写好)后 resolve */
   done: Promise<ConversationIndex>;
@@ -732,7 +734,7 @@ export class Runner {
     const lectureWarn = input.lecture && !lecture ? [`小课堂:${input.lecture.bundle} 读不出来(bundles/ 与 lectures/ 下都没有能放的),老师没拿到课的内容`] : [];
     if (input.live) {
       const l = input.live;
-      pack.live = { ...(l.caught ? { caught: l.caught } : {}), ...(l.cut !== undefined ? { cut: l.cut } : {}), ...(l.echo?.length ? { echo: l.echo } : {}), ...(l.app ? { app: l.app } : {}) };
+      pack.live = { ...(l.caught ? { caught: l.caught } : {}), ...(l.cut !== undefined ? { cut: l.cut } : {}), ...(l.echo?.length ? { echo: l.echo } : {}), ...(l.mouth?.length ? { mouth: l.mouth } : {}), ...(l.app ? { app: l.app } : {}) };
     }
     const prompt = buildContextPack(pack, text, policy.contextPack);
     const req: BrainRequest = { agent: tutor, prompt, systemBody, runtime: input.runtime ?? t.runtime, effort: policy.effort, tools, readDirs: readDirsOf(ws), session, ...(compact ? { compact: { digest: threadDigest(index.messages.filter((_, i) => known[i] === thread)) } } : {}), ...(images.length ? { images } : {}), ...(slate?.shot ? { boards: [slate.shot] } : {}) };
@@ -756,7 +758,7 @@ export class Runner {
     active.done = this.spawn(ws, tutor, date, job, thread, req, plan, runPolicy, active).finally(() => {
       if (this.active.get(tutor) === active) this.active.delete(tutor);
     });
-    return { tutor, date, job, thread, plan, done: active.done };
+    return { tutor, date, job, thread, ...(actDef?.reply === 'mouth' ? { reply: 'mouth' as const } : {}), plan, done: active.done };
   }
 
   /**

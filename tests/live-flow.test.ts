@@ -747,6 +747,62 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   check('请他说的是最后一句:他说了交给老师(带这一拍,话就是他说的)', okLast && pl.includes('      - "自己说 duck:说了「duck」') && pl.trimEnd().endsWith('duck'), pl.slice(0, 900) + JSON.stringify([said(cc), c.msgs.map((m) => m.t)]));
   c.ws.send(JSON.stringify({ t: 'bye' }));
   await until(() => c.closed !== null);
+
+  // D:嘴先答(activity 头上 reply: mouth):最后那句请他说的,他答了嘴先接——没说中提示一下、接着等(不交脑);说中了嘴接一句、交脑;
+  // 孩子眼前那块图跟着他那段声音交给嘴;嘴替脑接的那几句下一轮带给脑(live.mouth)
+  await idle();
+  writeFileSync(join(wsRoot, 'agents', 'chinese-tutor', 'activities', '嘴先答.md'), ['---', 'name: 嘴先答', 'description: 测试用', 'reply: mouth', '---', '', '## 老师怎么带', '', '你是老师。', '', '第一句: 问。', '', '收: 停。', ''].join('\n'));
+  await (await ctx.runner.send('chinese-tutor', { from: 'kid', text: '开始', newThread: true, activity: { name: '嘴先答', params: {} }, live: {} })).done;
+  const nD = fake.conns.length;
+  const dk = await connect('chinese-tutor', '?listen=open');
+  await until(() => has(dk, (m) => m.t === 'ready'));
+  const cd = fake.conns[nD];
+  const instr = (): string[] => cd.responses.map((r) => r?.instructions ?? '');
+  dk.ws.send(JSON.stringify({ t: 'send', body: { text: '最后请说', device: 'tablet-landscape' } }));
+  await until(() => said(cd).some((x) => x.includes('鸭子英文怎么说')), 15000);
+  await idle();
+  await until(() => dk.bins >= cd.responses.length, 3000);
+  await sleep(200);
+  // 窗停下来舞台交的图(嘴先答时跟着孩子那段声音交给嘴)
+  const tinyJpeg = Buffer.from([0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, 0, 10, 0, 10, 0x03, 1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1, 0xff, 0xd9]);
+  dk.ws.send(JSON.stringify({ t: 'board', body: { k: 'shot', thread: 'x', base: '作业', box: [0, 0, 1000, 600], image: `data:image/jpeg;base64,${tinyJpeg.toString('base64')}` } }));
+  await sleep(200);
+  const nD1 = turns(dk).length;
+  dk.ws.send(JSON.stringify({ t: 'ctx', body: { device: 'tablet-landscape' } }));
+  fake.kidTexts = ['dog'];
+  say(dk);
+  const okMiss = await until(() => instr().some((x) => x.includes('他还没说出来')), 8000);
+  await sleep(300);
+  check('嘴先答:没说中 → 嘴在范围里提示(那句问话、要他说的、他说的都在指令里),不交脑;图跟着那段声音给了嘴', okMiss && turns(dk).length === nD1 && instr().some((x) => x.includes('他还没说出来') && x.includes('「鸭子英文怎么说?」') && x.includes('「duck」') && x.includes('「dog」') && x.includes('那张图')) && cd.images === 1, JSON.stringify({ instr: instr(), turns: turns(dk).length - nD1, images: cd.images }));
+  await until(() => dk.bins >= cd.responses.length, 3000);
+  await sleep(300);
+  fake.kidTexts = ['duck'];
+  say(dk);
+  const okHit = await until(() => turns(dk).length > nD1, 8000);
+  await idle();
+  const pd = okHit ? promptOf(turns(dk)[nD1].job) : '';
+  check('嘴先答:说中了 → 嘴先接一句(当接住),交脑;脑那一轮带着嘴接过的几句(live.mouth)和那句接住', okHit && instr().some((x) => x.includes('他说出来了')) && pd.includes('    mouth:\n      - "孩子:dog"\n      - "嘴:') && pd.includes('    caught: ') && pd.trimEnd().endsWith('duck') && cd.images === 1, pd.slice(0, 900));
+  // 连着没说中:两次嘴提示,第三次交脑(嘴不再先说)
+  await until(() => dk.bins >= cd.responses.length, 3000);
+  await sleep(200);
+  dk.ws.send(JSON.stringify({ t: 'send', body: { text: '最后请说', device: 'tablet-landscape' } }));
+  await until(() => said(cd).filter((x) => x.includes('鸭子英文怎么说')).length >= 2, 15000);
+  await idle();
+  const nD2 = turns(dk).length;
+  for (const w of ['cat', 'dog', 'pig']) {
+    await until(() => dk.bins >= cd.responses.length, 3000);
+    await sleep(300);
+    fake.kidTexts = [w];
+    const r0 = cd.responses.length;
+    say(dk);
+    await until(() => cd.responses.length > r0 || turns(dk).length > nD2, 8000);
+  }
+  const okUp = await until(() => turns(dk).length > nD2, 8000);
+  await idle();
+  const pu = okUp ? promptOf(turns(dk)[nD2].job) : '';
+  check('嘴先答:连着两次没说中嘴提示,第三次交脑(带三次的话和嘴的两次提示)', okUp && instr().filter((x) => x.includes('他还没说出来')).length === 3 && pu.includes('      - "孩子:cat"') && pu.includes('      - "孩子:pig"') && (pu.match(/- "嘴:/g) ?? []).length === 2 && pu.trimEnd().endsWith('pig'), pu.slice(0, 900));
+  dk.ws.send(JSON.stringify({ t: 'bye' }));
+  await until(() => dk.closed !== null);
   liveDeps.echoWaitMs = undefined;
 }
 

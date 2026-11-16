@@ -2,7 +2,7 @@
  * activity 文件:孩子从首页一个按钮进去的一种做法。一个 activity 一个文件,归一位老师,
  * 放在老师的家 `agents/<老师>/activities/<名>.md`(仓里在 grades/grade-<n>/ 下同一个相对位置,init 拷进去,hash 记 shipped.json)。
  *
- * 头上平铺 `name` / `description` / `cards`(这个 activity 要用的卡,空格隔开)/ `base`(铺哪种页)/ `listen`(一直听)/ `page`(不起老师、进一页);正文按 `## ` 节分读者,标题就是读者:
+ * 头上平铺 `name` / `description` / `cards`(这个 activity 要用的卡,空格隔开)/ `base`(铺哪种页)/ `listen`(一直听)/ `reply`(谁先答)/ `page`(不起老师、进一页);正文按 `## ` 节分读者,标题就是读者:
  *   ## 家长填的       ```参数    一行一个:`名: 类型[,可空][,缺省 X][,A 到 B] —— 说明`
  *   ## 老师怎么带     给有脸的老师;参数不插值,只用 `{{有 名}}` … `{{/有}}` 裁段
  *   ## <工具人>收到什么  ```<工具人> 一段模板,`{{插槽}}` 由应用填;```<工具人>不要 可选
@@ -61,6 +61,15 @@ export const ACTIVITY_LISTENS: Readonly<Record<string, string>> = {
 };
 
 /**
+ * 头上的 `reply:`:孩子作答以后谁先答(2026-11-17 阶段 4 任务 2,Jack 定的:英语里简单、要快的先嘴,数学都用脑;代码不照学科分,照这里写的走)。
+ * mouth = 嘴先答:老师这一轮最后一句请他说一句([[请 说 …]]),他答了嘴先在那个范围里接(说中了接一句、脑接着写;没说中提示一下再等他,连着两次交给脑);
+ * 没写 = 脑先答(嘴只接住、照念)
+ */
+export const ACTIVITY_REPLIES: Readonly<Record<string, string>> = {
+  mouth: '嘴先答:最后一句请他说的,他答了嘴先接(说中了接一句,没说中提示一下)',
+};
+
+/**
  * 旧的头(2026-11-16 以前的出厂件、家长改过的):`board: page` 不再有意义(铺页的都铺页),还认一段时间——没写 base 的当 base: photo;
  * cards 里的 kit(教具卡,删了)读进来就丢。activity check、doctor 提一句;refresh 换掉没改过的。
  */
@@ -115,6 +124,8 @@ export const ActivitySchema = z.object({
   base: z.string().optional(),
   /** 头上的 `listen:`:孩子怎么说话(见 ACTIVITY_LISTENS);没写 = 照老师的 */
   listen: z.string().optional(),
+  /** 头上的 `reply:`:孩子作答以后谁先答(见 ACTIVITY_REPLIES);没写 = 脑 */
+  reply: z.string().optional(),
   /** 头上还写着旧的东西(board: page、cards 里的 kit):照新的读了,check 提一句 */
   old: z.array(z.string()).optional(),
   /** 「老师怎么带」那节的原文(没剥注释、没裁);没有这节就是 null(这个 activity 不起老师,如听写) */

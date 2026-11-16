@@ -67,7 +67,7 @@ export function renderContextPack(pack: ContextPack): string {
   }
   if (p.live) {
     const l = p.live;
-    if (!l.caught && l.cut === undefined && !l.echo?.length && !l.app) out.push('  live: true');
+    if (!l.caught && l.cut === undefined && !l.echo?.length && !l.mouth?.length && !l.app) out.push('  live: true');
     else {
       out.push('  live:');
       if (l.caught) out.push(`    caught: ${yamlScalar(l.caught)}`);
@@ -76,6 +76,10 @@ export function renderContextPack(pack: ContextPack): string {
       if (l.echo?.length) {
         out.push('    echo:');
         for (const x of l.echo) out.push(`      - ${yamlScalar(x)}`);
+      }
+      if (l.mouth?.length) {
+        out.push('    mouth:');
+        for (const x of l.mouth) out.push(`      - ${yamlScalar(x)}`);
       }
     }
   }

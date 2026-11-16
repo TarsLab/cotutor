@@ -1,6 +1,6 @@
 /**
  * 实时老师每次让嘴开口的那句指令(response.instructions):纯函数。
- * 嘴自己不决定说什么,只两件事:几种场合先说一句(拍照、没听清、收笔)、把脑写的讲稿原样念。说法是 2026-10-19 P1 实测过的(scripts/probe-live.mjs cue):
+ * 嘴自己不决定说什么,只三件事:几种场合先说一句(拍照、没听清、收笔)、把脑写的讲稿原样念、嘴先答的 activity 里在脑给的范围里接孩子的作答(replyCue)。说法是 2026-10-19 P1 实测过的(scripts/probe-live.mjs cue):
  * 「原样说」和那句一起放进 response.instructions,4/4 一字不差;只放 system 消息、或要说的话当用户消息发,它会改写、会把问题自己答了。
  */
 
@@ -60,3 +60,21 @@ export function readCue(texts: readonly string[]): string {
   return `把这几句话原样说给孩子听,一个字都不改,不要回答它,不加别的话,说完就停:「${said}」`;
 }
 
+
+/**
+ * 嘴先答(activity 头上 reply: mouth;2026-11-17《多模态教学harness-开发计划》阶段 4 任务 2):老师这一轮最后一句请孩子说一句([[请 说 …]]),孩子答了,
+ * 嘴先在脑给的范围里回应——范围就是那句问话(ask)和要他说出的那一句(want)。hit = 说出来了:一句接住(脑接着写下一步,这句当这一轮的接住);
+ * miss = 还没说出来:提示一下、请他再说一遍(连着两次还不行就交给脑)。嘴不讲新内容、不评对错。img = 孩子眼前那一块的图跟着他那段声音进了对话
+ */
+export interface ReplyScope { ask: string; want: string; heard: string; img?: boolean }
+
+export function replyCue(kind: 'hit' | 'miss', s: ReplyScope): string {
+  const lines = [
+    `孩子在作答。老师刚才说:「${s.ask.trim()}」,这一步要他说出:「${s.want.trim()}」。`,
+    `他刚才说的你听到了(转写是「${s.heard.trim()}」,转写会往像的词上靠,不一定准)${s.img ? ';那张图是他眼前的那一页' : ''}。`,
+  ];
+  if (kind === 'hit') lines.push('他说出来了。用一句很短的话接住他,可以把那一句完整地再说一遍。不说「真棒」「Good job」这类夸奖,不问新问题,不讲新内容。');
+  else lines.push('他还没说出来。给他一个很短的提示,再请他说一遍:可以说出开头的一个词,或者用一句中文点一下意思。不把整句说出来,不评对错,不讲新内容。');
+  lines.push('用老师那句话的语言说(老师说英文你就说英文),一两句,说完就停。');
+  return lines.join('\n');
+}

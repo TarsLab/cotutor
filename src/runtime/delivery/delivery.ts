@@ -12,7 +12,8 @@ import { queueInit, queueStep, type Beat, type Echo, type QueueEvent, type Queue
 
 /** 嘴这次回答是什么:接住(孩子这一轮)、照念哪几句、边画边聊(哪张画) */
 /** 嘴这一次说的是什么:接住、照念讲稿、边画边聊,或照念应用手里现成的一句(say:板上点字时这个字的念法) */
-export type Said = { kind: 'catch' } | { kind: 'read'; beat: Beat } | { kind: 'say' };
+/** 嘴这一次说的是什么:catch 接住 · read 照念讲稿 · say 照念点到的字 · reply 嘴先答时提示孩子再说一遍(src/realtime/cues.ts 的 replyCue miss) */
+export type Said = { kind: 'catch' } | { kind: 'read'; beat: Beat } | { kind: 'say' } | { kind: 'reply' };
 
 export interface DeliveryDeps {
   /** 通话里的毫秒(录像的钟) */

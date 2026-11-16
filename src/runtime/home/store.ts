@@ -11,7 +11,7 @@ import { localDate } from '../../shared/time.ts';
 import { threads } from '../../schema/index.ts';
 import { activityName, findActivityFile } from '../activities.ts';
 import { lintActivity, parseActivity, resolveParams } from '../activity.ts';
-import { arrangeHome, dropFixes, homeActivities, homeOwners, faceTutor, homeId, homeIssues, homeLectures, homeTutors, kidButtons, kidTiles, parseHome, type HomeCheckContext, type HomeDoc, type HomeIssue, type HomeTutorInfo, type KidHomeButton } from './home.ts';
+import { activityLook, arrangeHome, dropFixes, homeActivities, homeOwners, faceTutor, homeId, homeIssues, homeLectures, homeTutors, kidButtons, kidTiles, parseHome, type ActivityLook, type HomeCheckContext, type HomeDoc, type HomeIssue, type HomeTutorInfo, type KidHomeButton } from './home.ts';
 import type { BoardCard } from '../../board/presentation.ts';
 import { HOME_ID_RE, HOME_TILES, LECTURE_ACTIVITY, PublishedHomeSchema, tutorTiles, type Activity, type ActivityRun, type ActivityValue, type HomeTileId, type HomeVia, type MessageVia, type PublishedHome } from '../../schema/index.ts';
 import { listDates, readIndex } from '../journal/store.ts';
@@ -232,6 +232,7 @@ export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'pu
     const buttons = kidButtons((c.props.buttons ?? []) as TutorButton[], {
       lecture: (bundle) => Boolean(lectures.get(bundle)),
       activity: (a, params) => { const act = usable.get(`${name}/${a}`); return Boolean(act) && resolveParams(act!, params).issues.length === 0; },
+      look: (a) => activityLook(usable.get(`${name}/${a}`)),
       keepBriefs: opts.keepBriefs,
       today,
     }).map((b) => { const l = b.kind === 'lecture' ? lectures.get(b.bundle) : null; return l ? { ...b, title: l.title, ms: l.clock.total, ...(l.video ? { video: true as const } : {}) } : b; });
@@ -240,14 +241,14 @@ export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'pu
     const news = Boolean(publishedAt && arranged && !(await talkedSince(ws, name, publishedAt, now)));
     // 常驻的方砖(预习、检查作业、复习):不经发布,家里有那个 activity、没关掉就在
     const tiles: HomeTileId[] = [];
-    const bases = new Map<string, 'textbook' | 'photo'>();
+    const looks = new Map<string, ActivityLook>();
     for (const t of HOME_TILES) {
       const act = tutorTiles(ws.config.tutors[name] ?? {}).includes(t.id) ? await usableActivity(ws, name, t.activity) : null;
       if (!act) continue;
       tiles.push(t.id);
-      if (act.base === 'textbook' || act.base === 'photo') bases.set(t.activity, act.base);
+      looks.set(t.activity, activityLook(act));
     }
-    out.push({ kind: 'tutor', props: { tutor: name, buttons, tiles: kidTiles(tiles, { usable: () => true, bases }), ...(news ? { news: true } : {}) } });
+    out.push({ kind: 'tutor', props: { tutor: name, buttons, tiles: kidTiles(tiles, { usable: () => true, looks }), ...(news ? { news: true } : {}) } });
   }
   return { home: id, cards: out };
 }

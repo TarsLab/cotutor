@@ -2,7 +2,7 @@
  * activity 文件:孩子从首页一个按钮进去的一种做法。一个 activity 一个文件,归一位老师,
  * 放在老师的家 `agents/<老师>/activities/<名>.md`(仓里在 grades/grade-<n>/ 下同一个相对位置,init 拷进去,hash 记 shipped.json)。
  *
- * 头上平铺 `name` / `description` / `cards`(这个 activity 要用的卡,空格隔开);正文按 `## ` 节分读者,标题就是读者:
+ * 头上平铺 `name` / `description` / `cards`(这个 activity 要用的卡,空格隔开)/ `base`(铺哪种页)/ `listen`(一直听)/ `page`(不起老师、进一页);正文按 `## ` 节分读者,标题就是读者:
  *   ## 家长填的       ```参数    一行一个:`名: 类型[,可空][,缺省 X][,A 到 B] —— 说明`
  *   ## 老师怎么带     给有脸的老师;参数不插值,只用 `{{有 名}}` … `{{/有}}` 裁段
  *   ## <工具人>收到什么  ```<工具人> 一段模板,`{{插槽}}` 由应用填;```<工具人>不要 可选
@@ -51,6 +51,14 @@ export const ACTIVITY_BASES: Readonly<Record<string, string>> = {
   photo: '孩子拍的作业:进来先拍照,不拍就是白纸',
 };
 export type ActivityBase = 'textbook' | 'photo';
+
+/**
+ * 头上的 `listen:`:孩子怎么说话(2026-11-17 阶段 4 任务 1,原来只有口语课一直听)。open = 一直听:不用按,孩子开口就听(一问一答多的、请他说的多的);
+ * 没写 = 照 cotutor.json 这位老师的 listen(缺省按住说)
+ */
+export const ACTIVITY_LISTENS: Readonly<Record<string, string>> = {
+  open: '一直听:不用按,孩子开口就听',
+};
 
 /**
  * 旧的头(2026-11-16 以前的出厂件、家长改过的):`board: page` 不再有意义(铺页的都铺页),还认一段时间——没写 base 的当 base: photo;
@@ -105,6 +113,8 @@ export const ActivitySchema = z.object({
   page: z.string().optional(),
   /** 头上的 `base:`:铺哪种页(见 ACTIVITY_BASES);没写 = 不铺页(卡片流) */
   base: z.string().optional(),
+  /** 头上的 `listen:`:孩子怎么说话(见 ACTIVITY_LISTENS);没写 = 照老师的 */
+  listen: z.string().optional(),
   /** 头上还写着旧的东西(board: page、cards 里的 kit):照新的读了,check 提一句 */
   old: z.array(z.string()).optional(),
   /** 「老师怎么带」那节的原文(没剥注释、没裁);没有这节就是 null(这个 activity 不起老师,如听写) */

@@ -138,6 +138,8 @@ const MessageObjectSchema = z.object({
    * 以前的记录里还有 board: 'page'(以板为主、照片板):读进来就丢,那些话题不再当一节课
    */
   base: z.enum(['textbook', 'photo']).optional(),
+  /** 话题第一条:这节课一直听(activity 头上 listen: open;2026-11-17 阶段 4);孩子端回到这节课照它换 */
+  listen: z.literal('open').optional(),
   /** 口语课页的哪份口语单起的这个话题(talk/<id>/ 4,只记在话题第一条) */
   talk: z.string().optional(),
 });

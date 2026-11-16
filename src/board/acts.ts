@@ -2,7 +2,7 @@
  * 讲稿里的 `[[名 参数]]` 都在这里读(2026-11-16《多模态教学harness-开发计划》阶段 2 任务 1):
  *  - 老师的动作:看、圈、遮、盖、写、擦、摆、请、翻(src/schema/lesson.ts 的 ACT_NAMES),写在句子后面,这句念完才生效;
  *  - 小课堂的 [[play]]:对上一张卡的动作(cue),念完放那一段;
- *  - 口语课热身的 [[echo 词]] [[say 词]] [[call]]:记在这句上。
+ *  - 口语课打电话的 [[call]]:记在这句上。
  * 纯函数,永不抛:不认得的、写错的回 bad(解析器丢掉它、给家长记一行)。
  * 每种动作的写法(也是给老师的说明,见 ACT_GUIDE):
  *   看 第 3 题 / 例 2 / 练一练第 3 题 / 第 55 页 / 栏目名 / 课本上的一句原话
@@ -11,6 +11,7 @@
  *   擦(擦掉自己上一样)/ 擦 全部(整条白纸条)
  *   摆 点阵 6 行 6 个 / 摆 方向盘 上 东(白纸条里摆一个图形;可带 大 / 中 / 小)
  *   请 圈 / 请 写、圈(开放哪些作答:写、圈、点、涂、切、转、说、添)
+ *   请 说 duck / 请 说 The ducks are under the bus(请孩子说出这一句:念完停下等他说,应用比转写,说了接着念下一句;2026-11-17 阶段 4 任务 1,原来的 [[echo]] [[say]])
  *   翻 6的乘法口诀 / 翻 目录(换一课)
  */
 import { kitOf, readKitLines } from '../chalk/index.ts';
@@ -20,12 +21,12 @@ import { ACT_NAMES, ASK_NAMES, SIZES, type ActName, type AskName, type LineAct, 
 export type Mark =
   | { kind: 'act'; act: LineAct; /** 读成了,但丢了一部分(请里不认得的那几个) */ warn?: string }
   | { kind: 'cue'; name: string; arg?: string }
-  | { kind: 'line'; name: 'echo' | 'say' | 'call'; arg: string }
+  | { kind: 'line'; name: 'call'; arg: string }
   | { kind: 'bad'; text: string; why: string };
 
 /** 卡上的动作(锚到上一张卡):只剩小课堂的 play */
 const CUES = new Set(['play']);
-const LINE_MARKS = new Set(['echo', 'say', 'call']);
+const LINE_MARKS = new Set(['call']);
 
 /** 白纸条里能摆的图形(src/chalk/kit/ 的画法) */
 export const SHAPES = ['点阵', '方向盘'] as const;
@@ -36,6 +37,8 @@ export const SPOT_CHARS = 12;
 export const SPOT_MAX: Readonly<Record<'圈' | '遮' | '盖', number>> = { 圈: 4, 遮: 8, 盖: 8 };
 /** 看、翻的参数最多几个字 */
 const TARGET_CHARS = 40;
+/** 请 说 后面要孩子说的一句最多几个字 */
+export const SAY_CHARS = 60;
 const LESSON_CHARS = 20;
 const ERASE_ALL = ['全部', '全', '整条', '白纸条', '都擦'];
 
@@ -47,7 +50,8 @@ export type ActParts =
   | { name: '写'; text: string; size: Size }
   | { name: '擦'; all: boolean }
   | { name: '摆'; kit: string; params: Record<string, string>; size: Size }
-  | { name: '请'; ops: AskName[]; dropped: string[] };
+  /** say = 请 说 后面写的那一句(要孩子说出来的;没写 = 只是开放说,他说什么都交给老师) */
+  | { name: '请'; ops: AskName[]; dropped: string[]; say?: string };
 
 const SEP = /[、,,;;]+/;
 const chars = (s: string): number => Array.from(s).length;
@@ -111,11 +115,18 @@ export function actParts(act: LineAct): ActParts {
       return { name: '摆', kit: kit.name, params: r.params, size };
     }
     case '请': {
-      const want = arg.split(/[、,,;;\s]+/).map((x) => x.trim()).filter(Boolean);
+      // 请 说 <一句>:说 后面的不是能请的名字,就是要孩子说的那一句(英文带空格,原样留着)
+      const m = /(^|[、,,;;\s])说(?=$|[\s、,,;;::「『"“])/.exec(arg);
+      const after = m ? arg.slice(m.index + m[0].length).replace(/^[\s、,,;;::]+/, '').trim() : '';
+      const tail = after.split(/[、,,;;\s]+/).filter(Boolean);
+      const phrase = after && !tail.every((x) => (ASK_NAMES as readonly string[]).includes(x)) ? unquote(after) : '';
+      const head = m && phrase ? `${arg.slice(0, m.index + m[1].length)}说` : arg;
+      const want = head.split(/[、,,;;\s]+/).map((x) => x.trim()).filter(Boolean);
       const ops = [...new Set(want.filter((x): x is AskName => (ASK_NAMES as readonly string[]).includes(x)))];
       const dropped = want.filter((x) => !(ASK_NAMES as readonly string[]).includes(x));
       if (!ops.length) throw new Error(`请 后面写请孩子做什么:${ASK_NAMES.join('、')}`);
-      return { name: '请', ops, dropped };
+      if (chars(phrase) > SAY_CHARS) throw new Error(`请 说 后面写孩子要说的一句(${SAY_CHARS} 个字以内)`);
+      return { name: '请', ops, dropped, ...(phrase ? { say: phrase } : {}) };
     }
   }
 }
@@ -134,7 +145,7 @@ export function readMark(raw: string): Mark {
   if (act) {
     try {
       const p = actParts(act);
-      if (p.name === '请') return { kind: 'act', act: { name: '请', arg: p.ops.join('、') }, ...(p.dropped.length ? { warn: `请 里的「${p.dropped.join('」「')}」不认得,没开放(能请的:${ASK_NAMES.join('、')})` } : {}) };
+      if (p.name === '请') return { kind: 'act', act: { name: '请', arg: p.ops.join('、') + (p.say ? ` ${p.say}` : '') }, ...(p.dropped.length ? { warn: `请 里的「${p.dropped.join('」「')}」不认得,没开放(能请的:${ASK_NAMES.join('、')})` } : {}) };
       return { kind: 'act', act };
     } catch (e) {
       return { kind: 'bad', text: inner, why: e instanceof Error ? e.message : String(e) };
@@ -142,7 +153,7 @@ export function readMark(raw: string): Mark {
   }
   const [name, ...rest] = inner.split(/\s+/);
   const n = (name ?? '').toLowerCase();
-  if (LINE_MARKS.has(n)) return { kind: 'line', name: n as 'echo' | 'say' | 'call', arg: rest.join(' ') };
+  if (LINE_MARKS.has(n)) return { kind: 'line', name: 'call', arg: rest.join(' ') };
   if (CUES.has(n)) return { kind: 'cue', name: n, ...(rest.length ? { arg: rest.join(' ') } : {}) };
   return { kind: 'bad', text: inner, why: `不认得这个动作(动作有:${ACT_NAMES.join('、')})` };
 }

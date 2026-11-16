@@ -31,8 +31,8 @@
  *   孩子那一句的上下文(话题、设备、舞台上的卡)孩子端开口时报一次 {t:'ctx', body}。换模式 = 安静时换一条连接(silence 只有新连接能给)。
  *   commit 了不回答 300 秒百炼就关(response_idle_timeout,探针 probe-live-vad):放过的多了,离上次回答 IDLE_SWAP_MS 就在安静时换连接。
  * 口语课:先热身、再打电话。热身是脑一轮写完的跟读,讲稿的 [[echo 词]] / [[say 词]] 那句念完关闸(src/runtime/delivery/queue.ts),
- *   孩子说完(像跟读,src/scenes/talk/warmup.ts)开闸下一拍,不接住、不交脑;对老师说的照收下办(打断、接住、交脑);ECHO_WAIT_MS 没开口接着走,连着两拍没开口停下交脑(app: quiet)。
- *   每拍记进摸底(录像 {t:'echo'},只记不发),交脑时带上(live.warmup)。[[call]] 那句念完孩子端响铃,这里马上交脑一轮(app: call,不接住),
+ *   孩子说完(像跟读,src/board/echo.ts)开闸下一拍,不接住、不交脑;对老师说的照收下办(打断、接住、交脑);ECHO_WAIT_MS 没开口接着走,连着两拍没开口停下交脑(app: quiet)。
+ *   每拍记进摸底(录像 {t:'echo'},只记不发),交脑时带上(live.echo)。[[call]] 那句念完孩子端响铃,这里马上交脑一轮(app: call,不接住),
  *   之后的接住换英文(cue.ts 的 CATCH_EN),交脑带打电话几分钟(live.phone)。孩子端连上发来的第一条带 talk(口语单)时嘴先说「好,我们先热热身!」。
  * 录像:进出的消息、两边的声音都记(CallRecorder),落在 conversations/<老师>/<日期>.live/<时分秒>.reel.json / .wav(时分秒 = 这一段开始的时刻)。
  *   按段落(2026-11-06):两轮之间安静着(心跳时看),这一段 IDLE_CUT_MS 没动静、或录了 MAX_TAKE_MS,就收下这一段落盘、接着录新的一段;挂了落最后一段。
@@ -50,8 +50,7 @@ import { needsParent, troubleKind } from '../../shared/qianwen.ts';
 import { localDate } from '../../shared/time.ts';
 import { catchCue, readCue, type CatchKind } from '../../realtime/cues.ts';
 import { judge } from '../../realtime/listen.ts';
-import { echoKind, warmLines, type WarmBeat } from '../../scenes/talk/warmup.ts';
-import { coverage } from '../../scenes/talk/en-words.ts';
+import { coverage, echoKind, echoLines, type EchoBeat } from '../../board/echo.ts';
 import type { Beat, Echo } from '../delivery/queue.ts';
 import { Delivery, type Said } from '../delivery/delivery.ts';
 import { MIX_RATE } from '../journal/mix.ts';
@@ -220,7 +219,7 @@ export class LiveCall {
   /** 热身:按住说时松手了、在等这一下的转写(跟读还是对老师说的);那一下松手的 body */
   private echoHeld: Record<string, unknown> | null = null;
   /** 热身每拍记的(摸底)、连着没开口的拍数 */
-  private warm: WarmBeat[] = [];
+  private warm: EchoBeat[] = [];
   private quietBeats = 0;
   /** 嘴这次(或孩子端还在放的那段)是照念点字的那句 */
   private sayingPick = false;
@@ -794,7 +793,7 @@ export class LiveCall {
     if (this.echoing) {
       const kind = echoKind(said, this.echoing.echo.word);
       this.noteEcho(kind, said);
-      if (kind === 'said') {
+      if (kind === 'said' && !this.echoLast()) {
         this.rec.in({ t: 'hold', vad: true }, from);
         this.rec.in({ t: 'release', vad: true, echo: true }, to);
         this.echoed();
@@ -857,7 +856,7 @@ export class LiveCall {
     return {
       ...(this.caught ? { caught: this.caught } : {}),
       ...(cut !== undefined ? { cut } : {}),
-      ...(this.warm.length ? { warmup: warmLines(this.warm) } : {}),
+      ...(this.warm.length ? { echo: echoLines(this.warm) } : {}),
       ...(this.phoneAt !== null ? { phone: Math.max(0, Math.floor((Date.now() - this.phoneAt) / 60_000)) } : {}),
       ...(app === 'call' || app === 'quiet' || app === 'still' || app === 'pen' ? { app: app as 'call' | 'quiet' | 'still' | 'pen' } : {}),
     };
@@ -898,10 +897,18 @@ export class LiveCall {
     const e = this.echoing;
     if (!e) return;
     const startMs = e.heardAt !== null && e.endAt !== null ? Math.max(0, e.heardAt - e.endAt) : undefined;
-    const beat: WarmBeat = { word: e.echo.word, say: e.echo.say === true, outcome, ...(text !== undefined ? { text } : {}), ...(startMs !== undefined && outcome !== 'silent' ? { startMs } : {}), ...(text !== undefined && e.echo.word ? { hit: coverage(e.echo.word, text) } : {}) };
+    const beat: EchoBeat = { word: e.echo.word, say: e.echo.say === true, outcome, ...(text !== undefined ? { text } : {}), ...(startMs !== undefined && outcome !== 'silent' ? { startMs } : {}), ...(text !== undefined && e.echo.word ? { hit: coverage(e.echo.word, text) } : {}) };
     this.warm.push(beat);
     this.quietBeats = outcome === 'silent' ? this.quietBeats + 1 : 0;
     this.rec.out({ t: 'echo', ...beat });
+  }
+
+  /**
+   * 请他说的那句是这一轮的最后一句(脑写完了、后面没排着的):他说了也没有下一拍可念,这句交给老师(照对老师说的办),
+   * 不然开了闸什么都不念,他对着不出声的老师
+   */
+  private echoLast(): boolean {
+    return !this.turns.busy && this.d.pending === 0;
   }
 
   /** 热身这拍过了:开闸,下一拍接着念;压低的恢复 */
@@ -920,7 +927,7 @@ export class LiveCall {
     if (!text.trim()) { if (this.echoing.overdue) this.echoDue(); return; }
     const kind = echoKind(text, this.echoing.echo.word);
     this.noteEcho(kind, text);
-    if (kind === 'said') { this.echoed(); return; }
+    if (kind === 'said' && !this.echoLast()) { this.echoed(); return; }
     this.send({ t: 'kid', text });
     this.interrupt();
     this.turn(this.d.asked && !opensThread(body) ? 'answer' : 'voice', body, text);

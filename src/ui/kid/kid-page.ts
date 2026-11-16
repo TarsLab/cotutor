@@ -798,12 +798,14 @@ ${BOARD_MARK_JS}
   const BUTTON_ICON = { start: 'start', lecture: 'play' };
   const pickButton = (t, b) => {
     const via = { home: S.home.home, button: b.id };
+    // activity 头上写了 listen: open:进去就一直听
+    const look = b.listen === 'open' ? { listen: 'open' } : {};
     // 每个按钮进去都是新话题;今天聊过的在首页「今天」那一行接(2026-11-15)。按钮只有 activity(含方砖,start)和小课堂(2026-11-16)
     // 铺课本的 activity(预习):不拍照,直接开话题、铺课本的目录
-    if (b.kind === 'start' && b.base === 'textbook') openTutor(t, { kind: 'new', via, base: 'textbook', label: b.label, send: b.label });
+    if (b.kind === 'start' && b.base === 'textbook') openTutor(t, { kind: 'new', via, base: 'textbook', label: b.label, send: b.label, ...look });
     // 铺作业照片的 activity(检查作业、复习):先到拍照屏,带着照片(或白纸)开话题
-    else if (b.kind === 'start' && b.base === 'photo') openTutor(t, { kind: 'new', via, base: 'photo', label: b.label });
-    else if (b.kind === 'start') openTutor(t, { kind: 'new', via, send: b.label });
+    else if (b.kind === 'start' && b.base === 'photo') openTutor(t, { kind: 'new', via, base: 'photo', label: b.label, ...look });
+    else if (b.kind === 'start') openTutor(t, { kind: 'new', via, send: b.label, ...look });
     // 小课堂:新话题,先铺满放课;看完才能开口,开口那条带上 via 与看的情况
     else if (b.kind === 'lecture') openTutor(t, { kind: 'new', via, lecture: { bundle: b.bundle, title: b.title || b.label, ...(b.video ? { video: true } : {}) } });
   };
@@ -862,7 +864,7 @@ ${BOARD_MARK_JS}
   };
   // ---- 常驻的三块方砖(预习、检查作业、复习;服务端照老师家里的 activity 文件给,src/ui/kid/home-tiles.ts):牌上第一行;点了和 activity 按钮一样 ----
 ${HOME_TILES_JS}
-  const tileButton = (t, x) => h('button', { type: 'button', class: 'bt bt-tile', 'data-tile': x.id, style: '--sc:' + colorOf(t), on: { click: () => pickButton(t, { id: x.id, kind: 'start', label: x.label, board: x.board, base: x.base }) } },
+  const tileButton = (t, x) => h('button', { type: 'button', class: 'bt bt-tile', 'data-tile': x.id, style: '--sc:' + colorOf(t), on: { click: () => pickButton(t, { id: x.id, kind: 'start', label: x.label, base: x.base, listen: x.listen }) } },
     h('span', { class: 'ta', html: tileArt(t.mark, x.id) }), h('span', { class: 'btx' }, x.label));
   const tilesRow = (t, tiles) => (Array.isArray(tiles) && tiles.length ? h('div', { class: 'tls' }, ...tiles.map((x) => tileButton(t, x))) : null);
   /** 挨着的几个小课堂收进一格(平板上两张海报并排,手机上一张一行) */
@@ -1282,6 +1284,11 @@ ${HOME_TILES_JS}
     const open = (l) => { LS.asking = false; if (!S.tutor || S.tutor.name !== name || !BP.on) return; if (l) lsStart(l); };
     const toc = () => (BP.base === 'textbook' ? api('GET', '/api/kid/textbook/base?tutor=' + encodeURIComponent(name)).then((j) => open(j && j.lesson), () => { LS.asking = false; }) : open(null));
     if (q) api('GET', q).then((j) => (j && j.lesson ? open(j.lesson) : toc()), toc); else toc();
+  };
+  /** 拉了今天的话题以后:这节课一直听(第一条记着 listen,activity 头上写的)而这会儿是按住说,换过去(回到这节课、刷新页面) */
+  const listenSync = (mine) => {
+    if (S.readonly || REEL || !LV.on || LV.model.open) return;
+    if (mine.some((m) => m.listen === 'open')) liveDispatch({ type: 'listen', open: true });
   };
   /** 拉了今天的话题以后:这个话题是一节课(第一条记着 base)就把页摆出来(回到这个话题、刷新页面) */
   const bpSync = (mine) => {
@@ -2447,6 +2454,7 @@ __WORD_DRAW_JS__
       else renderSubtitle();
       if (S.lecture) renderLecturePending();
       bpSync(mine);
+      listenSync(mine);
       lsFeed();
       renderHeader();
       clearTimeout(S.pollTimer);
@@ -3362,7 +3370,7 @@ __REEL_DOCK_JS__
     if (LV.ws) liveClose();
     liveDispatch({ type: 'reset' });
     LV.gateOn = false;
-    liveDispatch({ type: 'listen', open: Boolean(intent && intent.talk) || Boolean(S.tutor && S.tutor.listen === 'open') });
+    liveDispatch({ type: 'listen', open: Boolean(intent && (intent.talk || intent.listen === 'open')) || Boolean(S.tutor && S.tutor.listen === 'open') });
     LV.on = true; LV.ready = false; LV.cap = { prev: '', cur: '', cut: '', catching: false }; LV.heard = new Map(); LV.jobs = new Set();
     liveFace(S.tutor);
     if (!LV.audio) {

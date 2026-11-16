@@ -1,5 +1,5 @@
 /** 首页文件的纯函数:解析、两级问题、排卡、孩子端按钮、--force 丢卡、发布 id;上下文包的 home 段;日记不记按钮字。 */
-import { arrangeHome, dropFixes, homeId, homeIssues, homeTutors, kidButtons, parseHome, type HomeTutorInfo } from '../src/runtime/home/home.ts';
+import { activityLook, arrangeHome, dropFixes, homeId, homeIssues, homeTutors, kidButtons, parseHome, type HomeTutorInfo } from '../src/runtime/home/home.ts';
 import { renderContextPack } from '../src/runtime/context/context-pack.ts';
 import { kidQuestions } from '../src/memory/diary.ts';
 import type { TutorButton } from '../src/board/cards/index.ts';
@@ -106,6 +106,8 @@ const tutors: Record<string, HomeTutorInfo> = {
   const seen: string[] = [];
   kidButtons([{ kind: 'activity', label: '出题', activity: '预习', params: { 范围: '春风' } }, { kind: 'lecture', label: '课', bundle: 'b1' }] as never[], { activity: (n, p) => { seen.push(n + JSON.stringify(p)); return true; } });
   check('判断用不用得了时带上按钮的参数(小课堂挂的不带)', seen.join(' ') === '预习{"范围":"春风"} 小课堂{}', seen.join(' '));
+  const looked = kidButtons([{ kind: 'activity', label: '口语', activity: '口语课', params: {} }, { kind: 'activity', label: '预', activity: '预习', params: {} }] as never[], { look: (n) => activityLook(n === '口语课' ? { base: 'photo', listen: 'open' } : { base: '别的' }) });
+  check('activity 按钮带上铺哪种页、一直听不听(同方砖;认不得的 base 不带)', JSON.stringify(looked) === '[{"id":0,"kind":"start","label":"口语","base":"photo","listen":"open"},{"id":1,"kind":"start","label":"预"}]', JSON.stringify(looked));
   const taken = new Set(['2026-09-17-2130', '2026-09-17-2130-2']);
   check('发布 id:时分,同一分钟加序号', homeId(new Date(2026, 8, 17, 21, 30), (x) => taken.has(x)) === '2026-09-17-2130-3' && homeId(new Date(2026, 8, 17, 8, 5), () => false) === '2026-09-17-0805');
 }

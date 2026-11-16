@@ -240,7 +240,7 @@ export function homeOwners(cards: readonly BoardCard[], tutors: readonly string[
  * start = activity 按钮(孩子那边点了发出按钮上的字;是哪个 activity、参数是什么,服务端照 via 从发布件查)
  */
 export type KidHomeButton =
-  | { id: number; kind: 'start'; label: string; brief?: string }
+  | ({ id: number; kind: 'start'; label: string; brief?: string } & ActivityLook)
   /** 小课堂:title / ms(课名、课长)由服务端读课包后补 */
   | { id: number; kind: 'lecture'; label: string; bundle: string; brief?: string; title?: string; ms?: number; video?: true };
 
@@ -252,20 +252,24 @@ export interface KidHomeTile {
    * 这一节课铺哪种页(头上的 base:):photo = 孩子端点了先到拍照屏,带着照片(或白纸)开话题;textbook = 不到拍照屏,直接开话题、铺课本的目录
    */
   base?: 'textbook' | 'photo';
+  /** 一直听(头上的 listen: open):孩子端进去不用按着说 */
+  listen?: 'open';
 }
 
+/** activity 头上孩子端进去前就要知道的:铺哪种页、一直听不听(方砖、activity 按钮都带) */
+export interface ActivityLook { base?: 'textbook' | 'photo'; listen?: 'open' }
+/** activity 文件头 → 孩子端要的那两样 */
+export const activityLook = (a: { base?: string; listen?: string } | null | undefined): ActivityLook => ({ ...(a?.base === 'textbook' || a?.base === 'photo' ? { base: a.base } : {}), ...(a?.listen === 'open' ? { listen: 'open' as const } : {}) });
+
 /** 这位老师牌上的方砖:开着的(on,牌上的先后)里,家里那个 activity 用得了的才出 */
-export function kidTiles(on: readonly HomeTileId[], opts: { usable: (activity: string) => boolean; bases?: ReadonlyMap<string, 'textbook' | 'photo'> }): KidHomeTile[] {
-  return HOME_TILES.filter((t) => on.includes(t.id) && opts.usable(t.activity)).map((t) => {
-    const base = opts.bases?.get(t.activity);
-    return { id: t.id, label: t.activity, ...(base ? { base } : {}) };
-  });
+export function kidTiles(on: readonly HomeTileId[], opts: { usable: (activity: string) => boolean; looks?: ReadonlyMap<string, ActivityLook> }): KidHomeTile[] {
+  return HOME_TILES.filter((t) => on.includes(t.id) && opts.usable(t.activity)).map((t) => ({ id: t.id, label: t.activity, ...opts.looks?.get(t.activity) }));
 }
 
 /**
  * 一张老师卡的按钮:文件里的 activity、小课堂。以前发布的那份里的开场、接着按钮(2026-11-16 删了)不出。keepBriefs = 家长预览(讲法留着)。
  */
-export function kidButtons(buttons: readonly TutorButton[], opts: { lecture?: (bundle: string) => boolean; activity?: (name: string, params: Readonly<Record<string, string>>) => boolean; keepBriefs?: boolean; today?: string }): KidHomeButton[] {
+export function kidButtons(buttons: readonly TutorButton[], opts: { lecture?: (bundle: string) => boolean; activity?: (name: string, params: Readonly<Record<string, string>>) => boolean; look?: (name: string) => ActivityLook; keepBriefs?: boolean; today?: string }): KidHomeButton[] {
   const out: KidHomeButton[] = [];
   buttons.forEach((b, k) => {
     // 留到那天为止(家长端表单的「只今天 / 到周日」);过了就不出现,id 还是文件里的下标
@@ -274,7 +278,8 @@ export function kidButtons(buttons: readonly TutorButton[], opts: { lecture?: (b
     // activity 按钮在孩子那边是 start:点了发出按钮上的字;是哪个 activity、参数是什么,服务端照 via 从发布件查
     // activity 用不了(文件不在、写坏了、这个按钮的参数按现在的文件解析不出),按钮不出:不让孩子点进一个没人带或带不了的话题;小课堂看完照它聊,同样
     const hasActivity = (name: string, params: Readonly<Record<string, string>> = {}): boolean => opts.activity?.(name, params) ?? true;
-    if (b.kind === 'activity') { if (hasActivity(b.activity, b.params)) out.push({ id: k, kind: 'start', label: b.label, ...brief }); }
+    // 铺哪种页、一直听不听同方砖(2026-11-17 起 activity 按钮也带;以前按钮点进去不铺页)
+    if (b.kind === 'activity') { if (hasActivity(b.activity, b.params)) out.push({ id: k, kind: 'start', label: b.label, ...opts.look?.(b.activity), ...brief }); }
     else if (b.kind === 'lecture') { if ((opts.lecture?.(b.bundle) ?? true) && hasActivity(b.activity ?? LECTURE_ACTIVITY)) out.push({ id: k, kind: 'lecture', label: b.label, bundle: b.bundle, ...brief }); }
   });
   return out;

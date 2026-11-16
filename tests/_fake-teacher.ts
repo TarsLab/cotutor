@@ -5,7 +5,7 @@
  * 回显那条消息的最后一行(前面有老师的回复就「接着说:」,不然「第一次说:」);上下文包里有 cards 段就把那几行回显在前面(「看到卡:…」);
  * 含「段在前」在最前面加一段「## 记账」;含「想要小课堂」出一张写着 scene 的旧式卡和一段「## 想要小课堂」;含「节头」先出一张只有一行 # 标题的文字卡;
  * 含「板书」出两张卡(「坏卡」再加一张解析不出的,「点读」再加一张两段的点读卡,「图片」再加一张 vault/pic.png 的图片卡);
- * 含「放课」出一张小课堂卡(讲稿带 [[play]]);含「整段」出一张三行的点读卡;含「热身」或「口语课」出口语课的热身(两拍 [[echo]]、一拍 [[say]]、[[call]]),
+ * 含「放课」出一张小课堂卡(讲稿带 [[play]]);含「整段」出一张三行的点读卡;含「热身」或「口语课」出口语课的热身(两拍跟我说、一拍你先说的 [[请 说 duck]]、[[call]]),
  * 「直接打电话」回一句带 [[call]],「(打电话)」回英文开场;含「家长段」加「## 家长」;含「记住它」「改记忆」回「## 记忆」(加三条 / 改一条删一条),
  * 「带证据」回两条带证据的(一条抄孩子的话、一条抄老师自己的),「记孩子」回一条 孩子: 开头的和一条普通的;记忆整理任务改一条删两条加一条;
  * 记账任务回固定形状的「## 记账」(「记账坏」或 FAKE_BOOKKEEP_BAD=1 少写 name;FAKE_BOOKKEEP_ASKED 里 | 分开的几句当 asked);
@@ -53,7 +53,7 @@ export function teacherReply(body: ChatBody): FakeReply {
   if (msg.includes('先想一想')) parts.push('你先想一想,5 个 1 是多少?[[看 例 2]] [[盖 5×1=5]]');
   if (msg.includes('预习乘法口诀')) parts.push('[[翻 5的乘法口诀]]\n我们先看例 2 的图。[[看 例 2]]\n你看到了什么?');
   if (msg.includes('不存在的课')) parts.push('我们翻到这一课。[[翻 坐井观天]]');
-  if (msg.includes('热身') || msg.includes('口语课')) parts.push('```word\n🦆 duck\nd-u-ck\n```\n\n我们先热热身!我先来:duck! [[echo duck]]\n\n小声一点:duck… [[echo duck]]\n\n你先说:鸭子英文怎么说? [[say duck]]\n\n热身好啦!老师给你打个电话。 [[call]]\n\n这句不该念。');
+  if (msg.includes('热身') || msg.includes('口语课')) parts.push('```word\n🦆 duck\nd-u-ck\n```\n\n我们先热热身!我先来:duck! [[请 说 duck]]\n\n小声一点:duck… [[请 说 duck]]\n\n你先说:鸭子英文怎么说? [[请 说 duck]]\n\n热身好啦!老师给你打个电话。 [[call]]\n\n这句不该念。');
   if (msg.includes('直接打电话')) parts.push('好,那我们现在就打电话! [[call]]');
   if (msg.includes('(打电话)')) parts.push('Hello Ray! Where are the ducks?');
   if (msg.includes('整段')) parts.push('```read\n小熊种西瓜。\n小猴睡大觉。\n西瓜熟了。\n```\n\n你看着连起来说一遍?');
@@ -71,6 +71,8 @@ export function teacherReply(body: ChatBody): FakeReply {
   const seen = listAfter(prompt, 'cards');
   if (seen.length) parts.push(`看到卡:${seen.join(' | ')}`);
   parts.push(`${resumed ? '接着说:' : '第一次说:'}${lastLine}`);
+  // 请他说的那句是这一轮最后一句(回显那句后面):他说了交给老师
+  if (msg.includes('最后请说')) parts.push('鸭子英文怎么说? [[请 说 duck]]');
   if (msg.includes('家长段')) parts.push('## 家长\n他其实会了。');
   if (msg.includes('把你的记忆整理一遍')) parts.push('## 记忆\n- 改:凑十他懂 → 凑十熟练了\n- 删:家长写的别出选择题\n- 整理时新记的\n- 删:没有这句话');
   if (msg.includes('记住它')) parts.push('## 记忆\n- 讲角用手指比划他马上懂\n- 家长说别出选择题\n- 第三条会被丢掉');

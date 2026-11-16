@@ -664,7 +664,7 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   await idle();
   const pq = t2 ? promptOf(t2.job) : '';
   const mq = t2 ? indexOf(localDate(ctx.now())).messages.find((m) => m.job === t2.job) : null;
-  check('热身:连着两拍没开口 → 停下,应用起一轮交脑(app: quiet,摸底两拍没开口,接在同一话题),你先说那句没念', okQuiet && t2.thread === t1.thread && pq.includes('    app: quiet\n') && pq.includes('    warmup:\n      - "跟 duck:没开口"\n      - "跟 duck:没开口"\n') && mq?.text === '(没出声)' && !said(ca).some((x) => x.includes('你先说')), JSON.stringify({ said: said(ca), pq: pq.slice(0, 600) }));
+  check('热身:连着两拍没开口 → 停下,应用起一轮交脑(app: quiet,摸底两拍没开口,接在同一话题),你先说那句没念', okQuiet && t2.thread === t1.thread && pq.includes('    app: quiet\n') && pq.includes('    echo:\n      - "跟 duck:没开口"\n      - "跟 duck:没开口"\n') && mq?.text === '(没出声)' && !said(ca).some((x) => x.includes('你先说')), JSON.stringify({ said: said(ca), pq: pq.slice(0, 600) }));
   await until(() => a.bins >= ca.responses.length, 3000);
   await sleep(300);
   // 又一堂:第一拍时孩子说的是对老师说的 → 打断(嘴接住、交脑,摸底带上这一笔);脑回 [[call]] → 念完响铃,应用起一轮(app: call)
@@ -681,7 +681,7 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   check('热身:孩子说的不像跟读 → 收下(kid)、嘴接住(中文)、交脑,摸底带「没跟,对你说」', okTalk && has(a, (m) => m.t === 'kid' && m.text === '那我们直接打电话吧') && pt.includes('      - "跟 duck:没跟,对你说「那我们直接打电话吧」"\n') && pt.trimEnd().endsWith('那我们直接打电话吧'), pt.slice(0, 700));
   await idle();
   const pc = tc ? promptOf(tc.job) : '';
-  check('[[call]] 念完:孩子端收到 read 带 call,应用起一轮(app: call、带摸底、打电话 0 分钟)', has(a, (m) => m.t === 'read' && m.call === true && String(m.text).includes('现在就打电话')) && pc.includes('    app: call\n') && pc.includes('    phone: 0\n') && pc.includes('    warmup:\n'), pc.slice(0, 700));
+  check('[[call]] 念完:孩子端收到 read 带 call,应用起一轮(app: call、带摸底、打电话 0 分钟)', has(a, (m) => m.t === 'read' && m.call === true && String(m.text).includes('现在就打电话')) && pc.includes('    app: call\n') && pc.includes('    phone: 0\n') && pc.includes('    echo:\n'), pc.slice(0, 700));
   a.ws.send(JSON.stringify({ t: 'bye' }));
   await until(() => a.closed !== null);
 
@@ -735,6 +735,29 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   const liveDir = join(wsRoot, 'conversations', 'chinese-tutor', `${localDate(ctx.now())}.live`);
   const reels = readdirSync(liveDir).filter((f) => f.endsWith('.reel.json')).map((f) => readFileSync(join(liveDir, f), 'utf8'));
   check('录像里有热身的每一拍({t:"echo"},只记不发)', reels.some((r) => r.includes('"t":"echo"') && r.includes('"outcome":"said"')) && !has(b, (m) => m.t === 'echo'));
+
+  // C:请他说的那句是这一轮的最后一句 → 他说了就交给老师(没有下一拍可念)
+  liveDeps.echoWaitMs = 5000;
+  await idle();
+  const nC = fake.conns.length;
+  const c = await connect('chinese-tutor', '?listen=open');
+  await until(() => has(c, (m) => m.t === 'ready'));
+  const cc = fake.conns[nC];
+  c.ws.send(JSON.stringify({ t: 'send', body: { text: '最后请说', device: 'tablet-landscape' } }));
+  await until(() => said(cc).some((x) => x.includes('鸭子英文怎么说')), 15000);
+  await idle();
+  await until(() => c.bins >= cc.responses.length, 3000);
+  await sleep(200);
+  const nC1 = turns(c).length;
+  c.ws.send(JSON.stringify({ t: 'ctx', body: { device: 'tablet-landscape' } }));
+  fake.kidTexts = ['duck'];
+  say(c);
+  const okLast = await until(() => turns(c).length > nC1, 8000);
+  await idle();
+  const pl = okLast ? promptOf(turns(c)[nC1].job) : '';
+  check('请他说的是最后一句:他说了交给老师(带这一拍,话就是他说的)', okLast && pl.includes('      - "自己说 duck:说了「duck」') && pl.trimEnd().endsWith('duck'), pl.slice(0, 900) + JSON.stringify([said(cc), c.msgs.map((m) => m.t)]));
+  c.ws.send(JSON.stringify({ t: 'bye' }));
+  await until(() => c.closed !== null);
   liveDeps.echoWaitMs = undefined;
   liveDeps.ringMs = undefined;
 }

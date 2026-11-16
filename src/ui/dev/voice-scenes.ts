@@ -39,6 +39,7 @@ export const VOICE_SCENES: VoiceScene[] = [
   { group: '别的声音', name: '卡在念', note: '点读、单词卡、田字格的声音:不是老师,不画声音', input: { status: 'card' }, sound: 'none', tutor: 'chinese', expect: 'card' },
   { group: '别的声音', name: '再听一遍', note: '放的是刚才录下的老师,不是老师在说', input: { status: 'replay' }, sound: 'none', tutor: 'chinese', expect: 'replay' },
   { group: '别的声音', name: '小课堂在放', note: '课里原来的声音在舞台上放', input: { status: 'lecture' }, sound: 'none', tutor: 'chinese', expect: 'lecture' },
+  { group: '别的声音', name: '轮到你说(按住说)', note: '老师请他说的那句([[请 说 …]])念完:按钮慢慢呼吸', input: { turn: true }, sound: 'none', tutor: 'english', expect: 'turn-hold' },
   { group: '口语课一直听', name: '口语单拍好 · 点上面开始', note: '左栏「先热身,再打电话」点之前:灰着、不接,麦也不开', input: { open: true, choose: true }, sound: 'none', tutor: 'english', expect: 'choose' },
   { group: '口语课一直听', name: '在听', note: '不用按,这颗是麦克风开关', input: { open: true }, sound: 'none', tutor: 'english', expect: 'open' },
   { group: '口语课一直听', name: '孩子在说', note: '服务端判出孩子开口', input: { open: true, hearing: true }, sound: 'kid', tutor: 'english', expect: 'open-kid' },
@@ -47,6 +48,6 @@ export const VOICE_SCENES: VoiceScene[] = [
   { group: '口语课一直听', name: '老师在想', note: '脑在写', input: { open: true, pending: true }, sound: 'none', tutor: 'english', expect: 'open-think' },
   { group: '口语课一直听', name: '麦关了', note: '孩子说话不出竖条(没在收)', input: { open: true, muted: true }, sound: 'none', tutor: 'english', expect: 'muted' },
   { group: '口语课一直听', name: '麦关了、老师在说', note: '老师的弧照出', input: { open: true, muted: true, status: 'mouth' }, sound: 'tutor', tutor: 'english', expect: 'muted-tutor' },
-  { group: '口语课一直听', name: '轮到你(跟读)', note: '热身那句念完等孩子跟:按钮和那张单词卡一起慢慢呼吸', input: { open: true, turn: true }, sound: 'none', tutor: 'english', expect: 'turn' },
+  { group: '口语课一直听', name: '轮到你(跟读)', note: '请他说的那句([[请 说 …]])念完等他说:按钮慢慢呼吸(那句锚着卡时卡也呼吸)', input: { open: true, turn: true }, sound: 'none', tutor: 'english', expect: 'turn' },
   { group: '口语课一直听', name: '打电话 · 响铃', note: '[[call]] 那句念完:头像晃;嘴一出声铃停', input: { open: true, status: 'ring' }, sound: 'none', tutor: 'english', expect: 'ring' },
 ];

@@ -36,6 +36,11 @@ check('摆 方向盘 一个键一个值', comp2?.params['上'] === '南' && comp
 check('摆 方向盘 不带参数:缺省', (parts('摆 方向盘') as { params: Record<string, string> } | null)?.params['上'] === '北');
 check('请 圈', JSON.stringify(parts('请 圈')) === '{"name":"请","ops":["圈"],"dropped":[]}');
 check('请 写、圈', JSON.stringify((parts('请 写、圈') as { ops: string[] }).ops) === '["写","圈"]');
+check('请 说 一句:说 后面的是要孩子说的', JSON.stringify(parts('请 说 The ducks are under the bus')) === '{"name":"请","ops":["说"],"dropped":[],"say":"The ducks are under the bus"}', JSON.stringify(parts('请 说 The ducks are under the bus')));
+check('请 说 一句:动作的原文留着那一句', ok('请 说 duck')?.arg === '说 duck' && ok('请 说「床前明月光」')?.arg === '说 床前明月光');
+check('请 说 不带:只开放说;请 说、写:两样都开', JSON.stringify(parts('请 说')) === '{"name":"请","ops":["说"],"dropped":[]}' && JSON.stringify((parts('请 说、写') as { ops: string[]; say?: string }).ops) === '["说","写"]' && !(parts('请 说、写') as { say?: string }).say);
+check('请 圈、说 duck:前面的照开,说 后面的是那一句', JSON.stringify(parts('请 圈、说 duck')) === '{"name":"请","ops":["圈","说"],"dropped":[],"say":"duck"}', JSON.stringify(parts('请 圈、说 duck')));
+check('请 说 太长', Boolean(bad('请 说 ' + 'a'.repeat(61))));
 {
   const m = readMark('请 圈、飞');
   check('请 里有不认得的:认得的留下、记一句', m.kind === 'act' && m.act.arg === '圈' && Boolean(m.warn?.includes('飞')), JSON.stringify(m));
@@ -59,7 +64,7 @@ check('请 一个都不认得', Boolean(bad('请 飞')));
 check('请 没写', Boolean(bad('请')));
 check('不认得的名字(英文)', Boolean(bad('open')));
 check('不认得的名字(中文)', Boolean(bad('跳 第 3 题')));
-check('play / echo / say / call 照旧', readMark('play').kind === 'cue' && readMark('echo duck').kind === 'line' && readMark('say duck').kind === 'line' && readMark('call').kind === 'line');
+check('play / call 照旧;echo / say 不认了(并进 请 说)', readMark('play').kind === 'cue' && readMark('call').kind === 'line' && readMark('echo duck').kind === 'bad' && readMark('say duck').kind === 'bad');
 check('一行里的几处都读出来,句子里拿掉', JSON.stringify(readMarks('你先圈出来。[[圈 心理辅导室]] [[请 圈]]')) === JSON.stringify({ text: '你先圈出来。', marks: [{ kind: 'act', act: { name: '圈', arg: '心理辅导室' } }, { kind: 'act', act: { name: '请', arg: '圈' } }] }), JSON.stringify(readMarks('你先圈出来。[[圈 心理辅导室]] [[请 圈]]')));
 check('actText 说回原文', actText({ name: '看', arg: '第 3 题' }) === '[[看 第 3 题]]' && actText({ name: '擦', arg: '' }) === '[[擦]]');
 

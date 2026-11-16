@@ -2130,8 +2130,8 @@ __WORD_DRAW_JS__
     S.stage.heard = true;
     renderGo();
   };
-  /** 舞台顶栏的题目:课本卡写这一课的名字(原来写的是「课本」,孩子看不出翻到哪了) */
-  const stageTitle = (card) => { const p = card.kind === 'kit' && card.props.kit === '课本' && card.props.params; return (p && typeof p['课'] === 'string' && p['课']) || cardTitle(card); };
+  /** 舞台顶栏的题目 */
+  const stageTitle = (card) => cardTitle(card);
   /** 舞台顶栏右边那一块:「给老师看」能不能按、旁边那行小字;交过的锁住,教具等老师时写「老师在看」 */
   const renderGo = () => {
     // 课本做底:没有卡;这一轮以后落了新的笔才能「给老师看」
@@ -2631,13 +2631,8 @@ __WORD_DRAW_JS__
     R.clock = reelClock(R.d.reel, R.real);
     R.p = R.clock.toPlay(w);
   };
-  /** 录像里的课本:孩子挪过窗就照他停下的那块看(写成老师的「看」,舞台照它移窗) */
-  const reelLook = (card, box) => {
-    if (!box || !card || card.kind !== 'kit' || !card.props || card.props.kit !== '课本') return card;
-    return { ...card, props: { ...card.props, params: { ...card.props.params, 看: '孩子在看|' + box.join(' ') } } };
-  };
   /** 弹窗(实录):孩子开着哪张就只读地开哪张,改了就重画(重卡重发一次 card);关了就关。点不动(body.rlk)。
-   *  以板为主的话题(reel.owns):板是整页——老师的板卡没开着时是应用自己铺的那块(课本目录、照片、白板,bpShow 照孩子端铺),孩子挪的窗跟着(f.bview) */
+   *  以板为主的话题(reel.owns):板是整页——老师的板卡没开着时是应用自己铺的那块(照片、白板,bpShow 照孩子端铺);课本做底的照记下的一节课的样子(f.lesson) */
   const reelStage = (f, rebuilt) => {
     const R = S.reel;
     // 课本做底的一节课:照孩子端记的这一刻的样子画(只读;孩子的窗跟着他停下的地方)
@@ -2656,12 +2651,11 @@ __WORD_DRAW_JS__
     if (!want) {
       R.stageKey = '';
       if (f.own) {
-        const key = JSON.stringify([f.own, f.bview]);
+        const key = JSON.stringify(f.own);
         if (R.ownKey === key && S.stage && S.stage.own) return;
         R.ownKey = key; R.now = '';
-        const own = reelLook(f.own, f.bview);
-        BP.book = own.props.kit === '课本'; BP.base = boardBase(own);
-        bpShow(own);
+        BP.book = false; BP.base = boardBase(f.own);
+        bpShow(f.own);
         return;
       }
       R.ownKey = '';
@@ -2669,14 +2663,10 @@ __WORD_DRAW_JS__
       return;
     }
     R.ownKey = '';
-    const card0 = S.sections[i].cards[f.stage.card];
-    const card = reelLook(card0, f.bview);
-    // 换成带孩子那扇窗的一份(录像里的 S.sections 是 reelDraw 现拼的,下次重拼又是原样):舞台要卡(ready)时拿的就是它
-    if (card !== card0) S.sections[i].cards[f.stage.card] = card;
-    const sk = JSON.stringify([card0.state === undefined ? null : card0.state, f.bview]);
+    const card = S.sections[i].cards[f.stage.card];
+    const sk = JSON.stringify(card.state === undefined ? null : card.state);
     if (R.stageKey !== want || !S.stage) {
       if (S.stage) closeStage();
-      if (card.kind === 'kit' && card.props.kit === '课本') BP.book = true;
       openStage(i, f.stage.card, { delegate: true });
       R.stageKey = want; R.stageState = sk; return;
     }

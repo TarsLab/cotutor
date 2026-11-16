@@ -8,6 +8,9 @@
  * 链接:家长端录像顶上「复制链接」拷的(/parent?tutor=&date=&thread=),孩子屏幕那页(/reel?…)也认;或者直接写 老师 话题 [日期]。
  * 这份时间线有孩子的原话:只在这台电脑上打印,不往外发。
  */
+import { lessonPage, lessonStrip } from '../../board/lesson.ts';
+import { stripItemLine } from '../../runtime/context/board-pack.ts';
+import type { Lesson } from '../../schema/index.ts';
 import { createServer } from 'node:http';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -90,7 +93,6 @@ function stateText(state: unknown): string {
 /** 板上的底说成一句 */
 function ownText(card: { props: Record<string, unknown> }): string {
   const p = card.props, params = (p.params ?? {}) as Record<string, string>;
-  if (p.kit === '课本') return `课本《${String(params['书'] ?? '').replace(/\.pdf$/i, '')}》${params['课'] ?? ''}`;
   if (p.kit === '照片') return `孩子的照片 ${params['图'] ?? ''}`;
   return '白板';
 }
@@ -198,6 +200,15 @@ export async function reelReport(ctx: AppContext, ref: ReelRef): Promise<ReelRep
   for (const a of R.aways) if (a.to - a.from >= 1000) add(a.from, 'away', `切到别处 ${span(a.to - a.from)}`);
   for (const l of R.lectures ?? []) add(l.from, 'lecture', `看小课堂「${l.title}」`, l.job);
   for (const o of R.owns ?? []) add(Math.max(o.at, R.startAt), 'board', `板上铺好:${ownText(o.card)}`);
+  // 一节课(课本做底):孩子端记的样子变了的那几处——翻到哪一课、老师让看哪里、白纸条上摆了什么
+  let was = '';
+  for (const x of R.lessons ?? []) {
+    const l = x.l as Lesson;
+    const p = lessonPage(l), st = lessonStrip(l);
+    const now = [p ? `《${p.title}》` : '', l.look ? `看 ${l.look.label}` : '', st?.items.length ? `白纸条:${st.items.map(stripItemLine).join('、')}` : ''].filter(Boolean).join(';');
+    if (now && now !== was) add(Math.max(x.at, R.startAt), 'board', `课本:${now}`);
+    was = now;
+  }
   for (const e of await readBoard(ctx.ws, ref.tutor, ref.date, ref.thread)) {
     const at = Date.parse(e.at);
     if (e.k === 'pick') add(at, 'board', `孩子点了「${e.text}」`);

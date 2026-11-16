@@ -5,7 +5,8 @@
  * 正文取自 kidSource:带卡 / 带固定段的顶层文本段 + 最后一段(老师板书之后又用了工具也不丢)。
  */
 import { stripSecrets } from '../board/cards/index.ts';
-import { type Bookkeeping, type ConversationMessage } from '../schema/index.ts';
+import { type Bookkeeping, type ConversationMessage, type LessonAct, type LineAct } from '../schema/index.ts';
+import { BOOK_TOC } from '../chalk/index.ts';
 import { parseBoard } from '../board/parse.ts';
 import { threads, type CardAssets, type CardStates } from '../schema/index.ts';
 import type { BoardSection, KidLecture } from '../board/presentation.ts';
@@ -206,7 +207,7 @@ export interface KidTodayThread {
   at: string;
   /** 从哪进来的:方砖、按钮上的字(预习、检查作业);自由话题是孩子的第一句(截 12 字) */
   label: string;
-  /** 课本翻到的那一课(老师最后那张带「课」的课本卡) */
+  /** 课本翻到的那一课(老师最后一次 [[翻 …]] 到的,目录不算) */
   lesson?: string;
   /** 孩子最后发的一张照片(captures/…):还没有预览图时拿它当图 */
   photo?: string;
@@ -215,20 +216,24 @@ export interface KidTodayThread {
 /** 首页「今天」那一格的字最多几个 */
 const TODAY_LABEL_MAX = 12;
 
+type SectionLike = { cards: readonly { kind: string; props: Record<string, unknown> }[]; acts?: readonly LineAct[]; lines?: readonly { acts?: readonly LineAct[] }[] };
+/** 一节里落到页上的动作(第一句前面的、每一句的) */
+const doneActs = (s: SectionLike | null | undefined): LessonAct[] => (s ? [...(s.acts ?? []), ...(s.lines ?? []).flatMap((l) => l.acts ?? [])].flatMap((a) => (a.do ? [a.do] : [])) : []);
+/** 一节里最后翻到的那一课(目录不算) */
+const lessonOf = (s: SectionLike | null | undefined): string | null => {
+  let t: string | null = null;
+  for (const a of doneActs(s)) if (a.k === '翻' && a.page.title !== BOOK_TOC) t = a.page.title;
+  return t;
+};
+
 /**
- * 这一轮让话题开了头没有(2026-11-15,Jack):有孩子参与的图出现了——孩子发了照片;老师出了板卡(课本只算翻到一课的,目录不算)、
- * 图片。只说话、只铺了目录的不算开头:孩子端不列(首页「今天」),记录照存,家长照看。
+ * 这一轮让话题开了头没有(2026-11-15,Jack):有孩子参与的图出现了——孩子发了照片;老师出了板卡、图片;课本翻到了一课(目录不算)、
+ * 白纸条上摆了图形。只说话、只铺了目录的不算开头:孩子端不列(首页「今天」),记录照存,家长照看。
  */
-export function startsThread(m: { from: ConversationMessage['from']; photos?: readonly string[]; section?: { cards: readonly { kind: string; props: Record<string, unknown> }[] } | null }): boolean {
+export function startsThread(m: { from: ConversationMessage['from']; photos?: readonly string[]; section?: SectionLike | null }): boolean {
   if (m.from === 'kid' && m.photos?.length) return true;
-  for (const c of m.section?.cards ?? []) {
-    if (c.kind === 'image') return true;
-    if (c.kind !== 'kit') continue;
-    const p = c.props as { kit?: unknown; params?: Record<string, unknown> };
-    if (p.kit !== '课本') return true;
-    if (typeof p.params?.['课'] === 'string' && p.params['课'].trim()) return true;
-  }
-  return false;
+  if (m.section?.cards.some((c) => c.kind === 'image' || c.kind === 'kit')) return true;
+  return Boolean(lessonOf(m.section)) || doneActs(m.section).some((a) => a.k === '摆');
 }
 
 /** 一天的索引 → 开了头的话题,新的在前;记账、整理记忆那种系统起的话题不算 */
@@ -249,10 +254,8 @@ export function startedThreads(messages: readonly ConversationMessage[]): KidTod
     if (m.from === 'kid' && m.text.trim()) e.said.push(m.text.replace(/\s+/g, ' ').trim());
     if (m.from === 'kid' && m.photos?.length) e.t.photo = m.photos[m.photos.length - 1];
     if (startsThread(m)) e.started = true;
-    for (const c of m.section?.cards ?? []) {
-      const p = c.props as { kit?: unknown; params?: Record<string, unknown> };
-      if (c.kind === 'kit' && p.kit === '课本' && typeof p.params?.['课'] === 'string' && p.params['课'].trim()) e.t.lesson = p.params['课'].trim();
-    }
+    const lesson = lessonOf(m.section);
+    if (lesson) e.t.lesson = lesson;
   });
   const out: KidTodayThread[] = [];
   for (const e of by.values()) {

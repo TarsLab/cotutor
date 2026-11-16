@@ -214,25 +214,28 @@ check('时长的写法', reelDuration(23400) === '23 秒' && reelDuration(130000
 }
 
 {
-  // 以板为主(2026-11-14 家长看到的录像是一块空板):应用自己铺的板(服务端给 owns)老师的板卡没开着时就在板上;
-  // 孩子在课本上挪的窗从通话里的 {t:'board', k:'view', box} 来,只认这块板铺上以后的;孩子开口不收板卡
-  const book = { kind: 'kit', props: { kit: '课本', params: { 书: 'a.pdf', 课: '目录', 看: '', 页: '3-4' }, ops: ['点字'] } };
-  const P1 = msg('P1', { live: true, text: '预习', timing: { startedAt: iso(T) }, section: { cards: [{ kind: 'kit', props: { kit: '课本', params: { 书: 'a.pdf', 课: '日月潭' } } }], lines: [line('我们看日月潭', 0)] } as unknown as BoardSection });
-  const P2 = msg('P2', { live: true, text: '我要预习日月潭', timing: { startedAt: iso(T + 30000) } });
+  // 以板为主(2026-11-14 家长看到的录像是一块空板):应用自己铺的板(服务端给 owns)老师的板卡没开着时就在板上;孩子开口不收板卡
+  const photo = { kind: 'kit', props: { kit: '照片', params: { 图: 'captures/a.jpg' }, ops: ['看'] } };
+  const P1 = msg('P1', { live: true, text: '检查作业', timing: { startedAt: iso(T) }, section: { cards: [{ kind: 'kit', props: { kit: '照片', params: { 图: 'captures/a.jpg', 圈: '' } } }], lines: [line('我们看第一题', 0)] } as unknown as BoardSection });
+  const P2 = msg('P2', { live: true, text: '这题对吗', timing: { startedAt: iso(T + 30000) } });
   const callP = { audio: '2026-11-14.live/183345.wav', startAt: T, playing: [], msgs: [
     [100, 'o', { t: 'turn', job: 'P1', thread: 'th' }],
-    [5000, 'i', { t: 'board', body: { k: 'view', thread: 'th', base: 'a.pdf#目录', box: [-387, 101, 1298, 901] } }],
     [28000, 'i', { t: 'hold' }], [29500, 'i', { t: 'release', body: {} }], [30000, 'o', { t: 'turn', job: 'P2', thread: 'th' }],
-    [40000, 'i', { t: 'board', body: { k: 'view', thread: 'th', base: 'a.pdf#日月潭', box: [0, 500, 1000, 1200] } }],
   ] };
   const plays: PlayRecord[] = [{ at: T + 20000, k: 'stage', job: 'P1', card: 0, open: true }];
-  const r = buildReel(input([P1, P2], { calls: [callP as unknown as NonNullable<ReelInput['calls']>[number]], plays, owns: [{ at: T, card: book }] }))!;
-  const f1 = reelFrameAt(r, T + 2000), f2 = reelFrameAt(r, T + 6000), f3 = reelFrameAt(r, T + 35000), f4 = reelFrameAt(r, T + 41000);
-  check('以板为主:一开始板上是应用铺的课本目录,孩子还没挪窗', f1.stage === null && JSON.stringify(f1.own) === JSON.stringify(book) && f1.bview === null, JSON.stringify(f1.own));
-  check('以板为主:孩子挪了窗 → 录像照他停下的那块看', JSON.stringify(f2.bview) === '[-387,101,1298,901]');
-  check('以板为主:老师的课本卡开了盖过应用的那块;孩子开口(29 秒)以后板卡还开着,挪窗只认它开了以后的', f3.stage?.job === 'P1' && f3.own === null && f3.bview === null && JSON.stringify(f4.bview) === '[0,500,1000,1200]', JSON.stringify([f3.stage, f3.bview, f4.bview]));
+  const r = buildReel(input([P1, P2], { calls: [callP as unknown as NonNullable<ReelInput['calls']>[number]], plays, owns: [{ at: T, card: photo }] }))!;
+  const f1 = reelFrameAt(r, T + 2000), f3 = reelFrameAt(r, T + 29800);
+  check('以板为主:一开始板上是应用铺的那张照片', f1.stage === null && JSON.stringify(f1.own) === JSON.stringify(photo), JSON.stringify(f1.own));
+  check('以板为主:老师的板卡开了盖过应用的那块;孩子开口(29 秒)以后板卡还开着', f3.stage?.job === 'P1' && f3.own === null, JSON.stringify(f3.stage));
   const plain = buildReel(input([P1, P2], { calls: [callP as unknown as NonNullable<ReelInput['calls']>[number]], plays }))!;
-  check('不是以板为主:没有 owns / bviews,弹窗照旧到孩子开口就收', plain.owns === undefined && reelFrameAt(plain, T + 2000).own === null && reelFrameAt(plain, T + 35000).stage === null);
+  check('不是以板为主:没有 owns,弹窗照旧到孩子开口就收', plain.owns === undefined && reelFrameAt(plain, T + 2000).own === null && reelFrameAt(plain, T + 35000).stage === null);
+  // 课本做底:孩子端记的一节课的样子(play 的 lesson),录像照这一刻的那一份画;第一份之前也先铺它
+  const L1 = { v: 1, pages: [], at: 'a.pdf#目录', look: null, view: null, strip: null, jobs: [] };
+  const L2 = { ...L1, at: 'a.pdf#日月潭', look: { label: '第1段', box: [0, 0, 1000, 200], n: 1 } };
+  const withLesson = buildReel(input([P1, P2], { calls: [callP as unknown as NonNullable<ReelInput['calls']>[number]], plays: [{ at: T + 1000, k: 'lesson', l: L1 }, { at: T + 31000, k: 'lesson', l: L2 }] }))!;
+  check('课本做底:录像照记下的一节课的样子', JSON.stringify(reelFrameAt(withLesson, T + 500).lesson) === JSON.stringify(L1) && JSON.stringify(reelFrameAt(withLesson, T + 20000).lesson) === JSON.stringify(L1) && JSON.stringify(reelFrameAt(withLesson, T + 40000).lesson) === JSON.stringify(L2));
+  check('不是课本做底:lesson 是 null', reelFrameAt(plain, T + 2000).lesson === null);
+  check('记下的样子形状不对的不收', playRecordOk({ at: 1, k: 'lesson', l: L1 }) && !playRecordOk({ at: 1, k: 'lesson', l: { v: 2 } }) && !playRecordOk({ at: 1, k: 'lesson', l: null }));
 }
 
 done();

@@ -6,7 +6,7 @@
  *   《古诗两首》3–4 页,下面两首各一页;语文园地一 5–7 页,按栏目分(第 7 页空着);识字表在最后。
  * 数学(2026-11-15)用 tests/_math-book.ts 照人教版数学排的那本:目录没有点线、单元下面的小节和课题从页里读、例题、栏目和题。
  */
-import { BOOK_KIT, BOOK_MAX_PAGES, bookCut, bookFind, bookFrame, bookPages, bookPick, bookSheets, bookSpots, bookTarget, bookView, findLesson, kitOf, lessonBlocks, readKitLines } from '../src/chalk/index.ts';
+import { BOOK_MAX_PAGES, bookCut, bookFind, bookFrame, bookPages, bookPick, bookSheets, bookTarget, bookView, findLesson, lessonBlocks } from '../src/chalk/index.ts';
 import { bookLesson, fitActs, lessonOpen } from '../src/board/lesson-fit.ts';
 import { lessonInit } from '../src/board/lesson.ts';
 import { buildBookIndex, decodePinyin, pageLines, printedOf } from '../src/memory/textbook-index.ts';
@@ -66,24 +66,15 @@ check('同一个词出现两处:先找挨着窗的那一处(认字栏里的)', B
 check('点在空白处、点到标点:不算', bookPick(fish, sheets, 5, 5) === null);
 check('窗里看得见什么:哪几页、哪几段', bookView(fish, sheets, blocks, [0, 0, 1000, sheets[1].top + 300]) === '第 1–2 页:第 1–3 段' && bookView(fish, sheets, blocks, [0, sheets[1].top + 350, 1000, sheets[1].top + 700]).startsWith('第 2 页:课文后面'), bookView(fish, sheets, blocks, [0, 0, 1000, sheets[1].top + 300]));
 
-// ---- 画法「课本」 ----
-const kit = kitOf(BOOK_KIT)!;
-const r = readKitLines(kit, ['课: 小鱼吹泡泡', '看: 第 2 段', '圈: 井沿、泡泡', '遮: 圆', '读一读这一段。']);
-check('老师写课、看、圈、遮;书和页由应用填;不写操作 = 点字、圈、画都开(不用认图)', r.params['课'] === '小鱼吹泡泡' && r.params['看'] === '第 2 段|' && r.params['圈'] === '井沿|;泡泡|' && r.params['遮'] === '圆|' && r.ops.join() === '点字,圈,画' && r.prompt === '读一读这一段。', JSON.stringify(r));
-const errOf = (f: () => unknown): string => { try { f(); return ''; } catch (e) { return e instanceof Error ? e.message : String(e); } };
-check('写错了抛,说清怎么写', errOf(() => readKitLines(kit, ['圈: 一二三四五六七八九十一二三'])).includes('12 个字以内') && errOf(() => readKitLines(kit, ['书: /etc/passwd.pdf'])).includes('应用填') && errOf(() => readKitLines(kit, ['页: 九'])).includes('59-60'));
-const filled = { ...r.params, 书: '语文一年级下册.pdf', 页: '2-3', 看: `第2段|${t2!.box.join(' ')}`, 圈: `井沿|${well!.join(' ')}`, 遮: `圆|${bookFind(fish, sheets, '圆')!.join(' ')}` };
-const scene = kit.build(filled, { aspect: H / W });
-check('画面:底是那两页、窗对着第 2 段、圈和盖拼音的块(id 以 cover- 起头)', scene.book?.src === '语文一年级下册.pdf' && scene.book.pages.join() === '2,3' && scene.frame![1] < t2!.box[1] && scene.frame![1] + scene.frame![3] > t2!.box[3] && scene.skeletons.some((s) => s.type === 'ellipse' && s.label === '老师圈的:井沿') && scene.skeletons.some((s) => s.id === 'cover-圆'), JSON.stringify(scene.frame));
-check('没写看:窗在第一页上面;要看的太小就放大到页宽的三分之一为止', bookFrame(null, sheets)[1] === 0 && bookFrame([500, 500, 520, 520], sheets)[2] >= 333);
-// 页底没有字的那一条不铺、页和页直接连着;没写「裁」的旧卡照原来整页排、中间空一条
+// ---- 课本的几何(画法「课本」那张卡 2026-11-16 删了,老师写动作;几何还在) ----
+check('窗:要看的那一块留边;没给就是第一页上面;太小就放大到页宽的三分之一为止', bookFrame(t2!.box, sheets)[1] < t2!.box[1] && bookFrame(null, sheets)[1] === 0 && bookFrame([500, 500, 520, 520], sheets)[2] >= 333);
+// 页底没有字的那一条不铺、页和页直接连着;没裁的照原来整页排、中间空一条
 const cut = bookCut(ix.pages);
 const joined = bookSheets(fish, undefined, cut);
 const lowest = Math.max(...ix.pages.flatMap((p) => p.lines.map((l) => (l.y2 * 1000) / p.w)));
 check('裁页底:整册一个数,印得最低的那行字还在;裁了的页直接连着,字的位置在页里不变', cut > 0 && cut === bookCut(ix.pages) && (H * 1000) / W - cut > lowest && joined[1].top === joined[0].height && joined[0].height === sheets[0].height - cut && bookFind(fish, joined, '井沿')?.[0] === bookFind(fish, sheets, '井沿')?.[0]);
-check('没写裁的卡照原来排(页之间空着);写了的连着', scene.book?.gap === 30 && kit.build({ ...filled, 裁: String(cut) }, { aspect: H / W }).book?.gap === 0 && sheets[1].top === sheets[0].height + 30);
-check('页、圈的存法读回来', bookPages('59-60').join() === '59,60' && bookPages('x').length === 0 && bookSpots('井沿|1 2 3 4;泡泡|')[1].box === null && bookSpots('井沿|1 2 3 4')[0].box?.join() === '1,2,3,4');
-check('孩子画了:说在第几页哪一截,圈住什么看图', kit.read(filled, { marks: [[[100, 1200], [200, 1250]]], aspect: H / W }, scene).includes('PDF 第 2 页下面'));
+check('没裁的页之间空着', sheets[1].top === sheets[0].height + 30);
+check('页的存法读回来', bookPages('59-60').join() === '59,60' && bookPages('x').length === 0);
 
 // ---- 数学课本 ----
 const mx = mathIndexOf();

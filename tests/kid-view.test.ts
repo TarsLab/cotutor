@@ -92,18 +92,20 @@ const okRun = (result: string): ReturnType<typeof parseTranscript> =>
   // 首页「今天」:开了头的话题(有孩子参与的图出现过)才列;只说话的、只铺了目录的、系统起的不列;新的在前
   const base = { artifacts: [] as string[], result: 'ok' as const };
   const kit = (kitName: string, params: Record<string, string> = {}) => ({ lines: [], cards: [{ kind: 'kit', props: { kit: kitName, params, ops: [] } }] });
+  // 课本做底:讲稿里的 [[翻 …]](落到页上的样子)
+  const fan = (title: string) => ({ cards: [], lines: [{ text: '好。', audio: null, marks: [], ask: false, anchor: null, cues: [], acts: [{ name: '翻', arg: title, do: { k: '翻', page: { id: `b#${title}`, kind: 'book', src: 'b', title, pages: [1], cut: 0, layout: 'prose', pick: true } } }] }] });
   const msgs = [
     // 1:只说话
     { ...base, job: '1', thread: '1', at: '2026-09-09T10:00', from: 'kid' as const, text: '我想问个问题', via: { home: 'h', button: 'new' as const, label: '新话题' }, kidText: '好', section: { lines: [], cards: [{ kind: 'choice', props: {} }] } },
     // 2:预习,先铺目录(不算),再翻到一课(算)
-    { ...base, job: '2', thread: '2', at: '2026-09-09T10:10', from: 'kid' as const, text: '预习', via: { home: 'h', button: 'preview', label: '预习' }, kidText: '看目录', section: kit('课本', { 书: 'b', 课: '' }) },
-    { ...base, job: '3', thread: '2', at: '2026-09-09T10:12', from: 'kid' as const, text: '坐井观天', kidText: '翻到了', section: kit('课本', { 书: 'b', 课: '坐井观天' }) },
+    { ...base, job: '2', thread: '2', at: '2026-09-09T10:10', from: 'kid' as const, text: '预习', via: { home: 'h', button: 'preview', label: '预习' }, kidText: '看目录', section: fan('目录') },
+    { ...base, job: '3', thread: '2', at: '2026-09-09T10:12', from: 'kid' as const, text: '坐井观天', kidText: '翻到了', section: fan('坐井观天') },
     // 4:检查作业,孩子发了照片
     { ...base, job: '4', thread: '4', at: '2026-09-09T10:20', from: 'kid' as const, text: '检查作业', via: { home: 'h', button: 'check', label: '检查作业' }, photos: ['captures/2026-09-09/1020-1.jpg'], kidText: '看看' },
     // 5:新话题,老师出了点阵
     { ...base, job: '5', thread: '5', at: '2026-09-09T10:30', from: 'kid' as const, text: '三乘五等于多少呀老师你帮我看看', via: { home: 'h', button: 'new' as const, label: '新话题' }, kidText: '摆一摆', section: kit('点阵', { 行: '3', 列: '5' }) },
     // 6:只铺了目录
-    { ...base, job: '6', thread: '6', at: '2026-09-09T10:40', from: 'kid' as const, text: '预习', via: { home: 'h', button: 'preview', label: '预习' }, kidText: '看目录', section: kit('课本', { 书: 'b' }) },
+    { ...base, job: '6', thread: '6', at: '2026-09-09T10:40', from: 'kid' as const, text: '预习', via: { home: 'h', button: 'preview', label: '预习' }, kidText: '看目录', section: { cards: [], lines: [] } },
     // 7:记账(系统起的)
     { ...base, job: '7', thread: '7', at: '2026-09-09T21:00', from: 'system' as const, text: '记账', kidText: '记好了', photos: ['captures/x.jpg'] },
   ];

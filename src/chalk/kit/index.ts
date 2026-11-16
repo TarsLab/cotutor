@@ -5,7 +5,6 @@
  * 加一种教具 = 加一个文件 + KITS 里一行,再在 cards/kit/card.md 里写它的参数、操作与例子。
  */
 
-import { book } from './book.ts';
 import { compass } from './compass.ts';
 import { dots } from './dots.ts';
 import { PHOTO_PICK, photo } from './photo.ts';
@@ -13,12 +12,12 @@ import { white } from './white.ts';
 import type { Kit, KitState } from './types.ts';
 
 export { KIT_MARK_MAX, KIT_MARK_POINTS, KIT_PICK_CHARS, KIT_PICK_MAX } from './types.ts';
-export { BOOK_ASPECT, BOOK_GAP, BOOK_KIT, BOOK_MAX_PAGES, BOOK_TOC, BOOK_W, SECTION_NAMES, bookCut, bookFind, bookFrame, bookHeight, bookOps, bookPages, bookPick, bookSheets, bookSpots, bookTarget, bookView, findLesson, lessonBlocks, lineBox, type BookBlock, type BookSheet } from './book.ts';
+export { BOOK_ASPECT, BOOK_GAP, BOOK_MAX_PAGES, BOOK_TOC, BOOK_W, SECTION_NAMES, bookCut, bookFind, bookFrame, bookHeight, bookPages, bookPick, bookSheets, bookTarget, bookView, findLesson, lessonBlocks, lineBox, type BookBlock, type BookSheet } from './book.ts';
 export { COVER_ID, PHOTO_PICK, photoFrame, photoLocate, photoPick, pickEnglish, photoRings, pickable, pinyinStrip, type PhotoLine, type PhotoWord } from './photo.ts';
 export type { Kit, KitEnv, KitParam, KitScene, KitState, KitTurn } from './types.ts';
 export { kitMarks, markPhrases, turnOf, turnPoint, turnedSkeletons, type KitMark } from './marks.ts';
 
-export const KITS: readonly Kit[] = [photo, book, white, dots, compass];
+export const KITS: readonly Kit[] = [photo, white, dots, compass];
 
 /** 只看、不动笔的那种「操作」:写明了才算,不写操作时不在全开里;只开放它的卡没有笔、没有「给老师看」 */
 export const KIT_LOOK = '看';

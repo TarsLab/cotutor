@@ -8,7 +8,7 @@
  * 一节里的动作照先后一个一个落(先翻再看,看的是新的那一课),落不了的记一句给家长(unfound / skipped),动作本身留在讲稿上、不带 do。
  * 这里也收着课本做底时以前替老师把住的规矩(以前在 board-page.ts 的 fitBook 与 runner 的 lastBoardKit、bookOn)。
  */
-import { BOOK_KIT, BOOK_MAX_PAGES, BOOK_TOC, bookCut, bookFind, bookSheets, bookTarget, findLesson, lessonBlocks } from '../chalk/index.ts';
+import { BOOK_MAX_PAGES, BOOK_TOC, bookCut, bookFind, bookSheets, bookTarget, findLesson, lessonBlocks } from '../chalk/index.ts';
 import type { BoardCard, BoardSection, BookIndex, BookPage, Lesson, LessonAct, LessonPage, LineAct } from '../schema/index.ts';
 import { actParts } from './acts.ts';
 import { lessonPage, lessonStep } from './lesson.ts';
@@ -94,41 +94,14 @@ export function fitActs(l: Lesson, acts: readonly LineAct[], book: LessonBook | 
 }
 
 /**
- * 课本做底的一节里卡都不上板(页就是课本,老师用讲稿里的动作):别的卡(点阵、方向盘、字卡……)撤掉(dropped,给家长记一行),
- * 卡撤了,讲稿里引用它的锚、标注、cue 跟着拿掉。
- * 过渡(阶段 2 任务 3 起,到阶段 3 结束删掉:语文预习还写 ```课本 卡):课本卡说成讲稿里的动作
- * (课 → 翻,看、圈、遮、盖照写的,开放的操作 → 请:画 = 写、点字 = 点),跟着它前面那一句(第一句前面的马上做)。
+ * 课本做底的一节里卡都不上板(页就是课本,老师用讲稿里的动作):卡都撤掉(dropped,给家长记一行),
+ * 讲稿里引用卡的锚、标注、cue 跟着拿掉。
  */
 export function bookSection(section: BoardSection): { section: BoardSection; dropped: BoardCard[] } {
-  const kits = section.cards.map((_, i) => i);
-  if (!kits.length) return { section, dropped: [] };
-  const dropped: BoardCard[] = [];
-  const lead: LineAct[] = [...(section.acts ?? [])];
-  const after = new Map<number, LineAct[]>();
-  for (const i of kits) {
-    const c = section.cards[i];
-    if (c.kind !== 'kit' || c.props.kit !== BOOK_KIT) { dropped.push(c); continue; }
-    const p = (c.props.params && typeof c.props.params === 'object' ? c.props.params : {}) as Record<string, unknown>;
-    const text = (k: string): string[] => (typeof p[k] === 'string' ? (p[k] as string).split(';').map((x) => x.split('|')[0].trim()).filter(Boolean) : []);
-    const acts: LineAct[] = [];
-    if (text('课')[0]) acts.push({ name: '翻', arg: text('课')[0] });
-    if (text('看')[0]) acts.push({ name: '看', arg: text('看')[0] });
-    for (const k of ['圈', '遮', '盖'] as const) if (text(k).length) acts.push({ name: k, arg: text(k).join('、') });
-    const ops = Array.isArray(c.props.ops) ? (c.props.ops as string[]) : [];
-    const asked = [...new Set(ops.flatMap((o) => (o === '圈' ? ['圈'] : o === '画' ? ['写'] : o === '点字' ? ['点'] : [])))];
-    if (asked.length) acts.push({ name: '请', arg: asked.join('、') });
-    // 跟着卡前面那一句:最后一句锚在它前面的卡上(或没有锚)的
-    let at = -1;
-    section.lines.forEach((l, k) => { if (l.anchor === null || l.anchor < i) at = k; });
-    if (at < 0) lead.push(...acts);
-    else after.set(at, [...(after.get(at) ?? []), ...acts]);
-  }
-  const lines = section.lines.map((l, k) => {
-    const acts = [...(l.acts ?? []), ...(after.get(k) ?? [])];
-    return { ...l, anchor: null, marks: [], cues: [], ...(acts.length ? { acts } : {}) };
-  });
-  const { layout: _layout, acts: _acts, ...rest } = section;
-  return { section: { ...rest, cards: [], lines, ...(lead.length ? { acts: lead } : {}) }, dropped };
+  if (!section.cards.length) return { section, dropped: [] };
+  const lines = section.lines.map((l) => ({ ...l, anchor: null, marks: [], cues: [] }));
+  const { layout: _layout, ...rest } = section;
+  return { section: { ...rest, cards: [], lines }, dropped: [...section.cards] };
 }
 
 /** 一节里落好的动作,照孩子看到的先后:第一句前面的,再一句一句(定稿时 runner 照它把这一节落进一节课的状态) */

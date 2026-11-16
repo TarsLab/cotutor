@@ -150,7 +150,7 @@ try {
   const sheets = bookSheets(at.pages, undefined, bookCut(ix.pages));
   const v = [-cam.tx / cam.s, -cam.ty / cam.s, (cam.w - cam.tx) / cam.s, (cam.h - cam.ty) / cam.s];
   const p6 = bookFind(at.pages, sheets, '青蛙笑了');
-  ok('老师的课本卡落下:板换成这一课(两页),「井沿」圈上了,窗里是第 6 段', Boolean(landed) && (await bookState()).pages === 2 && p6 && v[1] <= p6[1] && v[3] >= p6[3], JSON.stringify({ st: await bookState(), v: v.map(Math.round), p6 }));
+  ok('老师的动作落下:翻到这一课(两页),「井沿」圈上了,窗里是第 6 段', Boolean(landed) && (await bookState()).pages === 2 && p6 && v[1] <= p6[1] && v[3] >= p6[3], JSON.stringify({ st: await bookState(), v: v.map(Math.round), p6 }));
   console.log('  ', await shot('2-坐井观天.png'));
 
   // 三、点一个字

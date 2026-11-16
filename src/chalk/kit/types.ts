@@ -32,11 +32,6 @@ export interface KitScene {
   frame?: [number, number, number, number];
   /** 照片做底:src 相对 workspace 根;照片占场景里的 [0, 0, width, height](舞台垫在最底下,老师和孩子的笔画在它上面) */
   photo?: { src: string; width: number; height: number };
-  /**
-   * 课本做底(book.ts):src 是教材 PDF 相对 vault 根的路径,pages 是铺哪几页(PDF 的页号),从上往下排,一页宽 1000、高 1000 × aspect,页间空 gap。
-   * 舞台用 pdf.js 现画;孩子用手指移动、放大,窗(frame)只是老师要他先看的那一块
-   */
-  book?: { src: string; pages: number[]; aspect: number; gap: number };
 }
 
 /** 排画面时应用量到的东西(老师不写):照片的高宽比。服务端没量过就不给,画法自己取个缺省 */
@@ -81,7 +76,7 @@ export interface Kit {
   params: readonly KitParam[];
   /** 孩子在这张卡上能做的操作(事先设计好的);老师每张卡可以只开放其中几种(「操作: 切」),不写 = 全开(「看」除外:只看、不动笔,要写明才是) */
   ops: readonly string[];
-  /** 不写「操作」时开放哪几种;不给 = ops 里除了要写明才有的(看、点字)都开。课本不用认图,点字缺省就开 */
+  /** 不写「操作」时开放哪几种;不给 = ops 里除了要写明才有的(看、点字)都开 */
   open?: readonly string[];
   /** 一行简写 → 参数(「2 行 9 个」→ 行、每行);不是简写回 null */
   shorthand?(line: string): Record<string, string> | null;

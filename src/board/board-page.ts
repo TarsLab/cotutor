@@ -3,11 +3,10 @@
  * 1. 照片板没写「图」:就是这块底(这个话题里孩子最近发的那张照片)。《画板为主设计》:「底不用再写,缺省就是当前这一块」。
  *    没有底(孩子还没发照片)的照片板画不出来,撤掉。
  * 1b. 照片板的「圈」「遮」写的是字词(圈: 蚕):照这块底上认出的字和行框找到它在哪(locate),换成框;找不到的那一处不画(unfound,给家长端记一行)。
- * 1c. 课本卡:课本做底的一节课里说成讲稿里的动作(src/board/lesson-fit.ts 的 cardsToActs,不经这里);别的 activity 里画不出来,撤掉。
  * 2. 以板为主的话题(activity 头上 board: page):板是页面,老师的卡只往板上画——一节只认最后一张板卡,别的卡不给孩子看。
  * 撤掉的卡在讲稿里的引用(锚、敲黑板、[[cue]])跟着重排或撤掉;dropped 是撤掉的卡(给家长端记一行)。
  */
-import { BOOK_KIT, photoFrame, photoRings } from '../chalk/index.ts';
+import { photoFrame, photoRings } from '../chalk/index.ts';
 import type { BoardCard, BoardSection } from '../schema/index.ts';
 
 export interface BoardPageOpts {
@@ -20,8 +19,6 @@ export interface BoardPageOpts {
   /** 这块底上第几题在哪(认出的题号与框,分题);还没认、没认出题 = 不给 */
   question?: (no: string) => [number, number, number, number] | null;
 }
-
-const isBookBoard = (c: BoardCard): boolean => c.kind === 'kit' && c.props.kit === BOOK_KIT;
 
 /** 照片板的「圈」:写的字词换成框;找不到的那一处拿掉 */
 function resolveRings(v: string, locate: BoardPageOpts['locate'], unfound: string[], within: readonly [number, number, number, number] | null = null): string {
@@ -47,8 +44,6 @@ export function boardPageSection(section: BoardSection, opts: BoardPageOpts): { 
   const lastKit = opts.page ? section.cards.map((c) => c.kind).lastIndexOf('kit') : -1;
   section.cards.forEach((c, i) => {
     let card = c;
-    // 课本卡只在课本做底的一节课里(那里说成动作,src/board/lesson-fit.ts);拍照的 activity 里画不出来,撤掉
-    if (isBookBoard(c)) { dropped.push(c); return; }
     if (isPhotoBoard(c) && !photoOf(c)) {
       if (!opts.photo) { dropped.push(c); return; }
       card = { ...c, props: { ...c.props, params: { ...(c.props.params as Record<string, unknown>), 图: opts.photo } } };

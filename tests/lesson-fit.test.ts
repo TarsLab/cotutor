@@ -1,8 +1,8 @@
-/** 讲稿里的动作落到课本上(src/board/lesson-fit.ts):照索引找框、先翻再看、落不了的记一句;过渡期的课本卡说成动作。书是 tests/_math-book.ts 造的。 */
+/** 讲稿里的动作落到课本上(src/board/lesson-fit.ts):照索引找框、先翻再看、落不了的记一句;课本做底的一节卡都不上板。书是 tests/_math-book.ts 造的。 */
 import { bookPageOf, bookSection, fitActs, fitSection, lessonOpen, sectionActs } from '../src/board/lesson-fit.ts';
 import { lessonInit, lessonPage, lessonStep, lessonStrip } from '../src/board/lesson.ts';
 import { parseBoard } from '../src/board/parse.ts';
-import type { BoardCard, Lesson, LineAct } from '../src/schema/index.ts';
+import type { Lesson, LineAct } from '../src/schema/index.ts';
 import { mathIndexOf } from './_math-book.ts';
 import { check, done } from './_check.ts';
 
@@ -56,12 +56,11 @@ check('还没有页:先铺目录;有页就不动', opened.at === '数学二年�
   check('没有动作的一节原样', fitSection(parseBoard('你好。\n').section, opened, book).section.lines[0].acts === undefined);
 }
 
-// ——— 过渡:课本卡说成动作(落到页上和老师写的动作走同一条路) ———
+// ——— 课本做底的一节:卡都不上板;数学课本上请点字不开 ———
 {
-  const card = (params: Record<string, string>, ops = ['圈', '画']): BoardCard => ({ kind: 'kit', props: { kit: '课本', params, ops } });
-  const raw = bookSection({ cards: [card({ 课: '5的乘法口诀', 看: '例 2|', 盖: '5×1=5|' }), { kind: 'kit', props: { kit: '点阵', params: {} } }], lines: [{ text: '看例 2。', audio: null, marks: [], ask: false, anchor: 1, cues: [] }] });
-  check('课本卡:课 → 翻、看、盖照写的、操作 → 请(画 = 写);在第一句前面的马上做;别的卡撤掉', raw.section.acts?.map((a) => `${a.name} ${a.arg}`).join() === '翻 5的乘法口诀,看 例 2,盖 5×1=5,请 圈、写' && raw.dropped.length === 1 && raw.section.cards.length === 0, JSON.stringify(raw));
-  const f = fitSection(raw.section, opened, book);
-  check('数学课本上请点字:不开(这一页不能点字),记一句', fitSection(bookSection({ cards: [card({ 课: '5的乘法口诀' }, ['点字'])], lines: [] }).section, opened, book).why.some((w) => w.includes('不能点字')) && f.section.acts?.every((a) => a.do) === true, JSON.stringify(f));
+  const raw = bookSection({ cards: [{ kind: 'kit', props: { kit: '点阵', params: {} } }], lines: [{ text: '看例 2。', audio: null, marks: [], ask: false, anchor: 0, cues: [] }] });
+  check('卡都撤掉,讲稿的锚跟着没了', raw.dropped.length === 1 && raw.section.cards.length === 0 && raw.section.lines[0].anchor === null);
+  const f = fitActs(fitActs(opened, [A('翻', '5的乘法口诀')], book).lesson, [A('请', '点、圈')], book);
+  check('数学课本上请点字:点字不开,圈照开,记一句', (f.acts[0].do as { ops: string[] }).ops.join() === '圈' && f.why.some((w) => w.includes('不能点字')), JSON.stringify(f));
 }
 done();

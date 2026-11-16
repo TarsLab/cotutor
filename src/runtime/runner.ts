@@ -150,7 +150,7 @@ function lastBoardKit(messages: readonly ConversationMessage[]): { kit: string; 
   }
   return kit;
 }
-/** 课本上揭开的(盖住的算式)最多几个字:同课本卡「盖」写的上限 */
+/** 课本上揭开的(盖住的算式)最多几个字:同 [[盖 …]] 一处的上限 */
 const BOOK_MARK_CHARS = 12;
 /** 课本窗里的图(舞台导的 jpeg,长边 1024)base64 最多多长:够一张清楚的图,挡住塞进来的大文件 */
 export const BOOK_SHOT_B64_MAX = 700_000;
@@ -478,7 +478,7 @@ export class Runner {
 
   /** 板书落到板上之前替老师把住的(src/board/board-page.ts);这一轮没定(工作台、旧路径)就原样 */
   private fitBoard(section: BoardSection, active: Active): ReturnType<typeof boardPageSection> & { why: string[] } {
-    // 课本做底的一节课:板卡不上板(课本卡说成动作,过渡),讲稿里的动作照这一轮开始时这节课的样子一个一个落到页上
+    // 课本做底的一节课:卡不上板,讲稿里的动作照这一轮开始时这节课的样子一个一个落到页上
     if (active.book && active.lesson) {
       const cards = bookSection(section);
       const acts = fitSection(cards.section, active.lesson, active.book);
@@ -937,7 +937,7 @@ export class Runner {
         await updateLesson(ws, tutor, date, thread, (l) => lessonDone(acts.reduce((s, a) => lessonStep(s, { t: 'act', act: a }), l), job));
       }
       if (fit.unfound.length) kidView.warnings.push(`照片板写的「${fit.unfound.join('」「')}」在认出的字、题里找不到,没画(题找不到就是整张)`);
-      if (fit.dropped.length) kidView.warnings.push(active.book ? `课本做底:板卡不上板,用讲稿里的动作(撤掉了:${fit.dropped.map((c) => `${c.kind} ${cardLabel(c)}`.trim()).join(';')})` : active.board?.page ? `以板为主:这一节只上板一张板卡,别的没给孩子看(${fit.dropped.map((c) => `${c.kind} ${cardLabel(c)}`.trim()).join(';')})` : `照片板没写「图」,孩子还没发照片,画不出来,没给孩子看`);
+      if (fit.dropped.length) kidView.warnings.push(active.book ? `课本做底:卡不上板,用讲稿里的动作(撤掉了:${fit.dropped.map((c) => `${c.kind} ${cardLabel(c)}`.trim()).join(';')})` : active.board?.page ? `以板为主:这一节只上板一张板卡,别的没给孩子看(${fit.dropped.map((c) => `${c.kind} ${cardLabel(c)}`.trim()).join(';')})` : `照片板没写「图」,孩子还没发照片,画不出来,没给孩子看`);
     }
     // 整块出的(没走流式):卡与句这时才第一次见到,也发一遍
     if (kidView.section) {

@@ -1,6 +1,6 @@
 /**
  * 课本做底(语文预习,activity 头上 base: textbook;2026-11-14《语文预习:PDF 课本与镜头交互》)服务端那一半:
- * 课本卡落板之前填书、页、课,看 / 圈 / 遮换成框(src/board/board-page.ts);板此刻的样子里的课本(board-pack 的 bookSlateParts);
+ * 讲稿里的动作落到页上(src/board/lesson-fit.ts,翻、看、圈换成框);板此刻的样子里的课本(board-pack 的 bookSlateParts);
  * 全流程:点「预习」方砖(不拍照)→ 底是目录 → 老师翻到一课、看第 1 段再看第 2 段 → 孩子挪窗、点字记进日志 → 下一轮老师看到他在看哪里。
  * 书用 tests/_book.ts 造的那本;PDF 是个假文件,它的指纹对上一份事先写好的索引缓存(读 PDF 的那一层走 scripts/probe-textbook.mjs)。
  */
@@ -38,16 +38,15 @@ const ix = bookIndexOf();
 const kitCard = (params: Record<string, string>, kit = '课本'): BoardCard => ({ kind: 'kit', props: { kit, params, ops: ['点字', '圈', '画'] } } as BoardCard);
 const sec = (cards: BoardCard[]): BoardSection => ({ heading: null, lines: cards.map((_, i) => ({ text: `第${i}句`, anchor: i, marks: [], cues: [] })), cards } as unknown as BoardSection);
 
-// ---- 课本做底的一节:课本卡说成动作(过渡,语文预习还写卡),落到页上(纯函数) ----
+// ---- 课本做底的一节:卡都不上板,讲稿里的动作落到页上(纯函数) ----
 {
   const b = { file: '语文一年级下册.pdf', index: ix };
-  const raw = bookSection(sec([kitCard({ 课: '小鱼吹泡泡', 看: '第 1 段|' }), { kind: 'text', props: { text: '一张字卡' } } as BoardCard, kitCard({ 看: '第 2 段|', 圈: '井沿|;没有这个词|' })]));
-  check('课本卡说成动作:跟着它前面那一句(第一张在第一句前面);别的卡撤掉;一张卡都不上板', raw.section.cards.length === 0 && raw.dropped.length === 1 && raw.dropped[0].kind === 'text' && raw.section.acts?.map((a) => a.name).join() === '翻,看,请' && raw.section.lines[1].acts?.map((a) => `${a.name} ${a.arg}`).join() === '看 第 2 段,圈 井沿、没有这个词,请 点、圈、写', JSON.stringify(raw.section));
-  check('卡撤了,讲稿里的锚跟着没了', raw.section.lines.every((l) => l.anchor === null));
+  const raw = bookSection({ ...sec([{ kind: 'text', props: { text: '一张字卡' } } as BoardCard, kitCard({ 图: 'captures/a.jpg' }, '照片')]), lines: [{ text: '我们来预习。', audio: null, marks: [{ card: 0, phrase: '字卡' }], ask: false, anchor: 0, cues: [], acts: [{ name: '翻', arg: '小鱼吹泡泡' }, { name: '看', arg: '第 1 段' }] }, { text: '再看第二段。', audio: null, marks: [], ask: false, anchor: 1, cues: [], acts: [{ name: '看', arg: '第 2 段' }, { name: '圈', arg: '井沿、没有这个词' }] }] } as BoardSection);
+  check('课本做底的一节:卡都撤掉,讲稿里的锚、标注跟着没了;动作留着', raw.section.cards.length === 0 && raw.dropped.length === 2 && raw.section.lines.every((l) => l.anchor === null && !l.marks.length) && raw.section.lines[1].acts?.length === 2, JSON.stringify(raw.section));
   const fit = fitSection(raw.section, lessonOpen(lessonInit(), b), b);
-  check('落到页上:翻到这一课、看换成框;圈找得到的那一处,找不到的记一句', fit.section.acts?.[0].do?.k === '翻' && (fit.section.acts[1].do as { label: string }).label === '第1段' && (fit.section.lines[1].acts?.[1].do as { spots: unknown[] }).spots.length === 1 && fit.why.length === 1 && fit.why[0].includes('没有这个词'), JSON.stringify([fit.section, fit.why]));
-  const noBook = boardPageSection(sec([kitCard({ 课: '小鱼吹泡泡' }), kitCard({ 图: 'captures/a.jpg' }, '照片')]), { page: true, photo: 'captures/a.jpg' });
-  check('底不是课本(拍照的 activity):课本卡画不出来,撤掉', noBook.section.cards.length === 1 && noBook.section.cards[0].props.kit === '照片' && noBook.dropped.length === 1);
+  check('落到页上:翻到这一课、看换成框;圈找得到的那一处,找不到的记一句', fit.section.lines[0].acts?.[0].do?.k === '翻' && (fit.section.lines[0].acts[1].do as { label: string }).label === '第1段' && (fit.section.lines[1].acts?.[1].do as { spots: unknown[] }).spots.length === 1 && fit.why.length === 1 && fit.why[0].includes('没有这个词'), JSON.stringify([fit.section, fit.why]));
+  const noBook = boardPageSection(sec([kitCard({ 图: 'captures/a.jpg' }, '照片')]), { page: true, photo: 'captures/a.jpg' });
+  check('拍照的 activity:照片板照旧', noBook.section.cards.length === 1 && noBook.section.cards[0].props.kit === '照片');
   check('一课、目录铺哪几页', bookLesson(ix, '古诗两首')?.pages.map((p) => p.n).join() === '4,5' && bookLesson(ix, null)?.title === '目录' && bookLesson(ix, '没有') === null);
 }
 
@@ -131,7 +130,7 @@ const sec = (cards: BoardCard[]): BoardSection => ({ heading: null, lines: cards
   const m2 = index().messages.find((m) => m.job === job2);
   const s2 = m2?.section;
   const l2 = ((await route('GET', `/api/kid/lesson?tutor=${T}&date=${date}&thread=${thread}`, ctx)).json as { lesson: Lesson }).lesson;
-  check('老师写的两张课本卡:说成动作,跟着卡前面那一句(翻、看第 1 段;第二句念完看第 2 段、圈),卡不上板', s2?.cards.length === 0 && s2.lines[0].acts?.map((a) => a.do?.k).join() === '翻,看,请' && s2.lines[1].acts?.map((a) => a.do?.k).join() === '看,圈,请', JSON.stringify(s2));
+  check('老师写的动作落到页上:第一句念完翻、看第 1 段;第二句念完看第 2 段、圈、请圈', s2?.cards.length === 0 && s2.lines[0].acts?.map((a) => a.do?.k).join() === '翻,看' && s2.lines[1].acts?.map((a) => a.do?.k).join() === '看,圈,请', JSON.stringify(s2));
   check('一节课的状态:这一课、看着第 2 段、圈着井沿', l2.at === '语文一年级下册.pdf#小鱼吹泡泡' && l2.look?.label === '第2段' && lessonPage(l2)!.teacher.marks.map((m) => m.text).join() === '井沿', JSON.stringify(l2));
   check('圈的词课本里没有:家长端记一行', (m2?.warnings ?? []).some((w) => w.includes('没有这个词')), JSON.stringify(m2?.warnings));
   check('翻到这一课以前的那一轮:全文是目录(记了 told)', (await readBoard(ws, T, date, thread)).some((e) => e.k === 'turn' && e.told === '语文一年级下册.pdf#目录'));

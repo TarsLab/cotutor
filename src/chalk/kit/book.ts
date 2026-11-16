@@ -1,35 +1,26 @@
 /**
- * 课本:vault 里的教材 PDF 做底(2026-11-14《语文预习:PDF 课本与镜头交互》)。一课的几页竖着排成一长条,屏幕是看它的一扇窗:
- * 老师说看哪里(`看: 第 6–7 段`、`看: 日积月累`、`看: 小鸟回答说`),应用照课本的索引算出那一块在哪、窗移过去;孩子用手指拖、捏着放大,Apple Pencil 写画。
- * 字的位置来自 PDF 的文字层(src/memory/textbook-index.ts),不认图:圈字、遮拼音、点字都照它找,不用老师估坐标。
+ * 课本:vault 里的教材 PDF 做页(2026-11-14《语文预习:PDF 课本与镜头交互》)。一课的几页竖着排成一长条,屏幕是看它的一扇窗:
+ * 老师说看哪里(`[[看 第 6–7 段]]`、`[[看 日积月累]]`、`[[看 小鸟回答说]]`),应用照课本的索引算出那一块在哪、窗移过去;孩子用手指拖、点两下放大,Apple Pencil 写画。
+ * 字的位置来自 PDF 的文字层(src/memory/textbook-index.ts),不认图:圈字、遮拼音、盖字、点字都照它找,不用老师估坐标。
  *
  * 场景坐标:一页的宽是 1000,高 = 1000 × 页的高宽比;几页从上往下排。每页底下没有字的那一条裁掉(bookCut:教育平台盖的「仅供个人学习使用」就印在那里),
- * 页和页直接连着;没写「裁」的卡(2026-11-15 以前的)照原来整页排、页和页之间空 BOOK_GAP。老师的记号、孩子的笔画、窗(frame)都在这套坐标里,
- * 所以窗怎么动、换几张卡,孩子画在第 55 页上的那一笔都还在那里。
- * 这个文件是纯函数:索引(BookPage)由服务端读好给进来(落板之前换框、上下文包)或舞台拉来(点字)。
+ * 页和页直接连着(没裁的页之间空 BOOK_GAP)。老师的记号、孩子的笔画、窗都在这套坐标里,所以窗怎么动,孩子画在第 55 页上的那一笔都还在那里。
+ * 这个文件是纯函数:索引(BookPage)由服务端读好给进来(落到页上之前找框、上下文包)或舞台拉来(点字)。
+ * 2026-11-16 起老师不再写 ```课本 卡(讲稿里的动作,src/board/lesson-fit.ts);这里只剩课本的几何。
  */
 
 import { MATH_COLUMNS, bodySize, mathHeading, type BookLayout, type BookLesson, type BookLine, type BookPage } from '../../schema/index.ts';
-import type { ChalkSkeleton } from '../types.ts';
-import type { Kit, KitEnv, KitScene } from './types.ts';
 
 /** 一页的宽(场景坐标) */
 export const BOOK_W = 1000;
-/** 页和页之间空多少(没裁页底的旧卡;裁了的直接连着) */
+/** 页和页之间空多少(没裁页底的;裁了的直接连着) */
 export const BOOK_GAP = 30;
 /** 没量过高宽比时取的数:16 开的课本(人教版 521.6 × 737 pt) */
 export const BOOK_ASPECT = 1.413;
-/** 围栏的名字 */
-export const BOOK_KIT = '课本';
 /** 刚进来、还没定哪一课时板上铺的那几页 */
 export const BOOK_TOC = '目录';
-/** 一张课本卡最多铺几页(数学一个小节能有十几页,多的不铺,老师写下一层的课题) */
+/** 一课最多铺几页(数学一个小节能有十几页,多的不铺,老师翻下一层的课题) */
 export const BOOK_MAX_PAGES = 13;
-
-const RED = '#e03131';
-const RING_MAX = 4;
-const COVER_MAX = 8;
-const MARK_CHARS = 12;
 
 type Box = [number, number, number, number];
 
@@ -434,17 +425,6 @@ export function bookView(pages: readonly BookPage[], sheets: readonly BookSheet[
   return [where, parts.join(',')].filter(Boolean).join(':') || '空白处';
 }
 
-/**
- * 这一册的课本卡开放哪些操作:数学不开点字(点一个字弹田字格是语文的事,数学课本上点到字只会打岔);剩下的空了就是只看
- */
-export function bookOps(layout: BookLayout, ops: readonly string[]): string[] {
-  if (layout !== 'math') return [...ops];
-  const out = ops.filter((o) => o !== '点字');
-  return out.length ? out : ['看'];
-}
-
-// ——— 画法 ———
-
 /** 「59-60」「59」→ [59, 60] */
 export function bookPages(v: string | undefined): number[] {
   const m = /^(\d{1,4})(?:-(\d{1,4}))?$/.exec((v ?? '').trim());
@@ -452,55 +432,6 @@ export function bookPages(v: string | undefined): number[] {
   const a = Number(m[1]), b = Number(m[2] ?? m[1]);
   if (b < a || b - a >= BOOK_MAX_PAGES) return [];
   return Array.from({ length: b - a + 1 }, (_, k) => a + k);
-}
-
-/** 「看」「圈」「遮」里的一处:文字与(应用找到的)框;框没有就是还没找、或找不到 */
-export function bookSpots(v: string | undefined): { text: string; box: Box | null }[] {
-  return (v ?? '').split(';').filter(Boolean).map((part) => {
-    const [a, b] = part.includes('|') ? [part.slice(0, part.lastIndexOf('|')), part.slice(part.lastIndexOf('|') + 1)] : [part, ''];
-    const n = b.split(' ').filter(Boolean).map(Number);
-    return { text: a, box: n.length === 4 && n.every(Number.isFinite) ? (n as Box) : null };
-  });
-}
-
-function readPdf(v: string): string {
-  const s = v.trim();
-  if (!/\.pdf$/i.test(s) || s.startsWith('/') || s.includes('..') || /^https?:/.test(s)) throw new Error('课本的「书」由应用填,是 vault 里教材 PDF 的路径');
-  return s;
-}
-
-function readCut(v: string): string {
-  const n = Number(v.trim());
-  if (!Number.isFinite(n) || n < 0 || n > BOOK_W) throw new Error('课本的「裁」由应用填');
-  return n > 0 ? String(r1(n)) : '';
-}
-
-function readRange(v: string): string {
-  const p = bookPages(v.replace(/\s/g, '').replace(/[–—~～到至]/, '-'));
-  if (!p.length) throw new Error('课本的「页」由应用填:PDF 的第几页到第几页,如 59-60');
-  return p.length > 1 ? `${p[0]}-${p[p.length - 1]}` : String(p[0]);
-}
-
-/** 「圈」「遮」:几处字词,分号、顿号隔开;存下来「字|左 上 右 下」(找到了)或「字|」(还没找) */
-function readSpots(name: string, max: number) {
-  return (v: string): string => {
-    const parts = v.split(/[;;]/).flatMap((x) => (x.includes('|') ? [x] : x.split(/[、,,\s]+/))).map((x) => x.trim()).filter(Boolean);
-    if (!parts.length || parts.length > max) throw new Error(`课本的「${name}」最多 ${max} 处:写课本上的字词,用顿号隔开,如 ${name}: 井沿、无边无际`);
-    return parts.map((part) => {
-      const spot = bookSpots(part)[0];
-      const text = spot.text.replace(/[「」『』《》""“”]/g, '').trim();
-      if (!text || Array.from(text).length > MARK_CHARS) throw new Error(`课本的「${name}」写课本上的字词(${MARK_CHARS} 个字以内),应用照课本找到它在哪`);
-      return spot.box ? `${text}|${spot.box.join(' ')}` : `${text}|`;
-    }).join(';');
-  };
-}
-
-/** 「看」:一处;存「第6–7段|左 上 右 下」 */
-function readLook(v: string): string {
-  const spot = bookSpots(v.replace(/[;;]/g, ''))[0];
-  const text = spot?.text.trim() ?? '';
-  if (!text || Array.from(text).length > 40) throw new Error('课本的「看」写一处:第 6–7 段、第 55 页、栏目名(日积月累、做一做)、例 2、练一练第 3 题,或课本上的一句原话');
-  return spot.box ? `${text}|${spot.box.join(' ')}` : `${text}|`;
 }
 
 /** 老师要看的那一块 → 窗:四周留一点边;太小就放大到页宽的三分之一为止(字够大了),太高只取上面一页多 */
@@ -517,75 +448,3 @@ export function bookFrame(box: Box | null, sheets: readonly BookSheet[]): [numbe
   if (y2 - y1 > BOOK_W * 1.25) y2 = y1 + BOOK_W * 1.25;
   return [r1(x1), r1(y1), r1(x2 - x1), r1(y2 - y1)];
 }
-
-export const book: Kit = {
-  name: BOOK_KIT,
-  about: '课本:家长放在 vault 里的教材 PDF,一课的几页铺在板上。你说看哪里,应用把那一块移到孩子眼前;圈字、遮拼音、盖住印好的答案都写字,应用照课本找到它。孩子手指拖动、放大,点一个字看笔顺;用笔在上面圈、写。',
-  ops: ['点字', '圈', '画', '看'],
-  open: ['点字', '圈', '画'],
-  params: [
-    { key: '课', note: '哪一课:课名或语文园地几(课: 坐井观天)。不写就是板上现在这一课;第一次写,应用就把这一课的几页铺上。', read: (v) => v.trim().slice(0, 20), fallback: '' },
-    { key: '看', note: '让孩子看哪里:第 6–7 段、第 55 页、栏目名(日积月累、做一做)、例 2、练一练第 3 题,或课本上的一句原话。应用把它移到屏幕中间、字太小就放大。不写就不动(孩子正看着哪里就还是哪里)。', read: readLook, fallback: '' },
-    { key: '圈', note: '圈出课本上的字词:写字(圈: 井沿),应用照课本找到它。几处用顿号隔开,最多 4 处。', read: readSpots('圈', RING_MAX), fallback: '' },
-    { key: '遮', note: '要孩子自己认的字词:盖住头上的拼音,孩子点一下揭开。写字,几处用顿号隔开,最多 8 处。', read: readSpots('遮', COVER_MAX), fallback: '' },
-    { key: '盖', note: '盖住课本上印的字(例题里的算式、答案),请孩子先自己想,他点一下揭开。写课本上的原样(盖: 3×5=15),几处用顿号隔开,最多 8 处。', read: readSpots('盖', COVER_MAX), fallback: '' },
-    { key: '书', note: '应用填:教材 PDF 的路径。你不用写。', read: readPdf, fallback: '' },
-    { key: '页', note: '应用填:这一课在 PDF 的第几页到第几页。你不用写。', read: readRange, fallback: '' },
-    { key: '裁', note: '应用填:每页底下不铺的那一条。你不用写。', read: readCut, fallback: '' },
-  ],
-  build(p, env?: KitEnv): KitScene {
-    const a = env?.aspect && env.aspect > 0 ? env.aspect : BOOK_ASPECT;
-    const pages = bookPages(p['页']);
-    const cut = Number(p['裁']) || 0;
-    const sheets = bookSheets(pages.map((n) => ({ n })), a, cut);
-    const look = bookSpots(p['看'])[0];
-    const frame = bookFrame(look?.box ?? null, sheets);
-    // 记号照窗的大小:窗越小(放得越大)线越细,铺到屏幕上一样粗
-    const u = Math.max(frame[2], frame[3]) / 640;
-    const w = Math.max(1.2, 2.5 * u);
-    const sk: ChalkSkeleton[] = [];
-    for (const { text, box } of bookSpots(p['圈'])) {
-      if (!box) continue;
-      const [x1, y1, x2, y2] = box;
-      const pad = Math.max(4, (y2 - y1) * 0.35);
-      sk.push({ type: 'ellipse', id: `ring-${text}-${x1}-${y1}`, label: `老师圈的:${text}`, x: r1(x1 - pad * 1.4), y: r1(y1 - pad), width: r1(x2 - x1 + pad * 2.8), height: r1(y2 - y1 + pad * 2), strokeColor: RED, strokeWidth: w, animateDuration: 700 });
-    }
-    // 遮拼音:字头上一条纸色的块(拼音印在字的正上方,约 0.8 个字高);孩子点它揭开(舞台按 id 前缀认)
-    for (const { text, box } of bookSpots(p['遮'])) {
-      if (!box) continue;
-      const [x1, y1, x2, y2] = box;
-      const h = y2 - y1;
-      sk.push({ type: 'rectangle', id: `cover-${text}`, label: `盖住的拼音:${text}`, x: r1(x1 - h * 0.1), y: r1(y1 - h * 0.95), width: r1(x2 - x1 + h * 0.2), height: r1(h * 0.9), strokeColor: '#d9c9a3', strokeWidth: Math.max(1, u * 0.6), backgroundColor: '#f1e6c8', fillStyle: 'solid', roughness: 0, roundness: { type: 3 }, animateDuration: 150 });
-    }
-    // 盖字:那几个字整个盖住(纸色的块,比字宽出一点);孩子点它揭开(舞台按 id 前缀认)
-    for (const { text, box } of bookSpots(p['盖'])) {
-      if (!box) continue;
-      const [x1, y1, x2, y2] = box;
-      const h = y2 - y1;
-      sk.push({ type: 'rectangle', id: `cover-${text}`, label: `盖住的:${text}`, x: r1(x1 - h * 0.25), y: r1(y1 - h * 0.2), width: r1(x2 - x1 + h * 0.5), height: r1(h * 1.4), strokeColor: '#d9c9a3', strokeWidth: Math.max(1, u * 0.6), backgroundColor: '#f1e6c8', fillStyle: 'solid', roughness: 0, roundness: { type: 3 }, animateDuration: 150 });
-    }
-    return { skeletons: sk, groups: [], turns: [], frame, book: { src: p['书'] ?? '', pages, aspect: a, gap: cut > 0 ? 0 : BOOK_GAP } };
-  },
-  read(p, state) {
-    const marks = (state.marks ?? []).filter((s) => s.length);
-    const picked = (state.picked ?? []).filter(Boolean);
-    const looked = picked.length ? `点开看了笔顺:${picked.map((w) => `「${w}」`).join('')}` : '';
-    if (!marks.length) return looked || '还没画';
-    const a = state.aspect && state.aspect > 0 ? state.aspect : BOOK_ASPECT;
-    const sheets = bookSheets(bookPages(p['页']).map((n) => ({ n })), a, Number(p['裁']) || 0);
-    // 画在哪一页的哪一截(上、中、下):具体圈住了什么看图
-    const where = (y: number): string => {
-      const sh = sheets.find((s) => y >= s.top && y <= s.top + s.height + BOOK_GAP) ?? sheets[sheets.length - 1];
-      if (!sh) return '';
-      const f = (y - sh.top) / sh.height;
-      return `PDF 第 ${sh.n} 页${f < 0.34 ? '上面' : f < 0.67 ? '中间' : '下面'}`;
-    };
-    const parts = marks.map((s) => {
-      const ys = s.map((q) => q[1]);
-      return `画了一笔,在${where((Math.min(...ys) + Math.max(...ys)) / 2)}`;
-    });
-    if (looked) parts.unshift(looked);
-    parts.push('圈住了什么看图');
-    return parts.join(';');
-  },
-};

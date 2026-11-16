@@ -9,7 +9,7 @@ import type { BookLayout } from './textbook.ts';
 
 /**
  * 讲稿里的动作有哪些(《底层设计》第五节):
- * 看(窗移到哪)· 圈、遮(拼音)、盖(印好的答案)· 写(白纸条里写字)· 擦(自己上一样或整条白纸条)· 摆(白纸条里摆图形:点阵、方向盘)· 请(开放哪些作答)· 翻(换一课)
+ * 看(窗移到哪)· 圈、遮(拼音)、盖(印好的答案)· 写(白纸条里写字)· 擦(自己上一样或整条白纸条)· 摆(白纸条里摆图形:点阵、方向盘)· 请(开放哪些作答)· 翻(换一课、回到照片页、加一张白纸页)
  */
 export const ACT_NAMES = ['看', '圈', '遮', '盖', '写', '擦', '摆', '请', '翻'] as const;
 export type ActName = (typeof ACT_NAMES)[number];
@@ -35,7 +35,7 @@ export interface LineAct {
 
 /** 场景坐标的一块:[左, 上, 右, 下](课本:一页宽 1000,几页从上往下连着;src/chalk/kit/book.ts) */
 export type Box = [number, number, number, number];
-/** 一节课最多留几页、孩子的笔最多几笔、一笔最多几个点、点过的最多记几个、老师的记号最多几个、一条白纸条最多几样 */
+/** 一节课最多留几页(课本的几课、照片页、白纸页)、孩子的笔最多几笔、一笔最多几个点、点过的最多记几个、老师的记号最多几个、一条白纸条最多几样 */
 export const LESSON_PAGES_MAX = 8;
 export const LESSON_INK_MAX = 160;
 export const LESSON_INK_POINTS = 120;
@@ -57,21 +57,41 @@ export type StripItem =
  */
 export interface Strip { key: string; box: Box; items: StripItem[] }
 
-/** 一页:现在只有课本的一课(一课的几页 PDF 竖着连成一条)。id = 「册子#课名」(同板的日志里的 base) */
-export interface LessonPage {
-  id: string;
-  kind: 'book';
-  /** 册子的文件名(教材目录下) */
-  src: string;
-  /** 课名;还没翻到哪一课是「目录」 */
-  title: string;
-  /** 铺 PDF 的哪几页 */
-  pages: number[];
-  /** 每页底下裁掉多少(场景坐标;src/chalk/kit/book.ts 的 bookCut) */
-  cut: number;
-  layout: BookLayout;
-  /** 孩子能不能点字看笔顺(语文能,数学的课本上点的是数和算式,不弹) */
-  pick: boolean;
+/** 照片页上的一张:孩子拍的(相对 workspace 根,captures/ 下)和它的像素宽高(场景里一张宽 1000,高照宽高比) */
+export interface PagePhoto { src: string; w: number; h: number }
+/** 一节课的照片页最多几张(孩子连拍几页、拍错了再拍一张都接在后面;多了不收) */
+export const PAGE_PHOTOS_MAX = 6;
+/** 照片页、白纸页的 id(一节课各只有一页;课本的一课是「册子#课名」) */
+export const PHOTO_PAGE = '作业';
+export const WHITE_PAGE = '白纸';
+
+/**
+ * 一页铺的是什么(2026-11-16 阶段 3 起不只课本):
+ *  book  课本的一课:几页 PDF 竖着连成一条。id = 「册子#课名」(同板的日志里的 base)
+ *  photo 孩子拍的作业:几张照片竖着连成一条(先拍的在上),文字层是认字认出的行和题(src/scenes/photo-words/)
+ *  white 白纸:什么都没印,老师在上面摆图形、写字(整页就是一条白纸条)
+ */
+export type PageSource =
+  | {
+    id: string;
+    kind: 'book';
+    /** 册子的文件名(教材目录下) */
+    src: string;
+    /** 课名;还没翻到哪一课是「目录」 */
+    title: string;
+    /** 铺 PDF 的哪几页 */
+    pages: number[];
+    /** 每页底下裁掉多少(场景坐标;src/chalk/kit/book.ts 的 bookCut) */
+    cut: number;
+    layout: BookLayout;
+    /** 孩子能不能点字看笔顺(语文能,数学的课本上点的是数和算式,不弹) */
+    pick: boolean;
+  }
+  | { id: string; kind: 'photo'; title: string; photos: PagePhoto[]; pick: boolean }
+  | { id: string; kind: 'white'; title: string; pick: boolean };
+
+/** 一页:铺的是什么,加三层 */
+export type LessonPage = PageSource & {
   /** 老师的那一层 */
   teacher: { marks: TeacherMark[]; strips: Strip[] };
   /**
@@ -81,7 +101,7 @@ export interface LessonPage {
   kid: { ink: [number, number][][]; stripInk: Record<string, [number, number][][]>; revealed: string[]; picked: string[]; turns: Record<string, number> };
   /** 开放的:这一步请孩子做的(老师的「请」);没请就只能看(和点字) */
   open: AskName[];
-}
+};
 
 export interface Lesson {
   v: 1;
@@ -101,7 +121,7 @@ export const LESSON_JOBS_MAX = 60;
 
 /** 动作落到页上以后的样子(src/board/lesson-fit.ts 照课本找到框、填好页):lessonStep 只认它,不再查课本 */
 export type LessonAct =
-  | { k: '翻'; page: Omit<LessonPage, 'teacher' | 'kid' | 'open'> }
+  | { k: '翻'; page: PageSource }
   | { k: '看'; label: string; box: Box }
   | { k: '圈' | '遮' | '盖'; spots: { text: string; box: Box }[] }
   | { k: '写'; text: string; size: Size }
@@ -123,7 +143,9 @@ export type LessonEvent =
   /** 窗停在了哪 */
   | { t: 'view'; box: Box }
   /** 白纸条里的图形转到了多少度 */
-  | { t: 'turn'; item: string; deg: number };
+  | { t: 'turn'; item: string; deg: number }
+  /** 孩子拍来了几张(应用收下就铺,不等老师):接在照片页后面,没有照片页就开一页;pick = 这一页能不能点字 */
+  | { t: 'photo'; photos: PagePhoto[]; pick: boolean };
 
 const num = z.number().finite();
 export const BoxSchema = z.tuple([num, num, num, num]);
@@ -133,7 +155,8 @@ const StripItemSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('write'), text: z.string().min(1).max(40), size: SizeSchema }),
   z.object({ kind: z.literal('shape'), kit: z.string().min(1), params: z.record(z.string(), z.string()), size: SizeSchema }),
 ]);
-const PageBase = {
+const PhotoSchema = z.object({ src: z.string().min(1), w: z.number().int().positive(), h: z.number().int().positive() });
+const BookSourceSchema = z.object({
   id: z.string().min(1),
   kind: z.literal('book'),
   src: z.string().min(1),
@@ -142,9 +165,11 @@ const PageBase = {
   cut: z.number().finite().min(0),
   layout: z.enum(['prose', 'math']),
   pick: z.boolean(),
-};
-export const LessonPageSchema = z.object({
-  ...PageBase,
+});
+const PhotoSourceSchema = z.object({ id: z.string().min(1), kind: z.literal('photo'), title: z.string().min(1), photos: z.array(PhotoSchema).min(1).max(PAGE_PHOTOS_MAX), pick: z.boolean() });
+const WhiteSourceSchema = z.object({ id: z.string().min(1), kind: z.literal('white'), title: z.string().min(1), pick: z.boolean() });
+export const PageSourceSchema = z.discriminatedUnion('kind', [BookSourceSchema, PhotoSourceSchema, WhiteSourceSchema]);
+const Layers = {
   teacher: z.object({
     marks: z.array(z.object({ k: z.enum(['圈', '遮', '盖']), text: z.string().min(1), box: BoxSchema })).max(LESSON_MARKS_MAX),
     strips: z.array(z.object({ key: z.string().min(1), box: BoxSchema, items: z.array(StripItemSchema).max(STRIP_ITEMS_MAX) })),
@@ -157,7 +182,8 @@ export const LessonPageSchema = z.object({
     turns: z.record(z.string(), num),
   }),
   open: z.array(AskSchema),
-});
+};
+export const LessonPageSchema = z.discriminatedUnion('kind', [BookSourceSchema.extend(Layers), PhotoSourceSchema.extend(Layers), WhiteSourceSchema.extend(Layers)]);
 export const LessonSchema = z.object({
   v: z.literal(1),
   pages: z.array(LessonPageSchema).max(LESSON_PAGES_MAX),
@@ -168,7 +194,7 @@ export const LessonSchema = z.object({
   jobs: z.array(z.string()).max(LESSON_JOBS_MAX).default([]),
 });
 export const LessonActSchema = z.discriminatedUnion('k', [
-  z.object({ k: z.literal('翻'), page: z.object(PageBase) }),
+  z.object({ k: z.literal('翻'), page: PageSourceSchema }),
   z.object({ k: z.literal('看'), label: z.string(), box: BoxSchema }),
   z.object({ k: z.enum(['圈', '遮', '盖']), spots: z.array(z.object({ text: z.string().min(1), box: BoxSchema })) }),
   z.object({ k: z.literal('写'), text: z.string().min(1), size: SizeSchema }),
@@ -182,4 +208,5 @@ export const LineActSchema = z.object({ name: z.enum(ACT_NAMES), arg: z.string()
 const aligned = (a: z.infer<typeof LineActSchema>): LineAct => a;
 const alignedLesson = (l: z.infer<typeof LessonSchema>): Lesson => l;
 const alignedAct = (a: z.infer<typeof LessonActSchema>): LessonAct => a;
-void aligned; void alignedLesson; void alignedAct;
+const alignedPage = (p: z.infer<typeof LessonPageSchema>): LessonPage => p;
+void aligned; void alignedLesson; void alignedAct; void alignedPage;

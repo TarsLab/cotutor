@@ -49,8 +49,6 @@ const dirAt = (p: Readonly<Record<string, string>>, state: KitState, k: number):
 
 export const compass: Kit = {
   name: '方向盘',
-  about: '东南西北四个字在一个能转的圆盘上,中间站一个小人,盘外是前面、后面、左面、右面。孩子转一转盘,就看到面向哪边时四周各是什么方向。',
-  ops: ['转', '圈'],
   params: [
     { key: '上', values: DIRS, note: '一开始盘上哪个方向朝上。缺省北,就是孩子背的「上北下南左西右东」。' },
     { key: '小人', values: ['有', '没有'], note: '中间画不画小人和前后左右。讲「面向哪边」要有;只讲方向牌怎么排,写没有。' },

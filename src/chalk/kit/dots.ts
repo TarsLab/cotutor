@@ -110,8 +110,6 @@ function gaps(cuts: readonly number[], n: number, origin: number): { at: number[
 
 export const dots: Kit = {
   name: '点阵',
-  about: '几行圈圈,每行一样多。把东西画成圈圈,孩子画线切开、圈一圈、涂一份,数一份里有几个。讲平均分、几个几。',
-  ops: ['切', '圈', '涂', '添'],
   params: [
     { key: '行', note: `几行。1 到 ${ROWS_MAX},缺省 2。`, read: int('行', ROWS_MAX), fallback: '2' },
     { key: '每行', note: '每行几个。1 到 12,缺省 9。', read: int('每行', COLS_MAX), fallback: '9' },

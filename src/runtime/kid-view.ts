@@ -110,10 +110,8 @@ export interface KidMessage {
   fromHome?: true;
   /** 这一轮是实时的:讲稿不配音、嘴照念;不出卡的一轮板上留讲稿的字,还在跑时有句就出节 */
   live?: true;
-  /** 话题第一条:这个话题以板为主(孩子端的页面就是板) */
-  board?: 'page';
-  /** 话题第一条:页是课本(一节课的样子另取,/api/kid/lesson) */
-  base?: 'textbook';
+  /** 话题第一条:这一节课铺哪种页(课本、孩子拍的作业;一节课的样子另取,/api/kid/lesson) */
+  base?: 'textbook' | 'photo';
 }
 
 /** 索引里的小课堂 → 孩子端(画不带那段话)/ 家长端(带) */
@@ -146,7 +144,7 @@ export function kidConversation(index: { messages: readonly ConversationMessage[
     if (question === null && reply === null && !pending) continue;
     const withState = cardsWithState(m, states, assets, submitted);
     const section = m.result === 'ok' && withState ? stripSecrets(withState) : undefined;
-    out.push({ job: m.job, thread: ths[i], at: m.at, question, reply, pending, artifacts: reply ? [...m.artifacts] : [], ...(section ? { section } : {}), ...(question !== null && m.photos?.length ? { photos: [...m.photos] } : {}), ...(m.lecture ? { lecture: lectureView(m.lecture, false) } : {}), ...(question !== null && m.action ? { action: m.action } : {}), ...(question !== null && m.via && question.trim() === m.via.label.trim() ? { fromHome: true as const } : {}), ...(m.live ? { live: true as const } : {}), ...(m.board ? { board: m.board } : {}), ...(m.base ? { base: m.base } : {}) });
+    out.push({ job: m.job, thread: ths[i], at: m.at, question, reply, pending, artifacts: reply ? [...m.artifacts] : [], ...(section ? { section } : {}), ...(question !== null && m.photos?.length ? { photos: [...m.photos] } : {}), ...(m.lecture ? { lecture: lectureView(m.lecture, false) } : {}), ...(question !== null && m.action ? { action: m.action } : {}), ...(question !== null && m.via && question.trim() === m.via.label.trim() ? { fromHome: true as const } : {}), ...(m.live ? { live: true as const } : {}), ...(m.base ? { base: m.base } : {}) });
   }
   return out;
 }
@@ -227,12 +225,12 @@ const lessonOf = (s: SectionLike | null | undefined): string | null => {
 };
 
 /**
- * 这一轮让话题开了头没有(2026-11-15,Jack):有孩子参与的图出现了——孩子发了照片;老师出了板卡、图片;课本翻到了一课(目录不算)、
+ * 这一轮让话题开了头没有(2026-11-15,Jack):有孩子参与的图出现了——孩子发了照片;老师出了图片;课本翻到了一课(目录不算)、
  * 白纸条上摆了图形。只说话、只铺了目录的不算开头:孩子端不列(首页「今天」),记录照存,家长照看。
  */
 export function startsThread(m: { from: ConversationMessage['from']; photos?: readonly string[]; section?: SectionLike | null }): boolean {
   if (m.from === 'kid' && m.photos?.length) return true;
-  if (m.section?.cards.some((c) => c.kind === 'image' || c.kind === 'kit')) return true;
+  if (m.section?.cards.some((c) => c.kind === 'image')) return true;
   return Boolean(lessonOf(m.section)) || doneActs(m.section).some((a) => a.k === '摆');
 }
 

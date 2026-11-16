@@ -1,25 +1,31 @@
 /**
- * 课本做底的舞台(画法「课本」,src/chalk/kit/book.ts;2026-11-14《语文预习:PDF 课本与镜头交互》)。
- * 2026-11-16 起照一节课的状态画(src/schema/lesson.ts,页面一句一句落好了发进来):现在这一页、老师的一层(记号)、孩子的一层(笔、揭开)、开放的、老师让看的那一处。
- * 一课的几页从上往下连成一条(场景坐标:一页宽 1000),屏幕是看它的一扇窗:
+ * 一节课的舞台(2026-11-14《语文预习:PDF 课本与镜头交互》起是课本;2026-11-16 阶段 3 起孩子拍的作业照片、白纸也铺在这里):
+ * 照一节课的状态画(src/schema/lesson.ts,页面一句一句落好了发进来):现在这一页、老师的一层(记号、白纸条)、孩子的一层(笔、揭开)、开放的、老师让看的那一处。
+ * 一页铺的三种:课本的一课(几页 PDF)、作业照片(几张)、白纸,都从上往下连成一条(场景坐标:一页宽 1000,src/chalk/kit/book.ts 的 bookSheets),屏幕是看它的一扇窗:
  *  - 窗只有两种大小(2026-11-15):页宽铺满、两倍,双击切换;不两指缩放、不滚轮缩放。页宽时手指只上下滚,两倍时上下左右都能挪,松手带惯性。
  *  - 老师「看」了一处(look.n 变了):窗滚到那一块(大小不变,近的滑过去,远的直接到),那一块亮一下;没看就不动——他眼前的就是老师要讲的。
  *  - 只读(录像、家长看)照记录的窗摆:以前孩子缩放过的窗照样放得下(camFor)。
  *  - Apple Pencil(pointerType = pen)写画,手指永远不落笔;笔在纸上时别的手指(手掌)不算。
  *  - 轻点(手指或笔;手指的等一下看是不是双击)一个字:本地照课本的行和字算出是哪个字(bookPick),告诉页面(pick)弹田字格;点在盖住的拼音上就揭开(reveal)。
  *  - 孩子挪完、切完大小停下来:把窗(场景坐标)告诉页面(view),页面报给服务端说成一句「第 55 页:第 7 段」给老师。
- * 画面:pdf.js(/stage/pdf/,不打进 stage.js)现画。每页先画一张中等清晰度的(移动、缩放时用它),停下来再把窗里那一块照屏幕的像素重画一张盖上去,放大了字也清楚。
+ * 画面:课本 pdf.js(/stage/pdf/,不打进 stage.js)现画,每页先画一张中等清晰度的(移动、缩放时用它),停下来再把窗里那一块照屏幕的像素重画一张盖上去,放大了字也清楚;
+ * 照片照原图画进一张画布(孩子端上传前已缩到长边 2000,够清楚);白纸是一张白底。点字照页的文字层:课本是 PDF 的行和字,照片是认字认出的(src/chalk/kit/photo.ts 换成同样的样子)。
  * 老师的记号(圈、盖拼音的块)和孩子的笔画是一层 SVG,和页面在同一个随窗变换的容器里,所以对得齐;孩子的笔画挂在书页上(一节课的状态里),换课再回来还在。
  * 孩子落一笔、擦掉都告诉页面(stroke / wipe),页面照 lessonStep 改状态、报给服务端,再把新的状态发回来。
  * 类名带 bk-(舞台页也装孩子端的 theme.css);没有工具那一栏(2026-11-15,课本铺满屏宽):只有一颗「擦掉」浮在屏幕边上(.bk-wipe)。
  */
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type * as Pdfjs from 'pdfjs-dist';
-import { BOOK_ASPECT, BOOK_W, KID_INK, KID_INK_WIDTH, bookFrame, bookPick, bookSheets, turnedSkeletons, type BookSheet, type ChalkSkeleton } from '../../chalk/index.ts';
+import { BOOK_ASPECT, BOOK_W, KID_INK, KID_INK_WIDTH, bookFrame, bookPick, bookSheets, photoBookPage, turnedSkeletons, type BookSheet, type ChalkSkeleton, type PhotoLine, type PhotoWord } from '../../chalk/index.ts';
 import { lessonPage, lessonStrip } from '../../board/lesson.ts';
 import { stripLayout, type StripSlot } from '../../board/strip.ts';
-import { LESSON_INK_POINTS, type BookPage, type Lesson } from '../../schema/index.ts';
-import type { KitStageHandle } from './kit.tsx';
+import { LESSON_INK_POINTS, type BookPage, type Lesson, type LessonPage } from '../../schema/index.ts';
+
+/** 页面经它叫舞台:「给老师看」(先交窗里的图)、导一张小图(话题的预览图) */
+export interface BookStageHandle {
+  submit(): void;
+  peek(): Promise<string | null>;
+}
 
 export interface BookStageProps {
   /** 这节课(换了一节才重来) */
@@ -31,6 +37,8 @@ export interface BookStageProps {
   hand?: 'left' | 'right';
   /** 孩子落了一笔(场景坐标);strip = 落在开着的白纸条上 */
   onStroke(pts: [number, number][], strip?: string): void;
+  /** 笔落下了(写着,应用不替他交给老师;抬笔就是 onStroke) */
+  onPen?(): void;
   /** 白纸条里的方向盘转了一格(键 <白纸条>#<第几样>,转到多少度) */
   onTurn?(item: string, deg: number): void;
   /** 孩子擦掉了自己画的 */
@@ -119,10 +127,11 @@ const WIPE = '<path d="M4 15l8-8 6 6-6 6H8z"></path><path d="M12 21h8"></path>';
 /** 窗:中心(场景坐标)与倍数(一个场景单位多少 CSS 像素) */
 interface Cam { cx: number; cy: number; s: number }
 
-/** 这一课铺好的样子:哪本、哪几页、各页在场景里的位置、每页先画的那张、课本的行与字(点字用,后到) */
+/** 这一页铺好的样子:铺的什么(课本的 PDF、照片、白纸)、各页在场景里的位置、每页先画的那张、页的行与字(点字用,后到) */
 interface Geo {
   key: string;
-  pdf: string;
+  /** 课本的 PDF(重画清楚的那一块要它);照片、白纸没有 */
+  pdf: string | null;
   sheets: (BookSheet & { w: number; h: number })[];
   height: number;
   aspect: number;
@@ -134,6 +143,20 @@ interface Geo {
 
 /** 老师要看的那一块 → 窗里留出来的那一块(四周留边、太小放大;src/chalk/kit/book.ts 的 bookFrame) */
 const frameBox = (box: Box, sheets: readonly BookSheet[]): Box => { const f = bookFrame(box, sheets); return [f[0], f[1], f[0] + f[2], f[1] + f[3]]; };
+
+/** 白纸页多高(一张 A4 那么高;白纸条摆得多就跟着长) */
+const WHITE_H = BOOK_W * BOOK_ASPECT;
+/** 照片画进画布最宽多少像素 */
+const PHOTO_PX = 2000;
+
+/** 一页怎么铺:几张(各自的宽高,PDF 的点或照片的像素)、几号;白纸的高跟着白纸条 */
+function sourceKey(p: LessonPage | null, whiteH: number): string {
+  if (!p) return '';
+  if (p.kind === 'book') return `book|${p.src}|${p.pages.join(',')}|${p.cut}`;
+  if (p.kind === 'photo') return `photo|${p.photos.map((x) => x.src).join(',')}`;
+  return `white|${Math.ceil(whiteH / 400)}`;
+}
+const loadImage = (url: string): Promise<HTMLImageElement> => new Promise((ok, no) => { const img = new Image(); img.onload = () => ok(img); img.onerror = () => no(new Error(`照片打不开:${url}`)); img.src = url; });
 
 /** 白纸条的底色(盖住下面的题;比纸色白一点,孩子看得出这是一条白纸) */
 const STRIP_FILL = '#ffffff';
@@ -163,7 +186,7 @@ function skeletonDraw(ctx: CanvasRenderingContext2D, k: ChalkSkeleton): void {
 
 const pathD = (pts: readonly [number, number][]): string => pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ');
 
-export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function BookStage({ id: _id, lesson, readonly, hand, onStroke, onTurn, onWipe, onSubmit, onPick, onReveal, onView, onShot, onError }, ref) {
+export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function BookStage({ id: _id, lesson, readonly, hand, onStroke, onPen, onTurn, onWipe, onSubmit, onPick, onReveal, onView, onShot, onError }, ref) {
   const view = useRef<HTMLDivElement>(null);
   const paper = useRef<HTMLDivElement>(null);
   const svg = useRef<SVGSVGElement>(null);
@@ -204,15 +227,13 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
   const open = page?.open ?? [];
   const canMark = open.some((o) => PEN_ASKS.includes(o));
   const canPick = Boolean(page?.pick) || open.includes('点');
-  const pdfUrl = page ? `/api/kid/textbook/pdf?b=${encodeURIComponent(page.src)}` : '';
-  const pages = page?.pages ?? [];
-  /** 每页底下不铺的那一条(场景坐标;应用照这一册算好的,bookCut);有它页和页就直接连着 */
-  const cut = page?.cut ?? 0;
-  const geoKey = page ? `${page.src}|${pages.join(',')}|${cut}` : '';
   const revealedKey = (page?.kid.revealed ?? []).join('\n');
   /** 开着的白纸条:排好的样子;孩子在上面画的、转的 */
   const strip = lessonStrip(lesson);
   const stripLay = strip ? stripLayout(strip) : null;
+  /** 白纸页的高:白纸条摆得比一张纸长就跟着长 */
+  const whiteH = Math.max(WHITE_H, (stripLay?.rect[3] ?? 0) + 40);
+  const geoKey = sourceKey(page, whiteH);
   const latestStrip = useRef<{ key: string; lay: ReturnType<typeof stripLayout> } | null>(null);
   latestStrip.current = strip && stripLay ? { key: strip.key, lay: stripLay } : null;
   const canTurn = open.includes('转');
@@ -356,6 +377,7 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
     let k = need;
     const w = (x1 - x0) * k, h = (y1 - y0) * k;
     if (w * h > SHARP_MAX_PX) k *= Math.sqrt(SHARP_MAX_PX / (w * h));
+    if (!g.pdf) { cv.style.display = 'none'; return; }
     const doc = await openDoc(g.pdf);
     const tmp = document.createElement('canvas');
     tmp.width = Math.max(1, Math.round((x1 - x0) * k));
@@ -458,17 +480,23 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
   const canTurnRef = useRef(canTurn);
   canTurnRef.current = canTurn;
 
-  // ---- 铺这一课:开 PDF、量页、每页先画一张、拉行和字 ----
+  // ---- 铺这一页:量页(课本开 PDF 量,照片照状态里记的宽高,白纸一张)、每页先画一张、拉行和字 ----
   useEffect(() => {
-    if (!pdfUrl || !pages.length) return;
+    const p = latest.current && lessonPage(latest.current);
+    if (!p || !geoKey) return;
     if (geo.current?.key === geoKey) return;
     let cancelled = false;
     setPhase('loading');
     (async () => {
-      const doc = await openDoc(pdfUrl);
+      const pdfUrl = p.kind === 'book' ? `/api/kid/textbook/pdf?b=${encodeURIComponent(p.src)}` : null;
+      const doc = pdfUrl ? await openDoc(pdfUrl) : null;
       const dims: { n: number; w: number; h: number }[] = [];
-      for (const n of pages) { const pg = await doc.getPage(n); const vp = pg.getViewport({ scale: 1 }); dims.push({ n, w: vp.width, h: vp.height }); }
+      if (p.kind === 'book' && doc) for (const n of p.pages) { const pg = await doc.getPage(n); const vp = pg.getViewport({ scale: 1 }); dims.push({ n, w: vp.width, h: vp.height }); }
+      else if (p.kind === 'photo') p.photos.forEach((ph, i) => dims.push({ n: i + 1, w: ph.w, h: ph.h }));
+      else dims.push({ n: 1, w: BOOK_W, h: whiteH });
       if (cancelled) return;
+      // 每页底下不铺的那一条(课本;应用照这一册算好的,bookCut):有它页和页就直接连着
+      const cut = p.kind === 'book' ? p.cut : 0;
       const sheets = bookSheets(dims, undefined, cut).map((sh, i) => ({ ...sh, w: dims[i].w, h: dims[i].h }));
       const height = sheets.length ? sheets[sheets.length - 1].top + sheets[sheets.length - 1].height : BOOK_W;
       const aspect = Math.round((dims[0].h / dims[0].w) * 10000) / 10000;
@@ -477,7 +505,7 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
       const base = new Map<number, HTMLCanvasElement>();
       const host = paper.current;
       if (!host) return;
-      // 换了一课:旧的页拿掉
+      // 换了一页:旧的页拿掉
       for (const old of Array.from(host.querySelectorAll('.bk-page'))) old.remove();
       for (const sh of sheets) {
         const cv = document.createElement('canvas');
@@ -489,11 +517,11 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
       geo.current = { key: geoKey, pdf: pdfUrl, sheets, height, aspect, base, drawn: new Set(), lines: [] };
       if (svg.current) { svg.current.setAttribute('viewBox', `0 0 ${BOOK_W} ${height}`); Object.assign(svg.current.style, { width: `${BOOK_W}px`, height: `${height}px` }); }
       if (sharp.current) sharp.current.style.display = 'none';
-      // 这一页上孩子画的、老师的记号照状态摆(换课再回来还在)
+      // 这一页上孩子画的、老师的记号照状态摆(换页再回来还在)
       ink.current = (lessonPage(latest.current)?.kid.ink ?? []).map((st) => st.slice());
       paintInk();
       paintTeacher(latest.current);
-      // 换了一课从页宽看起;老师让看过哪里就到那里;录像照孩子停下的窗
+      // 换了一页从页宽看起;老师让看过哪里就到那里;录像照孩子停下的窗
       zoom.current = 1;
       const L = latest.current.look;
       const fb = L ? frameBox(L.box, sheets) : null;
@@ -506,21 +534,49 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
       // 每页先画一张(从窗里看得见的那页起)
       const order = [...sheets].sort((a, b) => Math.abs(a.top + a.height / 2 - cam.current.cy) - Math.abs(b.top + b.height / 2 - cam.current.cy));
       for (const sh of order) {
-        const pg = await doc.getPage(sh.n);
-        if (cancelled) return;
-        const k = px / sh.w;
-        const vp = pg.getViewport({ scale: k });
         const cv = base.get(sh.n)!;
-        // 画布只有铺出来的那么高(页底裁掉的那一条不画);批注不画:平台盖在页顶的社标是一条水印批注
-        cv.width = Math.round(vp.width); cv.height = Math.round(sh.height / sh.s * k);
-        await pg.render({ canvas: cv, viewport: vp, annotationMode: 0 }).promise.catch(() => {});
+        if (doc) {
+          const pg = await doc.getPage(sh.n);
+          if (cancelled) return;
+          const k = px / sh.w;
+          const vp = pg.getViewport({ scale: k });
+          // 画布只有铺出来的那么高(页底裁掉的那一条不画);批注不画:平台盖在页顶的社标是一条水印批注
+          cv.width = Math.round(vp.width); cv.height = Math.round(sh.height / sh.s * k);
+          await pg.render({ canvas: cv, viewport: vp, annotationMode: 0 }).promise.catch(() => {});
+        } else if (p.kind === 'photo') {
+          const img = await loadImage(`/api/kid/image?p=${encodeURIComponent(p.photos[sh.n - 1].src)}`).catch(() => null);
+          if (cancelled) return;
+          if (img) {
+            const k = Math.min(1, PHOTO_PX / img.naturalWidth);
+            cv.width = Math.round(img.naturalWidth * k); cv.height = Math.round(img.naturalHeight * k);
+            cv.getContext('2d')?.drawImage(img, 0, 0, cv.width, cv.height);
+          }
+        } else {
+          cv.width = 4; cv.height = Math.max(4, Math.round(4 * sh.height / BOOK_W));
+          const g = cv.getContext('2d');
+          if (g) { g.fillStyle = '#ffffff'; g.fillRect(0, 0, cv.width, cv.height); }
+        }
         geo.current?.drawn.add(sh.n);
       }
       scheduleSharp();
-      // 点字要的行和字
-      const r = await fetch(`/api/kid/textbook/lines?b=${encodeURIComponent(page!.src)}&p=${pages[0]}-${pages[pages.length - 1]}`, { cache: 'no-store' }).catch(() => null);
-      const j = r?.ok ? ((await r.json()) as { pages?: BookPage[] }) : null;
-      if (!cancelled && geo.current?.key === geoKey && Array.isArray(j?.pages)) geo.current.lines = j!.pages!;
+      // 点字要的行和字:课本照 PDF 的文字层,照片照认出来的(认完以前一直是空的,等一会儿再拉)
+      if (p.kind === 'book') {
+        const r = await fetch(`/api/kid/textbook/lines?b=${encodeURIComponent(p.src)}&p=${p.pages[0]}-${p.pages[p.pages.length - 1]}`, { cache: 'no-store' }).catch(() => null);
+        const j = r?.ok ? ((await r.json()) as { pages?: BookPage[] }) : null;
+        if (!cancelled && geo.current?.key === geoKey && Array.isArray(j?.pages)) geo.current.lines = j!.pages!;
+      } else if (p.kind === 'photo') {
+        for (let round = 0; round < 40 && !cancelled; round++) {
+          const got = await Promise.all(p.photos.map(async (ph, i) => {
+            const r = await fetch(`/api/kid/photo-words?p=${encodeURIComponent(ph.src)}`, { cache: 'no-store' }).catch(() => null);
+            const j = r?.ok ? ((await r.json()) as { state?: string; items?: PhotoWord[]; lines?: PhotoLine[] }) : null;
+            return { page: photoBookPage(i + 1, ph, j ? { items: j.items ?? [], lines: j.lines ?? [], questions: [] } : null).page, done: j?.state !== 'running' };
+          }));
+          if (cancelled || geo.current?.key !== geoKey) return;
+          geo.current.lines = got.map((x) => x.page);
+          if (got.every((x) => x.done)) break;
+          await new Promise((r) => window.setTimeout(r, 1500));
+        }
+      }
     })().catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)));
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -678,7 +734,7 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
       try { (e.currentTarget as Element).setPointerCapture(e.pointerId); } catch { /* 合成的指针捕获不了 */ }
       const p = toScene(e.clientX, e.clientY);
       const path = el('path', { d: pathD([p]), fill: 'none', stroke: KID_INK, 'stroke-width': String(KID_INK_WIDTH * 0.7), 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'vector-effect': 'non-scaling-stroke', opacity: '0.9' });
-      if (canMark && !readonly) svg.current?.querySelector('.bk-ink')?.append(path);
+      if (canMark && !readonly) { svg.current?.querySelector('.bk-ink')?.append(path); onPen?.(); }
       pen.current = { id: e.pointerId, pts: [p], el: path, x0: e.clientX, y0: e.clientY };
       return;
     }

@@ -1,7 +1,7 @@
 /**
  * chalk —— 画面引擎(2026-10-31 从 drawtell 并进来,历史在 git log 里):纯计算,不碰 DOM、不带 React,服务端、命令、舞台都能 import。
  * 时钟(课的第 t 毫秒是什么样)、几何(包围盒,文字按量好的字宽)、圈住了什么、擦掉与换画板、烤好的画面怎么逐笔露出来。
- * 课包怎么读(parseBundle)、元素交给 excalidraw 前怎么预处理(prepareSkeletons)也在这里;场景检查在 check.ts,字母笔顺在 glyphs/,教具(预设的画法:方向盘…)在 kit/。
+ * 课包怎么读(parseBundle)、元素交给 excalidraw 前怎么预处理(prepareSkeletons)也在这里;场景检查在 check.ts,字母笔顺在 glyphs/,白纸条上的图形(点阵、方向盘)与课本、照片页的几何在 kit/。
  * 只能在浏览器里跑的(画烤好的画面 mountBaked、用 excalidraw 烤)在 src/ui/stage/chalk/;做课包的命令在 src/app/cli/chalk/(cotutor chalk)。
  */
 export { lessonClock, clockAt, frameAt, elementsAtSvgTime, boardAtSvgTime } from './clock.ts';
@@ -22,5 +22,5 @@ export { CHAR_EM, CJK_EM, FALLBACK_EM, LINE_HEIGHT } from './text-metrics.ts';
 export { computeStepWindows, durationOf, freezeTimeSec, FREEZE_EPS_MS, START_MS, stretchToAudio } from './timeline.ts';
 export type { StretchInfo, StepWindow } from './timeline.ts';
 export type { ChalkScene, ChalkSkeleton, ChalkErase, ChalkBoard, ChalkStep, ChalkBlock, ChalkGroup, ChalkSubscene, ChalkBackground } from './types.ts';
-export { KITS, KIT_LOOK, kitLookOnly, kitOf, readKitLines, kitParams, kitOps, kitMarks, markPhrases, describeKit, kitTouched, turnOf, turnPoint, turnedSkeletons, KIT_MARK_MAX, KIT_MARK_POINTS, KIT_PICK_CHARS, KIT_PICK_MAX, PHOTO_PICK, photoLocate, photoPick, photoRings, photoFrame, pickable, pickEnglish, pinyinStrip, COVER_ID, BOOK_ASPECT, BOOK_GAP, BOOK_MAX_PAGES, BOOK_TOC, BOOK_W, SECTION_NAMES, bookCut, bookFind, bookFrame, bookHeight, bookPages, bookPick, bookSheets, bookTarget, bookView, findLesson, lessonBlocks, lineBox } from './kit/index.ts';
-export type { Kit, KitParam, KitScene, KitState, KitTurn, KitMark, PhotoLine, PhotoWord, BookBlock, BookSheet } from './kit/index.ts';
+export { KITS, kitOf, readKitLines, kitParams, kitMarks, markPhrases, turnOf, turnPoint, turnedSkeletons, PHOTO_ITEM, photoBookPage, photoText, pickable, pickEnglish, PICK_CHARS, BOOK_ASPECT, BOOK_GAP, BOOK_MAX_PAGES, BOOK_TOC, BOOK_W, SECTION_NAMES, bookCut, bookFind, bookFrame, bookHeight, bookPages, bookPick, bookSheets, bookTarget, bookView, findLesson, lessonBlocks, lineBox } from './kit/index.ts';
+export type { Kit, KitParam, KitScene, KitState, KitTurn, KitMark, PhotoLine, PhotoQuestion, PhotoText, PhotoWord, BookBlock, BookSheet } from './kit/index.ts';

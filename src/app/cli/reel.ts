@@ -90,13 +90,6 @@ function stateText(state: unknown): string {
   return bits.join(',') || '动了';
 }
 
-/** 板上的底说成一句 */
-function ownText(card: { props: Record<string, unknown> }): string {
-  const p = card.props, params = (p.params ?? {}) as Record<string, string>;
-  if (p.kit === '照片') return `孩子的照片 ${params['图'] ?? ''}`;
-  return '白板';
-}
-
 /**
  * 孩子挪课本是一串一串的(停一下报一次,一分钟几十次):中间没别的事的几次并成一行——挪了几次、从几点到几点、
  * 依次停在哪(连着一样的算一处,最多写 4 处,多的只写最后停在哪)
@@ -199,7 +192,6 @@ export async function reelReport(ctx: AppContext, ref: ReelRef): Promise<ReelRep
   }
   for (const a of R.aways) if (a.to - a.from >= 1000) add(a.from, 'away', `切到别处 ${span(a.to - a.from)}`);
   for (const l of R.lectures ?? []) add(l.from, 'lecture', `看小课堂「${l.title}」`, l.job);
-  for (const o of R.owns ?? []) add(Math.max(o.at, R.startAt), 'board', `板上铺好:${ownText(o.card)}`);
   // 一节课(课本做底):孩子端记的样子变了的那几处——翻到哪一课、老师让看哪里、白纸条上摆了什么
   let was = '';
   for (const x of R.lessons ?? []) {

@@ -136,7 +136,7 @@ try {
   // 二、孩子说要预习坐井观天(另起一条实时连接发进同一个话题;页面轮询拿到老师的卡)
   const day = async () => (await (await fetch(`${base}/api/kid/conversations/${T}/today`)).json());
   const thread = (await day()).messages?.slice(-1)[0]?.thread;
-  ok('开了一个以板为主的话题', Boolean(thread) && (await day()).messages.some((m) => m.board === 'page'), String(thread));
+  ok('开了一节铺课本的课', Boolean(thread) && (await day()).messages.some((m) => m.base === 'textbook'), String(thread));
   await until(`(() => true)()`);
   for (let i = 0; i < 40 && (await day()).messages.some((m) => m.result === 'running'); i++) await sleep(250);
   if (process.env.PROBE_DEBUG) console.log('  说之前:', JSON.stringify(await evaluate(`({ voice: document.querySelector('#lv-hold')?.dataset.voice, holdRect: document.querySelector('#lv-hold')?.getBoundingClientRect().toJSON(), top: (() => { const r = document.querySelector('#lv-hold').getBoundingClientRect(); const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return el ? el.id || el.className : null; })() })`)), 'conns', fake.conns.length, Boolean(fake.conns[fake.conns.length - 1]?.session));

@@ -101,6 +101,8 @@ export interface BookBlock {
   text: string;
   /** 哪几行:页号 + 那一页的第几行 */
   refs: { n: number; i: number }[];
+  /** 这一块自己的框(页的坐标,PDF 的点):照片上认出的题框住整道题(题里的图、要填的空也在里面),比框里那几行的并集大;没有就照 refs 算 */
+  area?: { n: number; box: Box };
 }
 
 interface At { p: BookPage; l: BookLine; i: number }
@@ -277,6 +279,12 @@ function refsBox(pages: readonly BookPage[], sheets: readonly BookSheet[], refs:
   }));
 }
 
+/** 一块在场景里的框:有自己的框就用它,没有照那几行 */
+function blockBox(pages: readonly BookPage[], sheets: readonly BookSheet[], b: BookBlock): Box | null {
+  if (b.area) { const sh = sheetOf(sheets, b.area.n); return sh ? toScene(sh, ...b.area.box) : null; }
+  return refsBox(pages, sheets, b.refs);
+}
+
 const PUNCT = /[\s\p{P}\p{S}]/u;
 
 /** 一课的字连成一串(照行的先后),每个字记着它在哪页哪行第几个 */
@@ -358,7 +366,7 @@ export function bookTarget(pages: readonly BookPage[], sheets: readonly BookShee
   const pr = PROBLEM.exec(q.replace(/\s/g, ''));
   if (pr) {
     const b = blocks.find((x) => x.kind === 'problem' && x.no === Number(pr[2]) && (!pr[1] || x.head === pr[1]));
-    const box = b ? refsBox(pages, sheets, b.refs) : null;
+    const box = b ? blockBox(pages, sheets, b) : null;
     return box ? { label: `${b!.head ?? ''}第${pr[2]}题`, box } : null;
   }
   if (/^(标题|题目|开头|课题)$/.test(q)) {
@@ -380,7 +388,15 @@ export function bookTarget(pages: readonly BookPage[], sheets: readonly BookShee
   return { label: q.length > 12 ? `${Array.from(q).slice(0, 12).join('')}…` : q, box: refsBox(pages, sheets, hit.refs)! };
 }
 
-/** 孩子点到的是哪个字(场景坐标的一点):落在一行里(上下各宽出两成)、离哪个字最近;不是汉字 = null */
+/** 能弹出来的:一到四个汉字(田字格),或一个英文单词(单词卡,最多 20 个字母) */
+const HANZI = /^[\u3400-\u9fff]+$/;
+const EN_WORD = /^[A-Za-z][A-Za-z'-]{0,19}$/;
+export const PICK_CHARS = 4;
+export const pickable = (text: string): boolean => (HANZI.test(text) && Array.from(text).length <= PICK_CHARS) || EN_WORD.test(text);
+/** 这一项是英文单词(浮层是单词卡,不是田字格) */
+export const pickEnglish = (text: string): boolean => EN_WORD.test(text);
+
+/** 孩子点到的是哪个字(场景坐标的一点):落在一行里(上下各宽出两成)、离哪个字最近;英文是那个字母所在的词;别的(数字、标点)= null */
 export function bookPick(pages: readonly BookPage[], sheets: readonly BookSheet[], x: number, y: number): { c: string; py?: string; box: Box } | null {
   for (const p of pages) {
     const sh = sheetOf(sheets, p.n);
@@ -390,11 +406,20 @@ export function bookPick(pages: readonly BookPage[], sheets: readonly BookSheet[
       const [x1, y1, x2, y2] = lineBox(sh, l);
       const pad = (y2 - y1) * 0.2;
       if (y < y1 - pad || y > y2 + pad || x < x1 - pad || x > x2 + pad) continue;
-      for (const ch of l.chars) {
-        if (!/\p{Script=Han}/u.test(ch.c)) continue;
+      for (let k = 0; k < l.chars.length; k++) {
+        const ch = l.chars[k];
+        const han = /\p{Script=Han}/u.test(ch.c);
+        if (!han && !/[A-Za-z]/.test(ch.c)) continue;
         const cx = (ch.x1 + ch.x2) / 2 * sh.s;
         const d = Math.abs(cx - x) + Math.abs((y1 + y2) / 2 - y) * 0.5;
-        if (!best || d < best.d) best = { c: ch.c, ...(ch.py ? { py: ch.py } : {}), box: toScene(sh, ch.x1, l.y1, ch.x2, l.y2), d };
+        if (best && d >= best.d) continue;
+        if (han) { best = { c: ch.c, ...(ch.py ? { py: ch.py } : {}), box: toScene(sh, ch.x1, l.y1, ch.x2, l.y2), d }; continue; }
+        // 英文:点中一个字母就是它所在的那个词(英语课本、英语作业的照片)
+        let a = k, b = k;
+        while (a > 0 && /[A-Za-z'-]/.test(l.chars[a - 1].c)) a--;
+        while (b < l.chars.length - 1 && /[A-Za-z'-]/.test(l.chars[b + 1].c)) b++;
+        const word = l.chars.slice(a, b + 1).map((c) => c.c).join('').replace(/^['-]+|['-]+$/g, '');
+        if (EN_WORD.test(word)) best = { c: word, box: toScene(sh, l.chars[a].x1, l.y1, l.chars[b].x2, l.y2), d };
       }
     }
     if (best && best.d < (best.box[2] - best.box[0]) * 1.2) { const { d: _d, ...hit } = best; return hit; }
@@ -403,21 +428,31 @@ export function bookPick(pages: readonly BookPage[], sheets: readonly BookSheet[
 }
 
 /** 窗里看得见什么(给老师的一句):哪几页、哪几段 / 哪几个栏目;一行露出一半以上才算 */
-export function bookView(pages: readonly BookPage[], sheets: readonly BookSheet[], blocks: readonly BookBlock[], box: Box): string {
-  const seen = (refs: readonly { n: number; i: number }[]): boolean => refs.some((r) => {
+export function bookView(pages: readonly BookPage[], sheets: readonly BookSheet[], blocks: readonly BookBlock[], box: Box, unit: '页' | '张' = '页'): string {
+  const seen = (refs: readonly { n: number; i: number }[], b?: BookBlock): boolean => (b?.area ? areaSeen(b.area) : false) || refs.some((r) => {
     const p = pages.find((x) => x.n === r.n), sh = sheetOf(sheets, r.n), l = p?.lines[r.i];
     if (!p || !sh || !l) return false;
     const [x1, y1, x2, y2] = lineBox(sh, l);
     const w = Math.max(0, Math.min(x2, box[2]) - Math.max(x1, box[0])), h = Math.max(0, Math.min(y2, box[3]) - Math.max(y1, box[1]));
     return w * h >= 0.5 * (x2 - x1) * (y2 - y1);
   });
-  const printed = [...new Set(sheets.filter((s) => s.top < box[3] && s.top + s.height > box[1]).map((s) => pages.find((p) => p.n === s.n)?.printed).filter((n): n is number => typeof n === 'number'))];
-  const where = printed.length ? `第 ${printed.length > 1 ? `${printed[0]}–${printed[printed.length - 1]}` : printed[0]} 页` : '';
+  // 照片上的题:题框露出一半以上才算
+  const areaSeen = (a: NonNullable<BookBlock['area']>): boolean => {
+    const sh = sheetOf(sheets, a.n);
+    if (!sh) return false;
+    const [x1, y1, x2, y2] = toScene(sh, ...a.box);
+    const w = Math.max(0, Math.min(x2, box[2]) - Math.max(x1, box[0])), h = Math.max(0, Math.min(y2, box[3]) - Math.max(y1, box[1]));
+    return w * h >= 0.5 * (x2 - x1) * (y2 - y1);
+  };
+  const shown = sheets.filter((s) => s.top < box[3] && s.top + s.height > box[1]);
+  // 照片一张一张数(第 2 张),课本照印的页码
+  const printed = unit === '张' ? shown.map((s) => s.n) : [...new Set(shown.map((s) => pages.find((p) => p.n === s.n)?.printed).filter((n): n is number => typeof n === 'number'))];
+  const where = printed.length ? `第 ${printed.length > 1 ? `${printed[0]}–${printed[printed.length - 1]}` : printed[0]} ${unit}` : '';
   const paras = blocks.filter((b) => b.kind === 'para' && seen(b.refs)).map((b) => b.no!);
   // 数学:例几、栏目;栏目名没露出来、只露出下面的题,说是哪个栏目第几题
   const named = blocks.filter((b) => (b.kind === 'section' || b.kind === 'example') && seen(b.refs)).map((b) => (b.kind === 'example' ? `例${b.no}` : b.head!));
   const probs = new Map<string, number[]>();
-  for (const b of blocks) if (b.kind === 'problem' && seen(b.refs) && !named.includes(b.head ?? '')) probs.set(b.head ?? '', [...(probs.get(b.head ?? '') ?? []), b.no!]);
+  for (const b of blocks) if (b.kind === 'problem' && seen(b.refs, b) && !named.includes(b.head ?? '')) probs.set(b.head ?? '', [...(probs.get(b.head ?? '') ?? []), b.no!]);
   const qs = [...probs].map(([h, ns]) => `${h}第 ${ns.length > 1 ? `${ns[0]}–${ns[ns.length - 1]}` : ns[0]} 题`);
   const secs = [...new Set(named), ...qs];
   const others = blocks.filter((b) => b.kind === 'other' && seen(b.refs)).length;

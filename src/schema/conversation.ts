@@ -133,10 +133,11 @@ const MessageObjectSchema = z.object({
   via: MessageViaSchema.optional(),
   /** 这个话题是从哪个 activity 起的(只记在话题第一条):名字与点的那一刻的参数,话题后面每条都照它带 */
   activity: ActivityRunSchema.optional(),
-  /** 这个话题以板为主(activity 头上 board: page;只记在话题第一条):孩子端的页面就是板,板的日志在 <date>.<话题>.board.jsonl */
-  board: z.literal('page').optional(),
-  /** 话题第一条:页是课本(activity 头上 base: textbook);这节课的样子在 <date>.<话题>.lesson.json */
-  base: z.literal('textbook').optional(),
+  /**
+   * 话题第一条:这一节课铺哪种页(activity 头上的 base:;2026-11-16 阶段 3 起 photo 也是);这节课的样子在 <date>.<话题>.lesson.json,板的日志在 <date>.<话题>.board.jsonl。
+   * 以前的记录里还有 board: 'page'(以板为主、照片板):读进来就丢,那些话题不再当一节课
+   */
+  base: z.enum(['textbook', 'photo']).optional(),
   /** 口语课页的哪份口语单起的这个话题(talk/<id>/ 4,只记在话题第一条) */
   talk: z.string().optional(),
 });

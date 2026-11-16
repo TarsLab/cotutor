@@ -142,15 +142,6 @@ export async function writeCardState(ws: Workspace, tutor: string, date: string,
   await rename(tmp, target);
 }
 
-/** 画板导出的 png:<date>.<job>.cards/<n>.png;返回相对 conversations/<老师>/ 的名字 */
-export async function writeCardImage(ws: Workspace, tutor: string, date: string, job: string, n: number, png: Buffer): Promise<string> {
-  const files = conversationFiles(ws.dirs.conversations, tutor, date);
-  await mkdir(files.cardsDir(job), { recursive: true });
-  const target = `${files.cardsDir(job)}/${n}.png`;
-  await writeFile(target, png);
-  return `${date}.${job}.cards/${n}.png`;
-}
-
 /**
  * 作业照片(R5,2026-09-14):落 workspace 的 captures/<日期>/<HHMM>-<n>.<ext>(paths.captures,相对 workspace 根),
  * 不落 vault。返回相对 workspace 根的路径(消息的 photos、上下文包的 photos: 段、/api/kid/image?p= 都用它)。

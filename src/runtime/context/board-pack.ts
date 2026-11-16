@@ -1,16 +1,14 @@
 /**
- * 以板为主的话题:每一轮给老师的那段「板此刻的样子」(上下文包的 board:,形状在 schema 的 ContextPack.slate)。纯函数。
- * 文字每一轮都给;图只在文字说不清时给(孩子交板,src/brain/ 的 boards)。2026-11-13《画板为主设计》下篇「老师怎么看到板」:
- *   底       孩子拍的那张(路径,认出了课名就带上),没有照片就是白板
- *   题       作业照片上认出的题号(分题:框写「第 3 题」就裁出那一道)
- *   全文     底上认出的正文:换底以后第一次认完那一轮给全,之后只写「未变」;还在认写「还在认」;这一轮刚发的照片不写(图随这一轮附上)
- *   你画的   老师上一次在板上画的(那张板卡的参数,图不算)
- *   开放     现在孩子能做的操作
- *   孩子做的 从上一轮到现在孩子在板上做的,合并过(点开看了哪几个字、各几次;课本上写画了几笔、擦过没有)
- *   最近点的 30 秒内点的最后一项(孩子说「这个」时指它)
- *   孩子在看 课本做底时:孩子自己挪了窗、停下来的地方(上一轮以后的最后一次)
- * 整段控制在 SLATE_MAX 字以内(课本 BOOK_SLATE_MAX):超了先截全文。
- * 课本做底(book)时:底是「课本《册》:《课》第几页」,全文是这一课分好段的正文(src/chalk/kit/book.ts 的 lessonBlocks),目录时是一单元一行。
+ * 一节课(铺着页的 activity):每一轮给老师的「页此刻的样子」(上下文包的 board:,形状在 schema 的 ContextPack.slate)和页的文字层(pageNotes)。纯函数。
+ * 2026-11-16 阶段 3 起按变得多快分两层(《多模态教学harness-底层设计》第四节):
+ *   页的文字层  这一页(课本的一课、照片的一张)印的字:第一次看到那一页时当一条笔记给(<page>),之后不重给;压缩以后重给现在这一页
+ *   board:      每轮会变的——
+ *     底       现在铺的是哪一页(课本《册》:《课》第几页 / 作业照片几张 / 白纸);这节课铺过几页就列出来(页集)
+ *     你画的   看哪里、圈 / 遮 / 盖了什么、白纸条里摆着什么(应用找的框不说)
+ *     开放     现在孩子能做的(点字是页自带的,别的是你请的)
+ *     孩子做的 从上一轮到现在孩子在页上做的,合并过(点开看了哪几个字、写画了几笔、擦过没有、揭了哪些、白纸条上的图形)
+ *     最近点的 30 秒内点的最后一项(孩子说「这个」时指它)
+ *     孩子在看 上一轮以后窗最后停下的地方(他自己挪的,或你让他看的那一块移完);附了那一块的图就注一句
  */
 import { BOOK_TOC, lessonBlocks } from '../../chalk/index.ts';
 import { lessonPage, lessonStrip } from '../../board/lesson.ts';
@@ -19,45 +17,28 @@ import type { BoardEvent, BookIndex, BookPage, ContextPack, Lesson, StripItem } 
 
 /** 「最近点的」多久以内算(孩子说「这个」指它);起点,试用后调 */
 export const RECENT_PICK_MS = 30_000;
-/** 板的说明最多多少字 */
-export const SLATE_MAX = 600;
-/** 课本做底时最多多少字:一课的正文(坐井观天带认字栏、课后题约 500 字,语文园地约 900)或整册目录要给全 */
-export const BOOK_SLATE_MAX = 2400;
-export const WHITE_BOARD = '白板';
+/** 一页的文字层最多多少字:一课的正文(坐井观天带认字栏、课后题约 500 字,语文园地约 900)、整册目录、一张作业照片都要给全 */
+export const PAGE_NOTE_MAX = 2400;
+
+/** 页的文字层的一条笔记:id 是板的日志里记「给过了」的键(课本「册子#课」、照片「作业#<路径>」),name 给老师看 */
+export interface PageNote { id: string; name: string; text: string[] }
 
 export interface SlateInput {
-  /** 底:孩子最近发的那张照片(相对 workspace 根);null = 白板 */
-  photo: string | null;
-  /** 这一轮孩子刚发了这张照片(图随这一轮附上,全文还没认) */
-  fresh: boolean;
-  /** 底上认出的东西(src/scenes/photo-words/store.ts 的那份);没认、白板 = null */
-  words: { state: 'running' | 'done' | 'failed'; lesson: string | null; full: readonly string[]; questions?: readonly string[] } | null;
+  /** 现在铺的那一页给老师看的名字;id 是它在板的日志里的 base */
+  page: { id: string; show: string };
+  /** 这节课铺过的别的页(页集;翻回去用),给老师看的名字 */
+  others: readonly string[];
   /** 这个话题板的日志 */
   events: readonly BoardEvent[];
-  /** 老师上一次在这块底上画的板卡:画法与参数、开放的操作;还没画 = null */
-  kit: { kit: string; params: Readonly<Record<string, string>>; ops: readonly string[] } | null;
-  /** 老师还没画时孩子就能做的(照片底开了认字 = 点字) */
-  ops: readonly string[];
-  /** 一节课的状态说成的那几样(课本做底时代替 kit 与 ops;lessonSlateBits) */
-  lesson?: LessonBits;
+  /** 一节课的状态说成的那几样(lessonSlateBits) */
+  lesson: LessonBits;
   /** 这一刻(毫秒) */
   now: number;
-  /**
-   * 课本做底(base: textbook)时代替 photo / words:show 给老师看的底(「课本《语文二年级上册》:《坐井观天》第 54–55 页」),
-   * key 板的日志里这块底的名字(「册子#课」),text 这一课的正文(一块一行;目录是一单元一行)
-   */
-  book?: { show: string; key: string; text: readonly string[]; /** 这一轮附了窗里的图(舞台交来的,孩子眼前那一块) */ shot?: boolean };
+  /** 这一轮附了窗里的图(舞台交来的,孩子眼前那一块) */
+  shot?: boolean;
 }
 
 const ago = (ms: number): string => `${Math.max(1, Math.round(ms / 1000))} 秒前`;
-
-/** 老师画的那张板卡说成一行:画法加上写了的参数(照片的「图」就是底,不重复) */
-export function drawnLine(kit: NonNullable<SlateInput['kit']>): string {
-  // 圈、遮写的字词只说字(框是应用找的);写的字照「字 在 位置」
-  const named = (v: string): string => v.split(';').map((x) => (x.includes('|') ? x.split('|')[0] || x.split('|')[1] : x)).join('、');
-  const parts = Object.entries(kit.params).filter(([k, v]) => v && k !== '图').map(([k, v]) => `${k} ${k === '圈' || k === '遮' || k === '盖' || k === '看' || (k === '框' && v.includes('|')) ? named(v) : v.split(';').map((x) => x.replace(/\|$/, '').replace(/\|/g, ' 在 ')).join(';')}`);
-  return parts.length ? `${kit.kit}:${parts.join(';')}` : kit.kit;
-}
 
 /** 点开看的那些合并成一句:「点开看了笔顺:傍(2 次)、晒」;英文单词「点开看了单词:yellow(2 次)」 */
 function pickLine(picks: readonly string[], what: string): string | null {
@@ -81,7 +62,7 @@ export function stripItemLine(it: StripItem): string {
 }
 
 /**
- * 一节课现在这一页上:你画的(看哪里、圈 / 遮 / 盖了什么、白纸条里摆着什么,应用找的框不说)、开放的(点字是课本自带的,别的是你请的)。
+ * 一节课现在这一页上:你画的(看哪里、圈 / 遮 / 盖了什么、白纸条里摆着什么,应用找的框不说)、开放的(点字是页自带的,别的是你请的)。
  * 白纸条收着的(讲别的题时)不说,回到那道题才说
  */
 export function lessonSlateBits(l: Lesson): LessonBits {
@@ -92,16 +73,16 @@ export function lessonSlateBits(l: Lesson): LessonBits {
   const parts = [
     ...(l.look ? [`看 ${l.look.label}`] : []),
     ...(['圈', '遮', '盖'] as const).flatMap((k) => (of(k).length ? [`${k} ${of(k).join('、')}`] : [])),
-    ...(strip?.items.length ? [`白纸条:${strip.items.map(stripItemLine).join('、')}`] : []),
+    ...(strip?.items.length ? [`${p.kind === 'white' ? '白纸上' : '白纸条'}:${strip.items.map(stripItemLine).join('、')}`] : []),
   ];
   const asked = p.open.map((o) => (o === '点' ? '点字' : o));
   const onStrip = strip ? stripRead(strip, p.kid.stripInk[strip.key] ?? [], p.kid.turns) : [];
   return { ...(parts.length ? { drawn: parts.join(';') } : {}), ops: [...new Set([...(p.pick ? ['点字'] : []), ...asked])], covers: { 遮: of('遮'), 盖: of('盖') }, revealed: [...p.kid.revealed], ...(onStrip.length ? { strip: onStrip } : {}) };
 }
 
-/** 板此刻的样子;told = 这一轮把这块底的全文给了老师(记进日志,下一轮写「未变」) */
-export function slateOf(x: SlateInput): { slate: NonNullable<ContextPack['slate']>; told?: string } {
-  const base = x.book ? x.book.key : (x.photo ?? WHITE_BOARD);
+/** 页此刻的样子 */
+export function slateOf(x: SlateInput): NonNullable<ContextPack['slate']> {
+  const base = x.page.id;
   const onBase = (e: BoardEvent): e is BoardEvent & { k: 'pick' } => e.k === 'pick' && e.base === base;
   // 上一轮交给老师以后的事
   let from = 0;
@@ -109,18 +90,18 @@ export function slateOf(x: SlateInput): { slate: NonNullable<ContextPack['slate'
   const since = x.events.slice(from);
   const picked = since.filter(onBase).map((e) => e.text);
   const did = [pickLine(picked.filter((t) => !isEnglish(t)), '笔顺'), pickLine(picked.filter(isEnglish), '单词')].filter((s): s is string => Boolean(s));
-  // 课本上写画的:几笔(笔画本身看图)、擦没擦过
+  // 页上写画的:几笔(笔画本身看图)、擦没擦过
   const inks = since.filter((e): e is BoardEvent & { k: 'ink' } => e.k === 'ink' && e.base === base);
   const wiped = inks.map((e) => Boolean(e.wipe)).lastIndexOf(true);
   const strokes = inks.slice(wiped + 1).length;
   if (wiped >= 0) did.push('擦掉了自己画的');
-  if (strokes) did.push(`在课本上写画了 ${strokes} 笔(写了什么看图)`);
+  if (strokes) did.push(`在页上写画了 ${strokes} 笔(写了什么看图)`);
   // 白纸条上的图形:画法照几何算的大概(状态,不是这一轮才做的;以图为准)
-  if (x.lesson?.strip) did.push(...x.lesson.strip);
-  // 遮了拼音的、盖住印好的字的(课本):揭了哪些、没揭哪些(这块底上揭过的都算)
-  const opened = new Set([...x.events.filter((e): e is BoardEvent & { k: 'reveal' } => e.k === 'reveal' && e.base === base).map((e) => e.text), ...(x.lesson?.revealed ?? [])]);
+  if (x.lesson.strip) did.push(...x.lesson.strip);
+  // 遮了拼音的、盖住印好的字的:揭了哪些、没揭哪些(这一页上揭过的都算)
+  const opened = new Set(x.lesson.revealed);
   for (const [key, what] of [['遮', '揭开了拼音'], ['盖', '揭开了盖住的']] as const) {
-    const covered = x.lesson ? x.lesson.covers[key] : x.kit?.params[key] ? x.kit.params[key].split(';').map((v) => v.split('|')[0]).filter(Boolean) : [];
+    const covered = x.lesson.covers[key];
     if (!covered.length) continue;
     const yes = covered.filter((w) => opened.has(w)), no = covered.filter((w) => !opened.has(w));
     did.push(`${what}:${yes.length ? yes.join('、') : '一个也没有'}${no.length ? `;没揭:${no.join('、')}` : ''}`);
@@ -128,46 +109,30 @@ export function slateOf(x: SlateInput): { slate: NonNullable<ContextPack['slate'
   const last = [...x.events].reverse().find(onBase);
   const lastMs = last ? x.now - Date.parse(last.at) : Infinity;
   const recent = last && lastMs >= 0 && lastMs <= RECENT_PICK_MS ? `${last.text}(${ago(lastMs)})` : undefined;
-  let text: string[] | undefined;
-  let told: string | undefined;
-  if (x.book) {
-    // 课本:这一课的正文第一次给全,之后「未变」(同照片)
-    if (x.events.some((e) => e.k === 'turn' && e.told === x.book!.key)) text = ['未变'];
-    else if (x.book.text.length) { text = [...x.book.text]; told = x.book.key; }
-  } else if (x.photo && !x.fresh && x.words) {
-    const toldBefore = x.events.some((e) => e.k === 'turn' && e.told === x.photo);
-    if (toldBefore) text = ['未变'];
-    else if (x.words.state === 'running') text = ['还在认'];
-    else if (x.words.full.length) { text = [...x.words.full]; told = x.photo; }
-  }
-  const lesson = x.words?.lesson;
   // 孩子眼前是哪一块:上一轮以后窗最后停下的地方(他自己挪的,或老师让他看的那一块移完);附了图的说一句
-  const stop = x.book ? [...since].reverse().find((e): e is BoardEvent & { k: 'view' | 'shot' } => (e.k === 'view' || e.k === 'shot') && e.base === base)?.text : undefined;
-  const view = stop && x.book?.shot ? `${stop}(这一块的图附在这一轮)` : stop;
-  const slate: NonNullable<ContextPack['slate']> = {
-    base: x.book ? x.book.show : x.photo ? (lesson ? `${x.photo}(《${lesson}》)` : x.photo) : WHITE_BOARD,
-    ...(text ? { text } : {}),
-    ...(x.words?.questions?.length ? { questions: `${x.words.questions.map((n) => `第${n}题`).join('、')}(框写题号就裁出那一道)` } : {}),
-    ...(x.lesson ? (x.lesson.drawn ? { drawn: x.lesson.drawn } : {}) : x.kit ? { drawn: drawnLine(x.kit) } : {}),
-    ops: [...(x.lesson ? x.lesson.ops : x.kit ? x.kit.ops : x.ops)],
+  const stop = [...since].reverse().find((e): e is BoardEvent & { k: 'view' | 'shot' } => (e.k === 'view' || e.k === 'shot') && e.base === base)?.text;
+  const view = stop && x.shot ? `${stop}(这一块的图附在这一轮)` : stop;
+  return {
+    base: x.page.show,
+    ...(x.others.length ? { pages: `还铺过:${x.others.join('、')}(翻回去写 [[翻 …]])` } : {}),
+    ...(x.lesson.drawn ? { drawn: x.lesson.drawn } : {}),
+    ops: [...x.lesson.ops],
     did,
     ...(recent ? { recent } : {}),
     ...(view ? { view } : {}),
   };
-  // 超了先截全文(从后往前),截掉的说一句
-  const size = (s: typeof slate): number => JSON.stringify(s).length;
-  const max = x.book ? BOOK_SLATE_MAX : SLATE_MAX;
-  if (slate.text && slate.text.length > 1 && size(slate) > max) {
-    const all = slate.text;
-    let keep = all.length;
-    while (keep > 1 && size({ ...slate, text: [...all.slice(0, keep), '…'] }) > max) keep--;
-    slate.text = [...all.slice(0, keep), `…(后面还有 ${all.length - keep} 行,${x.book ? '看图' : '看照片'})`];
-  }
-  return { slate, ...(told ? { told } : {}) };
+}
+
+/** 一条页的笔记太长就从后面截(截掉的说一句) */
+export function clipNote(text: readonly string[], max = PAGE_NOTE_MAX): string[] {
+  const all = [...text];
+  let keep = all.length, size = all.reduce((n, t) => n + t.length + 1, 0);
+  while (keep > 1 && size > max) { keep--; size -= all[keep].length + 1; }
+  return keep < all.length ? [...all.slice(0, keep), `…(后面还有 ${all.length - keep} 行,看图)`] : all;
 }
 
 /**
- * 课本做底时给老师看的底与全文(SlateInput.book 的 show、text):
+ * 课本给老师看的底与文字层:
  * 一课 = 分好的段(「第3段 小鸟回答说……」)、栏目(「【日积月累】……」)、课文后面的认字栏和课后题(带读音的写读音),换页处插一行「—— 第 55 页 ——」;
  * 数学 = 标题(「标题:6的乘法口诀」)、例题(「例4 ……」)、栏目(「【练一练】」)和下面的题(「第3题 ……」);图上的东西读不到,只有字。
  * 目录 = 一单元一行,课名后面是印的页码(老师照孩子说的课写「课: 坐井观天」);数学一个单元一行,后面是它下面的小节、课题(课题前带点)。

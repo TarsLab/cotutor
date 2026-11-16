@@ -5,11 +5,11 @@ import { boardSkillDoc, boardSyntaxDoc } from '../src/board/cards/docs.ts';
 import { check, done } from './_check.ts';
 
 {
-  check('有状态的卡:choice / lecture / kit;text / read / image / code 没有', CARD_KINDS.filter((k) => k.state).map((k) => k.name).join() === 'choice,lecture,kit');
-  check('十二种卡登记在册:板书十种 + 首页的老师卡与听写卡', CARD_KINDS.map((k) => k.name).join() === 'text,read,choice,image,tianzige,word,lecture,kit,photo,code,tutor,dictation' && cardKind('choice')?.name === 'choice' && cardKind('widget') === undefined);
-  check('用在哪:板书十种;首页只有老师卡与听写卡', kindsFor('board').map((k) => k.name).join() === 'text,read,choice,image,tianzige,word,lecture,kit,photo,code' && kindsFor('home').map((k) => k.name).join() === 'tutor,dictation');
+  check('有状态的卡:choice / lecture;text / read / image / code 没有', CARD_KINDS.filter((k) => k.state).map((k) => k.name).join() === 'choice,lecture');
+  check('十一种卡登记在册:板书九种 + 首页的老师卡与听写卡', CARD_KINDS.map((k) => k.name).join() === 'text,read,choice,image,tianzige,word,lecture,photo,code,tutor,dictation' && cardKind('choice')?.name === 'choice' && cardKind('widget') === undefined);
+  check('用在哪:板书九种;首页只有老师卡与听写卡', kindsFor('board').map((k) => k.name).join() === 'text,read,choice,image,tianzige,word,lecture,photo,code' && kindsFor('home').map((k) => k.name).join() === 'tutor,dictation');
   check('契约里的板书种类表与注册表对得上(schema 不 import 卡,靠这条锁住)', BOARD_CARD_KINDS.join() === kindsFor('board').map((k) => k.name).join());
-  check('老师的卡:没写 = null(全部);写了 = 注册表顺序、text 总在、首页的卡不算', tutorCardKinds(undefined) === null && tutorCardKinds(['kit', 'read'])?.join() === 'text,read,kit' && tutorCardKinds(['choice', 'tutor', 'text'])?.join() === 'text,choice' && tutorCardKinds([])?.join() === 'text');
+  check('老师的卡:没写 = null(全部);写了 = 注册表顺序、text 总在、首页的卡不算', tutorCardKinds(undefined) === null && tutorCardKinds(['code', 'read'])?.join() === 'text,read,code' && tutorCardKinds(['choice', 'tutor', 'text'])?.join() === 'text,choice' && tutorCardKinds([])?.join() === 'text');
   const tut = parseCard('tutor chinese-tutor', '- activity 预习 我要预习小蝌蚪找妈妈\n范围: 第 22 课\n讲法: 先读课文\n讲法: 再认字\n小课堂 2026-09-18-po13-jian-8 13 减 8 怎么拆', 'home');
   check('老师卡:列表号去掉、参数与讲法挂上一个按钮(讲法多行拼起来)、小课堂带课包', tut.card.kind === 'tutor' && JSON.stringify(tut.card.props) === JSON.stringify({ tutor: 'chinese-tutor', buttons: [{ kind: 'activity', label: '我要预习小蝌蚪找妈妈', activity: '预习', params: { 范围: '第 22 课' }, brief: '先读课文\n再认字' }, { kind: 'lecture', label: '13 减 8 怎么拆', bundle: '2026-09-18-po13-jian-8' }] }) && !tut.warning, JSON.stringify(tut));
   check('开场按钮、接着按钮、新话题没有了(2026-11-16):写了整张卡退文字卡', ['我要预习', '接着 2026-09-16 1930-1 接着写', '新话题'].every((line) => parseCard('tutor chinese-tutor', line, 'home').fallback === true));
@@ -18,17 +18,7 @@ import { check, done } from './_check.ts';
   check('老师卡:5 个按钮、没写老师、两位老师、坏老师名 → 文字卡 + fallback', tooMany.fallback === true && tooMany.warning?.includes('最多 4 个') === true && parseCard('tutor', 'activity a', 'home').fallback === true && parseCard('tutor a-tutor b-tutor', 'activity a', 'home').fallback === true && parseCard('tutor 数学', 'activity a', 'home').fallback === true, JSON.stringify(tooMany));
   check('老师卡写在板书里 → 文字卡 + warning;选择题、一段字写在首页 → 文字卡 + warning;首页里不认识的标签也退文字卡', parseCard('tutor math-tutor', 'a').card.kind === 'text' && parseCard('tutor math-tutor', 'a').warning?.includes('首页的卡') === true && parseCard('choice', '问?\n- [x] a', 'home').warning?.includes('choice 卡放不了') === true && parseCard('text', '今晚先读课文', 'home').fallback === true && parseCard('widget', 'x', 'home').card.kind === 'text' && parseCard('widget', 'x', 'home').fallback === true && parseCard('widget', 'x').card.kind === 'code');
   check('canvas 卡删了(2026-11-16):写了当不认识的标签,原样显示成代码卡', parseCard('canvas', '画一条蛇').card.kind === 'code');
-  // 板卡(cards/kit/card.md):标签是画法的名字、参数行、这一步开放的操作、其余是题目;交回来的是图加几句提示
-  const kt = parseCard('方向盘', '操作: 转\n把「东」转到小人的前面。');
-  check('kit:标签是画法的名字;参数补缺省、开放的操作记下', kt.card.kind === 'kit' && JSON.stringify(kt.card.props) === '{"kit":"方向盘","params":{"上":"北","小人":"有"},"ops":["转"],"prompt":"把「东」转到小人的前面。"}' && !kt.warning, JSON.stringify(kt));
-  check('kit:写 kit 再在第一行写名字也认;没写操作 = 全开;没题目是画法的名字', JSON.stringify(parseCard('kit', '方向盘\n上:东\n小人: 没有').card.props) === '{"kit":"方向盘","params":{"上":"东","小人":"没有"},"ops":["转","圈"]}' && cardLabel(parseCard('点阵', '').card) === '点阵');
-  const dt = parseCard('点阵', '2 行 9 个\n线: 竖 3、竖 6\n操作: 切、涂\n再切一刀,分成 6 份。');
-  check('kit 点阵:一行简写、板上已有的线、操作', JSON.stringify(dt.card.props) === '{"kit":"点阵","params":{"行":"2","每行":"9","共":"","线":"竖3 竖6"},"ops":["切","涂"],"prompt":"再切一刀,分成 6 份。"}', JSON.stringify(dt.card.props));
-  check('kit:参数的值不对、写了这种画法没有的操作、题目太长 → 文字卡,说清怎么改;没有这种画法 → 原样的代码卡', /只能写:北、东、南、西/.test(parseCard('方向盘', '上: 东北').warning ?? '') && /只有:切、圈、涂/.test(parseCard('点阵', '操作: 转').warning ?? '') && parseCard('方向盘', '转'.repeat(41)).card.kind === 'text' && /现在有:照片、白板、点阵、方向盘/.test(parseCard('kit', '指南针').warning ?? '') && parseCard('指南针', '转').card.kind === 'code');
-  const ring = Array.from({ length: 24 }, (_, k) => [Math.round(320 + 44 * Math.cos((k / 24) * Math.PI * 2)), Math.round(448 + 44 * Math.sin((k / 24) * Math.PI * 2))]);
-  check('kit 状态:转到多少度、按了几次、画的几笔、图的路径;形状不对不收', parseCardState(kt.card, { turn: { disc: 270 }, moves: 1, marks: [ring], image: 'conversations/math-tutor/x.cards/0.png' }).ok && parseCardState(kt.card, {}).ok && !parseCardState(kt.card, { marks: 'x' }).ok && !parseCardState(kt.card, { moves: -1 }).ok && !parseCardState(kt.card, { marks: Array.from({ length: 13 }, () => [[1, 1]]) }).ok && !parseCardState(kt.card, { marks: [[[1, 'a']]] }).ok);
-  check('kit describe:请他做的 + 大概;交了图就说图随这一轮附上', describeCard(kt.card, { turn: { disc: 270 }, moves: 1, marks: [] }) === 'kit「把「东」转到小人的前面。」 请他做的:转;大概:把方向盘逆时针转了 90°(按了 1 次);现在前面是东、右面是南、后面是西、左面是北;没有圈' && describeCard(dt.card, { marks: [[[40, 100], [330, 99], [560, 96]]], image: 'x.png' }) === 'kit「再切一刀,分成 6 份。」 请他做的:切、涂;大概:画了 1 道横线;连同板上原来的线,大致分成 6 份:每份 3 个;图随这一轮附上,以图为准', describeCard(dt.card, { marks: [[[40, 100], [330, 99], [560, 96]]], image: 'x.png' }));
-  check('kit 没有不下发的字段(答案不在卡上,老师自己判)', JSON.stringify(stripSecrets({ cards: [kt.card], lines: [] }).cards[0].props) === JSON.stringify(kt.card.props));
+  check('kit 卡删了(2026-11-16,课里不写卡,老师写讲稿里的动作):```点阵、```kit 当不认识的标签,原样显示成代码卡', parseCard('点阵', '2 行 9 个').card.kind === 'code' && parseCard('kit', '方向盘').card.kind === 'code' && cardKind('kit') === undefined);
   // 场景卡 2026-10-07 删了:老师照旧写 ```scene 也不报错,按不认识的标签当代码卡原样显示
   check('scene 不再是卡:当代码卡原样显示', parseCard('scene', '2026-09-04-guilv5\n我去把这道题画出来。').card.kind === 'code' && cardKind('scene') === undefined);
   check('老对话里存下的 scene 卡:下发孩子前退成一段字,只留老师那句,题面 / 讲法与课包 id 不下发', JSON.stringify(stripSecrets({ cards: [{ kind: 'scene', props: { bundle: '2026-09-09-guilv', text: '我去画出来。', brief: '题面:x\n讲法:y' } }], lines: [] }).cards) === '[{"kind":"text","props":{"text":"我去画出来。"}}]');

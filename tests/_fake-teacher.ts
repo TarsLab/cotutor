@@ -5,11 +5,11 @@
  * 回显那条消息的最后一行(前面有老师的回复就「接着说:」,不然「第一次说:」);上下文包里有 cards 段就把那几行回显在前面(「看到卡:…」);
  * 含「段在前」在最前面加一段「## 记账」;含「想要小课堂」出一张写着 scene 的旧式卡和一段「## 想要小课堂」;含「节头」先出一张只有一行 # 标题的文字卡;
  * 含「板书」出两张卡(「坏卡」再加一张解析不出的,「点读」再加一张两段的点读卡,「图片」再加一张 vault/pic.png 的图片卡);
- * 含「放课」出一张小课堂卡(讲稿带 [[play]]);含「方向盘」出一张教具卡(把东转到小人前面);含「整段」出一张三行的点读卡;含「热身」或「口语课」出口语课的热身(两拍 [[echo]]、一拍 [[say]]、[[call]]),
+ * 含「放课」出一张小课堂卡(讲稿带 [[play]]);含「整段」出一张三行的点读卡;含「热身」或「口语课」出口语课的热身(两拍 [[echo]]、一拍 [[say]]、[[call]]),
  * 「直接打电话」回一句带 [[call]],「(打电话)」回英文开场;含「家长段」加「## 家长」;含「记住它」「改记忆」回「## 记忆」(加三条 / 改一条删一条),
  * 「带证据」回两条带证据的(一条抄孩子的话、一条抄老师自己的),「记孩子」回一条 孩子: 开头的和一条普通的;记忆整理任务改一条删两条加一条;
  * 记账任务回固定形状的「## 记账」(「记账坏」或 FAKE_BOOKKEEP_BAD=1 少写 name;FAKE_BOOKKEEP_ASKED 里 | 分开的几句当 asked);
- * 上下文包有 photos 段就「看图」:请求带了工具先 read_file 那张照片,再回一张照片板(那张做底);含「回读板书」先 read_file 板书写法(回读检查)。
+ * 上下文包有 photos 段就「看图」:请求带了工具先 read_file 那张照片,再回一句看到了;铺着照片页的一节课(board: 底是作业照片)里含「讲题」回讲稿里的动作(看第 3 题、圈、请圈);含「回读板书」先 read_file 板书写法(回读检查)。
  */
 import { startFakeChat, type ChatBody, type FakeReply } from './_fake-bailian-chat.ts';
 
@@ -53,7 +53,6 @@ export function teacherReply(body: ChatBody): FakeReply {
   if (msg.includes('先想一想')) parts.push('你先想一想,5 个 1 是多少?[[看 例 2]] [[盖 5×1=5]]');
   if (msg.includes('预习乘法口诀')) parts.push('[[翻 5的乘法口诀]]\n我们先看例 2 的图。[[看 例 2]]\n你看到了什么?');
   if (msg.includes('不存在的课')) parts.push('我们翻到这一课。[[翻 坐井观天]]');
-  if (msg.includes('方向盘')) parts.push('我们把它画下来。\n\n```方向盘\n操作: 转\n把「东」转到小人的前面。\n```\n\n这是一个方向盘,中间的小人就是你。\n\n你把「东」转到小人的前面。');
   if (msg.includes('热身') || msg.includes('口语课')) parts.push('```word\n🦆 duck\nd-u-ck\n```\n\n我们先热热身!我先来:duck! [[echo duck]]\n\n小声一点:duck… [[echo duck]]\n\n你先说:鸭子英文怎么说? [[say duck]]\n\n热身好啦!老师给你打个电话。 [[call]]\n\n这句不该念。');
   if (msg.includes('直接打电话')) parts.push('好,那我们现在就打电话! [[call]]');
   if (msg.includes('(打电话)')) parts.push('Hello Ray! Where are the ducks?');
@@ -63,8 +62,10 @@ export function teacherReply(body: ChatBody): FakeReply {
   const ps = listAfter(prompt, 'photos');
   if (ps.length) {
     tool = { name: 'read_file', args: { file_path: ps[0] } };
-    parts.push(`看到照片:${ps.join(' | ')},是第 12 页第 3 题。\n\n\`\`\`照片\n${ps[0]}\n操作: 圈\n把算错的那道圈出来。\n\`\`\`\n\n哪道算错了?`);
+    parts.push(`看到照片:${ps.join(' | ')},是第 12 页第 3 题。\n\n哪道算错了?`);
   }
+  // 一节课的照片页(tests/board-page.test.ts):讲稿里写动作——看第 3 题、圈一个字、请他圈
+  if (prompt.includes('底: "孩子拍的作业照片') && msg.includes('讲题')) parts.push('我们看第 3 题。[[看 第 3 题]] [[圈 心理辅导室]]\n你把东面的两间圈出来。[[请 圈]]');
   // 回读检查:老师不听劝、又去读了一遍板书写法(请求带了工具才读得到)
   if (msg.includes('回读板书')) tool = { name: 'read_file', args: { file_path: '.agents/skills/cotutor-board/SKILL.md' } };
   const seen = listAfter(prompt, 'cards');

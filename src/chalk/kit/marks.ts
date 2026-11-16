@@ -1,13 +1,16 @@
 /**
- * 教具上孩子做的事怎么读(纯函数):这一组转到多少度、转过以后每样东西在哪、一笔指着什么(圈住了 / 画在上面 / 点了 / 旁边 / 空白)。
- * 各教具的 read 用它们拼自己的那一句;入口在 ./index.ts。
+ * 白纸条上的图形上孩子做的事怎么读(纯函数):这一组转到多少度、转过以后每样东西在哪、一笔指着什么(圈住了 / 画在上面 / 点了 / 旁边 / 空白)。
+ * 各图形的 read 用它们拼自己的那一句;入口在 ./index.ts。
  */
 
 import { lessonClock } from '../clock.ts';
 import { circleHits, hitPhrase } from '../circle.ts';
 import { boundsOfPoints, elementBounds, type Bounds } from '../geometry.ts';
 import type { ChalkSkeleton } from '../types.ts';
-import { KIT_MARK_MAX, type KitScene, type KitState, type KitTurn } from './types.ts';
+import type { KitScene, KitState, KitTurn } from './types.ts';
+
+/** 一个图形上最多读几笔(最近的那几笔) */
+const KIT_STROKES = 12;
 
 /** 这一组现在转到多少度(0–359,落在格上) */
 export function turnOf(t: KitTurn, state: KitState): number {
@@ -82,7 +85,7 @@ export function kitMarks(scene: KitScene, state: KitState): KitMark[] {
     return best ? best : null;
   };
   const out: KitMark[] = [];
-  for (const stroke of (state.marks ?? []).slice(0, KIT_MARK_MAX)) {
+  for (const stroke of (state.marks ?? []).slice(-KIT_STROKES)) {
     if (!stroke.length) continue;
     const ring = boundsOfPoints(stroke);
     const center: [number, number] = [(ring.minX + ring.maxX) / 2, (ring.minY + ring.maxY) / 2];

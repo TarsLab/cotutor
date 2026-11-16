@@ -97,7 +97,7 @@ try {
     const guideOf = async (w: ReturnType<typeof loadWorkspace>, tutor: string): Promise<string> => (await boardGuideOf(w, tutor)) ?? '';
     const mathGuide = await guideOf(loadWorkspace(root), 'math-tutor');
     check('上下文包:板书写法已在系统提示里', (r.pack.boardGuide ?? '').startsWith('已在你的系统提示里'), String(r.pack.boardGuide));
-    check('按老师裁的板书写法:数学有选择题、板、作业照片,没有田字格 / 单词 / 点读', mathGuide.startsWith('# 板书怎么写') && mathGuide.includes('### choice') && mathGuide.includes('### kit') && mathGuide.includes('## 作业照片') && !mathGuide.includes('### tianzige') && !mathGuide.includes('### word') && !mathGuide.includes('### read'), mathGuide.slice(0, 200));
+    check('按老师裁的板书写法:数学有选择题、作业照片,没有田字格 / 单词 / 点读,也没有教具卡(删了)', mathGuide.startsWith('# 板书怎么写') && mathGuide.includes('### choice') && !mathGuide.includes('### kit') && mathGuide.includes('## 作业照片') && !mathGuide.includes('### tianzige') && !mathGuide.includes('### word') && !mathGuide.includes('### read'), mathGuide.slice(0, 200));
     const ws2 = loadWorkspace(root);
     ws2.config.tutors['math-tutor'].cards = ['text', 'choice'];
     const g2 = await guideOf(ws2, 'math-tutor');
@@ -667,8 +667,6 @@ try {
   const phM = ((await day('math-tutor', phDate)).json as PhotoDay).index.messages.find((m) => m.job === phJ.job)!;
   const phRun = JSON.parse(readFileSync(join(root, 'conversations', 'math-tutor', `${phDate}.${phJ.job}.run.json`), 'utf8')) as { prompt: string };
   check('消息:text「(拍了一张)」、photos 记下;上下文包 photos: 段一行一张、photoFiles: 给同一张的绝对路径(Read 只认绝对路径);老师 Read 了那张', phM.result === 'ok' && phM.text === '(拍了一张)' && phM.photos?.join() === phOne && phRun.prompt.includes(`  photos:\n    - ${JSON.stringify(phOne)}\n  photoFiles:\n    - ${JSON.stringify(join(root, phOne))}\n`) && phRun.prompt.endsWith('</vault-note>\n---\n(拍了一张)\n') && phM.kidText?.includes('看到照片:' + phOne) === true, JSON.stringify({ text: phM.text, photos: phM.photos, kid: phM.kidText, prompt: phRun.prompt.slice(-200) }));
-  const phCards: { kind: string; props: Record<string, unknown> }[] = phM.section?.cards ?? [];
-  check('板书:照片板拿那张照片做底(孩子的照片不再用 image 卡)', phCards.some((c) => c.kind === 'kit' && (c.props.params as Record<string, string>)?.['图'] === phOne), JSON.stringify(phCards));
   {
     // 孩子的话缺省不带工具;带照片的那条要 Read 看图,照旧带白名单,vault 的路径也在
     check('孩子带照片的那条:带只读工具、上下文包有 vault:', toolsOf(phRun.prompt)?.join() === 'read_file,glob,grep_search' && phRun.prompt.includes('\n  vault:'), String(toolsOf(phRun.prompt)));
@@ -691,38 +689,6 @@ try {
   await wait('math-tutor');
   const phM2 = ((await day('math-tutor', phDate)).json as PhotoDay).index.messages.find((m) => m.job === (phR2.json as { job: string }).job)!;
   check('家长端带字带图:text 照写、photos 记下,接着同一话题', phR2.status === 202 && phM2.text === '这道呢' && phM2.photos?.join() === phTwo && (phR2.json as { thread: string }).thread === phJ.thread, JSON.stringify(phM2));
-  {
-    // 板卡:老师先画(方向盘),孩子转了交回来——包里是请他做的操作和应用算的大概,板的图直接附在这一轮(不经读图工具,不带工具)
-    const ktR = await kidSend(ctx, 'math-tutor', { text: '面向东后面是什么 方向盘' });
-    await wait('math-tutor');
-    const ktJob = (ktR.json as { job: string }).job;
-    const ktDay = ((await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { job: string; section?: { cards: { kind: string; props: Record<string, unknown>; state?: unknown; submitted?: boolean }[] } }[] }).messages.find((m) => m.job === ktJob)!;
-    const ktN = ktDay.section?.cards.findIndex((c) => c.kind === 'kit') ?? -1;
-    check('老师写的板卡下发到孩子端:哪种画法、参数、开放的操作、题目', ktN >= 0 && JSON.stringify(ktDay.section!.cards[ktN].props) === '{"kit":"方向盘","params":{"上":"北","小人":"有"},"ops":["转"],"prompt":"把「东」转到小人的前面。"}', JSON.stringify(ktDay.section?.cards));
-    const ktPNG = 'data:image/png;base64,' + Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).toString('base64');
-    const ktBad = await route('PUT', `/api/kid/conversations/math-tutor/cards/${ktJob}/${ktN}`, ctx, { turn: { disc: 270 }, moves: 1, marks: 'x' });
-    const ktPut = await route('PUT', `/api/kid/conversations/math-tutor/cards/${ktJob}/${ktN}`, ctx, { turn: { disc: 270 }, moves: 1, marks: [], image: ktPNG });
-    const ktRel = `conversations/math-tutor/${phDate}.${ktJob}.cards/${ktN}.png`;
-    const ktS = await kidSend(ctx, 'math-tutor', { text: '', action: 'submit', focus: { card: `${ktJob}/${ktN}` } });
-    await wait('math-tutor');
-    const ktJob2 = (ktS.json as { job: string }).job;
-    const ktRun = JSON.parse(readFileSync(join(root, 'conversations', 'math-tutor', `${phDate}.${ktJob2}.run.json`), 'utf8')) as { prompt: string };
-    const ktSaid = `${ktJob}/${ktN} kit「把「东」转到小人的前面。」 请他做的:转;大概:把方向盘逆时针转了 90°(按了 1 次);现在前面是东、右面是南、后面是西、左面是北;没有圈;图随这一轮附上,以图为准`;
-    const ktM = ((await day('math-tutor', phDate)).json as { index: { messages: { job: string; cards?: { card: string; text: string }[] }[] } }).index.messages.find((m) => m.job === ktJob2)!;
-    const ktHist = readFileSync(join(root, 'conversations', 'math-tutor', `${phDate}.${phJ.thread}.brain.jsonl`), 'utf8').trim().split('\n').map((l) => JSON.parse(l) as { user: { images: string[]; boards?: string[] } });
-    check('交了板卡:状态形状不对不收;板的图存成文件;包里是请他做的 + 大概;图直接附在这一轮、不带工具;消息里记着同一句', ktBad.status === 400 && ktPut.status === 200 && existsSync(join(root, ktRel)) && ktS.status === 202 && ktRun.prompt.includes(ktSaid) && (toolsOf(ktRun.prompt) ?? []).length === 0 && (ktHist[ktHist.length - 1].user.boards ?? []).join() === ktRel && ktHist[ktHist.length - 1].user.images.length === 0 && `${ktM.cards?.[0]?.card} ${ktM.cards?.[0]?.text}` === ktSaid, JSON.stringify({ bad: ktBad.status, put: ktPut.status, file: existsSync(join(root, ktRel)), tools: toolsOf(ktRun.prompt), images: ktHist[ktHist.length - 1].user, cards: ktM.cards }));
-    // 板的图不算作业照片:交板那一轮,前面拍的作业照片照样附着;再下一轮板换成占位,作业照片还在
-    // 2026-11-12 ray 检查作业:交了板以后老师再看不到题,把「添上几盒」猜成了「还剩几盒」
-    const ktBody = JSON.stringify(teacher.requests.at(-1)?.messages ?? []);
-    const shots = (b: string): number => b.split('data:image/').length - 1;
-    const ktNext = await kidSend(ctx, 'math-tutor', { text: '我不懂' });
-    await wait('math-tutor');
-    const ktBody2 = JSON.stringify(teacher.requests.at(-1)?.messages ?? []);
-    check('交板那一轮:作业照片和板都附着;下一轮:作业照片还在,板换成一句占位', shots(ktBody) === phTwo.split(',').length + 1 && ktNext.status === 202 && shots(ktBody2) === phTwo.split(',').length && ktBody2.includes(`(板 ${ktRel}:孩子那一轮交的,这里不再附图)`), JSON.stringify([shots(ktBody), shots(ktBody2)]));
-    const ktAgain = await kidSend(ctx, 'math-tutor', { text: '', action: 'submit', focus: { card: `${ktJob}/${ktN}` } });
-    const ktLocked = await route('PUT', `/api/kid/conversations/math-tutor/cards/${ktJob}/${ktN}`, ctx, { turn: { disc: 0 }, moves: 2 });
-    check('交过的教具卡锁住:不能再交、不能再改', ktAgain.status === 409 && ktLocked.status === 409, JSON.stringify([ktAgain.status, ktLocked.status]));
-  }
   await route('PUT', rateUrl(phJ.thread), ctx, { rating: 4 });
   const phBk = await route('POST', `/api/conversations/math-tutor/${phDate}/bookkeep`, ctx, { threads: [phJ.thread] });
   await ctx.runner.flush();

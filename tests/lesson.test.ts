@@ -1,16 +1,16 @@
 /** 一节课的状态(src/board/lesson.ts 的 lessonStep):老师的动作、孩子的事各自怎么改它。做法同 player.test.ts 对 step。 */
-import { LESSON_CAPS, lessonActs, lessonDone, lessonInit, lessonPage, lessonStep, lessonStrip } from '../src/board/lesson.ts';
-import { LESSON_JOBS_MAX, LESSON_INK_MAX, LESSON_INK_POINTS, LESSON_MARKS_MAX, LESSON_PAGES_MAX, LESSON_PICK_MAX, LessonSchema, STRIP_ITEMS_MAX, type Box, type Lesson, type LessonAct, type LessonEvent } from '../src/schema/index.ts';
+import { LESSON_CAPS, lessonActs, photoSheetBox, lessonDone, lessonInit, lessonPage, lessonStep, lessonStrip } from '../src/board/lesson.ts';
+import { LESSON_JOBS_MAX, LESSON_INK_MAX, LESSON_INK_POINTS, LESSON_MARKS_MAX, LESSON_PAGES_MAX, LESSON_PICK_MAX, LessonSchema, PAGE_PHOTOS_MAX, PHOTO_PAGE, STRIP_ITEMS_MAX, WHITE_PAGE, type Box, type Lesson, type LessonAct, type LessonEvent, type PageSource } from '../src/schema/index.ts';
 import { check, done } from './_check.ts';
 
-const page = (title: string, extra: Partial<Extract<LessonAct, { k: '翻' }>['page']> = {}): Extract<LessonAct, { k: '翻' }>['page'] => ({ id: `数学.pdf#${title}`, kind: 'book', src: '数学.pdf', title, pages: [50, 51], cut: 40, layout: 'math', pick: false, ...extra });
+const page = (title: string, extra: Partial<Extract<PageSource, { kind: 'book' }>> = {}): Extract<PageSource, { kind: 'book' }> => ({ id: `数学.pdf#${title}`, kind: 'book', src: '数学.pdf', title, pages: [50, 51], cut: 40, layout: 'math', pick: false, ...extra });
 const A = (act: LessonAct): LessonEvent => ({ t: 'act', act });
 const run = (l: Lesson, ...evs: LessonEvent[]): Lesson => evs.reduce(lessonStep, l);
 const B1: Box = [80, 300, 900, 420];
 const B2: Box = [80, 700, 900, 820];
 const valid = (l: Lesson): boolean => LessonSchema.safeParse(l).success;
 
-check('上限和 schema 一样', LESSON_CAPS.PAGES_MAX === LESSON_PAGES_MAX && LESSON_CAPS.INK_MAX === LESSON_INK_MAX && LESSON_CAPS.INK_POINTS === LESSON_INK_POINTS && LESSON_CAPS.PICK_MAX === LESSON_PICK_MAX && LESSON_CAPS.MARKS_MAX === LESSON_MARKS_MAX && LESSON_CAPS.STRIP_ITEMS_MAX === STRIP_ITEMS_MAX && LESSON_CAPS.JOBS_MAX === LESSON_JOBS_MAX);
+check('上限和 schema 一样', LESSON_CAPS.PAGES_MAX === LESSON_PAGES_MAX && LESSON_CAPS.INK_MAX === LESSON_INK_MAX && LESSON_CAPS.INK_POINTS === LESSON_INK_POINTS && LESSON_CAPS.PICK_MAX === LESSON_PICK_MAX && LESSON_CAPS.MARKS_MAX === LESSON_MARKS_MAX && LESSON_CAPS.STRIP_ITEMS_MAX === STRIP_ITEMS_MAX && LESSON_CAPS.JOBS_MAX === LESSON_JOBS_MAX && LESSON_CAPS.PHOTOS_MAX === PAGE_PHOTOS_MAX && LESSON_CAPS.PHOTO_PAGE === PHOTO_PAGE && LESSON_CAPS.WHITE_PAGE === WHITE_PAGE);
 
 // ——— 还没有页 ———
 {
@@ -117,5 +117,24 @@ check('同一处再看一遍:n 加一(窗再移一次)', look2.look?.n === 2);
 {
   const l = lessonActs(lesson, [{ do: { k: '看', label: '例4', box: B1 } }, {}, { do: { k: '摆', kit: '点阵', params: { 行: '6', 每行: '6' }, size: '中' } }]);
   check('lessonActs:带 do 的照先后落,没落上的跳过', l.look?.label === '例4' && lessonStrip(l)?.items.length === 1);
+}
+// ——— 照片页、白纸页(阶段 3) ———
+{
+  const p1 = { src: 'captures/a.jpg', w: 2000, h: 1500 }, p2 = { src: 'captures/b.jpg', w: 1000, h: 1000 };
+  const one = run(lessonInit(), { t: 'photo', photos: [p1], pick: true });
+  const op = lessonPage(one);
+  check('拍来一张:开一页照片页,铺上、窗移到它的顶上(当老师看了它)', one.at === PHOTO_PAGE && op?.kind === 'photo' && op.photos.length === 1 && op.pick && one.look?.label === '第1张' && one.look.n === 1 && valid(one), JSON.stringify(one));
+  const both = run(one, { t: 'photo', photos: [p2, p1], pick: true });
+  const bp = lessonPage(both);
+  check('再拍一张:接在后面(拍过的不重复),窗移到新的那张', bp?.kind === 'photo' && bp.photos.map((x) => x.src).join() === 'captures/a.jpg,captures/b.jpg' && both.look?.label === '第2张' && both.look.box[1] === 780, JSON.stringify(both.look));
+  check('照片一张一张从上往下连着:一张宽 1000,中间空 30', JSON.stringify(photoSheetBox([p1, p2], 1)) === '[0,780,1000,1780]');
+  const full = run(lessonInit(), { t: 'photo', photos: Array.from({ length: PAGE_PHOTOS_MAX + 2 }, (_, i) => ({ src: `captures/${i}.jpg`, w: 10, h: 10 })), pick: true });
+  check(`最多 ${PAGE_PHOTOS_MAX} 张,多的不收;宽高不对的不收`, (lessonPage(full) as { photos: unknown[] }).photos.length === PAGE_PHOTOS_MAX && run(lessonInit(), { t: 'photo', photos: [{ src: 'x', w: 0, h: 10 }], pick: true }).at === null);
+  const white = run(both, A({ k: '翻', page: { id: WHITE_PAGE, kind: 'white', title: WHITE_PAGE, pick: false } }), A({ k: '写', text: '23 + 18 =', size: '大' }), A({ k: '摆', kit: '点阵', params: { 行: '2', 每行: '9' }, size: '中' }));
+  check('白纸页:不用先看,写、摆都落在整页那一条白纸条上', white.at === WHITE_PAGE && lessonStrip(white)?.key === WHITE_PAGE && lessonStrip(white)?.items.length === 2 && valid(white), JSON.stringify(white.pages.map((p) => p.id)));
+  const back = run(white, { t: 'photo', photos: [], pick: true });
+  check('没拍新的:回到照片页', back.at === PHOTO_PAGE);
+  const again = run(back, A({ k: '翻', page: { id: WHITE_PAGE, kind: 'white', title: WHITE_PAGE, pick: false } }));
+  check('翻回白纸页:原来写的都在,白纸条开着', again.strip === WHITE_PAGE && lessonStrip(again)?.items.length === 2);
 }
 done();

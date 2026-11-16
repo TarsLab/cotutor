@@ -6,7 +6,7 @@
  * 流式:模型一行一段地吐,收到一行就交出到这时为止认出的全部,孩子端轮询着一个一个画框,不用干等整张认完。
  * 2026-10-10 拿一页仿课本试(识字 9、写字 9、读读写写 6):qwen3.8-max 24 项全对、框都套在字上,第一项 2.8 秒、全部 23 秒;
  * qwen3.5-omni-flash 整张 20 秒但不照一行一段回;qwen-vl-max / qwen3-vl-plus 36–37 秒。
- * 两处用:听写页的拍照认词(src/app/dictation/),和照片板的「点字」(./store.ts:孩子在 activity 里发的作业照片,认出的字词在板上能点)。
+ * 两处用:听写页的拍照认词(src/app/dictation/),和一节课的照片页(./store.ts:孩子在 activity 里发的作业照片,认出的行、题、字词是这一页的文字层:老师看哪道题、圈哪个字,孩子点哪个字,都照它找)。
  * 这里是认照片这件事的规则(要求怎么拼、一行一段怎么解析);看图的请求在 src/media/vision.ts(key 与端点按模型定),由路由那层交进来。出错、超时都不抛。
  */
 import { DICTATION_PROMPT_DEFAULT, DICTATION_PROMPT_EN_DEFAULT, DICTATION_DEFAULT } from '../../schema/index.ts';
@@ -37,7 +37,7 @@ export interface PhotoItem {
   emoji?: string;
 }
 
-/** 正文的一行和它在照片上的框(0–1000);照片板上点正文里任意一个字,照这一行按字数等分算是哪个字 */
+/** 正文的一行和它在照片上的框(0–1000);照片页上点正文里任意一个字,照这一行按字数等分算是哪个字(src/chalk/kit/photo.ts) */
 export interface PhotoLine {
   /** 这一行的字,照原样带标点(没分词、不带空格) */
   text: string;
@@ -77,14 +77,14 @@ export const FORMAT = `回答的格式:一行一段 JSON,不要别的字、不�
 3. 最后是全文:照片上的正文照原样一行写一行 {"full": "冬天来啦!一场大雪过后"};不要拼音、页码、栏目名。`;
 
 /**
- * 全文的每一行也带框(照片板的「点字」用:孩子点正文里任意一个字):FORMAT 的第 3 条换成这一条,别的一样。
+ * 全文的每一行也带框(照片页用:孩子点正文里任意一个字、老师圈正文里的字):FORMAT 的第 3 条换成这一条,别的一样。
  * 2026-11-13 scripts/probe-photo-text.mjs:统编版二上两页各两遍,行框紧贴着字、两遍差 0–2 个千分点;课文正文按字数等分,每个字都落在自己那一格。
  */
 const FULL_RULE = '3. 最后是全文:照片上的正文照原样一行写一行 {"full": "冬天来啦!一场大雪过后"};不要拼音、页码、栏目名。';
 const FULL_RULE_BOXED = `3. 最后是全文:照片上的正文一行写一行,从上到下 {"full": "冬天来啦!一场大雪过后", "box": [左, 上, 右, 下]};不要拼音、页码、栏目名。
    - full:这一行的字照原样,带标点;照片上在哪儿换行就在哪儿断,不把两行并成一行。
    - box:这一行汉字在照片上的位置(不含上面的拼音),同样的千分比,紧贴着字。`;
-/** 照片板还要每道题在哪(分题:老师一道一道裁着讲);接在全文后面,有题号才写 */
+/** 照片页还要每道题在哪(老师「看 第 3 题」照它移,白纸条贴着题框的下沿);接在全文后面,有题号才写 */
 const QUESTION_RULE = `4. 照片上有题号的(作业、练习),每道题一行 {"question": "3", "box": [左, 上, 右, 下]}:question 写题号的数字;box 框住这一整道题(题号、题目、图、要填的空、孩子写的答案都在里面),同样的千分比。大题里的小题不单列。没有题号不写。`;
 export const FORMAT_BOXED = `${FORMAT.replace(FULL_RULE, FULL_RULE_BOXED)}\n${QUESTION_RULE}`;
 
@@ -102,7 +102,7 @@ export const FORMAT_EN = `回答的格式:一行一段 JSON,不要别的字、�
    - emoji:能画出来的东西配一个 emoji(👵 🚌 🍎);抽象的词(like、the、is)不写这一栏。孩子写完对答案时才看到。
 3. 最后是全文:照片上的正文照原样一行写一行 {"full": "What colour is it? It's yellow."};不要页码、栏目名。`;
 
-/** 英文的全文也带框(照片板上点课文里任意一个单词):FORMAT_EN 的第 3 条换成这一条 */
+/** 英文的全文也带框(照片页上点课文里任意一个单词):FORMAT_EN 的第 3 条换成这一条 */
 const FULL_RULE_EN = '3. 最后是全文:照片上的正文照原样一行写一行 {"full": "What colour is it? It\'s yellow."};不要页码、栏目名。';
 export const FORMAT_EN_BOXED = FORMAT_EN.replace(FULL_RULE_EN, `3. 最后是全文:照片上的正文一行写一行,从上到下 {"full": "What colour is it? It's yellow.", "box": [左, 上, 右, 下]};不要页码、栏目名。
    - full:这一行的字照原样,带标点和空格;照片上在哪儿换行就在哪儿断,不把两行并成一行。
@@ -114,7 +114,7 @@ export function photoPrompt(prompt?: readonly string[], lang: DictationLang = 'z
   return `${ask.join('\n')}\n\n${lang === 'en' ? FORMAT_EN : FORMAT}`;
 }
 
-/** 交给模型的整段:activity 文件「认字收到什么」的模板填好 {{格式}};boxed = 全文的每一行也要框(照片板) */
+/** 交给模型的整段:activity 文件「认字收到什么」的模板填好 {{格式}};boxed = 全文的每一行也要框(照片页) */
 export function photoPromptFrom(template: string, lang: DictationLang = 'zh', opts: { boxed?: boolean } = {}): string {
   return fillSlots(template, { 格式: lang === 'en' ? (opts.boxed ? FORMAT_EN_BOXED : FORMAT_EN) : opts.boxed ? FORMAT_BOXED : FORMAT });
 }

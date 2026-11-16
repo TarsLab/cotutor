@@ -1,5 +1,5 @@
 /**
- * 以板为主的话题在实时那条线上(假百炼 _fake-realtime.ts + 假老师 + 假看图,不花钱):
+ * 一节课(铺着孩子拍的照片)在实时那条线上(假百炼 _fake-realtime.ts + 假老师 + 假看图,不花钱):
  * 孩子端报 {t:'board', body:{k:'pick'…}} → 记进板的日志、不起脑;安静时嘴照念这个字的念法(认字时写好的),孩子按着时不念;
  * 点完了 stillMs 没动静,应用替他叫一次老师(live.app: still,上下文包带上他点了什么);连着只叫一次,孩子开口了才再叫。
  */
@@ -76,26 +76,28 @@ await until(() => msgs.some((m) => m.t === 'ready'));
 const c = fake.conns[0];
 const settle = async (): Promise<void> => { await sleep(100); await until(() => ctx.runner.running(T) === null, 15000); await ctx.runner.flush(); await sleep(800); };
 
-// 点「预习」带着照片进来:以板为主的话题
-const JPG = 'data:image/jpeg;base64,' + Buffer.from('ffd8ffe000104a46494600010100000100010000ffd9', 'hex').toString('base64');
+// 点「预习」(base: photo)带着照片进来:照片铺上照片页,页的 id 是「作业」
+// 一张最小的 jpeg(文件头 + SOF0 的宽高):照片页照它排
+const JPG = 'data:image/jpeg;base64,' + Buffer.from([0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x05, 0xdc, 0x07, 0xd0, 0x03, 1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1, 0xff, 0xd9]).toString('base64');
 const shot = (await api('POST', `/api/kid/conversations/${T}/photos`, { image: JPG })).json.path as string;
 const home0 = (await api('GET', '/api/kid/home')).json as { home: string | null };
 sock.send(JSON.stringify({ t: 'send', body: { text: '', via: { home: home0.home, button: 'preview' }, photos: [shot] } }));
 await until(() => msgs.some((m) => m.t === 'turn'), 10000);
 const thread = msgs.find((m) => m.t === 'turn')!.thread as string;
+const PAGE = '作业';
 await settle();
 
 // ---- 点字:嘴照念念法,不起脑 ----
 {
   const r = c.responses.length;
   const turns = msgs.filter((m) => m.t === 'turn').length;
-  sock.send(JSON.stringify({ t: 'board', body: { k: 'pick', thread, text: '变', base: shot } }));
+  sock.send(JSON.stringify({ t: 'board', body: { k: 'pick', thread, text: '变', base: PAGE } }));
   const said = await until(() => c.responses.length > r);
   check('点字:嘴照念认字时写好的念法(原样念)', said && c.responses[r]?.instructions === readCue(['变,变化的变']), c.responses[r]?.instructions);
   await sleep(200);
   check('点字不起脑', msgs.filter((m) => m.t === 'turn').length === turns && ctx.runner.running(T) === null);
   const log = await readBoard(ws0, T, today, thread);
-  check('记进板的日志', log.some((e) => e.k === 'pick' && e.text === '变' && e.base === shot), JSON.stringify(log));
+  check('记进板的日志', log.some((e) => e.k === 'pick' && e.text === '变' && e.base === PAGE), JSON.stringify(log));
   // 他接着按了说话(又松开不说):等着替他叫的那次作废
   sock.send(JSON.stringify({ t: 'hold' }));
   await sleep(30);
@@ -108,7 +110,7 @@ await settle();
 {
   await sleep(300);
   const r = c.responses.length;
-  sock.send(JSON.stringify({ t: 'board', body: { k: 'reveal', thread, text: '晒', base: shot } }));
+  sock.send(JSON.stringify({ t: 'board', body: { k: 'reveal', thread, text: '晒', base: PAGE } }));
   await sleep(400);
   check('揭开拼音:记进日志,嘴不念(他在自己认)', c.responses.length === r && (await readBoard(ws0, T, today, thread)).some((e) => e.k === 'reveal' && e.text === '晒'));
   sock.send(JSON.stringify({ t: 'hold' }));
@@ -121,13 +123,13 @@ await settle();
 {
   await sleep(600);
   const r = c.responses.length;
-  sock.send(JSON.stringify({ t: 'board', body: { k: 'pick', thread: '0000-1', text: '变', base: shot } }));
-  sock.send(JSON.stringify({ t: 'board', body: { k: 'pick', thread, text: '123', base: shot } }));
+  sock.send(JSON.stringify({ t: 'board', body: { k: 'pick', thread: '0000-1', text: '变', base: PAGE } }));
+  sock.send(JSON.stringify({ t: 'board', body: { k: 'pick', thread, text: '123', base: PAGE } }));
   await sleep(300);
-  check('不是以板为主的话题、不是汉字:不念、不记', c.responses.length === r && (await readBoard(ws0, T, today, thread)).filter((e) => e.k === 'pick').length === 1);
+  check('不是一节课的话题、不是汉字:不念、不记', c.responses.length === r && (await readBoard(ws0, T, today, thread)).filter((e) => e.k === 'pick').length === 1);
   sock.send(JSON.stringify({ t: 'hold' }));
   await sleep(50);
-  sock.send(JSON.stringify({ t: 'board', body: { k: 'pick', thread, text: '晒', base: shot } }));
+  sock.send(JSON.stringify({ t: 'board', body: { k: 'pick', thread, text: '晒', base: PAGE } }));
   await sleep(300);
   check('孩子按着说话时点字:记下,嘴不念', c.responses.length === r && (await readBoard(ws0, T, today, thread)).filter((e) => e.k === 'pick').length === 2);
   sock.send(JSON.stringify({ t: 'hush' }));
@@ -137,7 +139,7 @@ await settle();
 // ---- 点完了不说话:替他叫一次老师 ----
 {
   const turns = msgs.filter((m) => m.t === 'turn').length;
-  sock.send(JSON.stringify({ t: 'board', body: { k: 'pick', thread, text: '晒', base: shot } }));
+  sock.send(JSON.stringify({ t: 'board', body: { k: 'pick', thread, text: '晒', base: PAGE } }));
   const called = await until(() => msgs.filter((m) => m.t === 'turn').length > turns, 6000);
   const turn = msgs.filter((m) => m.t === 'turn').slice(-1)[0];
   check('点完 stillMs 没动静:应用替他叫一次老师,接在这个话题', called && turn.thread === thread);
@@ -147,7 +149,7 @@ await settle();
   check('日志里记了一笔 still', (await readBoard(ws0, T, today, thread)).some((e) => e.k === 'still'));
   // 连着只叫一次:再点,不再叫
   const n2 = msgs.filter((m) => m.t === 'turn').length;
-  sock.send(JSON.stringify({ t: 'board', body: { k: 'pick', thread, text: '变', base: shot } }));
+  sock.send(JSON.stringify({ t: 'board', body: { k: 'pick', thread, text: '变', base: PAGE } }));
   await sleep(1200);
   check('连着只叫一次:老师接话以后他还是只点不说,就等着', msgs.filter((m) => m.t === 'turn').length === n2);
 }

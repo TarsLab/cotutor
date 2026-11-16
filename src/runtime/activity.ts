@@ -4,7 +4,7 @@
  */
 import {
   ACTIVITY_BASES,
-  ACTIVITY_BOARDS,
+  ACTIVITY_OLD_BOARD,
   ACTIVITY_PAGES,
   ACTIVITY_PARAM_TYPES,
   ACTIVITY_RESERVED_PARAMS,
@@ -163,13 +163,17 @@ export function parseActivity(text: string): ParsedActivity {
     sections[sections.length - 1]?.lines.push(l);
   }
 
+  // 旧的头还认一段时间:board: page 没写 base 的当 base: photo,cards 里的 kit 丢掉(ACTIVITY_OLD_BOARD)
+  const cardsWritten = (frontmatter.cards ?? '').split(/[\s,，、]+/).filter(Boolean);
+  const oldBoard = frontmatter.board?.trim() === ACTIVITY_OLD_BOARD;
+  const old = [...(frontmatter.board?.trim() ? [`board: ${frontmatter.board.trim()}`] : []), ...(oldBoard && cardsWritten.includes('kit') ? ['cards: kit'] : [])];
   const activity: Activity = {
     name: frontmatter.name ?? '',
     description: frontmatter.description ?? '',
-    cards: (frontmatter.cards ?? '').split(/[\s,，、]+/).filter(Boolean),
+    cards: cardsWritten.filter((c) => !(oldBoard && c === 'kit')),
     ...(frontmatter.page?.trim() ? { page: frontmatter.page.trim() } : {}),
-    ...(frontmatter.board?.trim() ? { board: frontmatter.board.trim() } : {}),
-    ...(frontmatter.base?.trim() ? { base: frontmatter.base.trim() } : {}),
+    ...(frontmatter.base?.trim() ? { base: frontmatter.base.trim() } : oldBoard ? { base: 'photo' } : {}),
+    ...(old.length ? { old } : {}),
     params: [],
     tutor: null,
     tools: [],
@@ -258,12 +262,9 @@ export function checkActivity(a: Activity, opts: CheckOptions = {}): ActivityIss
     }
   }
 
-  if (a.board !== undefined && !ACTIVITY_BOARDS[a.board]) fix(`头上 board 写的「${a.board}」不认得:只有 ${Object.keys(ACTIVITY_BOARDS).join('、')}`);
-  if (a.board !== undefined && a.page !== undefined) fix('头上的 board 和 page 只能写一个:page 不起老师,没有板');
-  // 课本做底的不要卡:老师在讲稿里写动作(cards/动作怎么写.md)
-  if (a.board !== undefined && a.base === undefined && !a.cards.includes('kit')) fix('头上写了 board: page,cards 里要有 kit(老师在板上画靠它)');
+  if (a.old?.length) issues.push({ level: 'note', text: `头上的「${a.old.join('」「')}」不用再写了:铺页的写 base: photo(孩子拍的作业)或 base: textbook(课本),老师在讲稿里写动作(cards/动作怎么写.md)${a.base ? `。现在照 base: ${a.base} 读` : ''}` });
   if (a.base !== undefined && !ACTIVITY_BASES[a.base]) fix(`头上 base 写的「${a.base}」不认得:只有 ${Object.keys(ACTIVITY_BASES).join('、')}`);
-  if (a.base !== undefined && a.board === undefined) fix('头上的 base 是板上垫什么,要和 board: page 一起写');
+  if (a.base !== undefined && a.page !== undefined) fix('头上的 base 和 page 只能写一个:page 不起老师,不铺页');
   if (a.page !== undefined && !ACTIVITY_PAGES[a.page]) fix(`头上 page 写的「${a.page}」不认得:只有 ${Object.keys(ACTIVITY_PAGES).join('、')}`);
   if (a.page !== undefined && a.tutor) fix(`头上写了 page: ${a.page}(不起老师,进那一页),「## 老师怎么带」用不上:删掉那节,或删掉 page`, a.tutor.line);
   else if (!a.tutor && a.page === undefined) issues.push({ level: 'note', text: '没有「## 老师怎么带」:这个 activity 不起老师' });

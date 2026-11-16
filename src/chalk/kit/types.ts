@@ -1,6 +1,6 @@
 /**
- * 教具:一种预设的画法。老师只写几个参数,这里排出画面(每样东西带名字)、说清哪一组能转;
- * 孩子在上面转一转、圈一圈,应用照名字把他做了什么说成一句话给老师,不用看图。
+ * 图形:一种预设的画法(点阵、方向盘)。老师在讲稿里写 [[摆 点阵 6 行 6 个]],这里排出画面(每样东西带名字)、说清哪一组能转;
+ * 画面摆在白纸条上(src/board/strip.ts),孩子在上面转一转、圈一圈,应用照名字把他做了什么说成一句话给老师,不用看图。
  * 和 glyphs/(字母笔顺)一样是「参数 → 骨架」的纯函数;画、烤、逐笔露出来都是 chalk 现成的。
  */
 
@@ -28,16 +28,8 @@ export interface KitScene {
   skeletons: ChalkSkeleton[];
   groups: ChalkGroup[];
   turns: KitTurn[];
-  /** 画框(场景坐标 [x, y, 宽, 高]):给了就按它铺,板上添了线、少了线画面都不挪位置;不给 = 按画的东西的外框 */
+  /** 画框(场景坐标 [x, y, 宽, 高]):给了就按它铺,添了线、少了线画面都不挪位置;不给 = 按画的东西的外框 */
   frame?: [number, number, number, number];
-  /** 照片做底:src 相对 workspace 根;照片占场景里的 [0, 0, width, height](舞台垫在最底下,老师和孩子的笔画在它上面) */
-  photo?: { src: string; width: number; height: number };
-}
-
-/** 排画面时应用量到的东西(老师不写):照片的高宽比。服务端没量过就不给,画法自己取个缺省 */
-export interface KitEnv {
-  /** 照片的高 ÷ 宽 */
-  aspect?: number;
 }
 
 /** 孩子在教具上做的事 */
@@ -46,12 +38,8 @@ export interface KitState {
   turn?: Record<string, number>;
   /** 一共按了几次转 */
   moves?: number;
-  /** 画的几笔(场景坐标,孩子画成什么样就是什么样,不归整;转了以后以前画的清掉,所以都是对着现在的画面画的) */
+  /** 画的几笔(场景坐标,孩子画成什么样就是什么样,不归整) */
   marks?: [number, number][][];
-  /** 照片做底的板:照片的高 ÷ 宽(舞台量的;服务端靠它把笔画换回照片上的千分比) */
-  aspect?: number;
-  /** 照片板的「点字」:孩子点开看过的字词,先后照他点的(同一个只记一次) */
-  picked?: string[];
 }
 
 /**
@@ -64,24 +52,18 @@ export interface KitParam {
   values?: readonly string[];
   read?(v: string): string;
   fallback?: string;
-  /** 非写不可(照片的「图」);没写就抛 */
+  /** 非写不可;没写就抛 */
   required?: boolean;
 }
 
 export interface Kit {
-  /** 围栏的标签:老师写 ```点阵 就是这张卡 */
+  /** 图形的名字:老师写 [[摆 点阵 …]] 就是它 */
   name: string;
-  /** 给老师看的一句:这是什么 */
-  about: string;
   params: readonly KitParam[];
-  /** 孩子在这张卡上能做的操作(事先设计好的);老师每张卡可以只开放其中几种(「操作: 切」),不写 = 全开(「看」除外:只看、不动笔,要写明才是) */
-  ops: readonly string[];
-  /** 不写「操作」时开放哪几种;不给 = ops 里除了要写明才有的(看、点字)都开 */
-  open?: readonly string[];
   /** 一行简写 → 参数(「2 行 9 个」→ 行、每行);不是简写回 null */
   shorthand?(line: string): Record<string, string> | null;
   /** 参数(已经补齐缺省、查过取值)→ 画面 */
-  build(p: Readonly<Record<string, string>>, env?: KitEnv): KitScene;
+  build(p: Readonly<Record<string, string>>): KitScene;
   /**
    * 孩子做了什么,应用照几何算的一句(给老师的「大概」):能算准的照实说(转了多少、圈住了哪个字),算不准的说大概(几道线、大致分成几份)。
    * 老师同时拿到一张图,以图为准;这句只帮它聚焦。
@@ -89,9 +71,3 @@ export interface Kit {
   read(p: Readonly<Record<string, string>>, state: KitState, scene: KitScene): string;
 }
 
-/** 一条消息里最多几笔、一笔最多几个点(舞台抽稀到这个数,服务端照它收) */
-export const KIT_MARK_MAX = 12;
-export const KIT_MARK_POINTS = 120;
-/** 「点字」最多记几个、一个最多几个字(田字格一张最多四个字) */
-export const KIT_PICK_MAX = 30;
-export const KIT_PICK_CHARS = 4;

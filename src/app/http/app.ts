@@ -21,7 +21,7 @@ import { parseEvents } from '../../runtime/journal/events.ts';
 import { type Lesson, type RunEvent } from '../../schema/index.ts';
 import { NEUTRAL_COLOR, SUBJECT_COLORS, TUTOR_PALETTE, tutorColors } from '../../ui/shared/tutor-color.ts';
 import { boardMarkOf, type BoardMarkId } from '../../ui/kid/board-mark.ts';
-import { buildReel, playRecordOk, reelCardTook, reelHolds, reelMissRuns, type PlayRecord, type Reel, type ReelCall, type ReelOwn } from '../../ui/kid/reel.ts';
+import { buildReel, playRecordOk, reelCardTook, reelHolds, reelMissRuns, type PlayRecord, type Reel, type ReelCall } from '../../ui/kid/reel.ts';
 import type { CallReel } from '../../runtime/journal/recorder.ts';
 import { DATE_RE, FocusSchema, canonicalSubject, MESSAGE_FROM, listTutors, subjectLang, viaSendsLabel, type ConversationIndex, type ConversationMessage, type MemoryLine, type TutorExtra } from '../../schema/index.ts';
 import type { BoardCard, Device } from '../../board/presentation.ts';
@@ -60,15 +60,15 @@ import { PARENT_HOME_PAGE } from '../../ui/parent/parent-home-page.ts';
 import { PARENT_SETTINGS_PAGE } from '../../ui/parent/parent-settings-page.ts';
 import { dictationRoute } from '../dictation/route.ts';
 import { kidWords, readWords } from '../../scenes/photo-words/store.ts';
+import { imageSize } from '../../shared/jpeg.ts';
 import { listTextbookPages, textbookPageFile } from '../../memory/textbook-pages.ts';
 import { bookFile, bookIndex, listBooks, pickBook } from '../../memory/textbook-pdf.ts';
-import { readBoard } from '../../runtime/journal/board-log.ts';
 import { lessonOpen } from '../../board/lesson-fit.ts';
 import { lessonInit } from '../../board/lesson.ts';
 import { readLesson } from '../../runtime/journal/lesson-store.ts';
 import { bookPages } from '../../chalk/index.ts';
 import type { Look } from '../../scenes/look.ts';
-import { IndexError, capturePathOk, deleteThread, listDates, rateThread, readErrLog, readIndex, readTranscript, scanCards, undoVaultWrite, writeCapture, writeCardImage, writeCardState, type VaultWrite } from '../../runtime/journal/store.ts';
+import { IndexError, capturePathOk, deleteThread, listDates, rateThread, readErrLog, readIndex, readTranscript, scanCards, undoVaultWrite, writeCapture, writeCardState, type VaultWrite } from '../../runtime/journal/store.ts';
 import { memoryLineText } from '../../memory/vault-notes.ts';
 import { childItem } from '../../memory/proposals.ts';
 import { IMAGE_EXT, parseCardState, stripSecrets } from '../../board/cards/index.ts';
@@ -378,8 +378,7 @@ export async function parentReel(ctx: AppContext, tutor: string, date: string, t
   const cards = Object.fromEntries(Object.entries(states).filter(([job]) => jobs.has(job)));
   const plays = await readPlays(ctx.ws, tutor, date, jobs);
   const calls = mine.some((m) => m.live) ? await liveCalls(ctx, tutor, date, jobs) : [];
-  const owns = await reelOwns(ctx.ws, tutor, date, thread, mine);
-  const reel = buildReel({ messages: mine, events, cards, now: ctx.now().getTime(), plays, calls, owns });
+  const reel = buildReel({ messages: mine, events, cards, now: ctx.now().getTime(), plays, calls });
   if (!reel) return null;
   const day = await parentDay(ctx, tutor, date);
   const kid = await kidDay(ctx, tutor, date);
@@ -396,25 +395,6 @@ async function bookBaseLesson(ws: Workspace, name: string): Promise<Lesson | nul
   if (!index) return null;
   const l = lessonOpen(lessonInit(), { file: name, index });
   return l.at ? l : null;
-}
-
-/**
- * 以板为主的话题,录像里应用自己铺的板(孩子端 kid-page 的 bpOpenBook / bpBase;它们不经实时那条连接,录像原来不知道,2026-11-14 家长看到的是一块空板):
- * 课本做底 = 板的日志里最早那块「册子#课」,从第一条起;照片板 = 孩子每发一张照片起换成它;一张都没发 = 白板
- */
-async function reelOwns(ws: Workspace, tutor: string, date: string, thread: string, mine: readonly ConversationMessage[]): Promise<ReelOwn[]> {
-  if (!mine.some((m) => m.board === 'page')) return [];
-  const at = (m: ConversationMessage): number => { const t = Date.parse(m.timing?.startedAt ?? ''); return Number.isNaN(t) ? Date.parse(m.at) : t; };
-  const from = at(mine[0]);
-  // 课本做底的一节课:录像照孩子端记的一节课的样子放(play 的 lesson),不铺应用自己的板
-  const bases = (await readBoard(ws, tutor, date, thread)).flatMap((e) => (e.k === 'turn' ? [e.told ?? ''] : e.k === 'view' ? [e.base] : []));
-  if (bases.some((b) => /\.pdf#/i.test(b))) return [];
-  const out: ReelOwn[] = [];
-  for (const m of mine) {
-    const photo = m.from === 'kid' && m.photos?.length ? m.photos[m.photos.length - 1] : null;
-    if (photo) out.push({ at: at(m), card: { kind: 'kit', props: { kit: '照片', params: { 图: photo }, ops: ['看'] } } });
-  }
-  return out.length ? out : [{ at: from, card: { kind: 'kit', props: { kit: '白板', params: { 写: '' }, ops: ['看'] } } }];
 }
 
 /** 这一天实时老师的通话录像(<日期>.live/<时分秒>.reel.json,src/runtime/live/call.ts 落的)里有这几轮的;声音是同名的 .wav。坏的、没声音的跳过 */
@@ -591,16 +571,7 @@ async function putCardState(ctx: AppContext, ws: Workspace, tutor: string, job: 
   if (!target) return { status: 404, json: { error: 'no_such_card' } };
   // 交过的卡锁住了,不能再改
   if (submittedCards(index).has(`${job}/${n}`)) return { status: 409, json: { error: 'submitted' } };
-  let state = body;
-  // 教具:「给老师看」时带一张板的图
-  if (target.kind === 'kit' && isObj(body) && typeof body.image === 'string') {
-    const { image, ...rest } = body;
-    const m = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(image);
-    if (!m || m[1].length > 8_000_000) return { status: 400, json: { error: 'bad_state' } };
-    const png = await writeCardImage(ws, tutor, date, job, n, Buffer.from(m[1], 'base64'));
-    state = { ...rest, image: `conversations/${tutor}/${png}` };
-  }
-  const r = parseCardState(target, state);
+  const r = parseCardState(target, body);
   if (!r.ok) return { status: 400, json: { error: 'bad_state' } };
   const last = index.messages[index.messages.length - 1];
   // turn = 这张卡所在话题的末条 job:下一条发给同一话题时才算「上一轮之后改过的」
@@ -623,8 +594,9 @@ const IMAGE_TYPES: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg
 export const PHOTO_MAX_BYTES = 3_000_000;
 
 /**
- * 上传作业照片(R5):body {image: "data:image/jpeg;base64,…"}(也认 png)→ 落 captures/<日期>/<HHMM>-<n>.jpg → {path}。
+ * 上传作业照片(R5):body {image: "data:image/jpeg;base64,…"}(也认 png)→ 落 captures/<日期>/<HHMM>-<n>.jpg → {path, w, h}。
  * 孩子端与家长端同一条路;照片只是落盘,发消息时把 path 放进 photos[] 才到老师那里。
+ * w、h 是像素宽高(src/shared/jpeg.ts 的 imageSize):一节课里孩子端照它先把照片铺上照片页(同服务端收到那一条时铺的一样)
  */
 async function uploadPhoto(ws: Workspace, body: unknown, now: Date): Promise<RouteResult> {
   if (!isObj(body) || typeof body.image !== 'string') return { status: 400, json: { error: 'bad_request', message: '要 {image: data:image/jpeg;base64,…}' } };
@@ -633,7 +605,7 @@ async function uploadPhoto(ws: Workspace, body: unknown, now: Date): Promise<Rou
   const data = Buffer.from(m[2], 'base64');
   if (!data.length || data.length > PHOTO_MAX_BYTES) return { status: 413, json: { error: 'too_large', message: `一张最多 ${PHOTO_MAX_BYTES / 1_000_000} MB,页面该先缩到长边 ${PHOTO_MAX_SIDE}` } };
   const path = await writeCapture(ws, now, data, m[1] === 'png' ? 'png' : 'jpg');
-  return { status: 201, json: { path } };
+  return { status: 201, json: { path, ...(imageSize(data) ?? {}) } };
 }
 
 /** 请求从哪来(createHandler 从请求头取):设备 cookie、来源地址 */
@@ -922,7 +894,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       if (!(await stat(file).catch(() => null))?.isFile()) return { status: 404, json: { error: 'not_found' } };
       return { status: 200, file, contentType: IMAGE_TYPES[ext] };
     }
-    // 照片板的「点字」:这张作业照片上认出的字词与框(认是 runner 在后台起的,流式落在照片旁边;舞台轮询)。只认 captures/ 里在的照片
+    // 照片页的点字:这张作业照片上认出的字词与行框(认是 runner 在后台起的,流式落在照片旁边;舞台轮询)。只认 captures/ 里在的照片
     // 课本页(vault 里教材那篇旁边同名文件夹里的图):以板为主的拍照屏上「选课本页」;只列这位老师学科的册子
     if (p === '/api/kid/textbook-pages' && method === 'GET') {
       const tutor = url.searchParams.get('tutor') ?? '';
@@ -937,8 +909,9 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       if (!file) return { status: 404, json: { error: 'not_found' } };
       if (method === 'GET') return { status: 200, file, contentType: IMAGE_TYPES[extname(file).slice(1).toLowerCase()] };
       // 选了这一页:拷进 captures/(同孩子拍的照片),回路径;发消息时放进 photos[]
-      const path = await writeCapture(ws, ctx.now(), await readFile(file), /\.png$/i.test(file) ? 'png' : 'jpg');
-      return { status: 200, json: { path } };
+      const data = await readFile(file);
+      const path = await writeCapture(ws, ctx.now(), data, /\.png$/i.test(file) ? 'png' : 'jpg');
+      return { status: 200, json: { path, ...(imageSize(data) ?? {}) } };
     }
     // 课本(语文预习,base: textbook):PDF 本身(舞台的 pdf.js 分段取,Range 由 sendFile 管)与几页的行和字(点字、找位置);b = 册子的文件名,p = PDF 的几页(59-60)
     if (p === '/api/kid/textbook/pdf' && method === 'GET') {

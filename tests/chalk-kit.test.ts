@@ -1,28 +1,26 @@
 /**
- * 教具(src/chalk/kit/):参数怎么读、每张卡开放哪些操作、画面、孩子做了什么说成给老师的那几句。
+ * 白纸条上的图形(src/chalk/kit/):[[摆 …]] 的参数怎么读、画面、孩子做了什么说成给老师的那几句;照片页的文字层(认出的字换成课本的样子)、点字。
  * 方向盘照 2026-11-10 那次检查作业:「早晨面向太阳,前面是东,后面、左面、右面各是什么」;
  * 点阵照「分一分」:18 个贴纸平均分给 2 个、3 个、6 个小朋友。孩子的笔画不归整,读数只是大概。
  */
-import { COVER_ID, KID_INK, KITS, photoFrame, photoLocate, photoRings, pinyinStrip, pickEnglish, kitLookOnly, describeKit, elementBounds, kitMarks, kitOf, kitOps, kitParams, kitTouched, readKitLines, turnPoint, turnedSkeletons, type KitState } from '../src/chalk/index.ts';
+import { KID_INK, KITS, bookFind, bookPick, bookSheets, bookTarget, bookView, elementBounds, kitMarks, kitOf, kitParams, photoBookPage, photoText, pickEnglish, pickable, readKitLines, turnPoint, turnedSkeletons, type KitState } from '../src/chalk/index.ts';
 import { sceneSchema } from '../src/chalk/scene-schema.ts';
 import { check, done } from './_check.ts';
 
 const kit = kitOf('方向盘')!;
 const grid = kitOf('点阵')!;
-check('四种画法在册:照片、白板、点阵、方向盘(课本 2026-11-16 起是一节课的页,不是卡)', KITS.map((k) => k.name).join() === '照片,白板,点阵,方向盘' && kitOf('没有这种') === undefined);
-check('每种教具都列了孩子能做的操作', kit.ops.join() === '转,圈' && grid.ops.join() === '切,圈,涂,添');
+check('两种图形在册:点阵、方向盘(照片、白板 2026-11-16 起是一节课的页,不是卡)', KITS.map((k) => k.name).join() === '点阵,方向盘' && kitOf('没有这种') === undefined);
 
-// ---- 参数与操作 ----
+// ---- 参数 ----
 const read = readKitLines(kit, ['上: 东', '小人:没有', '把「东」转到上面。', '想一想:哪个字在下面?']);
 check('参数行认全角半角冒号;不是参数的行是题目(带冒号的一句话也算题目)', read.params['上'] === '东' && read.params['小人'] === '没有' && read.prompt === '把「东」转到上面。 想一想:哪个字在下面?', JSON.stringify(read));
 const def = readKitLines(kit, []);
-check('没写的参数补缺省:上北、有小人;没写操作 = 全开', def.params['上'] === '北' && def.params['小人'] === '有' && def.prompt === '' && def.ops.join() === '转,圈', JSON.stringify(def));
+check('没写的参数补缺省:上北、有小人', def.params['上'] === '北' && def.params['小人'] === '有' && def.prompt === '', JSON.stringify(def));
 const errOf = (f: () => unknown): string => { try { f(); return ''; } catch (e) { return e instanceof Error ? e.message : String(e); } };
 check('参数的值不在能取的里面:抛,说清能写什么', errOf(() => readKitLines(kit, ['上: 东北'])).includes('北、东、南、西'));
-check('「操作: 圈」只开放这一种;写了这张卡没有的操作:抛,说清有哪些', readKitLines(kit, ['操作: 圈']).ops.join() === '圈' && readKitLines(grid, ['操作:涂、切']).ops.join() === '切,涂' && errOf(() => readKitLines(kit, ['操作: 切'])).includes('转、圈'));
-check('存下来的参数、操作不对就退回缺省(老对话里的,不抛)', kitParams(kit, { 上: '天', 小人: 3 })['上'] === '北' && kitParams(kit, undefined)['小人'] === '有' && kitOps(kit, ['圈', '飞']).join() === '圈' && kitOps(kit, 'x').join() === '转,圈' && kitParams(grid, { 行: '99' })['行'] === '2');
-const g1 = readKitLines(grid, ['2 行 9 个', '线: 竖 3、竖 6', '操作: 切、涂', '再切一刀,分成 6 份。']);
-check('点阵:一行简写「2 行 9 个」、板上已有的线、操作、题目', g1.params['行'] === '2' && g1.params['每行'] === '9' && g1.params['线'] === '竖3 竖6' && g1.ops.join() === '切,涂' && g1.prompt === '再切一刀,分成 6 份。', JSON.stringify(g1));
+check('存下来的参数不对就退回缺省(老记录里的,不抛)', kitParams(kit, { 上: '天', 小人: 3 })['上'] === '北' && kitParams(kit, undefined)['小人'] === '有' && kitParams(grid, { 行: '99' })['行'] === '2');
+const g1 = readKitLines(grid, ['2 行 9 个', '线: 竖 3、竖 6', '再切一刀,分成 6 份。']);
+check('点阵:一行简写「2 行 9 个」、已有的线;认不出的那一截留着(摆 的参数里有它就算写错)', g1.params['行'] === '2' && g1.params['每行'] === '9' && g1.params['线'] === '竖3 竖6' && g1.prompt === '再切一刀,分成 6 份。', JSON.stringify(g1));
 check('点阵:不写就是 2 行 9 个、没有线;行列写过了头、线写得不对:抛', readKitLines(grid, []).params['每行'] === '9' && readKitLines(grid, []).params['线'] === '' && readKitLines(grid, ['9 行 9 个']).params['行'] === '9' && errOf(() => readKitLines(grid, ['10 行 9 个'])).includes('1 到 9') && errOf(() => readKitLines(grid, ['线: 斜 1'])).includes('横 1'));
 
 // ---- 方向盘的画面 ----
@@ -54,7 +52,7 @@ const circled = kitMarks(scene, { ...east, marks: [ring(320, 448, 44)] });
 check('转过以后圈下面那个字:圈住的是西;没转时同一个地方是南', circled[0]?.kind === 'circle' && circled[0].items[0].label === '西' && JSON.stringify(kitMarks(scene, { marks: [ring(320, 448, 44)] })).includes('"南"'), JSON.stringify(circled));
 check('点一下、划过、划在底下、空白处', kitMarks(scene, { ...east, marks: [[[322, 190], [322, 190]]] })[0]?.kind === 'tap' && kitMarks(scene, { ...east, marks: [[[262, 448], [320, 450], [378, 447]]] })[0]?.kind === 'on' && kitMarks(scene, { ...east, marks: [[[296, 486], [344, 486]]] })[0]?.kind === 'near' && kitMarks(scene, { marks: [[[20, 20], [60, 30], [40, 60]]] })[0]?.kind === 'empty');
 check('圈住中间说小人;圈住整个盘只说四个字和小人(盘的边、刻度不算)', (() => { const me = kitMarks(scene, { marks: [ring(320, 320, 62)] })[0]; const all = kitMarks(scene, { marks: [ring(320, 320, 205)] })[0]; return me?.kind === 'circle' && me.items.length === 1 && me.items[0].label === '小人' && all?.kind === 'circle' && all.items.length === 5; })());
-check('给老师的那几句:请他做的 + 大概', describeKit(kit, P, { ...east, marks: [ring(320, 448, 44)] }, ['圈']) === '请他做的:圈;大概:把方向盘逆时针转了 90°(按了 1 次);现在前面是东、右面是南、后面是西、左面是北;圈住了:西(在后面)', describeKit(kit, P, { ...east, marks: [ring(320, 448, 44)] }, ['圈']));
+check('给老师的那一句(大概)', said(P, { ...east, marks: [ring(320, 448, 44)] }) === '把方向盘逆时针转了 90°(按了 1 次);现在前面是东、右面是南、后面是西、左面是北;圈住了:西(在后面)', said(P, { ...east, marks: [ring(320, 448, 44)] }));
 check('转了一圈回到原处也说转过;同一样东西圈两笔只说一遍', said(P, { turn: { disc: 0 }, moves: 4 }).startsWith('把方向盘转了一圈回到原处(按了 4 次)') && said(P, { marks: [ring(448, 320, 44), ring(448, 320, 50)] }).split('圈住了').length === 2);
 
 // ---- 点阵:切、圈、涂(只算大概,孩子画歪了照他画的算) ----
@@ -78,139 +76,45 @@ const scribble: [number, number][] = Array.from({ length: 14 }, (_, k) => [k % 2
 check('在左边来回涂:盖住大约 6 个(两行各 3 个)', gread(G, [scribble]) === '涂了一块,盖住大约 6 个', gread(G, [scribble]));
 check('点一下、看不出是什么的一笔', gread(G, [[[X(4), 126], [X(4), 126]]]) === '点了第 2 行第 4 个' && gread(G, [[[300, 200], [330, 230], [300, 250]]]) === '有 1 笔看不出是什么,看图', gread(G, [[[300, 200], [330, 230], [300, 250]]]));
 // 添:17 个、每行 5 个(最后一行只有 2 个);孩子在空的地方点三下,再横着切三道
-const M = readKitLines(grid, ['17 个,每行 5 个', '操作: 添、切']);
+const M = readKitLines(grid, ['17 个,每行 5 个']);
 const Y = (r: number): number => 70 + (r - 1) * 56;
 const hcut = (r: number): [number, number][] => [[40, Y(r) + 28], [150, Y(r) + 25], [320, Y(r) + 30]];
 const three: [number, number][][] = [3, 4, 5].map((c) => [[X(c), Y(4)], [X(c), Y(4)]]);
-check('一共 17 个、每行 5 个:排成 4 行,最后一行 2 个;只开放添、切', M.params['共'] === '17' && M.params['每行'] === '5' && M.ops.join() === '切,添' && grid.build(M.params).skeletons.length === 17 && grid.build(M.params).skeletons.some((e) => e.id === 'dot-4-2') && !grid.build(M.params).skeletons.some((e) => e.id === 'dot-4-3'), JSON.stringify(M));
+check('一共 17 个、每行 5 个:排成 4 行,最后一行 2 个', M.params['共'] === '17' && M.params['每行'] === '5' && grid.build(M.params).skeletons.length === 17 && grid.build(M.params).skeletons.some((e) => e.id === 'dot-4-2') && !grid.build(M.params).skeletons.some((e) => e.id === 'dot-4-3'), JSON.stringify(M));
 check('在空的地方点三下:添了 3 个,一共 20 个;点在圈圈上还是指它', gread(M.params, three) === '添了 3 个圈,连原来的一共 20 个' && gread(M.params, [[[X(2), Y(4)], [X(2), Y(4)]]]) === '点了第 4 行第 2 个', gread(M.params, three));
 check('自己画一个小圈也算添;绕着圈圈画的还是圈', gread(M.params, [ring(X(4), Y(4), 18)]) === '添了 1 个圈,连原来的一共 18 个' && gread(M.params, [ring(X(1), Y(4), 30)]) === '圈了一圈,里面大约 1 个', gread(M.params, [ring(X(4), Y(4), 18)]));
 check('添了 3 个再横着切三道:4 份,每份 5 个(他添的也数进去)', gread(M.params, [...three, hcut(1), hcut(2), hcut(3)]) === '添了 3 个圈,连原来的一共 20 个;画了 3 道横线;大致分成 4 份:每份 5 个', gread(M.params, [...three, hcut(1), hcut(2), hcut(3)]));
 check('没添就切:最后一份少,照实说 5、5、5、2', gread(M.params, [hcut(1), hcut(2), hcut(3)]) === '画了 3 道横线;大致分成 4 份:5、5、5、2', gread(M.params, [hcut(1), hcut(2), hcut(3)]));
-check('给老师的那几句', describeKit(grid, G, { marks: [vline(GX(3)), vline(GX(6))] }, ['切']) === '请他做的:切;大概:画了 2 道竖线;大致分成 3 份:每份 6 个');
+check('给老师的那一句', gread(G, [vline(GX(3)), vline(GX(6))]) === '画了 2 道竖线;大致分成 3 份:每份 6 个');
 
-// ---- 照片:孩子拍的作业做底,位置都是整张照片的千分比 ----
-const shot = kitOf('照片')!;
-const PH = readKitLines(shot, ['captures/2026-11-10/2159-1.jpg', '框: 243, 601, 927, 971', '圈: 595, 665, 694, 752', '操作: 圈', '心理辅导室的东面是哪两间?圈出来。']);
-check('照片:第一行是路径,框和圈规整成四个数,题目留下', PH.params['图'] === 'captures/2026-11-10/2159-1.jpg' && PH.params['框'] === '243 601 927 971' && PH.params['圈'] === '595 665 694 752' && PH.params['北'] === '上' && PH.ops.join() === '圈' && PH.prompt === '心理辅导室的东面是哪两间?圈出来。', JSON.stringify(PH));
-const threw = (lines: string[]): boolean => { try { readKitLines(shot, lines); return false; } catch { return true; } };
-check('照片:没写图也读得成(就是孩子最近发的那张,应用补上);网上的图、框的数不对、千分比出界都读不成', readKitLines(shot, ['操作: 点字', '圈出来。']).params['图'] === '' && threw(['https://example.com/a.jpg']) && threw(['a.jpg', '框: 1, 2, 3']) && threw(['a.jpg', '圈: 10, 10, 1200, 500']) && threw(['a.jpg', '方位: 5']));
-const threw2 = (f: () => unknown): boolean => { try { f(); return false; } catch { return true; } };
-const ps = shot.build(PH.params, { aspect: 1.0076 });
-check('照片:画框是裁的那一块(多留一圈边),照片占整个场景,竖的数乘了高宽比', ps.photo?.src === 'captures/2026-11-10/2159-1.jpg' && ps.photo.width === 1000 && Math.abs(ps.photo.height - 1007.6) < 0.01 && ps.frame![0] < 243 && ps.frame![0] > 200 && Math.abs(ps.frame![1] - (601 - 370 * 0.04) * 1.0076) < 0.01, JSON.stringify(ps.frame));
-check('照片:一处圈 = 一个红圈,套在老师给的框外面', ps.skeletons.length === 1 && ps.skeletons[0].type === 'ellipse' && ps.skeletons[0].strokeColor === '#e03131' && Number(ps.skeletons[0].x) < 595 && Number(ps.skeletons[0].x) + Number(ps.skeletons[0].width) > 694);
-const rose = shot.build({ ...PH.params, 圈: '', 方位: '644 708', 北: '右' }, { aspect: 1 });
-const word = (d: string) => rose.skeletons.find((e) => e.type === 'text' && e.text === d)!;
-check('照片:方位十字四个字各一支箭头;北写右,北就在右边、东在下面', rose.skeletons.filter((e) => e.type === 'arrow').length === 4 && rose.skeletons.filter((e) => e.type === 'text').length === 4 && Number(word('北').x) > 644 && Number(word('东').y) > 708 && Number(word('南').x) < 600);
-check('照片:老师的记号不用孩子的蓝', [...ps.skeletons, ...rose.skeletons].every((e) => e.strokeColor !== KID_INK));
-check('照片:只有图也行,板上没有老师的记号', shot.build(readKitLines(shot, ['a.jpg']).params).skeletons.length === 0);
-// 孩子在 (780, 708) 附近圈了一圈:场景里竖的是千分比 × 高宽比,说回去要除回来
-const A = 1.25;
-const kidRing = ring(780, 708 * A, 40);
-check('照片:孩子圈的说成千分比(中间、左上、右下),老师照抄就能把记号画在那', describeKit(shot, PH.params, { marks: [kidRing], aspect: A }, ['圈']) === '请他做的:圈;大概:圈了一圈,中间在 (780, 708),左上 (740, 676)、右下 (820, 740);这些数是整张照片的千分比,和你写「圈」「方位」用的一样', describeKit(shot, PH.params, { marks: [kidRing], aspect: A }, ['圈']));
-check('照片:一道线说从哪到哪;没量到高宽比只说画了什么', shot.read(PH.params, { marks: [[[600, 500], [700, 500], [800, 500]]], aspect: 1 }, ps) === '画了一道线,从 (600, 500) 到 (800, 500);这些数是整张照片的千分比,和你写「圈」「方位」用的一样' && shot.read(PH.params, { marks: [kidRing] }, ps) === '圈了一圈;位置看图' && shot.read(PH.params, {}, ps) === '还没画');
 
-// 照片上写字:写进框里(字照框的大小)、写在点上;只看的板
-const W = readKitLines(shot, ['captures/2026-11-12/0935-1.jpg', '写: 18 在 591, 860, 657, 948;18 ÷ 3 = 6 在 600, 700', '操作: 看', '算式这样填。']);
-const wsk = shot.build(W.params, { aspect: 0.468 }).skeletons;
-check('照片的「写」:规整成「字|数」,两处各一段红字,写在点上的垫一块纸色的底;写进框里的字落在框中间、不出框', W.params['写'] === '18|591 860 657 948;18 ÷ 3 = 6|600 700' && wsk.length === 3 && wsk.filter((e) => e.type === 'text').length === 2 && wsk[1].type === 'rectangle' && wsk[1].backgroundColor === '#fffdf8' && wsk.every((e) => e.strokeColor === '#e03131') && Number(wsk[0].x) >= 591 && Number(wsk[0].x) + Number(wsk[0].width) <= 657 && Number(wsk[0].y) >= 860 * 0.468 && Number(wsk[0].y) + Number(wsk[0].height) <= 948 * 0.468 + 1, JSON.stringify([W.params['写'], wsk[0]]));
-const B = readKitLines(shot, ['a.jpg', '框: 100, 400, 900, 900', '写: 18 ÷ 3 = 6;每人折 6 只', '操作: 看']);
-const bs = shot.build(B.params, { aspect: 0.5 });
-check('照片的「写」不给位置:写在照片下面另起的纸上,一行一行,画框跟着往下长,不压着照片上裁的那一块', B.params['写'] === '18 ÷ 3 = 6|;每人折 6 只|' && bs.skeletons.length === 3 && bs.skeletons[0].type === 'rectangle' && bs.skeletons[0].backgroundColor === '#fffdf8' && bs.skeletons.slice(1).every((e) => e.type === 'text' && Number(e.y) > (900 + 500 * 0.04) * 0.5) && Number(bs.skeletons[2].y) > Number(bs.skeletons[1].y) + Number(bs.skeletons[1].height) && bs.frame![1] + bs.frame![3] > Number(bs.skeletons[2].y) + Number(bs.skeletons[2].height) && JSON.stringify(kitParams(shot, B.params)) === JSON.stringify(B.params), JSON.stringify([B.params['写'], bs.frame, bs.skeletons.map((e) => [e.y, e.height])]));
-check('存下来的参数再读一遍不变(舞台、服务端都是这样读的)', JSON.stringify(kitParams(shot, W.params)) === JSON.stringify(W.params) && JSON.stringify(kitParams(shot, PH.params)) === JSON.stringify(PH.params) && JSON.stringify(kitParams(grid, M.params)) === JSON.stringify(M.params), JSON.stringify(kitParams(shot, W.params)));
-check('只看:写明了才有;不写操作时全开里没有它', W.ops.join() === '看' && kitLookOnly(W.ops) && !kitLookOnly(PH.ops) && readKitLines(shot, ['a.jpg']).ops.join() === '圈,画' && kitOps(shot, undefined).join() === '圈,画' && kitOps(shot, ['看']).join() === '看');
-check('照片的「写」写错了读不成:字太长、数的个数不对、位置出界', threw(['a.jpg', '写: ' + '字'.repeat(15) + ' 在 500, 500']) && threw(['a.jpg', '写: ' + '字'.repeat(21)]) && threw(['a.jpg', '写: 18 在 1, 2, 3']) && threw(['a.jpg', '写: 18 在 1200, 500']));
-
-// ---- 照片的「点字」:孩子点一个字词、圈一个字词,本地算出是哪一项 ----
+// ---- 照片页的文字层:认出的字换成课本的样子,和课本用同一份找框、点字、说窗里是哪 ----
 {
-  const { photoPick, pickable, PHOTO_PICK } = await import('../src/chalk/index.ts');
-  // 竖着拍的课本页(高宽比 1.4):场景里竖的数 = 千分比 × 1.4
-  const A2 = 1.4;
-  const words = [
-    { text: '变', box: [237, 233, 281, 267] as const },
-    { text: '极', box: [533, 233, 586, 267] as const },
-    { text: '海洋', box: [203, 836, 300, 857] as const },
-    { text: 'yellow', box: [600, 836, 700, 857] as const },
-  ];
-  const at = (x: number, y: number): [number, number] => [x, y * A2];
-  const tap = (x: number, y: number): [number, number][] => [at(x, y), at(x, y)];
-  check('点字:写明了才有;只有它的板没有东西要交', readKitLines(shot, ['a.jpg', '操作: 点字']).ops.join() === PHOTO_PICK && kitLookOnly([PHOTO_PICK]) && kitLookOnly(['看', PHOTO_PICK]) && !kitLookOnly([PHOTO_PICK, '圈']) && readKitLines(shot, ['a.jpg', '操作: 点字、圈']).ops.join() === '圈,点字' && !kitOps(shot, undefined).includes(PHOTO_PICK));
-  check('点字:点在框里就是那一项;框外半个字高以内算最近的一项,再远不算', photoPick(words, tap(260, 250), A2)?.text === '变' && photoPick(words, tap(290, 250), A2)?.text === '变' && photoPick(words, tap(400, 250), A2) === null && photoPick(words, tap(250, 862), A2)?.text === '海洋');
-  const ring = (x1: number, y1: number, x2: number, y2: number): [number, number][] => [at(x1, y1), at(x2, y1), at(x2, y2), at(x1, y2), at(x1, y1)];
-  check('点字:圈住哪一项的中心就是它;圈住两项取离圈中心近的;什么都没圈住不算', photoPick(words, ring(220, 220, 300, 280), A2)?.text === '变' && photoPick(words, ring(230, 220, 620, 280), A2)?.text === '极' && photoPick(words, ring(700, 400, 800, 500), A2) === null);
-  check('点字:一到四个汉字(弹田字格)、一个英文单词(弹单词卡);五个字以上、数字、空的点不中', pickable('变') && pickable('灌溉田地') && pickable('yellow') && pickEnglish("It's") && !pickEnglish('变') && !pickable('小蝌蚪找妈妈') && !pickable('123') && !pickable('') && photoPick(words, tap(650, 846), A2)?.text === 'yellow');
-  {
-    // 英文的一行按字母等分:点在 colour 上是 colour,点在问号上不算;圈住 yellow 是 yellow
-    const en = [{ text: 'What colour is it? It is yellow.', box: [100, 500, 740, 540] as const }];
-    const W = (740 - 100) / en[0].text.length;
-    const at = (i: number): [number, number][] => tap(100 + (i + 0.5) * W, 520);
-    const col = photoPick([], at(6), A2, en), q = photoPick([], at(17), A2, en);
-    const yi = en[0].text.indexOf('yellow');
-    const ring: [number, number][] = Array.from({ length: 20 }, (_, k) => [100 + (yi + 3) * W + Math.cos((k / 20) * Math.PI * 2) * 3.4 * W, (520 + Math.sin((k / 20) * Math.PI * 2) * 30) * A2]);
-    check('英文的行:点一下是落在的那个词;点在标点上不算;圈一圈是圈住的那个词', col?.text === 'colour' && q === null && photoPick([], ring, A2, en)?.text === 'yellow', JSON.stringify([col, q, photoPick([], ring, A2, en)]));
-  }
-  check('点字:没量到高宽比、空的一笔都不算', photoPick(words, tap(260, 250), 0) === null && photoPick(words, [], A2) === null);
-  check('点字:点开看过的字词说给老师;同时画了圈的两样都说', shot.read(PH.params, { picked: ['傍', '海洋'] }, ps) === '点开看了笔顺:「傍」「海洋」' && shot.read(PH.params, { picked: ['傍'], marks: [[[600, 500], [700, 500], [800, 500]]], aspect: 1 }, ps).startsWith('点开看了笔顺:「傍」;画了一道线') && describeKit(shot, PH.params, { picked: ['变'] }, [PHOTO_PICK]) === '请他做的:点字;大概:点开看了笔顺:「变」');
-  // 正文的行:按字数等分,一格一个字
-  const lines = [{ text: '我会变。太阳一晒,我就变成汽。升', box: [216, 202, 912, 228] as const }, { text: '小水滴聚在一起落下来', box: [200, 620, 420, 644] as const }];
-  const cellX = (l: (typeof lines)[number], i: number): number => l.box[0] + ((l.box[2] - l.box[0]) / Array.from(l.text).length) * (i + 0.5);
-  check('点字·正文:点一下是落在的那一格的字;点在标点上、行外面不算', photoPick([], tap(cellX(lines[0], 0), 215), A2, lines)?.text === '我' && photoPick([], tap(cellX(lines[0], 7), 215), A2, lines)?.text === '晒' && photoPick([], tap(cellX(lines[0], 15), 215), A2, lines)?.text === '升' && photoPick([], tap(cellX(lines[0], 3), 215), A2, lines) === null && photoPick([], tap(100, 215), A2, lines) === null && photoPick([], tap(500, 300), A2, lines) === null);
-  const got = photoPick([], tap(cellX(lines[0], 7), 215), A2, lines);
-  check('点字·正文:回的框是那一格(闪一下用)', !!got && got.box[1] === 202 && got.box[3] === 228 && got.box[2] - got.box[0] > 40 && got.box[2] - got.box[0] < 48 && got.box[0] < cellX(lines[0], 7) && got.box[2] > cellX(lines[0], 7));
-  check('点字·正文:圈住连着的几个字当一个词;标点把它断开取长的那一段;最多四个字', photoPick([], ring(cellX(lines[0], 4) - 15, 195, cellX(lines[0], 5) + 15, 235), A2, lines)?.text === '太阳' && photoPick([], ring(cellX(lines[0], 1) - 10, 195, cellX(lines[0], 5) + 10, 235), A2, lines)?.text === '会变' && photoPick([], ring(cellX(lines[0], 9) - 20, 195, cellX(lines[0], 15) + 20, 235), A2, lines)?.text === '我就变成');
-  const dotted = [{ text: '落', box: [354, 620, 376, 644] as const }];
-  check('点字:挑出来的字就在正文里时,点它是它,点它旁边的字是旁边那个字;没有行可看时框外一点才算它', photoPick(dotted, tap(365, 632), A2, lines)?.text === '落' && photoPick(dotted, tap(cellX(lines[1], 6), 632), A2, lines)?.text === '起' && photoPick(dotted, tap(cellX(lines[1], 6), 632), A2)?.text === '落');
-  check('点字:只点了字不算动过手(板重开还是从头画,不用「给老师看」)', !kitTouched({ picked: ['变'] }));
+  // 一张 2000 × 1500 的横拍照片:页宽 1000、高 750;竖的千分比 × 0.75
+  const T = {
+    items: [{ text: '开兴', box: [300, 300, 380, 340] as const }],
+    lines: [
+      { text: '3.看拼音写词语。', box: [100, 200, 500, 240] as const },
+      { text: '开兴 快乐', box: [300, 300, 600, 340] as const },
+      { text: '4.What colour is it?', box: [100, 600, 700, 640] as const },
+    ],
+    questions: [{ no: '3', box: [80, 180, 920, 500] as const }, { no: '4', box: [80, 560, 920, 900] as const }, { no: '3', box: [1, 1, 2, 2] as const }],
+  };
+  const { page, blocks } = photoBookPage(1, { w: 2000, h: 1500 }, T);
+  check('一张照片当一页:宽 1000,高照宽高比;行框竖的乘高宽比;挑出的字词也当一行(放在前面)', page.w === 1000 && page.h === 750 && page.printed === null && page.lines.length === 4 && page.lines[0].text === '开兴' && page.lines[1].y1 === 150 && page.lines[1].y2 === 180, JSON.stringify(page.lines[1]));
+  check('行里的字照字数等分', page.lines[2].chars.length === 5 && page.lines[2].chars[0].x1 === 300 && page.lines[2].chars[1].x1 === 360, JSON.stringify(page.lines[2].chars.slice(0, 2)));
+  check('题:题号、题框(竖的乘高宽比)、框里的那几行;同一题号只留第一个', blocks.length === 2 && blocks[0].no === 3 && JSON.stringify(blocks[0].area) === '{"n":1,"box":[80,135,920,375]}' && blocks[0].refs.map((r) => r.i).join() === '1,2' && blocks[1].refs.map((r) => r.i).join() === '3', JSON.stringify(blocks));
+  check('给老师的正文:一行一句,有题号的行前面带题号,挑出的字词不重复', JSON.stringify(photoText(page, blocks)) === '["第3题 3.看拼音写词语。","开兴 快乐","第4题 4.What colour is it?"]', JSON.stringify(photoText(page, blocks)));
+  const p2 = photoBookPage(2, { w: 1000, h: 1000 }, null);
+  const sheets = bookSheets([page, p2.page]);
+  check('两张从上往下连着,中间空一条', sheets[0].top === 0 && sheets[1].top === 780 && sheets[1].height === 1000, JSON.stringify(sheets));
+  const all = [...blocks, ...p2.blocks];
+  check('看第 3 题:是题框(比框里的几行大,图也在里面)', JSON.stringify(bookTarget([page, p2.page], sheets, all, '第 3 题')) === '{"label":"第3题","box":[80,135,920,375]}', JSON.stringify(bookTarget([page, p2.page], sheets, all, '第 3 题')));
+  check('圈字:先找挑出的字词(框更紧),再找正文的行', JSON.stringify(bookFind([page], sheets, '开兴')) === '[300,225,380,255]' && JSON.stringify(bookFind([page], sheets, '快乐')) === '[480,225,600,255]', JSON.stringify([bookFind([page], sheets, '开兴'), bookFind([page], sheets, '快乐')]));
+  check('点字:汉字是落在的那一格;英文是那个字母所在的词;行外面不算', bookPick([page], sheets, 335, 240)?.c === '开' && bookPick([page], sheets, 470, 465)?.c === 'colour' && bookPick([page], sheets, 50, 465) === null && bookPick([page], sheets, 335, 300) === null, JSON.stringify([bookPick([page], sheets, 335, 240), bookPick([page], sheets, 470, 465)]));
+  check('窗里是哪:第几张、露出一半以上的题', bookView([page, p2.page], sheets, all, [0, 100, 1000, 400], '张') === '第 1 张:第 3 题', bookView([page, p2.page], sheets, all, [0, 100, 1000, 400], '张'));
+  check('还没认出来:一页空的,没有题', p2.page.lines.length === 0 && p2.blocks.length === 0);
+  check('能弹出来的:一到四个汉字、一个英文单词', pickable('变') && pickable('灌溉田地') && pickable('yellow') && pickEnglish("It's") && !pickEnglish('变') && !pickable('小蝌蚪找妈妈') && !pickable('123') && !pickable(''));
 }
-
-check('做了没有:转过或画过才算', !kitTouched(null) && !kitTouched({}) && !kitTouched({ turn: { disc: 0 }, moves: 0, marks: [] }) && kitTouched({ moves: 1 }) && kitTouched({ marks: [[[1, 1], [2, 2]]] }));
-
-// ---- 照片的「圈」写字词:应用照认出的字找到它 ----
-{
-  const R = readKitLines(shot, ['圈: 蚕;耕作;595, 665, 694, 752']);
-  check('圈:字词与框可以混着写;字词存成「字|」(还没找),框照旧', R.params['圈'] === '蚕|;耕作|;595 665 694 752', R.params['圈']);
-  check('圈:找到了的存成「字|框」,再读一遍不变;画面只画有框的(还没找的不画)', readKitLines(shot, ['圈: 蚕|236 500 280 525']).params['圈'] === '蚕|236 500 280 525' && kitParams(shot, { 图: 'a.jpg', 圈: '蚕|236 500 280 525;耕|' })['圈'] === '蚕|236 500 280 525;耕|' && shot.build(kitParams(shot, { 图: 'a.jpg', 圈: '蚕|236 500 280 525;耕|' })).skeletons.filter((e) => e.type === 'ellipse').length === 1);
-  check('圈:英文的词、短语也认(英语课本)', readKitLines(shot, ['圈: apple;I like']).params['圈'] === 'apple|;I like|' && JSON.stringify(photoLocate([], [{ text: 'I like apples.', box: [100, 500, 240, 540] }], 'apple')) === '[170,500,220,540]');
-  check('圈:不是字词、太长、框的数不对:读不成', threw2(() => readKitLines(shot, ['圈: 123'])) && threw2(() => readKitLines(shot, ['圈: ' + '字'.repeat(9)])) && threw2(() => readKitLines(shot, ['圈: 蚕|1 2 3'])));
-  const LINES = [{ text: '采桑养蚕又插秧。', box: [104, 500, 456, 525] as const }, { text: '早起勤耕作，归来戴月光。', box: [103, 553, 649, 580] as const }];
-  check('找字:正文的行按字数等分(和点字一样的算法)', JSON.stringify(photoLocate([], LINES, '蚕')) === '[236,500,280,525]' && JSON.stringify(photoLocate([], LINES, '耕作')) === '[240,553,331,580]', JSON.stringify([photoLocate([], LINES, '蚕'), photoLocate([], LINES, '耕作')]));
-  const MAP = [{ text: '心理', box: [140, 300, 200, 320] as const }, { text: '辅导室', box: [130, 325, 220, 345] as const }, { text: '(1)心理辅导室的东面有', box: [100, 650, 600, 690] as const }];
-  check('找字:断成上下两行的(平面图上的「心理 / 辅导室」)也找得到;好几处时先要裁出来的那一块里的', JSON.stringify(photoLocate([], MAP, '心理辅导室', [100, 100, 900, 500])) === '[130,300,220,345]' && JSON.stringify(photoLocate([], MAP, '心理辅导室')) === '[130,300,220,345]' && JSON.stringify(photoLocate([], MAP, '心理辅导室', [0, 600, 1000, 1000])) === '[225,650,433,690]', JSON.stringify([photoLocate([], MAP, '心理辅导室', [100, 100, 900, 500]), photoLocate([], MAP, '心理辅导室')]));
-  check('找字:认出的项里有就用那一项的框;哪儿都没有回 null', JSON.stringify(photoLocate([{ text: '蚕', box: [1, 2, 30, 40] }], LINES, '蚕')) === '[1,2,30,40]' && photoLocate([], LINES, '飞') === null);
-  check('photoRings:每一处的字词与框', JSON.stringify(photoRings('蚕|236 500 280 525;耕|;10 10 50 50')) === '[{"text":"蚕","box":[236,500,280,525]},{"text":"耕","box":null},{"text":null,"box":[10,10,50,50]}]');
-}
-
-// ---- 照片的「遮」:盖住字头上的拼音 ----
-{
-  const C = readKitLines(shot, ['遮: 晒、极,越']);
-  check('遮:字词用顿号逗号隔开都行,存成「字|」(还没找)', C.params['遮'] === '晒|;极|;越|', C.params['遮']);
-  check('遮:只认字词;太多、不是汉字读不成', threw2(() => readKitLines(shot, ['遮: 523, 100, 560, 125'])) && threw2(() => readKitLines(shot, ['遮: ' + Array.from({ length: 9 }, () => '晒').join('、')])) && threw2(() => readKitLines(shot, ['遮: sun'])));
-  check('拼音那一条在字的上面:高一个字,左右各让出一点', JSON.stringify(pinyinStrip([300, 500, 340, 525])) === '[296,475,345,499]', JSON.stringify(pinyinStrip([300, 500, 340, 525])));
-  const cs = shot.build(kitParams(shot, { 图: 'a.jpg', 遮: '晒|300 500 340 525;极|' }), { aspect: 1 });
-  const cov = cs.skeletons.filter((e) => e.id.startsWith(COVER_ID));
-  check('画面:找到了的那处一块纸色的块盖在拼音上(还没找的不画),id 带字(舞台点到它就揭开)', cov.length === 1 && cov[0].id === `${COVER_ID}晒` && Number(cov[0].y) + Number(cov[0].height) <= 500 && cov[0].backgroundColor !== undefined, JSON.stringify(cov));
-}
-
-// ---- 照片的「框」写题号(分题) ----
-{
-  const f = (v: string): string => readKitLines(shot, [`框: ${v}`]).params['框'];
-  check('框:题号几种写法都认,存成「第N题|」;四个数照旧', f('第 3 题') === '第3题|' && f('3题') === '第3题|' && f('第三题') === '第3题|' && f('第3题|100 200 600 500') === '第3题|100 200 600 500' && f('243, 601, 927, 971') === '243 601 927 971', [f('第 3 题'), f('第三题')].join());
-  const qs = shot.build(kitParams(shot, { 图: 'a.jpg', 框: '第3题|100 200 600 500' }), { aspect: 1 });
-  const whole = shot.build(kitParams(shot, { 图: 'a.jpg', 框: '第3题|' }), { aspect: 1 });
-  check('框:题找到了裁那一道(多留一圈边);还没找到是整张', qs.frame![0] < 100 && qs.frame![0] > 70 && qs.frame![2] < 560 && JSON.stringify(whole.frame) === '[0,0,1000,1000]', JSON.stringify([qs.frame, whole.frame]));
-  check('photoFrame:题号与框', JSON.stringify(photoFrame('第3题|100 200 600 500')) === '{"question":"第3题","box":[100,200,600,500]}' && photoFrame('') === null && JSON.stringify(photoFrame('1 2 30 40')) === '{"question":null,"box":[1,2,30,40]}');
-}
-
-// ---- 白板:没有照片时老师写一个词、一道算式 ----
-const wb = kitOf('白板')!;
-const W1 = readKitLines(wb, ['写: 傍晚;18 ÷ 3 = 6', '把「晚」圈出来。']);
-const ws1 = wb.build(W1.params);
-check('白板:「写」几行用分号隔开;只写、圈、画,「看」写明了才有', W1.params['写'] === '傍晚;18 ÷ 3 = 6' && W1.ops.join() === '圈,画' && W1.prompt === '把「晚」圈出来。' && readKitLines(wb, ['操作: 看']).ops.join() === '看', JSON.stringify(W1));
-check('白板:一行一段字,竖着排在正中、不出画框;画框固定(添了线画面不挪)', ws1.skeletons.length === 2 && ws1.skeletons.every((e) => e.type === 'text' && Number(e.x) > 0 && Number(e.x) + Number(e.width) < 1000 && Number(e.y) > 0 && Number(e.y) + Number(e.height) < 625) && Number(ws1.skeletons[1].y) > Number(ws1.skeletons[0].y) && JSON.stringify(ws1.frame) === '[0,0,1000,625]', JSON.stringify(ws1.skeletons.map((e) => [e.x, e.y, e.width, e.height])));
-check('白板:不写就是空白板', wb.build(readKitLines(wb, []).params).skeletons.length === 0 && wb.read(readKitLines(wb, []).params, {}, wb.build(readKitLines(wb, []).params)) === '还没画');
-const t0 = ws1.skeletons[0];
-const ringAround = (e: typeof t0): [number, number][] => { const x = Number(e.x), y = Number(e.y), w = Number(e.width), h = Number(e.height); return Array.from({ length: 24 }, (_, i) => [Math.round(x + w / 2 + (w / 2 + 20) * Math.cos((i / 24) * Math.PI * 2)), Math.round(y + h / 2 + (h / 2 + 20) * Math.sin((i / 24) * Math.PI * 2))] as [number, number]); };
-check('白板:圈住一行就说圈住了它', describeKit(wb, W1.params, { marks: [ringAround(t0)] }, ['圈']) === '请他做的:圈;大概:画了 1 笔;圈住了:傍晚', describeKit(wb, W1.params, { marks: [ringAround(t0)] }, ['圈']));
-check('白板:写得太多读不成', threw2(() => readKitLines(wb, ['写: 一;二;三;四;五'])) && threw2(() => readKitLines(wb, ['写: ' + '字'.repeat(17)])));
 
 done();

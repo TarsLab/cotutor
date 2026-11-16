@@ -2,6 +2,7 @@
  * 长话题的前情(API 运行时整段压缩的那一轮用,src/runtime/runner.ts):照索引按先后拼——
  * 孩子的原话(交卡、拍照、交画、看小课堂各写成一句)、老师说的讲稿、出过的卡(种类与标签);最后一轮的卡给全,孩子可能正在答。
  * 不交给模型去摘:不花钱、不用等、不会编出孩子没说过的话(要一句句攒孩子原话的话题,原话一个字不能动)。
+ * 铺着页的一节课最后加一段「讲到哪了」(lessonProgress):照讲稿里落到页上的动作数,翻过哪几页、看过哪几处、现在在哪,不让模型自己总结。
  */
 import { cardLabel } from '../../board/cards/index.ts';
 import type { ConversationMessage } from '../../schema/index.ts';
@@ -33,5 +34,23 @@ export function threadDigest(messages: readonly ConversationMessage[]): string {
     const cards = (m.section?.cards ?? []).map((c) => (last ? `${c.kind}:${clip(JSON.stringify(c.props), 600)}` : `${c.kind}「${cardLabel(c)}」`));
     out.push(`老师:${said}${cards.length ? ` [卡:${cards.join(';')}]` : ''}`);
   });
+  const at = lessonProgress(messages);
+  if (at) out.push(at);
   return out.join('\n');
+}
+
+/** 一节课讲到哪了:翻过的页、看过的几处(照先后,同一处只记一次)、最后看的那一处;没落过动作的话题回 null */
+export function lessonProgress(messages: readonly ConversationMessage[]): string | null {
+  const turned: string[] = [], looked: string[] = [];
+  let now: string | null = null;
+  for (const m of messages) {
+    const sec = m.section;
+    if (!sec) continue;
+    for (const a of [...(sec.acts ?? []), ...sec.lines.flatMap((l) => l.acts ?? [])]) {
+      if (a.do?.k === '翻') { if (!turned.includes(a.do.page.title)) turned.push(a.do.page.title); now = null; }
+      if (a.do?.k === '看') { if (!looked.includes(a.do.label)) looked.push(a.do.label); now = a.do.label; }
+    }
+  }
+  if (!turned.length && !looked.length) return null;
+  return `讲到哪了(应用照你落到页上的动作数的):${[turned.length ? `翻过 ${turned.join('、')}` : '', looked.length ? `看过 ${looked.join('、')}` : '', now ? `最后在看 ${now}` : ''].filter(Boolean).join(';')}。页上印的字这一轮重给了。`;
 }

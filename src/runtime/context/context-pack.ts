@@ -1,5 +1,5 @@
 /**
- * 上下文包序列化:固定 YAML 块 + 老师守则原文(<cotutor-rules>)、家长笔记原文段(<vault-note>)+ `---` + 消息原文。
+ * 上下文包序列化:固定 YAML 块 + 老师守则原文(<cotutor-rules>)、家长笔记原文段(<vault-note>)、页上印的字(<page>)+ `---` + 消息原文。
  * 手写 YAML 子集:标量能裸写就裸写,其余 JSON 双引号(合法 YAML);空的 plan / recent 不写。
  */
 import { ContextPackSchema, VAULT_PACK_ROLES, type ContextPack } from '../../schema/index.ts';
@@ -80,16 +80,11 @@ export function renderContextPack(pack: ContextPack): string {
       }
     }
   }
-  // 以板为主的话题:板此刻的样子(键是给老师看的中文;和 board: off 不会同时有)
+  // 一节课:页此刻的样子(键是给老师看的中文;和 board: off 不会同时有)
   if (p.slate && p.board !== 'off') {
     const b = p.slate;
     out.push('  board:', `    底: ${yamlScalar(b.base)}`);
-    if (b.text?.length === 1) out.push(`    全文: ${yamlScalar(b.text[0])}`);
-    else if (b.text?.length) {
-      out.push('    全文:');
-      for (const x of b.text) out.push(`      - ${yamlScalar(x)}`);
-    }
-    if (b.questions) out.push(`    题: ${yamlScalar(b.questions)}`);
+    if (b.pages) out.push(`    页集: ${yamlScalar(b.pages)}`);
     if (b.drawn) out.push(`    你画的: ${yamlScalar(b.drawn)}`);
     out.push(`    开放: ${yamlScalar(b.ops.length ? b.ops.join('、') : '无')}`);
     if (b.did.length) {
@@ -134,6 +129,8 @@ export function renderContextPack(pack: ContextPack): string {
     const tag = n.role === 'rules' ? 'cotutor-rules' : n.role === 'boardGuide' ? 'cotutor-board' : n.role === 'activityGuide' ? 'cotutor-activity' : 'vault-note';
     out.push(shipped ? `<${tag} path=${JSON.stringify(n.path)}>` : `<${tag} role="${n.role}" path=${JSON.stringify(n.path)}>`, n.text.replace(/\s+$/, ''), `</${tag}>`);
   }
+  // 页上印的字:第一次看到那一页时给一次
+  for (const n of p.pageNotes ?? []) out.push(`<page id=${JSON.stringify(n.id)} name=${JSON.stringify(n.name)}>`, ...n.text, '</page>');
   return out.join('\n');
 }
 

@@ -1,7 +1,7 @@
 /**
- * 以板为主的 activity(头上 board: page;《画板为主设计》)服务端那一半:
- * 话题第一条记 board: page;板的日志(点字一件一行、哪一轮交给了老师);每一轮上下文包的 board: 段(底、全文只给一次、孩子做的合并、最近点的);
- * 板书落到板上之前替老师把住的(照片板不写图就是这块底、一节只上一张板卡)。看图与老师都是假的,不花钱、不联网。
+ * 铺孩子拍的照片的一节课(activity 头上 base: photo;2026-11-16 阶段 3)服务端那一半:
+ * 上传回照片的宽高;话题第一条记 base: photo;照片接在照片页后面(没拍就是白纸页);认出的字一张一条 <page>(第一次给,之后不重给);
+ * 讲稿里的动作照认出的题、字落到页上;孩子点字、落笔经实时那条连接落进这节课的状态和板的日志;board: 每轮只说会变的。看图与老师都是假的,不花钱、不联网。
  */
 import { mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -17,98 +17,27 @@ process.env.HOME = home;
 writeKeys(home, { payg: 'sk-t' });
 delete process.env.COTUTOR_WORKSPACE;
 
-const { slateOf, drawnLine, SLATE_MAX } = await import('../src/runtime/context/board-pack.ts');
-const { renderContextPack } = await import('../src/runtime/context/context-pack.ts');
-const { boardPageSection } = await import('../src/board/board-page.ts');
-const { parseActivity, checkActivity } = await import('../src/runtime/activity.ts');
+const { imageSize } = await import('../src/shared/jpeg.ts');
 const { readBoard } = await import('../src/runtime/journal/board-log.ts');
 const { initWorkspace } = await import('../src/app/cli/init.ts');
 const { loadWorkspace } = await import('../src/app/workspace.ts');
 const { createContext, route } = await import('../src/app/http/app.ts');
-type BoardEvent = import('../src/schema/index.ts').BoardEvent;
+const { lessonPage, lessonStrip } = await import('../src/board/lesson.ts');
 type BoardSection = import('../src/schema/index.ts').BoardSection;
+type Lesson = import('../src/schema/index.ts').Lesson;
 type Look = import('../src/scenes/look.ts').Look;
 
-// ---- board: 段怎么算(纯函数) ----
-{
-  const T = Date.parse('2026-11-13T11:05:30Z');
-  const at = (s: number): string => new Date(T - s * 1000).toISOString();
-  const words = { state: 'done' as const, lesson: '我是什么', full: ['我会变。太阳一晒,我就变成汽。', '我在池子里睡觉。'] };
-  const ev: BoardEvent[] = [
-    { at: at(60), k: 'turn', job: '1905-1' },
-    { at: at(20), k: 'pick', text: '傍', base: 'captures/a.jpg' },
-    { at: at(15), k: 'pick', text: '晒', base: 'captures/a.jpg' },
-    { at: at(4), k: 'pick', text: '傍', base: 'captures/a.jpg' },
-    { at: at(3), k: 'pick', text: '旧', base: 'captures/old.jpg' },
-  ];
-  const s1 = slateOf({ photo: 'captures/a.jpg', fresh: false, words, events: ev, kit: null, ops: ['点字'], now: T });
-  check('底带上认出的课名;全文第一次给全、记下 told', s1.slate.base === 'captures/a.jpg(《我是什么》)' && s1.slate.text?.length === 2 && s1.told === 'captures/a.jpg', JSON.stringify(s1));
-  check('孩子做的:上一轮以后点的,合并成一句(几次写上),别的底上的不算', JSON.stringify(s1.slate.did) === '["点开看了笔顺:傍(2 次)、晒"]', JSON.stringify(s1.slate.did));
-  check('最近点的:这块底上最后点的那一项,几秒前', s1.slate.recent === '傍(4 秒前)', s1.slate.recent);
-  check('老师还没画:开放的是应用给的(点字),没有「你画的」', s1.slate.ops.join() === '点字' && s1.slate.drawn === undefined);
-  const s2 = slateOf({ photo: 'captures/a.jpg', fresh: false, words, events: [...ev, { at: at(2), k: 'turn', job: '1905-3', told: 'captures/a.jpg' }], kit: { kit: '照片', params: { 图: 'captures/a.jpg', 圈: '412 300 470 330', 写: '' }, ops: ['点字', '圈'] }, ops: ['点字'], now: T + 40_000 });
-  check('给过全文的底:写「未变」;上一轮以后没做事就没有「孩子做的」;30 秒前的不算最近', JSON.stringify(s2.slate.text) === '["未变"]' && !s2.told && s2.slate.did.length === 0 && s2.slate.recent === undefined, JSON.stringify(s2));
-  check('你画的:画法加写了的参数(图就是底,不重复);开放的照那张板卡', s2.slate.drawn === '照片:圈 412 300 470 330' && s2.slate.ops.join() === '点字,圈');
-  check('这一轮刚发的照片:全文不写(图随这一轮附上);还在认写「还在认」', slateOf({ photo: 'captures/a.jpg', fresh: true, words, events: [], kit: null, ops: [], now: T }).slate.text === undefined && JSON.stringify(slateOf({ photo: 'captures/a.jpg', fresh: false, words: { ...words, state: 'running' }, events: [], kit: null, ops: [], now: T }).slate.text) === '["还在认"]');
-  const rv = slateOf({ photo: 'captures/a.jpg', fresh: false, words, events: [...ev, { at: at(1), k: 'reveal', text: '晒', base: 'captures/a.jpg' }], kit: { kit: '照片', params: { 遮: '晒|1 2 3 4;极|5 6 7 8' }, ops: ['点字'] }, ops: [], now: T });
-  check('遮了拼音:孩子做的里两份清单(揭了哪些、没揭哪些);你画的只说遮了哪几个字', rv.slate.did.includes('揭开了拼音:晒;没揭:极') && rv.slate.drawn === '照片:遮 晒、极', JSON.stringify(rv.slate));
-  const qs = slateOf({ photo: 'captures/a.jpg', fresh: false, words: { ...words, questions: ['1', '2', '3'] }, events: [], kit: { kit: '照片', params: { 框: '第2题|40 310 960 600' }, ops: ['圈'] }, ops: [], now: T });
-  check('作业照片认出了题:board: 里列出题号;你画的说裁的是第几题', qs.slate.questions === '第1题、第2题、第3题(框写题号就裁出那一道)' && qs.slate.drawn === '照片:框 第2题', JSON.stringify(qs.slate));
-  check('白板:底写「白板」', slateOf({ photo: null, fresh: false, words: null, events: [], kit: null, ops: [], now: T }).slate.base === '白板');
-  const long = slateOf({ photo: 'captures/a.jpg', fresh: false, words: { ...words, full: Array.from({ length: 40 }, (_, i) => `第${i}行课文课文课文课文课文课文`) }, events: [], kit: null, ops: [], now: T });
-  check(`全文太长先截:整段不过 ${SLATE_MAX} 字,截掉的说一句`, JSON.stringify(long.slate).length <= SLATE_MAX + 40 && /后面还有 \d+ 行/.test(long.slate.text!.slice(-1)[0]), String(JSON.stringify(long.slate).length));
-  check('写在照片下面的字说成那一行', drawnLine({ kit: '照片', params: { 图: 'a.jpg', 写: '傍晚|' }, ops: [] }) === '照片:写 傍晚' && drawnLine({ kit: '白板', params: { 写: '' }, ops: [] }) === '白板');
-  const pack = renderContextPack({ at: '2026-11-13T19:05', plan: [], recent: [], slate: s1.slate });
-  check('上下文包里是 board: 一段,中文的键,全文一行一项', pack.includes('\n  board:\n    底: "captures/a.jpg(《我是什么》)"\n    全文:\n      - "我会变。') && pack.includes('\n    开放: "点字"\n    孩子做的:\n      - "点开看了笔顺:傍(2 次)、晒"\n    最近点的: "傍(4 秒前)"'), pack);
-  check('board: off 的老师不带', !renderContextPack({ at: 'x', plan: [], recent: [], board: 'off', slate: s1.slate }).includes('底:'));
-}
+/** 一张最小的 jpeg:只有文件头和 SOF0(宽高),够认出大小;h × w */
+const jpeg = (w: number, h: number): Buffer => Buffer.from([0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, h >> 8, h & 255, w >> 8, w & 255, 0x03, 1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1, 0xff, 0xd9]);
+check('照片的宽高只读文件头:jpeg 的 SOF、png 的 IHDR;不是图回 null', JSON.stringify(imageSize(jpeg(2000, 1500))) === '{"w":2000,"h":1500}' && JSON.stringify(imageSize(Buffer.from('89504e470d0a1a0a0000000d4948445200000320000002580806000000', 'hex'))) === '{"w":800,"h":600}' && imageSize(Buffer.from('hello')) === null && imageSize(Buffer.from('ffd8ffd9', 'hex')) === null);
 
-// ---- 板书落到板上之前:照片板补上底、一节只上一张板卡 ----
+// ---- 全流程:点「预习」(base: photo)拍了照 → 照片页、board:、<page> → 动作落到认出的题 → 点字、落笔 → 下一轮 ----
 {
-  const line = (text: string, anchor: number | null, card?: number): BoardSection['lines'][number] => ({ text, audio: null, marks: card === undefined ? [] : [{ card, phrase: 'x' }], ask: false, anchor, cues: [] });
-  const sec: BoardSection = {
-    cards: [
-      { kind: 'text', props: { text: '傍晚' } },
-      { kind: 'kit', props: { kit: '照片', params: { 图: '' }, ops: ['点字'] } },
-      { kind: 'kit', props: { kit: '白板', params: { 写: '傍晚' }, ops: ['圈'] } },
-    ],
-    lines: [line('a', 0, 0), line('b', 1), line('c', 2, 2)],
-  };
-  const page = boardPageSection(sec, { page: true, photo: 'captures/a.jpg' });
-  check('以板为主:一节只认最后一张板卡,别的撤掉;讲稿里的锚与敲黑板跟着重排', page.section.cards.length === 1 && page.section.cards[0].props.kit === '白板' && page.dropped.length === 2 && JSON.stringify(page.section.lines.map((l) => [l.anchor, l.marks.map((m) => m.card)])) === '[[null,[]],[null,[]],[0,[0]]]', JSON.stringify(page.section.lines));
-  const free = boardPageSection(sec, { page: false, photo: 'captures/a.jpg' });
-  check('不是以板为主:卡都在;照片板没写图,补上这块底', free.section.cards.length === 3 && (free.section.cards[1].props.params as Record<string, string>)['图'] === 'captures/a.jpg' && free.dropped.length === 0);
-  const none = boardPageSection(sec, { page: false, photo: null });
-  check('还没有底的照片板画不出来:撤掉', none.section.cards.length === 2 && none.dropped[0].props.kit === '照片');
-  const ringSec: BoardSection = { cards: [{ kind: 'kit', props: { kit: '照片', params: { 图: '', 圈: '蚕|;飞|;10 10 50 50' }, ops: ['点字'] } }], lines: [] };
-  const located = boardPageSection(ringSec, { page: true, photo: 'captures/a.jpg', locate: (t) => (t === '蚕' ? [236, 500, 280, 525] : null) });
-  check('照片板圈的字词:照认出的字换成框;找不到的那一处拿掉、说一声', (located.section.cards[0].props.params as Record<string, string>)['圈'] === '蚕|236 500 280 525;10 10 50 50' && located.unfound.join() === '飞', JSON.stringify([located.section.cards[0].props.params, located.unfound]));
-  const coverSec: BoardSection = { cards: [{ kind: 'kit', props: { kit: '照片', params: { 图: '', 遮: '晒|;极|' }, ops: ['点字'] } }], lines: [] };
-  check('遮的字词同样照认出的字换成框', (boardPageSection(coverSec, { page: true, photo: 'captures/a.jpg', locate: (t) => (t === '晒' ? [1, 2, 30, 40] : [50, 2, 80, 40]) }).section.cards[0].props.params as Record<string, string>)['遮'] === '晒|1 2 30 40;极|50 2 80 40');
-  const qSec: BoardSection = { cards: [{ kind: 'kit', props: { kit: '照片', params: { 图: '', 框: '第2题|' }, ops: ['圈'] } }], lines: [] };
-  const qFit = boardPageSection(qSec, { page: true, photo: 'captures/a.jpg', question: (n) => (n === '2' ? [40, 310, 960, 600] : null) });
-  const qMiss = boardPageSection({ cards: [{ kind: 'kit', props: { kit: '照片', params: { 图: '', 框: '第9题|' }, ops: ['圈'] } }], lines: [] }, { page: true, photo: 'captures/a.jpg', question: () => null });
-  check('框写题号:照认出的题换成那一道的框;找不到就是整张、说一声', (qFit.section.cards[0].props.params as Record<string, string>)['框'] === '第2题|40 310 960 600' && (qMiss.section.cards[0].props.params as Record<string, string>)['框'] === '' && qMiss.unfound.join() === '第9题');
-  check('还没认出字(没有 locate):字词那几处不画', (boardPageSection(ringSec, { page: true, photo: 'captures/a.jpg' }).section.cards[0].props.params as Record<string, string>)['圈'] === '10 10 50 50');
-  check('没什么要改的:原样回', boardPageSection({ cards: [sec.cards[0]], lines: [] }, { page: false, photo: null }).section.cards[0] === sec.cards[0]);
-}
-
-// ---- activity 头上的 board ----
-{
-  const file = (head: string): string => `---\nname: 试\ndescription: 试\n${head}\n---\n\n## 老师怎么带\n\n你是老师。\n第一句: 好。\n收: 好。\n`;
-  const issues = (head: string): string[] => checkActivity(parseActivity(file(head)).activity).filter((i) => i.level === 'fix').map((i) => i.text);
-  check('board: page 读得出', parseActivity(file('board: page\ncards: kit')).activity.board === 'page' && !issues('board: page\ncards: kit').length, JSON.stringify(issues('board: page\ncards: kit')));
-  check('board 写了不认得的、没有 kit、和 page 一起写:都要改', issues('board: 板\ncards: kit').some((t) => t.includes('不认得')) && issues('board: page\ncards: text').some((t) => t.includes('要有 kit')) && issues('board: page\npage: dictation\ncards: kit').some((t) => t.includes('只能写一个')));
-}
-
-// ---- 全流程:点「预习」拍了照 → 话题以板为主、board: 段 → 点字记进日志、嘴要念的 → 下一轮老师看到他点了什么 ----
-{
-  const JPG = Buffer.from('ffd8ffe000104a46494600010100000100010000ffd9', 'hex');
   const LINES = [
-    '{"lesson": "我是什么"}',
+    '{"lesson": "安全疏散示意图"}',
     '{"text": "变", "kind": "char", "pick": true, "box": [237, 233, 281, 267], "sure": true, "say": "变,变化的变"}',
-    '{"text": "晒", "kind": "read", "pick": false, "box": [323, 102, 360, 125], "sure": true, "say": "晒,晒太阳"}',
-    '{"full": "我会变。太阳一晒,我就变成汽。", "box": [216, 202, 912, 228]}',
+    '{"full": "3.心理辅导室的东面有(  )和(  )。", "box": [100, 600, 700, 640]}',
+    '{"question": "3", "box": [80, 560, 920, 900]}',
   ];
   const look: Look = async (o) => { o.onDelta?.(`${LINES.join('\n')}\n`); return { ok: true, text: LINES.join('\n'), ms: 5 }; };
   const teacher = await startFakeTeacher();
@@ -119,61 +48,80 @@ type Look = import('../src/scenes/look.ts').Look;
   cfg.runtimes = { ...FAKE_RUNTIMES };
   for (const t of Object.values(cfg.tutors)) delete t.runtime;
   writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
-  // 拍照的以板为主(出厂的语文预习 2026-11-14 改成了课本做底,见 tests/board-book.test.ts)
   pinPhotoPreview(root);
-  let now = new Date(2026, 10, 13, 19, 5);
+  let now = new Date(2026, 10, 16, 19, 5);
   const ctx = createContext(loadWorkspace(root), { now: () => now, look });
   const T = 'chinese-tutor';
-  const date = '2026-11-13';
+  const date = '2026-11-16';
   const wait = async (): Promise<void> => { for (let i = 0; i < 200 && ctx.runner.running(T); i++) await new Promise((r) => setTimeout(r, 25)); await ctx.runner.flush(); };
   const promptOf = (job: string): string => (JSON.parse(readFileSync(join(root, 'conversations', T, `${date}.${job}.run.json`), 'utf8')) as { prompt: string }).prompt;
-  const index = (): { messages: { job: string; board?: string; section?: BoardSection; warnings?: string[] }[] } => JSON.parse(readFileSync(join(root, 'conversations', T, `${date}.json`), 'utf8'));
+  const index = (): { messages: { job: string; base?: string; section?: BoardSection; warnings?: string[] }[] } => JSON.parse(readFileSync(join(root, 'conversations', T, `${date}.json`), 'utf8'));
+  const lesson = async (thread: string): Promise<Lesson | null> => ((await route('GET', `/api/kid/lesson?tutor=${T}&date=${date}&thread=${thread}`, ctx)).json as { lesson: Lesson | null }).lesson;
+  const history = (thread: string): { user: { images: string[]; boards?: string[] } }[] => readFileSync(join(root, 'conversations', T, `${date}.${thread}.brain.jsonl`), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
 
-  const h = (await route('GET', '/api/kid/home', ctx)).json as { home: string | null; cards: { kind: string; props: { tutor?: string; tiles?: { id: string; board?: string }[] } }[] };
+  const h = (await route('GET', '/api/kid/home', ctx)).json as { home: string | null; cards: { kind: string; props: { tutor?: string; tiles?: { id: string; base?: string }[] } }[] };
   const tile = h.cards.find((c) => c.props.tutor === T)?.props.tiles?.find((x) => x.id === 'preview');
-  check('首页的「预习」方砖说它以板为主(孩子端点了先到拍照屏)', tile?.board === 'page', JSON.stringify(tile));
-  const p1 = ((await route('POST', `/api/kid/conversations/${T}/photos`, ctx, { image: `data:image/jpeg;base64,${JPG.toString('base64')}` })).json as { path: string }).path;
+  check('首页的「预习」方砖说它铺孩子拍的照片(孩子端点了先到拍照屏)', tile?.base === 'photo', JSON.stringify(tile));
+  const up = (await route('POST', `/api/kid/conversations/${T}/photos`, ctx, { image: `data:image/jpeg;base64,${jpeg(2000, 1500).toString('base64')}` })).json as { path: string; w: number; h: number };
+  check('上传照片:回路径和宽高(孩子端照它先铺上照片页)', up.path.startsWith('captures/') && up.w === 2000 && up.h === 1500, JSON.stringify(up));
+  const p1 = up.path;
   const first = await kidSend(ctx, T, { text: '', via: { home: h.home, button: 'preview' }, photos: [p1] });
   await wait();
   const job1 = String(first.json.job);
   const thread = String(first.json.thread);
   const m1 = index().messages.find((m) => m.job === job1);
-  check('点方砖带着照片进来:话题第一条记 board: page', first.status === 202 && m1?.board === 'page', JSON.stringify(first));
+  const l1 = await lesson(thread);
+  const pg1 = l1 ? lessonPage(l1) : null;
+  check('点方砖带着照片进来:话题第一条记 base: photo;照片铺上照片页(宽高照文件)、窗移到它', first.status === 202 && m1?.base === 'photo' && l1?.at === '作业' && pg1?.kind === 'photo' && pg1.photos[0].src === p1 && pg1.photos[0].w === 2000 && pg1.pick === true && l1.look?.label === '第1张', JSON.stringify(l1));
   const pr1 = promptOf(job1);
-  check('第一轮的 board::底是这张、点字开着;全文还没认(照片随这一轮附上)', pr1.includes(`\n  board:\n    底: "${p1}"\n    开放: "点字"\n`) && !pr1.includes('全文'), pr1.slice(pr1.indexOf('board:'), pr1.indexOf('board:') + 120));
-  check('假老师看图回了照片板:以板为主只上这一张', (m1?.section?.cards.length ?? 0) === 1 && m1?.section?.cards[0].kind === 'kit', JSON.stringify(m1));
+  check('第一轮的 board::底是作业照片、字还在认(图附在这一轮);点字开着;照片不进 photos:', pr1.includes('底: "孩子拍的作业照片 1 张(从上往下连着);第 1 张刚拍来、图附在这一轮,字还在认"') && pr1.includes('开放: "点字"') && !pr1.includes('\n  photos:') && !pr1.includes('<page '), pr1.slice(pr1.indexOf('board:'), pr1.indexOf('board:') + 200));
+  check('第一轮:整张照片随这一轮附给老师(一条路)', history(thread)[0].user.images.some((x) => x.endsWith(p1.split('/').pop()!)), JSON.stringify(history(thread)[0].user));
 
-  // 点字:记进日志,回嘴要念的
-  now = new Date(2026, 10, 13, 19, 6);
-  const say1 = await ctx.runner.boardEvent(T, date, { k: 'pick', thread, text: '晒', base: p1 });
-  const say2 = await ctx.runner.boardEvent(T, date, { k: 'pick', thread, text: '晒', base: p1 });
-  const say3 = await ctx.runner.boardEvent(T, date, { k: 'pick', thread, text: '我', base: p1 });
-  check('点字:嘴念认字时写好的念法;正文里没挑出来的字念它自己', say1?.say === '晒,晒太阳' && say2?.thread === thread && say3?.say === '我', JSON.stringify([say1, say3]));
+  // 点字、落笔:实时那条连接报来,base 是页的 id
+  now = new Date(2026, 10, 16, 19, 6);
+  const say1 = await ctx.runner.boardEvent(T, date, { k: 'pick', thread, text: '变', base: '作业' });
+  const say2 = await ctx.runner.boardEvent(T, date, { k: 'pick', thread, text: '我', base: '作业' });
+  const ink = await ctx.runner.boardEvent(T, date, { k: 'stroke', thread, base: '作业', pts: [[300, 480], [340, 470]] });
+  check('点字:嘴念认字时写好的念法;正文里没挑出来的字念它自己;落笔不念不催', say1?.say === '变,变化的变' && say2?.say === '我' && ink?.say === null && ink.still === false, JSON.stringify([say1, say2, ink]));
   const bad = [
-    await ctx.runner.boardEvent(T, date, { k: 'pick', thread: '1111-1', text: '晒', base: p1 }),
-    await ctx.runner.boardEvent(T, date, { k: 'pick', thread, text: '123', base: p1 }),
-    await ctx.runner.boardEvent(T, date, { k: 'pick', thread, text: '晒', base: 'cotutor.json' }),
-    await ctx.runner.boardEvent(T, date, { k: 'drag', thread }),
+    await ctx.runner.boardEvent(T, date, { k: 'pick', thread: '1111-1', text: '变', base: '作业' }),
+    await ctx.runner.boardEvent(T, date, { k: 'pick', thread, text: '123', base: '作业' }),
+    await ctx.runner.boardEvent(T, date, { k: 'pick', thread, text: '变', base: p1 }),
+    await ctx.runner.boardEvent(T, date, { k: 'drag', thread, base: '作业' }),
   ];
-  check('不对的不记:不是今天的话题、不是汉字、底不在 captures/、不认得的事', bad.every((x) => x === null));
+  check('不对的不记:不是今天的话题、不能弹的字、不是现在这一页、不认得的事', bad.every((x) => x === null));
   const log1 = await readBoard(loadWorkspace(root), T, date, thread);
-  check('板的日志:第一轮交给老师一行,三下点字各一行', log1.map((e) => e.k).join() === 'turn,pick,pick,pick', JSON.stringify(log1));
+  check('板的日志:第一轮一行,两下点字、一笔各一行', log1.map((e) => e.k).join() === 'turn,pick,pick,ink', JSON.stringify(log1));
 
-  // 第二轮:孩子说「这个是什么意思」
-  now = new Date(2026, 10, 13, 19, 6, 5);
-  const second = await kidSend(ctx, T, { text: '这个是什么意思', thread });
+  // 第二轮:字认完了,这一张的字给一条 <page>;老师写动作,照认出的题、字落到页上
+  now = new Date(2026, 10, 16, 19, 6, 5);
+  const second = await kidSend(ctx, T, { text: '讲题吧', thread });
   await wait();
-  const pr2 = promptOf(String(second.json.job));
-  check('第二轮的 board::课名、全文给全、他点了什么(合并)、最近点的', pr2.includes('底: "' + p1 + '(《我是什么》)"') && pr2.includes('全文: "我会变。太阳一晒,我就变成汽。"') && pr2.includes('点开看了笔顺:晒(2 次)、我') && pr2.includes('最近点的: "我(5 秒前)"'), pr2.slice(pr2.indexOf('board:'), pr2.indexOf('board:') + 260));
-  // 第三轮:全文未变;没点就没有「孩子做的」
-  now = new Date(2026, 10, 13, 19, 8);
-  const third = await kidSend(ctx, T, { text: '好的', thread });
+  const job2 = String(second.json.job);
+  const pr2 = promptOf(job2);
+  check('第二轮:这一张认出的字给一条 <page>(有题号的行带题号);他点了什么、写画了几笔、最近点的', pr2.includes(`<page id="作业#${p1}" name="第1张">\n第3题 3.心理辅导室的东面有()和()。\n</page>`) && pr2.includes('点开看了笔顺:变、我') && pr2.includes('在页上写画了 1 笔') && pr2.includes('最近点的: "我(5 秒前)"'), pr2);
+  const s2 = index().messages.find((m) => m.job === job2)?.section;
+  const l2 = await lesson(thread);
+  check('动作落到页上:看第 3 题是认出的题框、圈照认出的行找到、请圈', s2?.lines[0].acts?.map((a) => a.do?.k).join() === '看,圈' && s2.lines[1].acts?.[0].do?.k === '请' && l2?.look?.label === '第3题' && JSON.stringify(l2.look.box) === '[80,420,920,675]' && lessonPage(l2!)!.teacher.marks[0]?.text === '心理辅导室' && lessonPage(l2!)!.open.join() === '圈', JSON.stringify(l2));
+  // 第三轮:字不重给;再拍一张接在后面
+  now = new Date(2026, 10, 16, 19, 8);
+  const p2 = ((await route('POST', `/api/kid/conversations/${T}/photos`, ctx, { image: `data:image/jpeg;base64,${jpeg(1000, 1000).toString('base64')}` })).json as { path: string }).path;
+  const third = await kidSend(ctx, T, { text: '还有一张', thread, photos: [p2] });
   await wait();
   const pr3 = promptOf(String(third.json.job));
-  check('第三轮:全文写「未变」,上一轮以后没点就不写孩子做的、最近点的', pr3.includes('全文: "未变"') && !pr3.includes('孩子做的') && !pr3.includes('最近点的'), pr3.slice(pr3.indexOf('board:'), pr3.indexOf('board:') + 200));
-  const log3 = await readBoard(loadWorkspace(root), T, date, thread);
-  check('给过全文的那一轮在日志里记了 told', log3.filter((e) => e.k === 'turn').length === 3 && log3.some((e) => e.k === 'turn' && e.told === p1));
+  const l3 = await lesson(thread);
+  check('第三轮:给过的那一张不重给;新拍的接在后面(两张),窗移到第 2 张', !pr3.includes(`<page id="作业#${p1}"`) && pr3.includes('孩子拍的作业照片 2 张(从上往下连着,第 1–2 张)') && (lessonPage(l3!) as { photos: unknown[] }).photos.length === 2 && l3?.look?.label === '第2张', pr3.slice(pr3.indexOf('board:'), pr3.indexOf('board:') + 200));
+  const told = (await readBoard(loadWorkspace(root), T, date, thread)).filter((e) => e.k === 'turn').map((e) => (e.k === 'turn' ? [e.told].flat().filter(Boolean).join() : ''));
+  check('给过哪一张的字记在那一轮的 told 里', told[1] === `作业#${p1}` && told[0] === '' && told[2] === '', JSON.stringify(told));
 
+  // 没拍:白纸页
+  now = new Date(2026, 10, 16, 19, 20);
+  const blank = await kidSend(ctx, T, { text: '预习', via: { home: h.home, button: 'preview' } });
+  await wait();
+  const lb = await lesson(String(blank.json.thread));
+  check('不拍就开始:铺一张白纸页;底说白纸', lb?.at === '白纸' && lessonPage(lb!)?.kind === 'white' && promptOf(String(blank.json.job)).includes('底: "白纸(老师摆、写的都在上面)"') && !lessonStrip(lb!), JSON.stringify(lb));
+
+  const JPG = jpeg(10, 10);
   // 课本页:vault 里教材旁边同名文件夹里的图;只列这位老师学科的册子;选了拷进 captures/
   {
     const wsx = loadWorkspace(root);
@@ -194,13 +142,13 @@ type Look = import('../src/scenes/look.ts').Look;
     check('越界的路径、不是图、没这位老师:404', bad.every((r) => r.status === 404));
   }
 
-  // 别的话题:没有 board
+  // 别的话题:没有 base
   const { chatStart, writeChat } = await import('./_chat.ts');
   writeChat(root, [T]);
   const free = await chatStart(ctx, T, { text: '你好' });
   await wait();
-  check('不从以板为主的 activity 进来的话题:不记 board、上下文包没有 board:', !index().messages.find((m) => m.job === free.json.job)?.board && !promptOf(String(free.json.job)).includes('\n  board:'));
-  check('点字只认以板为主的话题', (await ctx.runner.boardEvent(T, date, { k: 'pick', thread: String(free.json.thread), text: '晒', base: p1 })) === null);
+  check('不从铺页的 activity 进来的话题:不记 base、上下文包没有 board:', !index().messages.find((m) => m.job === free.json.job)?.base && !promptOf(String(free.json.job)).includes('\n  board:'));
+  check('点字只认一节课的话题', (await ctx.runner.boardEvent(T, date, { k: 'pick', thread: String(free.json.thread), text: '变', base: '作业' })) === null);
   await teacher.close();
 }
 

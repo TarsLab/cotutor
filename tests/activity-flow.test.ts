@@ -193,7 +193,7 @@ try {
     check('eval:每轮照实时写(真孩子都是实时的:消息记 live)', evalMsgs.every((m) => m.live === true), JSON.stringify(evalMsgs.map((m) => m.live)));
     check('eval:每轮回调', lines[0] === '写死的#1:1:练词' && lines.includes('写死的#1:2:整段'), lines.join(' '));
     check('eval:落在 evals/,不进孩子的对话;报告写了', readFileSync(join(root, r.file), 'utf8').includes('"activity": "练词"') && !(await readIndex(ctx.ws, 'chinese-tutor', DATE)).messages.some((m) => m.thread === a.runs[0].thread && m.text === '整段' && m.job === a.runs[0].thread));
-    writeFileSync(exFile, '---\nactivity: 练词\n---\n\n## 记\n孩子: 记住它\n最多轮: 2\n判:\n- 不出教具卡\n');
+    writeFileSync(exFile, '---\nactivity: 练词\n---\n\n## 记\n孩子: 记住它\n最多轮: 2\n判:\n- 不在页上讲\n');
     const vaultBefore = JSON.stringify(readdirSync(join(root, 'vault'), { recursive: true }));
     const rm = await evalActivity(ctx.ws, 'chinese-tutor', '练词', { runs: 1, kid });
     const memMsg = (await readIndex({ ...ctx.ws, dirs: { ...ctx.ws.dirs, conversations: join(root, 'evals') } }, 'chinese-tutor', rm.examples[0].runs[0].date)).messages.find((m) => m.thread === rm.examples[0].runs[0].thread && m.text === '记住它');

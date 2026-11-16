@@ -76,7 +76,7 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   check('填了词:那段在', quiz.includes('### 用上这周的词') && quiz.includes('第 1 步之后') && !quiz.includes('{{'));
   check('空列表、空字符串算没填', !(renderTutorSection(a, { params: { 词: [] }, cards }) ?? '').includes('用上这周的词') && !(renderTutorSection(a, { params: { 词: ' ' }, cards }) ?? '').includes('用上这周的词'));
   check('卡也能当裁段的名字', renderTutorSection({ ...a, tutor: { text: '甲\n{{有 photo}}\n乙\n{{/有}}', line: 1 } }, { cards: ['photo'] }) === '甲\n乙' && renderTutorSection({ ...a, tutor: { text: '甲\n{{有 photo}}\n乙\n{{/有}}', line: 1 } }, { cards: ['text'] }) === '甲');
-  check('activity 的卡并上老师的,text 总在', activityCards(a, ['read']).join(' ') === 'text read photo' && activityCards(a).length >= 10);
+  check('activity 的卡并上老师的,text 总在', activityCards(a, ['read']).join(' ') === 'text read photo' && activityCards(a).length >= 9);
 
   // 插槽
   const filled = fillSlots(reader!.prompt, { 格式: '一行一个词。' });
@@ -156,20 +156,16 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   ];
   check('判:每节有讲稿拒绝只出卡、空白和空轮次', gradeRun(['每节有讲稿'], turns)[0].pass && !gradeRun(['每节有讲稿'], [{ kid: 'x', section: sec([], [story]) }])[0].pass && !gradeRun(['每节有讲稿'], [{ kid: 'x', section: sec(['  ']) }])[0].pass && !gradeRun(['每节有讲稿'], [{ kid: 'x', section: null }])[0].pass && !gradeRun(['每节有讲稿'], [])[0].pass);
   {
-    const kitSec = (lines: string[], ops?: string[]) => sec(lines, ops ? [{ kind: 'kit', props: { kit: '照片', params: {}, ops } }] : []);
-    const ok1 = [{ kid: 'a', section: kitSec(['哪个字不认识,就点一点它。'], ['点字']) }, { kid: 'b', section: kitSec(['你把傍晚圈出来。']) }];
-    const r1 = gradeRun(['请动手就开放'], ok1)[0];
-    check('判:请动手就开放——末句请他动手,板上(这一轮的板卡,没出就沿用上一张)要开放那个操作', !r1.pass && r1.why === '第 2 轮请他圈,板上开放的是点' && gradeRun(['请动手就开放'], [ok1[0], { kid: 'b', section: kitSec(['你把傍晚圈出来。'], ['点字', '圈']) }])[0].pass && gradeRun(['请动手就开放'], [{ kid: 'c', section: kitSec(['你读一读。']) }])[0].pass, JSON.stringify(r1));
-  }
-  {
-    // 讲稿里的动作:[[请 …]] 就是开放;[[摆 …]] 算出了教具;问了带动作就算上板
+    // 讲稿里的动作:[[请 …]] 就是开放(没写沿用上一次);[[摆 …]] 算摆了图形;问了带动作就算上页
     const actSec = (lines: [string, { name: string; arg: string }[]][]): BoardSection => ({ cards: [], lines: lines.map(([text, acts]) => ({ text, audio: null, marks: [], ask: /[??]$/.test(text), anchor: null, cues: [], ...(acts.length ? { acts } : {}) })) } as unknown as BoardSection);
+    const ok1 = [{ kid: 'a', section: actSec([['哪个字不认识,就点一点它。', [{ name: '请', arg: '点' }]]]) }, { kid: 'b', section: actSec([['你把傍晚圈出来。', []]]) }];
+    const r1 = gradeRun(['请动手就开放'], ok1)[0];
+    check('判:请动手就开放——末句请他动手,页上(这一轮的 [[请 …]],没写就沿用上一次)要开放那个操作', !r1.pass && r1.why === '第 2 轮请他圈,页上开放的是点' && gradeRun(['请动手就开放'], [ok1[0], { kid: 'b', section: actSec([['你把傍晚圈出来。', [{ name: '请', arg: '点、圈' }]]]) }])[0].pass && gradeRun(['请动手就开放'], [{ kid: 'c', section: actSec([['你读一读。', []]]) }])[0].pass, JSON.stringify(r1));
     const asked = [{ kid: 'a', section: actSec([['你把 6 个圈成一串。', [{ name: '摆', arg: '点阵 6 行 6 个' }, { name: '请', arg: '圈' }]]]) }];
-    check('判:动作——请就是开放、摆算出教具、带动作的问算上板', gradeRun(['请动手就开放'], asked)[0].pass && !gradeRun(['请动手就开放'], [{ kid: 'a', section: actSec([['你圈一圈。', [{ name: '请', arg: '写' }]]]) }])[0].pass && gradeRun(['出教具卡: 点阵'], asked)[0].pass && !gradeRun(['出教具卡: 方向盘'], asked)[0].pass && gradeRun(['出教具卡: 课本'], [{ kid: 'a', section: actSec([['看例 4。', [{ name: '看', arg: '例 4' }]]]) }])[0].pass && !gradeRun(['不出教具卡'], asked)[0].pass && gradeRun(['问就上板'], [{ kid: 'a', section: actSec([['一共几个?', [{ name: '看', arg: '例 4' }]]]) }])[0].pass);
+    check('判:摆图形(写了名字就要是那一种)、在页上讲、不在页上讲', gradeRun(['请动手就开放'], asked)[0].pass && gradeRun(['摆图形'], asked)[0].pass && gradeRun(['摆图形: 点阵'], asked)[0].pass && !gradeRun(['摆图形: 方向盘'], asked)[0].pass && gradeRun(['在页上讲'], [{ kid: 'a', section: actSec([['看例 4。', [{ name: '看', arg: '例 4' }]]]) }])[0].pass && !gradeRun(['在页上讲'], asked)[0].pass && !gradeRun(['不在页上讲'], asked)[0].pass && gradeRun(['不在页上讲'], [{ kid: 'x', section: sec(['都对了。'], []) }])[0].pass);
+    check('判:问就上页(只用嘴问的那一轮不过;带动作的、请拍照的、没问的都过)', !gradeRun(['问就上页'], [{ kid: 'x', section: sec(['小箭头朝哪个方向?'], []) }])[0].pass && gradeRun(['问就上页'], [{ kid: 'x', section: sec(['拍给我看看,好吗?'], [{ kind: 'photo', props: {} }]) }, { kid: 'y', section: actSec([['东面有哪两间?圈出来。', [{ name: '请', arg: '圈' }]]]) }, { kid: 'z', section: sec(['都对了。'], []) }])[0].pass);
+    check('判:卡上有也看动作的参数([[写 …]])', gradeRun(['卡上有: 17'], [{ kid: 'x', section: actSec([['你看。', [{ name: '写', arg: '17 + 3 = 20' }]]]) }])[0].pass);
   }
-  check('判:出教具卡(方向题老师先画出来)', gradeRun(['出教具卡'], [{ kid: 'x', section: sec(['你转一转。'], [{ kind: 'kit', props: { kit: '方向盘', params: {} } }]) }])[0].pass && !gradeRun(['出教具卡'], turns)[0].pass && gradeRun(['出教具卡'], turns)[0].why!.includes('没写板卡'));
-  check('判:出教具卡带画法名、不出教具卡', gradeRun(['出教具卡: 照片'], [{ kid: 'x', section: sec(['你圈一圈。'], [{ kind: 'kit', props: { kit: '照片', params: {} } }]) }])[0].pass && !gradeRun(['出教具卡: 照片'], [{ kid: 'x', section: sec(['你转一转。'], [{ kind: 'kit', props: { kit: '方向盘', params: {} } }]) }])[0].pass && gradeRun(['不出教具卡'], [{ kid: 'x', section: sec(['都对了。'], []) }])[0].pass && !gradeRun(['不出教具卡'], [{ kid: 'x', section: sec(['你转一转。'], [{ kind: 'kit', props: { kit: '方向盘', params: {} } }]) }])[0].pass);
-  check('判:问就上板(只用嘴问的那一轮不过;请拍照、带板的、没问的都过)', !gradeRun(['问就上板'], [{ kid: 'x', section: sec(['小箭头朝哪个方向?'], []) }])[0].pass && gradeRun(['问就上板'], [{ kid: 'x', section: sec(['拍给我看看,好吗?'], [{ kind: 'photo', props: {} }]) }, { kid: 'y', section: sec(['东面有哪两间?圈出来。'], [{ kind: 'kit', props: { kit: '照片', params: {} } }]) }, { kid: 'z', section: sec(['都对了。'], []) }])[0].pass);
   check('判:放过整段', gradeRun(['放过整段'], [{ kid: 'x', section: sec(['好?'], [{ kind: 'read', props: { segments: ['一', '二', '三'] } }]) }])[0].pass && !gradeRun(['放过整段'], [{ kid: 'x', section: sec(['好?']) }])[0].pass);
   const g = Object.fromEntries(gradeRun(['每节末句是问句', '不说: 错了', '问到: 在哪里', '并排: 睡大觉 | 浇了水'], turns).map((r) => [r.check, r]));
   check('判:每节末句问句、不说、问到、并排;删掉的判(出画图卡)不认得', g['每节末句是问句'].pass && g['不说: 错了'].pass && g['问到: 在哪里'].pass && g['并排: 睡大觉 | 浇了水'].pass && parseExamples('---\nactivity: x\n---\n## 甲\n孩子: 你好\n判:\n- 出画图卡\n').issues.some((i) => i.text.includes('判「出画图卡」不认得')));

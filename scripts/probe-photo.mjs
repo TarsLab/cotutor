@@ -2,8 +2,8 @@
 /**
  * 作业照片线(R5)的手动验收(不进 pnpm test,要本机 Chrome;老师是假 CLI,不花钱):
  * 自己起一个临时 workspace(运行时指假老师 tests/_fake-teacher.ts)+ 一个 HTTP 的 serve →
- * 把服务自己画的 /icon-192.png 当「照片」传上去(POST …/photos)→ 只带照片发一条 → 假老师「看图」:Read 那张、板书出照片板(那张做底)
- *(2026-11-13 起孩子的照片不再用 image 卡再给他看,归到照片板)→
+ * 把服务自己画的 /icon-192.png 当「照片」传上去(POST …/photos)→ 只带照片发一条 → 假老师「看图」:Read 那张、回一句看到了
+ *(孩子的照片不再用 image 卡再给他看;铺页的 activity 里照片铺在照片页上,见 probe-photo-page.mjs)→
  * 用 Chrome DevTools 协议开孩子端:节头不挂照片;家长端那轮的问句下有缩略图。
  * 再走发照片屏:相册选 2 张 → 裁一张、画一笔(没有配一句话那条了)→ 一条消息两张 jpg;板上哪一节的节头都不挂照片。
  * 老师都走实时:嘴是假百炼;发消息都经实时那条连接(_live-send.mjs),板上只有实时一种画法(节头是老师写的,孩子的照片由老师的图片卡放上板;答拍给我看卡的见 probe-photo-card)。
@@ -68,7 +68,7 @@ try {
   for (let i = 0; i < 80; i++) { today = (await api('GET', '/api/kid/conversations/math-tutor/today')).json; if (today && !today.pending && today.messages.every((m) => !m.pending)) break; await sleep(250); }
   const msg = today?.messages.find((m) => m.job === sent.json?.job);
   const cards = msg?.section?.cards ?? [];
-  ok('孩子端条目:问句「(拍了一张)」带 photos;照片板拿那张做底', msg?.question === '(拍了一张)' && msg?.photos?.[0] === photo && cards.some((c) => c.kind === 'kit' && c.props.params?.['图'] === photo), JSON.stringify({ q: msg?.question, photos: msg?.photos, kinds: cards.map((c) => c.kind) }));
+  ok('孩子端条目:问句「(拍了一张)」带 photos;不用 image 卡再给他看一遍', msg?.question === '(拍了一张)' && msg?.photos?.[0] === photo && !cards.some((c) => c.kind === 'image'), JSON.stringify({ q: msg?.question, photos: msg?.photos, kinds: cards.map((c) => c.kind) }));
   const parentDay = (await api('GET', '/api/conversations/math-tutor/today')).json;
   const pm = parentDay?.index?.messages.find((m) => m.job === sent.json?.job);
   ok('家长端索引:消息带 photos、转录里 Read 了那张', pm?.photos?.[0] === photo && JSON.stringify(parentDay?.runs?.[pm?.job] ?? []).includes(photo), JSON.stringify(pm?.photos));

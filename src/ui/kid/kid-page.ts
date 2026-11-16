@@ -245,7 +245,7 @@ ${BACK_TINT_CSS}
   #stage.cv .top .ttl.open { white-space:normal; }
   #stage.cv #st-act { position:absolute; top:env(safe-area-inset-top); right:env(safe-area-inset-right); height:56px; box-sizing:border-box; padding:0 12px; border-top:0; gap:10px; }
   #stage.cv #st-note { font-size:14px; }
-  /* 照片板的「点字」:孩子点中的字词,田字格浮在板上面(不挡工具那一列:右手时在右上,左手时在左上) */
+  /* 页上点字:孩子点中的字词,田字格浮在页上面(右手时在右上,左手时在左上) */
   #st-pick { position:absolute; z-index:3; top:calc(env(safe-area-inset-top) + 72px); right:calc(env(safe-area-inset-right) + 16px); padding:54px 14px 12px; background:#fff; border-radius:24px; box-shadow:0 10px 36px rgba(60,50,30,.22), 0 0 0 1px rgba(60,50,30,.06); animation:st-pick-in .22s cubic-bezier(.2,.8,.2,1); }
   #st-pick[hidden] { display:none; }
   body.hand-left #st-pick { right:auto; left:calc(env(safe-area-inset-left) + 16px); }
@@ -276,7 +276,7 @@ ${BACK_TINT_CSS}
   /* 以板为主:板是页面;顶栏多两颗换底的钮(拍照、相册),左上的 × 是回首页 */
   #st-bp { display:none; }
   #stage.bp #st-bp { display:flex; gap:8px; flex:none; }
-  #stage.bp.bk #st-bp { display:none; }
+  #stage.bp.bk:not(.ph) #st-bp { display:none; }
   #st-bp button { display:flex; align-items:center; gap:6px; height:40px; padding:0 14px; border:1.5px solid var(--line, #e5e1d8); border-radius:20px; background:#fff; font:inherit; font-size:16px; font-weight:600; color:var(--ink); cursor:pointer; }
   #st-bp button svg { width:20px; height:20px; }
   /* 以板为主:板铺到顶,顶栏是浮在板上的一层(只有按钮收触摸;2026-11-14 原来是一条 56px 的白栏,11-15 去掉顶上那层纸色渐隐:它把课本头两行和「给老师看」都罩虚了,几颗钮各自垫实底);
@@ -704,7 +704,6 @@ ${pageDomJs(4000)}
     send: SVG('<path d="M12 19V5M5 12l7-7 7 7"></path>', 20, 2.4),
     micMd: SVG('<rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path>', 22, 2),
     keyboard: SVG('<rect x="3" y="6" width="18" height="13" rx="2"></rect><path d="M7 10h1M11 10h1M15 10h1M8 15h8"></path>', 26, 1.8),
-    kit: SVG('<circle cx="12" cy="12" r="9"></circle><path d="M12 3v3M12 18v3M3 12h3M18 12h3"></path><path d="M9 15l2-5 4-1-2 5z"></path>', 30, 1.8),
     micOff: SVG('<rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3M4 4l16 16"></path>', 22, 2),
     album: __ALBUM_28__,
     close: SVG('<path d="M6 6l12 12M18 6L6 18"></path>', 24, 2.2),
@@ -743,7 +742,7 @@ ${BOARD_MARK_JS}
 
   // ---- 状态 ----
   /** 以板为主的 activity(头上 board: page):on = 这个话题的页面是板;base = 现在的底(照片路径,null 白板,undefined 还没定);label = 方砖上的字(不拍照直接开始时发它) */
-  const BP = { on: false, book: false, asking: false, base: undefined, label: '', books: [] };
+  const BP = { on: false, base: null, label: '', books: [] };
   const S = { home: null, tutor: null, day: null, sections: [], played: new Set(), state: { section: -1, line: -1, status: 'idle' }, pending: false, waitSince: null, offline: false, bar: 'idle', pollTimer: null, stage: null, partial: null, thread: null, threadAt: null, hist: null, readonly: false, newThread: false, device: 'phone', via: null, cont: null, ask: null, talk: null, talkWait: false, reel: null, pendSaid: null, homeDraw: true, autoOpened: new Set() };
   // 实时的老师这一次(连、发、收、画在下面「实时的老师」那一块):on = 这位老师这一次走实时(左栏的样子);ready = 嘴连上了;
   // model = liveStep 的状态(只在 liveDispatch 里写);cap = 字幕(上一句、在说的、被打断的那句);heard = 每一轮(job)念到第几句
@@ -800,10 +799,10 @@ ${BOARD_MARK_JS}
   const pickButton = (t, b) => {
     const via = { home: S.home.home, button: b.id };
     // 每个按钮进去都是新话题;今天聊过的在首页「今天」那一行接(2026-11-15)。按钮只有 activity(含方砖,start)和小课堂(2026-11-16)
-    // 以板为主、垫课本的 activity(语文预习):不拍照,直接开话题、铺课本的目录
-    if (b.kind === 'start' && b.board === 'page' && b.base === 'textbook') openTutor(t, { kind: 'new', via, board: true, book: true, label: b.label, send: b.label });
-    // 以板为主的 activity:先到拍照屏,带着照片(或白板)开话题
-    else if (b.kind === 'start' && b.board === 'page') openTutor(t, { kind: 'new', via, board: true, label: b.label });
+    // 铺课本的 activity(预习):不拍照,直接开话题、铺课本的目录
+    if (b.kind === 'start' && b.base === 'textbook') openTutor(t, { kind: 'new', via, base: 'textbook', label: b.label, send: b.label });
+    // 铺作业照片的 activity(检查作业、复习):先到拍照屏,带着照片(或白纸)开话题
+    else if (b.kind === 'start' && b.base === 'photo') openTutor(t, { kind: 'new', via, base: 'photo', label: b.label });
     else if (b.kind === 'start') openTutor(t, { kind: 'new', via, send: b.label });
     // 小课堂:新话题,先铺满放课;看完才能开口,开口那条带上 via 与看的情况
     else if (b.kind === 'lecture') openTutor(t, { kind: 'new', via, lecture: { bundle: b.bundle, title: b.title || b.label, ...(b.video ? { video: true } : {}) } });
@@ -1157,16 +1156,16 @@ ${HOME_TILES_JS}
     S.via = intent.via || null; S.lecture = intent.lecture ? { ...intent.lecture, watch: null, sent: false, marks: [], flying: [], log: [] } : null;
     // 口语课页拍好了口语单:先等孩子点「先热身,再打电话」(那一下起声音),发出去的第一条带 talk
     S.talk = intent.talk || null; S.talkWait = Boolean(intent.talk);
-    BP.on = Boolean(intent.board); BP.book = Boolean(intent.book); BP.base = undefined; BP.label = intent.label || ''; lsReset();
-    if (intent.board && !intent.book) bpBooks();
+    BP.on = Boolean(intent.base); BP.base = intent.base || null; BP.label = intent.label || ''; lsReset();
+    if (BP.base === 'photo') bpBooks();
     // 先定走不走实时,再热麦克风:实时时麦克风的自检要开在实时那个 AudioContext 里(liveOpen)
     if (liveWanted(t)) liveOpen(intent); else liveClose();
     renderBar(); renderHeader();
     liveFace(t); tintBack(t); markBoard($('#bmark'), t);
     $('#board').replaceChildren(); pin.on = false;
     if (S.talkWait) $('#board').append(talkBoard());
-    else if (BP.on && BP.book) bpOpenBook();
-    else if (BP.on) $('#board').append(bpStartBoard());
+    else if (BP.base === 'textbook') bpOpenLesson();
+    else if (BP.base === 'photo') $('#board').append(bpStartBoard());
     $('#tutor').classList.add('on');
     setBar('idle');
     loadDay(true).then(() => { if (intent.send) send(intent.send); });
@@ -1197,18 +1196,18 @@ ${HOME_TILES_JS}
     }, () => {});
     return el;
   };
-  // ---- 以板为主(《画板为主设计》):进来先拍照(或白板),照片一发就铺板,板一直在;老师的板卡落在这块板上,别的卡服务端不给;点回首页才结束 ----
-  /** 拍照屏:拍一页、从相册选、不拍用白板(左栏照 _open 画同样三颗) */
+  // ---- 一节课铺的页(2026-11-16 阶段 3):base: textbook 进来铺课本的目录;base: photo 进来先拍照(或不拍用白纸),照片一发就铺上照片页、不等老师;页一直在,点回首页才结束 ----
+  /** 拍照屏:拍一页、从相册选、不拍用白纸(左栏照 _open 画同样三颗) */
   const bpStartBoard = () => {
     const go = (cls, icon, label, f) => h('button', { type: 'button', class: 'ask-go ' + cls, style: cls === 'fresh' ? 'background:' + tutorColor() : 'color:' + tutorColor() + ';border-color:' + tutorColor(), on: { click: f } }, h('span', { class: 't' }, h('span', { class: 'ic', html: ICON[icon] }), label));
-    return withOpen(h('div', { class: 'blank ask bp-start' }, avatarEl(S.tutor, 'draw'), h('span', { class: 'nm' }, S.tutor.display), h('b', {}, '先拍一页给老师看'), h('small', {}, '拍课本、作业都行;没有要拍的,就用白板'),
-      h('div', { class: 'ask-row' }, go('fresh', 'camera', '拍照', () => bpPick(true)), go('back', 'album', '从相册选', () => bpPick(false)), go('back', 'spark', '不拍,用白板', bpWhite))),
-      { kind: 'board', big: '先拍一页给老师看', small: '拍课本、作业都行;没有要拍的,就用白板', acts: [
+    return withOpen(h('div', { class: 'blank ask bp-start' }, avatarEl(S.tutor, 'draw'), h('span', { class: 'nm' }, S.tutor.display), h('b', {}, '先拍一页给老师看'), h('small', {}, '拍正一点,整页都拍进来;没有要拍的,就用白纸'),
+      h('div', { class: 'ask-row' }, go('fresh', 'camera', '拍照', () => bpPick(true)), go('back', 'album', '从相册选', () => bpPick(false)), go('back', 'spark', '不拍,用白纸', bpWhite))),
+      { kind: 'board', big: '先拍一页给老师看', small: '拍正一点,整页都拍进来;没有要拍的,就用白纸', acts: [
         { cls: 'fresh', icon: 'camera', s: '拍照', go: () => bpPick(true) },
         { cls: 'back', icon: 'album', s: '从相册选', go: () => bpPick(false) },
-        { cls: 'back', icon: 'spark', s: '不拍,用白板', go: bpWhite }] });
+        { cls: 'back', icon: 'spark', s: '不拍,用白纸', go: bpWhite }] });
   };
-  /** 这位老师学科的课本页(vault 里教材旁边的图):有就在拍照屏和板的顶栏多一颗「选课本页」 */
+  /** 这位老师学科的课本页(vault 里教材旁边的图):有就在拍照屏和页的顶栏多一颗「选课本页」 */
   const bpBooks = () => {
     const name = S.tutor && S.tutor.name;
     BP.books = [];
@@ -1225,7 +1224,7 @@ ${HOME_TILES_JS}
       if (blank._open && !blank._open.acts.some((a) => a.s === '选课本页')) { blank._open.acts.splice(1, 0, { cls: 'back', icon: 'album', s: '选课本页', go: tbkOpen }); LO.el = undefined; openSync(); }
     }, () => {});
   };
-  /** 选课本页:一册一段,一页一格;点一页 → 拷进 captures/ → 当孩子拍的照片发、铺板 */
+  /** 选课本页:一册一段,一页一格;点一页 → 拷进 captures/ → 当孩子拍的照片发、铺上照片页 */
   const tbkOpen = () => {
     if (!S.tutor || S.pending || S.readonly || !BP.books.length) return;
     unlock();
@@ -1237,7 +1236,7 @@ ${HOME_TILES_JS}
         $('#tbk').classList.remove('on');
         const b = $('#board .blank'); if (b) b.remove();
         send('', { photos: [r.path] });
-        if (BP.on) bpBase(r.path);
+        bpPhotos([r]);
       } catch { el.classList.remove('busy'); }
     };
     $('#tbk .ls').replaceChildren(...BP.books.flatMap((bk) => [h('h3', {}, bk.book), h('div', { class: 'pgs' }, ...bk.pages.map((pg) => { const el = h('button', { type: 'button', class: 'pg' }, h('img', { src: '/api/kid/textbook-page?b=' + encodeURIComponent(bk.book) + '&f=' + encodeURIComponent(pg.file), alt: '', loading: 'lazy' }), h('span', {}, pg.n != null ? '第 ' + pg.n + ' 页' : pg.file)); el.addEventListener('click', () => pick(bk.book, pg, el)); return el; }))]));
@@ -1247,7 +1246,7 @@ ${HOME_TILES_JS}
   $('#tbk-x').addEventListener('click', () => $('#tbk').classList.remove('on'));
   $('#st-tb').innerHTML = ICON.album + '<span>课本</span>';
   $('#st-tb').addEventListener('click', tbkOpen);
-  /** 拍照 / 相册:一个现做的 file input(和输入条的相机同一套 wireFile),拍完进发照片屏;发出去时铺板(ps-go) */
+  /** 拍照 / 相册:一个现做的 file input(和输入条的相机同一套 wireFile),拍完进发照片屏;发出去时铺上照片页(ps-go) */
   const bpPick = (camera) => {
     if (!S.tutor || S.pending || S.readonly) return;
     unlock();
@@ -1257,71 +1256,43 @@ ${HOME_TILES_JS}
     document.body.append(f);
     f.click();
   };
-  /** 不拍:发方砖上的字开话题,板是白板 */
+  /** 不拍:发方砖上的字开话题,铺一张白纸页(服务端收到没带照片的第一条也铺白纸,两边一样) */
   const bpWhite = () => {
     if (!S.tutor || S.pending || !canSend()) return;
     const b = $('#board .blank'); if (b) b.remove();
     send(BP.label || '开始');
-    bpBase(null);
+    lsStart(lessonStep(lessonInit(), { t: 'act', act: { k: '翻', page: { id: '白纸', kind: 'white', title: '白纸', pick: false } } }));
   };
-  /** 换底:照片铺满一块板(开了点字,认出的字词一个一个垫上底);白板是空的,等老师写。不等老师 */
-  const bpBase = (photo) => {
-    BP.base = photo;
-    // 数学的照片上点的是数和算式,不弹田字格:只看,等老师画
-    const pick = !(S.tutor && S.tutor.subject === '数学');
-    const card = photo ? { kind: 'kit', props: { kit: '照片', params: { 图: photo }, ops: [pick ? '点字' : '看'] } } : { kind: 'kit', props: { kit: '白板', params: { 写: '' }, ops: ['看'] } };
-    bpShow(card);
+  /** 孩子拍来了几张(上传时服务端回了宽高):先落在自己这一份上,接在照片页后面——不等老师(服务端收到这一条时照同样的规矩铺) */
+  const bpPhotos = (list) => {
+    if (BP.base !== 'photo') return;
+    const photos = list.filter((x) => x && x.path && x.w > 0 && x.h > 0).map((x) => ({ src: x.path, w: x.w, h: x.h }));
+    if (!photos.length) return;
+    // 数学的照片上点的是数和算式,不弹田字格(同服务端)
+    const ev = { t: 'photo', photos, pick: !(S.tutor && S.tutor.subject === '数学') };
+    if (LS.on && LS.l) { LS.l = lessonStep(LS.l, ev); lsShow(); return; }
+    lsStart(lessonStep(lessonInit(), ev));
   };
-  /** 把这张(应用自己铺的)板放上舞台:舞台开着、是板就在原地换(舞台包比着画差别),没开就开 */
-  const bpShow = (card) => {
-    const old = S.stage;
-    const wasKit = Boolean(old) && !frame.hidden && (stageCardNow() || {}).kind === 'kit';
-    if (old && S.sections[old.section]) playRec({ k: 'stage', job: S.sections[old.section].job, card: old.card, open: false });
-    pickHide();
-    S.stage = { section: -1, card: -1, id: 'board:' + (BP.base || 'white'), own: card, playing: null, delegate: false, autoplay: false };
-    $('#st-ttl').textContent = ''; $('#st-ttl').classList.remove('open');
-    $('#st-kd').hidden = true;
-    $('#stage').classList.add('cv', 'bp', 'on');
-    $('#stage').classList.toggle('bk', BP.book);
-    if (wasKit) { renderGo(); postStage(stageCard(card)); } else renderStage();
-  };
-  /** 课本做底(base: textbook):回到的这节课(有话题)向服务端要它记着的样子,新开的要这一科课本的目录;铺上 */
-  const bpOpenBook = () => {
+  /** 进一节课:回到的(有话题)照服务端记的;新开的课本铺目录,作业照片等孩子拍(拍照屏) */
+  const bpOpenLesson = () => {
     const name = S.tutor && S.tutor.name;
     if (!name || LS.asking) return;
     LS.asking = true;
     const q = S.thread && S.day && S.day.date ? '/api/kid/lesson?tutor=' + encodeURIComponent(name) + '&date=' + encodeURIComponent(S.day.date) + '&thread=' + encodeURIComponent(S.thread) : null;
-    const open = (l) => { LS.asking = false; if (!S.tutor || S.tutor.name !== name || !BP.on || !BP.book) return; if (l) lsStart(l); };
-    const toc = () => api('GET', '/api/kid/textbook/base?tutor=' + encodeURIComponent(name)).then((j) => open(j && j.lesson), () => { LS.asking = false; });
+    const open = (l) => { LS.asking = false; if (!S.tutor || S.tutor.name !== name || !BP.on) return; if (l) lsStart(l); };
+    const toc = () => (BP.base === 'textbook' ? api('GET', '/api/kid/textbook/base?tutor=' + encodeURIComponent(name)).then((j) => open(j && j.lesson), () => { LS.asking = false; }) : open(null));
     if (q) api('GET', q).then((j) => (j && j.lesson ? open(j.lesson) : toc()), toc); else toc();
   };
-  /** 照片板的底:那张照片 */
-  const boardBase = (card) => (card && card.props && card.props.params && typeof card.props.params['图'] === 'string' ? card.props.params['图'] : null);
-  /** 孩子点了一个字:田字格照弹(pickShow);以板为主的话题里报给服务端记进板的日志(嘴念这个字、老师下一轮知道) */
-  const bpPicked = (card, text, k) => {
-    if (!BP.on || !S.thread || S.readonly || REEL) return;
-    const base = boardBase(card);
-    if (base) lvSend({ t: 'board', body: { k: k || 'pick', thread: S.thread, text, base } });
-  };
-  /** 拉了今天的话题以后:这个话题以板为主就把板摆出来(回到这个话题、刷新页面):老师最后那张板卡,没有就是底本身 */
+  /** 拉了今天的话题以后:这个话题是一节课(第一条记着 base)就把页摆出来(回到这个话题、刷新页面) */
   const bpSync = (mine) => {
     if (S.newThread || S.readonly || REEL) return;
-    if (!mine.some((m) => m.board === 'page')) { BP.on = false; return; }
-    // 回到这个话题、刷新了页面:话题第一条记着 base: textbook 就是课本做底
-    if (!BP.book && mine.some((m) => m.base === 'textbook')) BP.book = true;
-    if (!BP.on && !BP.book) bpBooks();
-    BP.on = true;
-    // 课本做底:页一直是这节课,不铺卡
-    if (BP.book) { if (!LS.on) bpOpenBook(); else lsFeed(); return; }
-    if (BP.base === undefined && !BP.book) { BP.base = null; for (const m of mine) if (m.question !== null && Array.isArray(m.photos) && m.photos.length) BP.base = m.photos[m.photos.length - 1]; }
-    if (S.stage) { $('#stage').classList.add('bp'); return; }
-    for (let i = S.sections.length - 1; i >= 0; i--) {
-      const k = S.sections[i].cards.map((c) => c.kind).lastIndexOf('kit');
-      if (k >= 0 && !(S.sections[i].cards[k].props.kit === '照片' && S.sections[i].cards[k].props.params && S.sections[i].cards[k].props.params['图'] !== BP.base)) { openStage(i, k); return; }
-    }
-    bpBase(BP.base);
+    const first = mine.find((m) => m.base);
+    if (!first) { BP.on = false; return; }
+    if (!BP.on && first.base === 'photo') bpBooks();
+    BP.on = true; BP.base = first.base;
+    if (!LS.on) bpOpenLesson(); else lsFeed();
   };
-  // ---- 一节课(课本做底,2026-11-16):服务端记着一节课的状态(<date>.<话题>.lesson.json);这里照 lessonStep(src/board/lesson.ts,内联)把老师念过的那几句的动作落上,
+  // ---- 一节课(2026-11-16;阶段 3 起课本、作业照片、白纸都是):服务端记着一节课的状态(<date>.<话题>.lesson.json);这里照 lessonStep(src/board/lesson.ts,内联)把老师念过的那几句的动作落上,
   //      孩子在页上做的事也落上、报给服务端,变了就整份发给舞台画(舞台 book.tsx 只照状态画)。
   //      老师一节的动作:第一句前面的马上落;每一句的等它念完(下一句开始放、或嘴放完了)才落;孩子打断、老师开了下一轮、不在实时里,没落的一下子都落上。
   //      回到这节课、刷新:照服务端的(lesson.jobs 是已经落进去的那几轮,不再落) ----
@@ -1344,9 +1315,11 @@ ${HOME_TILES_JS}
     if (!LS.job) return;
     lsApply(Infinity);
     LS.seen.add(LS.job); LS.l = lessonDone(LS.l, LS.job); LS.job = null; LS.lead = 0; LS.lines = 0;
-    clearTimeout(LS.idleT);
+    clearTimeout(LS.idleT); LS.idleT = 0;
     lsShow();
   };
+  /** 写完了还没落完的一节:5 秒后嘴静着就都落上,还在说再等一回。已经在等就不重来(每次派发都会经过 lsTick) */
+  const lsIdle = () => { if (LS.idleT) return; LS.idleT = setTimeout(() => { LS.idleT = 0; if (!LS.job) return; if (LV.model.status === 'mouth') lsIdle(); else lsFinish(); }, 5000); };
   /** 新的一节(还没落进来的):上一节没落完的先都落上,从这一节第一句前面的动作起 */
   const lsFeed = () => {
     if (!LS.on || !LS.l) return;
@@ -1366,17 +1339,17 @@ ${HOME_TILES_JS}
     if (!LS.on || !LS.job) { lsShow(); return; }
     const sec = lsSection(LS.job);
     const done = sec && !sec.partial && !(S.partial && S.partial.job === LS.job);
-    clearTimeout(LS.idleT);
     if (!LV.on || S.readonly || REEL) { lsFinish(); return; }
     if (done && LV.model.status !== 'mouth' && (LS.lines >= sec.lines.length - 1 || !sec.lines.length)) { lsFinish(); return; }
-    if (done && LV.model.status !== 'mouth') LS.idleT = setTimeout(() => { if (LV.model.status !== 'mouth') lsFinish(); }, 5000);
+    // 写完了还没落完:嘴静下来 5 秒就都落上;那时嘴还在说就再等一回(嘴说完不一定再经过这里)
+    if (done) lsIdle();
     lsShow();
   };
   /** 这节课此刻的样子发给舞台(变了才发);录像记一份(停一下再记,只记变了的) */
   const lsShow = () => {
     if (!LS.on || !LS.l || !S.stage || !S.stage.lesson) return;
     const p = lessonPage(LS.l);
-    $('#st-ttl').textContent = p && p.title !== '目录' ? p.title : '';
+    $('#st-ttl').textContent = p && p.kind === 'book' && p.title !== '目录' ? p.title : '';
     const key = JSON.stringify(LS.l);
     renderGo();
     if (key === LS.key) return;
@@ -1384,19 +1357,20 @@ ${HOME_TILES_JS}
     postStage({ type: 'lesson', id: S.stage.id, lesson: LS.l, readonly: S.readonly || REEL, hand: document.body.classList.contains('hand-left') ? 'left' : 'right' });
     if (!REEL && !S.readonly) { clearTimeout(LS.recT); LS.recT = setTimeout(() => { const k = JSON.stringify(LS.l); if (k !== LS.recKey && S.thread) { LS.recKey = k; playRec({ k: 'lesson', l: LS.l }); } }, 1500); }
   };
-  /** 课本铺满:舞台开一次,之后只换状态 */
+  /** 页铺满:舞台开一次,之后只换状态 */
   const lsOpenStage = () => {
     if (S.stage && S.stage.lesson) { lsShow(); return; }
     if (S.stage) closeStage();
     S.stage = { section: -1, card: -1, id: 'lesson:' + (S.thread || 'new'), lesson: true, playing: null, delegate: false, autoplay: false };
     $('#st-ttl').classList.remove('open'); $('#st-kd').hidden = true;
     $('#stage').classList.add('cv', 'bp', 'bk', 'on');
+    $('#stage').classList.toggle('ph', BP.base === 'photo');
     $('#st-body').hidden = true; $('#st-body').replaceChildren();
     frame.hidden = false; frame.src = stageUrl(S.stage.id);
     LS.key = '';
     renderGo();
   };
-  /** 进课本做底的一节课:回到的(有话题)照服务端记的,新开的铺目录;没有课本就空着,老师会说 */
+  /** 进一节课:回到的(有话题)照服务端记的,新开的铺目录(课本)、照片页或白纸(作业);没有课本就空着,老师会说 */
   const lsStart = (l, jobs) => {
     LS.on = true; LS.l = l; LS.seen = new Set(jobs || (l && l.jobs) || []); LS.job = null; LS.lead = 0; LS.lines = 0; LS.key = '';
     LS.inkAt = l && lessonPage(l) ? lessonPage(l).kid.ink.length : 0;
@@ -1404,7 +1378,7 @@ ${HOME_TILES_JS}
     lsOpenStage();
     lsFeed();
   };
-  const lsReset = () => { clearTimeout(LS.recT); clearTimeout(LS.idleT); LS.on = false; LS.l = null; LS.job = null; LS.key = ''; LS.recKey = ''; LS.asking = false; };
+  const lsReset = () => { clearTimeout(LS.recT); clearTimeout(LS.idleT); LS.idleT = 0; LS.on = false; LS.l = null; LS.job = null; LS.key = ''; LS.recKey = ''; LS.asking = false; };
   /** 孩子在页上做的事:先落在自己这一份上,再经实时那条连接报给服务端(它照样落进 lesson.json;base 不是它现在那一页就不落) */
   const lsKid = (ev, report) => {
     if (!LS.on || !LS.l || S.readonly || REEL) return;
@@ -1415,7 +1389,7 @@ ${HOME_TILES_JS}
   };
   /** 「给老师看」能不能按:这一轮以后落了新的笔(课本上的、白纸条上的) */
   const lsInk = () => { const p = LS.l && lessonPage(LS.l); return p ? p.kid.ink.length + Object.values(p.kid.stripInk || {}).reduce((n, x) => n + x.length, 0) : 0; };
-  /** 舞台说话(课本做底):落笔、擦掉、点字、揭开、挪窗、窗里的图、给老师看 */
+  /** 舞台说话(一节课):落笔、擦掉、点字、揭开、挪窗、窗里的图、给老师看 */
   const lsStageMsg = (m) => {
     if (m.type === 'ready') { LS.key = ''; lsShow(); return; }
     if (m.type === 'peek') { previewGot(m.image); return; }
@@ -1434,7 +1408,8 @@ ${HOME_TILES_JS}
       if (done) done(patch); else send('', patch);
       return;
     }
-    if (m.type === 'close' || m.type === 'error') { /* 课本铺不出来:舞台留着,老师会说 */ }
+    if (m.type === 'pen' && S.thread && LS.l && LS.l.at && !S.readonly && !REEL) { lvSend({ t: 'board', body: { k: 'pen', thread: S.thread, base: LS.l.at } }); return; }
+    if (m.type === 'close' || m.type === 'error') { /* 页铺不出来:舞台留着,老师会说 */ }
   };
 
   /** 板上的拍照、相册:换一页 */
@@ -1459,7 +1434,7 @@ ${HOME_TILES_JS}
     $('#lv-acts').replaceChildren(...(o ? o.acts.map(lvGo) : []));
   }
   new MutationObserver(openSync).observe($('#board'), { childList: true });
-  const closeTutor = () => { clearTimeout(PV.timer); liveDispatch({ type: 'reset' }); liveClose(); hideLecture(); S.lecture = null; reelStop(); clearTimeout(S.pollTimer); dispatch({ type: 'halt' }); psClose(); $('#lb').classList.remove('on'); S.tutor = null; S.via = null;  S.ask = null; BP.on = false; BP.book = false; BP.base = undefined; lsReset(); $('#tutor').classList.remove('on'); document.body.classList.remove('pending', 'speaking'); S.homeDraw = true; loadHome(); };
+  const closeTutor = () => { clearTimeout(PV.timer); liveDispatch({ type: 'reset' }); liveClose(); hideLecture(); S.lecture = null; reelStop(); clearTimeout(S.pollTimer); dispatch({ type: 'halt' }); psClose(); $('#lb').classList.remove('on'); S.tutor = null; S.via = null;  S.ask = null; BP.on = false; BP.base = null; lsReset(); $('#tutor').classList.remove('on'); document.body.classList.remove('pending', 'speaking'); S.homeDraw = true; loadHome(); };
   $('#back').addEventListener('click', closeTutor);
   $('#back-ic').innerHTML = ICON.back;
 
@@ -1497,11 +1472,6 @@ ${HOME_TILES_JS}
         // 小课堂卡:老师放课里的一段;紧凑态是那一段末帧的画面、「0:19–0:30 ▷」;舞台是舞台包里的小课堂播放器
         const ready = lectureReady(c);
         return box('lecture', h('div', { class: 'sp' }, p.title || p.bundle || ''), p.text ? h('div', { class: 'tx' }, p.text) : null, h('div', { class: 'th' }, ready ? (p.video ? lcVideoStill(p.bundle, p.end) : lcStill(p.bundle, p.still || 0, null, 'lc-still')) : '课还没放进来', ready ? h('span', { class: 'pl' }, lcClock(p.start) + '–' + lcClock(p.end) + ' ▷') : null));
-      }
-      case 'kit': {
-        // 教具(cards/kit/card.md):题目 + 哪种教具;做过了写着转过了、画了几笔。落下时自己铺满打开(autoStage),这张是关掉以后再点开的入口
-        const did = stateSummary(c).join('、');
-        return box('kit', p.prompt ? h('div', { class: 'kp' }, p.prompt) : null, h('div', { class: 'kb' }, h('span', { class: 'ki', html: ICON.kit }), h('span', { class: 'kn' }, p.kit || ''), h('span', { class: 'kd' }, did || '点开 ✎')));
       }
       case 'photo': {
         // 拍给我看(cards/photo/card.md):相机 + 要拍什么。还没拍:最后一节时下沿「等你拍…」带拍照、相册;拍了:照片放大在卡里,配的话在照片下面(2026-11-04)。点卡不开舞台
@@ -1981,7 +1951,7 @@ __WORD_DRAW_JS__
     else S.sections[idx] = sec;
     const n = sec.cards.length;
     const placed = n > P.shown;
-    for (; P.shown < n; P.shown++) { follow(placeCard(P, sec, P.shown, idx)); liveLand(idx, P.shown, true); autoStage(idx, P.shown); }
+    for (; P.shown < n; P.shown++) { follow(placeCard(P, sec, P.shown, idx)); liveLand(idx, P.shown, true); }
     dispatch({ type: wasLive ? 'liveBeat' : 'liveStart', section: idx });
     lsFeed();
     if (LV.on && placed) liveDispatch({ type: 'cards' });
@@ -2000,7 +1970,6 @@ __WORD_DRAW_JS__
       else placeCard(P, sec, k, idx);
       // 换了样子的卡标注补画,新铺的照落下画、写
       liveLand(idx, k, !old);
-      if (!old) autoStage(idx, k);
     }
     dispatch({ type: 'liveFinal', section: idx });
     stageDone(idx);
@@ -2056,28 +2025,27 @@ __WORD_DRAW_JS__
   S.layHalf = halfWidth();
 
   // ---- 舞台:点卡放大,交互都在这里 ----
-  const KIND_NAME = { text: '', read: '点读', choice: '选一选', image: '看图', tianzige: '田字格', dictation: '听写', word: '单词', lecture: '小课堂', kit: '', code: '' };
-  const GO_LABEL = { kit: '给老师看' };
-  // ---- 铺满的舞台(教具):「给老师看」轻点只交板、按住说 = 板和这句话一起给脑;嘴说的话浮在板顶上 ----
+  const KIND_NAME = { text: '', read: '点读', choice: '选一选', image: '看图', tianzige: '田字格', dictation: '听写', word: '单词', lecture: '小课堂', code: '' };
+  // ---- 铺满的舞台(一节课的页):「给老师看」轻点只交窗里的图、按住说 = 图和这句话一起给脑;嘴说的话浮在页底 ----
   const CV = { capT: 0, give: null };
-  /** 舞台上那张卡 */
-  const stageCardNow = () => (!S.stage ? null : S.stage.own ? S.stage.own : S.sections[S.stage.section] ? S.sections[S.stage.section].cards[S.stage.card] : null);
-  /** 舞台关了:等着的交板作废,浮着的字幕收起 */
+  /** 舞台上那张卡(一节课没有卡) */
+  const stageCardNow = () => (!S.stage || S.stage.lesson ? null : S.sections[S.stage.section] ? S.sections[S.stage.section].cards[S.stage.card] : null);
+  /** 舞台关了:等着的交图作废,浮着的字幕收起 */
   const stageClosed = () => {
     if (CV.give) { const g = CV.give; CV.give = null; g(null); }
     clearTimeout(CV.capT); CV.capT = 0; $('#cv-cap').classList.remove('on');
     $('#stage').classList.remove('cv'); $('#st-go').classList.remove('holding');
   };
-  /** 铺满的舞台上嘴说的话:板顶上浮一条,说完 4 秒淡掉 */
+  /** 铺满的舞台上嘴说的话:页底浮一条,说完 4 秒淡掉 */
   const cvCap = () => {
     const el = $('#cv-cap');
     if (!$('#stage').classList.contains('cv')) { el.classList.remove('on'); return; }
     if (LV.model.status === 'mouth' && LV.cap.cur) { if (el.textContent !== LV.cap.cur) el.textContent = LV.cap.cur; el.classList.add('on'); clearTimeout(CV.capT); CV.capT = 0; return; }
     if (el.classList.contains('on') && !CV.capT) CV.capT = setTimeout(() => { CV.capT = 0; el.classList.remove('on'); }, 4000);
   };
-  /** 板上有孩子还没交的笔迹(板卡上画了、转了,还没交):他这时开口,这一句连板此刻的图一起交(《画板为主设计》下篇「图什么时候附」) */
-  const kitInk = () => { const c = stageCardNow(); return c && c.kind === 'kit' && !c.submitted && S.stage && !S.stage.own && !S.readonly && !REEL && c.state && (((c.state.marks || []).length > 0) || c.state.moves > 0) ? c : null; };
-  /** 「给老师看」:让舞台导出 png;存状态(连图),回这一条要带的(交卡的 action + focus)。8 秒没导出来算了 */
+  /** 页上有孩子这一轮以后新落的笔(还没交给老师):他这时开口,这一句连窗里的图一起交 */
+  const penInk = () => Boolean(S.stage && S.stage.lesson && LS.on && !S.readonly && !REEL && lsInk() > LS.inkAt);
+  /** 「给老师看」:让舞台先交窗里的图;回这一条要带的(交了的 action)。8 秒没回来算了 */
   const stageGive = () => new Promise((resolve) => {
     if (CV.give) { const g = CV.give; CV.give = null; g(null); }
     CV.give = resolve;
@@ -2085,46 +2053,11 @@ __WORD_DRAW_JS__
     setTimeout(() => { if (CV.give === resolve) { CV.give = null; resolve(null); } }, 8000);
   });
   /**
-   * 落下就自己打开的卡(教具:老师先画好,孩子不用找、不用点):只在今天能说话的实时页、刚落下的那一刻开一次;
-   * 回来看、以前的话题、录像、家长端不开(那里点卡才开)。舞台已经开着(孩子正在别的卡上)就不抢
-   */
-  const autoStage = (secIdx, idx) => {
-    const sec = S.sections[secIdx];
-    const card = sec && sec.cards[idx];
-    if (!card || !opensItself(card) || card.submitted) return;
-    if (!LV.on || S.readonly) return;
-    // 以板为主:板一直开着,老师的板卡都落在它上面;照的不是现在这块底(孩子刚换了一页)的作废
-    if (S.stage && !S.stage.waiting && !BP.on) return;
-    if (BP.on && card.props.kit === '照片' && card.props.params && BP.base !== undefined && card.props.params['图'] !== BP.base) return;
-    const id = sec.job + '/' + idx;
-    if (S.autoOpened.has(id)) return;
-    S.autoOpened.add(id);
-    if (S.stage) swapStage(secIdx, idx); else openStage(secIdx, idx);
-  };
-  /** 板开着、等着老师(孩子刚交了教具卡):老师的下一张教具落下,就在这块板上换成它——舞台不关、不重装,舞台包自己比着画差别 */
-  const swapStage = (secIdx, idx) => {
-    const card = S.sections[secIdx].cards[idx];
-    const old = S.stage;
-    if (S.sections[old.section]) playRec({ k: 'stage', job: S.sections[old.section].job, card: old.card, open: false });
-    S.stage = { section: secIdx, card: idx, id: S.sections[secIdx].job + '/' + idx, playing: null, delegate: false, autoplay: false };
-    playRec({ k: 'stage', job: S.sections[secIdx].job, card: idx, open: true });
-    $('#st-ttl').textContent = stageTitle(card); $('#st-ttl').classList.remove('open');
-    pickHide();
-    renderGo();
-    setNow(secIdx, idx);
-    postStage(stageCard(card));
-  };
-  /**
-   * 老师这一轮写完了(或没成),板还在等,说明这一轮没有新的教具:
-   * 这一节有别的卡(请拍照、算式、放一段课)= 老师换了地方,板收起来,孩子回到板书;
-   * 这一节只有话(或这一轮没成)= 板留着——他说的多半就是板上的东西(「你数一数最后一份有几个」),孩子自己关。
-   * 2026-11-12 ray 检查作业:交了板 6 秒板就收了,老师正请他数板上的圈,孩子自己点开了 5 次。
-   * idx = 刚写完(或撤掉)的那一节:只有它在等着的那张卡后面才算(那张卡自己那一节写完不算——孩子手快,老师还没说完就交了);dropped = 这一节撤掉了
+   * 老师这一轮写完了(或没成),舞台还在等(孩子刚交了卡):这一节有别的卡 = 老师换了地方,舞台收起来;只有话 = 留着。
+   * idx = 刚写完(或撤掉)的那一节;dropped = 这一节撤掉了。一节课的页不收
    */
   const stageDone = (idx, dropped) => {
-    // 以板为主:板不收
-    if (BP.on) { if (S.stage && S.stage.waiting && !S.stage.heard && idx > S.stage.section) { S.stage.heard = true; renderGo(); } return; }
-    if (!S.stage || !S.stage.waiting || idx <= S.stage.section) return;
+    if (!S.stage || S.stage.lesson || !S.stage.waiting || idx <= S.stage.section) return;
     const sec = dropped ? null : S.sections[idx];
     if (sec && sec.cards.length) { closeStage(); return; }
     S.stage.heard = true;
@@ -2146,14 +2079,14 @@ __WORD_DRAW_JS__
     const card = stageCardNow();
     if (!card) return;
     $('#st-act').hidden = !hasState(card);
-    $('#st-go').textContent = GO_LABEL[card.kind] || '交给老师';
+    $('#st-go').textContent = '交给老师';
     // 老师还在写这一节:卡的状态服务端还存不进去,先不让交(写完 finalizeLive 再放开)
     const writing = Boolean(S.stage && S.sections[S.stage.section] && S.sections[S.stage.section].partial);
     $('#st-go').disabled = !stateSummary(card).length || writing;
     $('#st-go').hidden = false;
-    $('#st-note').textContent = isFullStage(card) ? stateSummary(card).join('、') : '';
+    $('#st-note').textContent = '';
     $('#st-go').classList.remove('holding');
-    if (card.submitted) { $('#st-act').hidden = S.readonly; $('#st-go').hidden = true; if (S.stage && S.stage.waiting && !S.stage.heard) $('#st-note').textContent = '老师在看…'; else $('#st-note').innerHTML = ICON.lock + ' 交给老师了'; }
+    if (card.submitted) { $('#st-act').hidden = S.readonly; $('#st-go').hidden = true; $('#st-note').innerHTML = ICON.lock + ' 交给老师了'; }
   };
   const openStage = (secIdx, idx, opts = {}) => {
     const card = S.sections[secIdx] && S.sections[secIdx].cards[idx];
@@ -2162,19 +2095,16 @@ __WORD_DRAW_JS__
     if (S.readonly && hasState(card) && !opts.delegate) return; // 以前的只能看:选择 / 板不开,免得改了当时的答案
     S.stage = { section: secIdx, card: idx, id: S.sections[secIdx].job + '/' + idx, playing: null, delegate: Boolean(opts.delegate), autoplay: Boolean(opts.autoplay) };
     playRec({ k: 'stage', job: S.sections[secIdx].job, card: idx, open: true });
-    // 教具铺满:题目一行写在顶栏,点开看全
     $('#st-ttl').textContent = stageTitle(card);
     $('#st-ttl').classList.remove('open');
     $('#st-kd').textContent = KIND_NAME[card.kind] || card.kind;
-    $('#st-kd').hidden = isFullStage(card) || !(KIND_NAME[card.kind] || card.kind);
-    $('#stage').classList.toggle('cv', isFullStage(card));
-    $('#stage').classList.toggle('bp', BP.on);
-    $('#stage').classList.toggle('bk', BP.on && BP.book);
+    $('#st-kd').hidden = !(KIND_NAME[card.kind] || card.kind);
+    $('#stage').classList.remove('cv', 'bp', 'bk', 'ph');
     renderStage();
     $('#stage').classList.add('on');
     setNow(secIdx, idx);
   };
-  /** 照片板的「点字」:孩子点中了一个字词 → 田字格浮在板上,一笔一笔写一遍(点格子再写一遍);再点别的字换成那个,× 收起来。老师不开口 */
+  /** 页上点字:孩子点中了一个字词 → 田字格浮在页上,一笔一笔写一遍(点格子再写一遍);再点别的字换成那个,× 收起来。老师不开口 */
   const pickHide = () => { const box = $('#st-pick'); for (const b of box.querySelectorAll('.hz')) tianzigeReset(b); box.replaceChildren(); box.hidden = true; };
   /**
    * 浮层(板的一角,右手在右上):应用自己弹的现成的卡,不等老师。哪种卡能浮、点的是什么就弹哪种:
@@ -2235,8 +2165,7 @@ __WORD_DRAW_JS__
   /** 发给舞台包的这张卡(ready 时发;看录像时孩子改了卡再发一次,包按新状态重画) */
   const stageCard = (card) => {
     const b = card.kind === 'lecture' ? card.props.bundle : null;
-    const im = card.kind === 'kit' && card.props.kit === '照片' && card.props.params && typeof card.props.params['图'] === 'string' ? card.props.params['图'] : null;
-    return { type: 'card', id: S.stage.id, kind: card.kind, props: card.props, state: card.state === undefined ? null : card.state, readonly: Boolean(card.submitted) || (card.kind === 'kit' && S.readonly), ...(isFullStage(card) ? { full: true, hand: document.body.classList.contains('hand-left') ? 'left' : 'right' } : {}), bundleUrl: b ? lcBundleUrl(b, card.kind === 'lecture' && card.props.video === true) : undefined, imageUrl: im ? '/api/kid/image?p=' + encodeURIComponent(im) : undefined, wordsUrl: im && card.kind === 'kit' && Array.isArray(card.props.ops) && card.props.ops.includes('点字') ? '/api/kid/photo-words?p=' + encodeURIComponent(im) : undefined, autoplay: S.stage.autoplay };
+    return { type: 'card', id: S.stage.id, kind: card.kind, props: card.props, state: card.state === undefined ? null : card.state, bundleUrl: b ? lcBundleUrl(b, card.kind === 'lecture' && card.props.video === true) : undefined, autoplay: S.stage.autoplay };
   };
   /** 舞台包说话:ready → 把卡发过去;phase → 记下在放还是放完;state → 存;done 且是讲稿委托的 → 关舞台接着念 */
   window.addEventListener('message', (e) => {
@@ -2246,10 +2175,8 @@ __WORD_DRAW_JS__
     const card = stageCardNow();
     if (!card) return;
     if (m.type === 'peek') { previewGot(m.image); return; }
-    if (m.type === 'state' || m.type === 'view' || m.type === 'reveal') previewSoon(PV_HAND_MS);
+    if (m.type === 'state') previewSoon(PV_HAND_MS);
     if (m.type === 'ready') postStage(stageCard(card));
-    else if (m.type === 'pick') { if (card.kind === 'kit') { pickShow(m.text); bpPicked(card, m.text); } }
-    else if (m.type === 'reveal') { if (card.kind === 'kit') bpPicked(card, m.text, 'reveal'); }
     else if (m.type === 'phase') {
       S.stage.playing = { phase: m.phase, line: m.line };
       // 小课堂卡(仲裁表「交给小课堂」):那一段放完,舞台不关、停在末帧,嘴接着念
@@ -2257,23 +2184,10 @@ __WORD_DRAW_JS__
       renderSubtitle();
     }
     else if (m.type === 'state') {
-      if (card.submitted || S.stage.own) return;
+      if (card.submitted) return;
       card.state = m.state;
       renderGo();
       repaintCard(S.stage.section, S.stage.card); saveState(S.sections[S.stage.section].job, S.stage.card, card.state);
-    }
-    else if (m.type === 'submit') {
-      // 「给老师看」:轻点的直接发这一条;按住说的(CV.give)把要带的交回去,等松手那一下发
-      const done = CV.give; CV.give = null;
-      const finish = (patch) => { if (done) done(patch); else if (patch) send('', patch); };
-      if (card.submitted || S.stage.own) { finish(null); return; }
-      card.state = m.state; card.submitted = true;
-      const id = S.stage.id; const secI = S.stage.section, job = S.sections[secI].job; const idx = S.stage.card;
-      // 教具:交了不关——板留着等老师(只看),老师的下一张还是教具就在这块板上接着画(swapStage);老师这一轮换了别的卡才关,只说话板留着(stageDone)
-      if (opensItself(card)) { S.stage.waiting = true; renderGo(); postStage(stageCard(card)); }
-      else closeStage();
-      repaintCard(secI, idx);
-      api('PUT', CONV + S.tutor.name + '/cards/' + job + '/' + idx, m.image ? { ...card.state, image: m.image } : card.state).catch(() => {}).then(() => finish({ action: 'submit', focus: { card: id } }));
     }
     else if (m.type === 'close' || m.type === 'error') { const d = S.stage; closeStage(); if (d.delegate) resumeAfter(d); }
   });
@@ -2310,9 +2224,11 @@ __WORD_DRAW_JS__
   /** 「交给老师」/「给老师看」点一下;板的按住说在 bindGive(按住说话那几颗旁边) */
   const giveTap = () => {
     if (!S.stage) return;
+    // 一节课:舞台先交窗里的图,再说交了(lsStageMsg 的 submit)
+    if (S.stage.lesson) { if (penInk()) postStage({ type: 'control', action: 'submit' }); return; }
     const card = stageCardNow();
     if (!card || card.submitted) return;
-    if (isHeavy(card)) { if (isFullStage(card) && !stateSummary(card).length) return; postStage({ type: 'control', action: 'submit' }); return; } // 教具:舞台导出 png、把整份状态交回来
+    if (isHeavy(card)) return;
     if (!stateSummary(card).length) return;
     if (card.submitted) return;
     const id = S.stage.id, secI = S.stage.section, idx = S.stage.card;
@@ -2514,9 +2430,7 @@ __WORD_DRAW_JS__
       if (S.partial && !entries.some((e) => e.job === S.partial.job)) { const P = S.partial; S.partial = null; P.el.remove(); if (P.live) { S.sections.splice(P.idx, 1); dispatch({ type: 'liveDropped' }); } stageDone(P.idx, true); }
       // 服务端的状态是真相(别的设备上选的、重开页面):没在舞台里改着的卡照它画;props 也跟(小课堂卡的 ready、起止是服务端下发时现读的)
       entries.forEach((e) => { const i = S.sections.findIndex((x) => x.job === e.job); if (i < 0 || fresh.includes(i)) return; e.cards.forEach((c, idx) => { const mine = S.sections[i].cards[idx]; if (!mine || (S.stage && S.stage.section === i && S.stage.card === idx)) return; const ds = JSON.stringify(mine.state) !== JSON.stringify(c.state), dp = JSON.stringify(mine.props) !== JSON.stringify(c.props); if (ds || dp) { mine.state = c.state; mine.props = c.props; repaintCard(i, idx); } }); });
-      if (fresh.length && S.stage && !S.stage.waiting && !BP.on) closeStage();
-      // 整节一下子到的(没流过):里面有落下就自己打开的卡(教具),刚落下的这一次打开;回来看(silent)不开
-      if (!silent) for (const i of fresh) S.sections[i].cards.forEach((_, k) => autoStage(i, k));
+      if (fresh.length && S.stage && !S.stage.waiting && !S.stage.lesson) closeStage();
       for (const i of fresh) stageDone(i);
       // 孩子的话:刚发出去、这一节还没出来的记着(左栏照它写;答拍给我看卡的先放进那张卡)
       {
@@ -2632,12 +2546,12 @@ __WORD_DRAW_JS__
     R.p = R.clock.toPlay(w);
   };
   /** 弹窗(实录):孩子开着哪张就只读地开哪张,改了就重画(重卡重发一次 card);关了就关。点不动(body.rlk)。
-   *  以板为主的话题(reel.owns):板是整页——老师的板卡没开着时是应用自己铺的那块(照片、白板,bpShow 照孩子端铺);课本做底的照记下的一节课的样子(f.lesson) */
+   *  一节课(铺着页的 activity)照孩子端记下的这一刻的样子画(f.lesson) */
   const reelStage = (f, rebuilt) => {
     const R = S.reel;
     // 课本做底的一节课:照孩子端记的这一刻的样子画(只读;孩子的窗跟着他停下的地方)
     if (f.lesson) {
-      BP.on = true; BP.book = true;
+      BP.on = true;
       const key = JSON.stringify(f.lesson);
       if (R.lessonKey === key && S.stage && S.stage.lesson) return;
       R.lessonKey = key; R.now = '';
@@ -2645,24 +2559,13 @@ __WORD_DRAW_JS__
       lsOpenStage(); lsShow();
       return;
     }
-    BP.on = Boolean((R.d.reel.owns || []).length);
     const i = f.stage ? S.sections.findIndex((x) => x.job === f.stage.job) : -1;
     const want = i >= 0 && S.sections[i].cards[f.stage.card] ? f.stage.job + '/' + f.stage.card : '';
     if (!want) {
       R.stageKey = '';
-      if (f.own) {
-        const key = JSON.stringify(f.own);
-        if (R.ownKey === key && S.stage && S.stage.own) return;
-        R.ownKey = key; R.now = '';
-        BP.book = false; BP.base = boardBase(f.own);
-        bpShow(f.own);
-        return;
-      }
-      R.ownKey = '';
       if (S.stage) { closeStage(); R.now = ''; }
       return;
     }
-    R.ownKey = '';
     const card = S.sections[i].cards[f.stage.card];
     const sk = JSON.stringify(card.state === undefined ? null : card.state);
     if (R.stageKey !== want || !S.stage) {
@@ -3441,7 +3344,7 @@ __REEL_DOCK_JS__
     // 新话题只由按钮开(via / 口语课的 talk,服务端定);别的接着这个话题
     if (!S.newThread && S.thread) body.thread = S.thread;
     if (S.via) body.via = S.via;
-    if (S.stage && !S.stage.own) body.focus = { card: S.stage.id };
+    if (S.stage && !S.stage.lesson) body.focus = { card: S.stage.id };
     return body;
   };
   /**
@@ -3578,7 +3481,7 @@ __REEL_DOCK_JS__
     }
     // 「给老师看」按住说:舞台导出、存好那张板,这一句带着它交给脑(没说清服务端照交板);板没交成这一下作废
     // 板上有他新画的(没交):按头像说话也一样,话连板此刻的图一起交;只点字、没画就不附图
-    if (kitInk()) {
+    if (penInk()) {
       // 等板导出的这一会儿(LV.letGo):声音不推、别的按钮不接,发出去才放开
       LV.letGo = true;
       stageGive().then((patch) => {
@@ -3604,7 +3507,7 @@ __REEL_DOCK_JS__
     const body = { text, device: S.device };
     if (opts.action) body.action = opts.action;
     if (opts.photos && opts.photos.length) { body.photos = opts.photos; VB.photo = true; }
-    const focus = opts.focus || (S.stage && !S.stage.own ? { card: S.stage.id } : null);
+    const focus = opts.focus || (S.stage && !S.stage.lesson ? { card: S.stage.id } : null);
     if (focus) body.focus = focus;
     // 新话题只由按钮开(via / 口语课的 talk,服务端定);别的接着这个话题
     if (!S.newThread && S.thread) body.thread = S.thread;
@@ -3668,7 +3571,7 @@ __REEL_DOCK_JS__
   const bindGive = (el) => {
     let tapAt = 0;
     el.addEventListener('pointerdown', (e) => {
-      if (el.disabled || press || LV.letGo || !kitInk() || !LV.on || !LV.ready || LV.model.open || S.bar === 'typing' || document.body.classList.contains('pending')) return;
+      if (el.disabled || press || LV.letGo || !penInk() || !LV.on || !LV.ready || LV.model.open || S.bar === 'typing' || document.body.classList.contains('pending')) return;
       e.preventDefault(); unlock();
       if (LV.audio) LV.audio.wake().catch(() => {});
       press = { y: e.clientY, cancelled: false, held: false, live: false, give: true, cancelPx: 80, onTap: giveTap, timer: setTimeout(() => { if (!press || !press.give) return; press.held = true; press.live = true; liveHold(); }, 300) };
@@ -3853,17 +3756,18 @@ __REEL_DOCK_JS__
     PS.busy = true; psUi();
     const name = S.tutor.name;
     try {
-      for (const it of PS.items) if (!it.path) { const data = await psExport(it); const r = await api('POST', CONV + name + '/photos', { image: data }); it.path = r.path; }
+      for (const it of PS.items) if (!it.path) { const data = await psExport(it); const r = await api('POST', CONV + name + '/photos', { image: data }); it.path = r.path; it.w = r.w; it.h = r.h; }
     } catch (e) {
       PS.busy = false; psUi();
       if (e && e.status === 404) { psClose(); closeTutor(); }
       return;
     }
     const photos = PS.items.map((it) => it.path);
+    const sized = PS.items.map((it) => ({ path: it.path, w: it.w, h: it.h }));
     playRec({ k: 'ps', e: 'send' });
     psClose();
     // 只发照片(2026-10-21 撤了配一句话:孩子一次都没用过;实时老师先说「我看一看图片」,孩子接着说就行)
-    if (S.tutor && S.tutor.name === name) { const b = BP.on ? $('#board .blank') : null; if (b) b.remove(); send('', { photos }); if (BP.on) bpBase(photos[photos.length - 1]); }
+    if (S.tutor && S.tutor.name === name) { const b = BP.on ? $('#board .blank') : null; if (b) b.remove(); send('', { photos }); bpPhotos(sized); }
   });
 
   // ---- 看大图:节头的小图点开;双指缩放、双击复位;几张就左右翻。不碰播放 ----

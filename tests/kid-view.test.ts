@@ -91,7 +91,6 @@ const okRun = (result: string): ReturnType<typeof parseTranscript> =>
 {
   // 首页「今天」:开了头的话题(有孩子参与的图出现过)才列;只说话的、只铺了目录的、系统起的不列;新的在前
   const base = { artifacts: [] as string[], result: 'ok' as const };
-  const kit = (kitName: string, params: Record<string, string> = {}) => ({ lines: [], cards: [{ kind: 'kit', props: { kit: kitName, params, ops: [] } }] });
   // 课本做底:讲稿里的 [[翻 …]](落到页上的样子)
   const fan = (title: string) => ({ cards: [], lines: [{ text: '好。', audio: null, marks: [], ask: false, anchor: null, cues: [], acts: [{ name: '翻', arg: title, do: { k: '翻', page: { id: `b#${title}`, kind: 'book', src: 'b', title, pages: [1], cut: 0, layout: 'prose', pick: true } } }] }] });
   const msgs = [
@@ -102,15 +101,15 @@ const okRun = (result: string): ReturnType<typeof parseTranscript> =>
     { ...base, job: '3', thread: '2', at: '2026-09-09T10:12', from: 'kid' as const, text: '坐井观天', kidText: '翻到了', section: fan('坐井观天') },
     // 4:检查作业,孩子发了照片
     { ...base, job: '4', thread: '4', at: '2026-09-09T10:20', from: 'kid' as const, text: '检查作业', via: { home: 'h', button: 'check', label: '检查作业' }, photos: ['captures/2026-09-09/1020-1.jpg'], kidText: '看看' },
-    // 5:新话题,老师出了点阵
-    { ...base, job: '5', thread: '5', at: '2026-09-09T10:30', from: 'kid' as const, text: '三乘五等于多少呀老师你帮我看看', via: { home: 'h', button: 'new' as const, label: '新话题' }, kidText: '摆一摆', section: kit('点阵', { 行: '3', 列: '5' }) },
+    // 5:新话题,老师出了一张图
+    { ...base, job: '5', thread: '5', at: '2026-09-09T10:30', from: 'kid' as const, text: '三乘五等于多少呀老师你帮我看看', via: { home: 'h', button: 'new' as const, label: '新话题' }, kidText: '看一看', section: { lines: [], cards: [{ kind: 'image', props: { src: 'a.png' } }] } },
     // 6:只铺了目录
     { ...base, job: '6', thread: '6', at: '2026-09-09T10:40', from: 'kid' as const, text: '预习', via: { home: 'h', button: 'preview', label: '预习' }, kidText: '看目录', section: { cards: [], lines: [] } },
     // 7:记账(系统起的)
     { ...base, job: '7', thread: '7', at: '2026-09-09T21:00', from: 'system' as const, text: '记账', kidText: '记好了', photos: ['captures/x.jpg'] },
   ];
   const list = startedThreads(msgs as never);
-  check('只列开了头的:翻到一课的预习、发了照片的检查作业、出了点阵的新话题;新的在前', list.map((t) => t.thread).join() === '5,4,2', JSON.stringify(list));
+  check('只列开了头的:翻到一课的预习、发了照片的检查作业、出了图的新话题;新的在前', list.map((t) => t.thread).join() === '5,4,2', JSON.stringify(list));
   check('名字:方砖的字;新话题用孩子的第一句(截 12 字)', list.find((t) => t.thread === '2')?.label === '预习' && list.find((t) => t.thread === '4')?.label === '检查作业' && list.find((t) => t.thread === '5')?.label === '三乘五等于多少呀老师你帮…', JSON.stringify(list));
   check('课本翻到的那一课、孩子最后发的照片、最后一条的时间', list.find((t) => t.thread === '2')?.lesson === '坐井观天' && list.find((t) => t.thread === '2')?.at === '2026-09-09T10:12' && list.find((t) => t.thread === '4')?.photo === 'captures/2026-09-09/1020-1.jpg', JSON.stringify(list));
 }

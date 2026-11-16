@@ -197,9 +197,7 @@ export interface Reel {
   marks: ReelMark[];
   /** 实录:弹窗开着的段、页面切到后台的段 */
   stages: ReelStage[];
-  /** 以板为主:应用自己铺的板(老师的板卡没开着时板上是它) */
-  owns?: ReelOwn[];
-  /** 一节课(课本做底):孩子端记的每一份样子 */
+  /** 一节课(铺着页的 activity):孩子端记的每一份样子 */
   lessons?: { at: number; l: unknown }[];
   aways: { from: number; to: number }[];
   /** 看小课堂的几段(没有 = 这个话题不是从小课堂开始的,或那时还不记) */
@@ -248,14 +246,6 @@ export interface ReelInput {
   plays?: readonly PlayRecord[];
   /** 实时的轮所在的通话;没有通话录像的实时轮当不是实时的(写完那一刻铺上) */
   calls?: readonly ReelCall[];
-  /** 以板为主的话题:应用自己铺的那块板从什么时候起是哪张(课本的目录、孩子拍的照片、白板);服务端照话题和板的日志排好,不是这种话题就空 */
-  owns?: readonly ReelOwn[];
-}
-
-/** 应用自己铺的板(孩子端 kid-page 的 S.stage.own):这一刻起板上是这张卡(kind kit) */
-export interface ReelOwn {
-  at: number;
-  card: { kind: string; props: Record<string, unknown> };
 }
 
 /** 本地时间的「2026-09-28T20:29」或 ISO:都给墙钟毫秒;坏的 → NaN */
@@ -472,18 +462,13 @@ export function buildReel(input: ReelInput): Reel | null {
   // 弹窗开着的段:开 → 同一张的关(没关的到下一次开弹窗 / 下一次开口 / 最后一条记录)
   const stages: ReelStage[] = [];
   const opens = plays.filter((r): r is Extract<PlayRecord, { k: 'stage' }> => r.k === 'stage');
-  // 以板为主:板是页面,孩子开口不收板(kid-page 的 stageDone),板卡开着直到换下一张
-  const pageBoard = Boolean(input.owns?.length);
-  // 以板为主的板卡没关:开到通话最后一条(实录十秒一批,最后几秒的常常没有)
-  const callsEnd = Math.max(0, ...(input.calls ?? []).map((c) => c.startAt + (c.msgs.length ? c.msgs[c.msgs.length - 1][0] : 0)));
   opens.forEach((r, i) => {
     if (!r.open || !secByJob.get(r.job)) return;
     const close = opens.slice(i + 1).find((x) => !x.open || x.job !== r.job || x.card !== r.card);
-    const nextSpeak = pageBoard ? undefined : speakAt.find((x) => x > r.at);
-    const to = Math.min(close ? close.at : Infinity, nextSpeak ?? Infinity, Math.max(plays.length ? plays[plays.length - 1].at : r.at, pageBoard ? callsEnd : r.at, r.at));
+    const nextSpeak = speakAt.find((x) => x > r.at);
+    const to = Math.min(close ? close.at : Infinity, nextSpeak ?? Infinity, Math.max(plays.length ? plays[plays.length - 1].at : r.at, r.at));
     if (to > r.at) stages.push({ job: r.job, card: r.card, from: r.at, to });
   });
-  const owns = [...(input.owns ?? [])].sort((a, b) => a.at - b.at);
   const aways: Reel['aways'] = [];
   plays.forEach((r, i) => {
     if (r.k !== 'visible' || r.on) return;
@@ -604,7 +589,7 @@ export function buildReel(input: ReelInput): Reel | null {
   }
   gaps.sort((a, b) => a.from - b.from);
   const lessons = plays.flatMap((r) => (r.k === 'lesson' ? [{ at: r.at, l: r.l }] : [])).sort((a, b) => a.at - b.at);
-  return { startAt, endAt, tracks, says, clips, cards, notes, waits, gaps, marks, stages, aways, lectures, views, holds, types, photoScreens, scrolls, misses, ...(pageBoard ? { owns } : {}), ...(lessons.length ? { lessons } : {}) };
+  return { startAt, endAt, tracks, says, clips, cards, notes, waits, gaps, marks, stages, aways, lectures, views, holds, types, photoScreens, scrolls, misses, ...(lessons.length ? { lessons } : {}) };
 }
 
 /** 课里的「分:秒」(同 lecture.ts 的 clockLabel;这份文件只准从 board/presentation.ts 取运行时的东西) */
@@ -664,9 +649,7 @@ export interface ReelFrame {
   asking: boolean;
   /** 弹窗开着(实录):哪一张 */
   stage: { job: string; card: number } | null;
-  /** 以板为主、老师的板卡没开着:板上是应用自己铺的这张 */
-  own: ReelOwn['card'] | null;
-  /** 一节课(课本做底)这一刻的样子;不是这种话题 = null */
+  /** 一节课(铺着页的 activity)这一刻的样子;不是这种话题 = null */
   lesson: unknown;
   /** 弹窗开着、这张卡孩子还没动:想了多久(切到后台的时间不算) */
   thinking: { job: string; card: number; ms: number } | null;
@@ -721,9 +704,6 @@ export function reelFrameAt(reel: Reel, t: number): ReelFrame {
   const tr = shown[shown.length - 1];
   const asking = !saying && !w && Boolean(tr && tr.ask && tr.doneAt <= t);
   const st = reel.stages.find((x) => x.from <= t && t < x.to) ?? null;
-  // 以板为主:老师的板卡没开着就是应用铺的那块
-  let ow: ReelOwn | null = null;
-  for (const x of reel.owns ?? []) { if (x.at > t) break; ow = x; }
   const touched = st ? reel.cards.some((c) => c.job === st.job && c.card === st.card && c.at >= st.from && c.at <= t) : true;
   const thinking = st && !touched ? { job: st.job, card: st.card, ms: t - st.from - reelAwayMs(reel.aways, st.from, t) } : null;
   const away = reel.aways.some((a) => a.from <= t && t < a.to);
@@ -752,7 +732,7 @@ export function reelFrameAt(reel: Reel, t: number): ReelFrame {
   let lesson: unknown = null;
   for (const x of reel.lessons ?? []) { if (x.at > t) break; lesson = x.l; }
   if (!lesson && reel.lessons?.length) lesson = reel.lessons[0].l;
-  return { sections, saying, clip, last, cards, notes, wait: w ? { job: w.job, ms: t - w.from } : null, gap, asking, stage: st ? { job: st.job, card: st.card } : null, own: st || !ow ? null : ow.card, lesson, thinking, away, lecture: reelLectureAt(reel.lectures ?? [], t), hold, unclear, typing, photoScreen, view, scroll, miss };
+  return { sections, saying, clip, last, cards, notes, wait: w ? { job: w.job, ms: t - w.from } : null, gap, asking, stage: st ? { job: st.job, card: st.card } : null, lesson, thinking, away, lecture: reelLectureAt(reel.lectures ?? [], t), hold, unclear, typing, photoScreen, view, scroll, miss };
 }
 
 /** 这一刻在不在看小课堂:最近一条看的记录;在放的按真实时间往前推(推不过下一条) */

@@ -25,10 +25,10 @@ const p2 = resolvePolicy(layered, 'math-tutor');
 check('政策逐层覆盖;老 workspace 写着的 dailyMessages 读得进、不起作用', p2.replyMaxChars === 80 && p2.contextPack.recent === 3 && p2.contextPack.planLines === 10 && !('dailyMessages' in p2) && p2.board === 'off');
 check('别的老师不受影响', resolvePolicy(layered, 'chinese-tutor').board === 'auto' && resolvePolicy(layered, 'chinese-tutor').replyMaxChars === 80);
 
-check('出厂老师带卡的清单(text 总在)', cfg.tutors['math-tutor'].cards?.join() === 'text,choice,image,lecture,kit,code' && Object.values(cfg.tutors).every((t) => t.cards?.includes('text')));
+check('出厂老师带卡的清单(text 总在)', cfg.tutors['math-tutor'].cards?.join() === 'text,choice,image,lecture,code' && Object.values(cfg.tutors).every((t) => t.cards?.includes('text')));
 check('cards 只认板书的种类:写错名字、写首页的老师卡都过不了契约;不写也行', !CotutorConfigSchema.safeParse({ ...raw, tutors: { ...raw.tutors, x: { display: 'x', cards: ['txt'] } } }).success && !CotutorConfigSchema.safeParse({ ...raw, tutors: { ...raw.tutors, x: { display: 'x', cards: ['tutor'] } } }).success && CotutorConfigSchema.safeParse({ ...raw, tutors: { ...raw.tutors, x: { display: 'x' } } }).success);
-const retired = CotutorConfigSchema.safeParse({ ...raw, tutors: { ...raw.tutors, x: { display: 'x', cards: ['text', 'paint', 'canvas', 'kit'] } } });
-check('cards 里不再有的卡(paint、canvas)读进来就丢掉,不拦整份配置', retired.success && retired.data.tutors.x.cards?.join() === 'text,kit', JSON.stringify(retired.error?.issues ?? null));
+const retired = CotutorConfigSchema.safeParse({ ...raw, tutors: { ...raw.tutors, x: { display: 'x', cards: ['text', 'paint', 'canvas', 'kit', 'code'] } } });
+check('cards 里不再有的卡(paint、canvas、kit)读进来就丢掉,不拦整份配置', retired.success && retired.data.tutors.x.cards?.join() === 'text,code', JSON.stringify(retired.error?.issues ?? null));
 const withHelper = CotutorConfigSchema.parse({ ...raw, tutors: { ...raw.tutors, helper: { display: '小帮手', hidden: true }, 'off-tutor': { display: '关着的', enabled: false } } });
 const kidOnly = listTutors(withHelper, { kidOnly: true });
 check('孩子端不见 hidden 与关着的', kidOnly.length === 3 && !kidOnly.some((t) => t.name === 'helper' || t.name === 'off-tutor'));

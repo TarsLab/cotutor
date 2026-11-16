@@ -84,17 +84,15 @@ export const ContextPackSchema = z.object({
     })
     .optional(),
   /**
-   * 以板为主的话题:板此刻的样子,每一轮都带(应用写的,不是孩子端原样转发的;src/runtime/context/board-pack.ts)。
-   * base 底(照片的路径与认出的课名,或「白板」)· text 底上认出的全文(换底后第一次认完给全,之后只写「未变」;还没认完不写)·
-   * drawn 你在板上画着的 · ops 现在开放给孩子的操作 · did 孩子从上一轮到现在做的(合并过)· recent 他最近点的那一项(30 秒内,孩子说「这个」时指它)
-   * view 课本做底时孩子现在看着哪里(上一轮以后窗停下的地方:他自己挪的,或你让他看的那一块;舞台交了那一块的图就注一句、图随这一轮附上)
+   * 一节课(铺着页的 activity):页此刻的样子,每一轮都带(应用写的;src/runtime/context/board-pack.ts)。
+   * base 现在铺的那一页 · pages 这节课还铺过哪些页 · drawn 你在页上画着的 · ops 现在开放给孩子的 · did 孩子从上一轮到现在做的(合并过)·
+   * recent 他最近点的那一项(30 秒内,孩子说「这个」时指它)· view 孩子现在看着哪里(上一轮以后窗停下的地方;附了那一块的图就注一句、图随这一轮附上)。
+   * 页上印的字不在这里,在 pageNotes(第一次看到那一页时给一次)
    */
   slate: z
     .object({
       base: z.string().min(1),
-      text: z.array(z.string()).optional(),
-      /** 作业照片上认出的题号(「第1题、第2题」);框写题号就裁出那一道 */
-      questions: z.string().optional(),
+      pages: z.string().optional(),
       drawn: z.string().optional(),
       ops: z.array(z.string()).default([]),
       did: z.array(z.string()).default([]),
@@ -102,6 +100,11 @@ export const ContextPackSchema = z.object({
       view: z.string().optional(),
     })
     .optional(),
+  /**
+   * 页的文字层(2026-11-16 阶段 3):这一轮第一次看到的那几页上印的字,一页一条(<page id name>);给过的不重给,压缩以后重给现在这一页。
+   * 课本是一课分好段的正文,照片是认字认出的行(带题号),一行一句
+   */
+  pageNotes: z.array(z.object({ id: z.string().min(1), name: z.string().min(1), text: z.array(z.string()) })).optional(),
   /**
    * 孩子从首页的 activity 进来的话题:哪个 activity、家长填的参数(点的那一刻,补了缺省)。
    * 话题里每条都带;放在 YAML 块最后,键序固定(name、params;参数照文件「家长填的」的顺序)

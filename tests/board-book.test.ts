@@ -20,9 +20,8 @@ process.env.HOME = home;
 writeKeys(home, { payg: 'sk-t' });
 delete process.env.COTUTOR_WORKSPACE;
 
-const { boardPageSection } = await import('../src/board/board-page.ts');
-const { bookLesson, bookSection, fitSection, lessonOpen } = await import('../src/board/lesson-fit.ts');
-const { bookSlateParts, slateOf } = await import('../src/runtime/context/board-pack.ts');
+const { bookLesson, pageSection, fitSection, lessonOpen } = await import('../src/board/lesson-fit.ts');
+const { bookSlateParts, lessonSlateBits, slateOf } = await import('../src/runtime/context/board-pack.ts');
 const { renderContextPack } = await import('../src/runtime/context/context-pack.ts');
 const { parseActivity, checkActivity } = await import('../src/runtime/activity.ts');
 const { readBoard } = await import('../src/runtime/journal/board-log.ts');
@@ -35,18 +34,15 @@ type BoardSection = import('../src/schema/index.ts').BoardSection;
 type BoardCard = import('../src/schema/index.ts').BoardCard;
 
 const ix = bookIndexOf();
-const kitCard = (params: Record<string, string>, kit = '课本'): BoardCard => ({ kind: 'kit', props: { kit, params, ops: ['点字', '圈', '画'] } } as BoardCard);
 const sec = (cards: BoardCard[]): BoardSection => ({ heading: null, lines: cards.map((_, i) => ({ text: `第${i}句`, anchor: i, marks: [], cues: [] })), cards } as unknown as BoardSection);
 
-// ---- 课本做底的一节:卡都不上板,讲稿里的动作落到页上(纯函数) ----
+// ---- 铺着页的一节:卡都不上页,讲稿里的动作落到页上(纯函数) ----
 {
   const b = { file: '语文一年级下册.pdf', index: ix };
-  const raw = bookSection({ ...sec([{ kind: 'text', props: { text: '一张字卡' } } as BoardCard, kitCard({ 图: 'captures/a.jpg' }, '照片')]), lines: [{ text: '我们来预习。', audio: null, marks: [{ card: 0, phrase: '字卡' }], ask: false, anchor: 0, cues: [], acts: [{ name: '翻', arg: '小鱼吹泡泡' }, { name: '看', arg: '第 1 段' }] }, { text: '再看第二段。', audio: null, marks: [], ask: false, anchor: 1, cues: [], acts: [{ name: '看', arg: '第 2 段' }, { name: '圈', arg: '井沿、没有这个词' }] }] } as BoardSection);
-  check('课本做底的一节:卡都撤掉,讲稿里的锚、标注跟着没了;动作留着', raw.section.cards.length === 0 && raw.dropped.length === 2 && raw.section.lines.every((l) => l.anchor === null && !l.marks.length) && raw.section.lines[1].acts?.length === 2, JSON.stringify(raw.section));
-  const fit = fitSection(raw.section, lessonOpen(lessonInit(), b), b);
+  const raw = pageSection({ ...sec([{ kind: 'text', props: { text: '一张字卡' } } as BoardCard, { kind: 'image', props: { src: 'captures/a.jpg' } } as BoardCard]), lines: [{ text: '我们来预习。', audio: null, marks: [{ card: 0, phrase: '字卡' }], ask: false, anchor: 0, cues: [], acts: [{ name: '翻', arg: '小鱼吹泡泡' }, { name: '看', arg: '第 1 段' }] }, { text: '再看第二段。', audio: null, marks: [], ask: false, anchor: 1, cues: [], acts: [{ name: '看', arg: '第 2 段' }, { name: '圈', arg: '井沿、没有这个词' }] }] } as BoardSection);
+  check('铺着页的一节:卡都撤掉,讲稿里的锚、标注跟着没了;动作留着', raw.section.cards.length === 0 && raw.dropped.length === 2 && raw.section.lines.every((l) => l.anchor === null && !l.marks.length) && raw.section.lines[1].acts?.length === 2, JSON.stringify(raw.section));
+  const fit = fitSection(raw.section, lessonOpen(lessonInit(), b), { book: b });
   check('落到页上:翻到这一课、看换成框;圈找得到的那一处,找不到的记一句', fit.section.lines[0].acts?.[0].do?.k === '翻' && (fit.section.lines[0].acts[1].do as { label: string }).label === '第1段' && (fit.section.lines[1].acts?.[1].do as { spots: unknown[] }).spots.length === 1 && fit.why.length === 1 && fit.why[0].includes('没有这个词'), JSON.stringify([fit.section, fit.why]));
-  const noBook = boardPageSection(sec([kitCard({ 图: 'captures/a.jpg' }, '照片')]), { page: true, photo: 'captures/a.jpg' });
-  check('拍照的 activity:照片板照旧', noBook.section.cards.length === 1 && noBook.section.cards[0].props.kit === '照片');
   check('一课、目录铺哪几页', bookLesson(ix, '古诗两首')?.pages.map((p) => p.n).join() === '4,5' && bookLesson(ix, null)?.title === '目录' && bookLesson(ix, '没有') === null);
 }
 
@@ -61,20 +57,24 @@ const sec = (cards: BoardCard[]): BoardSection => ({ heading: null, lines: cards
   const T = Date.parse('2026-11-14T10:00:00Z');
   const at = (s: number): string => new Date(T - s * 1000).toISOString();
   const key = '语文一年级下册.pdf#小鱼吹泡泡';
-  const s1 = slateOf({ photo: null, fresh: false, words: null, events: [{ at: at(60), k: 'turn', job: '1000-1' }, { at: at(30), k: 'pick', text: '泡', base: key }, { at: at(20), k: 'view', text: '第 1 页:第 1–2 段', base: key }, { at: at(5), k: 'view', text: '第 2 页:课文后面的部分', base: key }], kit: null, ops: ['点字'], now: T, book: { show: fish.show, key, text: fish.text } });
-  check('课本:全文第一次给全、记下 told;孩子在看是上一轮以后最后停下的地方', s1.told === key && s1.slate.text?.[0] === '第1段 小鱼在水里吹泡泡。' && s1.slate.view === '第 2 页:课文后面的部分' && s1.slate.did.join() === '点开看了笔顺:泡', JSON.stringify(s1.slate));
-  const s2 = slateOf({ photo: null, fresh: false, words: null, events: [{ at: at(60), k: 'turn', job: '1000-1', told: key }, { at: at(50), k: 'view', text: '第 1 页', base: key }, { at: at(40), k: 'turn', job: '1000-2' }], kit: null, ops: [], now: T, book: { show: fish.show, key, text: fish.text } });
-  check('给过的全文写「未变」;上一轮之前挪的不算「孩子在看」', JSON.stringify(s2.slate.text) === '["未变"]' && s2.slate.view === undefined, JSON.stringify(s2.slate));
-  const pack = renderContextPack({ at: '2026-11-14T10:00', plan: [], recent: [], slate: s1.slate });
-  check('上下文包里多一行「孩子在看」', pack.includes('    孩子在看: "第 2 页:课文后面的部分"'), pack.slice(pack.indexOf('board:')));
+  const bits = lessonSlateBits(lessonInit());
+  const s1 = slateOf({ page: { id: key, show: fish.show }, others: ['作业照片(1 张)'], events: [{ at: at(60), k: 'turn', job: '1000-1' }, { at: at(30), k: 'pick', text: '泡', base: key }, { at: at(20), k: 'view', text: '第 1 页:第 1–2 段', base: key }, { at: at(5), k: 'view', text: '第 2 页:课文后面的部分', base: key }], lesson: bits, now: T });
+  check('board::底是这一页;页集说还铺过哪些;孩子在看是上一轮以后最后停下的地方;页上的字不在这里', s1.base === fish.show && s1.pages === '还铺过:作业照片(1 张)(翻回去写 [[翻 …]])' && s1.view === '第 2 页:课文后面的部分' && s1.did.join() === '点开看了笔顺:泡' && !('text' in s1), JSON.stringify(s1));
+  const s2 = slateOf({ page: { id: key, show: fish.show }, others: [], events: [{ at: at(60), k: 'turn', job: '1000-1', told: [key] }, { at: at(50), k: 'view', text: '第 1 页', base: key }, { at: at(40), k: 'turn', job: '1000-2' }], lesson: bits, now: T });
+  check('上一轮之前挪的不算「孩子在看」;只铺过这一页不写页集', s2.view === undefined && s2.pages === undefined, JSON.stringify(s2));
+  const pack = renderContextPack({ at: '2026-11-14T10:00', plan: [], recent: [], slate: s1, pageNotes: [{ id: key, name: '《小鱼吹泡泡》', text: fish.text }] });
+  check('上下文包里多一行「孩子在看」;页上的字是一条 <page> 笔记', pack.includes('    孩子在看: "第 2 页:课文后面的部分"') && pack.includes(`<page id="${key}" name="《小鱼吹泡泡》">\n第1段 小鱼在水里吹泡泡。`), pack.slice(pack.indexOf('board:')));
 }
 
 // ---- activity 头上的 base ----
 {
   const file = (head: string): string => `---\nname: 试\ndescription: 试\n${head}\n---\n\n## 老师怎么带\n\n你是老师。\n第一句: 好。\n收: 好。\n`;
-  const issues = (head: string): string[] => checkActivity(parseActivity(file(head)).activity).filter((i) => i.level === 'fix').map((i) => i.text);
-  check('base: textbook 读得出', parseActivity(file('board: page\nbase: textbook\ncards: kit')).activity.base === 'textbook' && !issues('board: page\nbase: textbook\ncards: kit').length);
-  check('base 写了不认得的、没写 board:都要改', issues('board: page\nbase: 课本\ncards: kit').some((t) => t.includes('不认得')) && issues('base: textbook\ncards: kit').some((t) => t.includes('board: page')));
+  const issues = (head: string, level = 'fix'): string[] => checkActivity(parseActivity(file(head)).activity).filter((i) => i.level === level).map((i) => i.text);
+  check('base: textbook、base: photo 读得出', parseActivity(file('base: textbook')).activity.base === 'textbook' && parseActivity(file('base: photo')).activity.base === 'photo' && !issues('base: textbook').length && !issues('base: photo').length);
+  check('base 写了不认得的、和 page 一起写:都要改', issues('base: 课本').some((t) => t.includes('不认得')) && issues('base: photo\npage: dictation').some((t) => t.includes('只能写一个')));
+  const old = parseActivity(file('board: page\ncards: kit')).activity;
+  check('旧的头还认:board: page 没写 base 的当 base: photo,cards 里的 kit 丢掉;check 提一句(不算要改)', old.base === 'photo' && !old.cards.includes('kit') && !issues('board: page\ncards: kit').length && issues('board: page\ncards: kit', 'note').some((t) => t.includes('不用再写了') && t.includes('base: photo')), JSON.stringify(old));
+  check('旧的 board: page + base: textbook:照 base: textbook', parseActivity(file('board: page\nbase: textbook')).activity.base === 'textbook');
 }
 
 // ---- 全流程 ----
@@ -93,12 +93,12 @@ const sec = (cards: BoardCard[]): BoardSection => ({ heading: null, lines: cards
   const date = '2026-11-14';
   const wait = async (): Promise<void> => { for (let i = 0; i < 200 && ctx.runner.running(T); i++) await new Promise((r) => setTimeout(r, 25)); await ctx.runner.flush(); };
   const promptOf = (job: string): string => (JSON.parse(readFileSync(join(root, 'conversations', T, `${date}.${job}.run.json`), 'utf8')) as { prompt: string }).prompt;
-  const index = (): { messages: { job: string; board?: string; section?: BoardSection; warnings?: string[] }[] } => JSON.parse(readFileSync(join(root, 'conversations', T, `${date}.json`), 'utf8'));
+  const index = (): { messages: { job: string; base?: string; section?: BoardSection; warnings?: string[] }[] } => JSON.parse(readFileSync(join(root, 'conversations', T, `${date}.json`), 'utf8'));
   const ws = loadWorkspace(root);
 
-  const h = (await route('GET', '/api/kid/home', ctx)).json as { home: string | null; cards: { kind: string; props: { tutor?: string; tiles?: { id: string; board?: string; base?: string }[] } }[] };
+  const h = (await route('GET', '/api/kid/home', ctx)).json as { home: string | null; cards: { kind: string; props: { tutor?: string; tiles?: { id: string; base?: string }[] } }[] };
   const tile = h.cards.find((c) => c.props.tutor === T)?.props.tiles?.find((x) => x.id === 'preview');
-  check('首页的语文「预习」方砖:以板为主、垫课本(孩子端不到拍照屏)', tile?.board === 'page' && tile.base === 'textbook', JSON.stringify(tile));
+  check('首页的语文「预习」方砖:铺课本(孩子端不到拍照屏)', tile?.base === 'textbook', JSON.stringify(tile));
 
   // 还没放课本:老师的底说没有,家长端记一行
   const none = await kidSend(ctx, T, { text: '', via: { home: h.home, button: 'preview' } });
@@ -121,7 +121,7 @@ const sec = (cards: BoardCard[]): BoardSection => ({ heading: null, lines: cards
   const job1 = String(first.json.job);
   const thread = String(first.json.thread);
   const pr1 = promptOf(job1);
-  check('点方砖进来(不拍照):话题记 board: page;底是目录,全文是一单元一行', index().messages.find((m) => m.job === job1)?.board === 'page' && pr1.includes('底: "课本《语文一年级下册》:目录(还没翻到哪一课)"') && pr1.includes('第一单元·阅读:1 小鱼吹泡泡(1)'), pr1.slice(pr1.indexOf('board:'), pr1.indexOf('board:') + 200));
+  check('点方砖进来(不拍照):话题记 base: textbook;底是目录,目录的字是一条 <page>(一单元一行)', index().messages.find((m) => m.job === job1)?.base === 'textbook' && pr1.includes('底: "课本《语文一年级下册》:目录(还没翻到哪一课)"') && pr1.includes('<page id="语文一年级下册.pdf#目录" name="目录">\n第一单元·阅读:1 小鱼吹泡泡(1)'), pr1.slice(pr1.indexOf('board:'), pr1.indexOf('board:') + 200));
 
   now = new Date(2026, 10, 14, 10, 6);
   const second = await kidSend(ctx, T, { text: '我要预习小鱼', thread });
@@ -133,7 +133,7 @@ const sec = (cards: BoardCard[]): BoardSection => ({ heading: null, lines: cards
   check('老师写的动作落到页上:第一句念完翻、看第 1 段;第二句念完看第 2 段、圈、请圈', s2?.cards.length === 0 && s2.lines[0].acts?.map((a) => a.do?.k).join() === '翻,看' && s2.lines[1].acts?.map((a) => a.do?.k).join() === '看,圈,请', JSON.stringify(s2));
   check('一节课的状态:这一课、看着第 2 段、圈着井沿', l2.at === '语文一年级下册.pdf#小鱼吹泡泡' && l2.look?.label === '第2段' && lessonPage(l2)!.teacher.marks.map((m) => m.text).join() === '井沿', JSON.stringify(l2));
   check('圈的词课本里没有:家长端记一行', (m2?.warnings ?? []).some((w) => w.includes('没有这个词')), JSON.stringify(m2?.warnings));
-  check('翻到这一课以前的那一轮:全文是目录(记了 told)', (await readBoard(ws, T, date, thread)).some((e) => e.k === 'turn' && e.told === '语文一年级下册.pdf#目录'));
+  check('翻到这一课以前的那一轮:给了目录的字(记了 told)', (await readBoard(ws, T, date, thread)).some((e) => e.k === 'turn' && [e.told].flat().includes('语文一年级下册.pdf#目录')));
 
   // 孩子在板上:点字(嘴念这个字)、挪窗(记成一句、不念、不催)
   const base = '语文一年级下册.pdf#小鱼吹泡泡';
@@ -146,7 +146,7 @@ const sec = (cards: BoardCard[]): BoardSection => ({ heading: null, lines: cards
     ctx.runner.boardEvent(T, date, { k: 'view', thread, base: 'captures/a.jpg', box: [0, 0, 1, 1] }),
     ctx.runner.boardEvent(T, date, { k: 'pick', thread, text: '泡', base: '../x.pdf#小鱼吹泡泡' }),
   ]);
-  check('不对的不记:框不是四个数、册子不在、照片的底不能挪窗、越界的册名', bad.every((x) => x === null), JSON.stringify(bad));
+  check('不对的不记:框不是四个数、不是现在这一页(别的册子、照片、越界的册名)', bad.every((x) => x === null), JSON.stringify(bad));
   const log = await readBoard(ws, T, date, thread);
   const v = log.find((e) => e.k === 'view');
   check('挪窗记成一句:哪一页、看得见什么', v?.k === 'view' && v.text === '第 2 页:第 2–3 段', JSON.stringify(v));
@@ -155,14 +155,14 @@ const sec = (cards: BoardCard[]): BoardSection => ({ heading: null, lines: cards
   const third = await kidSend(ctx, T, { text: '这个字怎么读', thread });
   await wait();
   const pr3 = promptOf(String(third.json.job));
-  check('下一轮:底是这一课,全文分好段;他点了什么、最近点的、他在看哪里', pr3.includes('底: "课本《语文一年级下册》:《小鱼吹泡泡》第 1–2 页"') && pr3.includes('第1段 小鱼在水里吹泡泡。') && pr3.includes('点开看了笔顺:泡') && pr3.includes('孩子在看: "第 2 页:第 2–3 段"'), pr3.slice(pr3.indexOf('board:'), pr3.indexOf('board:') + 400));
+  check('下一轮:底是这一课,这一课的字分好段(第一次看到,给一条 <page>);他点了什么、最近点的、他在看哪里', pr3.includes('底: "课本《语文一年级下册》:《小鱼吹泡泡》第 1–2 页"') && pr3.includes('第1段 小鱼在水里吹泡泡。') && pr3.includes('点开看了笔顺:泡') && pr3.includes('孩子在看: "第 2 页:第 2–3 段"'), pr3.slice(pr3.indexOf('board:'), pr3.indexOf('board:') + 400));
   now = new Date(2026, 10, 14, 10, 8);
   const fourth = await kidSend(ctx, T, { text: '不存在的课', thread });
   await wait();
   const pr4 = promptOf(String(fourth.json.job));
   const m4 = index().messages.find((m) => m.job === fourth.json.job);
   const l4 = ((await route('GET', `/api/kid/lesson?tutor=${T}&date=${date}&thread=${thread}`, ctx)).json as { lesson: Lesson }).lesson;
-  check('再下一轮:全文「未变」;翻不到的课还在这一课,家长端记一行', pr4.includes('全文: "未变"') && l4.at === '语文一年级下册.pdf#小鱼吹泡泡' && (m4?.warnings ?? []).some((w) => w.includes('坐井观天')), JSON.stringify(m4?.warnings));
+  check('再下一轮:这一课的字不重给;翻不到的课还在这一课,家长端记一行', !pr4.includes('<page ') && l4.at === '语文一年级下册.pdf#小鱼吹泡泡' && (m4?.warnings ?? []).some((w) => w.includes('坐井观天')), JSON.stringify(m4?.warnings));
   // 孩子在课本上点了、揭了、挪了:一节课的状态里也有
   check('点字、挪窗也落进一节课的状态', lessonPage(l4)!.kid.picked.join() === '泡' && JSON.stringify(l4.view) === '[0,1385,1000,1985]', JSON.stringify(l4));
 
@@ -172,7 +172,7 @@ const sec = (cards: BoardCard[]): BoardSection => ({ heading: null, lines: cards
   check('孩子端取课本:PDF 给文件;几页的行和字只给要的那几页', got.status === 200 && got.contentType === 'application/pdf' && Boolean(got.file?.endsWith('语文一年级下册.pdf')) && lines.pages.map((p) => p.n).join() === '2,3' && lines.pages[0].lines.some((l) => l.text === '小鱼在水里吹泡泡。'));
   const base0 = (await route('GET', `/api/kid/textbook/base?tutor=${T}`, ctx)).json as { lesson: Lesson | null };
   const toc0 = base0.lesson ? lessonPage(base0.lesson) : null;
-  check('课本话题刚开:孩子端要的目录当一页(这一科这学期那一册、目录那几页、能点字)', toc0?.title === '目录' && toc0.pages.join() === '1' && toc0.src === '语文一年级下册.pdf' && toc0.pick === true, JSON.stringify(base0));
+  check('课本话题刚开:孩子端要的目录当一页(这一科这学期那一册、目录那几页、能点字)', toc0?.kind === 'book' && toc0.title === '目录' && toc0.pages.join() === '1' && toc0.src === '语文一年级下册.pdf' && toc0.pick === true, JSON.stringify(base0));
   check('英语老师没有课本:lesson 是 null;没有这位老师 404', ((await route('GET', '/api/kid/textbook/base?tutor=english-tutor', ctx)).json as { lesson: unknown }).lesson === null && (await route('GET', '/api/kid/textbook/base?tutor=nobody', ctx)).status === 404);
   check('一节课的状态:老师、日期、话题不对的 404;没有的 lesson 是 null', (await route('GET', `/api/kid/lesson?tutor=nobody&date=${date}&thread=${thread}`, ctx)).status === 404 && (await route('GET', `/api/kid/lesson?tutor=${T}&date=x&thread=${thread}`, ctx)).status === 404 && ((await route('GET', `/api/kid/lesson?tutor=${T}&date=${date}&thread=0000-9`, ctx)).json as { lesson: unknown }).lesson === null);
   const nf = await Promise.all([route('GET', `/api/kid/textbook/pdf?b=${encodeURIComponent('../cotutor.json')}`, ctx), route('GET', '/api/kid/textbook/pdf?b=x.pdf', ctx), route('GET', `/api/kid/textbook/lines?b=${encodeURIComponent('语文一年级下册.pdf')}&p=x`, ctx)]);
@@ -187,7 +187,7 @@ const sec = (cards: BoardCard[]): BoardSection => ({ heading: null, lines: cards
   const mtile = h.cards.find((c) => c.props.tutor === M)?.props.tiles?.find((x) => x.id === 'preview');
   const mbase0 = (await route('GET', `/api/kid/textbook/base?tutor=${M}`, ctx)).json as { lesson: Lesson | null };
   const mtoc = mbase0.lesson ? lessonPage(mbase0.lesson) : null;
-  check('数学「预习」方砖也垫课本;目录当一页,不开点字、什么都没请', mtile?.board === 'page' && mtile.base === 'textbook' && mtoc?.src === '数学一年级下册.pdf' && mtoc.title === '目录' && mtoc.pick === false && mtoc.open.length === 0, JSON.stringify({ mtile, mbase0 }));
+  check('数学「预习」方砖也铺课本;目录当一页,不开点字、什么都没请', mtile?.base === 'textbook' && mtoc?.kind === 'book' && mtoc.src === '数学一年级下册.pdf' && mtoc.title === '目录' && mtoc.pick === false && mtoc.open.length === 0, JSON.stringify({ mtile, mbase0 }));
   const mPrompt = (job: string): string => (JSON.parse(readFileSync(join(root, 'conversations', M, `${date}.${job}.run.json`), 'utf8')) as { prompt: string }).prompt;
   const mIndex = (): { messages: { job: string; section?: BoardSection }[] } => JSON.parse(readFileSync(join(root, 'conversations', M, `${date}.json`), 'utf8'));
   const mwait = async (): Promise<void> => { for (let i = 0; i < 200 && ctx.runner.running(M); i++) await new Promise((r) => setTimeout(r, 25)); await ctx.runner.flush(); };
@@ -215,7 +215,7 @@ const sec = (cards: BoardCard[]): BoardSection => ({ heading: null, lines: cards
     ctx.runner.boardEvent(T, date, { k: 'shot', thread, base, box: [0, 0, 1000, 800], image: JPG }),
     ctx.runner.boardEvent(M, date, { k: 'shot', thread: mth, base: '数学一年级下册.pdf#目录', box: [0, 0, 1000, 800], image: JPG }),
   ]);
-  check('不收:不是 jpeg、没有图;目录(字全在 board: 里);语文的课本先不收窗里的图', badShots.every((x) => x === null), JSON.stringify(badShots));
+  check('不收:不是 jpeg、没有图;不是现在这一页(目录);语文的课本先不收窗里的图', badShots.every((x) => x === null), JSON.stringify(badShots));
   now = new Date(2026, 10, 14, 11, 2);
   const mt3 = await kidSend(ctx, M, { text: '这是几个', thread: mth });
   await mwait();
@@ -240,7 +240,7 @@ const sec = (cards: BoardCard[]): BoardSection => ({ heading: null, lines: cards
   now = new Date(2026, 10, 14, 11, 3, 30);
   const mt35 = await kidSend(ctx, M, { text: '我写好了', thread: mth });
   await mwait();
-  check('下一轮:孩子做的里有写画了几笔', mPrompt(String(mt35.json.job)).includes('在课本上写画了 2 笔'), mPrompt(String(mt35.json.job)).slice(mPrompt(String(mt35.json.job)).indexOf('孩子做的'), mPrompt(String(mt35.json.job)).indexOf('孩子做的') + 80));
+  check('下一轮:孩子做的里有写画了几笔', mPrompt(String(mt35.json.job)).includes('在页上写画了 2 笔'), mPrompt(String(mt35.json.job)).slice(mPrompt(String(mt35.json.job)).indexOf('孩子做的'), mPrompt(String(mt35.json.job)).indexOf('孩子做的') + 80));
   // 动手:例 4 下面摆一个点阵(白纸条),请他圈
   now = new Date(2026, 10, 14, 11, 3, 40);
   await kidSend(ctx, M, { text: '我想摆一摆', thread: mth });

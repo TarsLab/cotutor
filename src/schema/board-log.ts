@@ -14,8 +14,8 @@ export const BoardEventSchema = z.discriminatedUnion('k', [
   z.object({ at: z.string().min(1), k: z.literal('pick'), text: z.string().min(1).max(BOARD_PICK_CHARS), base: z.string().min(1) }),
   /** 孩子点开了一处盖住的拼音(老师写的「遮」);base 同上 */
   z.object({ at: z.string().min(1), k: z.literal('reveal'), text: z.string().min(1).max(BOARD_PICK_CHARS), base: z.string().min(1) }),
-  /** 应用把板交给老师的那一轮(上下文包里有 board: 的那条);told = 这一轮把这块底认出的全文给了老师 */
-  z.object({ at: z.string().min(1), k: z.literal('turn'), job: z.string().min(1), told: z.string().optional() }),
+  /** 应用把页交给老师的那一轮(上下文包里有 board: 的那条);told = 这一轮把哪几页印的字给了老师(页的笔记的 id;以前只记一个,是字符串) */
+  z.object({ at: z.string().min(1), k: z.literal('turn'), job: z.string().min(1), told: z.union([z.string(), z.array(z.string())]).optional() }),
   /** 课本做底:孩子自己挪了、放大了窗,停下来的地方(应用照课本说成一句:「第 55 页:第 7 段」);base = 「册子#课」 */
   z.object({ at: z.string().min(1), k: z.literal('view'), text: z.string().min(1).max(80), base: z.string().min(1) }),
   /**

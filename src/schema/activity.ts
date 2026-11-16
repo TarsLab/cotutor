@@ -41,21 +41,22 @@ export const ACTIVITY_PAGES: Readonly<Record<string, string>> = {
 };
 
 /**
- * 头上的 `board:`:这个 activity 的页面是不是一块板(2026-11-13《画板为主设计》)。
- * page = 以板为主:进来先拍照(或直接用白板),照片一发应用就铺板,板从进来到回首页一直在;老师的卡只往板上画记号、开放操作,不出别的卡
- */
-export const ACTIVITY_BOARDS: Readonly<Record<string, string>> = {
-  page: '以板为主:先拍照或用白板,板一直在,老师只在板上画',
-};
-export type ActivityBoard = 'page';
-
-/**
- * 头上的 `base:`(写了 board: page 才有):板上垫什么。不写 = 孩子拍的照片(进来先到拍照屏)。
- * textbook = vault 里的教材 PDF(2026-11-14《语文预习:PDF 课本与镜头交互》):不拍照、不选相册,进来铺这一册的目录,老师照孩子说的课翻到那一课
+ * 头上的 `base:`:这一节课铺哪种页(2026-11-16《多模态教学harness-开发计划》阶段 3;以前要和 `board: page` 一起写)。不写 = 不铺页(小课堂、看图说话、口语课还是卡片流,阶段 4、5 搬)。
+ * textbook = vault 里的教材 PDF(《语文预习:PDF 课本与镜头交互》):不拍照,进来铺这一册的目录,老师照孩子说的课翻到那一课。
+ * photo = 孩子拍的作业:进来先拍照(或不拍,用白纸),照片一发就铺;老师照认出的题看、圈、在题下面的白纸条上摆、写。
+ * 两种页上老师都能 [[翻 白纸]] 加一张白纸页。
  */
 export const ACTIVITY_BASES: Readonly<Record<string, string>> = {
   textbook: '课本:vault 的教材/ 下这一科的 PDF,不拍照',
+  photo: '孩子拍的作业:进来先拍照,不拍就是白纸',
 };
+export type ActivityBase = 'textbook' | 'photo';
+
+/**
+ * 旧的头(2026-11-16 以前的出厂件、家长改过的):`board: page` 不再有意义(铺页的都铺页),还认一段时间——没写 base 的当 base: photo;
+ * cards 里的 kit(教具卡,删了)读进来就丢。activity check、doctor 提一句;refresh 换掉没改过的。
+ */
+export const ACTIVITY_OLD_BOARD = 'page';
 
 /** 应用认的节标题;工具人那节是 `<工具人>收到什么` */
 export const ACTIVITY_SECTIONS = { params: '家长填的', tutor: '老师怎么带' } as const;
@@ -102,10 +103,10 @@ export const ActivitySchema = z.object({
   params: z.array(ActivityParamSchema),
   /** 头上的 `page:`:不起老师、进这一页(见 ACTIVITY_PAGES);没写 = 起老师 */
   page: z.string().optional(),
-  /** 头上的 `board:`:page = 以板为主(见 ACTIVITY_BOARDS);没写 = 照卡片流 */
-  board: z.string().optional(),
-  /** 头上的 `base:`:板上垫什么(见 ACTIVITY_BASES);没写 = 孩子拍的照片 */
+  /** 头上的 `base:`:铺哪种页(见 ACTIVITY_BASES);没写 = 不铺页(卡片流) */
   base: z.string().optional(),
+  /** 头上还写着旧的东西(board: page、cards 里的 kit):照新的读了,check 提一句 */
+  old: z.array(z.string()).optional(),
   /** 「老师怎么带」那节的原文(没剥注释、没裁);没有这节就是 null(这个 activity 不起老师,如听写) */
   tutor: z.object({ text: z.string(), line: z.number().int() }).nullable(),
   tools: z.array(ActivityToolSchema),

@@ -5,7 +5,7 @@
  */
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
-import { LiveCall, type LiveApp } from '../../runtime/live/call.ts';
+import { LiveCall, type LiveApp, type LiveDeps } from '../../runtime/live/call.ts';
 import { acceptWebSocket, isUpgrade } from './ws.ts';
 import { cookieOf } from '../http/access.ts';
 import { DEVICE_COOKIE } from '../../schema/kid-device.ts';
@@ -24,6 +24,8 @@ export interface LiveRouteDeps {
   stallMs?: number;
   /** 测试:板上点完字多久没动静替孩子叫老师 */
   stillMs?: number;
+  /** 测试:收笔的秒数 */
+  pen?: LiveDeps['pen'];
   idleCutMs?: number;
   maxTakeMs?: number;
   onFinished?(tutor: string, why: string): void;
@@ -49,7 +51,7 @@ export function makeLiveUpgrade(deps: LiveRouteDeps = {}): LiveUpgrade {
       onClose: () => call?.onSocketClose(),
     });
     const listen = new URL(req.url ?? '', 'http://x').searchParams.get('listen') === 'open' ? 'open' : 'hold';
-    call = new LiveCall(sock, { ctx, tutor, deviceId: cookieOf(req.headers.cookie, DEVICE_COOKIE), listen, endpoint: deps.endpoint, env: deps.env, heartbeatMs: deps.heartbeatMs, keepAliveMs: deps.keepAliveMs, swapTokens: deps.swapTokens, idleSwapMs: deps.idleSwapMs, echoWaitMs: deps.echoWaitMs, ringMs: deps.ringMs, stallMs: deps.stallMs, stillMs: deps.stillMs, idleCutMs: deps.idleCutMs, maxTakeMs: deps.maxTakeMs, onFinished: (why) => { if (call) open.delete(call); deps.onFinished?.(tutor, why); } });
+    call = new LiveCall(sock, { ctx, tutor, deviceId: cookieOf(req.headers.cookie, DEVICE_COOKIE), listen, endpoint: deps.endpoint, env: deps.env, heartbeatMs: deps.heartbeatMs, keepAliveMs: deps.keepAliveMs, swapTokens: deps.swapTokens, idleSwapMs: deps.idleSwapMs, echoWaitMs: deps.echoWaitMs, ringMs: deps.ringMs, stallMs: deps.stallMs, stillMs: deps.stillMs, pen: deps.pen, idleCutMs: deps.idleCutMs, maxTakeMs: deps.maxTakeMs, onFinished: (why) => { if (call) open.delete(call); deps.onFinished?.(tutor, why); } });
     open.add(call);
     void call.start();
     return true;

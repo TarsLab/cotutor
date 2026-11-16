@@ -7,9 +7,9 @@
 /**
  * 孩子这一轮是怎么来的:按住说的、打字的、拍的照片、交的卡、点了首页的按钮(activity 的开场、接着);
  * answer = 按住说的、上一句念给他的是问句(看图说话这种一问一答);empty = 按住了但转写是空的;
- * warm = 口语单拍好、进来上口语课,嘴先说要热身
+ * warm = 口语单拍好、进来上口语课,嘴先说要热身;pen = 孩子在页上写完停了笔,应用替他交给老师(src/runtime/live/pen.ts)
  */
-export type CatchKind = 'voice' | 'answer' | 'text' | 'photo' | 'card' | 'start' | 'empty' | 'warm' | 'away' | 'retry';
+export type CatchKind = 'voice' | 'answer' | 'text' | 'photo' | 'card' | 'start' | 'empty' | 'warm' | 'away' | 'retry' | 'pen';
 
 /**
  * 嘴先说的那句;没写的那几种嘴不出声,等脑的第一句。
@@ -21,6 +21,8 @@ const CATCH: Partial<Record<CatchKind, string>> = {
   // 听不清由应用判(转写是空的),不交给脑,嘴不说孩子就不知道要再说一遍
   empty: '孩子按了说话,但什么都没说清。只说一句「没听清,再说一遍吧」,说完就停。',
   warm: '孩子拍好了今天的口语单,要开始上口语课。只说一句「好,我们先热热身!」,说完就停。',
+  // 收笔:脑要看图判他写的,要等 10–20 秒(阶段 0.1 量的),先接住;不说对不对
+  pen: '孩子在页上写完了,停了笔。只说一句「我看看你写的」,不说对不对,说完就停。',
   // 脑这一轮没成,一句也没写出来(2026-11-14:Token Plan 拒了一下午,孩子说了 10 次老师一声不出)。不说错、不说为什么:
   // away = 要家长动手的(欠费、key、业务空间),孩子再说也没用;retry = 断流、网络抖一下,再说一遍多半就好
   away: '老师这边接不上了。只说一句「老师这会儿接不上了,请爸爸妈妈来看一看吧」,说完就停。',
@@ -37,6 +39,7 @@ const CATCH_EN: Partial<Record<CatchKind, string>> = {
   warm: '孩子要开始上口语课。只说一句「Okay, let\'s start!」,说完就停。',
   away: '老师这边接不上了。只说一句「Sorry, I can\'t talk right now. Please ask Mom or Dad to take a look.」,说完就停。',
   retry: '老师刚才没接上孩子的话。只说一句「Sorry, I missed that. Say it again?」,说完就停。',
+  pen: '孩子写完了,停了笔。只说一句「Let me see what you wrote.」,说完就停。',
 };
 
 /** 这一轮嘴先说的那句的指令;null = 嘴不出声。en = 口语课打电话那段 */

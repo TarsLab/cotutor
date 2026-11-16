@@ -16,6 +16,7 @@
  *     课本上落的一笔 {k:'stroke', thread, base, pts}、擦掉 {k:'wipe'} 落进一节课的状态;报来的一件一件排着记,交给脑之前先等记完;
  *   安静时嘴照念这个字词的念法(认字时写好的「傍,傍晚的傍」),老师正在说就不念;再点下一个,上一句掐掉。
  *   点过以后 STILL_MS 没动静(没开口、没再点),应用替他叫一次老师(app: still,带上他做了什么);连着只叫一次,孩子开口了才再叫
+ *   一节课里落笔 {k:'pen'}、抬笔(stroke 收下了)走收笔(./pen.ts 的 turnStep):抬笔停 live.pen 的秒数没再落笔,替他交一轮(app: pen,嘴先说「我看看你写的」);他先开口了就不交
  * 这里 → 孩子端:二进制帧 = PCM16 24k 嘴的声音;文本帧 = JSON
  *   {t:'ready'} 嘴连上了 · {t:'down', why} 连不上(孩子端回到「正在叫老师」,过一会儿重连)· {t:'kid', text} 孩子那句的转写 · {t:'tutor', of, delta} / {t:'tutor', of, done} 嘴的字(of:catch 接住 / read 照念)
  *   {t:'turn', job, thread} 脑开始写这一轮 · {t:'read', job, line, text, play?} 讲稿这一句开始放(play = 念完放小课堂那一段;一句一个,按孩子端放到的时刻发:一段里第一句在段首,
@@ -61,6 +62,7 @@ import { INPUT_RATE, OUTPUT_RATE, RealtimeSession } from '../../realtime/bailian
 import { CallRecorder, renderTake, type RawTake } from '../journal/recorder.ts';
 import { MouthEvents, MouthTakes, type MouthEvent } from '../journal/mouth.ts';
 import { Turns } from './turns.ts';
+import { penInit, turnStep, type PenEvent, type PenTimes } from './pen.ts';
 
 /** 孩子端那条 WebSocket 里一次通话用得上的(app/ws/ws.ts 的 ServerSocket 满足它) */
 export interface KidSocket {
@@ -97,6 +99,8 @@ export interface LiveDeps {
   ringMs?: number;
   /** 测试:板上点完字多久没动静替孩子叫老师 */
   stillMs?: number;
+  /** 测试:收笔的秒数(缺省照 cotutor.json 的 live.pen) */
+  pen?: Partial<PenTimes>;
   /** 测试:要嘴说了多久一个字没出算卡住 */
   stallMs?: number;
   /** 测试:录像这一段多久没动静、录了多久就切(心跳时看) */
@@ -225,6 +229,10 @@ export class LiveCall {
   /** 板上报来的事(Runner.boardEvent)排成一条 */
   private boards: Promise<void> = Promise.resolve();
   private stillUsed = false;
+  /** 收笔(./pen.ts):笔在不在页上、什么时候替他交;那一个计时 */
+  private pen = penInit();
+  private penTimer: NodeJS.Timeout | null = null;
+  private penThread: string | null = null;
   /** 打电话从哪一刻起(墙钟,[[call]] 那句在孩子端放完、开始响铃);null = 还没打 */
   private phoneAt: number | null = null;
   private offEvents: (() => void) | null = null;
@@ -655,7 +663,7 @@ export class LiveCall {
       case 'staged': this.d.step({ e: 'staged' }); break;
       // 以板为主:孩子在板上点了一个字
       // 一件一件排着记(「给老师看」前舞台先交的那张窗图要先落下,交给脑那一轮在 toBrain 里等它)
-      case 'board': { const body = m.body; this.boards = this.boards.then(() => this.board(body)).catch(() => undefined); break; }
+      case 'board': { const body = m.body, seq = this.turnSeq; this.boards = this.boards.then(() => this.board(body, seq)).catch(() => undefined); break; }
       // 一直听:孩子端开口时报的上下文(收下时当松手的 body)
       case 'ctx': if (isObj(m.body)) this.ctxBody = m.body; break;
       // 一直听:孩子端停推(关麦、卡的声音、录音、小课堂)/ 接着推;停的时候孩子正说到一半,那一句作废
@@ -695,6 +703,7 @@ export class LiveCall {
   private turn(kind: CatchKind, body: Record<string, unknown>, text?: string): void {
     const seq = ++this.turnSeq;
     this.stillReset();
+    if (kind !== 'pen') this.penStep({ e: 'turn' });
     this.caught = '';
     this.d.note({ e: 'release' });
     // 按住说的等转写回来(heard);一直听的转写已经有了(text)
@@ -850,7 +859,7 @@ export class LiveCall {
       ...(cut !== undefined ? { cut } : {}),
       ...(this.warm.length ? { warmup: warmLines(this.warm) } : {}),
       ...(this.phoneAt !== null ? { phone: Math.max(0, Math.floor((Date.now() - this.phoneAt) / 60_000)) } : {}),
-      ...(app === 'call' || app === 'quiet' || app === 'still' ? { app: app as 'call' | 'quiet' | 'still' } : {}),
+      ...(app === 'call' || app === 'quiet' || app === 'still' || app === 'pen' ? { app: app as 'call' | 'quiet' | 'still' | 'pen' } : {}),
     };
   }
 
@@ -929,6 +938,7 @@ export class LiveCall {
   /** 应用起的一轮(不是孩子说的):嘴不出声,接在这次通话的话题后面交给脑 */
   private appTurn(text: string, app: 'call' | 'quiet' | 'still', thread: string | null = this.turns.thread): void {
     const seq = ++this.turnSeq;
+    this.penStep({ e: 'turn' });
     this.caught = '';
     this.caughtDone = true;
     this.pendingVoice = null;
@@ -941,10 +951,16 @@ export class LiveCall {
    * 以板为主:孩子在板上点了一个字(孩子端已经弹了田字格)。验过记进板的日志;安静时嘴照念它的念法,
    * 嘴正在念上一个字就掐掉换这个;老师在说(照念讲稿、接住、脑在写、孩子在说)不念。之后等 STILL_MS 看他开不开口
    */
-  private async board(body: unknown): Promise<void> {
+  private async board(body: unknown, seq: number): Promise<void> {
     const { ctx, tutor } = this.deps;
+    const b = isObj(body) ? body : {};
+    // 笔落在页上:等着替他交的那次取消(写字不打断老师,不进板的日志)
+    if (b.k === 'pen') { this.lastActive = Date.now(); this.penStep({ e: 'down', at: Date.now() }); return; }
     const r = await ctx.runner.boardEvent(tutor, localDate(ctx.now()), body).catch(() => null);
     if (!r || this.ended || r.shot) return;
+    // 抬笔(这一笔收下了):停一会儿没再落笔就替他交给老师
+    // 这一笔报来以后孩子已经开口、开了一轮(seq 是报来那一刻的):这一笔随那一轮走了,不再等
+    if (b.k === 'stroke' && seq === this.turnSeq) { this.penThread = r.thread; this.penStep({ e: 'up', at: Date.now(), strip: typeof b.strip === 'string' }); }
     this.lastActive = Date.now();
     // 课本上挪窗、放大(view):他在自己读,不替他叫老师,先前点字起的那一下也取消
     if (r.still === false) { if (this.stillTimer) clearTimeout(this.stillTimer); this.stillTimer = null; } else this.stillArm(r.thread);
@@ -963,6 +979,29 @@ export class LiveCall {
     }
     if (this.playing()) { this.d.flush(); this.send({ t: 'flush' }); }
     if (!this.said) go();
+  }
+
+  /** 收笔的秒数:测试给的,不然照 cotutor.json 的 live.pen */
+  private penTimes(): PenTimes {
+    const cfg = this.deps.ctx.runner.ws.config.live.pen;
+    return { blankMs: this.deps.pen?.blankMs ?? cfg.blankMs, stripMs: this.deps.pen?.stripMs ?? cfg.stripMs, retryMs: this.deps.pen?.retryMs ?? 1000 };
+  }
+
+  /** 收笔的一件事(./pen.ts 的 turnStep):照它起、停计时;到点交一轮(嘴先说「我看看你写的」,带着窗里的图) */
+  private penStep(ev: PenEvent): void {
+    const r = turnStep(this.pen, ev, this.penTimes());
+    this.pen = r.s;
+    for (const d of r.do) {
+      if (d.k === 'cancel' || d.k === 'arm') { if (this.penTimer) clearTimeout(this.penTimer); this.penTimer = null; }
+      if (d.k === 'arm') this.penTimer = setTimeout(() => { this.penTimer = null; this.penStep({ e: 'due', at: Date.now(), busy: !this.quiet() || this.playing() || Boolean(this.pendingVoice || this.draft || this.echoing || this.holding || this.vadOn) }); }, Math.max(0, d.at - Date.now()));
+      if (d.k === 'send' && !this.ended) {
+        // 写完了也算他动了手:替他叫老师的那次(still)不用了
+        if (this.stillTimer) clearTimeout(this.stillTimer);
+        this.stillTimer = null;
+        const text = '(孩子在页上写完了,停了笔)';
+        this.turn('pen', { text, app: 'pen', ...(this.penThread ?? this.turns.thread ? { thread: this.penThread ?? this.turns.thread } : {}), ...(this.ctxBody.device ? { device: this.ctxBody.device } : {}) }, text);
+      }
+    }
   }
 
   /** 板上点完字:STILL_MS 后看他动没动;这一回已经替他叫过就不再叫 */
@@ -1031,6 +1070,7 @@ export class LiveCall {
     this.d.stop();
     if (this.echoing?.timer) clearTimeout(this.echoing.timer);
     if (this.stillTimer) clearTimeout(this.stillTimer);
+    if (this.penTimer) clearTimeout(this.penTimer);
     this.offEvents?.();
     const s = this.session;
     this.session = null;

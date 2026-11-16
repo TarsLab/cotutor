@@ -221,7 +221,7 @@ export type TalkConfig = z.infer<typeof TalkSchema>;
 /** 嘴的缺省音色:出厂三位各一个(10-19 起 Ray 那里用着的),别的老师用 MOUTH_VOICE。不进 voices 的缺省值:voices 的键要是在的老师 */
 export const MOUTH_VOICE = 'Serena';
 export const SHIPPED_MOUTHS: Readonly<Record<string, string>> = { 'chinese-tutor': 'Serena', 'math-tutor': 'Andre', 'english-tutor': 'Theo Calm' };
-export const LIVE_DEFAULT = { model: 'qwen3.8-omni-flash-realtime', voices: {} as Record<string, string>, listen: 'hold' as const, vad: 'server_vad' as const, silenceMs: 1600 };
+export const LIVE_DEFAULT = { model: 'qwen3.8-omni-flash-realtime', voices: {} as Record<string, string>, listen: 'hold' as const, vad: 'server_vad' as const, silenceMs: 1600, pen: { blankMs: 2500, stripMs: 6000 } };
 export const LiveSchema = z.object({
   model: z.string().min(1).default(LIVE_DEFAULT.model).describe('嘴用的 realtime 模型'),
   voices: z
@@ -234,6 +234,14 @@ export const LiveSchema = z.object({
   // 缺省 server_vad:semantic_vad 听不见一两个字的回答(好的、Yes,问过也一样,probe-live-vad context)
   vad: z.enum(['semantic_vad', 'server_vad']).default(LIVE_DEFAULT.vad).describe('一直听时谁判说完:server_vad 按静音(缺省;一两个字的回答也认,「嗯」、笑声也会让老师小声一下);semantic_vad 按语义(切得少、不理「嗯」和笑声,但「好的」「Yes」这类短回答听不见)'),
   silenceMs: z.number().int().min(500).max(4000).default(LIVE_DEFAULT.silenceMs).describe('一直听时停多久算说完(毫秒;孩子一句话中间停一下接着说,太短会切碎)'),
+  // 收笔(src/runtime/live/pen.ts):一节课里孩子在页上写完、抬笔以后停多久替他交给老师。2026-11-16 定的起点,真机上看孩子怎么写再调
+  pen: z
+    .object({
+      blankMs: z.number().int().min(800).max(20_000).default(LIVE_DEFAULT.pen.blankMs).describe('在题目的空位上写完以后等多久(毫秒)'),
+      stripMs: z.number().int().min(800).max(30_000).default(LIVE_DEFAULT.pen.stripMs).describe('在白纸条上列式、画图以后等多久(毫秒;要想一想再接着画,长一点)'),
+    })
+    .default(LIVE_DEFAULT.pen)
+    .describe('收笔:一节课里孩子抬笔以后停多久(没再落笔)应用替他把窗里的图交给老师,嘴先说一句「我看看你写的」'),
 });
 export type LiveConfig = z.infer<typeof LiveSchema>;
 /** 这位老师的嘴用哪个音色 */

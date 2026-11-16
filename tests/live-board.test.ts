@@ -52,7 +52,7 @@ cfg.live = { voices: { 'chinese-tutor': 'Serena' } };
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 const ctx = createContext(loadWorkspace(wsRoot), { look });
 await ctx.reload();
-const liveUpgrade = makeLiveUpgrade({ endpoint: fake.endpoint, stillMs: 900 });
+const liveUpgrade = makeLiveUpgrade({ endpoint: fake.endpoint, stillMs: 900, pen: { blankMs: 700, stripMs: 1500, retryMs: 200 } });
 const server = createServer(createHandler(ctx));
 server.on('upgrade', (req, socket, head) => { void liveUpgrade(req, socket, head, ctx).then((took) => { if (!took) socket.destroy(); }); });
 await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
@@ -152,6 +152,34 @@ await settle();
   sock.send(JSON.stringify({ t: 'board', body: { k: 'pick', thread, text: '变', base: PAGE } }));
   await sleep(1200);
   check('连着只叫一次:老师接话以后他还是只点不说,就等着', msgs.filter((m) => m.t === 'turn').length === n2);
+}
+
+// ---- 收笔:落笔、抬笔,停一会儿没再写,替他交给老师;嘴先说「我看看你写的」 ----
+{
+  await settle();
+  const turns = msgs.filter((m) => m.t === 'turn').length;
+  const r = c.responses.length;
+  sock.send(JSON.stringify({ t: 'board', body: { k: 'pen', thread, base: PAGE } }));
+  sock.send(JSON.stringify({ t: 'board', body: { k: 'stroke', thread, base: PAGE, pts: [[300, 480], [340, 470]] } }));
+  // 又落了一笔:计时重来
+  await sleep(400);
+  sock.send(JSON.stringify({ t: 'board', body: { k: 'pen', thread, base: PAGE } }));
+  await sleep(500);
+  check('笔还在页上:到点不交', msgs.filter((m) => m.t === 'turn').length === turns);
+  sock.send(JSON.stringify({ t: 'board', body: { k: 'stroke', thread, base: PAGE, pts: [[350, 480], [390, 470]] } }));
+  const sent = await until(() => msgs.filter((m) => m.t === 'turn').length > turns, 6000);
+  const turn = msgs.filter((m) => m.t === 'turn').slice(-1)[0];
+  check('抬笔停了 blankMs:替他交给老师一轮,接在这个话题;嘴先说「我看看你写的」', sent && turn.thread === thread && c.responses.slice(r).some((x) => (x?.instructions ?? '').includes('我看看你写的')), JSON.stringify(c.responses.slice(r).map((x) => x?.instructions)));
+  await settle();
+  const prompt = (JSON.parse(readFileSync(join(convDir, `${today}.${turn.job}.run.json`), 'utf8')) as { prompt: string }).prompt;
+  check('那一轮:live.app: pen,孩子做的里有写画了 2 笔', prompt.includes('    app: pen') && prompt.includes('在页上写画了 2 笔'), prompt.slice(prompt.indexOf('  board:'), prompt.indexOf('  board:') + 400).replace(/\n/g, ' | '));
+  // 写完了自己开口:不再替他交
+  const n2 = msgs.filter((m) => m.t === 'turn').length;
+  sock.send(JSON.stringify({ t: 'board', body: { k: 'stroke', thread, base: PAGE, pts: [[300, 600], [340, 610]] } }));
+  sock.send(JSON.stringify({ t: 'send', body: { text: '我写好了', thread } }));
+  await until(() => msgs.filter((m) => m.t === 'turn').length > n2, 6000);
+  await sleep(1200);
+  check('写完自己说了(开了一轮):不再替他交', msgs.filter((m) => m.t === 'turn').length === n2 + 1);
 }
 
 sock.send(JSON.stringify({ t: 'bye' }));

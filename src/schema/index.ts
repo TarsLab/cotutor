@@ -13,6 +13,7 @@
  *  activity      activity 文件(agents/<老师>/activities/<名>.md:家长填的、老师怎么带、工具人收到什么)
  *  board-log     以板为主的话题里板的日志(一件事一行)
  *  textbook      课本:vault 里教材 PDF 的索引(字、行、拼音、目录、页码)
+ *  lesson        一节课:讲稿里的动作、一节课的状态
  * 运行时校验用 zod,失败信息经 explainIssues 变成修复指南。
  */
 export * from './issues.ts';
@@ -34,3 +35,4 @@ export * from './home.ts';
 export * from './activity.ts';
 export * from './board-log.ts';
 export * from './textbook.ts';
+export * from './lesson.ts';

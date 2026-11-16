@@ -3,6 +3,7 @@
  * (剥类型时一起没了)。下面的 zod 与类型对齐,文件底部用赋值断言锁住。每种卡的 props 契约在 src/board/cards/<kind>.ts。
  */
 import { z } from 'zod';
+import { LineActSchema, type LineAct } from './lesson.ts';
 
 /**
  * 一张卡:kind 是种类(text / read / choice / fill / image / code…),props 由那种卡自己定;state 是孩子在卡上做的事(存服务端,形状由那种卡定);
@@ -66,6 +67,8 @@ export interface BoardLine {
   echo?: { word: string; say?: true };
   /** 讲稿的 [[call]]:念完进打电话 */
   call?: true;
+  /** 讲稿里写在这句后面的动作(`[[看 第 3 题]]`):这句念完才生效 */
+  acts?: LineAct[];
 }
 
 /** 一节板书 = 一轮回复:卡整块铺,讲稿逐句播;partial = 还在流式生成 */
@@ -76,6 +79,8 @@ export interface BoardSection {
   /** 流式时:前几拍已经就绪(关了)——页面就绪一拍铺一拍卡;定稿的节没有这个字段(全部就绪) */
   ready?: number;
   layout?: BoardLayout;
+  /** 写在第一句讲稿前面的动作:马上生效(没有讲稿的一节,动作都在这里) */
+  acts?: LineAct[];
 }
 
 
@@ -105,6 +110,8 @@ export const BoardLineSchema = z.object({
   echo: z.object({ word: z.string(), say: z.literal(true).optional() }).optional(),
   /** [[call]]:念完进打电话 */
   call: z.literal(true).optional(),
+  /** 写在这句后面的动作:念完才生效 */
+  acts: z.array(LineActSchema).optional(),
 });
 export const BoardSectionSchema = z.object({
   cards: z.array(BoardCardSchema),
@@ -113,6 +120,8 @@ export const BoardSectionSchema = z.object({
   ready: z.number().int().nonnegative().optional(),
   /** 排版(围栏行上写的 same,为某个端排的行);没有 = 一行一张 */
   layout: BoardLayoutSchema.optional(),
+  /** 写在第一句前面的动作:马上生效 */
+  acts: z.array(LineActSchema).optional(),
 });
 
 const assertAligned = (s: z.infer<typeof BoardSectionSchema>): BoardSection => s;

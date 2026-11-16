@@ -1,7 +1,8 @@
 /**
  * 板书解析器:老师的回复正文(已剥掉「记账」段)→ 一节 BoardSection。
  * 三条规则(见 docs/卡片协议.md):围栏 = 卡(标签第一个词是 kind),普通行 = 讲稿一句,第一个 H2 起是给家长的尾巴。
- * 讲稿句里 [词] 是标注(落到第一张含这个词的卡,整节找,卡在前在后都行),[[名 参数]] 是对上一张卡的动作(cue)。
+ * 讲稿句里 [词] 是标注(落到第一张含这个词的卡,整节找,卡在前在后都行);[[名 参数]] 在 ./acts.ts 读:老师的动作(看、圈…,这句念完生效;
+ * 只有动作的一行跟着上一句,第一句前面的记在这一节上、马上生效)、[[play]](对上一张卡)、热身的 echo / say / call。写错的、不认得的丢掉,记一行 warning。
  * partial 模式给流式用:没闭合的围栏和没换行结束的最后一行压着不算,下次整段重解析自然补上。
  * 永不抛错:围栏没闭合当到文末,卡解析不出退成文字卡并记一句 warning。
  * spans 是「这张卡 / 这句话是原文哪几行」,家长端「看原文」据此在原文旁边标出解析器怎么读的;孩子端的 BoardSection 不带它。
@@ -9,6 +10,8 @@
 import { parseCard, type CardPlace } from './cards/index.ts';
 import { anchorMarks, hasState, isAskCard, isHeading, isQuestion, lineTarget, MAX_CARDS_PER_ROW, phrasesIn, plainLine, standsAlone, type BoardCard, type BoardCue, type BoardLine, type BoardSection, type Device } from './presentation.ts';
 import { parseSections } from './sections.ts';
+import { readMarks } from './acts.ts';
+import type { LineAct } from '../schema/index.ts';
 
 export interface ParseBoardOptions {
   /** 文本还在长(流式):压住没闭合的围栏与没换行结束的最后一行 */
@@ -89,7 +92,6 @@ function tailTo(lines: readonly string[], from: number): number {
 
 const FENCE_OPEN = /^ {0,3}(`{3,}|~{3,})(.*)$/;
 const H2 = /^##\s+\S/;
-const CUE = /\[\[([^\[\]]+)\]\]/g;
 
 function fenceClose(line: string, fence: string): boolean {
   const m = /^ {0,3}(`{3,}|~{3,})\s*$/.exec(line);
@@ -131,13 +133,11 @@ interface RawLine {
   line: number;
   echo?: BoardLine['echo'];
   call?: true;
+  acts: LineAct[];
+  /** [[ ]] 里写错的、不认得的:丢掉,给家长记一行 */
+  bad: string[];
 }
 
-/**
- * 热身的记号:不锚卡,记在这句上。[[echo 词]] 跟我说、[[say 词]] 你先说(念完等孩子说「词」),[[call]] 念完进打电话。
- * echo 没写词就取这句里的英文;一句写了几个,算最后一个
- */
-const LINE_MARKS = new Set(['echo', 'say', 'call']);
 const englishIn = (text: string): string => (text.match(/[A-Za-z][A-Za-z']*/g) ?? []).join(' ');
 
 /** 句子锚到上一张卡;小节标题行不算卡,跳过它 */
@@ -146,25 +146,30 @@ function lastCard(cards: readonly BoardCard[]): number | null {
   return null;
 }
 
+/**
+ * 一行讲稿:[[ ]] 都在 ./acts.ts 读——老师的动作(看、圈…)记在这句上、念完生效;[[play]] 是对上一张卡的动作;
+ * 热身的 [[echo 词]] 跟我说、[[say 词]] 你先说(念完等孩子说「词」)、[[call]] 念完进打电话(echo 没写词就取这句里的英文;一句写了几个,算最后一个)
+ */
 function rawLine(line: string, cards: readonly BoardCard[], at: number): RawLine {
   const anchor = lastCard(cards);
   const cues: BoardCue[] = [];
+  const acts: LineAct[] = [];
+  const bad: string[] = [];
   let mark: { name: string; arg: string } | null = null;
-  const text = line
-    .replace(CUE, (_, inner: string) => {
-      const [name, ...rest] = inner.trim().split(/\s+/);
-      const n = (name ?? '').toLowerCase();
-      if (LINE_MARKS.has(n)) mark = { name: n, arg: rest.join(' ') };
-      else if (name && anchor !== null) cues.push({ card: anchor, name: n, ...(rest.length ? { arg: rest.join(' ') } : {}) });
-      return '';
-    })
-    .replace(/\s{2,}/g, ' ')
-    .trim();
+  const read = readMarks(line);
+  for (const m of read.marks) {
+    if (m.kind === 'act') { acts.push(m.act); if (m.warn) bad.push(m.warn); }
+    else if (m.kind === 'line') mark = { name: m.name, arg: m.arg };
+    else if (m.kind === 'cue') { if (anchor !== null) cues.push({ card: anchor, name: m.name, ...(m.arg ? { arg: m.arg } : {}) }); }
+    else bad.push(`讲稿里的 [[${m.text}]] 没做:${m.why}`);
+  }
+  const text = read.text;
+  const base = { text, anchor, cues, line: at, acts, bad };
   const m = mark as { name: string; arg: string } | null;
-  if (!m) return { text, anchor, cues, line: at };
-  if (m.name === 'call') return { text, anchor, cues, line: at, call: true };
+  if (!m) return base;
+  if (m.name === 'call') return { ...base, call: true };
   const word = m.arg || (m.name === 'echo' ? englishIn(text) : '');
-  return { text, anchor, cues, line: at, echo: { word, ...(m.name === 'say' ? { say: true as const } : {}) } };
+  return { ...base, echo: { word, ...(m.name === 'say' ? { say: true as const } : {}) } };
 }
 
 /** 一句讲稿交给嘴时要带的:[[play]] 到小课堂卡、热身的 echo / say、call(runner 的 line 事件、mock 的假嘴都用它) */
@@ -248,12 +253,23 @@ export function parseBoard(text: string, opts: ParseBoardOptions = {}): ParsedBo
     if (speech) raws.push(rawLine(speech, cards, i));
     i++;
   }
+  // 写错的动作:丢掉,给家长记一行
+  for (const r of raws) for (const b of r.bad) warnings.push({ text: b, line: r.line });
+  // 只有动作没有话的一行:动作跟着上一句(念完它才生效);第一句前面的马上生效(记在这一节上)
+  const lead: LineAct[] = [];
+  const kept: RawLine[] = [];
+  for (const r of raws) {
+    if (r.text) { kept.push(r); continue; }
+    if (!r.acts.length) continue;
+    const prev = kept[kept.length - 1];
+    if (prev) prev.acts = [...prev.acts, ...r.acts];
+    else lead.push(...r.acts);
+  }
   // 标注整节找(老师把卡写在句子后面也认),所以卡收齐了再落
-  const kept = raws.filter((r) => r.text);
   const out: BoardLine[] = kept.map((r) => {
     const marks = anchorMarks(cards, phrasesIn(r.text));
     const plain = plainLine(r.text);
-    return { text: plain, audio: null, marks, ask: isQuestion(plain), anchor: r.anchor, cues: r.cues, ...(r.echo ? { echo: r.echo } : {}), ...(r.call ? { call: true as const } : {}) };
+    return { text: plain, audio: null, marks, ask: isQuestion(plain), anchor: r.anchor, cues: r.cues, ...(r.echo ? { echo: r.echo } : {}), ...(r.call ? { call: true as const } : {}), ...(r.acts.length ? { acts: r.acts } : {}) };
   });
   // 排版:有卡写了 same 才排行(明写的并排,其余孩子端按宽度排);接不上(上一行满了、有独占一行的卡)就另起一行并提醒。提问卡(下面补的)不在行里,rowsFor 认前缀
   let layout: BoardSection['layout'];
@@ -272,7 +288,7 @@ export function parseBoard(text: string, opts: ParseBoardOptions = {}): ParsedBo
   // 末句的锚点不动(还在它讲的那张卡的拍里);提问卡自己一拍、没有讲稿。
   // 老师还在写(partial)时不补:这时的末句不一定是最后一句。首页没有讲稿,不管;实时不补(板上放什么由脑定)
   const lastLine = out[out.length - 1];
-  if (!partial && !opts.live && (opts.place ?? 'board') === 'board' && lastLine?.ask && !lastLine.cues.length && !lastLine.echo && !lastLine.call) {
+  if (!partial && !opts.live && (opts.place ?? 'board') === 'board' && lastLine?.ask && !lastLine.cues.length && !lastLine.echo && !lastLine.call && !lastLine.acts?.length) {
     const t = lineTarget(lastLine);
     // 拍给我看卡也算能答:孩子拍来的照片进它的答案栏(board/presentation.ts 的 askCard)
     const answerable = (c: BoardCard | undefined): boolean => Boolean(c && (hasState(c) || c.kind === 'photo'));
@@ -282,7 +298,7 @@ export function parseBoard(text: string, opts: ParseBoardOptions = {}): ParsedBo
     }
   }
   return {
-    section: { cards, lines: out, ...(partial ? { partial: true } : {}), ...(layout ? { layout } : {}) },
+    section: { cards, lines: out, ...(partial ? { partial: true } : {}), ...(layout ? { layout } : {}), ...(lead.length ? { acts: lead } : {}) },
     warnings,
     tail: tail ? tail.join('\n').trim() : '',
     spans: {
@@ -376,8 +392,10 @@ export function annotateSource(text: string, opts: Pick<ParseBoardOptions, 'live
     const l = board.section.lines[n];
     const waits = l.ask && n === board.section.lines.length - 1;
     const asked = waits && board.section.cards.some(isAskCard);
-    rows[i].label = `讲稿 ${n + 1}${waits ? ` · 问句,停下等${asked ? '(补提问卡)' : ''}` : ' · 播'}`;
+    rows[i].label = `讲稿 ${n + 1}${waits ? ` · 问句,停下等${asked ? '(补提问卡)' : ''}` : ' · 播'}${l.acts?.length ? ` · 念完${l.acts.map((a) => a.name).join('、')}` : ''}`;
   });
+  // 只有动作的一行(跟着上一句,第一句前面的马上做)
+  for (const r of rows) if (r.role === 'drop' && /\[\[[^\[\]]+\]\]/.test(r.text)) r.label = '动作 · 跟着上一句(第一句前面的马上做)';
   // 整块照旧是 drop,开头那行点名
   for (const span of board.spans.toolCalls) {
     const i = at(span[0]);

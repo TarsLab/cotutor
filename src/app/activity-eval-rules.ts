@@ -34,16 +34,16 @@ export interface ExampleIssue {
 /** 认得的判:名字 → 一句话。带参数的写成「名字: 参数」 */
 export const GRADERS: Readonly<Record<string, string>> = {
   每节有讲稿: '每一轮至少有一句非空讲稿;只有卡、空回复或没有轮次都不通过',
-  放过整段: '有一节放过三行以上的 read 卡(连成的一段)',
-  每节末句是问句: '有卡的每一节(讲解),最后一句讲稿以问号结尾;没卡的随口问答不查(守则:问答一两句、没有卡)',
-  一节一问: '有卡的每一节,讲稿里最多一个问号(看图说话:一节只问一个问题)',
+  放过整段: '有一轮写过三行以上([[写 …]],连成的一段)',
+  每节末句是问句: '在页上动过的每一轮(讲解),最后一句讲稿以问号结尾;只说话的不查(收尾、接一句)',
+  一节一问: '在页上动过的每一轮,讲稿里最多一个问号(看图说话:一轮只问一个问题)',
   收尾不问: '最后一轮的末句不是问句(守则「答完就停」:答案出来了、孩子说懂了,一句收住,不再考他)',
   不说: '老师的讲稿里没有这几个说法(「不说: 你没说清楚、错了」)',
   说到: '老师的讲稿里出现过这几个说法(「说到: 你画的」;同「问到」,不要求是问句)',
   放课里一段: '写过 lecture 卡(放小课堂里的一段)',
   一节最多一段: '每一节最多一张 lecture 卡',
   问到: '老师的讲稿里出现过这个词(「问到: 在哪里」)',
-  并排: '有一张 read 卡同时有这两句里的字(「并排: 睡大觉 | 浇了水」)',
+  并排: '有一轮写下的([[写 …]])同时有这两句里的字(「并排: 睡大觉 | 浇了水」)',
   卡上有: '老师写的卡上、讲稿的动作里([[写 …]] [[圈 …]])出现过这几个说法(「卡上有: 先看清」,如顺口溜)',
   出拍给我看卡: '写过拍给我看卡(photo):要孩子拍照片发来时',
   摆图形: '讲稿里摆过图形([[摆 …]]):老师先摆出来、请孩子动笔时;后面写图形的名字就要是那一种(「摆图形: 点阵」)',
@@ -176,7 +176,10 @@ export function askedOps(turns: readonly EvalTurn[]): { turn: number; want: stri
   return out;
 }
 
-const segmentsOf = (c: BoardSection['cards'][number]): string[] => (c.kind === 'read' && Array.isArray((c.props as { segments?: unknown }).segments) ? ((c.props as { segments: unknown[] }).segments as string[]) : []);
+/** 一轮里写在页上的几行([[写 …]];大小的档去掉) */
+const writesOf = (s: BoardSection | null): string[] => actsOf(s).filter((a) => a.name === '写').map((a) => a.arg.replace(/^[大中小]\s+|\s+[大中小]$/g, '').trim());
+/** 这一轮在页上动过(写了动作,或还写着卡) */
+const onPage = (t: EvalTurn): boolean => Boolean(t.section?.cards.length || actsOf(t.section).length);
 const listArg = (arg: string): string[] => arg.split(/[、,，;；]/).map((x) => x.trim()).filter(Boolean);
 
 /** 判一次跑下来的这些轮 */
@@ -191,13 +194,13 @@ export function gradeRun(checks: readonly string[], turns: readonly EvalTurn[]):
         return { check, pass: turns.length > 0 && silent < 0, ...(!turns.length ? { why: '没有老师回复' } : silent >= 0 ? { why: `第 ${silent + 1} 轮没有讲稿` } : {}) };
       }
       case '放过整段': {
-        const ok = turns.some((t) => (t.section?.cards ?? []).some((c) => segmentsOf(c).length >= 3));
-        return { check, pass: ok, ...(ok ? {} : { why: `${turns.length} 轮都没放过三行以上的 read 卡` }) };
+        const ok = turns.some((t) => writesOf(t.section).length >= 3);
+        return { check, pass: ok, ...(ok ? {} : { why: `${turns.length} 轮都没一轮写过三行以上` }) };
       }
       case '每节末句是问句': {
         const bad = turns.flatMap((t, k) => {
           const last = t.section?.lines[t.section.lines.length - 1]?.text.trim() ?? '';
-          return t.section?.cards.length && !/[?？]$/.test(last) ? [`第 ${k + 1} 轮末句「${last}」`] : [];
+          return onPage(t) && !/[?？]$/.test(last) ? [`第 ${k + 1} 轮末句「${last}」`] : [];
         });
         return { check, pass: !bad.length, ...(bad.length ? { why: bad.join(';') } : {}) };
       }
@@ -210,7 +213,7 @@ export function gradeRun(checks: readonly string[], turns: readonly EvalTurn[]):
       case '一节一问': {
         const bad = turns.flatMap((t, k) => {
           const n = (t.section?.lines ?? []).reduce((a, l) => a + (l.text.match(/[?？]/g)?.length ?? 0), 0);
-          return t.section?.cards.length && n > 1 ? [`第 ${k + 1} 轮问了 ${n} 个`] : [];
+          return onPage(t) && n > 1 ? [`第 ${k + 1} 轮问了 ${n} 个`] : [];
         });
         return { check, pass: !bad.length, ...(bad.length ? { why: bad.join(';') } : {}) };
       }
@@ -264,8 +267,8 @@ export function gradeRun(checks: readonly string[], turns: readonly EvalTurn[]):
       }
       case '并排': {
         const [a, b] = arg.split('|').map((x) => x.trim());
-        const ok = Boolean(a && b) && turns.some((t) => (t.section?.cards ?? []).some((c) => { const seg = segmentsOf(c).join('\n'); return seg.includes(a) && seg.includes(b); }));
-        return { check, pass: ok, ...(ok ? {} : { why: `没有一张 read 卡同时有「${a}」和「${b}」` }) };
+        const ok = Boolean(a && b) && turns.some((t) => { const seg = writesOf(t.section).join('\n'); return seg.includes(a) && seg.includes(b); });
+        return { check, pass: ok, ...(ok ? {} : { why: `没有一轮写下的同时有「${a}」和「${b}」` }) };
       }
       default:
         return { check, pass: false, why: '不认得这条判' };
@@ -275,7 +278,7 @@ export function gradeRun(checks: readonly string[], turns: readonly EvalTurn[]):
 
 /** 模拟孩子的提示词:故事、人设、到现在的对话;只回孩子说的一句 */
 export function kidPrompt(e: Pick<ActivityExample, 'story' | 'persona'>, turns: readonly EvalTurn[]): string {
-  const said = turns.flatMap((t) => [`孩子:${t.kid}`, `老师:${(t.section?.lines.map((l) => l.text) ?? []).join('')}${(t.section?.cards ?? []).filter((c) => c.kind === 'read').map((c) => `(板上:${segmentsOf(c).join(' / ')})`).join('')}`]);
+  const said = turns.flatMap((t) => [`孩子:${t.kid}`, `老师:${(t.section?.lines.map((l) => l.text) ?? []).join('')}${(writesOf(t.section).length ? `(页上写着:${writesOf(t.section).join(' / ')})` : '')}`]);
   return [
     '你在扮演一个小学二年级的孩子,在和语文老师说话。',
     e.persona ? `你是这样的孩子:${e.persona}` : '',

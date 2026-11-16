@@ -147,14 +147,17 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   const bad = parseExamples('---\nactivity: x\n---\n## 甲\n孩子: 你好\n判:\n- 出彩虹\n## 乙\n乱写一行\n最多轮: 99\n');
   check('例子写坏:判不认得、行认不出、最多轮超了、没孩子没人设、没有判都报', ['判「出彩虹」不认得', '认不出', '最多轮要是', '孩子一句都没有', '没有判'].every((w) => bad.issues.some((i) => i.text.includes(w))), JSON.stringify(bad.issues));
   const line = (t: string) => ({ text: t, audio: null, marks: [], ask: false, anchor: null });
+  // 写在页上的([[写 …]]):看图说话把孩子的话写在图下面
+  const wrote = (text: string, writes: string[]) => ({ text, audio: null, marks: [], ask: /[??]$/.test(text), anchor: null, acts: writes.map((w) => ({ name: '写', arg: w })) });
   const sec = (lines: string[], cards: { kind: string; props: Record<string, unknown> }[] = []) => ({ lines: lines.map(line), cards }) as never;
-  const story = { kind: 'read', props: { segments: ['小熊睡大觉。', '小熊浇了水。', '西瓜熟了。'] } };
+  const story = ['小熊睡大觉。', '小熊浇了水。', '西瓜熟了。'];
+  const said = (lines: string[], writes: string[]) => ({ lines: lines.map((t, i) => (i === 0 ? wrote(t, writes) : line(t))), cards: [] }) as never;
   const turns = [
     { kid: '看图说话', section: sec(['图上有谁呀?']) },
-    { kid: '小熊', section: sec(['小熊在哪里?'], [story]) },
-    { kid: '小熊睡大觉浇了水西瓜熟了', section: sec(['你说得真清楚。', '你自己连起来说一遍,好吗?'], [story]) },
+    { kid: '小熊', section: said(['小熊在哪里?'], story) },
+    { kid: '小熊睡大觉浇了水西瓜熟了', section: said(['你说得真清楚。', '你自己连起来说一遍,好吗?'], story) },
   ];
-  check('判:每节有讲稿拒绝只出卡、空白和空轮次', gradeRun(['每节有讲稿'], turns)[0].pass && !gradeRun(['每节有讲稿'], [{ kid: 'x', section: sec([], [story]) }])[0].pass && !gradeRun(['每节有讲稿'], [{ kid: 'x', section: sec(['  ']) }])[0].pass && !gradeRun(['每节有讲稿'], [{ kid: 'x', section: null }])[0].pass && !gradeRun(['每节有讲稿'], [])[0].pass);
+  check('判:每节有讲稿拒绝只出卡、空白和空轮次', gradeRun(['每节有讲稿'], turns)[0].pass && !gradeRun(['每节有讲稿'], [{ kid: 'x', section: said([], story) }])[0].pass && !gradeRun(['每节有讲稿'], [{ kid: 'x', section: sec(['  ']) }])[0].pass && !gradeRun(['每节有讲稿'], [{ kid: 'x', section: null }])[0].pass && !gradeRun(['每节有讲稿'], [])[0].pass);
   {
     // 讲稿里的动作:[[请 …]] 就是开放(没写沿用上一次);[[摆 …]] 算摆了图形;问了带动作就算上页
     const actSec = (lines: [string, { name: string; arg: string }[]][]): BoardSection => ({ cards: [], lines: lines.map(([text, acts]) => ({ text, audio: null, marks: [], ask: /[??]$/.test(text), anchor: null, cues: [], ...(acts.length ? { acts } : {}) })) } as unknown as BoardSection);
@@ -166,17 +169,17 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
     check('判:问就上页(只用嘴问的那一轮不过;带动作的、请拍照的、没问的都过)', !gradeRun(['问就上页'], [{ kid: 'x', section: sec(['小箭头朝哪个方向?'], []) }])[0].pass && gradeRun(['问就上页'], [{ kid: 'x', section: sec(['拍给我看看,好吗?'], [{ kind: 'photo', props: {} }]) }, { kid: 'y', section: actSec([['东面有哪两间?圈出来。', [{ name: '请', arg: '圈' }]]]) }, { kid: 'z', section: sec(['都对了。'], []) }])[0].pass);
     check('判:卡上有也看动作的参数([[写 …]])', gradeRun(['卡上有: 17'], [{ kid: 'x', section: actSec([['你看。', [{ name: '写', arg: '17 + 3 = 20' }]]]) }])[0].pass);
   }
-  check('判:放过整段', gradeRun(['放过整段'], [{ kid: 'x', section: sec(['好?'], [{ kind: 'read', props: { segments: ['一', '二', '三'] } }]) }])[0].pass && !gradeRun(['放过整段'], [{ kid: 'x', section: sec(['好?']) }])[0].pass);
+  check('判:放过整段(一轮写过三行)', gradeRun(['放过整段'], [{ kid: 'x', section: said(['好?'], ['一', '二', '三']) }])[0].pass && !gradeRun(['放过整段'], [{ kid: 'x', section: said(['好?'], ['一', '二']) }])[0].pass);
   const g = Object.fromEntries(gradeRun(['每节末句是问句', '不说: 错了', '问到: 在哪里', '并排: 睡大觉 | 浇了水'], turns).map((r) => [r.check, r]));
   check('判:每节末句问句、不说、问到、并排;删掉的判(出画图卡)不认得', g['每节末句是问句'].pass && g['不说: 错了'].pass && g['问到: 在哪里'].pass && g['并排: 睡大觉 | 浇了水'].pass && parseExamples('---\nactivity: x\n---\n## 甲\n孩子: 你好\n判:\n- 出画图卡\n').issues.some((i) => i.text.includes('判「出画图卡」不认得')));
-  check('判:收尾不问——只看最后一轮的末句', gradeRun(['收尾不问'], [{ kid: 'x', section: sec(['你来数数?'], [story]) }, { kid: 'y', section: sec(['对,就是 5 个。']) }])[0].pass && !gradeRun(['收尾不问'], [{ kid: 'x', section: sec(['好的。']) }, { kid: 'y', section: sec(['你教教我?']) }])[0].pass);
-  check('判:有卡的节末句不是问句报哪轮;没卡的随口一句不查', !gradeRun(['每节末句是问句'], [{ kid: 'x', section: sec(['好的。'], [story]) }])[0].pass && gradeRun(['每节末句是问句'], [{ kid: 'x', section: sec(['好的。']) }])[0].pass);
-  check('判:一节一问(有卡的节最多一个问号;没卡的不查)', gradeRun(['一节一问'], [{ kid: 'x', section: sec(['这是你说的话。', '他们在哪里呀?'], [story]) }])[0].pass && !gradeRun(['一节一问'], [{ kid: 'x', section: sec(['在哪里?', '什么时候?'], [story]) }])[0].pass && gradeRun(['一节一问'], [{ kid: 'x', section: sec(['在哪里?什么时候?']) }])[0].pass);
+  check('判:收尾不问——只看最后一轮的末句', gradeRun(['收尾不问'], [{ kid: 'x', section: said(['你来数数?'], story) }, { kid: 'y', section: sec(['对,就是 5 个。']) }])[0].pass && !gradeRun(['收尾不问'], [{ kid: 'x', section: sec(['好的。']) }, { kid: 'y', section: sec(['你教教我?']) }])[0].pass);
+  check('判:在页上动过的那轮末句不是问句报哪轮;只说话的不查', !gradeRun(['每节末句是问句'], [{ kid: 'x', section: said(['好的。'], story) }])[0].pass && gradeRun(['每节末句是问句'], [{ kid: 'x', section: sec(['好的。']) }])[0].pass);
+  check('判:一节一问(在页上动过的那轮最多一个问号;只说话的不查)', gradeRun(['一节一问'], [{ kid: 'x', section: said(['这是你说的话。', '他们在哪里呀?'], story) }])[0].pass && !gradeRun(['一节一问'], [{ kid: 'x', section: said(['在哪里?', '什么时候?'], story) }])[0].pass && gradeRun(['一节一问'], [{ kid: 'x', section: sec(['在哪里?什么时候?']) }])[0].pass);
   check('判:卡上有', gradeRun(['卡上有: 浇了水、西瓜'], turns)[0].pass && !gradeRun(['卡上有: 先看清'], turns)[0].pass);
   const lecCard = { kind: 'lecture', props: { bundle: 'b1', from: 0, to: 9000 } };
   check('判:放课里一段、一节最多一段、说到', gradeRun(['放课里一段'], [{ kid: 'x', section: sec(['你圈的这 3 根?'], [lecCard]) }])[0].pass && !gradeRun(['放课里一段'], turns)[0].pass && !gradeRun(['一节最多一段'], [{ kid: 'x', section: sec(['看?'], [lecCard, lecCard]) }])[0].pass && gradeRun(['说到: 圈'], [{ kid: 'x', section: sec(['你圈的这 3 根?']) }])[0].pass);
   const kp = kidPrompt({ story: '小熊种瓜', persona: '问一句答一句' }, turns.slice(0, 2));
-  check('模拟孩子的提示词:故事、人设、对话、板上的整段', kp.includes('小熊种瓜') && kp.includes('问一句答一句') && kp.includes('孩子:小熊') && kp.includes('板上:小熊睡大觉。 / 小熊浇了水。'));
+  check('模拟孩子的提示词:故事、人设、对话、页上写着的整段', kp.includes('小熊种瓜') && kp.includes('问一句答一句') && kp.includes('孩子:小熊') && kp.includes('页上写着:小熊睡大觉。 / 小熊浇了水。'));
 }
 
 // ---- 听写:不起老师(page:),认字那段和出厂的要求(DICTATION_PROMPT_DEFAULT)拼出来一字不差----

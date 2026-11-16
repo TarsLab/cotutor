@@ -247,18 +247,18 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   // ---- activity 也走实时(P3.1):首页按钮的开场 → 嘴不先说、脑照 activity 带;上一句念的是问句,孩子再开口嘴也不先说 ----
   const { publishHome } = await import('../src/runtime/home/store.ts');
   mkdirSync(join(wsRoot, 'home'), { recursive: true });
-  writeFileSync(join(wsRoot, 'home', 'draft.md'), '```tutor chinese-tutor\nactivity 看图说话\n```\n\n## 为什么这么排\n\n试实时\n');
+  writeFileSync(join(wsRoot, 'home', 'draft.md'), '```tutor chinese-tutor\nactivity 聊\n```\n\n## 为什么这么排\n\n试实时\n');
   const pub = await publishHome(ctx.ws, { now: ctx.now() });
   await until(() => ctx.runner.running('chinese-tutor') === null, 15000);
   const k = await connect('chinese-tutor');
   await until(() => has(k, (m) => m.t === 'ready'));
   const c = fake.conns.at(-1)!;
-  k.ws.send(JSON.stringify({ t: 'send', body: { text: '看图说话', via: { home: pub.home?.id, button: 0 } } }));
+  k.ws.send(JSON.stringify({ t: 'send', body: { text: '聊', via: { home: pub.home?.id, button: 0 } } }));
   const okTurn = await until(() => has(k, (m) => m.t === 'turn'), 10000);
   const turn = k.msgs.find((m) => m.t === 'turn')!;
   await until(() => ctx.runner.running('chinese-tutor') === null, 15000);
   const m0 = indexOf(localDate(ctx.now())).messages.find((m) => m.job === turn?.job);
-  check('首页按钮开的 activity:嘴不先说(第一次开口就是照念)、脑照 activity 带(消息记 via 与 activity)、实时轮', pub.ok && okTurn && String(c.responses[0]?.instructions).startsWith('把这几句话原样说给孩子听') && m0?.activity?.name === '看图说话' && m0?.via?.button === 0 && m0?.live === true, JSON.stringify({ ok: pub.ok, r: c.responses[0], activity: m0?.activity, via: m0?.via, live: m0?.live }));
+  check('首页按钮开的 activity:嘴不先说(第一次开口就是照念)、脑照 activity 带(消息记 via 与 activity)、实时轮', pub.ok && okTurn && String(c.responses[0]?.instructions).startsWith('把这几句话原样说给孩子听') && m0?.activity?.name === '聊' && m0?.via?.button === 0 && m0?.live === true, JSON.stringify({ ok: pub.ok, r: c.responses[0], activity: m0?.activity, via: m0?.via, live: m0?.live }));
 
   // 脑这一轮末句是问句,念完了孩子再开口(答问):嘴也不先说
   fake.kidText = '你先问我吧?';

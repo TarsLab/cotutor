@@ -41,7 +41,7 @@ export const LESSON_INK_MAX = 160;
 export const LESSON_INK_POINTS = 120;
 export const LESSON_PICK_MAX = 30;
 export const LESSON_MARKS_MAX = 24;
-export const STRIP_ITEMS_MAX = 6;
+export const STRIP_ITEMS_MAX = 8;
 
 /** 老师在页上的一个记号:圈(红圈)、遮(盖住字头上的拼音)、盖(整个盖住印好的字);text 是课本上印的字,box 是应用找到的位置 */
 export interface TeacherMark { k: '圈' | '遮' | '盖'; text: string; box: Box }

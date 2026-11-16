@@ -53,7 +53,7 @@ check('圈 没写字', Boolean(bad('圈')));
 check('圈 超过 4 处', Boolean(bad('圈 一、二、三、四、五')));
 check('遮 一处太长', Boolean(bad('遮 一二三四五六七八九十一二三')));
 check('写 没写字', Boolean(bad('写')));
-check('写 太长', Boolean(bad('写 一二三四五六七八九十一二三四五六七')));
+check('写 太长', Boolean(bad('写 一二三四五六七八九十一二三四五六七八九十一二三四五')));
 check('擦 带了认不出的参数', Boolean(bad('擦 第3题')));
 check('摆 不认得的图形', Boolean(bad('摆 数轴 0 到 10')));
 check('摆 没写图形', Boolean(bad('摆')));

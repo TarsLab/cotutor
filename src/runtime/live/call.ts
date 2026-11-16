@@ -13,6 +13,7 @@
  *   {t:'staged'} 讲稿 [[play]] 的小课堂那一段放完了(或放不了、被关):后面的讲稿接着交给嘴
  *   {t:'board', body} 以板为主的话题里孩子在板上做了一件事(点字 {k:'pick', thread, text, base};课本上挪了窗 {k:'view', thread, base, box}):记进板的日志(Runner.boardEvent),不起脑;
  *     课本的窗停下来以后舞台交的图 {k:'shot', thread, base, box, image} 也走这里:存下来等下一轮附给脑,不算孩子动了手;
+ *     课本上落的一笔 {k:'stroke', thread, base, pts}、擦掉 {k:'wipe'} 落进一节课的状态;报来的一件一件排着记,交给脑之前先等记完;
  *   安静时嘴照念这个字词的念法(认字时写好的「傍,傍晚的傍」),老师正在说就不念;再点下一个,上一句掐掉。
  *   点过以后 STILL_MS 没动静(没开口、没再点),应用替他叫一次老师(app: still,带上他做了什么);连着只叫一次,孩子开口了才再叫
  * 这里 → 孩子端:二进制帧 = PCM16 24k 嘴的声音;文本帧 = JSON
@@ -221,6 +222,8 @@ export class LiveCall {
   private sayingPick = false;
   /** 板上点完字,等着看他开不开口;stillUsed = 这一回已经替他叫过老师 */
   private stillTimer: NodeJS.Timeout | null = null;
+  /** 板上报来的事(Runner.boardEvent)排成一条 */
+  private boards: Promise<void> = Promise.resolve();
   private stillUsed = false;
   /** 打电话从哪一刻起(墙钟,[[call]] 那句在孩子端放完、开始响铃);null = 还没打 */
   private phoneAt: number | null = null;
@@ -651,7 +654,8 @@ export class LiveCall {
       // 孩子端放完了小课堂那一段(或放不了、被关):后面的讲稿接着交给嘴
       case 'staged': this.d.step({ e: 'staged' }); break;
       // 以板为主:孩子在板上点了一个字
-      case 'board': void this.board(m.body); break;
+      // 一件一件排着记(「给老师看」前舞台先交的那张窗图要先落下,交给脑那一轮在 toBrain 里等它)
+      case 'board': { const body = m.body; this.boards = this.boards.then(() => this.board(body)).catch(() => undefined); break; }
       // 一直听:孩子端开口时报的上下文(收下时当松手的 body)
       case 'ctx': if (isObj(m.body)) this.ctxBody = m.body; break;
       // 一直听:孩子端停推(关麦、卡的声音、录音、小课堂)/ 接着推;停的时候孩子正说到一半,那一句作废
@@ -828,6 +832,9 @@ export class LiveCall {
     while (this.draft?.seq === seq && (this.vadOn || this.vadAwait !== null) && Date.now() < more && !this.ended && seq === this.turnSeq) await new Promise((r) => setTimeout(r, 20));
     if (this.ended || seq !== this.turnSeq) return;
     if (this.draft?.seq === seq) { body = { ...body, text: this.draft.texts.join(',') }; this.draft = null; }
+    // 板上报来的事先记完(窗里的图、落的笔),这一轮的 board: 才看得到
+    await this.boards;
+    if (this.ended || seq !== this.turnSeq) return;
     await this.turns.submit(body);
   }
 

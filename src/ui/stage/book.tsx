@@ -1,28 +1,52 @@
 /**
  * 课本做底的舞台(画法「课本」,src/chalk/kit/book.ts;2026-11-14《语文预习:PDF 课本与镜头交互》)。
+ * 2026-11-16 起照一节课的状态画(src/schema/lesson.ts,页面一句一句落好了发进来):现在这一页、老师的一层(记号)、孩子的一层(笔、揭开)、开放的、老师让看的那一处。
  * 一课的几页从上往下连成一条(场景坐标:一页宽 1000),屏幕是看它的一扇窗:
  *  - 窗只有两种大小(2026-11-15):页宽铺满、两倍,双击切换;不两指缩放、不滚轮缩放。页宽时手指只上下滚,两倍时上下左右都能挪,松手带惯性。
- *  - 老师的卡写了「看」:窗滚到那一块(大小不变,近的滑过去,远的直接到),那一块亮一下;没写就不动——他眼前的就是老师要讲的。
+ *  - 老师「看」了一处(look.n 变了):窗滚到那一块(大小不变,近的滑过去,远的直接到),那一块亮一下;没看就不动——他眼前的就是老师要讲的。
  *  - 只读(录像、家长看)照记录的窗摆:以前孩子缩放过的窗照样放得下(camFor)。
  *  - Apple Pencil(pointerType = pen)写画,手指永远不落笔;笔在纸上时别的手指(手掌)不算。
  *  - 轻点(手指或笔;手指的等一下看是不是双击)一个字:本地照课本的行和字算出是哪个字(bookPick),告诉页面(pick)弹田字格;点在盖住的拼音上就揭开(reveal)。
  *  - 孩子挪完、切完大小停下来:把窗(场景坐标)告诉页面(view),页面报给服务端说成一句「第 55 页:第 7 段」给老师。
  * 画面:pdf.js(/stage/pdf/,不打进 stage.js)现画。每页先画一张中等清晰度的(移动、缩放时用它),停下来再把窗里那一块照屏幕的像素重画一张盖上去,放大了字也清楚。
- * 老师的记号(圈、盖拼音的块)和孩子的笔画是一层 SVG,和页面在同一个随窗变换的容器里,所以对得齐;孩子的笔画挂在书页上,老师下一张卡还是这一课就还在。
+ * 老师的记号(圈、盖拼音的块)和孩子的笔画是一层 SVG,和页面在同一个随窗变换的容器里,所以对得齐;孩子的笔画挂在书页上(一节课的状态里),换课再回来还在。
+ * 孩子落一笔、擦掉都告诉页面(stroke / wipe),页面照 lessonStep 改状态、报给服务端,再把新的状态发回来。
  * 类名带 bk-(舞台页也装孩子端的 theme.css);没有工具那一栏(2026-11-15,课本铺满屏宽):只有一颗「擦掉」浮在屏幕边上(.bk-wipe)。
  */
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type * as Pdfjs from 'pdfjs-dist';
-import { BOOK_ASPECT, BOOK_W, KID_INK, KID_INK_WIDTH, KIT_MARK_MAX, KIT_MARK_POINTS, bookPages, bookPick, bookSheets, bookSpots, kitOf, kitOps, kitParams, type BookSheet, type KitState } from '../../chalk/index.ts';
-import type { BookPage } from '../../schema/index.ts';
-import type { KitStageHandle, KitStageProps } from './kit.tsx';
+import { BOOK_ASPECT, BOOK_W, KID_INK, KID_INK_WIDTH, bookFrame, bookPick, bookSheets, type BookSheet } from '../../chalk/index.ts';
+import { lessonPage } from '../../board/lesson.ts';
+import { LESSON_INK_POINTS, type BookPage, type Lesson } from '../../schema/index.ts';
+import type { KitStageHandle } from './kit.tsx';
 
-export interface BookStageProps extends KitStageProps {
+export interface BookStageProps {
+  /** 这节课(换了一节才重来) */
+  id: string;
+  /** 一节课此刻的样子(页面落好了老师念过的那几句的动作) */
+  lesson: Lesson;
+  /** 只看(录像、家长端、以前的) */
+  readonly?: boolean;
+  hand?: 'left' | 'right';
+  /** 孩子落了一笔(场景坐标) */
+  onStroke(pts: [number, number][]): void;
+  /** 孩子擦掉了自己画的 */
+  onWipe(): void;
+  /** 「给老师看」:窗里的图先交(onShot),再说交了 */
+  onSubmit(): void;
+  /** 点中了一个字(页面弹田字格) */
+  onPick?(text: string): void;
+  /** 点开了一块盖住的(遮、盖) */
+  onReveal?(text: string): void;
   /** 孩子挪完窗停下来的地方(场景坐标 [左, 上, 右, 下]) */
   onView?(box: [number, number, number, number]): void;
   /** 窗停下来以后(老师移完、孩子挪完、落了笔、刚铺好)窗里那一块的图(jpeg data URL):老师下一轮看得见孩子眼前的课本 */
   onShot?(box: [number, number, number, number], image: string): void;
+  onError(message: string): void;
 }
+
+/** 孩子能落笔的请:写、圈、涂、切、添(点是点字,转、说不用笔) */
+const PEN_ASKS = ['写', '圈', '涂', '切', '添'];
 
 type Lib = typeof Pdfjs;
 type Box = [number, number, number, number];
@@ -103,16 +127,20 @@ interface Geo {
   lines: BookPage[];
 }
 
+/** 老师要看的那一块 → 窗里留出来的那一块(四周留边、太小放大;src/chalk/kit/book.ts 的 bookFrame) */
+const frameBox = (box: Box, sheets: readonly BookSheet[]): Box => { const f = bookFrame(box, sheets); return [f[0], f[1], f[0] + f[2], f[1] + f[3]]; };
+
 const pathD = (pts: readonly [number, number][]): string => pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ');
 
-export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function BookStage({ id, kit, params, ops, state, readonly, hand, onState, onSubmit, onPick, onReveal, onView, onShot, onError }, ref) {
+export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function BookStage({ id: _id, lesson, readonly, hand, onStroke, onWipe, onSubmit, onPick, onReveal, onView, onShot, onError }, ref) {
   const view = useRef<HTMLDivElement>(null);
   const paper = useRef<HTMLDivElement>(null);
   const svg = useRef<SVGSVGElement>(null);
   const sharp = useRef<HTMLCanvasElement>(null);
   const geo = useRef<Geo | null>(null);
   const cam = useRef<Cam>({ cx: BOOK_W / 2, cy: 400, s: 1 });
-  const cur = useRef<KitState>({ marks: [] });
+  /** 孩子的笔画(这一页的;页面发来的状态为准,落笔时先在这里画上) */
+  const ink = useRef<[number, number][][]>([]);
   const glide = useRef(0);
   const settle = useRef(0);
   const sharpTask = useRef<{ cancel(): void } | null>(null);
@@ -130,22 +158,24 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
   const pen = useRef<{ id: number; pts: [number, number][]; el: SVGPathElement; x0: number; y0: number } | null>(null);
   /** 孩子手上动着的时候老师的新窗先记着,手停了再去 */
   const pendingFrame = useRef<Box | null>(null);
-  const revealed = useRef(new Set<string>());
-  /** 回过状态的那张卡(换卡时才再回) */
-  const emitted = useRef('');
+  /** 移过窗的那一次「看」(look.n):同一次不再移 */
+  const lookedN = useRef(-1);
   const [phase, setPhase] = useState<'loading' | 'ready'>('loading');
   const [marks, setMarks] = useState(0);
 
-  const def = kitOf(kit);
-  const kp = def ? kitParams(def, params) : {};
-  const open = def ? kitOps(def, ops) : [];
-  const canMark = open.includes('圈') || open.includes('画');
-  const canPick = open.includes('点字');
-  const pdfUrl = kp['书'] ? `/api/kid/textbook/pdf?b=${encodeURIComponent(kp['书'])}` : '';
-  const pages = bookPages(kp['页']);
-  /** 每页底下不铺的那一条(场景坐标;应用照这一册算好写在卡上,bookCut);有它页和页就直接连着 */
-  const cut = Number(kp['裁']) || 0;
-  const geoKey = `${kp['书']}|${pages.join(',')}|${cut}`;
+  const page = lessonPage(lesson);
+  /** 最新的状态(铺页是异步的,铺好时照最新的摆) */
+  const latest = useRef(lesson);
+  latest.current = lesson;
+  const open = page?.open ?? [];
+  const canMark = open.some((o) => PEN_ASKS.includes(o));
+  const canPick = Boolean(page?.pick) || open.includes('点');
+  const pdfUrl = page ? `/api/kid/textbook/pdf?b=${encodeURIComponent(page.src)}` : '';
+  const pages = page?.pages ?? [];
+  /** 每页底下不铺的那一条(场景坐标;应用照这一册算好的,bookCut);有它页和页就直接连着 */
+  const cut = page?.cut ?? 0;
+  const geoKey = page ? `${page.src}|${pages.join(',')}|${cut}` : '';
+  const revealedKey = (page?.kid.revealed ?? []).join('\n');
 
   // ---- 窗 ----
   /** 窗的大小(CSS 像素) */
@@ -236,7 +266,8 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
   const shotTimer = useRef(0);
   const shotKey = useRef('');
   const shotTries = useRef(0);
-  const cardRef = useRef('');
+  /** 老师那一层的样子(记号变了,窗里的图要重交) */
+  const teacherKey = useRef('');
   const scheduleShot = (): void => {
     if (!onShot || readonly) return;
     window.clearTimeout(shotTimer.current);
@@ -251,7 +282,7 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
     if (seen.some((sh) => !g.drawn.has(sh.n))) { if (shotTries.current++ < 20) scheduleShot(); return; }
     shotTries.current = 0;
     const box = b.map((v) => Math.round(v)) as Box;
-    const key = `${g.key}|${box.join(',')}|${cardRef.current}|${(cur.current.marks ?? []).length}`;
+    const key = `${g.key}|${box.join(',')}|${teacherKey.current}|${ink.current.length}`;
     if (key === shotKey.current) return;
     const image = snapshot('image/jpeg');
     if (!image) return;
@@ -301,29 +332,24 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
     Object.assign(cv.style, { display: 'block', left: `${x0}px`, top: `${y0}px`, width: `${x1 - x0}px`, height: `${y1 - y0}px` });
   };
 
-  /** 老师的记号:圈(一笔画出来)、盖拼音的块;孩子揭开过的不再盖 */
-  const paintTeacher = useCallback((p: Record<string, string>) => {
-    const s = svg.current;
-    if (!s) return;
-    const layer = s.querySelector('.bk-teacher');
-    if (!layer) return;
+  /** 老师的记号:圈(一笔画出来)、盖拼音的块、盖住印好的字;孩子揭开过的不再盖 */
+  const paintTeacher = useCallback((l: Lesson) => {
+    const layer = svg.current?.querySelector('.bk-teacher');
+    const p = lessonPage(l);
+    if (!layer || !p) return;
+    const opened = new Set(p.kid.revealed);
     const out: SVGElement[] = [];
-    for (const { text, box } of bookSpots(p['圈'])) {
-      if (!box) continue;
-      const pad = Math.max(4, (box[3] - box[1]) * 0.35);
-      const e = el('ellipse', { cx: String((box[0] + box[2]) / 2), cy: String((box[1] + box[3]) / 2), rx: String((box[2] - box[0]) / 2 + pad * 1.4), ry: String((box[3] - box[1]) / 2 + pad), fill: 'none', stroke: RED, 'stroke-width': '3', 'vector-effect': 'non-scaling-stroke', class: 'bk-ring', 'data-text': text, pathLength: '1' });
-      out.push(e);
-    }
-    for (const { text, box } of bookSpots(p['遮'])) {
-      if (!box || revealed.current.has(text)) continue;
+    for (const { k, text, box } of p.teacher.marks) {
       const h = box[3] - box[1];
-      out.push(el('rect', { x: String(box[0] - h * 0.1), y: String(box[1] - h * 0.95), width: String(box[2] - box[0] + h * 0.2), height: String(h * 0.9), rx: String(h * 0.15), fill: '#f1e6c8', stroke: '#d9c9a3', 'stroke-width': '1', 'vector-effect': 'non-scaling-stroke', class: 'bk-cover', 'data-cover': text }));
-    }
-    // 盖:印好的字整个盖住(和 book.ts 的 build 一样大)
-    for (const { text, box } of bookSpots(p['盖'])) {
-      if (!box || revealed.current.has(text)) continue;
-      const h = box[3] - box[1];
-      out.push(el('rect', { x: String(box[0] - h * 0.25), y: String(box[1] - h * 0.2), width: String(box[2] - box[0] + h * 0.5), height: String(h * 1.4), rx: String(h * 0.2), fill: '#f1e6c8', stroke: '#d9c9a3', 'stroke-width': '1', 'vector-effect': 'non-scaling-stroke', class: 'bk-cover', 'data-cover': text }));
+      if (k === '圈') {
+        const pad = Math.max(4, h * 0.35);
+        out.push(el('ellipse', { cx: String((box[0] + box[2]) / 2), cy: String((box[1] + box[3]) / 2), rx: String((box[2] - box[0]) / 2 + pad * 1.4), ry: String(h / 2 + pad), fill: 'none', stroke: RED, 'stroke-width': '3', 'vector-effect': 'non-scaling-stroke', class: 'bk-ring', 'data-text': text, pathLength: '1' }));
+        continue;
+      }
+      if (opened.has(text)) continue;
+      // 遮:字头上一条(拼音印在字的正上方);盖:印好的字整个盖住(和 book.ts 的 build 一样大)
+      const r = k === '遮' ? [box[0] - h * 0.1, box[1] - h * 0.95, box[2] - box[0] + h * 0.2, h * 0.9, h * 0.15] : [box[0] - h * 0.25, box[1] - h * 0.2, box[2] - box[0] + h * 0.5, h * 1.4, h * 0.2];
+      out.push(el('rect', { x: String(r[0]), y: String(r[1]), width: String(r[2]), height: String(r[3]), rx: String(r[4]), fill: '#f1e6c8', stroke: '#d9c9a3', 'stroke-width': '1', 'vector-effect': 'non-scaling-stroke', class: 'bk-cover', 'data-cover': text }));
     }
     layer.replaceChildren(...out);
   }, []);
@@ -333,19 +359,14 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
     const layer = svg.current?.querySelector('.bk-ink');
     if (!layer) return;
     const common = { fill: 'none', stroke: KID_INK, 'stroke-width': String(KID_INK_WIDTH * 0.7), 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'vector-effect': 'non-scaling-stroke', opacity: '0.9' };
-    const out = (cur.current.marks ?? []).map((st) => el('path', { d: pathD(st), ...common }));
+    const out = ink.current.map((st) => el('path', { d: pathD(st), ...common }));
     layer.replaceChildren(...out, ...(pen.current ? [pen.current.el] : []));
-    setMarks((cur.current.marks ?? []).length);
+    setMarks(ink.current.length);
   }, []);
-
-  const emit = useCallback(() => {
-    const s = cur.current;
-    onState({ marks: (s.marks ?? []).map((st) => st.map((p) => [p[0], p[1]] as [number, number])), ...(s.aspect ? { aspect: s.aspect } : {}) });
-  }, [onState]);
 
   // ---- 铺这一课:开 PDF、量页、每页先画一张、拉行和字 ----
   useEffect(() => {
-    if (!pdfUrl || !pages.length) { onError('课本卡没有书或页'); return; }
+    if (!pdfUrl || !pages.length) return;
     if (geo.current?.key === geoKey) return;
     let cancelled = false;
     setPhase('loading');
@@ -374,20 +395,20 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
       geo.current = { key: geoKey, pdf: pdfUrl, sheets, height, aspect, base, drawn: new Set(), lines: [] };
       if (svg.current) { svg.current.setAttribute('viewBox', `0 0 ${BOOK_W} ${height}`); Object.assign(svg.current.style, { width: `${BOOK_W}px`, height: `${height}px` }); }
       if (sharp.current) sharp.current.style.display = 'none';
-      // 换了一课,孩子在上一课画的不带过来;同一课(重开、看录像)照状态摆
-      cur.current = { marks: (state?.marks ?? []).slice(0, KIT_MARK_MAX), aspect };
-      revealed.current = new Set();
+      // 这一页上孩子画的、老师的记号照状态摆(换课再回来还在)
+      ink.current = (lessonPage(latest.current)?.kid.ink ?? []).map((st) => st.slice());
       paintInk();
-      const frame = bookSpots(kp['看'])[0]?.box ? def?.build(kp, { aspect }).frame : null;
-      // 换了一课从页宽看起
+      paintTeacher(latest.current);
+      // 换了一课从页宽看起;老师让看过哪里就到那里;录像照孩子停下的窗
       zoom.current = 1;
-      const fb: Box | null = frame ? [frame[0], frame[1], frame[0] + frame[2], frame[1] + frame[3]] : null;
-      cam.current = fb ? lookAt(fb) : pageTop();
+      const L = latest.current.look;
+      const fb = L ? frameBox(L.box, sheets) : null;
+      lookedN.current = L?.n ?? -1;
+      const v = readonly ? latest.current.view : null;
+      cam.current = v ? camFor(v) : fb ? lookAt(fb) : pageTop();
       apply();
-      if (fb) flashLook(fb);
+      if (fb && !v) flashLook(fb);
       setPhase('ready');
-      emitted.current = id;
-      emit();
       // 每页先画一张(从窗里看得见的那页起)
       const order = [...sheets].sort((a, b) => Math.abs(a.top + a.height / 2 - cam.current.cy) - Math.abs(b.top + b.height / 2 - cam.current.cy));
       for (const sh of order) {
@@ -403,7 +424,7 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
       }
       scheduleSharp();
       // 点字要的行和字
-      const r = await fetch(`/api/kid/textbook/lines?b=${encodeURIComponent(kp['书'])}&p=${pages[0]}-${pages[pages.length - 1]}`, { cache: 'no-store' }).catch(() => null);
+      const r = await fetch(`/api/kid/textbook/lines?b=${encodeURIComponent(page!.src)}&p=${pages[0]}-${pages[pages.length - 1]}`, { cache: 'no-store' }).catch(() => null);
       const j = r?.ok ? ((await r.json()) as { pages?: BookPage[] }) : null;
       if (!cancelled && geo.current?.key === geoKey && Array.isArray(j?.pages)) geo.current.lines = j!.pages!;
     })().catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)));
@@ -411,24 +432,25 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [geoKey]);
 
-  // ---- 老师的下一张卡(同一课):记号换上,写了「看」就把窗移过去;孩子手上动着就等他停 ----
-  const cardKey = `${id}|${JSON.stringify(params)}`;
+  // ---- 状态变了(页面落好了老师的动作、孩子做的事):记号、笔画照新的摆;老师新「看」了一处就把窗移过去,孩子手上动着就等他停 ----
+  const teacherNow = JSON.stringify([page?.teacher, revealedKey]);
+  const inkNow = page?.kid.ink.length ?? 0;
   useEffect(() => {
     const g = geo.current;
     if (!g || g.key !== geoKey || phase !== 'ready') return;
-    paintTeacher(kp);
-    cardRef.current = cardKey;
-    scheduleShot();
-    // 这张卡的状态从孩子手上那份起(笔画挂在书页上,换卡不清);一张卡只回一次
-    if (!readonly && emitted.current !== id) { emitted.current = id; emit(); }
-    const look = bookSpots(kp['看'])[0];
-    if (look?.box) {
-      const f = def?.build(kp, { aspect: g.aspect }).frame;
-      const b: Box | null = f ? [f[0], f[1], f[0] + f[2], f[1] + f[3]] : null;
-      if (b) { if (touches.current.size || pen.current) pendingFrame.current = b; else goLook(b); }
+    if (teacherKey.current !== teacherNow) { teacherKey.current = teacherNow; paintTeacher(lesson); scheduleShot(); }
+    const want = page?.kid.ink ?? [];
+    if (want.length !== ink.current.length || want.some((st, i) => st.length !== ink.current[i]?.length)) { ink.current = want.map((st) => st.slice()); paintInk(); scheduleShot(); }
+    const L = lesson.look;
+    if (L && L.n !== lookedN.current) {
+      lookedN.current = L.n;
+      const b = frameBox(L.box, g.sheets);
+      if (touches.current.size || pen.current) pendingFrame.current = b; else goLook(b);
     }
+    // 录像:孩子的窗跟着
+    if (readonly && lesson.view) moveTo(camFor(lesson.view), true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cardKey, phase]);
+  }, [teacherNow, inkNow, lesson.look?.n, lesson.view?.join(','), phase, geoKey]);
 
   useEffect(() => {
     const ro = new ResizeObserver(() => { cam.current = clamp(cam.current); apply(); scheduleSharp(); });
@@ -464,7 +486,6 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
       const pad = bh * 0.3;
       if (sx >= bx - pad && sx <= bx + bw + pad && sy >= by - pad && sy <= by + bh + pad) {
         const t = c.getAttribute('data-cover') ?? '';
-        revealed.current.add(t);
         c.remove();
         onReveal?.(t);
         return;
@@ -606,11 +627,11 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
       pen.current = null;
       const tiny = Math.hypot(e.clientX - p.x0, e.clientY - p.y0) < TAP_PX && p.pts.length < 6;
       if (tiny || !canMark || readonly) { p.el.remove(); if (tiny) tap(e.clientX, e.clientY); settled(); return; }
-      const step = Math.ceil(p.pts.length / KIT_MARK_POINTS);
-      const pts = p.pts.filter((_, i) => i % step === 0 || i === p.pts.length - 1).slice(-KIT_MARK_POINTS).map(([x, y]) => [Math.round(x), Math.round(y)] as [number, number]);
-      cur.current = { ...cur.current, marks: [...(cur.current.marks ?? []), pts].slice(-KIT_MARK_MAX) };
+      const step = Math.ceil(p.pts.length / LESSON_INK_POINTS);
+      const pts = p.pts.filter((_, i) => i % step === 0 || i === p.pts.length - 1).slice(-LESSON_INK_POINTS).map(([x, y]) => [Math.round(x), Math.round(y)] as [number, number]);
+      ink.current = [...ink.current, pts];
       paintInk();
-      emit();
+      onStroke(pts);
       settled();
       return;
     }
@@ -655,11 +676,12 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
   const wheelTimer = useRef(0);
 
   const wipe = useCallback(() => {
-    if (readonly || !(cur.current.marks ?? []).length) return;
-    cur.current = { ...cur.current, marks: [] };
+    if (readonly || !ink.current.length) return;
+    ink.current = [];
     paintInk();
-    emit();
-  }, [readonly, paintInk, emit]);
+    onWipe();
+    scheduleShot();
+  }, [readonly, paintInk, onWipe]);
 
   /** 窗此刻的样子导成一张图(交板是 png,交给老师看的窗是 jpeg):每页先画的那张、重画清楚的那一块 + 老师的圈 + 孩子的笔画,纸色打底 */
   const snapshot = useCallback((type: 'image/png' | 'image/jpeg' = 'image/png'): string | undefined => {
@@ -683,7 +705,7 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
       ctx.strokeStyle = RED; ctx.lineWidth = 3 / k;
       for (const e of Array.from(svg.current?.querySelectorAll<SVGEllipseElement>('.bk-ring') ?? [])) { ctx.beginPath(); ctx.ellipse(Number(e.getAttribute('cx')), Number(e.getAttribute('cy')), Number(e.getAttribute('rx')), Number(e.getAttribute('ry')), 0, 0, Math.PI * 2); ctx.stroke(); }
       ctx.strokeStyle = KID_INK; ctx.lineWidth = (KID_INK_WIDTH * 0.7) / k;
-      for (const st of cur.current.marks ?? []) { ctx.beginPath(); st.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke(); }
+      for (const st of ink.current) { ctx.beginPath(); st.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke(); }
       return type === 'image/jpeg' ? cv.toDataURL('image/jpeg', 0.8) : cv.toDataURL('image/png');
     } catch {
       return undefined;
@@ -692,8 +714,11 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
 
   useImperativeHandle(ref, () => ({
     submit() {
-      const s = cur.current;
-      onSubmit({ marks: s.marks ?? [], ...(s.aspect ? { aspect: s.aspect } : {}) }, snapshot());
+      // 「给老师看」:窗里的图这时就交(不等停下来),老师这一轮看到的是他刚写完的样子
+      const g = geo.current;
+      const image = g && onShot && !readonly ? snapshot('image/jpeg') : undefined;
+      if (image) { const b = viewBox().map((v) => Math.round(v)) as Box; shotKey.current = `${g!.key}|${b.join(',')}|${teacherKey.current}|${ink.current.length}`; onShot!(b, image); }
+      onSubmit();
     },
     peek() { return Promise.resolve(snapshot('image/jpeg') ?? null); },
   }), [onSubmit, snapshot]);

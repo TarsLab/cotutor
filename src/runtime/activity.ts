@@ -260,7 +260,8 @@ export function checkActivity(a: Activity, opts: CheckOptions = {}): ActivityIss
 
   if (a.board !== undefined && !ACTIVITY_BOARDS[a.board]) fix(`头上 board 写的「${a.board}」不认得:只有 ${Object.keys(ACTIVITY_BOARDS).join('、')}`);
   if (a.board !== undefined && a.page !== undefined) fix('头上的 board 和 page 只能写一个:page 不起老师,没有板');
-  if (a.board !== undefined && !a.cards.includes('kit')) fix('头上写了 board: page,cards 里要有 kit(老师在板上画靠它)');
+  // 课本做底的不要卡:老师在讲稿里写动作(cards/动作怎么写.md)
+  if (a.board !== undefined && a.base === undefined && !a.cards.includes('kit')) fix('头上写了 board: page,cards 里要有 kit(老师在板上画靠它)');
   if (a.base !== undefined && !ACTIVITY_BASES[a.base]) fix(`头上 base 写的「${a.base}」不认得:只有 ${Object.keys(ACTIVITY_BASES).join('、')}`);
   if (a.base !== undefined && a.board === undefined) fix('头上的 base 是板上垫什么,要和 board: page 一起写');
   if (a.page !== undefined && !ACTIVITY_PAGES[a.page]) fix(`头上 page 写的「${a.page}」不认得:只有 ${Object.keys(ACTIVITY_PAGES).join('、')}`);

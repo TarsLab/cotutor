@@ -91,7 +91,10 @@ export interface Lesson {
   view: Box | null;
   /** 开着的白纸条(Strip.key);没开 = null */
   strip: string | null;
+  /** 落进来过的那几轮(老师那一节的 job,最近的 LESSON_JOBS_MAX 个):孩子端回到这节课时照它知道哪几节已经在里面,不再落一遍 */
+  jobs: string[];
 }
+export const LESSON_JOBS_MAX = 60;
 
 /** 动作落到页上以后的样子(src/board/lesson-fit.ts 照课本找到框、填好页):lessonStep 只认它,不再查课本 */
 export type LessonAct =
@@ -158,6 +161,7 @@ export const LessonSchema = z.object({
   look: z.object({ label: z.string(), box: BoxSchema, n: z.number().int().nonnegative() }).nullable(),
   view: BoxSchema.nullable(),
   strip: z.string().nullable(),
+  jobs: z.array(z.string()).max(LESSON_JOBS_MAX).default([]),
 });
 export const LessonActSchema = z.discriminatedUnion('k', [
   z.object({ k: z.literal('翻'), page: z.object(PageBase) }),

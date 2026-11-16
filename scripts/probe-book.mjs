@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 /**
  * 课本做底的舞台(src/ui/stage/book.tsx)手动验收:不进 pnpm test,要本机 Chrome、一个跑着的 cotutor serve(它的 vault 教材/ 下放了课本 PDF)。不花钱、不起老师。
- * 直接开 /stage/,照页面那样 postMessage 发课本卡进去;卡的参数用服务端那几个函数现算(读课本索引、落板之前换框),和老师真出的卡一样:
+ * 直接开 /stage/,照页面那样 postMessage 发一节课的样子进去(type: lesson);老师的动作用服务端那几个函数现落(读课本索引、找框,src/board/lesson-fit.ts),和老师真写的一样:
  *  一、目录那张:pdf.js 现画,两页都画出来了(画布上有字)。
  *  二、老师翻到《坐井观天》看开头:窗对着开头,页宽铺满,那一块亮一下。
  *  三、下一张看第 6–7 段、圈「井沿」:同一块板(不重铺),窗滑过去(大小不变),第 6–7 段的开头在窗里,圈画上了。
  *  四、手指往上拖:窗跟着走、不落笔、横着不动;停下来报一次窗(view)。
  *  五、两指捏开:不缩放;双击:两倍,停下来窗里那一块重画清楚;再双击回页宽。
- *  六、笔(pointerType = pen)画一道:留下一笔、回状态。
+ *  六、请了圈以后,笔(pointerType = pen)画一道:留下一笔、报 stroke。
  *  七、手指点「渴」:报 pick「渴」。
- *  八、老师下一张看第 1 段:窗滑回去,孩子画的那一笔还在。
- *  九、给老师看:交回板此刻的图(png)。
+ *  八、老师再看第 1 段:窗滑回去,孩子画的那一笔还在。
+ *  九、给老师看:先交窗里的图(shot,jpeg),再报 submit。
  *  十、预览图:peek 回一张长边 480 的 jpeg(首页「今天」那一格)。
  * iPad 横屏各截一张(Page.captureScreenshot)。
  * 用法:node scripts/probe-book.mjs <服务根地址> --books <vault 的教材目录> [--book <文件名>] [--out <截图目录>]
@@ -21,8 +21,9 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { QUIET_ARGS } from './_quiet.mjs';
 import { bookIndex, listBooks, pickBook } from '../src/memory/textbook-pdf.ts';
-import { boardPageSection, bookLesson } from '../src/board/board-page.ts';
-import { bookCut, bookFind, bookSheets, bookSpots } from '../src/chalk/index.ts';
+import { bookLesson, fitActs, lessonOpen } from '../src/board/lesson-fit.ts';
+import { lessonInit, lessonStep } from '../src/board/lesson.ts';
+import { bookCut, bookFind, bookSheets } from '../src/chalk/index.ts';
 
 const args = process.argv.slice(2);
 const opt = (k) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : undefined; };
@@ -36,15 +37,15 @@ const file = opt('--book') ?? pickBook(await listBooks(books, '语文'), new Dat
 const ix = await bookIndex(books, join(tmp, 'cache'), file);
 if (!ix) { console.error(`读不到课本:${file}`); process.exit(2); }
 
-/** 老师写的课本卡 → 落板之前换好的(和服务端一样) */
-let lesson = null;
-const card = (params) => {
-  const sec = { heading: null, lines: [{ text: '一句', anchor: 0, marks: [], cues: [] }], cards: [{ kind: 'kit', props: { kit: '课本', params: { 课: '', 看: '', 圈: '', 遮: '', 书: '', 页: '', ...params }, ops: ['点字', '圈', '画'] } }] };
-  const out = boardPageSection(sec, { page: true, photo: null, book: { file, index: ix, lesson } });
-  const c = out.section.cards[0];
-  lesson = c.props.params['课'];
-  if (out.unfound.length) console.log(`  (课本里找不到:${out.unfound.join('、')})`);
-  return c;
+/** 一节课:先铺目录;老师写的动作照服务端的落法落上去 */
+const book = { file, index: ix };
+let L = lessonOpen(lessonInit(), book);
+/** 老师写的动作([名, 参数])落上,回这一节课此刻的样子;最后落上的那个「看」的框 */
+const act = (...acts) => {
+  const r = fitActs(L, acts.map(([name, arg]) => ({ name, arg: arg ?? '' })), book);
+  if (r.why.length) console.log(`  (${r.why.join(';')})`);
+  L = r.lesson;
+  return L;
 };
 
 const chrome = process.env.CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
@@ -83,7 +84,7 @@ await send('Page.navigate', { url: `${base}/stage/` });
 await until(`document.readyState === 'complete' && Boolean(document.querySelector('#root'))`);
 // 舞台发给页面的(这里舞台就是顶层,发给自己)
 await evaluate(`window.__got = []; addEventListener('message', (e) => { if (e.data && e.data.source === 'cotutor-stage' && e.data.type !== 'card') window.__got.push(e.data); }); true`);
-const post = (c, id) => evaluate(`window.postMessage(${JSON.stringify({ source: 'cotutor-stage', type: 'card', id, kind: 'kit', props: c.props, state: null, full: true, hand: 'right' })}, '*'), true`);
+const post = (l) => evaluate(`window.postMessage(${JSON.stringify({ source: 'cotutor-stage', type: 'lesson', id: 'lesson:probe', lesson: l, hand: 'right' })}, '*'), true`);
 const got = (type) => evaluate(`window.__got.filter((m) => m.type === ${JSON.stringify(type)})`);
 const ready = () => until(`document.querySelector('.bk-board')?.dataset.phase === 'ready'`);
 /** 窗:容器的 transform 与窗在屏幕上的位置 */
@@ -100,19 +101,17 @@ const drag = async (from, to, steps = 12, extra = {}) => {
 };
 
 // 一、目录
-const toc = card({});
-await post(toc, 'p/0');
-ok('目录:铺好了(两页)', Boolean(await ready()) && (await evaluate(`document.querySelectorAll('.bk-page').length`)) === toc.props.params['页'].split('-').length, toc.props.params['页']);
+await post(L);
+ok('目录:铺好了(两页)', Boolean(await ready()) && (await evaluate(`document.querySelectorAll('.bk-page').length`)) === L.pages[0].pages.length, L.pages[0].pages.join());
 const inked = await until(`(() => { const c = document.querySelector('.bk-page'); if (!c || !c.width) return false; const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 0; i < d.length; i += 400) if (d[i] < 160) n++; return n > 50 ? n : false; })()`, 15000, 300);
 ok('pdf.js 画出了字(画布上有深色的点)', Boolean(inked), String(inked));
 console.log('  截图', await shot('1-目录.png'));
 
 // 二、翻到坐井观天、看开头
-const c1 = card({ 课: '坐井观天', 看: '开头' });
-await post(c1, 'p/1');
+await post(act(['翻', '坐井观天'], ['看', '开头']));
 await ready();
 await sleep(400);
-const look1 = bookSpots(c1.props.params['看'])[0].box;
+const look1 = L.look?.box;
 let cam = await camera();
 const v1 = visible(cam);
 const pageS = cam.w / 1000;
@@ -124,11 +123,10 @@ console.log('  截图', await shot('2-开头.png'));
 
 // 三、看第 6–7 段、圈井沿:同一块板,窗滑过去
 const pagesBefore = await evaluate(`[...document.querySelectorAll('.bk-page')].map((c) => c.width).join()`);
-const c2 = card({ 看: '第 6–7 段', 圈: '井沿' });
-await post(c2, 'p/2');
+await post(act(['看', '第 6–7 段'], ['圈', '井沿'], ['请', '点、圈']));
 await sleep(1000);
 cam = await camera();
-const look2 = bookSpots(c2.props.params['看'])[0].box;
+const look2 = L.look?.box;
 const v2 = visible(cam);
 ok('第二张同一课:不重铺(页的画布还是那几张)', pagesBefore === (await evaluate(`[...document.querySelectorAll('.bk-page')].map((c) => c.width).join()`)));
 ok('窗滑到第 6–7 段(跨两页):大小不变,开头在窗里', look2 && v2[1] <= look2[1] + 5 && look2[1] < v2[3] && Math.abs(cam.s - pageS) < 0.01, JSON.stringify({ look2, v2: v2.map(Math.round) }));
@@ -178,15 +176,17 @@ cam = await camera();
 const p0 = { x: cam.left + cam.w * 0.3, y: cam.top + cam.h * 0.5 }, p1 = { x: cam.left + cam.w * 0.6, y: cam.top + cam.h * 0.55 };
 await drag(p0, p1, 14, { pointerType: 'pen' });
 await sleep(200);
-const states = await got('state');
-ok('笔画一道:留下一笔、回状态', (await inks()) === 1 && states.length > 0 && states[states.length - 1].state.marks.length === 1, JSON.stringify(states[states.length - 1]?.state?.marks?.length));
+const strokes = await got('stroke');
+ok('笔画一道:留下一笔、报 stroke', (await inks()) === 1 && strokes.length === 1 && strokes[0].pts.length > 3, JSON.stringify(strokes.map((x) => x.pts.length)));
+// 页面落上这一笔再发回来(同孩子端 lsKid)
+if (strokes[0]) { L = lessonStep(L, { t: 'stroke', pts: strokes[0].pts }); await post(L); }
 
 // 七、手指点「渴」
 const at = bookLesson(ix, '坐井观天');
 const sheets = bookSheets(at.pages, undefined, bookCut(ix.pages));
 const ke = bookFind(at.pages, sheets, '渴');
-// 先让「渴」在窗里:发一张看它的卡(窗滑过去)
-await post(card({ 看: '口渴了' }), 'p/3');
+// 先让「渴」在窗里:老师看它(窗滑过去)
+await post(act(['看', '口渴了']));
 await sleep(1000);
 cam = await camera();
 const kp = toScreen(cam, (ke[0] + ke[2]) / 2, (ke[1] + ke[3]) / 2);
@@ -200,20 +200,20 @@ ok('手指点「渴」:报 pick「渴」', picks.length === 1 && picks[0].text =
 console.log('  截图', await shot('7-点字.png'));
 
 // 八、老师下一张看第 1 段:窗滑回去,那一笔还在
-await post(card({ 看: '第 1 段' }), 'p/4');
+await post(act(['看', '第 1 段']));
 await sleep(1000);
 cam = await camera();
-const look8 = bookSpots((await evaluate('1') && card({ 看: '第 1 段' })).props.params['看'])[0].box;
+const look8 = L.look.box;
 const v8 = visible(cam);
 ok('窗滑回第 1 段;孩子画的那一笔还在', v8[1] <= look8[1] + 5 && look8[1] < v8[3] && (await inks()) === 1);
-const lastState = (await got('state')).slice(-1)[0];
-ok('新卡的状态带着那一笔(笔画挂在书页上)', lastState?.state?.marks?.length === 1);
 
 // 九、给老师看
 await evaluate(`window.postMessage({ source: 'cotutor-stage', type: 'control', action: 'submit' }, '*'), true`);
 const sub = await until(`window.__got.find((m) => m.type === 'submit')`, 5000);
-ok('给老师看:交回一张 png 和状态', Boolean(sub?.image?.startsWith('data:image/png')) && sub.image.length > 5000 && sub.state.marks.length === 1, String(sub?.image?.length));
-if (sub?.image) writeFileSync(join(shots, '9-交的图.png'), Buffer.from(sub.image.split(',')[1], 'base64'));
+const subShot = (await got('shot')).slice(-1)[0];
+const order = await evaluate(`window.__got.map((m) => m.type).filter((t) => t === 'shot' || t === 'submit').slice(-2).join()`);
+ok('给老师看:先交窗里的图(jpeg),再报 submit', Boolean(sub) && Boolean(subShot?.image?.startsWith('data:image/jpeg')) && subShot.image.length > 5000 && order === 'shot,submit', `${order} ${subShot?.image?.length}`);
+if (subShot?.image) writeFileSync(join(shots, '9-交的图.jpg'), Buffer.from(subShot.image.split(',')[1], 'base64'));
 
 // 十、预览图(首页「今天」那一格):peek 回一张长边 480 的 jpeg
 await evaluate(`window.postMessage({ source: 'cotutor-stage', type: 'control', action: 'peek' }, '*'), true`);

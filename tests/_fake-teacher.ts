@@ -44,14 +44,14 @@ export function teacherReply(body: ChatBody): FakeReply {
   if (msg.includes('预习小鱼')) parts.push('我们来预习《小鱼吹泡泡》。\n\n```课本\n课: 小鱼吹泡泡\n看: 第 1 段\n```\n\n你先读一读第一段。\n\n```课本\n看: 第 2 段\n圈: 井沿、没有这个词\n```\n\n再看第二段,井沿在哪里?');
   // 真课本的页面探针(scripts/probe-book-page.mjs,家长放的人教统编版二年级上册)
   if (msg.includes('预习坐井观天')) parts.push('我们来预习《坐井观天》。\n\n```课本\n课: 坐井观天\n看: 第 6–7 段\n圈: 井沿\n```\n\n青蛙和小鸟又说了什么?你读一读这两段。');
-  // 数学课本做底(tests/board-book.test.ts):翻到课题、看例 2(不写操作:数学不开点字)
+  // 数学课本做底(tests/board-book.test.ts):讲稿里写动作——翻到课题、看例 2(没请:数学不开点字)
   // 真数学课本的页面探针(人教版数学二年级上册):6的乘法口诀从例 4 起
-  if (msg.includes('预习6的乘法口诀')) parts.push('```课本\n课: 6的乘法口诀\n看: 例 4\n```\n\n我们先看例 4 的图。\n\n你看到了什么?');
-  // 数学课本上换成点阵动手、再回到课本(盖住表里的 12,孩子点开)
-  if (msg.includes('摆一摆')) parts.push('我们在白板上摆一摆。\n\n```点阵\n6 行 6 个\n操作: 圈\n6 个圈成一串,一共几串?\n```\n\n这里有 6 串糖葫芦的山楂。\n\n你把 6 个圈成一串。');
-  if (msg.includes('回课本')) parts.push('```课本\n看: 例 4\n盖: 12\n```\n\n我们回到课本上。\n\n表里盖住的数你先想一想,再点开看。');
-  if (msg.includes('先想一想')) parts.push('```课本\n看: 例 2\n盖: 5×1=5\n```\n\n你先想一想,5 个 1 是多少?');
-  if (msg.includes('预习乘法口诀')) parts.push('```课本\n课: 5的乘法口诀\n看: 例 2\n```\n\n我们先看例 2 的图。\n\n你看到了什么?');
+  if (msg.includes('预习6的乘法口诀')) parts.push('[[翻 6的乘法口诀]]\n我们先看例 4 的图。[[看 例 4]]\n你看到了什么?');
+  // 数学课本上动手:例 4 下面摆一个点阵,请他圈;再回到课本上(盖住表里的 12,孩子点开)
+  if (msg.includes('摆一摆')) parts.push('这里有 6 串糖葫芦的山楂,我们摆出来。[[看 例 4]] [[摆 点阵 6 行 6 个]]\n你把 6 个圈成一串。[[请 圈]]');
+  if (msg.includes('回课本')) parts.push('我们回到课本上。[[擦 全部]] [[盖 12]]\n表里盖住的数你先想一想,再点开看。');
+  if (msg.includes('先想一想')) parts.push('你先想一想,5 个 1 是多少?[[看 例 2]] [[盖 5×1=5]]');
+  if (msg.includes('预习乘法口诀')) parts.push('[[翻 5的乘法口诀]]\n我们先看例 2 的图。[[看 例 2]]\n你看到了什么?');
   if (msg.includes('不存在的课')) parts.push('```课本\n课: 坐井观天\n```\n\n我们翻到这一课。');
   if (msg.includes('方向盘')) parts.push('我们把它画下来。\n\n```方向盘\n操作: 转\n把「东」转到小人的前面。\n```\n\n这是一个方向盘,中间的小人就是你。\n\n你把「东」转到小人的前面。');
   if (msg.includes('热身') || msg.includes('口语课')) parts.push('```word\n🦆 duck\nd-u-ck\n```\n\n我们先热热身!我先来:duck! [[echo duck]]\n\n小声一点:duck… [[echo duck]]\n\n你先说:鸭子英文怎么说? [[say duck]]\n\n热身好啦!老师给你打个电话。 [[call]]\n\n这句不该念。');

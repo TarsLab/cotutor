@@ -2,6 +2,8 @@
 import { actParts, actText, readMark, readMarks } from '../src/board/acts.ts';
 import { annotateSource, parseBoard } from '../src/board/parse.ts';
 import type { LineAct } from '../src/schema/index.ts';
+import { readFileSync } from 'node:fs';
+import { actsGuide } from '../src/board/cards/docs.ts';
 import { check, done } from './_check.ts';
 
 const ok = (raw: string): LineAct | null => { const m = readMark(raw); return m.kind === 'act' ? m.act : null; };
@@ -94,5 +96,16 @@ check('actText 说回原文', actText({ name: '看', arg: '第 3 题' }) === '[[
   // 家长端看原文:讲稿一行标上念完做什么;只有动作的一行另标
   const a = annotateSource('[[翻 6的乘法口诀]]\n我们看例 4。[[看 例 4]]\n[[请 圈]]\n');
   check('看原文:讲稿标「念完看」,只有动作的行标「动作」', a.rows[1].label?.includes('念完看') === true && a.rows[0].label?.startsWith('动作') === true && a.rows[2].label?.startsWith('动作') === true, JSON.stringify(a.rows));
+}
+// ——— 给老师的那一页(cards/动作怎么写.md):里面写的每个动作都读得成 ———
+{
+  const all = [...actsGuide().matchAll(/\[\[([^\[\]]+)\]\]/g)].map((m) => m[1]);
+  const wrong = all.filter((x) => readMark(x).kind !== 'act');
+  check('动作怎么写.md:每个 [[ ]] 都是读得成的动作', all.length >= 15 && !wrong.length, wrong.join(' / '));
+  const g = actsGuide();
+  check('递给老师的那一页剥掉了给人看的注释', g.startsWith('# 动作怎么写') && !g.includes('给人看'), g.slice(0, 80));
+  const math = readFileSync(new URL('../grades/grade-2/agents/math-tutor/activities/预习.md', import.meta.url), 'utf8');
+  const mwrong = [...math.matchAll(/\[\[([^\[\]]+)\]\]/g)].map((m) => m[1]).filter((x) => readMark(x).kind !== 'act');
+  check('数学「预习」里写的动作都读得成', !mwrong.length, mwrong.join(' / '));
 }
 done();

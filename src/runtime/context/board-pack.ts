@@ -6,7 +6,7 @@
  *   全文     底上认出的正文:换底以后第一次认完那一轮给全,之后只写「未变」;还在认写「还在认」;这一轮刚发的照片不写(图随这一轮附上)
  *   你画的   老师上一次在板上画的(那张板卡的参数,图不算)
  *   开放     现在孩子能做的操作
- *   孩子做的 从上一轮到现在孩子在板上做的,合并过(点开看了哪几个字、各几次)
+ *   孩子做的 从上一轮到现在孩子在板上做的,合并过(点开看了哪几个字、各几次;课本上写画了几笔、擦过没有)
  *   最近点的 30 秒内点的最后一项(孩子说「这个」时指它)
  *   孩子在看 课本做底时:孩子自己挪了窗、停下来的地方(上一轮以后的最后一次)
  * 整段控制在 SLATE_MAX 字以内(课本 BOOK_SLATE_MAX):超了先截全文。
@@ -108,6 +108,12 @@ export function slateOf(x: SlateInput): { slate: NonNullable<ContextPack['slate'
   const since = x.events.slice(from);
   const picked = since.filter(onBase).map((e) => e.text);
   const did = [pickLine(picked.filter((t) => !isEnglish(t)), '笔顺'), pickLine(picked.filter(isEnglish), '单词')].filter((s): s is string => Boolean(s));
+  // 课本上写画的:几笔(笔画本身看图)、擦没擦过
+  const inks = since.filter((e): e is BoardEvent & { k: 'ink' } => e.k === 'ink' && e.base === base);
+  const wiped = inks.map((e) => Boolean(e.wipe)).lastIndexOf(true);
+  const strokes = inks.slice(wiped + 1).length;
+  if (wiped >= 0) did.push('擦掉了自己画的');
+  if (strokes) did.push(`在课本上写画了 ${strokes} 笔(写了什么看图)`);
   // 遮了拼音的、盖住印好的字的(课本):揭了哪些、没揭哪些(这块底上揭过的都算)
   const opened = new Set([...x.events.filter((e): e is BoardEvent & { k: 'reveal' } => e.k === 'reveal' && e.base === base).map((e) => e.text), ...(x.lesson?.revealed ?? [])]);
   for (const [key, what] of [['遮', '揭开了拼音'], ['盖', '揭开了盖住的']] as const) {

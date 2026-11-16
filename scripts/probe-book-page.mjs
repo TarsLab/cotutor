@@ -41,7 +41,7 @@ const { startFakeRealtime } = await import(join(repo, 'tests', '_fake-realtime.t
 const { startFakeTeacher } = await import(join(repo, 'tests', '_fake-teacher.ts'));
 const { readBoard } = await import(join(repo, 'src', 'runtime', 'journal', 'board-log.ts'));
 const { bookIndex } = await import(join(repo, 'src', 'memory', 'textbook-pdf.ts'));
-const { bookLesson } = await import(join(repo, 'src', 'board', 'board-page.ts'));
+const { bookLesson } = await import(join(repo, 'src', 'board', 'lesson-fit.ts'));
 const { bookCut, bookFind, bookSheets } = await import(join(repo, 'src', 'chalk', 'index.ts'));
 
 const fake = await startFakeRealtime();

@@ -6,13 +6,19 @@
  *  - 写、摆:落进「看」着的那道题的白纸条;没在看哪一道题就不做
  *  - 擦、请:照写的做
  * 一节里的动作照先后一个一个落(先翻再看,看的是新的那一课),落不了的记一句给家长(unfound / skipped),动作本身留在讲稿上、不带 do。
- * 这里也收着课本做底时以前替老师把住的规矩(以前在 board-page.ts 与 runner 的 lastBoardKit、bookOn)。
+ * 这里也收着课本做底时以前替老师把住的规矩(以前在 board-page.ts 的 fitBook 与 runner 的 lastBoardKit、bookOn)。
  */
-import { BOOK_KIT, BOOK_TOC, bookCut, bookFind, bookSheets, bookSpots, bookTarget, lessonBlocks } from '../chalk/index.ts';
-import type { BoardCard, BoardSection, BookIndex, BookPage, Box, Lesson, LessonAct, LessonPage, LineAct } from '../schema/index.ts';
+import { BOOK_KIT, BOOK_MAX_PAGES, BOOK_TOC, bookCut, bookFind, bookSheets, bookTarget, findLesson, lessonBlocks } from '../chalk/index.ts';
+import type { BoardCard, BoardSection, BookIndex, BookPage, Lesson, LessonAct, LessonPage, LineAct } from '../schema/index.ts';
 import { actParts } from './acts.ts';
-import { bookLesson } from './board-page.ts';
 import { lessonPage, lessonStep } from './lesson.ts';
+
+/** 一课(或目录)铺哪几页(最多 BOOK_MAX_PAGES 页,数学一个小节能有十几页);认不出 = null */
+export function bookLesson(index: BookIndex, name: string | null): { title: string; pages: BookPage[] } | null {
+  if (!name || name === BOOK_TOC) return index.toc.length ? { title: BOOK_TOC, pages: index.pages.filter((p) => index.toc.includes(p.n)) } : null;
+  const l = findLesson(index.lessons, name);
+  return l ? { title: l.title, pages: index.pages.filter((p) => p.n >= l.pages[0] && p.n <= l.pages[1]).slice(0, BOOK_MAX_PAGES) } : null;
+}
 
 /** 课本做底:这一册的文件名与索引 */
 export interface LessonBook { file: string; index: BookIndex }
@@ -64,8 +70,11 @@ export function fitAct(l: Lesson, a: LineAct, book: LessonBook | null): { do: Le
       return { do: parts.name === '写' ? { k: '写', text: parts.text, size: parts.size } : { k: '摆', kit: parts.kit, params: parts.params, size: parts.size } };
     case '擦':
       return { do: { k: '擦', all: parts.all } };
-    case '请':
-      return { do: { k: '请', ops: parts.ops } };
+    case '请': {
+      // 点字只在能点的页上(数学课本上点的是数和算式,不弹)
+      const ops = p.pick ? parts.ops : parts.ops.filter((o) => o !== '点');
+      return ops.length ? { do: { k: '请', ops }, ...(ops.length < parts.ops.length ? { why: `《${p.title}》上不能点字` } : {}) } : { why: `《${p.title}》上不能点字` };
+    }
   }
 }
 
@@ -85,44 +94,46 @@ export function fitActs(l: Lesson, acts: readonly LineAct[], book: LessonBook | 
 }
 
 /**
- * 过渡(阶段 2 任务 3 到阶段 3 结束,语文预习还写 ```课本 卡):一张已经换好框的课本卡(board-page.ts 的 fitBook)说成落好的动作——
- * 课 → 翻(和现在这一页一样就不翻);看、圈、遮、盖照卡上的框;开放的操作 → 请(画 = 写、点字 = 点)。
+ * 课本做底的一节里卡都不上板(页就是课本,老师用讲稿里的动作):别的卡(点阵、方向盘、字卡……)撤掉(dropped,给家长记一行),
+ * 卡撤了,讲稿里引用它的锚、标注、cue 跟着拿掉。
+ * 过渡(阶段 2 任务 3 起,到阶段 3 结束删掉:语文预习还写 ```课本 卡):课本卡说成讲稿里的动作
+ * (课 → 翻,看、圈、遮、盖照写的,开放的操作 → 请:画 = 写、点字 = 点),跟着它前面那一句(第一句前面的马上做)。
  */
-export function bookCardActs(card: BoardCard, cur: Lesson, book: LessonBook): LessonAct[] {
-  if (card.kind !== 'kit' || card.props.kit !== BOOK_KIT) return [];
-  const p = (card.props.params && typeof card.props.params === 'object' ? card.props.params : {}) as Record<string, string>;
-  const out: LessonAct[] = [];
-  const page = p['书'] === book.file && p['课'] ? bookPageOf(book, p['课'] === BOOK_TOC ? null : p['课']) : null;
-  if (page && page.id !== cur.at) out.push({ k: '翻', page });
-  const look = bookSpots(p['看'])[0];
-  if (look?.box) out.push({ k: '看', label: look.text, box: look.box as Box });
-  for (const k of ['圈', '遮', '盖'] as const) {
-    const spots = bookSpots(p[k]).flatMap((s) => (s.box ? [{ text: s.text, box: s.box as Box }] : []));
-    if (spots.length) out.push({ k, spots });
+export function bookSection(section: BoardSection): { section: BoardSection; dropped: BoardCard[] } {
+  const kits = section.cards.map((_, i) => i);
+  if (!kits.length) return { section, dropped: [] };
+  const dropped: BoardCard[] = [];
+  const lead: LineAct[] = [...(section.acts ?? [])];
+  const after = new Map<number, LineAct[]>();
+  for (const i of kits) {
+    const c = section.cards[i];
+    if (c.kind !== 'kit' || c.props.kit !== BOOK_KIT) { dropped.push(c); continue; }
+    const p = (c.props.params && typeof c.props.params === 'object' ? c.props.params : {}) as Record<string, unknown>;
+    const text = (k: string): string[] => (typeof p[k] === 'string' ? (p[k] as string).split(';').map((x) => x.split('|')[0].trim()).filter(Boolean) : []);
+    const acts: LineAct[] = [];
+    if (text('课')[0]) acts.push({ name: '翻', arg: text('课')[0] });
+    if (text('看')[0]) acts.push({ name: '看', arg: text('看')[0] });
+    for (const k of ['圈', '遮', '盖'] as const) if (text(k).length) acts.push({ name: k, arg: text(k).join('、') });
+    const ops = Array.isArray(c.props.ops) ? (c.props.ops as string[]) : [];
+    const asked = [...new Set(ops.flatMap((o) => (o === '圈' ? ['圈'] : o === '画' ? ['写'] : o === '点字' ? ['点'] : [])))];
+    if (asked.length) acts.push({ name: '请', arg: asked.join('、') });
+    // 跟着卡前面那一句:最后一句锚在它前面的卡上(或没有锚)的
+    let at = -1;
+    section.lines.forEach((l, k) => { if (l.anchor === null || l.anchor < i) at = k; });
+    if (at < 0) lead.push(...acts);
+    else after.set(at, [...(after.get(at) ?? []), ...acts]);
   }
-  const ops = Array.isArray(card.props.ops) ? (card.props.ops as string[]) : [];
-  const asked = [...new Set(ops.flatMap((o) => (o === '圈' ? ['圈' as const] : o === '画' ? ['写' as const] : o === '点字' ? ['点' as const] : [])))];
-  if (asked.length) out.push({ k: '请', ops: asked });
-  return out;
+  const lines = section.lines.map((l, k) => {
+    const acts = [...(l.acts ?? []), ...(after.get(k) ?? [])];
+    return { ...l, anchor: null, marks: [], cues: [], ...(acts.length ? { acts } : {}) };
+  });
+  const { layout: _layout, acts: _acts, ...rest } = section;
+  return { section: { ...rest, cards: [], lines, ...(lead.length ? { acts: lead } : {}) }, dropped };
 }
 
-/**
- * 一节里落到页上的动作,照孩子看到的先后:第一句前面的;然后每一句之前、锚着的那张课本卡(过渡)和这一句的动作;最后没锚上的课本卡。
- * 定稿时 runner 照它把这一节落进一节课的状态
- */
-export function sectionActs(section: BoardSection, l: Lesson, book: LessonBook): LessonAct[] {
-  const out: LessonAct[] = [];
-  let s = l;
-  const push = (xs: readonly LessonAct[]): void => { for (const a of xs) { out.push(a); s = lessonStep(s, { t: 'act', act: a }); } };
-  let card = 0;
-  const cardsTo = (k: number): void => { for (; card <= k && card < section.cards.length; card++) push(bookCardActs(section.cards[card], s, book)); };
-  push((section.acts ?? []).flatMap((a) => (a.do ? [a.do] : [])));
-  for (const line of section.lines) {
-    if (line.anchor !== null) cardsTo(line.anchor);
-    push((line.acts ?? []).flatMap((a) => (a.do ? [a.do] : [])));
-  }
-  cardsTo(section.cards.length - 1);
-  return out;
+/** 一节里落好的动作,照孩子看到的先后:第一句前面的,再一句一句(定稿时 runner 照它把这一节落进一节课的状态) */
+export function sectionActs(section: BoardSection): LessonAct[] {
+  return [...(section.acts ?? []), ...section.lines.flatMap((l) => l.acts ?? [])].flatMap((a) => (a.do ? [a.do] : []));
 }
 
 /** 一节里讲稿的动作都落到页上(第一句前面的先落,再一句一句);回换好的一节和落不了的那几句 */

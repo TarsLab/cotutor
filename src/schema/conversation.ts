@@ -135,6 +135,8 @@ const MessageObjectSchema = z.object({
   activity: ActivityRunSchema.optional(),
   /** 这个话题以板为主(activity 头上 board: page;只记在话题第一条):孩子端的页面就是板,板的日志在 <date>.<话题>.board.jsonl */
   board: z.literal('page').optional(),
+  /** 话题第一条:页是课本(activity 头上 base: textbook);这节课的样子在 <date>.<话题>.lesson.json */
+  base: z.literal('textbook').optional(),
   /** 口语课页的哪份口语单起的这个话题(talk/<id>/ 4,只记在话题第一条) */
   talk: z.string().optional(),
 });

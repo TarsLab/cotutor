@@ -1,5 +1,5 @@
 /** 讲稿里的动作落到课本上(src/board/lesson-fit.ts):照索引找框、先翻再看、落不了的记一句;过渡期的课本卡说成动作。书是 tests/_math-book.ts 造的。 */
-import { bookCardActs, bookPageOf, fitActs, fitSection, lessonOpen, sectionActs } from '../src/board/lesson-fit.ts';
+import { bookPageOf, bookSection, fitActs, fitSection, lessonOpen, sectionActs } from '../src/board/lesson-fit.ts';
 import { lessonInit, lessonPage, lessonStep, lessonStrip } from '../src/board/lesson.ts';
 import { parseBoard } from '../src/board/parse.ts';
 import type { BoardCard, Lesson, LineAct } from '../src/schema/index.ts';
@@ -49,23 +49,19 @@ check('还没有页:先铺目录;有页就不动', opened.at === '数学二年�
   const parsed = parseBoard('[[翻 5的乘法口诀]]\n我们看例 2。[[看 例 2]]\n先别看答案。[[盖 5×1=5]] [[请 圈]]\n这里没有。[[圈 没有的字]]\n');
   const f = fitSection(parsed.section, opened, book);
   check('fitSection:第一句前面的先落,再一句一句', f.section.acts?.[0].do?.k === '翻' && f.section.lines[0].acts?.[0].do?.k === '看' && f.section.lines[1].acts?.every((a) => a.do) === true && !f.section.lines[2].acts?.[0].do && f.why.length === 1, JSON.stringify([f.section, f.why]));
-  const acts = sectionActs(f.section, opened, book);
+  const acts = sectionActs(f.section);
   check('sectionActs:落好的照先后排', acts.map((a) => a.k).join() === '翻,看,盖,请');
   const after = acts.reduce((s: Lesson, a) => lessonStep(s, { t: 'act', act: a }), opened);
   check('照它落进状态', after.look?.label === '例2' && lessonPage(after)!.open.join() === '圈');
   check('没有动作的一节原样', fitSection(parseBoard('你好。\n').section, opened, book).section.lines[0].acts === undefined);
 }
 
-// ——— 过渡:课本卡说成动作 ———
+// ——— 过渡:课本卡说成动作(落到页上和老师写的动作走同一条路) ———
 {
   const card = (params: Record<string, string>, ops = ['圈', '画']): BoardCard => ({ kind: 'kit', props: { kit: '课本', params, ops } });
-  const box = '80 300 900 420';
-  const acts = bookCardActs(card({ 课: '5的乘法口诀', 书: '数学二年级上册.pdf', 页: '6', 看: `例2|${box}`, 盖: `5×1=5|${box}`, 圈: '' }), opened, book);
-  check('课本卡:课 → 翻、看 / 盖照卡上的框、操作 → 请(画 = 写)', acts.map((a) => a.k).join() === '翻,看,盖,请' && (acts[3] as { ops: string[] }).ops.join() === '圈,写', JSON.stringify(acts));
-  const same = bookCardActs(card({ 课: '目录', 书: '数学二年级上册.pdf', 页: '1' }, ['看']), opened, book);
-  check('和现在这一页一样:不翻;只开放看:不请', same.length === 0, JSON.stringify(same));
-  check('不是课本卡:没有动作', bookCardActs({ kind: 'kit', props: { kit: '点阵', params: {} } }, opened, book).length === 0);
-  const sec = { cards: [card({ 课: '5的乘法口诀', 书: '数学二年级上册.pdf', 页: '6', 看: `例2|${box}` })], lines: [{ text: '看例 2。', audio: null, marks: [], ask: false, anchor: 0, cues: [], acts: [{ name: '请', arg: '圈', do: { k: '请', ops: ['圈'] } }] as LineAct[] }] };
-  check('sectionActs:锚着的课本卡在那一句的动作前面', sectionActs(sec, opened, book).map((a) => a.k).join() === '翻,看,请,请');
+  const raw = bookSection({ cards: [card({ 课: '5的乘法口诀', 看: '例 2|', 盖: '5×1=5|' }), { kind: 'kit', props: { kit: '点阵', params: {} } }], lines: [{ text: '看例 2。', audio: null, marks: [], ask: false, anchor: 1, cues: [] }] });
+  check('课本卡:课 → 翻、看、盖照写的、操作 → 请(画 = 写);在第一句前面的马上做;别的卡撤掉', raw.section.acts?.map((a) => `${a.name} ${a.arg}`).join() === '翻 5的乘法口诀,看 例 2,盖 5×1=5,请 圈、写' && raw.dropped.length === 1 && raw.section.cards.length === 0, JSON.stringify(raw));
+  const f = fitSection(raw.section, opened, book);
+  check('数学课本上请点字:不开(这一页不能点字),记一句', fitSection(bookSection({ cards: [card({ 课: '5的乘法口诀' }, ['点字'])], lines: [] }).section, opened, book).why.some((w) => w.includes('不能点字')) && f.section.acts?.every((a) => a.do) === true, JSON.stringify(f));
 }
 done();

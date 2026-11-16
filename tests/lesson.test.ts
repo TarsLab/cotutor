@@ -1,6 +1,6 @@
 /** 一节课的状态(src/board/lesson.ts 的 lessonStep):老师的动作、孩子的事各自怎么改它。做法同 player.test.ts 对 step。 */
-import { LESSON_CAPS, lessonActs, lessonInit, lessonPage, lessonStep, lessonStrip } from '../src/board/lesson.ts';
-import { LESSON_INK_MAX, LESSON_INK_POINTS, LESSON_MARKS_MAX, LESSON_PAGES_MAX, LESSON_PICK_MAX, LessonSchema, STRIP_ITEMS_MAX, type Box, type Lesson, type LessonAct, type LessonEvent } from '../src/schema/index.ts';
+import { LESSON_CAPS, lessonActs, lessonDone, lessonInit, lessonPage, lessonStep, lessonStrip } from '../src/board/lesson.ts';
+import { LESSON_JOBS_MAX, LESSON_INK_MAX, LESSON_INK_POINTS, LESSON_MARKS_MAX, LESSON_PAGES_MAX, LESSON_PICK_MAX, LessonSchema, STRIP_ITEMS_MAX, type Box, type Lesson, type LessonAct, type LessonEvent } from '../src/schema/index.ts';
 import { check, done } from './_check.ts';
 
 const page = (title: string, extra: Partial<Extract<LessonAct, { k: '翻' }>['page']> = {}): Extract<LessonAct, { k: '翻' }>['page'] => ({ id: `数学.pdf#${title}`, kind: 'book', src: '数学.pdf', title, pages: [50, 51], cut: 40, layout: 'math', pick: false, ...extra });
@@ -10,7 +10,7 @@ const B1: Box = [80, 300, 900, 420];
 const B2: Box = [80, 700, 900, 820];
 const valid = (l: Lesson): boolean => LessonSchema.safeParse(l).success;
 
-check('上限和 schema 一样', LESSON_CAPS.PAGES_MAX === LESSON_PAGES_MAX && LESSON_CAPS.INK_MAX === LESSON_INK_MAX && LESSON_CAPS.INK_POINTS === LESSON_INK_POINTS && LESSON_CAPS.PICK_MAX === LESSON_PICK_MAX && LESSON_CAPS.MARKS_MAX === LESSON_MARKS_MAX && LESSON_CAPS.STRIP_ITEMS_MAX === STRIP_ITEMS_MAX);
+check('上限和 schema 一样', LESSON_CAPS.PAGES_MAX === LESSON_PAGES_MAX && LESSON_CAPS.INK_MAX === LESSON_INK_MAX && LESSON_CAPS.INK_POINTS === LESSON_INK_POINTS && LESSON_CAPS.PICK_MAX === LESSON_PICK_MAX && LESSON_CAPS.MARKS_MAX === LESSON_MARKS_MAX && LESSON_CAPS.STRIP_ITEMS_MAX === STRIP_ITEMS_MAX && LESSON_CAPS.JOBS_MAX === LESSON_JOBS_MAX);
 
 // ——— 还没有页 ———
 {
@@ -103,6 +103,14 @@ check('同一处再看一遍:n 加一(窗再移一次)', look2.look?.n === 2);
 {
   const many = run(lessonInit(), ...Array.from({ length: LESSON_PAGES_MAX + 2 }, (_, i) => A({ k: '翻', page: page(`第${i}课`) })));
   check('页多了丢最早的', many.pages.length === LESSON_PAGES_MAX && many.at === `数学.pdf#第${LESSON_PAGES_MAX + 1}课` && many.pages[0].title === '第2课');
+}
+
+// ——— 落进来过的那几轮 ———
+{
+  const d = lessonDone(lessonDone(lessonInit(), 'j1'), 'j1');
+  check('lessonDone:记下这一节,同一节不重记', JSON.stringify(d.jobs) === '["j1"]' && valid(d));
+  const many = Array.from({ length: LESSON_JOBS_MAX + 3 }, (_, i) => `j${i}`).reduce(lessonDone, lessonInit());
+  check('几轮多了丢最早的', many.jobs.length === LESSON_JOBS_MAX && many.jobs[0] === 'j3');
 }
 
 // ——— 一节的动作照先后落 ———

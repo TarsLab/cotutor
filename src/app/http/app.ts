@@ -18,7 +18,7 @@ import { conversationFiles, threads } from '../../schema/index.ts';
 import { kidConversation, startedThreads, submittedCards, parentConversation, type KidMessage, type KidTodayThread, type ParentMessage } from '../../runtime/kid-view.ts';
 import { previewOf, writePreview } from '../../runtime/journal/preview.ts';
 import { parseEvents } from '../../runtime/journal/events.ts';
-import { type RunEvent } from '../../schema/index.ts';
+import { type Lesson, type RunEvent } from '../../schema/index.ts';
 import { NEUTRAL_COLOR, SUBJECT_COLORS, TUTOR_PALETTE, tutorColors } from '../../ui/shared/tutor-color.ts';
 import { boardMarkOf, type BoardMarkId } from '../../ui/kid/board-mark.ts';
 import { buildReel, playRecordOk, reelCardTook, reelHolds, reelMissRuns, type PlayRecord, type Reel, type ReelCall, type ReelOwn } from '../../ui/kid/reel.ts';
@@ -63,8 +63,10 @@ import { kidWords, readWords } from '../../scenes/photo-words/store.ts';
 import { listTextbookPages, textbookPageFile } from '../../memory/textbook-pages.ts';
 import { bookFile, bookIndex, listBooks, pickBook } from '../../memory/textbook-pdf.ts';
 import { readBoard } from '../../runtime/journal/board-log.ts';
-import { bookLesson } from '../../board/board-page.ts';
-import { bookCut, bookOps, bookPages } from '../../chalk/index.ts';
+import { lessonOpen } from '../../board/lesson-fit.ts';
+import { lessonInit } from '../../board/lesson.ts';
+import { readLesson } from '../../runtime/journal/lesson-store.ts';
+import { bookPages } from '../../chalk/index.ts';
 import type { Look } from '../../scenes/look.ts';
 import { IndexError, capturePathOk, deleteThread, listDates, rateThread, readErrLog, readIndex, readTranscript, scanCards, undoVaultWrite, writeCapture, writeCardImage, writeCardState, type VaultWrite } from '../../runtime/journal/store.ts';
 import { memoryLineText } from '../../memory/vault-notes.ts';
@@ -388,13 +390,12 @@ export async function parentReel(ctx: AppContext, tutor: string, date: string, t
   return { tutor, date, thread, reel, messages: day.messages.filter((m) => m.thread === thread), kid: kid.messages.filter((m) => m.thread === thread), device, face, live, realtime: mine.some((m) => m.live) };
 }
 
-/** 课本做底的那张卡(孩子端 bpOpenBook 铺的):这本书的这一课(null = 目录);读不出、没有这一课 → null */
-async function bookBaseCard(ws: Workspace, name: string, lesson: string | null): Promise<{ kind: string; props: Record<string, unknown> } | null> {
-  const ix = await bookIndex(ws.paths.textbooks, join(ws.root, '.cotutor', 'textbooks'), name).catch(() => null);
-  const at = ix ? bookLesson(ix, lesson) : null;
-  if (!at?.pages.length) return null;
-  const range = at.pages.length > 1 ? `${at.pages[0].n}-${at.pages[at.pages.length - 1].n}` : String(at.pages[0].n);
-  return { kind: 'kit', props: { kit: '课本', params: { 课: at.title, 看: '', 圈: '', 遮: '', 书: name, 页: range, 裁: String(bookCut(ix!.pages) || '') }, ops: bookOps(ix!.layout, ['点字']) } };
+/** 课本做底的一节课还没开始时孩子端先铺的(bpOpenBook):这本书的目录当一页;读不出、没有目录 → null */
+async function bookBaseLesson(ws: Workspace, name: string): Promise<Lesson | null> {
+  const index = await bookIndex(ws.paths.textbooks, join(ws.root, '.cotutor', 'textbooks'), name).catch(() => null);
+  if (!index) return null;
+  const l = lessonOpen(lessonInit(), { file: name, index });
+  return l.at ? l : null;
 }
 
 /**
@@ -405,13 +406,9 @@ async function reelOwns(ws: Workspace, tutor: string, date: string, thread: stri
   if (!mine.some((m) => m.board === 'page')) return [];
   const at = (m: ConversationMessage): number => { const t = Date.parse(m.timing?.startedAt ?? ''); return Number.isNaN(t) ? Date.parse(m.at) : t; };
   const from = at(mine[0]);
+  // 课本做底的一节课:录像照孩子端记的一节课的样子放(play 的 lesson),不铺应用自己的板
   const bases = (await readBoard(ws, tutor, date, thread)).flatMap((e) => (e.k === 'turn' ? [e.told ?? ''] : e.k === 'view' ? [e.base] : []));
-  const book = bases.find((b) => /\.pdf#/i.test(b));
-  if (book) {
-    const cut = book.lastIndexOf('#');
-    const card = await bookBaseCard(ws, book.slice(0, cut), book.slice(cut + 1) || null);
-    return card ? [{ at: from, card }] : [];
-  }
+  if (bases.some((b) => /\.pdf#/i.test(b))) return [];
   const out: ReelOwn[] = [];
   for (const m of mine) {
     const photo = m.from === 'kid' && m.photos?.length ? m.photos[m.photos.length - 1] : null;
@@ -949,12 +946,19 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       if (!file) return { status: 404, json: { error: 'not_found' } };
       return { status: 200, file, contentType: 'application/pdf' };
     }
-    // 课本做底的话题刚开:这位老师学科、这学期那一册的目录,一张课本卡(孩子端先铺它,老师翻到哪一课再换);没有课本 = card: null
+    // 课本做底的一节课刚开:这位老师学科、这学期那一册的目录当一页(孩子端先铺它,老师翻到哪一课再换);没有课本 = lesson: null
     if (p === '/api/kid/textbook/base' && method === 'GET') {
       const t = ws.config.tutors[url.searchParams.get('tutor') ?? ''];
       if (!t) return { status: 404, json: { error: 'not_found' } };
       const name = pickBook(await listBooks(ws.paths.textbooks, canonicalSubject(t.subject) || null), ctx.now());
-      return { status: 200, json: { card: name ? await bookBaseCard(ws, name, null) : null } };
+      return { status: 200, json: { lesson: name ? await bookBaseLesson(ws, name) : null } };
+    }
+    // 一节课此刻的样子(src/runtime/journal/lesson-store.ts):孩子端回到这节课、刷新页面时照它铺;只读的(以前的、家长看)也照它
+    if (p === '/api/kid/lesson' && method === 'GET') {
+      const tutor = url.searchParams.get('tutor') ?? '', date = url.searchParams.get('date') ?? '', thread = url.searchParams.get('thread') ?? '';
+      if (!ws.config.tutors[tutor] || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^[0-9A-Za-z.-]{1,40}$/.test(thread)) return { status: 404, json: { error: 'not_found' } };
+      const l = await readLesson(ws, tutor, date, thread);
+      return { status: 200, json: { lesson: l.at ? l : null } };
     }
     if (p === '/api/kid/textbook/lines' && method === 'GET') {
       const name = url.searchParams.get('b') ?? '';

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { check, done } from './_check.ts';
 import { SAMPLE_ACTIVITY } from './_activity-sample.ts';
+import type { BoardSection } from '../src/schema/index.ts';
 
 const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-activity-home-')));
 process.env.HOME = home;
@@ -158,7 +159,13 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
     const kitSec = (lines: string[], ops?: string[]) => sec(lines, ops ? [{ kind: 'kit', props: { kit: '照片', params: {}, ops } }] : []);
     const ok1 = [{ kid: 'a', section: kitSec(['哪个字不认识,就点一点它。'], ['点字']) }, { kid: 'b', section: kitSec(['你把傍晚圈出来。']) }];
     const r1 = gradeRun(['请动手就开放'], ok1)[0];
-    check('判:请动手就开放——末句请他动手,板上(这一轮的板卡,没出就沿用上一张)要开放那个操作', !r1.pass && r1.why === '第 2 轮请他圈,板上开放的是点字' && gradeRun(['请动手就开放'], [ok1[0], { kid: 'b', section: kitSec(['你把傍晚圈出来。'], ['点字', '圈']) }])[0].pass && gradeRun(['请动手就开放'], [{ kid: 'c', section: kitSec(['你读一读。']) }])[0].pass, JSON.stringify(r1));
+    check('判:请动手就开放——末句请他动手,板上(这一轮的板卡,没出就沿用上一张)要开放那个操作', !r1.pass && r1.why === '第 2 轮请他圈,板上开放的是点' && gradeRun(['请动手就开放'], [ok1[0], { kid: 'b', section: kitSec(['你把傍晚圈出来。'], ['点字', '圈']) }])[0].pass && gradeRun(['请动手就开放'], [{ kid: 'c', section: kitSec(['你读一读。']) }])[0].pass, JSON.stringify(r1));
+  }
+  {
+    // 讲稿里的动作:[[请 …]] 就是开放;[[摆 …]] 算出了教具;问了带动作就算上板
+    const actSec = (lines: [string, { name: string; arg: string }[]][]): BoardSection => ({ cards: [], lines: lines.map(([text, acts]) => ({ text, audio: null, marks: [], ask: /[??]$/.test(text), anchor: null, cues: [], ...(acts.length ? { acts } : {}) })) } as unknown as BoardSection);
+    const asked = [{ kid: 'a', section: actSec([['你把 6 个圈成一串。', [{ name: '摆', arg: '点阵 6 行 6 个' }, { name: '请', arg: '圈' }]]]) }];
+    check('判:动作——请就是开放、摆算出教具、带动作的问算上板', gradeRun(['请动手就开放'], asked)[0].pass && !gradeRun(['请动手就开放'], [{ kid: 'a', section: actSec([['你圈一圈。', [{ name: '请', arg: '写' }]]]) }])[0].pass && gradeRun(['出教具卡: 点阵'], asked)[0].pass && !gradeRun(['出教具卡: 方向盘'], asked)[0].pass && gradeRun(['出教具卡: 课本'], [{ kid: 'a', section: actSec([['看例 4。', [{ name: '看', arg: '例 4' }]]]) }])[0].pass && !gradeRun(['不出教具卡'], asked)[0].pass && gradeRun(['问就上板'], [{ kid: 'a', section: actSec([['一共几个?', [{ name: '看', arg: '例 4' }]]]) }])[0].pass);
   }
   check('判:出教具卡(方向题老师先画出来)', gradeRun(['出教具卡'], [{ kid: 'x', section: sec(['你转一转。'], [{ kind: 'kit', props: { kit: '方向盘', params: {} } }]) }])[0].pass && !gradeRun(['出教具卡'], turns)[0].pass && gradeRun(['出教具卡'], turns)[0].why!.includes('没写板卡'));
   check('判:出教具卡带画法名、不出教具卡', gradeRun(['出教具卡: 照片'], [{ kid: 'x', section: sec(['你圈一圈。'], [{ kind: 'kit', props: { kit: '照片', params: {} } }]) }])[0].pass && !gradeRun(['出教具卡: 照片'], [{ kid: 'x', section: sec(['你转一转。'], [{ kind: 'kit', props: { kit: '方向盘', params: {} } }]) }])[0].pass && gradeRun(['不出教具卡'], [{ kid: 'x', section: sec(['都对了。'], []) }])[0].pass && !gradeRun(['不出教具卡'], [{ kid: 'x', section: sec(['你转一转。'], [{ kind: 'kit', props: { kit: '方向盘', params: {} } }]) }])[0].pass);

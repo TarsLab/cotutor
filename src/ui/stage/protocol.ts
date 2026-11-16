@@ -9,6 +9,8 @@ export const STAGE_SOURCE = 'cotutor-stage';
 /** 页面 → 舞台 */
 export type ToStage =
   | { source: typeof STAGE_SOURCE; type: 'card'; id: string; kind: string; props: Record<string, unknown>; state: unknown; /** 课包目录 URL(小课堂),如 /api/bundles/<id>/ */ bundleUrl?: string; /** 照片板的那张照片的 URL,如 /api/kid/image?p=captures/… */ imageUrl?: string; /** 照片板开放了「点字」:这张照片认出的字词从哪读,如 /api/kid/photo-words?p=captures/… */ wordsUrl?: string; /** 装好就播(讲稿 [[play]] 委托) */ autoplay?: boolean; /** 交给老师过了:教具只看,不能再动 */ readonly?: boolean; /** 教具铺满:题目在页面顶栏,工具一列、底下给老师的小头像留一格;hand = left 工具在右 */ full?: boolean; hand?: 'left' | 'right' }
+  /** 一节课此刻的样子(src/schema/lesson.ts):页面一句一句落好老师的动作、孩子做的事也落上,变了就发;舞台照它画课本(book.tsx) */
+  | { source: typeof STAGE_SOURCE; type: 'lesson'; id: string; lesson: unknown; readonly?: boolean; hand?: 'left' | 'right' }
   /** peek = 板此刻的样子导一张小图(话题的预览图,首页「今天」用;回 peek) */
   | { source: typeof STAGE_SOURCE; type: 'control'; action: 'toggle' | 'next' | 'prev' | 'play' | 'pause' | 'submit' | 'peek' }
   /** 家长看录像时的小课堂(card props.follow):录像这一刻停在课里的哪儿、在不在放、倍速、到这一刻画过的几处;页面每 100 毫秒发一次 */
@@ -29,6 +31,9 @@ export type FromStage =
   /** 课本:窗停下来以后窗里那一块的图(jpeg data URL,长边 1024);页面交给服务端,下一轮附给老师 */
   | { source: typeof STAGE_SOURCE; type: 'shot'; box: [number, number, number, number]; image: string }
   | { source: typeof STAGE_SOURCE; type: 'submit'; state: unknown; /** 板导出的 png(data URL),页面转存 */ image?: string }
+  /** 一节课(课本):孩子落了一笔(场景坐标)/ 擦掉了自己画的;页面照 lessonStep 改状态、报给服务端 */
+  | { source: typeof STAGE_SOURCE; type: 'stroke'; pts: [number, number][] }
+  | { source: typeof STAGE_SOURCE; type: 'wipe' }
   /** control peek 的回话:板此刻的样子(长边 480 的 jpeg data URL;课本是窗里那块;导不出、小课堂这种不是板的 null) */
   | { source: typeof STAGE_SOURCE; type: 'peek'; image: string | null }
   | { source: typeof STAGE_SOURCE; type: 'close' }

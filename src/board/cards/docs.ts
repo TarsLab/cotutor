@@ -97,6 +97,12 @@ export function boardGuideFor(kinds: readonly string[], dir = PACKAGE_CARDS_DIR)
   return stripHumanNotes(boardSyntaxDoc(dir, kinds));
 }
 
+/** 铺着页的一节课里,老师对页做什么写在讲稿的句子后面(src/board/acts.ts):这一篇进系统提示,跟在板书写法后面 */
+export const ACTS_GUIDE_SOURCE = '动作怎么写.md';
+export function actsGuide(dir = PACKAGE_CARDS_DIR): string {
+  return stripHumanNotes(readFileSync(join(dir, ACTS_GUIDE_SOURCE), 'utf8')).trim();
+}
+
 /** references/README.md:一行一种——名字、一句是什么、何时用;老师按需 @ 单张 */
 export function cardsIndexDoc(dir = PACKAGE_CARDS_DIR): string {
   const rows = cardDocs(dir).map((d) => {

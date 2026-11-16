@@ -17,10 +17,12 @@ const backOf = (v: unknown): LectureBack | null => {
 import { KitStage, type KitStageHandle } from './kit.tsx';
 import { BookStage } from './book.tsx';
 import type { KitState } from '../../chalk/index.ts';
+import type { Lesson } from '../../schema/index.ts';
 import { STAGE_SOURCE, type FromStage, type ToStage } from './protocol.ts';
 import './stage.css';
 
 type Card = Extract<ToStage, { type: 'card' }>;
+type LessonMsg = Extract<ToStage, { type: 'lesson' }>;
 type Outgoing = FromStage extends infer U ? (U extends FromStage ? Omit<U, 'source'> : never) : never;
 
 const noop = (): void => {};
@@ -46,6 +48,8 @@ const post = (m: Outgoing): void => { window.parent.postMessage({ source: STAGE_
 
 function App(): JSX.Element {
   const [card, setCard] = useState<Card | null>(null);
+  /** 一节课(课本做底):页面发来的此刻的样子;有它就画课本,不看卡 */
+  const [lesson, setLesson] = useState<LessonMsg | null>(null);
   const kit = useRef<KitStageHandle>(null);
   const lecture = useRef<LectureStageHandle>(null);
   /** 录像的 follow 比播放器先到(卡刚到、还没挂上):记着最后那条,挂上了交给它(它自己再等课装好) */
@@ -59,7 +63,8 @@ function App(): JSX.Element {
     const onMsg = (e: MessageEvent<ToStage>): void => {
       const m = e.data;
       if (!m || m.source !== STAGE_SOURCE) return;
-      if (m.type === 'card') setCard(m);
+      if (m.type === 'card') { setCard(m); setLesson(null); }
+      else if (m.type === 'lesson') setLesson(m);
       else if (m.type === 'follow') { if (lecture.current) lecture.current.follow(m.ms, m.playing, m.rate, m.marks as StageMark[]); else pendingFollow.current = m; }
       else if (m.type === 'control') {
         if (m.action === 'submit') kit.current?.submit();
@@ -84,6 +89,9 @@ function App(): JSX.Element {
   const onBookView = useCallback((box: [number, number, number, number]) => post({ type: 'view', box }), []);
   const onBookShot = useCallback((box: [number, number, number, number], image: string) => post({ type: 'shot', box, image }), []);
   const onKitSubmit = useCallback((state: KitState, image?: string) => post({ type: 'submit', state, ...(image ? { image } : {}) }), []);
+  const onLessonSubmit = useCallback(() => post({ type: 'submit', state: null }), []);
+  const onStroke = useCallback((pts: [number, number][]) => post({ type: 'stroke', pts }), []);
+  const onWipe = useCallback(() => post({ type: 'wipe' }), []);
   const onLectureDone = useCallback((w: LectureWatch) => post({ type: 'lecture', event: 'finished', ...w }), []);
   const onLectureClose = useCallback((w: LectureWatch) => post({ type: 'lecture', event: 'close', ...w }), []);
   const onLectureAsk = useCallback((w: LectureWatch) => post({ type: 'lecture', event: 'ask', ...w }), []);
@@ -95,6 +103,7 @@ function App(): JSX.Element {
   const onMarks = useCallback((marks: StageMark[]) => post({ type: 'marks', marks }), []);
   const onWatch = useCallback((e: WatchEntry) => post({ type: 'watch', ...e }), []);
 
+  if (lesson) return <BookStage ref={kit} key={lesson.id} id={lesson.id} lesson={lesson.lesson as Lesson} readonly={lesson.readonly === true} hand={lesson.hand === 'left' ? 'left' : 'right'} onStroke={onStroke} onWipe={onWipe} onSubmit={onLessonSubmit} onPick={onKitPick} onReveal={onKitReveal} onView={onBookView} onShot={onBookShot} onError={onError} />;
   if (!card) return <div className="stage-wait" />;
   // 板书上的小课堂卡(老师放课里的一段):props 里有下发时补的起止
   if (card.kind === 'lecture' && card.bundleUrl && typeof card.props.start === 'number' && typeof card.props.end === 'number') {
@@ -104,8 +113,8 @@ function App(): JSX.Element {
   if (card.kind === 'lecture' && card.bundleUrl) return <LectureStage ref={lecture} follow={card.props.follow === true} back={backOf(card.props.back)} onLog={onWatch} bundleUrl={card.bundleUrl} title={String(card.props.title ?? '')} marks={Array.isArray(card.props.marks) ? (card.props.marks as StageMark[]) : []} at={typeof card.props.at === 'number' ? card.props.at : undefined} view={card.props.view === true} video={card.props.video === true} onMarks={onMarks} onFinished={onLectureDone} onClose={onLectureClose} onAsk={onLectureAsk} onError={onError} />;
   if (card.kind === 'kit') {
     const p = card.props as { kit?: unknown; params?: unknown; ops?: unknown };
-    // 课本做底:pdf.js 现画、窗能挪能放大(book.tsx);别的画法烤成一幅图(kit.tsx)
-    if (p.kit === '课本') return <BookStage ref={kit} id={card.id} kit="课本" params={p.params && typeof p.params === 'object' ? (p.params as Record<string, unknown>) : {}} ops={p.ops} state={(card.state ?? null) as KitState | null} onPick={onKitPick} onReveal={onKitReveal} onView={onBookView} onShot={onBookShot} readonly={card.readonly === true} hand={card.hand === 'left' ? 'left' : 'right'} onState={onKitState} onSubmit={onKitSubmit} onError={onError} />;
+    // 课本卡(2026-11-16 以前的记录):课本改成照一节课的状态画了,旧卡不再铺
+    if (p.kit === '课本') return <div className="stage-wait" />;
     return <KitStage ref={kit} id={card.id} kit={String(p.kit ?? '')} params={p.params && typeof p.params === 'object' ? (p.params as Record<string, unknown>) : {}} ops={p.ops} state={(card.state ?? null) as KitState | null} imageUrl={typeof card.imageUrl === 'string' ? card.imageUrl : undefined} wordsUrl={typeof card.wordsUrl === 'string' ? card.wordsUrl : undefined} onPick={onKitPick} onReveal={onKitReveal} readonly={card.readonly === true} hand={card.hand === 'left' ? 'left' : 'right'} onState={onKitState} onSubmit={onKitSubmit} onError={onError} />;
   }
   return <div className="stage-wait">{String(card.props.title ?? card.props.text ?? '')}</div>;

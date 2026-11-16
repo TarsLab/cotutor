@@ -1,6 +1,6 @@
 /**
  * activity 的例子与判分:`agents/<老师>/activities/<名>.例子.md`,一个 `## ` 一个例子。
- * 例子 = 孩子心里的故事 + 人设(模拟孩子照它答)+ 开头几句写死的孩子的话 + 参数 + 几条判。判只看板书(讲稿与卡),应用就能判,不用再请模型。
+ * 例子 = 孩子心里的故事 + 人设(模拟孩子照它答)+ 开头几句写死的孩子的话 + 参数 + 几条判。判只看板书(讲稿、讲稿里的动作与卡),应用就能判,不用再请模型。
  * 纯函数:解析、判分;跑在 src/app/activity-eval.ts。
  */
 import type { BoardSection } from '../board/presentation.ts';
@@ -46,10 +46,10 @@ export const GRADERS: Readonly<Record<string, string>> = {
   并排: '有一张 read 卡同时有这两句里的字(「并排: 睡大觉 | 浇了水」)',
   卡上有: '老师写的卡上出现过这几个说法(「卡上有: 先看清」,如顺口溜)',
   出拍给我看卡: '写过拍给我看卡(photo):要孩子拍照片发来时',
-  出教具卡: '写过板卡(kit):老师先画出来、请孩子动笔时;后面写画法的名字就要是那一种(「出教具卡: 照片」)',
-  不出教具卡: '没写过板卡(kit):作业全对,说一句就收,不讲题时',
-  请动手就开放: '末句请孩子在板上动手(点一点、圈出来、切一刀…)的每一轮,板上开放了对应的操作(这一轮的板卡,没出就是板上原来那张):《画板为主设计》「话接不接得上」',
-  问就上板: '讲稿里有问号的每一轮都带一张板卡或画板卡(请孩子拍照的那一轮不算):讲题不只用嘴问',
+  出教具卡: '写过板卡(kit),或讲稿里摆过图形([[摆 …]]):老师先画出来、请孩子动笔时;后面写画法的名字就要是那一种(「出教具卡: 点阵」;课本 = 翻过、看过)',
+  不出教具卡: '没写过板卡(kit),讲稿里也没摆过、写过、圈过:作业全对,说一句就收,不讲题时',
+  请动手就开放: '末句请孩子在板上动手(点一点、圈出来、切一刀…)的每一轮,板上开放了对应的操作(这一轮的 [[请 …]] 或板卡,都没有就是上一次的):《画板为主设计》「话接不接得上」',
+  问就上板: '讲稿里有问号的每一轮都带一张板卡,或讲稿里有动作(请孩子拍照的那一轮不算):讲题不只用嘴问',
 };
 
 const DEFAULT_TURNS = 12;
@@ -149,24 +149,30 @@ export interface GradeResult {
   why?: string;
 }
 
-/** 末句里请孩子动手的说法 → 板上要开放的操作 */
+/** 末句里请孩子动手的说法 → 板上要开放的操作(说成讲稿里「请」的名字) */
 export const ASK_OPS: readonly [RegExp, string][] = [
-  [/点一点|点一下|点点它|点出来/, '点字'],
+  [/点一点|点一下|点点它|点出来/, '点'],
   [/圈出来|圈一圈|圈起来|圈住/, '圈'],
   [/切一刀|切开|切成|再切/, '切'],
   [/涂出来|涂一涂|涂上/, '涂'],
   [/转到|转一转|转一下/, '转'],
   [/添满|添上|添几|添一/, '添'],
-  [/画一画|画出来|画一道|画上/, '画'],
+  [/画一画|画出来|画一道|画上|写一写|写出来|写上|写下/, '写'],
 ];
+/** 板卡的操作 → 讲稿里「请」的名字(点字 = 点,画 = 写) */
+const cardOp = (o: string): string => (o === '点字' ? '点' : o === '画' ? '写' : o);
+/** 一节里的动作(第一句前面的、每一句的) */
+const actsOf = (s: BoardSection | null): { name: string; arg: string }[] => (s ? [...(s.acts ?? []), ...s.lines.flatMap((l) => l.acts ?? [])] : []);
 
-/** 每一轮末句请孩子动手要的操作,和那时板上开放的操作(这一轮出了板卡用它的,没出沿用上一张) */
+/** 每一轮末句请孩子动手要的操作,和那时板上开放的操作(这一轮写了 [[请 …]] 用最后那个;出了板卡用它的;都没有沿用上一次) */
 export function askedOps(turns: readonly EvalTurn[]): { turn: number; want: string; open: string[] }[] {
   let open: string[] = [];
   const out: { turn: number; want: string; open: string[] }[] = [];
   turns.forEach((t, k) => {
     const kit = (t.section?.cards ?? []).filter((c) => c.kind === 'kit').slice(-1)[0];
-    if (kit) open = Array.isArray((kit.props as { ops?: unknown }).ops) ? ((kit.props as { ops: string[] }).ops) : [];
+    const ask = actsOf(t.section).filter((a) => a.name === '请').slice(-1)[0];
+    if (ask) open = ask.arg.split(/[、,,\s]+/).filter(Boolean);
+    else if (kit) open = Array.isArray((kit.props as { ops?: unknown }).ops) ? ((kit.props as { ops: string[] }).ops).map(cardOp) : [];
     const last = t.section?.lines.slice(-1)[0]?.text ?? '';
     for (const [re, op] of ASK_OPS) if (re.test(last)) out.push({ turn: k + 1, want: op, open: [...open] });
   });
@@ -217,11 +223,12 @@ export function gradeRun(checks: readonly string[], turns: readonly EvalTurn[]):
       }
       case '出教具卡': {
         const want = arg.trim();
-        const ok = turns.some((t) => (t.section?.cards ?? []).some((c) => c.kind === 'kit' && (!want || (c.props as { kit?: unknown }).kit === want)));
+        const drew = (a: { name: string; arg: string }): boolean => (want === '课本' ? a.name === '翻' || a.name === '看' : a.name === '摆' && (!want || a.arg.split(/\s+/)[0] === want));
+        const ok = turns.some((t) => (t.section?.cards ?? []).some((c) => c.kind === 'kit' && (!want || (c.props as { kit?: unknown }).kit === want)) || actsOf(t.section).some(drew));
         return { check, pass: ok, ...(ok ? {} : { why: `${turns.length} 轮都没写${want ? `「${want}」这种` : ''}板卡` }) };
       }
       case '不出教具卡': {
-        const n = turns.filter((t) => (t.section?.cards ?? []).some((c) => c.kind === 'kit')).length;
+        const n = turns.filter((t) => (t.section?.cards ?? []).some((c) => c.kind === 'kit') || actsOf(t.section).some((a) => ['摆', '写', '圈'].includes(a.name))).length;
         return { check, pass: !n, ...(n ? { why: `有 ${n} 轮写了板卡` } : {}) };
       }
       case '请动手就开放': {
@@ -229,7 +236,7 @@ export function gradeRun(checks: readonly string[], turns: readonly EvalTurn[]):
         return { check, pass: !bad.length, ...(bad.length ? { why: bad.map((x) => `第 ${x.turn} 轮请他${x.want},板上开放的是${x.open.length ? x.open.join('、') : '没有'}`).join(';') } : {}) };
       }
       case '问就上板': {
-        const bare = turns.filter((t) => (t.section?.lines ?? []).some((l) => /[??]/.test(l.text)) && !(t.section?.cards ?? []).some((c) => c.kind === 'kit' || c.kind === 'photo'));
+        const bare = turns.filter((t) => (t.section?.lines ?? []).some((l) => /[??]/.test(l.text)) && !(t.section?.cards ?? []).some((c) => c.kind === 'kit' || c.kind === 'photo') && !actsOf(t.section).length);
         return { check, pass: !bare.length, ...(bare.length ? { why: `有 ${bare.length} 轮只用嘴问、没出板:「${bare[0].section?.lines.find((l) => /[??]/.test(l.text))?.text ?? ''}」` } : {}) };
       }
       case '卡上有': {

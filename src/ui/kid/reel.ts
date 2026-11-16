@@ -33,7 +33,8 @@ export type ReelHoldResult = 'sent' | 'unclear' | 'cancel';
  * 改版(孩子看到什么记什么):view = 孩子屏幕的 CSS 尺寸、键盘高、页面版本;
  * hold = 按住说话的一步(down 按下 / audio 话筒开了 / slide 上滑取消 on 或滑回来 / up 松手,cancel = 不是孩子松的手、是系统抢走了触摸(pointercancel,iPadOS 底部手势),照旧当松手 / end 收尾,r 见 ReelHoldResult,lv = 按下起每 100 毫秒一位的音量 0–9);
  * type = 打字(focus 点进输入框 / v 值变了 / send 发了 / blur 收起);ps = 发照片屏(open / tool:crop 裁剪 · pen 圈画 · rot 转 / send / cancel);
- * scroll = 孩子自己翻到哪(锚在卡上:那张卡的上沿离板书上沿 dy 像素)
+ * scroll = 孩子自己翻到哪(锚在卡上:那张卡的上沿离板书上沿 dy 像素);
+ * lesson = 一节课(课本做底)此刻的样子(src/schema/lesson.ts;孩子端变了停一下记一份,录像照它画课本)
  */
 export type PlayRecord = { at: number } & (
   | { k: 'stage'; job: string; card: number; open: boolean }
@@ -44,6 +45,7 @@ export type PlayRecord = { at: number } & (
   | { k: 'type'; e: 'focus' | 'v' | 'send' | 'blur'; v?: string }
   | { k: 'ps'; e: 'open' | 'tool' | 'send' | 'cancel'; tool?: string }
   | { k: 'scroll'; job: string; card: number; dy: number }
+  | { k: 'lesson'; l: unknown }
 );
 
 /** 一条实录的形状对不对(服务端收、读 play.jsonl 时用;坏的丢掉) */
@@ -64,6 +66,8 @@ export function playRecordOk(x: unknown): x is PlayRecord {
     case 'type': return ['focus', 'v', 'send', 'blur'].includes(r.e as string) && text(r.v);
     case 'ps': return ['open', 'tool', 'send', 'cancel'].includes(r.e as string) && (r.tool === undefined || (typeof r.tool === 'string' && r.tool.length <= 12));
     case 'scroll': return job(r.job) && int(r.card) && px(r.dy, -20000, 20000);
+    // 一节课的样子:形状照 src/schema/lesson.ts(这里只看个大概;舞台画不出来的不画)
+    case 'lesson': { const l = r.l as Record<string, unknown> | null; return Boolean(l) && typeof l === 'object' && l!.v === 1 && Array.isArray(l!.pages) && JSON.stringify(l).length <= 400_000; }
     default: return false;
   }
 }
@@ -196,6 +200,8 @@ export interface Reel {
   /** 以板为主:应用自己铺的板(老师的板卡没开着时板上是它);孩子在课本上挪窗停下的地方(场景坐标,通话里报的 {t:'board', k:'view'}) */
   owns?: ReelOwn[];
   bviews?: { at: number; box: [number, number, number, number] }[];
+  /** 一节课(课本做底):孩子端记的每一份样子 */
+  lessons?: { at: number; l: unknown }[];
   aways: { from: number; to: number }[];
   /** 看小课堂的几段(没有 = 这个话题不是从小课堂开始的,或那时还不记) */
   lectures: ReelLecture[];
@@ -609,7 +615,8 @@ export function buildReel(input: ReelInput): Reel | null {
     reach = Math.max(reach, to);
   }
   gaps.sort((a, b) => a.from - b.from);
-  return { startAt, endAt, tracks, says, clips, cards, notes, waits, gaps, marks, stages, aways, lectures, views, holds, types, photoScreens, scrolls, misses, ...(pageBoard ? { owns, bviews } : {}) };
+  const lessons = plays.flatMap((r) => (r.k === 'lesson' ? [{ at: r.at, l: r.l }] : [])).sort((a, b) => a.at - b.at);
+  return { startAt, endAt, tracks, says, clips, cards, notes, waits, gaps, marks, stages, aways, lectures, views, holds, types, photoScreens, scrolls, misses, ...(pageBoard ? { owns, bviews } : {}), ...(lessons.length ? { lessons } : {}) };
 }
 
 /** 课里的「分:秒」(同 lecture.ts 的 clockLabel;这份文件只准从 board/presentation.ts 取运行时的东西) */
@@ -673,6 +680,8 @@ export interface ReelFrame {
   own: ReelOwn['card'] | null;
   /** 孩子在这块课本上最后挪到的窗(这块板铺上以后的);没挪过 = null */
   bview: [number, number, number, number] | null;
+  /** 一节课(课本做底)这一刻的样子;不是这种话题 = null */
+  lesson: unknown;
   /** 弹窗开着、这张卡孩子还没动:想了多久(切到后台的时间不算) */
   thinking: { job: string; card: number; ms: number } | null;
   /** 孩子切到别处了(页面在后台) */
@@ -757,7 +766,10 @@ export function reelFrameAt(reel: Reel, t: number): ReelFrame {
   for (const x of reel.scrolls ?? []) { if (x.at > t) break; scroll = x; }
   const ms = (reel.misses ?? []).find((x) => x.from <= t && t < x.to);
   const miss = ms ? { n: ms.n, k: (reel.holds ?? []).filter((x) => x.result !== 'sent' && x.from >= ms.from && x.from <= t).length } : null;
-  return { sections, saying, clip, last, cards, notes, wait: w ? { job: w.job, ms: t - w.from } : null, gap, asking, stage: st ? { job: st.job, card: st.card } : null, own: st || !ow ? null : ow.card, bview, thinking, away, lecture: reelLectureAt(reel.lectures ?? [], t), hold, unclear, typing, photoScreen, view, scroll, miss };
+  let lesson: unknown = null;
+  for (const x of reel.lessons ?? []) { if (x.at > t) break; lesson = x.l; }
+  if (!lesson && reel.lessons?.length) lesson = reel.lessons[0].l;
+  return { sections, saying, clip, last, cards, notes, wait: w ? { job: w.job, ms: t - w.from } : null, gap, asking, stage: st ? { job: st.job, card: st.card } : null, own: st || !ow ? null : ow.card, bview, lesson, thinking, away, lecture: reelLectureAt(reel.lectures ?? [], t), hold, unclear, typing, photoScreen, view, scroll, miss };
 }
 
 /** 这一刻在不在看小课堂:最近一条看的记录;在放的按真实时间往前推(推不过下一条) */

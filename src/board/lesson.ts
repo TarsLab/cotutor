@@ -14,17 +14,18 @@
  */
 import type { Box, Lesson, LessonAct, LessonEvent, LessonPage, Strip } from '../schema/index.ts';
 
-const PAGES_MAX = 8;
-const INK_MAX = 160;
-const INK_POINTS = 120;
-const PICK_MAX = 30;
-const MARKS_MAX = 24;
-const STRIP_ITEMS_MAX = 6;
+const LS_PAGES_MAX = 8;
+const LS_INK_MAX = 160;
+const LS_INK_POINTS = 120;
+const LS_PICK_MAX = 30;
+const LS_MARKS_MAX = 24;
+const LS_STRIP_MAX = 6;
+const LS_JOBS_MAX = 60;
 /** 上限(测试拿去和 schema 比) */
-export const LESSON_CAPS = { PAGES_MAX, INK_MAX, INK_POINTS, PICK_MAX, MARKS_MAX, STRIP_ITEMS_MAX };
+export const LESSON_CAPS = { PAGES_MAX: LS_PAGES_MAX, INK_MAX: LS_INK_MAX, INK_POINTS: LS_INK_POINTS, PICK_MAX: LS_PICK_MAX, MARKS_MAX: LS_MARKS_MAX, STRIP_ITEMS_MAX: LS_STRIP_MAX, JOBS_MAX: LS_JOBS_MAX };
 
 /** 还什么都没铺的一节课 */
-export const lessonInit = (): Lesson => ({ v: 1, pages: [], at: null, look: null, view: null, strip: null });
+export const lessonInit = (): Lesson => ({ v: 1, pages: [], at: null, look: null, view: null, strip: null, jobs: [] });
 
 /** 现在铺着的那一页 */
 export const lessonPage = (l: Lesson): LessonPage | null => l.pages.find((p) => p.id === l.at) ?? null;
@@ -36,21 +37,21 @@ export function lessonStrip(l: Lesson): Strip | null {
 }
 
 /** 换掉现在这一页(别的页原样) */
-const onPage = (l: Lesson, f: (p: LessonPage) => LessonPage): Lesson => {
+const onLessonPage = (l: Lesson, f: (p: LessonPage) => LessonPage): Lesson => {
   const at = lessonPage(l);
   const to = at ? f(at) : at;
   return at && to !== at ? { ...l, pages: l.pages.map((p) => (p === at ? to! : p)) } : l;
 };
 
-const sameBox = (a: Box, b: Box): boolean => a.every((v, i) => v === b[i]);
+const sameLessonBox = (a: Box, b: Box): boolean => a.every((v, i) => v === b[i]);
 
-function act(l: Lesson, a: LessonAct): Lesson {
+function lessonAct(l: Lesson, a: LessonAct): Lesson {
   switch (a.k) {
     case '翻': {
       const had = l.pages.find((p) => p.id === a.page.id);
       const fresh: LessonPage = { ...a.page, teacher: { marks: [], strips: [] }, kid: { ink: [], revealed: [], picked: [], turns: {} }, open: [] };
       // 铺过的留着(翻回来原来画的都在);多了丢最早的
-      const pages = had ? l.pages : [...l.pages, fresh].slice(-PAGES_MAX);
+      const pages = had ? l.pages : [...l.pages, fresh].slice(-LS_PAGES_MAX);
       return { ...l, pages, at: a.page.id, look: null, view: null, strip: null };
     }
     case '看': {
@@ -61,18 +62,18 @@ function act(l: Lesson, a: LessonAct): Lesson {
     case '圈':
     case '遮':
     case '盖':
-      return onPage(l, (p) => {
-        const add = a.spots.filter((s) => !p.teacher.marks.some((m) => m.k === a.k && m.text === s.text && sameBox(m.box, s.box))).map((s) => ({ k: a.k, text: s.text, box: s.box }));
-        return add.length ? { ...p, teacher: { ...p.teacher, marks: [...p.teacher.marks, ...add].slice(-MARKS_MAX) } } : p;
+      return onLessonPage(l, (p) => {
+        const add = a.spots.filter((s) => !p.teacher.marks.some((m) => m.k === a.k && m.text === s.text && sameLessonBox(m.box, s.box))).map((s) => ({ k: a.k, text: s.text, box: s.box }));
+        return add.length ? { ...p, teacher: { ...p.teacher, marks: [...p.teacher.marks, ...add].slice(-LS_MARKS_MAX) } } : p;
       });
     case '写':
     case '摆': {
       const look = l.look;
       if (!look || !lessonPage(l)) return l;
       const item = a.k === '写' ? { kind: 'write' as const, text: a.text, size: a.size } : { kind: 'shape' as const, kit: a.kit, params: a.params, size: a.size };
-      const next = onPage(l, (p) => {
+      const next = onLessonPage(l, (p) => {
         const had = p.teacher.strips.find((s) => s.key === look.label);
-        const strip: Strip = had ? { ...had, items: [...had.items, item].slice(-STRIP_ITEMS_MAX) } : { key: look.label, box: look.box, items: [item] };
+        const strip: Strip = had ? { ...had, items: [...had.items, item].slice(-LS_STRIP_MAX) } : { key: look.label, box: look.box, items: [item] };
         return { ...p, teacher: { ...p.teacher, strips: had ? p.teacher.strips.map((s) => (s === had ? strip : s)) : [...p.teacher.strips, strip] } };
       });
       return { ...next, strip: look.label };
@@ -81,35 +82,38 @@ function act(l: Lesson, a: LessonAct): Lesson {
       const open = lessonStrip(l);
       if (open) {
         const items = a.all ? [] : open.items.slice(0, -1);
-        const next = onPage(l, (p) => ({ ...p, teacher: { ...p.teacher, strips: items.length ? p.teacher.strips.map((s) => (s === open ? { ...s, items } : s)) : p.teacher.strips.filter((s) => s !== open) } }));
+        const next = onLessonPage(l, (p) => ({ ...p, teacher: { ...p.teacher, strips: items.length ? p.teacher.strips.map((s) => (s === open ? { ...s, items } : s)) : p.teacher.strips.filter((s) => s !== open) } }));
         return items.length ? next : { ...next, strip: null };
       }
-      return onPage(l, (p) => (p.teacher.marks.length ? { ...p, teacher: { ...p.teacher, marks: a.all ? [] : p.teacher.marks.slice(0, -1) } } : p));
+      return onLessonPage(l, (p) => (p.teacher.marks.length ? { ...p, teacher: { ...p.teacher, marks: a.all ? [] : p.teacher.marks.slice(0, -1) } } : p));
     }
     case '请':
-      return onPage(l, (p) => ({ ...p, open: [...a.ops] }));
+      return onLessonPage(l, (p) => ({ ...p, open: [...a.ops] }));
   }
 }
 
 export function lessonStep(l: Lesson, ev: LessonEvent): Lesson {
   switch (ev.t) {
     case 'act':
-      return act(l, ev.act);
+      return lessonAct(l, ev.act);
     case 'stroke':
       if (!ev.pts.length) return l;
-      return onPage(l, (p) => ({ ...p, kid: { ...p.kid, ink: [...p.kid.ink, ev.pts.slice(0, INK_POINTS)].slice(-INK_MAX) } }));
+      return onLessonPage(l, (p) => ({ ...p, kid: { ...p.kid, ink: [...p.kid.ink, ev.pts.slice(0, LS_INK_POINTS)].slice(-LS_INK_MAX) } }));
     case 'wipe':
-      return onPage(l, (p) => (p.kid.ink.length ? { ...p, kid: { ...p.kid, ink: [] } } : p));
+      return onLessonPage(l, (p) => (p.kid.ink.length ? { ...p, kid: { ...p.kid, ink: [] } } : p));
     case 'reveal':
-      return onPage(l, (p) => (p.kid.revealed.includes(ev.text) ? p : { ...p, kid: { ...p.kid, revealed: [...p.kid.revealed, ev.text] } }));
+      return onLessonPage(l, (p) => (p.kid.revealed.includes(ev.text) ? p : { ...p, kid: { ...p.kid, revealed: [...p.kid.revealed, ev.text] } }));
     case 'pick':
-      return onPage(l, (p) => ({ ...p, kid: { ...p.kid, picked: [...p.kid.picked, ev.text].slice(-PICK_MAX) } }));
+      return onLessonPage(l, (p) => ({ ...p, kid: { ...p.kid, picked: [...p.kid.picked, ev.text].slice(-LS_PICK_MAX) } }));
     case 'view':
       return lessonPage(l) ? { ...l, view: ev.box } : l;
     case 'turn':
-      return onPage(l, (p) => ({ ...p, kid: { ...p.kid, turns: { ...p.kid.turns, [ev.item]: ((Math.round(ev.deg) % 360) + 360) % 360 } } }));
+      return onLessonPage(l, (p) => ({ ...p, kid: { ...p.kid, turns: { ...p.kid.turns, [ev.item]: ((Math.round(ev.deg) % 360) + 360) % 360 } } }));
   }
 }
+
+/** 这一节(老师那一轮)落进来了:记下它的 job(孩子端回来时不再落一遍) */
+export const lessonDone = (l: Lesson, job: string): Lesson => (l.jobs.includes(job) ? l : { ...l, jobs: [...l.jobs, job].slice(-LS_JOBS_MAX) });
 
 /** 一节里的动作照先后都落上(第一句前面的、每一句的;落不了的跳过) */
 export function lessonActs(l: Lesson, acts: readonly { do?: LessonAct }[]): Lesson {

@@ -5,9 +5,9 @@ import { boardSkillDoc, boardSyntaxDoc } from '../src/board/cards/docs.ts';
 import { check, done } from './_check.ts';
 
 {
-  check('有状态的卡:choice / lecture;text / read / image / code 没有', CARD_KINDS.filter((k) => k.state).map((k) => k.name).join() === 'choice,lecture');
-  check('十一种卡登记在册:板书九种 + 首页的老师卡与听写卡', CARD_KINDS.map((k) => k.name).join() === 'text,read,choice,image,tianzige,word,lecture,photo,code,tutor,dictation' && cardKind('choice')?.name === 'choice' && cardKind('widget') === undefined);
-  check('用在哪:板书九种;首页只有老师卡与听写卡', kindsFor('board').map((k) => k.name).join() === 'text,read,choice,image,tianzige,word,lecture,photo,code' && kindsFor('home').map((k) => k.name).join() === 'tutor,dictation');
+  check('有状态的卡:choice;text / read / image / code 没有', CARD_KINDS.filter((k) => k.state).map((k) => k.name).join() === 'choice');
+  check('十种卡登记在册:板书八种 + 首页的老师卡与听写卡(小课堂卡 2026-11-17 删了)', CARD_KINDS.map((k) => k.name).join() === 'text,read,choice,image,tianzige,word,photo,code,tutor,dictation' && cardKind('choice')?.name === 'choice' && cardKind('lecture') === undefined);
+  check('用在哪:板书八种;首页只有老师卡与听写卡', kindsFor('board').map((k) => k.name).join() === 'text,read,choice,image,tianzige,word,photo,code' && kindsFor('home').map((k) => k.name).join() === 'tutor,dictation');
   check('契约里的板书种类表与注册表对得上(schema 不 import 卡,靠这条锁住)', BOARD_CARD_KINDS.join() === kindsFor('board').map((k) => k.name).join());
   check('老师的卡:没写 = null(全部);写了 = 注册表顺序、text 总在、首页的卡不算', tutorCardKinds(undefined) === null && tutorCardKinds(['code', 'read'])?.join() === 'text,read,code' && tutorCardKinds(['choice', 'tutor', 'text'])?.join() === 'text,choice' && tutorCardKinds([])?.join() === 'text');
   const tut = parseCard('tutor chinese-tutor', '- activity 预习 我要预习小蝌蚪找妈妈\n范围: 第 22 课\n讲法: 先读课文\n讲法: 再认字\n小课堂 2026-09-18-po13-jian-8 13 减 8 怎么拆', 'home');

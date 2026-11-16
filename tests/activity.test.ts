@@ -77,7 +77,7 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   check('填了词:那段在', quiz.includes('### 用上这周的词') && quiz.includes('第 1 步之后') && !quiz.includes('{{'));
   check('空列表、空字符串算没填', !(renderTutorSection(a, { params: { 词: [] }, cards }) ?? '').includes('用上这周的词') && !(renderTutorSection(a, { params: { 词: ' ' }, cards }) ?? '').includes('用上这周的词'));
   check('卡也能当裁段的名字', renderTutorSection({ ...a, tutor: { text: '甲\n{{有 photo}}\n乙\n{{/有}}', line: 1 } }, { cards: ['photo'] }) === '甲\n乙' && renderTutorSection({ ...a, tutor: { text: '甲\n{{有 photo}}\n乙\n{{/有}}', line: 1 } }, { cards: ['text'] }) === '甲');
-  check('activity 的卡并上老师的,text 总在', activityCards(a, ['read']).join(' ') === 'text read photo' && activityCards(a).length >= 9);
+  check('activity 的卡并上老师的,text 总在', activityCards(a, ['read']).join(' ') === 'text read photo' && activityCards(a).length >= 8);
 
   // 插槽
   const filled = fillSlots(reader!.prompt, { 格式: '一行一个词。' });
@@ -177,8 +177,9 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   check('判:在页上动过的那轮末句不是问句报哪轮;只说话的不查', !gradeRun(['每节末句是问句'], [{ kid: 'x', section: said(['好的。'], story) }])[0].pass && gradeRun(['每节末句是问句'], [{ kid: 'x', section: sec(['好的。']) }])[0].pass);
   check('判:一节一问(在页上动过的那轮最多一个问号;只说话的不查)', gradeRun(['一节一问'], [{ kid: 'x', section: said(['这是你说的话。', '他们在哪里呀?'], story) }])[0].pass && !gradeRun(['一节一问'], [{ kid: 'x', section: said(['在哪里?', '什么时候?'], story) }])[0].pass && gradeRun(['一节一问'], [{ kid: 'x', section: sec(['在哪里?什么时候?']) }])[0].pass);
   check('判:卡上有', gradeRun(['卡上有: 浇了水、西瓜'], turns)[0].pass && !gradeRun(['卡上有: 先看清'], turns)[0].pass);
-  const lecCard = { kind: 'lecture', props: { bundle: 'b1', from: 0, to: 9000 } };
-  check('判:放课里一段、一节最多一段、说到', gradeRun(['放课里一段'], [{ kid: 'x', section: sec(['你圈的这 3 根?'], [lecCard]) }])[0].pass && !gradeRun(['放课里一段'], turns)[0].pass && !gradeRun(['一节最多一段'], [{ kid: 'x', section: sec(['看?'], [lecCard, lecCard]) }])[0].pass && gradeRun(['说到: 圈'], [{ kid: 'x', section: sec(['你圈的这 3 根?']) }])[0].pass);
+  // 放小课堂一段:「看」落在小课堂上(带 at);没落上的看参数是不是时间
+  const play = (text: string, n: number) => ({ lines: [{ text, audio: null, marks: [], ask: true, anchor: null, acts: Array.from({ length: n }, () => ({ name: '看', arg: '0:19–0:30', do: { k: '看', label: '0:19–0:30', box: [0, 0, 0, 0], at: [19000, 30000] } })) }], cards: [] }) as never;
+  check('判:放课里一段、一节最多一段、说到', gradeRun(['放课里一段'], [{ kid: 'x', section: play('你圈的这 3 根?', 1) }])[0].pass && !gradeRun(['放课里一段'], turns)[0].pass && !gradeRun(['一节最多一段'], [{ kid: 'x', section: play('看?', 2) }])[0].pass && gradeRun(['一节最多一段'], [{ kid: 'x', section: play('看?', 1) }])[0].pass && gradeRun(['说到: 圈'], [{ kid: 'x', section: sec(['你圈的这 3 根?']) }])[0].pass);
   const kp = kidPrompt({ story: '小熊种瓜', persona: '问一句答一句' }, turns.slice(0, 2));
   check('模拟孩子的提示词:故事、人设、对话、页上写着的整段', kp.includes('小熊种瓜') && kp.includes('问一句答一句') && kp.includes('孩子:小熊') && kp.includes('页上写着:小熊睡大觉。 / 小熊浇了水。'));
 }

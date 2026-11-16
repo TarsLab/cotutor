@@ -7,12 +7,12 @@
 import { readFile, rename, writeFile } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
 import { activityStatusOf, restoreActivity, shippedActivityText, type ActivityStatus } from '../cli/activities.ts';
-import { EXAMPLES_SUFFIX, activityFile, listActivities } from '../../runtime/activities.ts';
+import { EXAMPLES_SUFFIX, activityFile, lectureActivity, listActivities } from '../../runtime/activities.ts';
 import { sha256 } from '../cli/tutors.ts';
 import type { Workspace } from '../../schema/index.ts';
 import { lintActivity, renderTutorSection, resolveParams, type ActivityIssue } from '../../runtime/activity.ts';
 import type { TutorButton } from '../../board/cards/index.ts';
-import { ACTIVITY_SECTIONS, ACTIVITY_TOOLS, ACTIVITY_TOOL_SECTION_RE, BOARD_CARD_KINDS, LECTURE_ACTIVITY, type Activity } from '../../schema/index.ts';
+import { ACTIVITY_SECTIONS, ACTIVITY_TOOLS, ACTIVITY_TOOL_SECTION_RE, BOARD_CARD_KINDS, type Activity } from '../../schema/index.ts';
 import { readPublished } from '../../runtime/home/store.ts';
 
 export interface DevActivityRow {
@@ -57,11 +57,12 @@ const exampleCount = async (file: string): Promise<number> => {
 async function homeButtons(ws: Workspace, tutor: string, name: string): Promise<{ label: string; kind: 'activity' | 'lecture'; params: Record<string, string> }[]> {
   const { home } = await readPublished(ws);
   const out: { label: string; kind: 'activity' | 'lecture'; params: Record<string, string> }[] = [];
+  const lecture = await lectureActivity(ws.root, tutor);
   for (const c of home?.cards ?? []) {
     if (c.kind !== 'tutor' || c.props.tutor !== tutor) continue;
     for (const b of (c.props.buttons ?? []) as TutorButton[]) {
       if (b.kind === 'activity' && b.activity === name) out.push({ label: b.label, kind: 'activity', params: b.params });
-      else if (b.kind === 'lecture' && (b.activity ?? LECTURE_ACTIVITY) === name) out.push({ label: b.label, kind: 'lecture', params: {} });
+      else if (b.kind === 'lecture' && (b.activity ?? lecture) === name) out.push({ label: b.label, kind: 'lecture', params: {} });
     }
   }
   return out;

@@ -100,11 +100,11 @@ check('时间:分:秒、时:分:秒;秒过 59、乱写的不认', parseClock('0:
   check('都不写 = 整堂课;越界夹到课里;止不在起后 = null', JSON.stringify(lectureRange(clock, undefined, undefined)) === JSON.stringify({ start: 0, end: clock.total }) && lectureRange(clock, 0, 999_000)?.end === clock.total && lectureRange(clock, 20_000, 20_000) === null && lectureRange(lectureClock([], []), 0, 1000) === null);
 }
 {
-  const { enrichLectures } = await import('../src/runtime/lecture.ts');
-  const bundles = fileURLToPath(new URL('./fixtures/bundles/', import.meta.url));
-  const sec = await enrichLectures({ dirs: { bundles } }, { cards: [{ kind: 'lecture', props: { bundle: '2026-09-18-po13-jian-8', from: 19_000, to: 30_000 } }, { kind: 'lecture', props: { bundle: '2026-01-01-gone', from: 0 } }, { kind: 'text', props: { text: 'x' } }], lines: [] });
-  const [a, b, c] = sec.cards.map((x) => x.props as Record<string, unknown>);
-  check('下发时补快照:课名、对齐后的起止、末帧停在 SVG 的哪一刻、ready;课包不在 ready: false;别的卡不动', a.title === '13 − 8 破十法' && a.start === clock.segments[2].start && a.end === clock.segments[3].start && (a.still as number) > clock.segments[2].drawStart && (a.still as number) <= clock.segments[2].drawEnd && a.ready === true && b.ready === false && !('start' in b) && c.text === 'x' && !('ready' in c), JSON.stringify({ a, b }));
+  // 老师的 [[看 0:19–0:30]] 落在小课堂页上(src/board/lesson-fit.ts 的 lectureTarget):对齐到句,同以前 lecture 卡的起止
+  const { lectureTarget } = await import('../src/board/lesson-fit.ts');
+  const a = lectureTarget(clock, '0:19–0:30');
+  const words = lectureTarget(clock, (clock.segments[2].line ?? '').slice(0, 6));
+  check('看 0:19–0:30:对齐到段界(第 3 段);写课里一句原话的一截:放那一句;找不到 null', a?.at[0] === clock.segments[2].start && a.at[1] === clock.segments[3].start && words?.at[0] === clock.segments[2].start && words.at[1] === clock.segments[2].start + clock.segments[2].len && lectureTarget(clock, '没有这句话') === null, JSON.stringify({ a, words }));
 }
 // ---- 视频来源(第 4 步):lecture.md、视频的时钟、mp4 的时长、读盘 ----
 {

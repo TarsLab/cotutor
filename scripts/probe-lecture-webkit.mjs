@@ -3,8 +3,10 @@
  * 小课堂在 WebKit(Safari 的内核,iPad 上就是它)里的手动验收:Chrome 里好好的、iPad 上坏的几处(2026-10-06 真机报的)——
  * 一、SVG 放进页面后 Safari 让 SMIL 时间轴重新走,没点「开始看」画面就自己画、没有声音;
  * 二、真手指(不是 dispatchEvent)画得上:舞台页装着孩子端的 theme.css,同名的类会把 pointer-events 关掉;同一刻画两笔还是一处;
- * 三、画的卡的缩略图是播放器截的图(2026-10-19 起):烤好的画面(frame.svg,字体与背景图内嵌)画进 canvas、叠上两笔、出 jpeg——Safari 不把 canvas 标成跨源、字体画得出。
+ * 三、画的一处带一张播放器截的图(2026-10-19 起,随问的那一轮附给老师):烤好的画面(frame.svg,字体与背景图内嵌)画进 canvas、叠上两笔、出 jpeg——
+ *    Safari 不把 canvas 标成跨源、字体画得出。截图在舞台发给页面的画的单子里(postMessage 的 marks),页面上听着取下来数像素;
  *    给了截图路径(argv[2])就在旁边存一份那张 jpeg(<名>-mark.jpg),对着看字体。
+ * 2026-11-17(阶段 5)起小课堂是一节课里的一页:播放器在舞台(#st-frame)里。
  * 本仓不装 playwright:借一份 playwright-core 和它配套的 WebKit(在那个目录里跑 node node_modules/playwright-core/cli.js install webkit)。
  *
  * 用法:PLAYWRIGHT_CORE=<含 node_modules/playwright-core 的目录> node scripts/probe-lecture-webkit.mjs [截图.png]
@@ -30,7 +32,9 @@ try {
   await page.click('#deck .pc[data-tutor="math-tutor"]', { position: { x: 40, y: 40 } }); // 后面那张只露出左上角(牌角的头像),里面的东西不收触摸
   await page.waitForTimeout(1200);
   await page.click('.bt-lecture');
-  const fr = page.frameLocator('#lc-frame');
+  // 舞台发给页面的画的单子(带截图)记下来
+  await page.evaluate(() => { window.addEventListener('message', (e) => { if (e.data && e.data.type === 'marks') window.__marks = e.data.marks; }); });
+  const fr = page.frameLocator('#st-frame');
   await fr.locator('.lc-start').waitFor({ timeout: 30000 });
   const frame = page.frames().find((f) => f.url().includes('/stage/'));
   // 画面的样子:烤过的课包没有 SMIL,看露出来几个元素、正在画的那一笔描到哪(dashoffset);paused = 没有 SMIL 在自己走
@@ -58,24 +62,18 @@ try {
   await page.mouse.up();
   await sleep(600);
   ok('画了两笔:同一刻,还是一处', (await fr.locator('.lc-mark').count()) === 1 && (await fr.locator('.lc-ink path').count()) === 2);
-  const sb = await fr.locator('.lc-seg').nth(5).boundingBox();
-  await page.mouse.click(sb.x + 2, sb.y + sb.height / 2);
-  await fr.locator('.lc-play').click();
-  // 放完停在最后一帧,「去问老师」淡入了才回板书
-  await fr.locator('.lc-askbtn').waitFor({ timeout: 60000 });
-  await fr.locator('.lc-askbtn').click();
-  await page.waitForSelector('.lc-pending .c-mark img.mk-svg', { timeout: 30000 });
-  await page.waitForFunction(() => (document.querySelector('.lc-pending .c-mark img.mk-svg')?.naturalWidth ?? 0) > 0, null, { timeout: 30000 });
   // 截图:jpeg、1280 宽;数像素:蓝的(画的两笔)、深色的(课包的字与线)
+  await page.waitForFunction(() => Boolean(window.__marks?.[0]?.image), null, { timeout: 30000 });
   const th = await page.evaluate(async () => {
-    const i = document.querySelector('.lc-pending .c-mark img.mk-svg');
+    const src = window.__marks[0].image;
+    const i = new Image(); i.src = src; await i.decode();
     const px = { blue: 0, dark: 0 };
     const cv = document.createElement('canvas'); cv.width = i.naturalWidth; cv.height = i.naturalHeight; const g = cv.getContext('2d'); g.drawImage(i, 0, 0);
     const d = g.getImageData(0, 0, cv.width, cv.height).data;
     for (let k = 0; k < d.length; k += 4) { if (Math.abs(d[k] - 47) + Math.abs(d[k + 1] - 111) + Math.abs(d[k + 2] - 214) < 90) px.blue++; else if (d[k] + d[k + 1] + d[k + 2] < 200) px.dark++; }
-    return { jpeg: i.src.startsWith('data:image/jpeg;base64,'), w: i.naturalWidth, h: i.naturalHeight, px, src: i.src.startsWith('data:') ? i.src : '' };
+    return { jpeg: src.startsWith('data:image/jpeg;base64,'), w: i.naturalWidth, h: i.naturalHeight, px, src };
   });
-  ok('画的卡的缩略图是截图(Safari 能把烤好的画面画进 canvas 导出 jpeg):1280 宽,画面上的字与线在,叠着两笔', th.jpeg && th.w === 1280 && th.px.blue > 1500 && th.px.dark > 2000, JSON.stringify({ ...th, src: undefined }));
+  ok('画的那一处的截图(Safari 能把烤好的画面画进 canvas 导出 jpeg,问的时候随那一轮附给老师):1280 宽,画面上的字与线在,叠着两笔', th.jpeg && th.w === 1280 && th.px.blue > 1500 && th.px.dark > 2000, JSON.stringify({ ...th, src: undefined }));
   if (process.argv[2]) {
     await page.screenshot({ path: process.argv[2] });
     if (th.src) { const { writeFileSync } = await import('node:fs'); const f = process.argv[2].replace(/\.png$/, '') + '-mark.jpg'; writeFileSync(f, Buffer.from(th.src.split(',')[1], 'base64')); console.log('  ' + f); }

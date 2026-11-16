@@ -145,7 +145,7 @@ function lastCard(cards: readonly BoardCard[]): number | null {
 }
 
 /**
- * 一行讲稿:[[ ]] 都在 ./acts.ts 读——老师的动作(看、圈…)记在这句上、念完生效;[[play]] 是对上一张卡的动作。
+ * 一行讲稿:[[ ]] 都在 ./acts.ts 读——老师的动作(看、圈…)记在这句上、念完生效(以前小课堂的 [[play]] 2026-11-17 并进了「看」)。
  * `[[请 说 词]]` 除了是动作(开放说),还记成这句的 echo:念完停下等孩子说「词」;老师这句里自己说了那个词是跟我说,没说是你先说(一句写了几个,算最后一个)
  */
 function rawLine(line: string, cards: readonly BoardCard[], at: number): RawLine {
@@ -161,7 +161,6 @@ function rawLine(line: string, cards: readonly BoardCard[], at: number): RawLine
       if (m.warn) bad.push(m.warn);
       if (m.act.name === '请') { const p = actParts(m.act); if (p.name === '请' && p.say) say = p.say; }
     }
-    else if (m.kind === 'cue') { if (anchor !== null) cues.push({ card: anchor, name: m.name, ...(m.arg ? { arg: m.arg } : {}) }); }
     else bad.push(`讲稿里的 [[${m.text}]] 没做:${m.why}`);
   }
   const text = read.text;
@@ -170,14 +169,14 @@ function rawLine(line: string, cards: readonly BoardCard[], at: number): RawLine
   return { ...base, echo: { word: say, ...(sayFirst(text, say) ? { say: true as const } : {}) } };
 }
 
-/** 一句讲稿交给嘴时要带的:[[play]] 到小课堂卡、请孩子说的 echo(runner 的 line 事件、mock 的假嘴都用它) */
-export function lineFlags(line: { cues?: readonly BoardCue[]; echo?: BoardLine['echo'] }, cards: readonly BoardCard[]): { play?: true; echo?: NonNullable<BoardLine['echo']> } {
-  return { ...(playsLecture(line, cards) ? { play: true as const } : {}), ...(line.echo ? { echo: line.echo } : {}) };
+/** 一句讲稿交给嘴时要带的:放小课堂里的一段(这句的 [[看 0:19–0:30]] 落在小课堂上)、请孩子说的 echo(runner 的 line 事件、mock 的假嘴都用它) */
+export function lineFlags(line: { acts?: readonly LineAct[]; echo?: BoardLine['echo'] }): { play?: true; echo?: NonNullable<BoardLine['echo']> } {
+  return { ...(playsLecture(line) ? { play: true as const } : {}), ...(line.echo ? { echo: line.echo } : {}) };
 }
 
-/** 这句的 [[play]] 锚着小课堂卡:念完放卡上那一段(实时时服务端在这句之后等孩子端放完再交讲稿,src/runtime/delivery/queue.ts) */
-export function playsLecture(line: { cues?: readonly BoardCue[] }, cards: readonly BoardCard[]): boolean {
-  return (line.cues ?? []).some((c) => c.name === 'play' && cards[c.card]?.kind === 'lecture');
+/** 这句念完放小课堂里的一段(这句有落在小课堂上的「看」,带 at):实时时服务端在这句之后等孩子端放完再交讲稿(src/runtime/delivery/queue.ts) */
+export function playsLecture(line: { acts?: readonly LineAct[] }): boolean {
+  return (line.acts ?? []).some((a) => a.do?.k === '看' && Boolean(a.do.at));
 }
 
 export function parseBoard(text: string, opts: ParseBoardOptions = {}): ParsedBoard {

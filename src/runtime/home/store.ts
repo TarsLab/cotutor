@@ -9,11 +9,11 @@ import { UsageError } from '../../shared/errors.ts';
 import type { Workspace } from '../../schema/index.ts';
 import { localDate } from '../../shared/time.ts';
 import { threads } from '../../schema/index.ts';
-import { activityName, findActivityFile } from '../activities.ts';
+import { activityName, findActivityFile, lectureActivity } from '../activities.ts';
 import { lintActivity, parseActivity, resolveParams } from '../activity.ts';
 import { activityLook, arrangeHome, dropFixes, homeActivities, homeOwners, faceTutor, homeId, homeIssues, homeLectures, homeTutors, kidButtons, kidTiles, parseHome, type ActivityLook, type HomeCheckContext, type HomeDoc, type HomeIssue, type HomeTutorInfo, type KidHomeButton } from './home.ts';
 import type { BoardCard } from '../../board/presentation.ts';
-import { HOME_ID_RE, HOME_TILES, LECTURE_ACTIVITY, PublishedHomeSchema, tutorTiles, type Activity, type ActivityRun, type ActivityValue, type HomeTileId, type HomeVia, type MessageVia, type PublishedHome } from '../../schema/index.ts';
+import { HOME_ID_RE, HOME_TILES, PublishedHomeSchema, tutorTiles, type Activity, type ActivityRun, type ActivityValue, type HomeTileId, type HomeVia, type MessageVia, type PublishedHome } from '../../schema/index.ts';
 import { listDates, readIndex } from '../journal/store.ts';
 import { bakeSoon, inspectLecture, readLecture, type Lecture } from '../lecture.ts';
 
@@ -55,14 +55,25 @@ async function checkContext(ws: Workspace, doc: Pick<HomeDoc, 'cards'>, now: Dat
     const r = await inspectLecture(ws, id);
     if (r.lecture) { lectures.set(id, r.lecture.subject); if (!r.lecture.video && !r.lecture.baked) unbaked.add(id); } else lectureProblems.set(id, r.problems);
   }
+  const lectureActivities = await lectureActivitiesOf(ws);
   const activities = new Map<string, { activity: Activity; fixes: number }>();
-  for (const r of homeActivities(doc)) {
+  for (const r of homeActivities(doc, (t) => lectureActivities.get(t))) {
     const text = await readFile(findActivityFile(ws.root, r.tutor, r.name), 'utf8').catch(() => null);
     if (text === null) continue;
     const { activity, issues } = lintActivity(text, { fileName: activityName(ws.root, r.tutor, r.name), tutorCards: ws.config.tutors[r.tutor]?.cards });
     activities.set(`${r.tutor}/${r.name}`, { activity, fixes: issues.filter((i) => i.level === 'fix').length });
   }
-  return { tutors: tutorInfos(ws), lectures, lectureProblems, unbaked, today: localDate(now), activities };
+  return { tutors: tutorInfos(ws), lectures, lectureProblems, unbaked, today: localDate(now), activities, lectureActivities };
+}
+
+/** 每位老师家里铺小课堂的那个 activity(头上 base: lecture);没有的老师不在表里 */
+async function lectureActivitiesOf(ws: Workspace): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  for (const t of Object.keys(ws.config.tutors)) {
+    const name = await lectureActivity(ws.root, t);
+    if (name) out.set(t, name);
+  }
+  return out;
 }
 
 export interface HomeCheck {
@@ -213,8 +224,9 @@ export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'pu
     if (l && !l.video && !l.baked) bakeSoon(ws.dirs.bundles, id);
   }
   // 按钮引用的 activity 用不用得了:文件在、检查没有要改的;参数再按按钮各自解析(工作台能存下写坏的 activity)
+  const lectureActs = await lectureActivitiesOf(ws);
   const usable = new Map<string, Activity>();
-  for (const a of homeActivities({ cards })) {
+  for (const a of homeActivities({ cards }, (t) => lectureActs.get(t))) {
     const act = await usableActivity(ws, a.tutor, a.name);
     if (act) usable.set(`${a.tutor}/${a.name}`, act);
   }
@@ -233,6 +245,7 @@ export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'pu
       lecture: (bundle) => Boolean(lectures.get(bundle)),
       activity: (a, params) => { const act = usable.get(`${name}/${a}`); return Boolean(act) && resolveParams(act!, params).issues.length === 0; },
       look: (a) => activityLook(usable.get(`${name}/${a}`)),
+      lectureActivity: lectureActs.get(name) ?? null,
       keepBriefs: opts.keepBriefs,
       today,
     }).map((b) => { const l = b.kind === 'lecture' ? lectures.get(b.bundle) : null; return l ? { ...b, title: l.title, ms: l.clock.total, ...(l.video ? { video: true as const } : {}) } : b; });
@@ -286,9 +299,10 @@ export async function resolveVia(ws: Workspace, tutor: string, via: HomeVia): Pr
   const b = card ? ((card.props.buttons ?? []) as TutorButton[])[via.button] : undefined;
   if (!b) return null;
   const brief = b.brief ? { brief: b.brief } : {};
-  // 小课堂看完照哪个 activity 聊:写了 activity: 是它,没写是这位老师的「小课堂」;文件不在 → null
+  // 小课堂看完照哪个 activity 聊:写了 activity: 是它,没写是这位老师头上 base: lecture 的那个;都没有、文件不在 → null
   if (b.kind === 'lecture') {
-    const run = await runOf(b.activity ?? LECTURE_ACTIVITY, {});
+    const name = b.activity ?? (await lectureActivity(ws.root, tutor));
+    const run = name ? await runOf(name, {}) : null;
     return run ? { kind: 'lecture', label: b.label, bundle: b.bundle, ...brief, activity: run } : null;
   }
   if (b.kind === 'activity') {

@@ -64,7 +64,7 @@ check('请 一个都不认得', Boolean(bad('请 飞')));
 check('请 没写', Boolean(bad('请')));
 check('不认得的名字(英文)', Boolean(bad('open')));
 check('不认得的名字(中文)', Boolean(bad('跳 第 3 题')));
-check('play 照旧;echo / say 不认了(并进 请 说),call 不认了(打电话删了)', readMark('play').kind === 'cue' && readMark('call').kind === 'bad' && readMark('echo duck').kind === 'bad' && readMark('say duck').kind === 'bad');
+check('play 不认了(并进 看 0:19–0:30);echo / say 不认了(并进 请 说),call 不认了(打电话删了)', readMark('play').kind === 'bad' && (readMark('play') as { why: string }).why.includes('[[看 0:19–0:30]]') && readMark('call').kind === 'bad' && readMark('echo duck').kind === 'bad' && readMark('say duck').kind === 'bad');
 check('一行里的几处都读出来,句子里拿掉', JSON.stringify(readMarks('你先圈出来。[[圈 心理辅导室]] [[请 圈]]')) === JSON.stringify({ text: '你先圈出来。', marks: [{ kind: 'act', act: { name: '圈', arg: '心理辅导室' } }, { kind: 'act', act: { name: '请', arg: '圈' } }] }), JSON.stringify(readMarks('你先圈出来。[[圈 心理辅导室]] [[请 圈]]')));
 check('actText 说回原文', actText({ name: '看', arg: '第 3 题' }) === '[[看 第 3 题]]' && actText({ name: '擦', arg: '' }) === '[[擦]]');
 

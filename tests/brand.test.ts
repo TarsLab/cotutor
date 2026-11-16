@@ -52,7 +52,6 @@ for (const p of ['/', '/reel', '/preview']) {
 // 回首页的胶囊「‹ logo」:老师页、听写、小课堂舞台同一颗单色 logo,不放老师头像、不动
 const { BACK_LOGO } = await import('../src/ui/shared/brand.ts');
 const { TUTOR_FACE_JS } = await import('../src/ui/kid/tutor-face.ts');
-const { readFileSync } = await import('node:fs');
 check('胶囊的 logo 单色、不挂动作', BACK_LOGO.includes('stroke="currentColor"') && !BACK_LOGO.includes(LOGO_CLAY) && !/ct-(draw|nod|hover)/.test(BACK_LOGO));
 const backOf = (h: string): string => /<button id="back"[^>]*>([\s\S]*?)<\/button>/.exec(h)?.[1] ?? '';
 for (const p of ['/', '/reel']) {
@@ -60,9 +59,7 @@ for (const p of ['/', '/reel']) {
   check(`${p} 老师页的胶囊里是那颗 logo、没有老师头像`, b.includes(BACK_LOGO) && !b.includes('c-av') && !b.includes('class="av"'), b.slice(0, 120));
 }
 check('听写的胶囊里是同一颗 logo、不塞老师头像', TUTOR_FACE_JS.includes(BACK_LOGO) && !/backCapsule[\s\S]*tutorAvatar\(/.test(TUTOR_FACE_JS.slice(TUTOR_FACE_JS.indexOf('var backCapsule'))));
-const lecture = readFileSync(new URL('../src/ui/stage/lecture.tsx', import.meta.url), 'utf8');
-check('小课堂舞台的胶囊画同一颗 logo(logo.ts 大号那档、单色)、没有老师头像', /logoBody\(LOGO_BIG, \{ outer: 'currentColor', inner: 'currentColor' \}\)/.test(lecture) && lecture.includes('className="lc-logo"') && !lecture.includes('lc-av'));
-// 胶囊带上老师:填这位老师的颜色、logo 后面接名字首字(同首页牌上的 .fc),三处一份——老师页、听写(tutor-face.ts 的 BACK_TINT_*)、小课堂舞台
+// 胶囊带上老师:填这位老师的颜色、logo 后面接名字首字(同首页牌上的 .fc),两处一份——老师页、听写(tutor-face.ts 的 BACK_TINT_*);小课堂是一节课里的一页,用老师页的胶囊
 const { BACK_TINT_JS, BACK_TINT_CSS, TUTOR_FACE_CSS } = await import('../src/ui/kid/tutor-face.ts');
 const { SUBJECT_COLORS } = await import('../src/ui/shared/tutor-color.ts');
 check('胶囊着色:首字取名字第一个字、填老师的颜色加 .tinted', BACK_TINT_JS.includes("Array.from(t.display || '')[0]") && BACK_TINT_JS.includes("classList.toggle('tinted'") && BACK_TINT_CSS.includes('#back.tinted { background:var(--bk)') && BACK_TINT_CSS.includes('#back.tinted .ct-logo { color:#fff; }'));
@@ -76,8 +73,6 @@ check('听写页出页面就带上念的老师:语文 = 语文的颜色 + 「语
 check('英文听写:英语老师的颜色 + 「英」', en?.color === SUBJECT_COLORS['英语'] && en?.initial === '英', JSON.stringify(en));
 check('听写页没带老师:reader 缺省给语文老师(听写一定有念的老师)', dflt?.initial === '语', JSON.stringify(dflt));
 check('页面里没有剩下 __BACK_TUTOR__ 占位符', ![await html('/dictation'), await html('/dictation?lang=en')].some((h) => h.includes('__BACK_TUTOR__')));
-const stageCss = readFileSync(new URL('../src/ui/stage/stage.css', import.meta.url), 'utf8');
-check('小课堂舞台的胶囊同一个样子:填颜色(--bk)、接首字', lecture.includes("'lc-back' + (back ? ' lc-tinted' : '')") && lecture.includes('className="lc-ini"') && stageCss.includes('.lc-back.lc-tinted { background: var(--bk)'));
 check('家长端的占位符换掉了', !(await html('/parent')).includes('__BRAND__') && !(await html('/')).includes('__BRAND__') && !(await html('/')).includes('__MARK__') && !(await html('/parent')).includes('__MARK__'));
 
 done();

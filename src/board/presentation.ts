@@ -62,8 +62,6 @@ export function cardTexts(card: BoardCard): string[] {
       return [str(p.text)];
     case 'image':
       return [str(p.caption)];
-    case 'lecture':
-      return [str(p.title), str(p.text)];
     case 'tianzige':
       return []; // 田字格里是 SVG 路径不是文字,标注落不上;讲稿里的 [鼓] 去别的卡找
     case 'word':
@@ -190,9 +188,9 @@ export function penFor(card: BoardCard, phrase: string): PenName {
 /** 一行最多几张:明写的并排(课文件 / 老师的 same)能到 3 张;按宽度排的最多 2 张(半宽 + 半宽) */
 export const MAX_CARDS_PER_ROW = 3;
 
-/** 独占一行的卡:标题行、提问卡、教具、小课堂、拍给我看(选择题量得下就能半宽,2026-10-01) */
+/** 独占一行的卡:标题行、提问卡、拍给我看(选择题量得下就能半宽,2026-10-01) */
 export function standsAlone(card: BoardCard): boolean {
-  return isHeading(card) || isAskCard(card) || card.kind === 'lecture' || card.kind === 'photo';
+  return isHeading(card) || isAskCard(card) || card.kind === 'photo';
 }
 
 const HALF_KINDS = ['text', 'read', 'code', 'tianzige', 'word', 'choice'];
@@ -385,17 +383,6 @@ export function hasState(card: BoardCard): boolean {
   return card.kind === 'choice';
 }
 
-/** 重卡:舞台在 iframe 里的舞台包(/stage/)开,页面只管顶栏、字幕行、输入条 */
-export function isHeavy(card: BoardCard): boolean {
-  return card.kind === 'lecture';
-}
-
-/** 小课堂卡能不能放:课包读得出来,下发时服务端填 ready 与那一段的起止 */
-export function lectureReady(card: BoardCard): boolean {
-  const p = card.props || {};
-  return card.kind === 'lecture' && p.ready === true && typeof p.start === 'number' && typeof p.end === 'number' && p.end > p.start;
-}
-
 /** 点读第 k 段(0 起)的配音文件(相对 conversations/<老师>/);没生成好 → null(孩子端等它到,等不到不出声) */
 export function segmentAudio(card: BoardCard, k: number): string | null {
   const want = `/${k + 1}.mp3`;
@@ -454,7 +441,7 @@ export function isQuestion(text: string): boolean {
 }
 
 /** 孩子端条目里页面用到的字段(与 kid-view 的 KidMessage 兼容) */
-/** 孩子端一条带的小课堂:画的卡是截下来的图(没截图的课包现画那一刻再叠那几笔);家长端的画多一段老师拿到的话(text);again = 再看一遍又画的那条 */
+/** 孩子端一条带的小课堂:画的几处(时刻、几笔、截图;录像照它画);家长端的画多一段老师拿到的话(text);again = 再看一遍又画的那条 */
 export interface KidLecture {
   bundle: string;
   title: string;

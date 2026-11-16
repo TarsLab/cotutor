@@ -25,7 +25,9 @@ import { HOME_TILES, HOME_TILE_IDS, subjectLang, tutorExtras, type ConversationM
 import { NEUTRAL_COLOR, tutorColors } from '../../ui/shared/tutor-color.ts';
 import { boardMarkOf } from '../../ui/kid/board-mark.ts';
 import { backTutorOf } from '../../ui/kid/tutor-face.ts';
-import { enrichLectures, ensureBaked, lectureFrameSvg, parseRing, parseSvgMs, readLecture, storedMarks, type Lecture } from '../../runtime/lecture.ts';
+import { ensureBaked, lectureFrameSvg, lecturePage, parseRing, parseSvgMs, readLecture, storedMarks, type Lecture } from '../../runtime/lecture.ts';
+import { fitSection } from '../../board/lesson-fit.ts';
+import { lessonInit, lessonStep } from '../../board/lesson.ts';
 import { tianzigeData } from '../../ui/kid/tianzige.ts';
 import { handleDictation, type DictationDeps } from '../dictation/route.ts';
 import type { PhotoItem, PhotoProgress, Recognize } from '../dictation/recognize.ts';
@@ -34,28 +36,18 @@ import { mockLiveUpgrade } from './mock-live.ts';
 // 回给页面的形状直接用真服务的(app.ts):真接口加字段、改字段,这里不跟就红(2026-10-17;以前 mock 自己拼对象,motto 这种真服务没有的字段只在 mock 下显示)
 import type { KidDay, KidHome, KidTodayItem, KidTutor, Overview, OverviewThread, OverviewTutor } from '../http/app.ts';
 
-/** 看完小课堂的第一问,mock 老师这样答:对着画的地方说,放课里拆开那一捆的那一段;视频的放轮着分那一段 */
+/** 看完小课堂的第一问,mock 老师这样答:对着画的地方说,在页上放课里拆开那一捆的那一段([[看 0:19–0:30]]);视频的放轮着分那一段 */
 const MOCK_VIDEO_LECTURE_REPLY = [
   '你画的是轮着分的那一下。',
   '',
-  '```lecture',
-  '2026-10-06-pingjunfen 0:05-0:11',
-  '再看一遍怎么轮着分。',
-  '```',
-  '',
-  '我们回到轮着分的地方,再看一遍。[[play]]',
+  '我们回到轮着分的地方,再看一遍。[[看 0:05–0:11]]',
   '',
   '每人分到几块?',
 ].join('\n');
 const MOCK_LECTURE_REPLY = [
   '你画的是右边散的 3 根。8 根要从哪儿拿?',
   '',
-  '```lecture',
-  '2026-09-18-po13-jian-8 0:19-0:30',
-  '再看一遍拆开那一捆。',
-  '```',
-  '',
-  '我们回到拆开那一捆的地方,再看一遍。[[play]]',
+  '我们回到拆开那一捆的地方,再看一遍。[[看 0:19–0:30]]',
   '',
   '拿走 8 根,这一捆还剩几根?',
 ].join('\n');
@@ -288,16 +280,13 @@ gǔ lì
 3、4、5 和 5、12、13 都是常见的勾股数组
 ~~~
 
-我们换一道找规律的题,课里讲过这一段。
+我们换一道找规律的题。
 
-~~~lecture
-2026-09-04-guilv5 0:00
+~~~text
 75、70、65,后面三个空填什么?
 ~~~
 
-我们回到课里看一遍。[[play]]
-
-看完了,你自己说说,每次少几?`,
+你自己说说,每次少几?`,
     ],
   },
   {
@@ -366,7 +355,7 @@ interface MockMessage {
   states?: Record<number, unknown>;
   /** 孩子这条带的照片(假路径;/api/kid/image 给占位图) */
   photos?: string[];
-  /** 看完小课堂后的第一条:节前画小课堂卡与画的卡(画带那段话;孩子端下发时摘掉) */
+  /** 看完小课堂后的第一条:看的情况与画的(画带那段话;孩子端下发时摘掉) */
   lecture?: KidLecture;
   /** 家长端多看到的看的情况 */
   lectureWatch?: { watchedMs: number; finished: boolean; pauses: number };
@@ -510,7 +499,7 @@ export function createMock(opts: MockOptions = {}): Mock {
   /** 话题打星(家长端清单上):<老师>/<话题> → 1–5;记过账的话题(同样的键) */
   const ratings = new Map<string, number>();
   const booked = new Set<string>();
-  /** 下发孩子端的形状:答案剥掉、状态并到卡上、小课堂卡补那一段的起止(样本课包在仓库里) */
+  /** 下发孩子端的形状:答案剥掉、状态并到卡上 */
   const kidMessage = async (m: MockMessage): Promise<KidMessage> => {
     const { states, action: _a, submitted: _s, lectureWatch: _w, lectureLog: _l, ...rest } = m;
     if (rest.lecture?.marks) rest.lecture = { ...rest.lecture, marks: rest.lecture.marks.map(({ text: _t, ...k }) => k) };
@@ -519,7 +508,7 @@ export function createMock(opts: MockOptions = {}): Mock {
     // 卡的配音同真服务挂在 assets 上(<job>.cards/<n>/<段号>.mp3),都是静音(见 /api/audio)
     const voiced = (c: BoardCard, i: number) => { const a = cardAssets(c); return a.length ? { assets: a.map((x) => `mock.${m.job}.cards/${i}/${x.file}`) } : {}; };
     const withState = m.section ? { ...m.section, cards: m.section.cards.map((c, i) => ({ ...c, ...voiced(c, i), ...(done.has(`${m.job}/${i}`) ? { submitted: true } : {}), ...(states && i in states ? { state: states[i] } : {}) })) } : null;
-    const section = withState ? await enrichLectures(MOCK_LECTURE_DIRS, stripSecrets(withState)) : null;
+    const section = withState ? stripSecrets(withState) : null;
     return { ...rest, section };
   };
   // 学科色同真服务:按老师的先后定(src/ui/shared/tutor-color.ts)
@@ -620,11 +609,13 @@ export function createMock(opts: MockOptions = {}): Mock {
   /** 流式模拟:想的期间每隔一段露一张卡(讲稿句跟到那张卡为止),整段想完才定稿 */
   const think = (t: MockTutor, m: MockMessage, cur = cursor): Promise<void> => {
     const i = cur.get(t.name) ?? 0;
-    // 看完小课堂的第一问:老师放课里的那一段(小课堂卡 + [[play]]);不占脚本的位置
+    // 看完小课堂的第一问:老师在页上放课里的那一段([[看 0:19–0:30]]);不占脚本的位置
     const lectureFirst = Boolean(m.lecture && !m.lecture.again);
     const step = lectureFirst ? (m.lecture?.video ? MOCK_VIDEO_LECTURE_REPLY : MOCK_LECTURE_REPLY) : t.script[i];
     if (!lectureFirst) cur.set(t.name, i + 1);
-    const full = step ? withMockLooks(sectionFromScript(step), t.name, i) : null;
+    // 看完小课堂的那一问:讲稿里的动作落到页上的小课堂(同 runner 的 fitBoard),孩子端照它在页上放那一段
+    const lt = lectureFirst && m.lecture ? mockLecture(m.lecture.bundle) : null;
+    const full = step ? (lt ? fitSection(sectionFromScript(step), lessonStep(lessonInit(), { t: 'act', act: { k: '翻', page: lecturePage(lt) } }), { book: null, lecture: { bundle: lt.id, clock: lt.clock } }).section : withMockLooks(sectionFromScript(step), t.name, i)) : null;
     const n = full ? full.cards.length : 0;
     const tick = delay / (n + 1);
     return new Promise<void>((resolve) => {
@@ -721,7 +712,7 @@ export function createMock(opts: MockOptions = {}): Mock {
       const out = await Promise.all(list.map(async (m, i) => {
         const { states, ...rest } = m;
         const withState = (c: BoardSection['cards'][number], k: number) => (states && k in states ? { ...c, state: states[k] } : c);
-        const section = m.section ? await enrichLectures(MOCK_LECTURE_DIRS, { ...m.section, cards: m.section.cards.map(withState) }) : null;
+        const section = m.section ? { ...m.section, cards: m.section.cards.map(withState) } : null;
         return { ...rest, from: 'kid' as const, section, ...(i === 0 && !m.pending ? { parentText: '## 家长\n第一遍就答上了,后面那句是我故意留的:看他会不会自己往下想。', remembered: [`${date} 讲故事时爱抢着说结局,可以先让他猜`] } : {}) };
       }));
       const pending = list.find((m) => m.pending);

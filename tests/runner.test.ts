@@ -108,7 +108,7 @@ try {
     const gk = await guideOf(wsK, 'chinese-tutor');
     const kRules = rk.pack.notes?.find((n) => n.role === 'rules')?.text ?? '';
     const mRules = r.pack.notes?.find((n) => n.role === 'rules')?.text ?? '';
-    check('只讲 text / read 的老师:板书写法没有选择题那句、没有作业照片;守则没有小课堂那几段;数学的守则有「想要小课堂」(看完怎么聊搬进了 小课堂 activity)', gk.includes('### read') && !gk.includes('能选,就配一张') && !gk.includes('## 作业照片') && !kRules.includes('小课堂') && kRules.includes('## 记忆') && mRules.includes('## 想要小课堂') && !mRules.includes('孩子刚看完小课堂') && !mRules.includes('{{'), kRules.slice(0, 200));
+    check('只讲 text / read 的老师:板书写法没有选择题那句、没有作业照片;守则里谁都有「想要小课堂」(小课堂卡 2026-11-17 删了,不再看卡;看完怎么聊在 小课堂 activity)', gk.includes('### read') && !gk.includes('能选,就配一张') && !gk.includes('## 作业照片') && kRules.includes('## 想要小课堂') && kRules.includes('## 记忆') && mRules.includes('## 想要小课堂') && !mRules.includes('孩子刚看完小课堂') && !mRules.includes('{{'), kRules.slice(0, 200));
     const wsAll = loadWorkspace(root);
     delete wsAll.config.tutors['chinese-tutor'].cards;
     check('没写 cards → 照旧递出厂的 SKILL.md(全部卡)', (await guideOf(wsAll, 'chinese-tutor')).includes('### tianzige') && (await guideOf(wsAll, 'chinese-tutor')).includes('### choice'));

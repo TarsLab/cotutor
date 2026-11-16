@@ -61,15 +61,18 @@ export interface Strip { key: string; box: Box; items: StripItem[] }
 export interface PagePhoto { src: string; w: number; h: number }
 /** 一节课的照片页最多几张(孩子连拍几页、拍错了再拍一张都接在后面;多了不收) */
 export const PAGE_PHOTOS_MAX = 6;
-/** 照片页、白纸页的 id(一节课各只有一页;课本的一课是「册子#课名」) */
+/** 照片页、白纸页、小课堂页的 id(一节课各只有一页;课本的一课是「册子#课名」) */
 export const PHOTO_PAGE = '作业';
 export const WHITE_PAGE = '白纸';
+export const LECTURE_PAGE = '小课堂';
 
 /**
  * 一页铺的是什么(2026-11-16 阶段 3 起不只课本):
  *  book  课本的一课:几页 PDF 竖着连成一条。id = 「册子#课名」(同板的日志里的 base)
  *  photo 孩子拍的作业:几张照片竖着连成一条(先拍的在上),文字层是认字认出的行和题(src/scenes/photo-words/)
  *  white 白纸:什么都没印,老师在上面摆图形、写字(整页就是一条白纸条)
+ *  lecture 小课堂(2026-11-17 阶段 5):一堂做好的课(课包 bundles/<id>/ 或视频 lectures/<id>/),按时刻编号的页——放就是窗自己往前走;
+ *          文字层是每一句的起点与原话(src/board/lecture.ts 的时钟),老师 [[看 0:19–0:30]] 就是放那一段
  */
 export type PageSource =
   | {
@@ -88,7 +91,20 @@ export type PageSource =
     pick: boolean;
   }
   | { id: string; kind: 'photo'; title: string; photos: PagePhoto[]; pick: boolean }
-  | { id: string; kind: 'white'; title: string; pick: boolean };
+  | { id: string; kind: 'white'; title: string; pick: boolean }
+  | {
+    id: string;
+    kind: 'lecture';
+    /** 课名 */
+    title: string;
+    /** 课包或视频的 id(bundles/<id>/、lectures/<id>/) */
+    bundle: string;
+    /** 视频;false = 课包 */
+    video: boolean;
+    /** 课长(毫秒) */
+    ms: number;
+    pick: boolean;
+  };
 
 /** 一页:铺的是什么,加三层 */
 export type LessonPage = PageSource & {
@@ -108,8 +124,8 @@ export interface Lesson {
   pages: LessonPage[];
   /** 现在铺的是哪一页(id);还没有页 = null */
   at: string | null;
-  /** 老师最后让看的那一处;n 每「看」一次加一(同一处再看一遍,窗也再移过去) */
-  look: { label: string; box: Box; n: number } | null;
+  /** 老师最后让看的那一处;n 每「看」一次加一(同一处再看一遍,窗也再移过去);at = 小课堂上放的那一段(课里的毫秒,起止) */
+  look: { label: string; box: Box; n: number; at?: [number, number] } | null;
   /** 孩子的窗最后停在哪(场景坐标) */
   view: Box | null;
   /** 开着的白纸条(Strip.key);没开 = null */
@@ -122,7 +138,8 @@ export const LESSON_JOBS_MAX = 60;
 /** 动作落到页上以后的样子(src/board/lesson-fit.ts 照课本找到框、填好页):lessonStep 只认它,不再查课本 */
 export type LessonAct =
   | { k: '翻'; page: PageSource }
-  | { k: '看'; label: string; box: Box }
+  /** at:小课堂上放哪一段(课里的毫秒,对齐到句) */
+  | { k: '看'; label: string; box: Box; at?: [number, number] }
   | { k: '圈' | '遮' | '盖'; spots: { text: string; box: Box }[] }
   | { k: '写'; text: string; size: Size }
   | { k: '摆'; kit: string; params: Record<string, string>; size: Size }
@@ -168,7 +185,9 @@ const BookSourceSchema = z.object({
 });
 const PhotoSourceSchema = z.object({ id: z.string().min(1), kind: z.literal('photo'), title: z.string().min(1), photos: z.array(PhotoSchema).min(1).max(PAGE_PHOTOS_MAX), pick: z.boolean() });
 const WhiteSourceSchema = z.object({ id: z.string().min(1), kind: z.literal('white'), title: z.string().min(1), pick: z.boolean() });
-export const PageSourceSchema = z.discriminatedUnion('kind', [BookSourceSchema, PhotoSourceSchema, WhiteSourceSchema]);
+const LectureSourceSchema = z.object({ id: z.string().min(1), kind: z.literal('lecture'), title: z.string().min(1), bundle: z.string().min(1), video: z.boolean(), ms: z.number().nonnegative(), pick: z.boolean() });
+export const PageSourceSchema = z.discriminatedUnion('kind', [BookSourceSchema, PhotoSourceSchema, WhiteSourceSchema, LectureSourceSchema]);
+const RangeSchema = z.tuple([z.number().nonnegative(), z.number().nonnegative()]);
 const Layers = {
   teacher: z.object({
     marks: z.array(z.object({ k: z.enum(['圈', '遮', '盖']), text: z.string().min(1), box: BoxSchema })).max(LESSON_MARKS_MAX),
@@ -183,19 +202,19 @@ const Layers = {
   }),
   open: z.array(AskSchema),
 };
-export const LessonPageSchema = z.discriminatedUnion('kind', [BookSourceSchema.extend(Layers), PhotoSourceSchema.extend(Layers), WhiteSourceSchema.extend(Layers)]);
+export const LessonPageSchema = z.discriminatedUnion('kind', [BookSourceSchema.extend(Layers), PhotoSourceSchema.extend(Layers), WhiteSourceSchema.extend(Layers), LectureSourceSchema.extend(Layers)]);
 export const LessonSchema = z.object({
   v: z.literal(1),
   pages: z.array(LessonPageSchema).max(LESSON_PAGES_MAX),
   at: z.string().nullable(),
-  look: z.object({ label: z.string(), box: BoxSchema, n: z.number().int().nonnegative() }).nullable(),
+  look: z.object({ label: z.string(), box: BoxSchema, n: z.number().int().nonnegative(), at: RangeSchema.optional() }).nullable(),
   view: BoxSchema.nullable(),
   strip: z.string().nullable(),
   jobs: z.array(z.string()).max(LESSON_JOBS_MAX).default([]),
 });
 export const LessonActSchema = z.discriminatedUnion('k', [
   z.object({ k: z.literal('翻'), page: PageSourceSchema }),
-  z.object({ k: z.literal('看'), label: z.string(), box: BoxSchema }),
+  z.object({ k: z.literal('看'), label: z.string(), box: BoxSchema, at: RangeSchema.optional() }),
   z.object({ k: z.enum(['圈', '遮', '盖']), spots: z.array(z.object({ text: z.string().min(1), box: BoxSchema })) }),
   z.object({ k: z.literal('写'), text: z.string().min(1), size: SizeSchema }),
   z.object({ k: z.literal('摆'), kit: z.string().min(1), params: z.record(z.string(), z.string()), size: SizeSchema }),

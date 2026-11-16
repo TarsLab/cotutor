@@ -11,7 +11,7 @@
  * 2026-11-02 以前是 spawn 命令行(Qwen Code)读 stream-json;注释里还叫「进程」的地方指的就是脑这一轮。
  */
 import { imageSize, jpegFromDataUrl } from '../shared/jpeg.ts';
-import { lecturePack, readLecture, storedMarks, type IncomingMark } from './lecture.ts';
+import { lectureDid, lecturePage, readLecture, storedMarks, type IncomingMark, type Lecture } from './lecture.ts';
 import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { buildContextPack } from './context/context-pack.ts';
@@ -26,6 +26,7 @@ import { findActivityFile } from './activities.ts';
 import { readActivity, threadActivity } from './activity-state.ts';
 import { createBrain, getRuntime, type BrainExecutor, type BrainRequest, type RunPlan, type ToolSet } from '../brain/index.ts';
 import { lineFlags, parseBoard } from '../board/parse.ts';
+import { clockLabel, lectureLines } from '../board/lecture.ts';
 import { readyBeats, beatsOf, type BoardSection, type Device } from '../board/presentation.ts';
 import type { BoardCard } from '../schema/index.ts';
 import { deriveKidView, truncateReply } from './kid-view.ts';
@@ -490,10 +491,17 @@ export class Runner {
     return { photos, running };
   }
 
-  /** 页的文字层从哪来(找框、说窗里是哪):课本(要的话)、照片认出的字 */
+  /** 页的文字层从哪来(找框、说窗里是哪):课本(要的话)、照片认出的字、小课堂的每一句 */
   private async lessonSource(ws: Workspace, tutor: string, withBook: boolean, l: Lesson): Promise<LessonSource> {
     const book = withBook ? (await this.bookOf(ws, tutor, (this.opts.now ?? (() => new Date()))())).book : null;
-    return { book, photos: (await this.photoTexts(ws, l)).photos };
+    return { book, photos: (await this.photoTexts(ws, l)).photos, lecture: await this.lectureOf(ws, l) };
+  }
+
+  /** 这节课铺着的小课堂(页集里那一页的课包或视频);没有、读不出来 → null */
+  private async lectureOf(ws: Workspace, l: Lesson): Promise<LessonSource['lecture']> {
+    const p = l.pages.find((x) => x.kind === 'lecture');
+    const got = p && p.kind === 'lecture' ? await readLecture(ws, p.bundle) : null;
+    return got ? { bundle: got.id, clock: got.clock } : null;
   }
 
   /** 这一条带的照片的宽高(照片页照它排);读不出的不铺 */
@@ -507,23 +515,25 @@ export class Runner {
   }
 
   /**
-   * 一节课(activity 头上 base:)这一轮开始时的样子:课本做底的先铺目录;这一条带的照片接在照片页后面(没有就开一页);
+   * 一节课(activity 头上 base:)这一轮开始时的样子:从小课堂按钮进来的先铺那堂课;课本做底的先铺目录;这一条带的照片接在照片页后面(没有就开一页);
    * 孩子拍的作业但还没有页(不拍,用白纸)就铺一张白纸页。落盘,回页的文字层从哪来、这节课现在的样子。
    * 孩子端照同样的规矩先落在自己那一份上(拍的照片发出去就铺、不等老师)
    */
-  private async lessonOn(ws: Workspace, tutor: string, now: Date, date: string, thread: string, base: ActivityBase, photos: readonly string[]): Promise<{ src: LessonSource; lesson: Lesson; problem?: string; running: string[] }> {
+  private async lessonOn(ws: Workspace, tutor: string, now: Date, date: string, thread: string, base: ActivityBase, photos: readonly string[], lecture: Lecture | null): Promise<{ src: LessonSource; lesson: Lesson; problem?: string; running: string[] }> {
     const { book, problem } = base === 'textbook' ? await this.bookOf(ws, tutor, now) : { book: null };
     const sizes = await this.photoSizes(ws, photos);
     // 数学的照片上点的是数和算式,不弹田字格(同数学课本)
     const pick = canonicalSubject(ws.config.tutors[tutor]?.subject) !== '数学';
     const lesson = await updateLesson(ws, tutor, date, thread, (l) => {
-      let s = book ? lessonOpen(l, book) : l;
+      // 小课堂(孩子端点了按钮就铺上、先看完才开口;服务端收到第一条时照同样的规矩铺)
+      let s = lecture && !l.pages.some((p) => p.kind === 'lecture') ? lessonStep(l, { t: 'act', act: { k: '翻', page: lecturePage(lecture) } }) : l;
+      s = book ? lessonOpen(s, book) : s;
       if (sizes.length) s = lessonStep(s, { t: 'photo', photos: sizes, pick });
       else if (base === 'photo' && !s.at) s = lessonStep(s, { t: 'act', act: { k: '翻', page: whitePage() } });
       return s;
     });
     const texts = await this.photoTexts(ws, lesson);
-    return { src: { book, photos: texts.photos }, lesson, running: texts.running, ...(problem ? { problem } : {}) };
+    return { src: { book, photos: texts.photos, lecture: await this.lectureOf(ws, lesson) }, lesson, running: texts.running, ...(problem ? { problem } : {}) };
   }
 
   /**
@@ -531,7 +541,7 @@ export class Runner {
    * 上一轮以后舞台交过窗里的图(shot)就挪成这一轮的(<date>.<job>.shot.jpg),shot 是它的绝对路径,随这一轮附给老师。
    * told = 这一轮给了哪几页的字(收尾记进板的日志,以后不重给)
    */
-  private async lessonSlate(ws: Workspace, tutor: string, date: string, thread: string, job: string, x: { src: LessonSource; lesson: Lesson; problem?: string; running: string[] }, now: Date, opts: { compact: boolean; fresh: readonly string[] }): Promise<{ slate: NonNullable<ContextPack['slate']>; notes: PageNote[]; told: string[]; shot?: string }> {
+  private async lessonSlate(ws: Workspace, tutor: string, date: string, thread: string, job: string, x: { src: LessonSource; lesson: Lesson; problem?: string; running: string[] }, now: Date, opts: { compact: boolean; fresh: readonly string[]; /** 孩子这一条带来的、页上状态里没有的(小课堂看的情况、画的几处) */ did?: readonly string[] }): Promise<{ slate: NonNullable<ContextPack['slate']>; notes: PageNote[]; told: string[]; shot?: string }> {
     const events = await readBoard(ws, tutor, date, thread);
     const page = lessonPage(x.lesson);
     const told = new Set(opts.compact ? [] : events.flatMap((e) => (e.k === 'turn' && e.told ? (Array.isArray(e.told) ? e.told : [e.told]) : [])));
@@ -554,14 +564,19 @@ export class Runner {
         notes.push({ id, name: `第${i + 1}张`, text: clipNote(photoText(layer.page, layer.blocks)) });
       });
     } else if (page?.kind === 'white') show = '白纸(老师摆、写的都在上面)';
+    else if (page?.kind === 'lecture') {
+      const c = x.src.lecture && x.src.lecture.bundle === page.bundle ? x.src.lecture.clock : null;
+      show = `小课堂《${page.title}》(${page.video ? '视频' : '课包'},${clockLabel(page.ms)};放课里一段写 [[看 0:19–0:30]])${c ? '' : ';课读不出来了,放不了'}`;
+      if (c && !told.has(page.id)) notes.push({ id: page.id, name: `小课堂《${page.title}》`, text: clipNote(lectureLines(c)) });
+    }
     if (!page && x.problem) show = `课本:${x.problem}(请家长放进 vault 的教材文件夹)`;
-    const others = x.lesson.pages.filter((p) => p !== page).map((p) => (p.kind === 'book' ? `《${p.title}》` : p.kind === 'photo' ? `作业照片(${p.photos.length} 张)` : '白纸'));
+    const others = x.lesson.pages.filter((p) => p !== page).map((p) => (p.kind === 'book' ? `《${p.title}》` : p.kind === 'photo' ? `作业照片(${p.photos.length} 张)` : p.kind === 'lecture' ? `小课堂《${p.title}》` : '白纸'));
     let from = 0;
     events.forEach((e, i) => { if (e.k === 'turn') from = i + 1; });
     const files = conversationFiles(ws.dirs.conversations, tutor, date);
     const fresh = page ? events.slice(from).some((e) => e.k === 'shot' && e.base === page.id) : false;
     const shot = fresh ? await rename(files.shot(thread), files.shot(job)).then(() => files.shot(job), () => undefined) : undefined;
-    const slate = slateOf({ page: { id: page?.id ?? '#', show }, others, events, lesson: lessonSlateBits(x.lesson), now: now.getTime(), ...(shot ? { shot: true } : {}) });
+    const slate = slateOf({ page: { id: page?.id ?? '#', show }, others, events, lesson: lessonSlateBits(x.lesson), now: now.getTime(), ...(shot ? { shot: true } : {}), ...(opts.did?.length ? { did: opts.did } : {}) });
     return { slate, notes, told: notes.map((n) => n.id), ...(shot ? { shot } : {}) };
   }
 
@@ -713,11 +728,17 @@ export class Runner {
     // 一节课(activity 头上 base:;记在话题第一条):每一轮带页此刻的样子,第一次看到的页带上它印的字
     const first = fresh ? null : index.messages.find((_, i) => known[i] === thread);
     const actDef = threadRun ? await readActivity(ws, tutor, threadRun.name) : null;
-    const pageBase: ActivityBase | null = input.bookkeep || policy.board === 'off' ? null : fresh ? (activityRun && (actDef?.base === 'textbook' || actDef?.base === 'photo') ? actDef.base : null) : (first?.base ?? null);
-    const les = pageBase ? await this.lessonOn(ws, tutor, now, date, thread, pageBase, photos) : null;
+    // 小课堂:课包现读;读不出来(删了、坏了)就不带,这条照发,家长端提醒
+    const lecture = input.lecture ? await readLecture(ws, input.lecture.bundle) : null;
+    const marks = input.lecture?.marks?.length ? storedMarks(lecture, input.lecture.marks, photos.length) : [];
+    const lectureWarn = input.lecture && !lecture ? [`小课堂:${input.lecture.bundle} 读不出来(bundles/ 与 lectures/ 下都没有能放的),老师没拿到课的内容`] : [];
+    // 铺哪种页:activity 头上的 base;从小课堂按钮进来、挂的 activity 没写 base 的,也是一节铺着小课堂的课
+    const freshBase = actDef?.base === 'textbook' || actDef?.base === 'photo' || actDef?.base === 'lecture' ? actDef.base : input.lecture ? 'lecture' : null;
+    const pageBase: ActivityBase | null = input.bookkeep || policy.board === 'off' ? null : fresh ? (activityRun || input.lecture ? freshBase : null) : (first?.base ?? null);
+    const les = pageBase ? await this.lessonOn(ws, tutor, now, date, thread, pageBase, photos, lecture) : null;
     if (les?.problem) activityWarn.push(les.problem);
     if (les && pageBase) active.lesson = { base: pageBase, src: les.src, at: les.lesson };
-    const slate = les ? await this.lessonSlate(ws, tutor, date, thread, job, les, now, { compact, fresh: photos }) : null;
+    const slate = les ? await this.lessonSlate(ws, tutor, date, thread, job, les, now, { compact, fresh: photos, did: input.lecture ? lectureDid(lecture, input.lecture, marks) : [] }) : null;
     if (slate) {
       pack.slate = slate.slate;
       if (slate.notes.length) pack.pageNotes = slate.notes;
@@ -726,12 +747,8 @@ export class Runner {
       delete pack.photos;
       delete pack.photoFiles;
     }
-    const images = slate ? photos.map((p) => join(ws.root, p)) : (pack.photoFiles ?? []);
-    // 小课堂:课包现读;读不出来(删了、坏了)就不带,这条照发,家长端提醒
-    const lecture = input.lecture ? await readLecture(ws, input.lecture.bundle) : null;
-    const marks = input.lecture?.marks?.length ? storedMarks(lecture, input.lecture.marks, photos.length) : [];
-    if (input.lecture && lecture) pack.lecture = lecturePack(lecture, input.lecture, marks);
-    const lectureWarn = input.lecture && !lecture ? [`小课堂:${input.lecture.bundle} 读不出来(bundles/ 与 lectures/ 下都没有能放的),老师没拿到课的内容`] : [];
+    // 小课堂上画的一处带一张截图,排在这一轮新拍的照片后面(storedMarks 的那段话照这个顺序说第几张)
+    const images = slate ? seen.map((p) => join(ws.root, p)) : (pack.photoFiles ?? []);
     if (input.live) {
       const l = input.live;
       pack.live = { ...(l.caught ? { caught: l.caught } : {}), ...(l.cut !== undefined ? { cut: l.cut } : {}), ...(l.echo?.length ? { echo: l.echo } : {}), ...(l.mouth?.length ? { mouth: l.mouth } : {}), ...(l.app ? { app: l.app } : {}) };
@@ -908,7 +925,7 @@ export class Runner {
       active.partial = section.cards.length || lines.length ? { cards: section.cards, lines, partial: true, ready: readySeen } : null;
       if (section.cards.length && timing.firstCardMs === undefined) timing.firstCardMs = since();
       for (; cardsSeen < section.cards.length; cardsSeen++) emit({ lane: 'main', kind: 'card', card: cardsSeen, label: `${section.cards[cardsSeen].kind} ${cardLabel(section.cards[cardsSeen])}`.trim() });
-      for (; linesSeen < lines.length; linesSeen++) emit({ lane: 'main', kind: 'line', line: linesSeen, text: lines[linesSeen].text, ...lineFlags(lines[linesSeen], section.cards) });
+      for (; linesSeen < lines.length; linesSeen++) emit({ lane: 'main', kind: 'line', line: linesSeen, text: lines[linesSeen].text, ...lineFlags(lines[linesSeen]) });
       settleReady();
     };
     // 请老师(src/brain/):正文、工具随流回报
@@ -944,7 +961,7 @@ export class Runner {
     // 整块出的(没走流式):卡与句这时才第一次见到,也发一遍
     if (kidView.section) {
       for (; cardsSeen < kidView.section.cards.length; cardsSeen++) emit({ lane: 'main', kind: 'card', card: cardsSeen, label: `${kidView.section.cards[cardsSeen].kind} ${cardLabel(kidView.section.cards[cardsSeen])}`.trim() });
-      for (; linesSeen < kidView.section.lines.length; linesSeen++) emit({ lane: 'main', kind: 'line', line: linesSeen, text: kidView.section.lines[linesSeen].text, ...lineFlags(kidView.section.lines[linesSeen], kidView.section.cards) });
+      for (; linesSeen < kidView.section.lines.length; linesSeen++) emit({ lane: 'main', kind: 'line', line: linesSeen, text: kidView.section.lines[linesSeen].text, ...lineFlags(kidView.section.lines[linesSeen]) });
     }
     if (timing.firstReadyMs === undefined && (kidView.section?.lines.length || kidView.kidText)) timing.firstReadyMs = since();
     if (kidView.section) emit({ lane: 'ready', kind: 'all', cards: kidView.section.cards.length, lines: kidView.section.lines.length });

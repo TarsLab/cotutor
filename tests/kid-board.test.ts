@@ -6,8 +6,6 @@ import {
   cardTitle,
   findPhrase,
   hasState,
-  isHeavy,
-  lectureReady,
   segmentAudio,
   stateSummary,
   pickedLabels,
@@ -55,7 +53,6 @@ const cards: BoardCard[] = [
   { kind: 'text', props: { text: '做到了还要多做一步' } },
   { kind: 'gizmo', props: { bundle: 'x', title: '场景' } },
 ];
-const lectureCard: BoardCard = { kind: 'lecture', props: { bundle: '2026-09-04-guilv5', text: '再看一遍', title: '找规律', ready: true, start: 0, end: 8000 } };
 
 {
   check('卡上的字都能被找到;不认识的 kind 拿 props 里的字符串', cardTexts(cards[2]).join('|') === '楚有祠者|先成者饮酒' && cardTexts(cards[3]).join('|') === '酒是谁的?|他自己的|第二个画完的' && cardTexts(cards[5]).join('|') === 'x|场景' && cardTexts(cards[0])[0] === '画蛇添足');
@@ -70,10 +67,10 @@ const lectureCard: BoardCard = { kind: 'lecture', props: { bundle: '2026-09-04-g
   const def: BoardCard = { kind: 'text', props: { title: '认边', text: '两条短边叫直角边,最长的一条叫斜边' } };
   const plain: BoardCard = { kind: 'text', props: { text: '一个直角三角形,斜边是 13' } };
   const formula: BoardCard = { kind: 'text', props: { style: 'formula', text: '直角边² + 直角边² = 斜边²' } };
-  check('底色槽:# 标题 sky、素文 sand、formula paper、后期定的优先、做题的紫、点读米、图 / 小课堂 / 代码白', tintFor(cards[0]) === 'sky' && tintFor(def) === 'sky' && tintFor(plain) === 'sand' && tintFor(cards[1]) === 'sand' && tintFor(formula) === 'paper' && tintFor({ kind: 'text', props: { text: 'x' }, look: { tint: 'night' } }) === 'night' && tintFor(cards[3]) === 'plum' && tintFor(cards[4]) === 'sand' && tintFor(cards[2]) === 'sand' && tintFor(lectureCard) === 'paper' && tintFor({ kind: 'image', props: {} }) === 'paper');
+  check('底色槽:# 标题 sky、素文 sand、formula paper、后期定的优先、做题的紫、点读米、图 / 代码白', tintFor(cards[0]) === 'sky' && tintFor(def) === 'sky' && tintFor(plain) === 'sand' && tintFor(cards[1]) === 'sand' && tintFor(formula) === 'paper' && tintFor({ kind: 'text', props: { text: 'x' }, look: { tint: 'night' } }) === 'night' && tintFor(cards[3]) === 'plum' && tintFor(cards[4]) === 'sand' && tintFor(cards[2]) === 'sand' && tintFor({ kind: 'image', props: {} }) === 'paper');
   check('后期定的 look 优先', tintFor({ ...plain, look: { tint: 'moss' } }) === 'moss' && lookFor({ ...plain, look: { look: 'quote' } }) === 'quote');
   check('字形槽:formula → formula、后期定的优先,其余 plain', lookFor(cards[1]) === 'plain' && lookFor(formula) === 'formula' && lookFor({ kind: 'text', props: { text: 'x' }, look: { look: 'title' } }) === 'title' && lookFor(def) === 'plain' && lookFor(cards[3]) === 'plain');
-  check('笔:选项 box、问题里的词 underline、点读 marker、公式 / 大字 marker、标题位 circle、数字 underline、正文里的词 tint;后期定的 pen 页面直接用', penFor(cards[3], '他自己的') === 'box' && penFor(cards[3], '酒') === 'underline' && penFor(cards[2], '楚有祠者') === 'marker' && penFor(formula, '斜边') === 'marker' && penFor({ kind: 'text', props: { text: '多做一步' }, look: { look: 'title' } }, '多做一步') === 'marker' && penFor(cards[1], '多做一步') === 'tint' && penFor(cards[0], '画蛇添足') === 'circle' && penFor(def, '认边') === 'circle' && penFor(def, '直角边') === 'tint' && penFor({ kind: 'text', props: { title: '验证', text: '9 加 16 等于 25' } }, '25') === 'underline' && penFor(lectureCard, '找规律') === 'underline');
+  check('笔:选项 box、问题里的词 underline、点读 marker、公式 / 大字 marker、标题位 circle、数字 underline、正文里的词 tint;后期定的 pen 页面直接用', penFor(cards[3], '他自己的') === 'box' && penFor(cards[3], '酒') === 'underline' && penFor(cards[2], '楚有祠者') === 'marker' && penFor(formula, '斜边') === 'marker' && penFor({ kind: 'text', props: { text: '多做一步' }, look: { look: 'title' } }, '多做一步') === 'marker' && penFor(cards[1], '多做一步') === 'tint' && penFor(cards[0], '画蛇添足') === 'circle' && penFor(def, '认边') === 'circle' && penFor(def, '直角边') === 'tint' && penFor({ kind: 'text', props: { title: '验证', text: '9 加 16 等于 25' } }, '25') === 'underline');
   const hd: BoardCard = { kind: 'text', props: { title: '两大类型', text: '', heading: true } };
   check('小节标题不是卡:没有能标注的字,sectionTitle 优先拿它', isHeading(hd) && !isHeading(def) && cardTexts(hd).length === 0 && sectionTitle({ cards: [hd, def], lines: [] }) === '两大类型');
   // ---- 行(2026-10-01 排版归代码):每张卡半宽或全宽,相邻两张半宽并一行;明写的并排照办;手机上折;标题行与有状态的卡独占 ----
@@ -81,8 +78,8 @@ const lectureCard: BoardCard = { kind: 'lecture', props: { bundle: '2026-09-04-g
   check('没量过就按字数估:字少的文字卡半宽,两两并一行;别的种类(选择题)估不了算全宽,标题行独占', JSON.stringify(rowsFor(sec, 'tablet-landscape')) === '[[0,1],[2],[3],[4],[5],[6]]');
   check('一行几列:两张并排两列;落单的半宽卡两列(占左半);全宽一列', rowCols(sec, [0, 1]) === 2 && rowCols(sec, [2]) === 2 && rowCols(sec, [3]) === 1 && rowCols(sec, [5]) === 1);
   const measured = (i: number): boolean => i === 1 || i === 2 || i === 3 || i === 4;
-  const boardCard: BoardCard = { kind: 'lecture', props: { bundle: 'x', title: '找规律' } };
-  check('量出来的优先:选择题量得下也半宽,和后面半宽的并一行;小课堂量成半宽也不算', JSON.stringify(rowsFor(sec, 'tablet-landscape', measured)) === '[[0],[1,2],[3,4],[5],[6]]' && rowCols(sec, [0], measured) === 1 && rowCols({ cards: [boardCard], lines: [] }, [0], () => true) === 1 && JSON.stringify(rowsFor({ cards: [def, boardCard, plain], lines: [] }, 'tablet-landscape', () => true)) === '[[0],[1],[2]]');
+  const boardCard: BoardCard = { kind: 'photo', props: { text: '写好的那一页' } };
+  check('量出来的优先:选择题量得下也半宽,和后面半宽的并一行;拍给我看卡量成半宽也不算', JSON.stringify(rowsFor(sec, 'tablet-landscape', measured)) === '[[0],[1,2],[3,4],[5],[6]]' && rowCols(sec, [0], measured) === 1 && rowCols({ cards: [boardCard], lines: [] }, [0], () => true) === 1 && JSON.stringify(rowsFor({ cards: [def, boardCard, plain], lines: [] }, 'tablet-landscape', () => true)) === '[[0],[1],[2]]');
   const laid: BoardSection = { ...sec, layout: { for: 'tablet-landscape', rows: [[0], [1, 2], [3, 4], [5, 6]] } };
   check('明写的并排同端照办(量成全宽也并,选择题也能并);碰上标题行拆开,拆出来的按宽度排', JSON.stringify(rowsFor(laid, 'tablet-landscape', () => false)) === '[[0],[1,2],[3,4],[5],[6]]' && JSON.stringify(rowsFor(laid, 'tablet-landscape')) === '[[0],[1,2],[3,4],[5],[6]]');
   const three: BoardSection = { ...sec, layout: { for: 'tablet-landscape', rows: [[0, 1, 2], [3], [4], [5], [6]] } };
@@ -100,9 +97,9 @@ const lectureCard: BoardCard = { kind: 'lecture', props: { bundle: '2026-09-04-g
   {
     const fit = (lines: number, extra: Partial<CardFit> = {}): CardFit => ({ half: 100, full: 80, lines, overflow: false, ...extra });
     const code: BoardCard = { kind: 'code', props: { text: '🟧🟧🟧' } };
-    check('能半宽的种类:文字、点读、代码、田字格、单词卡、选择题;标题行、提问卡、小课堂、图不行;大字的照量', canHalf(def) && canHalf(cards[2]) && canHalf(code) && canHalf(cards[3]) && canHalf(cards[4]) && canHalf({ kind: 'tianzige', props: { chars: '鼓' } }) && canHalf({ kind: 'word', props: { word: 'apple' } }) && !canHalf(hd) && !canHalf({ kind: 'text', props: { text: '?', ask: true } }) && !canHalf(lectureCard) && !canHalf({ kind: 'image', props: { src: 'a.png' } }) && canHalf({ ...def, look: { look: 'title' } }) && canHalf({ kind: 'word', props: { word: 'yellow' }, look: { look: 'title' } }));
+    check('能半宽的种类:文字、点读、代码、田字格、单词卡、选择题;标题行、提问卡、图不行;大字的照量', canHalf(def) && canHalf(cards[2]) && canHalf(code) && canHalf(cards[3]) && canHalf(cards[4]) && canHalf({ kind: 'tianzige', props: { chars: '鼓' } }) && canHalf({ kind: 'word', props: { word: 'apple' } }) && !canHalf(hd) && !canHalf({ kind: 'text', props: { text: '?', ask: true } }) && !canHalf({ kind: 'image', props: { src: 'a.png' } }) && canHalf({ ...def, look: { look: 'title' } }) && canHalf({ kind: 'word', props: { word: 'yellow' }, look: { look: 'title' } }));
     check('文字卡看半宽时几行:平板 ≤ 4、手机 ≤ 2;横着溢出不行', fitsHalf(def, 'tablet-landscape', fit(4)) && !fitsHalf(def, 'tablet-landscape', fit(5)) && fitsHalf(def, 'phone', fit(2)) && !fitsHalf(def, 'phone', fit(3)) && !fitsHalf(def, 'tablet-portrait', fit(1, { overflow: true })));
-    check('公式 / 代码 / 田字格 / 单词卡 / 选择题:半宽时不比全宽高(没折行)才行;小课堂量成什么都不行', fitsHalf(formula, 'tablet-landscape', fit(1, { half: 60, full: 60 })) && !fitsHalf(formula, 'phone', fit(2, { half: 90, full: 60 })) && fitsHalf(code, 'tablet-landscape', fit(0, { half: 80 })) && fitsHalf(code, 'tablet-landscape', fit(0, { half: 81 })) && !fitsHalf(code, 'tablet-landscape', fit(0, { half: 120 })) && fitsHalf(cards[3], 'tablet-landscape', fit(1, { half: 80 })) && !fitsHalf(cards[3], 'tablet-landscape', fit(1, { half: 130 })) && !fitsHalf(lectureCard, 'tablet-landscape', fit(1, { half: 80 })));
+    check('公式 / 代码 / 田字格 / 单词卡 / 选择题:半宽时不比全宽高(没折行)才行', fitsHalf(formula, 'tablet-landscape', fit(1, { half: 60, full: 60 })) && !fitsHalf(formula, 'phone', fit(2, { half: 90, full: 60 })) && fitsHalf(code, 'tablet-landscape', fit(0, { half: 80 })) && fitsHalf(code, 'tablet-landscape', fit(0, { half: 81 })) && !fitsHalf(code, 'tablet-landscape', fit(0, { half: 120 })) && fitsHalf(cards[3], 'tablet-landscape', fit(1, { half: 80 })) && !fitsHalf(cards[3], 'tablet-landscape', fit(1, { half: 130 })));
   }
   // ---- 选中态:播到这句该在的卡;句子锚到标题行时退到本节第一张真卡 ----
   const secL: BoardSection = { cards: [hd, def, formula], lines: [L('一', { anchor: 0 }), L('二', { anchor: 1, marks: [{ card: 2, phrase: '斜边' }] })] };
@@ -115,8 +112,6 @@ const lectureCard: BoardCard = { kind: 'lecture', props: { bundle: '2026-09-04-g
   check('有舞台交互的是选择题(填空 10-22 删了,《卡片协议.md》)', cards[3].kind === 'choice' && hasState(cards[3]) && !hasState(cards[4]) && !hasState(cards[0]) && !hasState(cards[2]) && !hasState(cards[5]) && !hasState({ kind: 'image', props: { src: 'a.png' } }));
   check('点读段的配音:assets 里有 <段号>.mp3 才有', segmentAudio({ ...cards[2], assets: ['2026-09-10.1620-1.cards/2/2.mp3'] }, 1) === '2026-09-10.1620-1.cards/2/2.mp3' && segmentAudio({ ...cards[2], assets: ['2026-09-10.1620-1.cards/2/2.mp3'] }, 0) === null && segmentAudio(cards[2], 0) === null);
   check('做了什么(交给老师能不能按):选择题是选项、别的卡永远空', stateSummary({ ...cards[3], state: { picked: [0] } }).join() === 'A 他自己的' && stateSummary({ ...cards[4], state: { answers: ['多做一步'] } }).length === 0 && stateSummary({ ...cards[0], state: { x: 1 } }).length === 0);
-  check('重卡:小课堂在舞台包里开;小课堂卡读得出、有起止才 ready', isHeavy(lectureCard) && !isHeavy(cards[3]) && lectureReady(lectureCard) && !lectureReady({ kind: 'lecture', props: { bundle: 'x' } }) && !lectureReady(cards[0]) && !isHeavy({ kind: 'scene', props: { bundle: 'x', ready: true } }));
-  check('小课堂卡:能标注标题 / 那句话;标题是 title;没有「交给老师」', cardTexts(lectureCard).join('|') === '找规律|再看一遍' && cardTitle(lectureCard) === '找规律' && !hasState(lectureCard));
   check('图片卡:能标注的是图注,标题是图注 / 「图」', cardTexts({ kind: 'image', props: { src: 'a.png', caption: '看这里' } }).join() === '看这里' && cardTitle({ kind: 'image', props: { src: 'a.png', caption: '看这里' } }) === '看这里' && cardTitle({ kind: 'image', props: { src: 'a.png' } }) === '图');
   check('舞台顶栏的名字:标题 > 问题 > 正文 > 第一段;截 24 字', cardTitle(cards[0]) === '画蛇添足' && cardTitle(cards[3]) === '酒是谁的?' && cardTitle(cards[2]) === '楚有祠者' && cardTitle(cards[1]) === '画蛇添足 = 多做一步,反而坏事' && cardTitle({ kind: 'text', props: { text: '字'.repeat(30) } }).length === 25 && cardTitle({ kind: 'gizmo', props: { bundle: 'x' } }) === 'x');
   check('单选:点了换成它,再点取消;多选:切换', JSON.stringify(togglePick([], 1, false)) === '[1]' && JSON.stringify(togglePick([1], 2, false)) === '[2]' && JSON.stringify(togglePick([1], 1, false)) === '[]' && JSON.stringify(togglePick([0], 2, true)) === '[0,2]' && JSON.stringify(togglePick([0, 2], 0, true)) === '[2]');

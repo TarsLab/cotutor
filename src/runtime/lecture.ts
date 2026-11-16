@@ -8,10 +8,9 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BUNDLE_ID_RE } from '../board/cards/kind.ts';
 import { mp4DurationMs } from '../media/mp4.ts';
-import { LECTURE_FILE, LECTURE_VIDEO, MARK_MAX_POINTS, clockLabel, inkHint, lectureAt, lectureClock, lectureLines, lectureRange, markHead, parseLectureDoc, videoClock, type LectureClock, type LectureMark, type LecturePicture } from '../board/lecture.ts';
+import { LECTURE_FILE, LECTURE_VIDEO, MARK_MAX_POINTS, clockLabel, inkHint, lectureAt, lectureClock, markHead, parseLectureDoc, videoClock, type LectureClock, type LectureMark, type LecturePicture } from '../board/lecture.ts';
 import { bakeMatches, BundleError, elementsAtSvgTime, parseBundle, renderFrameSvg, type LessonBundle } from '../chalk/index.ts';
-import type { ContextPack } from '../schema/index.ts';
-import type { BoardCard, BoardSection } from '../board/presentation.ts';
+import { LECTURE_PAGE, type PageSource } from '../schema/index.ts';
 
 export interface Lecture {
   id: string;
@@ -107,7 +106,7 @@ export interface StoredMark extends IncomingMark {
 }
 
 /**
- * 孩子带来的画 → 落盘的样子:那段话 = 时刻与那时在讲哪句 + 截图是上下文包 photos 的第几张(photoBase = 前面已经有几张孩子自己拍的)
+ * 孩子带来的画 → 落盘的样子:那段话 = 时刻与那时在讲哪句 + 截图是这一轮附的第几张图(photoBase = 前面已经有几张孩子自己拍的)
  * + 课包的再说画的地方盖着什么(按课包现算,用课里的叫法)。读不出来就只留时刻与笔画
  */
 export function storedMarks(l: Lecture | null, marks: readonly IncomingMark[], photoBase = 0): StoredMark[] {
@@ -118,37 +117,22 @@ export function storedMarks(l: Lecture | null, marks: readonly IncomingMark[], p
     if (!l) return base;
     const head = markHead(l.clock, m.atMs);
     if (m.hit !== undefined) return { ...base, text: `${head}${m.hit ? `;${m.hit}` : ''}` };
-    const pic = shot ? `画在截图上(photos 第 ${shot} 张)` : l.video ? '没有截图,看不出画的是什么' : '没有截图';
+    const pic = shot ? `截图附在这一轮(第 ${shot} 张图)` : l.video ? '没有截图,看不出画的是什么' : '没有截图';
     const hint = l.video ? '' : inkHint(l.clock, m, l.picture).text;
     return { ...base, text: `${head};${pic}${hint ? `;${hint}` : ''}` };
   });
 }
 
-/** 上下文包 lecture: 段:标题、来源、课长、每句起点与原话、看的情况、画过的几处 */
-export function lecturePack(l: Lecture, w: LectureWatch, marks: readonly StoredMark[] = []): NonNullable<ContextPack['lecture']> {
-  const seen = w.finished ? (w.again ? '又看完了一遍' : '看完了') : `${w.again ? '又看了一遍,' : ''}看到 ${clockLabel(w.watchedMs)}`;
-  const watched = `${seen}${w.pauses ? `,停过 ${w.pauses} 次` : ''}${marks.length ? `,画了 ${marks.length} 处` : ''}`;
-  return { title: l.title, source: `${l.video ? 'video' : 'bundle'} ${l.id}`, length: clockLabel(l.clock.total), lines: lectureLines(l.clock), watched, marks: marks.flatMap((m) => (m.text ? [m.text] : [])) };
+/** 小课堂当一页铺(src/schema/lesson.ts 的 lecture 页;一节课只有一页,id 是「小课堂」) */
+export function lecturePage(l: Lecture): Extract<PageSource, { kind: 'lecture' }> {
+  return { id: LECTURE_PAGE, kind: 'lecture', title: l.title || l.id, bundle: l.id, video: l.video, ms: l.clock.total, pick: false };
 }
 
-/**
- * 小课堂卡(cards/lecture)下发时补的快照:课名、真放的起止(对齐段界)、末帧停在 SVG 的哪一刻、能不能放。
- * 课包每次现读(家长重做了课包,下一次下发就跟上);读不出来或起止对不上 → ready: false,讲稿 [[play]] 不停。
- */
-export async function enrichLectures(ws: LectureDirs, section: BoardSection): Promise<BoardSection> {
-  if (!section.cards.some((c) => c.kind === 'lecture')) return section;
-  const seen = new Map<string, Promise<Lecture | null>>();
-  const cards: BoardCard[] = [];
-  for (const c of section.cards) {
-    const p = c.props as { bundle?: unknown; from?: unknown; to?: unknown };
-    if (c.kind !== 'lecture' || typeof p.bundle !== 'string') { cards.push(c); continue; }
-    if (!seen.has(p.bundle)) seen.set(p.bundle, readLecture(ws, p.bundle));
-    const l = await seen.get(p.bundle)!;
-    const r = l ? lectureRange(l.clock, typeof p.from === 'number' ? p.from : undefined, typeof p.to === 'number' ? p.to : undefined) : null;
-    // 视频没有 SVG:末帧的缩略图页面用 <video> 停在 end 前一点
-    cards.push({ ...c, props: { ...c.props, ...(l ? { title: l.title } : {}), ...(l?.video ? { video: true } : {}), ...(l && r ? { start: r.start, end: r.end, ...(l.video ? {} : { still: Math.round(lectureAt(l.clock, Math.max(r.start, r.end - 1)).svgMs * 10) / 10 }) } : {}), ready: Boolean(l && r) } });
-  }
-  return { ...section, cards };
+/** 孩子带来的看的情况与画的几处,给老师的「孩子做的」(上下文包 board: 的 did):「看完了小课堂,停过 2 次」+ 一处一行 */
+export function lectureDid(l: Lecture | null, w: LectureWatch, marks: readonly StoredMark[] = []): string[] {
+  const seen = w.finished ? (w.again ? '又看完了一遍小课堂' : '看完了小课堂') : `${w.again ? '又看了一遍小课堂,' : '看小课堂'}看到 ${clockLabel(w.watchedMs)}`;
+  const head = `${seen}${w.pauses ? `,停过 ${w.pauses} 次` : ''}${marks.length ? `,停住画了 ${marks.length} 处` : ''}${l ? '' : '(课读不出来了)'}`;
+  return [head, ...marks.flatMap((m) => (m.text ? [`画的:${m.text}`] : []))];
 }
 
 const baking = new Map<string, Promise<boolean>>();
@@ -178,7 +162,7 @@ const COTUTOR_BIN = fileURLToPath(new URL('../../bin/cotutor.js', import.meta.ur
 const tried = new Set<string>();
 
 /**
- * 孩子端要用到的课包(首页的小课堂、lecture 卡)没烤过:后台烤一次,不等(下一次下发就是烤好的)。
+ * 孩子端要用到的课包(首页的小课堂)没烤过:后台烤一次,不等(下一次下发就是烤好的)。
  * 一个服务进程里每份课包只看一次;烤不了照样放(孩子端在浏览器里现烤)。
  */
 export function bakeSoon(bundlesDir: string, id: string): void {
@@ -189,11 +173,6 @@ export function bakeSoon(bundlesDir: string, id: string): void {
     const [scene, baked] = await Promise.all(['scene.json', 'bake.json'].map((f) => readFile(join(key, f), 'utf8').then((t) => JSON.parse(t) as unknown, () => null)));
     if (scene && !bakeMatches(baked, scene as { skeletons?: unknown })) await ensureBaked(bundlesDir, id);
   })().catch(() => {});
-}
-
-/** 一节板书里 lecture 卡用到的课包,没烤过的后台烤 */
-export function bakeSectionSoon(bundlesDir: string, section: BoardSection): void {
-  for (const c of section.cards) if (c.kind === 'lecture' && typeof c.props.bundle === 'string' && !(c.props as { video?: unknown }).video) bakeSoon(bundlesDir, c.props.bundle);
 }
 
 /**

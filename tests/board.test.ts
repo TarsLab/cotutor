@@ -28,14 +28,13 @@ for (const f of fixtures) {
   check('问答:两句话;末句是问句,只补一张提问卡', m.section.cards.length === 1 && m.section.cards[0].props.ask === true && m.section.lines.length === 2 && m.section.lines[0].text === '7乘8等于56。', JSON.stringify(m.section.cards));
 }
 {
-  const r = parseBoard('开场一句。\n\n```text\n# 三角形\n拼一拼\n```\n\n讲[三角形]这张卡[[play]]。\n\n```python\nprint(1)\n```\n\n```\n原样\n```\n\n看代码 [[play 3]] 吧?\n');
+  const r = parseBoard('开场一句。\n\n```text\n# 三角形\n拼一拼\n```\n\n讲[三角形]这张卡。\n\n```python\nprint(1)\n```\n\n```\n原样\n```\n\n看代码吧。\n');
   const { cards, lines } = r.section;
   check('围栏 = 卡:text 的 # 行是标题;不认识的标签当代码卡(lang = 标签);没标签的围栏也是代码卡', cards.length === 3 && cards[0].kind === 'text' && cards[0].props.title === '三角形' && cards[0].props.text === '拼一拼' && cards[1].kind === 'code' && cards[1].props.lang === 'python' && cards[1].props.text === 'print(1)' && cards[2].kind === 'code' && cards[2].props.lang === null, JSON.stringify(cards));
-  check('段落 = 讲稿:三句,末句问句', lines.length === 3 && lines[0].text === '开场一句。' && lines[2].ask && !lines[1].ask, JSON.stringify(lines.map((l) => l.text)));
+  check('段落 = 讲稿:三句', lines.length === 3 && lines[0].text === '开场一句。' && !lines[2].ask && !lines[1].ask, JSON.stringify(lines.map((l) => l.text)));
   const hb = parseBoard('```text\n# 两大类型\n```\n\n```text\n# 认边\n两条短边叫直角边\n```\n\n讲[直角边]。\n\n```text\n# 小结\n```\n\n再讲一句。\n');
   check('小节标题行是 heading 卡:句子锚到它前面 / 后面的真卡,标注不落在它上面', hb.section.cards[0].props.heading === true && hb.section.cards[2].props.heading === true && hb.section.lines[0].anchor === 1 && hb.section.lines[1].anchor === 1 && hb.section.lines[0].marks[0]?.card === 1 && hb.warnings.length === 0, JSON.stringify(hb.section.lines));
   check('[词] → 标注落到含它的卡;念的时候去括号', lines[1].marks[0]?.card === 0 && lines[1].marks[0]?.phrase === '三角形' && lines[1].text === '讲三角形这张卡。');
-  check('[[play]] → 对上一张卡的动作,句子里不留痕', lines[1].cues[0]?.name === 'play' && lines[1].cues[0]?.card === 0 && lines[2].cues[0]?.name === 'play' && lines[2].cues[0]?.arg === '3' && lines[2].cues[0]?.card === 2 && lines[2].text === '看代码 吧?'.replace(' ', ' '), JSON.stringify(lines.map((l) => [l.text, l.cues])));
   check('锚点:开场句 null,之后是上一张卡', lines[0].anchor === null && lines[1].anchor === 0 && lines[2].anchor === 2);
   check('没有 warning', r.warnings.length === 0, r.warnings.map((w) => w.text).join());
 }
@@ -50,7 +49,8 @@ for (const f of fixtures) {
   check('[[请 说]] 没写要说的:只开放说,不等', !open.section.lines[0].echo && open.section.lines[0].acts?.[0]?.arg === '说', JSON.stringify(open.section.lines[0]));
   const old = parseBoard('我先来:duck! [[echo duck]]\n');
   check('以前的 [[echo]] 不认了:丢掉、记一行', !old.section.lines[0].echo && old.warnings.some((w) => w.text.includes('echo duck')), JSON.stringify(old));
-  check('[[play]] 照旧是卡的动作', parseBoard('```text\n课\n```\n\n看这段 [[play]]。\n').section.lines[0].cues[0]?.name === 'play');
+  const play = parseBoard('```text\n课\n```\n\n看这段 [[play]]。\n');
+  check('[[play]] 不认了(2026-11-17 并进 [[看 0:19–0:30]]):丢掉、记一行', !play.section.lines[0].cues.length && play.warnings.some((w) => w.text.includes('[[看 0:19–0:30]]')), JSON.stringify(play.warnings));
 }
 {
   const r = parseBoard('先说这个词:[平行四边形]。\n\n```text\n平行四边形\n```\n');

@@ -5,7 +5,7 @@
  * 规矩:
  *  - 翻:换到那一页(课本的一课、照片页、白纸页;还没铺过就铺上:老师的一层、孩子的一层都是空的、什么都没请);窗回到页顶,白纸条收起来。翻回铺过的,原来画的都在
  *  - 孩子拍来了照片(photo):接在照片页后面(没有就开一页,最多 PAGE_PHOTOS_MAX 张),换到照片页,窗移到新拍的第一张的顶上
- *  - 看:窗移到那一处;那一处有白纸条就打开它(回到这道题,原来摆的还在),没有就收起开着的
+ *  - 看:窗移到那一处;那一处有白纸条就打开它(回到这道题,原来摆的还在),没有就收起开着的;小课堂上是放那一段(at)
  *  - 圈、遮、盖:记号加在这一页上(同一处不重复)
  *  - 写、摆:落进「看」着的那道题的白纸条(没有就开一条,紧贴题的下沿);白纸页上整页就是一条(从页顶摆起);课本、照片上没在看哪一道题就不做
  *  - 擦:白纸条开着擦它的最后一样(擦 全部:整条收掉);没开着擦老师最后一个记号
@@ -77,7 +77,7 @@ function lessonAct(l: Lesson, a: LessonAct): Lesson {
     case '看': {
       const p = lessonPage(l);
       const strip = p?.teacher.strips.some((s) => s.key === a.label) ? a.label : null;
-      return { ...l, look: { label: a.label, box: a.box, n: (l.look?.n ?? 0) + 1 }, strip };
+      return { ...l, look: { label: a.label, box: a.box, n: (l.look?.n ?? 0) + 1, ...(a.at ? { at: a.at } : {}) }, strip };
     }
     case '圈':
     case '遮':

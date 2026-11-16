@@ -1,16 +1,18 @@
 /**
  * 讲稿里的动作落到页上(2026-11-16 阶段 2 任务 2,阶段 3 起页不只课本;纯函数,runner 在流式与定稿时都过一遍):老师写的是页上印的字,应用照页的文字层找到它在哪。
- *  - 翻 课名 / 翻 目录:照课本目录找到这一课铺哪几页;翻 白纸:加一张白纸页(有了就回到它);翻 作业:回到孩子拍的照片页
+ *  - 翻 课名 / 翻 目录:照课本目录找到这一课铺哪几页;翻 白纸:加一张白纸页(有了就回到它);翻 作业:回到孩子拍的照片页;翻 小课堂:回到那堂课
  *  - 看 第 3 题 / 例 2 / 原话…:照这一页分好的块找到那一块的框(src/chalk/kit/book.ts 的 bookTarget);照片页还认「第 2 张」「第 2 张第 3 题」
+ *  - 看 0:19–0:30 / 0:19 / 课里的一句原话(小课堂页,2026-11-17 阶段 5):放那一段,对齐到句(src/board/lecture.ts 的 lectureRange);只写起点放到那一句的末尾
  *  - 圈、遮、盖 字词:照字找到框;先在「看」着的那一块里找(找不到的那一处不做)
  *  - 写、摆:落进「看」着的那道题的白纸条;白纸页上整页就是一条;课本、照片上没在看哪一道题就不做
  *  - 擦、请:照写的做
- * 页的文字层:课本是 PDF 的文字层(src/memory/textbook-index.ts);照片是认字认出的行和题,换成课本的样子(src/chalk/kit/photo.ts);白纸没有。
+ * 页的文字层:课本是 PDF 的文字层(src/memory/textbook-index.ts);照片是认字认出的行和题,换成课本的样子(src/chalk/kit/photo.ts);小课堂是每一句的起点与原话;白纸没有。
  * 一节里的动作照先后一个一个落(先翻再看,看的是新的那一页),落不了的记一句给家长(why),动作本身留在讲稿上、不带 do。
  */
 import { BOOK_MAX_PAGES, BOOK_TOC, bookCut, bookFind, bookSheets, bookTarget, findLesson, lessonBlocks, photoBookPage, type BookBlock, type BookSheet, type PhotoText } from '../chalk/index.ts';
-import { PHOTO_PAGE, WHITE_PAGE, type BoardCard, type BoardSection, type BookIndex, type BookPage, type Box, type Lesson, type LessonAct, type LineAct, type PageSource } from '../schema/index.ts';
+import { LECTURE_PAGE, PHOTO_PAGE, WHITE_PAGE, type BoardCard, type BoardSection, type BookIndex, type BookPage, type Box, type Lesson, type LessonAct, type LineAct, type PageSource } from '../schema/index.ts';
 import { actParts } from './acts.ts';
+import { clockLabel, lectureRange, parseClock, type LectureClock } from './lecture.ts';
 import { lessonPage, lessonStep } from './lesson.ts';
 
 /** 一课(或目录)铺哪几页(最多 BOOK_MAX_PAGES 页,数学一个小节能有十几页);认不出 = null */
@@ -27,6 +29,27 @@ export interface LessonBook { file: string; index: BookIndex }
 export interface LessonSource {
   book: LessonBook | null;
   photos?: Readonly<Record<string, PhotoText>>;
+  /** 小课堂页的那堂课(src/runtime/lecture.ts 读的):每一句的起点、段长、原话;读不出来、没有小课堂是 null */
+  lecture?: { bundle: string; clock: Pick<LectureClock, 'segments' | 'total'> } | null;
+}
+
+/** 「看」小课堂:「0:19–0:30」「0:19」(放到那一句的末尾),或课里一句原话的一截(放那一句);对齐到句 */
+export function lectureTarget(clock: Pick<LectureClock, 'segments' | 'total'>, what: string): { label: string; at: [number, number] } | null {
+  const t = what.trim();
+  const m = /^(\d{1,2}(?::\d{2}){1,2})\s*(?:(?:[–—~～]|-|到|至)+\s*(\d{1,2}(?::\d{2}){1,2}))?$/.exec(t);
+  let r: { start: number; end: number } | null = null;
+  if (m) {
+    const from = parseClock(m[1]);
+    const to = m[2] ? parseClock(m[2]) : undefined;
+    if (from === null || to === null) return null;
+    r = lectureRange(clock, from, to);
+  } else {
+    const bare = (x: string): string => x.replace(/[\s,，。.!！?？、;；:：「」『』“”"']/g, '');
+    const want = bare(t);
+    const seg = want ? clock.segments.find((x) => bare(x.line ?? '').includes(want)) : undefined;
+    if (seg) r = { start: seg.start, end: seg.start + seg.len };
+  }
+  return r ? { label: `${clockLabel(r.start)}–${clockLabel(r.end)}`, at: [r.start, r.end] } : null;
 }
 
 /** 一课(或目录)当一页铺:页的样子(老师的一层、孩子的一层由 lessonStep 补) */
@@ -71,6 +94,12 @@ function photoTarget(t: ReturnType<typeof pageText>, what: string): { label: str
 /** 翻到哪:白纸、照片页(作业、照片)、课本的一课或目录 */
 function turnTo(l: Lesson, name: string, src: LessonSource): { page: PageSource } | { why: string } {
   if (name === WHITE_PAGE || name === '白板' || name === '白纸页') return { page: whitePage() };
+  if (name === LECTURE_PAGE || name === '课' || name === '视频') {
+    const p = l.pages.find((x) => x.kind === 'lecture');
+    if (!p) return { why: '这节课没有小课堂' };
+    const { teacher: _t, kid: _k, open: _o, ...page } = p;
+    return { page };
+  }
   if (name === PHOTO_PAGE || name === '照片' || name === '作业照片') {
     const p = l.pages.find((x) => x.kind === 'photo');
     if (!p) return { why: '孩子还没拍照片,没有照片页可翻' };
@@ -95,6 +124,12 @@ export function fitAct(l: Lesson, a: LineAct, src: LessonSource): { do: LessonAc
   switch (parts.name) {
     case '看': {
       if (p.kind === 'white') return { why: '白纸页上没有可看的,直接摆、写' };
+      if (p.kind === 'lecture') {
+        const c = src.lecture && src.lecture.bundle === p.bundle ? src.lecture.clock : null;
+        if (!c) return { why: `小课堂《${p.title}》读不出来,放不了` };
+        const hit = lectureTarget(c, parts.target);
+        return hit ? { do: { k: '看', label: hit.label, box: [0, 0, 0, 0], at: hit.at } } : { why: `「${parts.target}」在小课堂《${p.title}》里找不到(写 0:19–0:30,或课里一句原话)` };
+      }
       const t = pageText(p, src);
       const hit = p.kind === 'photo' ? photoTarget(t, parts.target) : bookTarget(t.pages, t.sheets, t.blocks, parts.target);
       return hit ? { do: { k: '看', label: hit.label, box: hit.box } } : { why: `「${parts.target}」在《${p.title}》里找不到${p.kind === 'photo' ? '(照片上认出的题没有它,或者还没认完)' : ''}` };
@@ -102,6 +137,7 @@ export function fitAct(l: Lesson, a: LineAct, src: LessonSource): { do: LessonAc
     case '圈':
     case '遮':
     case '盖': {
+      if (p.kind === 'lecture') return { why: `小课堂上${parts.name}不了:请孩子停住了自己画` };
       const t = pageText(p, src);
       const within = l.look?.box ?? null;
       const spots = parts.spots.flatMap((text) => { const box = bookFind(t.pages, t.sheets, text, within); return box ? [{ text, box }] : []; });
@@ -112,6 +148,7 @@ export function fitAct(l: Lesson, a: LineAct, src: LessonSource): { do: LessonAc
     }
     case '写':
     case '摆':
+      if (p.kind === 'lecture') return { why: `小课堂上${parts.name}不了:[[翻 白纸]] 再${parts.name}` };
       if (!l.look && p.kind !== 'white') return { why: `${parts.name}要先「看」一道题(白纸条贴着那道题的下沿),或 [[翻 白纸]]` };
       return { do: parts.name === '写' ? { k: '写', text: parts.text, size: parts.size } : { k: '摆', kit: parts.kit, params: parts.params, size: parts.size } };
     case '擦':

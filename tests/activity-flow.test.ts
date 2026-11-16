@@ -217,13 +217,18 @@ try {
     check('挂的 activity 不在:按钮点不了(null)', (await resolveVia(ctx.ws, 'chinese-tutor', { home: '2026-10-12-0900', button: 0 })) === null);
     writeFileSync(pubFile, lec());
     const plain = await resolveVia(ctx.ws, 'chinese-tutor', { home: '2026-10-12-0900', button: 0 });
-    check('不挂:看完照这位老师的「小课堂」activity', plain?.kind === 'lecture' && JSON.stringify((plain as { activity?: unknown }).activity) === JSON.stringify({ name: '小课堂', params: {} }), JSON.stringify(plain));
+    check('不挂:看完照这位老师头上 base: lecture 的 activity(出厂的「小课堂」)', plain?.kind === 'lecture' && JSON.stringify((plain as { activity?: unknown }).activity) === JSON.stringify({ name: '小课堂', params: {} }), JSON.stringify(plain));
     const lecFile = join(root, 'agents', 'chinese-tutor', 'activities', '小课堂.md');
     const lecText = readFileSync(lecFile, 'utf8');
     rmSync(lecFile);
     check('没有小课堂.md:按钮点不了(null)', (await resolveVia(ctx.ws, 'chinese-tutor', { home: '2026-10-12-0900', button: 0 })) === null);
     const noLec = await checkHome(ctx.ws, HOME('小课堂 2026-10-08-kantu 看图说话怎么说'), now);
-    check('没有小课堂.md:首页检查报要改,说看完怎么聊写在哪', noLec.issues.some((i) => i.level === 'fix' && i.text.includes('看完怎么聊写在 agents/chinese-tutor/activities/小课堂.md')), JSON.stringify(noLec.issues));
+    check('没有铺小课堂的 activity(头上 base: lecture 的):首页检查报要改,说怎么补', noLec.issues.some((i) => i.level === 'fix' && i.text.includes('没有铺小课堂的 activity(头上写 base: lecture 的') && i.text.includes('activity: <名>')), JSON.stringify(noLec.issues));
+    // 看完照哪个聊不照名字找(2026-11-17):头上写 base: lecture 的那个,叫什么都行
+    writeFileSync(join(root, 'agents', 'chinese-tutor', 'activities', '看完再问.md'), lecText.replace('name: 小课堂', 'name: 看完再问'));
+    const renamed = await resolveVia(ctx.ws, 'chinese-tutor', { home: '2026-10-12-0900', button: 0 });
+    check('不挂:看完照这位老师头上 base: lecture 的那个 activity(不照名字)', JSON.stringify((renamed as { activity?: unknown } | null)?.activity) === JSON.stringify({ name: '看完再问', params: {} }), JSON.stringify(renamed));
+    rmSync(join(root, 'agents', 'chinese-tutor', 'activities', '看完再问.md'));
     writeFileSync(lecFile, lecText);
     writeFileSync(pubFile, keep);
     const c = await checkHome(ctx.ws, HOME('小课堂 2026-10-08-kantu 看图说话怎么说\nactivity: 看图说说'), now);

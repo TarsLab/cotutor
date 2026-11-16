@@ -32,16 +32,19 @@ export const ACTIVITY_TOOLS: Readonly<Record<string, { slots: readonly string[] 
 };
 
 /**
- * 头上的 `base:`:这一节课铺哪种页(2026-11-16《多模态教学harness-开发计划》阶段 3;以前要和 `board: page` 一起写)。不写 = 不铺页(小课堂、看图说话、口语课还是卡片流,阶段 4、5 搬)。
+ * 头上的 `base:`:这一节课铺哪种页(2026-11-16《多模态教学harness-开发计划》阶段 3;以前要和 `board: page` 一起写)。
  * textbook = vault 里的教材 PDF(《语文预习:PDF 课本与镜头交互》):不拍照,进来铺这一册的目录,老师照孩子说的课翻到那一课。
  * photo = 孩子拍的作业:进来先拍照(或不拍,用白纸),照片一发就铺;老师照认出的题看、圈、在题下面的白纸条上摆、写。
- * 两种页上老师都能 [[翻 白纸]] 加一张白纸页。
+ * lecture = 小课堂(2026-11-17 阶段 5):从首页的小课堂按钮进来,页上铺那堂课,孩子先看完再问;老师 [[看 0:19–0:30]] 放课里那一段。
+ *   小课堂按钮没写 `activity:` 时,看完照这位老师 base: lecture 的那个 activity 聊;按钮挂了别的 activity(如看图说话),页上也先铺这堂课。
+ * 哪种页上老师都能 [[翻 白纸]] 加一张白纸页。
  */
 export const ACTIVITY_BASES: Readonly<Record<string, string>> = {
   textbook: '课本:vault 的教材/ 下这一科的 PDF,不拍照',
   photo: '孩子拍的作业:进来先拍照,不拍就是白纸',
+  lecture: '小课堂:首页小课堂按钮给的那堂课(课包或视频),先看完再问',
 };
-export type ActivityBase = 'textbook' | 'photo';
+export type ActivityBase = 'textbook' | 'photo' | 'lecture';
 
 /**
  * 头上的 `listen:`:孩子怎么说话(2026-11-17 阶段 4 任务 1,原来只有口语课一直听)。open = 一直听:不用按,孩子开口就听(一问一答多的、请他说的多的);
@@ -71,9 +74,6 @@ export const ACTIVITY_SECTIONS = { params: '家长填的', tutor: '老师怎么�
 export const ACTIVITY_TOOL_SECTION_RE = /^(.+?)收到什么$/;
 /** 首页按钮下面已经占用的行名,参数不能叫这些 */
 export const ACTIVITY_RESERVED_PARAMS = ['讲法', '留到'] as const;
-
-/** 小课堂按钮没写 `activity:` 时,看完照这位老师的这个 activity 聊 */
-export const LECTURE_ACTIVITY = '小课堂';
 
 export const ActivityParamSchema = z.object({
   name: z.string().min(1),

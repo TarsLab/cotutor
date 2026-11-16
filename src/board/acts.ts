@@ -1,17 +1,16 @@
 /**
  * 讲稿里的 `[[名 参数]]` 都在这里读(2026-11-16《多模态教学harness-开发计划》阶段 2 任务 1):
  *  - 老师的动作:看、圈、遮、盖、写、擦、摆、请、翻(src/schema/lesson.ts 的 ACT_NAMES),写在句子后面,这句念完才生效;
- *  - 小课堂的 [[play]]:对上一张卡的动作(cue),念完放那一段;
  * 纯函数,永不抛:不认得的、写错的回 bad(解析器丢掉它、给家长记一行)。
  * 每种动作的写法(也是给老师的说明,见 ACT_GUIDE):
- *   看 第 3 题 / 例 2 / 练一练第 3 题 / 第 55 页 / 栏目名 / 课本上的一句原话
+ *   看 第 3 题 / 例 2 / 练一练第 3 题 / 第 55 页 / 栏目名 / 课本上的一句原话;小课堂上 0:19–0:30 / 0:19 / 课里一句原话(放那一段;原来的 [[play]])
  *   圈 心理辅导室、井沿(最多 4 处)   遮 傍晚、晒(拼音盖住,最多 8 处)   盖 3×5=15(印好的答案盖住,最多 8 处)
  *   写 6×4=24(白纸条里写一行字,最多 24 个字;前后可带 大 / 中 / 小)
  *   擦(擦掉自己上一样)/ 擦 全部(整条白纸条)
  *   摆 点阵 6 行 6 个 / 摆 方向盘 上 东(白纸条里摆一个图形;可带 大 / 中 / 小)
  *   请 圈 / 请 写、圈(开放哪些作答:写、圈、点、涂、切、转、说、添)
  *   请 说 duck / 请 说 The ducks are under the bus(请孩子说出这一句:念完停下等他说,应用比转写,说了接着念下一句;2026-11-17 阶段 4 任务 1,原来的 [[echo]] [[say]])
- *   翻 6的乘法口诀 / 翻 目录(换一课)
+ *   翻 6的乘法口诀 / 翻 目录(换一课)/ 翻 白纸 / 翻 作业 / 翻 小课堂
  */
 import { kitOf, readKitLines } from '../chalk/index.ts';
 import { ACT_NAMES, ASK_NAMES, SIZES, type ActName, type AskName, type LineAct, type Size } from '../schema/index.ts';
@@ -19,11 +18,7 @@ import { ACT_NAMES, ASK_NAMES, SIZES, type ActName, type AskName, type LineAct, 
 /** [[...]] 里的一处读成什么 */
 export type Mark =
   | { kind: 'act'; act: LineAct; /** 读成了,但丢了一部分(请里不认得的那几个) */ warn?: string }
-  | { kind: 'cue'; name: string; arg?: string }
   | { kind: 'bad'; text: string; why: string };
-
-/** 卡上的动作(锚到上一张卡):只剩小课堂的 play */
-const CUES = new Set(['play']);
 
 /** 白纸条里能摆的图形(src/chalk/kit/ 的画法) */
 export const SHAPES = ['点阵', '方向盘'] as const;
@@ -148,9 +143,7 @@ export function readMark(raw: string): Mark {
       return { kind: 'bad', text: inner, why: e instanceof Error ? e.message : String(e) };
     }
   }
-  const [name, ...rest] = inner.split(/\s+/);
-  const n = (name ?? '').toLowerCase();
-  if (CUES.has(n)) return { kind: 'cue', name: n, ...(rest.length ? { arg: rest.join(' ') } : {}) };
+  if (/^play\b/i.test(inner)) return { kind: 'bad', text: inner, why: '[[play]] 不用了:放小课堂里的一段写 [[看 0:19–0:30]]' };
   return { kind: 'bad', text: inner, why: `不认得这个动作(动作有:${ACT_NAMES.join('、')})` };
 }
 

@@ -55,7 +55,7 @@ for (const d of docs) {
     check('有图片没画板:作业照片在,「用 canvas 卡」那段不在', noCanvas.includes('## 作业照片') && !noCanvas.includes('用 `canvas` 卡'));
   }
   const css = cardsCss();
-  check('各卡的 css 拼成一段,每种一个标头,选项行都在', CARD_KINDS.every((k) => css.includes(`cards/${k.name}/card.css`)) && css.includes('.ch-o {') && !css.includes('.bl {') && css.includes('.c-lecture .th') && !css.includes('c-scene'));
+  check('各卡的 css 拼成一段,每种一个标头,选项行都在', CARD_KINDS.every((k) => css.includes(`cards/${k.name}/card.css`)) && css.includes('.ch-o {') && !css.includes('.bl {') && !css.includes('c-scene'));
   const sp = splitSections('# x — y\n\n## 甲\na\n\n## 乙\nb\nc\n');
   check('splitSections:标题行与栏目', sp.headline === 'x — y' && sp.sections['甲'] === 'a' && sp.sections['乙'] === 'b\nc');
 }

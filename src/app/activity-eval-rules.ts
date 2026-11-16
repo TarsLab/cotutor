@@ -40,8 +40,8 @@ export const GRADERS: Readonly<Record<string, string>> = {
   收尾不问: '最后一轮的末句不是问句(守则「答完就停」:答案出来了、孩子说懂了,一句收住,不再考他)',
   不说: '老师的讲稿里没有这几个说法(「不说: 你没说清楚、错了」)',
   说到: '老师的讲稿里出现过这几个说法(「说到: 你画的」;同「问到」,不要求是问句)',
-  放课里一段: '写过 lecture 卡(放小课堂里的一段)',
-  一节最多一段: '每一节最多一张 lecture 卡',
+  放课里一段: '讲稿里放过小课堂里的一段([[看 0:19–0:30]] 落在小课堂上)',
+  一节最多一段: '每一轮最多放一段小课堂',
   问到: '老师的讲稿里出现过这个词(「问到: 在哪里」)',
   并排: '有一轮写下的([[写 …]])同时有这两句里的字(「并排: 睡大觉 | 浇了水」)',
   卡上有: '老师写的卡上、讲稿的动作里([[写 …]] [[圈 …]])出现过这几个说法(「卡上有: 先看清」,如顺口溜)',
@@ -178,6 +178,8 @@ export function askedOps(turns: readonly EvalTurn[]): { turn: number; want: stri
 
 /** 一轮里写在页上的几行([[写 …]];大小的档去掉) */
 const writesOf = (s: BoardSection | null): string[] => actsOf(s).filter((a) => a.name === '写').map((a) => a.arg.replace(/^[大中小]\s+|\s+[大中小]$/g, '').trim());
+/** 一轮里放了几段小课堂(「看」落在小课堂上,带 at;没落上的看参数是不是时间) */
+const playsOf = (s: BoardSection | null): number => (s ? [...(s.acts ?? []), ...s.lines.flatMap((l) => l.acts ?? [])] : []).filter((a) => a.name === '看' && (a.do?.k === '看' ? Boolean(a.do.at) : /^\d{1,2}:\d{2}/.test(a.arg.trim()))).length;
 /** 这一轮在页上动过(写了动作,或还写着卡) */
 const onPage = (t: EvalTurn): boolean => Boolean(t.section?.cards.length || actsOf(t.section).length);
 const listArg = (arg: string): string[] => arg.split(/[、,，;；]/).map((x) => x.trim()).filter(Boolean);
@@ -252,11 +254,11 @@ export function gradeRun(checks: readonly string[], turns: readonly EvalTurn[]):
         return { check, pass: !said.length, ...(said.length ? { why: said.join(';') } : {}) };
       }
       case '放课里一段': {
-        const ok = turns.some((t) => (t.section?.cards ?? []).some((c) => c.kind === 'lecture'));
+        const ok = turns.some((t) => playsOf(t.section) > 0);
         return { check, pass: ok, ...(ok ? {} : { why: `${turns.length} 轮都没放课里的一段` }) };
       }
       case '一节最多一段': {
-        const bad = turns.flatMap((t, k) => { const n = (t.section?.cards ?? []).filter((c) => c.kind === 'lecture').length; return n > 1 ? [`第 ${k + 1} 轮放了 ${n} 段`] : []; });
+        const bad = turns.flatMap((t, k) => { const n = playsOf(t.section); return n > 1 ? [`第 ${k + 1} 轮放了 ${n} 段`] : []; });
         return { check, pass: !bad.length, ...(bad.length ? { why: bad.join(';') } : {}) };
       }
       case '说到':

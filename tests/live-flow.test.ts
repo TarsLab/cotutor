@@ -4,10 +4,11 @@
  * 念的时候按下 = 打断(清队列,下一轮上下文包带 cut)→ 挂了落录像;两轮之间安静够久了录像切段(电话不挂,一段一轮,家长端的录像跨段照样拼);
  * 没开 / 不在 live.voices 拒升级;嘴连不上告诉孩子端走板书。
  */
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { check, done } from './_check.ts';
 import { FAKE_RUNTIMES, startFakeTeacher } from './_fake-teacher.ts';
 import { startFakeRealtime } from './_fake-realtime.ts';
@@ -247,7 +248,9 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   // ---- activity 也走实时(P3.1):首页按钮的开场 → 嘴不先说、脑照 activity 带;上一句念的是问句,孩子再开口嘴也不先说 ----
   const { publishHome } = await import('../src/runtime/home/store.ts');
   mkdirSync(join(wsRoot, 'home'), { recursive: true });
-  writeFileSync(join(wsRoot, 'home', 'draft.md'), '```tutor chinese-tutor\nactivity 聊\n```\n\n## 为什么这么排\n\n试实时\n');
+  // 小课堂(2026-11-17 起是一节课里的一页):课包拷进来,牌上第二个按钮是它
+  cpSync(fileURLToPath(new URL('./fixtures/bundles/2026-09-18-po13-jian-8/', import.meta.url)), join(wsRoot, 'bundles', '2026-09-18-po13-jian-8'), { recursive: true });
+  writeFileSync(join(wsRoot, 'home', 'draft.md'), '```tutor chinese-tutor\nactivity 聊\n小课堂 2026-09-18-po13-jian-8 看课\n```\n\n## 为什么这么排\n\n试实时\n');
   const pub = await publishHome(ctx.ws, { now: ctx.now() });
   await until(() => ctx.runner.running('chinese-tutor') === null, 15000);
   const k = await connect('chinese-tutor');
@@ -276,14 +279,11 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   await until(() => c.responses.length > r);
   check('上一句念的是问句:孩子答了,嘴也不先说(第一次开口就是照念)', lastQ && String(c.responses[r]?.instructions).startsWith('把这几句话原样说给孩子听'), JSON.stringify(c.responses.slice(r)));
 
-  // 讲稿的 [[play]](小课堂,P3.2):念完那句先停,read 带 play;孩子端回 staged 才接着念后面的
+  // 小课堂上放课里一段([[看 0:19–0:30]] 落在小课堂页上;以前的 [[play]]):念完那句先停,read 带 play;孩子端回 staged 才接着念后面的
   await until(() => ctx.runner.running('chinese-tutor') === null, 15000);
   await sleep(300);
-  fake.kidText = '放课';
   const np = k.msgs.length;
-  k.ws.send(JSON.stringify({ t: 'hold' }));
-  k.ws.send(loud());
-  k.ws.send(JSON.stringify({ t: 'release', body: { thread: turn.thread } }));
+  k.ws.send(JSON.stringify({ t: 'send', body: { text: '放课', via: { home: pub.home?.id, button: 1 }, lecture: { bundle: '2026-09-18-po13-jian-8', watchedMs: 46_000, finished: true, pauses: 0 } } }));
   const okPlay = await until(() => k.msgs.slice(np).some((m) => m.t === 'read' && m.play === true), 15000);
   const playRead = k.msgs.slice(np).find((m) => m.t === 'read' && m.play === true);
   await until(() => ctx.runner.running('chinese-tutor') === null, 15000);
@@ -292,7 +292,7 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   k.ws.send(JSON.stringify({ t: 'staged' }));
   const okRest = await until(() => k.msgs.slice(np).filter((m) => m.t === 'read' && m.job === playRead?.job).length === 3, 10000);
   const after = k.msgs.slice(np).filter((m) => m.t === 'read' && m.job === playRead?.job).map((m) => m.line);
-  check('[[play]]:念完那句(read 带 play)就停,脑写完了也不往下念;孩子端回 staged 才接着念后面的', okPlay && playRead?.line === 0 && playRead?.text === '我们回到那里再看一遍。' && before.join() === '0' && okRest && after.join() === '0,1,2', JSON.stringify({ before, after, playRead }));
+  check('[[看 0:19–0:30]] 在小课堂上:念完那句(read 带 play)就停,脑写完了也不往下念;孩子端回 staged 才接着念后面的', okPlay && playRead?.line === 0 && playRead?.text === '我们回到那里再看一遍。' && before.join() === '0' && okRest && after.join() === '0,1,2', JSON.stringify({ before, after, playRead }));
   await until(() => ctx.runner.running('chinese-tutor') === null, 15000);
   k.ws.send(JSON.stringify({ t: 'bye' }));
   await until(() => k.closed !== null);
@@ -407,9 +407,11 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   await until(() => has(k, (m) => m.t === 'ready'));
   const c = fake.conns.at(-1)!;
   fake.kidText = '老师板书再来一遍';
+  // 接着「聊」那个话题(上一段最后开的是一节铺着小课堂的课,那里卡不上页)
+  const chat = indexOf(localDate(ctx.now())).messages.find((m) => m.activity?.name === '聊' && !m.base)?.thread;
   k.ws.send(JSON.stringify({ t: 'hold' }));
   k.ws.send(loud());
-  k.ws.send(JSON.stringify({ t: 'release', body: {} }));
+  k.ws.send(JSON.stringify({ t: 'release', body: { thread: chat } }));
   await until(() => has(k, (m) => m.t === 'turn'), 10000);
   const job = k.msgs.find((m) => m.t === 'turn')!.job as string;
   await until(() => ctx.runner.running('chinese-tutor') === null, 15000);

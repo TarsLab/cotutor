@@ -1,12 +1,12 @@
 /**
  * 小课堂全流程(假 CLI,不花钱):首页草稿写 `小课堂 <课包 id> <字>` → 检查(课包不在要改)→ 发布 →
- * 孩子端首页的小课堂按钮带课名与课长 → 没看完不能开口(400)→ 看完开口:新话题、上下文包 lecture:(每句起点与原话、看的情况)、
- * 消息记 lecture → 孩子端那一条带小课堂、家长端多看到看的情况。
- * 画:第一条带两处(一处两笔带截图、一处是 2026-10-19 以前的一笔 path)→ 上下文包 photos: 带截图、这一轮带只读工具、marks:(每处一段话:
- * 时刻、那时在讲哪句、截图第几张、画的地方盖着什么)、消息记画(SVG 时刻、几笔、那段话)、孩子端不带那段话、家长端带;
+ * 孩子端首页的小课堂按钮带课名与课长 → 没看完不能开口(400)→ 看完开口:新话题、一节铺着小课堂的课(2026-11-17 阶段 5:小课堂是页集里的一页)——
+ * board: 的底是小课堂、<page> 是每句起点与原话、孩子做的写看的情况;消息记 lecture → 孩子端那一条带小课堂、家长端多看到看的情况。
+ * 画:第一条带两处(一处两笔带截图、一处是 2026-10-19 以前的一笔 path)→ 截图随这一轮附给老师(同新拍的照片)、孩子做的一处一行
+ * (时刻、那时在讲哪句、截图第几张图、画的地方盖着什么)、消息记画(SVG 时刻、几笔、那段话)、孩子端不带那段话、家长端带;
  * 问过以后再看一遍又画了 → 同一话题下一条带上(again);不是这份课包开头的话题、没带画、没带话题都 400。
- * 视频来源(第 4 步):lectures/<id>/ 的按钮(课长从 mp4)、坏的 lecture.md 首页检查说清楚;画带截图(先传进 captures/)→ 上下文包 source: video、
- * photos: 带截图、marks: 说「画在截图上(photos 第 1 张)」;消息的 photos 不记截图;截图不在 captures/ 400。
+ * 视频来源(第 4 步):lectures/<id>/ 的按钮(课长从 mp4)、坏的 lecture.md 首页检查说清楚;画带截图(先传进 captures/)→ 底是视频的小课堂、
+ * 截图附给老师、那一处说「截图附在这一轮(第 1 张图)」;消息的 photos 不记截图;截图不在 captures/ 400。
  */
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -82,11 +82,13 @@ try {
   check('看完开口:202、新话题、字是孩子说的、记 via 与 lecture(课名从课包来)', r.status === 202 && thread === job && m?.text === '为什么要拆开那一捆' && m.via?.label === '13 减 8 怎么拆' && m.lecture?.bundle === BUNDLE && m.lecture.title === '13 − 8 破十法' && m.lecture.pauses === 2 && m.lecture.finished, JSON.stringify(m));
   const run = await readRunFile(ctx.ws, 'math-tutor', date, job);
   const prompt = run?.prompt ?? '';
-  check('上下文包 lecture:课名、来源、课长、每句起点与原话、看的情况;home: 带讲法', prompt.includes('  lecture:\n    title: "13 − 8 破十法"\n    source: "bundle 2026-09-18-po13-jian-8"\n    length: ') && prompt.includes('      - "0:00 先看 13 减 8。') && prompt.includes('    watched: "看完了,停过 2 次,画了 2 处"') && prompt.includes('    brief: "他常把 13 当成 1 和 3"') && prompt.includes('---\n为什么要拆开那一捆'), prompt.slice(0, 1600));
-  const lines = prompt.split('\n').filter((l) => /^ {6}- "\d+:\d\d /.test(l) && !l.includes(' 画的,'));
-  check('每句一行,六句,起点递增', lines.length === 6, JSON.stringify(lines));
-  check('上下文包 marks:每处一段话(时刻、那时在讲哪句、截图第几张、画的地方盖着什么);watched 带画了几处', prompt.includes('    watched: "看完了,停过 2 次,画了 2 处"\n    marks:\n      - "0:26 画的,那时在讲『那就拆开这一捆') && prompt.includes(';画在截图上(photos 第 1 张);画的地方盖着:第 1 步画的 3 条线(旁边写着『3』)"') && /\n {6}- "0:46 画的,[^\n]*;没有截图;画的地方盖着:[^\n]*文字『5』/.test(prompt), prompt.slice(prompt.indexOf('  lecture:'), prompt.indexOf('  lecture:') + 1400));
-  check('课包的画带截图:上下文包 photos: 与 photoFiles: 带它(这一轮带只读工具读图,同照片);消息的 photos 不记截图', prompt.includes(`  photos:\n    - "${shotPath}"\n  photoFiles:\n`) && !m?.photos);
+  check('一节铺着小课堂的课:board: 的底是这堂课(课包、课长、怎么放一段);孩子做的写看的情况;home: 带讲法;没有 lecture: 段了', prompt.includes('    底: "小课堂《13 − 8 破十法》(课包,0:46;放课里一段写 [[看 0:19–0:30]])"') && prompt.includes('      - "看完了小课堂,停过 2 次,停住画了 2 处"') && prompt.includes('    brief: "他常把 13 当成 1 和 3"') && !prompt.includes('  lecture:') && prompt.includes('---\n为什么要拆开那一捆') && m?.base === 'lecture', prompt.slice(0, 1600));
+  const page = prompt.slice(prompt.indexOf('<page id="小课堂"'), prompt.indexOf('</page>', prompt.indexOf('<page id="小课堂"')));
+  const lines = page.split('\n').filter((l) => /^\d+:\d\d /.test(l));
+  check('页的文字层:<page> 一句一行(起点与原话),六句', page.includes('name="小课堂《13 − 8 破十法》"') && lines.length === 6 && lines[0].startsWith('0:00 先看 13 减 8。'), JSON.stringify(lines));
+  check('孩子做的:画的一处一行(时刻、那时在讲哪句、截图是这一轮附的第几张图、画的地方盖着什么)', prompt.includes('      - "画的:0:26 画的,那时在讲『那就拆开这一捆') && prompt.includes(';截图附在这一轮(第 1 张图);画的地方盖着:第 1 步画的 3 条线(旁边写着『3』)"') && /\n {6}- "画的:0:46 画的,[^\n]*;没有截图;画的地方盖着:[^\n]*文字『5』/.test(prompt), prompt.slice(prompt.indexOf('  board:'), prompt.indexOf('  board:') + 1400));
+  const imgs = (q: string): number => { const body = teacher.requests.find((b) => JSON.stringify(b.messages.at(-1)?.content ?? '').includes(q)); return (JSON.stringify(body?.messages.at(-1)?.content ?? '').match(/"type":"image_url"/g) ?? []).length; };
+  check('课包的画带截图:随这一轮附给老师(同新拍的照片),上下文包不再列 photos:;消息的 photos 不记截图', imgs('为什么要拆开那一捆') === 1 && !prompt.includes('  photos:') && !m?.photos, String(imgs('为什么要拆开那一捆')));
   check('消息记看的过程(录像用)与画下去的那一刻', JSON.stringify(m?.lecture?.log) === JSON.stringify(log) && m?.lecture?.marks?.[0].t === -50_000, JSON.stringify(m?.lecture?.log));
   check('消息记画:时刻、SVG 停在哪、几笔(旧的 path 读成一笔)、截图、那段话', m?.lecture?.marks?.length === 2 && m.lecture.marks[0].atMs === 26_000 && m.lecture.marks[0].svgMs > 1000 && m.lecture.marks[0].strokes.length === 2 && m.lecture.marks[0].strokes[0].length === 11 && m.lecture.marks[0].image === shotPath && m.lecture.marks[1].strokes.length === 1 && m.lecture.marks[1].strokes[0].length === 20 && (m.lecture.marks[0].text ?? '').startsWith('0:26 画的'), JSON.stringify(m?.lecture?.marks?.[0]).slice(0, 300));
   const kd = (await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { job: string; lecture?: { bundle: string; title: string } }[] };
@@ -98,7 +100,7 @@ try {
   const r2 = await send({ text: '还有呢', thread });
   await wait();
   const run2 = await readRunFile(ctx.ws, 'math-tutor', date, (r2.json as { job: string }).job);
-  check('同一话题再问:普通的一条,不再带 lecture:', r2.status === 202 && !(run2?.prompt ?? '').includes('  lecture:'));
+  check('同一话题再问:页上还是小课堂,孩子做的不再说看了多久;课里的每句给过了不再给', r2.status === 202 && (run2?.prompt ?? '').includes('    底: "小课堂《13 − 8 破十法》') && !(run2?.prompt ?? '').includes('看完了小课堂') && !(run2?.prompt ?? '').includes('<page id="小课堂"'));
 
   // 问过以后再看一遍又画了:同一话题下一条带上新画的
   const again = { bundle: BUNDLE, watchedMs: 30_000, finished: false, pauses: 1, marks: [{ atMs: 40_000, strokes: [ring(600, 160, 40, 18)] }] };
@@ -108,7 +110,7 @@ try {
   const j3 = (r3.json as { job: string; thread: string }).job;
   const m3 = (await readIndex(ctx.ws, 'math-tutor', date)).messages.find((x) => x.job === j3);
   const p3 = (await readRunFile(ctx.ws, 'math-tutor', date, j3))?.prompt ?? '';
-  check('再看一遍的画:同一话题、记 again 与新画的、上下文包 watched 说又看了一遍、marks 一处', r3.status === 202 && (r3.json as { thread: string }).thread === thread && m3?.lecture?.again === true && m3.lecture.marks?.length === 1 && p3.includes('    watched: "又看了一遍,看到 0:30,停过 1 次,画了 1 处"') && p3.includes('      - "0:40 画的,'), p3.slice(p3.indexOf('  lecture:'), p3.indexOf('  lecture:') + 900));
+  check('再看一遍的画:同一话题、记 again 与新画的、孩子做的说又看了一遍、画的一处', r3.status === 202 && (r3.json as { thread: string }).thread === thread && m3?.lecture?.again === true && m3.lecture.marks?.length === 1 && p3.includes('      - "又看了一遍小课堂,看到 0:30,停过 1 次,停住画了 1 处"') && p3.includes('      - "画的:0:40 画的,'), p3.slice(p3.indexOf('  board:'), p3.indexOf('  board:') + 900));
 
   const r5 = await send({ text: '我又看了一遍', thread, lecture: { bundle: BUNDLE, watchedMs: 46_600, finished: true, pauses: 0, log: [{ t: -50_000, pos: 0, play: true }, { t: -3_000, pos: 46_600, play: false }] } });
   await wait();
@@ -139,7 +141,7 @@ try {
   const j4 = (r4.json as { job: string }).job;
   const m4 = (await readIndex(ctx.ws, 'math-tutor', date)).messages.find((x) => x.job === j4);
   const p4 = (await readRunFile(ctx.ws, 'math-tutor', date, j4))?.prompt ?? '';
-  check('视频的画:上下文包 source: video、photos: 带截图、marks: 说那时在讲哪句与截图是第几张', r4.status === 202 && p4.includes(`    source: "video ${VID}"`) && p4.includes(`  photos:\n    - "${shotPath}"`) && p4.includes('      - "0:12 画的,那时在讲『分完了,每人 4 块,一样多。这就是平均分。』;画在截图上(photos 第 1 张)"'), p4.slice(0, 1500));
+  check('视频的画:底是视频的小课堂、截图附给老师、画的那一处说那时在讲哪句与截图是第几张图', r4.status === 202 && p4.includes('    底: "小课堂《平均分:一个一个轮着分》(视频,0:18;') && imgs('为什么要轮着分') === 1 && p4.includes('      - "画的:0:12 画的,那时在讲『分完了,每人 4 块,一样多。这就是平均分。』;截图附在这一轮(第 1 张图)"'), p4.slice(0, 1500));
   check('消息记 lecture.video 与画的截图;消息的 photos 不记截图', m4?.lecture?.video === true && m4.lecture.marks?.[0].image === shotPath && !m4.photos, JSON.stringify(m4?.lecture));
   const kd4 = (await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { job: string; lecture?: { video?: boolean; marks?: { image?: string; text?: string }[] } }[] };
   const kl4 = kd4.messages.find((x) => x.job === j4)?.lecture;

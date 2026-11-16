@@ -5,7 +5,7 @@
  * 正文取自 kidSource:带卡 / 带固定段的顶层文本段 + 最后一段(老师板书之后又用了工具也不丢)。
  */
 import { stripSecrets } from '../board/cards/index.ts';
-import { type Bookkeeping, type ConversationMessage, type LessonAct, type LineAct } from '../schema/index.ts';
+import { type ActivityBase, type Bookkeeping, type ConversationMessage, type LessonAct, type LineAct } from '../schema/index.ts';
 import { BOOK_TOC } from '../chalk/index.ts';
 import { parseBoard } from '../board/parse.ts';
 import { threads, type CardAssets, type CardStates } from '../schema/index.ts';
@@ -111,7 +111,7 @@ export interface KidMessage {
   /** 这一轮是实时的:讲稿不配音、嘴照念;不出卡的一轮板上留讲稿的字,还在跑时有句就出节 */
   live?: true;
   /** 话题第一条:这一节课铺哪种页(课本、孩子拍的作业;一节课的样子另取,/api/kid/lesson) */
-  base?: 'textbook' | 'photo';
+  base?: ActivityBase;
   /** 这节课一直听(话题第一条记的,activity 头上 listen: open):孩子端回到这节课照它换 */
   listen?: 'open';
 }

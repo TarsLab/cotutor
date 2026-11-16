@@ -36,6 +36,8 @@ export interface SlateInput {
   now: number;
   /** 这一轮附了窗里的图(舞台交来的,孩子眼前那一块) */
   shot?: boolean;
+  /** 孩子这一条带来的、板的日志里没有的(小课堂:看的情况、画的几处),接在「孩子做的」最前面 */
+  did?: readonly string[];
 }
 
 const ago = (ms: number): string => `${Math.max(1, Math.round(ms / 1000))} 秒前`;
@@ -89,7 +91,7 @@ export function slateOf(x: SlateInput): NonNullable<ContextPack['slate']> {
   x.events.forEach((e, i) => { if (e.k === 'turn') from = i + 1; });
   const since = x.events.slice(from);
   const picked = since.filter(onBase).map((e) => e.text);
-  const did = [pickLine(picked.filter((t) => !isEnglish(t)), '笔顺'), pickLine(picked.filter(isEnglish), '单词')].filter((s): s is string => Boolean(s));
+  const did = [...(x.did ?? []), pickLine(picked.filter((t) => !isEnglish(t)), '笔顺'), pickLine(picked.filter(isEnglish), '单词')].filter((s): s is string => Boolean(s));
   // 页上写画的:几笔(笔画本身看图)、擦没擦过
   const inks = since.filter((e): e is BoardEvent & { k: 'ink' } => e.k === 'ink' && e.base === base);
   const wiped = inks.map((e) => Boolean(e.wipe)).lastIndexOf(true);

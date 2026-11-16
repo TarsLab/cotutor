@@ -93,7 +93,7 @@ export class Turns {
         // 收尾:整块出的运行时、或流式时没发出来的最后几句,从正式的一节补上
         const m = index.messages.find((x) => x.job === job) ?? (await readIndex(runner.ws, tutor, started.date)).messages.find((x) => x.job === job);
         const sec = m?.section;
-        if (sec) this.deps.lines(job, sec.lines.map((l, i) => ({ i, text: l.text, ...lineFlags(l, sec.cards) })));
+        if (sec) this.deps.lines(job, sec.lines.map((l, i) => ({ i, text: l.text, ...lineFlags(l) })));
         else if (m?.result === 'error') this.deps.failed(job, m.error ?? '');
       }, () => { this.deps.failed(job, ''); })
       .finally(() => {

@@ -732,7 +732,21 @@ export function reelFrameAt(reel: Reel, t: number): ReelFrame {
   let lesson: unknown = null;
   for (const x of reel.lessons ?? []) { if (x.at > t) break; lesson = x.l; }
   if (!lesson && reel.lessons?.length) lesson = reel.lessons[0].l;
-  return { sections, saying, clip, last, cards, notes, wait: w ? { job: w.job, ms: t - w.from } : null, gap, asking, stage: st ? { job: st.job, card: st.card } : null, lesson, thinking, away, lecture: reelLectureAt(reel.lectures ?? [], t), hold, unclear, typing, photoScreen, view, scroll, miss };
+  const lecture = reelLectureAt(reel.lectures ?? [], t);
+  // 在看小课堂:页上是那堂课(2026-11-17 起小课堂是一节课里的一页;第一遍看的时候第一条还没发,孩子端还没记一节课的样子,照这堂课铺一页)
+  if (lecture) lesson = lectureLesson(lesson, lecture);
+  return { sections, saying, clip, last, cards, notes, wait: w ? { job: w.job, ms: t - w.from } : null, gap, asking, stage: st ? { job: st.job, card: st.card } : null, lesson, thinking, away, lecture, hold, unclear, typing, photoScreen, view, scroll, miss };
+}
+
+/** 看小课堂的那一刻一节课的样子:记下的那份翻到小课堂那一页(没有就加上它);还没记过就只有它一页(同 src/schema/lesson.ts 的形状) */
+function lectureLesson(lesson: unknown, x: NonNullable<ReelFrame['lecture']>): unknown {
+  const l = lesson as { pages?: { id: string; kind: string; bundle?: string }[]; at?: string | null } | null;
+  const page = { id: '小课堂', kind: 'lecture', title: x.title || x.bundle, bundle: x.bundle, video: x.video, ms: 0, pick: false, teacher: { marks: [], strips: [] }, kid: { ink: [], stripInk: {}, revealed: [], picked: [], turns: {} }, open: [] };
+  if (l && Array.isArray(l.pages)) {
+    const has = l.pages.some((p) => p.kind === 'lecture' && p.bundle === x.bundle);
+    return { ...l, pages: has ? l.pages : [...l.pages.filter((p) => p.id !== '小课堂'), page], at: '小课堂' };
+  }
+  return { v: 1, pages: [page], at: '小课堂', look: null, view: null, strip: null, jobs: [] };
 }
 
 /** 这一刻在不在看小课堂:最近一条看的记录;在放的按真实时间往前推(推不过下一条) */

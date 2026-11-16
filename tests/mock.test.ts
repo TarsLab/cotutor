@@ -68,7 +68,7 @@ interface Day { messages: Msg[]; pending: string | null }
   await m.kidSend('math-tutor', { text: '继续' });
   await m.settle();
   const md5 = (await get('/api/kid/conversations/math-tutor/today')).json as Day;
-  check('「继续」空文本也行,空文本没 action 400;第三节有小课堂卡', md5.messages[2].question === '继续' && md5.messages[2].section?.cards.some((c) => c.kind === 'lecture') === true && (await m.kidSend('math-tutor', { text: '  ' })).status === 400);
+  check('「继续」空文本也行,空文本没 action 400;第三节有卡', md5.messages[2].question === '继续' && (md5.messages[2].section?.cards.length ?? 0) > 0 && (await m.kidSend('math-tutor', { text: '  ' })).status === 400);
   await m.kidSend('english-tutor', { text: 'apple' });
   await m.settle();
   const rd = ((await get('/api/kid/conversations/english-tutor/today')).json as Day).messages[0];
@@ -110,11 +110,7 @@ interface Day { messages: Msg[]; pending: string | null }
   const toggled = [...js.matchAll(/classList\.(?:add|toggle|remove)\('([\w-]+)'/g)].map((x) => x[1]);
   const clash = [...new Set(toggled.filter((c) => bare.has(c)))];
   check('页面挂的状态类不与主题的裸类名撞(主题认得 .pen)', bare.has('pen') && toggled.length > 10 && clash.length === 0, clash.join());
-  // 小课堂卡:数学老师第三节;课包样本在仓库里,下发时补 ready 与那一段的起止;舞台包与课包路由
-  const md6 = (await get('/api/kid/conversations/math-tutor/today')).json as Day;
-  const sc = md6.messages.map((x) => x.section).find((x) => x && x.cards.some((c) => c.kind === 'lecture'))!;
-  const si = sc ? sc.cards.findIndex((c) => c.kind === 'lecture') : -1;
-  check('小课堂卡下发时带 ready 与那一段的起止;讲稿 [[play]] 锚到它', si >= 0 && sc.cards[si].props.ready === true && sc.cards[si].props.start === 0 && Number(sc.cards[si].props.end) > 0 && sc.lines.some((l) => l.cues.some((c) => c.name === 'play' && c.card === si)), JSON.stringify(sc.cards[si]));
+  // 课包样本在仓库里(小课堂是一节课里的一页,舞台照课包画);舞台包与课包路由
   check('课包文件能取;没有的 404', (await get('/api/bundles/2026-09-04-guilv5/manifest.json')).status === 200 && (await get('/api/bundles/nope/scene.json')).status === 404);
   const { stageBuilt } = await import('../src/app/http/stage.ts');
   if (stageBuilt()) check('舞台包能取', (await get('/stage/')).status === 200 && (await get('/stage/stage.js')).file !== undefined);

@@ -48,6 +48,18 @@ export async function listActivities(agentsDir: string, tutor?: string, opts: { 
   return out;
 }
 
+/**
+ * 小课堂按钮没写 `activity:` 时看完照哪个 activity 聊:这位老师家里头上写着 base: lecture 的那个(按名字排第一个;2026-11-17 起不再照名字「小课堂」找)。
+ * 没有 → null(首页检查报,孩子端不出这个按钮)
+ */
+export async function lectureActivity(root: string, tutor: string): Promise<string | null> {
+  for (const r of await listActivities(join(root, 'agents'), tutor)) {
+    const text = await readFile(r.file, 'utf8').catch(() => '');
+    if (parseActivity(text).activity.base === 'lecture') return r.name;
+  }
+  return null;
+}
+
 /** workspace 里那份的位置(就是这个名字,不认改过的名;装、升级、写都用它) */
 export function activityFile(root: string, tutor: string, name: string): string {
   return join(root, 'agents', tutor, ACTIVITIES_DIR, `${name}.md`);

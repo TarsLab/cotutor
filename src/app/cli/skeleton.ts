@@ -97,12 +97,12 @@ export interface ConfigTemplateInput {
  *  不写 avatar:三门主科用包里的出厂头像(src/app/http/avatars.ts) */
 const TUTOR_DEFAULTS: Record<string, { display: string; description?: string; subject?: string; hidden?: boolean; runtime?: string; enabled?: boolean; cards?: BoardCardKind[]; policy?: { effort?: 'low' | 'medium' | 'high'; tools?: 'on' } }> = {
   // 数学多想一会儿:算错的代价大(别的老师用缺省 low);走 qwen3.8-max(同语文老师)。运行时 api = 应用直连百炼(2026-10-31 起出厂缺省)
-  'math-tutor': { display: '数学老师', description: '数学老师。孩子拍数学作业、预习、复习都找它', subject: '数学', runtime: 'api', cards: ['text', 'choice', 'image', 'lecture', 'code'], policy: { effort: 'medium' } },
+  'math-tutor': { display: '数学老师', description: '数学老师。孩子拍数学作业、预习、复习都找它', subject: '数学', runtime: 'api', cards: ['text', 'choice', 'image', 'code'], policy: { effort: 'medium' } },
   // 语文老师走 qwen3.8-max(看图说话的 activity eval 在它上面验证;2026-10-31 Ray 上 API 与 Qwen Code 对照过)
-  'chinese-tutor': { display: '语文老师', description: '语文老师。生字、词语、课文、看图说话都找它', subject: '语文', runtime: 'api', cards: ['text', 'read', 'choice', 'image', 'tianzige', 'lecture'] },
+  'chinese-tutor': { display: '语文老师', description: '语文老师。生字、词语、课文、看图说话都找它', subject: '语文', runtime: 'api', cards: ['text', 'read', 'choice', 'image', 'tianzige'] },
   // 英语也走 api(qwen3.8-max):2026-10-31 api-flash 真跑英语四个 activity,13 次里 5 次第一轮只出一张拍照卡、没有讲稿(实时页嘴没话可念);max 在 Ray 上都过。
   // 想省钱改 api-flash,先跑 activity eval。medium 是 2026-10-27 给 flash 加的(low 偶尔只出卡或念规则,详见年级教学包验证记录)
-  'english-tutor': { display: '英语老师', description: '英语老师。单词、句子、课文、口语课都找它', subject: '英语', runtime: 'api', cards: ['text', 'read', 'choice', 'image', 'word', 'lecture'], policy: { effort: 'medium' } },
+  'english-tutor': { display: '英语老师', description: '英语老师。单词、句子、课文、口语课都找它', subject: '英语', runtime: 'api', cards: ['text', 'read', 'choice', 'image', 'word'], policy: { effort: 'medium' } },
 };
 
 /** cotutor.json 模板:只在文件不存在时写入;政策文件永不自动重建或覆盖(家长的决定不由机器代做)。 */

@@ -27,7 +27,7 @@ export interface CardKind<P = Record<string, unknown>, S = unknown> {
   assets?(props: P): { file: string; text: string }[];
 }
 
-/** 课包 / 视频小课堂的 id(bundles/<id>/、lectures/<id>/):lecture 卡、画板的底、首页的小课堂按钮共用 */
+/** 课包 / 视频小课堂的 id(bundles/<id>/、lectures/<id>/):首页的小课堂按钮、一节课里的小课堂页共用 */
 export const BUNDLE_ID_RE = /^[a-z0-9][a-z0-9-]{0,80}$/;
 
 /** 围栏正文 → 非空行(各自 trim) */

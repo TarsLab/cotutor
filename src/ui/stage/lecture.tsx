@@ -6,15 +6,15 @@
  * 能拖到任意一刻(拖的时候不出声),气口不停,放到结尾一次就算看完(发给页面)。
  * 画:停住了就能在画面上画,停在同一刻画的几笔算一处;记那一刻(课里的毫秒)与几笔(课包坐标:屏幕点经 getScreenCTM 反算到 SVG,再减掉导出时的平移),
  * 每画一笔重截一张图(画面 + 这一刻的几笔,给老师看);进度条上那一刻留一个蓝色记号;画了、擦了都把整张单子发给页面(页面是画的主人,带给老师、画画的卡)。
- * 界面照原型:顶上回去 + 课名,中间画面,下面字幕、进度条(步骤点、画的记号、拖动、时间)、一行提示。没有错误文案:装不上就发 error。
- * 老师放课里的一段(板书上的小课堂卡,range):舞台的顶栏与字幕行是页面的,这里只有画面与进度条;从那一段的开头放(讲稿交来的自己放),
- * 放到那一段的末尾一次就停在末帧、发 done;放着 / 停着 / 放完都发 phase(页面字幕行显示课里那句)。iPad 不让出声就停着等孩子点「放这一段」。
+ * 界面照原型:顶上课名与画一画、擦掉,中间画面,下面字幕、进度条(步骤点、画的记号、拖动、时间)、一行提示。没有错误文案:装不上就发 error。
+ * 2026-11-17(阶段 5)起小课堂是一节课里的一页:舞台照一节课的状态装它(main.tsx),回首页、老师的牌、按住说话都是页面的,这里没有回去的钮。
+ * 老师放课里的一段(讲稿 [[看 0:19–0:30]] 落在这一页上,look.at):页面念完那句发 play(look 的 n),从那一段的开头放,
+ * 放到那一段的末尾一次就停在末帧、发 phase done(嘴接着念)。iPad 不让出声就停着等孩子点「放这一段」。
  */
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { frameAt } from '../../chalk/index.ts';
 import { mountBaked } from './chalk/render.ts';
 import { MARK_MAX, MARK_MAX_POINTS, MARK_MAX_STROKES, MARK_STROKE_POINTS, clockLabel, lectureAt, lectureClock, lectureNext, type LectureClock } from '../../board/lecture.ts';
-import { LOGO_BIG, logoBody } from '../shared/logo.ts';
 import { loadBaked, loadBundle } from './bundle.ts';
 
 /** 一处画(页面与舞台之间传的样子):课里的时刻、SVG 停在哪(画缩略图)、停在这一刻画的几笔(课包坐标;视频是视频自己的像素坐标) */
@@ -79,33 +79,22 @@ export interface LectureStageProps {
   view?: boolean;
   onMarks(marks: StageMark[]): void;
   onFinished(w: LectureWatch): void;
-  onClose(w: LectureWatch): void;
-  /** 放完了,孩子点「去问老师」;不给就不画这个按钮 */
-  onAsk?(w: LectureWatch): void;
   onError(message: string): void;
-  /** 板书上的小课堂卡:只放这一段(毫秒);有它就是卡的样子(没有顶栏、字幕行、提示,只看不画) */
-  range?: { start: number; end: number };
-  /** 讲稿交来的:装好就放 */
-  autoplay?: boolean;
-  /** 卡的样子:放着 / 停着 / 那一段放完,带课里那一句(页面的字幕行) */
-  onPhase?(phase: 'drawing' | 'paused' | 'done', line: string, step: number, total: number): void;
+  /** 老师让看的那一段(一节课的 look.at,课里的毫秒) */
+  look?: [number, number] | null;
+  /** 页面要放老师那一段了(look 的 n;变了就从那一段开头放) */
+  play?: number;
+  /** 老师那一段放完了(停在末帧) */
+  onRangeDone?(): void;
   /** 视频小课堂(第 4 步):bundleUrl 是 /api/kid/lectures/<id>/,下面有 lecture.json(一句一段)与 video.mp4 */
   video?: boolean;
   /** 看的过程:放 / 停 / 拖完 / 跳 / 放完 / 回去,一次一条(录像用) */
   onLog?(e: WatchEntry): void;
   /** 家长看录像:只看,时钟跟着页面(follow) */
   follow?: boolean;
-  /** 左上返回胶囊上的老师:填他的颜色、logo 后面接首字,同老师页的 #back(src/ui/kid/tutor-face.ts 的 backTint);不给浅底只放 logo */
-  back?: LectureBack | null;
+  /** 左手(页面的老师牌在右边):竖栏挪到左边 */
+  left?: boolean;
 }
-
-export interface LectureBack {
-  color: string;
-  initial: string;
-}
-
-/** 左上返回胶囊里的 logo(和老师页的「‹ logo」同一颗:brand.ts 的 BACK_LOGO,28 px 大号那档;单色、不动) */
-const BACK_LOGO_BODY = logoBody(LOGO_BIG, { outer: 'currentColor', inner: 'currentColor' });
 
 /** 视频小课堂的时钟:服务端按 lecture.md 拼好的一句一段 */
 async function loadVideoClock(url: string): Promise<LectureClock> {
@@ -137,18 +126,18 @@ const INK = '#2f6fd6';
 const SEG_GAP = 3;
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
-export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(function LectureStage({ bundleUrl, title, marks: initialMarks, at: rawAt, view: rawView = false, onMarks, onFinished, onClose, onAsk, onError, range, autoplay = false, onPhase, video = false, onLog, follow = false, back = null }, ref): JSX.Element {
-  const card = range !== undefined;
-  const view = rawView || card || follow;
+export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(function LectureStage({ bundleUrl, title, marks: initialMarks, at: openAt, view: rawView = false, onMarks, onFinished, onError, look = null, play, onRangeDone, video = false, onLog, follow = false, left = false }, ref): JSX.Element {
+  const view = rawView || follow;
   /** 录像跟着放:倍速 */
   const rate = useRef(1);
-  const openAt = card ? range.start : rawAt;
+  /** 老师让放的那一段(look,页面发 play 才放);放完停在末帧,只停这一次 */
+  const [range, setRange] = useState<{ start: number; end: number } | null>(null);
   const [clock, setClock] = useState<LectureClock | null>(null);
   const segs = useMemo(() => (clock ? clock.segments.map((x) => ({ i: x.index, start: x.start, len: x.len })) : []), [clock]);
   const [now, setNow] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [started, setStarted] = useState(openAt !== undefined);
-  /** 那一段放完过(卡的样子):只停一次,之后孩子要接着放就接着放 */
+  /** 那一段放完过:只停一次,之后孩子要接着放就接着放 */
   const rangeDone = useRef(false);
   /** iPad 不让出声(play() 被拒):停下,等孩子点一下 */
   const blocked = useRef(false);
@@ -319,7 +308,7 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
         // 视频:时钟就是视频自己的;课包:配音在放跟着配音走,没在放按真实时间往前走(看录像跟页面的钟,不跟声音)
         const v = vid.current;
         let next = v ? (v.ended ? clock.total : Math.min(clock.total, v.currentTime * 1000)) : lectureNext(clock, t.current, dt, follow ? null : voiceOf(p));
-        // 卡的样子:放到那一段的末尾停在末帧(退 1 毫秒,不露下一段的头一笔),只停这一次
+        // 老师那一段:放到末尾停在末帧(退 1 毫秒,不露下一段的头一笔),只停这一次
         if (range && !rangeDone.current && t.current < range.end && next >= range.end) {
           next = Math.max(range.start, range.end - 1);
           hush();
@@ -343,7 +332,7 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [clock, playing, paint, syncAudio, onFinished]);
+  }, [clock, playing, paint, syncAudio, onFinished, range]);
 
   const toggle = useCallback(() => {
     if (!clock) return;
@@ -358,29 +347,28 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
     setPlaying(true);
   }, [clock, playing, paint, syncAudio]);
 
-  // ---- 卡的样子(老师放课里的一段) ----
-  const phaseOf = useRef(onPhase);
-  phaseOf.current = onPhase;
-  const sayPhase = (c: LectureClock, phase: 'drawing' | 'paused' | 'done'): void => {
-    const i = lectureAt(c, t.current).index;
-    phaseOf.current?.(phase, c.segments[i]?.line ?? '', i + 1, c.segments.length);
-  };
+  // ---- 老师放课里的一段:页面念完那句发 play(look 的 n 变了)→ 从那一段开头放;放到末尾停住,告诉页面 ----
   const onRangeEnd = useRef(() => {});
-  onRangeEnd.current = () => { if (clock) sayPhase(clock, 'done'); };
-  // 讲稿交来的:装好就从那一段开头放
+  onRangeEnd.current = () => onRangeDone?.();
+  const played = useRef<number | undefined>(undefined);
   useEffect(() => {
-    if (clock && card && autoplay) toggle();
-    // 只在装好时一次
+    if (!clock || play === undefined || play === played.current || !look) return;
+    played.current = play;
+    const r = { start: Math.max(0, Math.min(look[0], clock.total)), end: Math.min(look[1], clock.total) };
+    if (!(r.end > r.start)) { onRangeEnd.current(); return; }
+    rangeDone.current = false;
+    setRange(r);
+    setStarted(true);
+    setFresh(null);
+    setFull(null);
+    blocked.current = false;
+    paint(clock, r.start);
+    seg.current = -1;
+    syncAudio(clock, r.start, true);
+    setPlaying(true);
+    // look 跟着 play 一起来;只在 play 变了时放
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clock]);
-  // 放着 / 停着、换了一句:告诉页面(字幕行);那一段放完的 done 在时钟里说
-  const atIndex = clock ? lectureAt(clock, now).index : -1;
-  useEffect(() => {
-    if (!clock || !card || !started) return;
-    if (!playing && rangeDone.current && Math.abs(t.current - (range.end - 1)) < 2) return;
-    sayPhase(clock, playing ? 'drawing' : 'paused');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clock, playing, atIndex, started]);
+  }, [clock, play]);
   // 录像:页面的时钟是准的;差 300 毫秒以上(拖了、压过一段空白)就挪过去,放着就自己按倍速走(画面每帧都画)。
   // 课还没装好(clock 还没有:视频的元数据、课包在路上)时来的先记着,装好了照最后那条对上——
   // 2026-10-19:家长在录像停着时点「圈了一处」(现在叫「画了一处」),播放器这时才打开,页面只发那一条,丢了就一直停在 0:00、没有圈
@@ -634,7 +622,7 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
   };
   const paused = Boolean(clock) && started && !playing;
   /** 放完了停在最后一帧(孩子的那份):按钮晚一点淡入,不打断孩子还在听、还在想的那一下 */
-  const ended = paused && !card && !follow && !view && Boolean(clock) && now >= clock!.total;
+  const ended = paused && !follow && !view && Boolean(clock) && now >= clock!.total;
   useEffect(() => {
     if (!ended) { setEndUi(false); return; }
     const id = setTimeout(() => setEndUi(true), END_UI_MS);
@@ -652,14 +640,8 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
   const again = ended && endUi;
 
   return (
-    <div className={'lc' + (card ? ' lc-card' : ' lc-full') + (video ? ' lc-vid' : '')}>
-      {/* 左上「‹ logo 首字」浮在上面,和老师页的返回胶囊一个样子(放 logo、不放老师头像,填老师的颜色、接首字) */}
-      {!card && !follow && <button type="button" className={'lc-back' + (back ? ' lc-tinted' : '')} style={back ? ({ '--bk': back.color } as CSSProperties) : undefined} aria-label="回首页" onClick={() => { log(false); onClose({ ...watch.current }); }}>
-        <i className="lc-back-ic"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 5l-7 7 7 7" /></svg></i>
-        <svg className="lc-logo" width="28" height="28" viewBox="0 0 100 100" aria-hidden="true" dangerouslySetInnerHTML={{ __html: BACK_LOGO_BODY }} />
-        {back && <span className="lc-ini" aria-hidden="true">{back.initial}</span>}
-      </button>}
-      {!card && <div className={'lc-rail' + (follow ? '' : ' lc-under')}>
+    <div className={'lc lc-full' + (left ? ' lc-left' : '') + (video ? ' lc-vid' : '')}>
+      <div className={'lc-rail' + (follow ? '' : ' lc-under')}>
         <div className="lc-name"><span className="lc-tag">小课堂</span><span className="lc-title">{title}</span></div>
         {!view && <div className="lc-tools">
           <button type="button" className={'lc-tool' + (paused && pen ? ' on' : '')} aria-pressed={paused && pen} disabled={!clock || !started} onClick={penTool}>
@@ -671,18 +653,18 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
             擦掉
           </button>
         </div>}
-      </div>}
+      </div>
       <div className={'lc-canvas' + (penOn ? ' lc-pen' : '')} onPointerDown={penDown} onPointerMove={penMove} onPointerUp={penUp} onPointerCancel={penUp}>
         <div className="lc-host" ref={host} />
         {!clock && <div className="stage-wait">课还在路上…</div>}
         {clock && !started && !follow && (
           <button type="button" className="lc-start" onClick={toggle}>
             <svg width="28" height="28" viewBox="0 0 18 18"><path d="M5 3.5v11l9-5.5z" fill="currentColor" /></svg>
-            {card ? '放这一段' : '开始看'}
+            开始看
           </button>
         )}
       </div>
-      {!card && <div className={'lc-line' + (fresh !== null || full ? ' ink' : '')}>{say}</div>}
+      <div className={'lc-line' + (fresh !== null || full ? ' ink' : '')}>{say}</div>
       <div className="lc-bar">
         <button type="button" className={'lc-play' + (again ? ' again' : paused && clock && now < clock.total ? ' go' : '')} aria-label={playing ? '暂停' : '播放'} onClick={toggle} disabled={!clock}>
           {playing
@@ -690,7 +672,7 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
             : again
               ? <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3.5 10a6.5 6.5 0 1 0 1.9-4.6" /><path d="M3.5 3v3.5H7" /></svg>
               : <svg width="20" height="20" viewBox="0 0 18 18"><path d="M5 3.5v11l9-5.5z" fill="currentColor" /></svg>}
-          {again ? <span>再看一遍</span> : paused && clock && now < clock.total ? <span>{card && !rangeDone.current ? '放这一段' : '接着看'}</span> : null}
+          {again ? <span>再看一遍</span> : paused && clock && now < clock.total ? <span>{range && !rangeDone.current ? '放这一段' : '接着看'}</span> : null}
         </button>
         <div className="lc-track" ref={track} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
           <div className="lc-segs">
@@ -708,16 +690,9 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
           <span>{clockLabel(now)} / {clock ? clockLabel(clock.total) : '0:00'}</span>
           {marks.length ? <small>画了 {marks.length} 处</small> : null}
         </div>
-        {/* 「看完就能问老师」与「去问老师」占同一个位置:放完了话音落了一会儿才换 */}
-        {!card && !follow && <div className="lc-slot">
-          {!ended
-            ? <span className="lc-hint">看完就能问老师</span>
-            : again && onAsk
-              ? <button type="button" className="lc-askbtn lc-in" onClick={() => { log(false); onAsk({ ...watch.current }); }}>
-                  去问老师
-                  <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="m7.5 4 6 6-6 6" /></svg>
-                </button>
-              : null}
+        {/* 「看完就能问老师」:看完了(话音落了一会儿)换成「有不懂就问老师」(问老师是页面的按住说话、一直听) */}
+        {!follow && !view && <div className="lc-slot">
+          <span className={'lc-hint' + (again ? ' lc-in' : '')}>{watch.current.finished ? '有不懂就问老师' : '看完就能问老师'}</span>
         </div>}
       </div>
     </div>

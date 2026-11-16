@@ -101,10 +101,10 @@ const tutors: Record<string, HomeTutorInfo> = {
   const pv = kidButtons(buttons, { keepBriefs: true });
   check('家长预览留讲法', pv.map((b) => b.id).join() === '0,1' && JSON.stringify(pv).includes('念给他听'));
   const acts = [{ kind: 'lecture', label: '分一分', bundle: 'b1' }, { kind: 'lecture', label: '看图', bundle: 'b1', activity: '看图说话' }, { kind: 'activity', label: '预', activity: '预习', params: {} }] as never[];
-  const only = (names: string[]) => kidButtons(acts, { activity: (n) => names.includes(n) }).map((b) => b.label).join();
-  check('activity 文件不在的按钮不出:小课堂看完照「小课堂」,挂了的照挂的', only(['小课堂', '看图说话', '预习']) === '分一分,看图,预' && only(['看图说话']) === '看图' && only(['小课堂']) === '分一分');
+  const only = (names: string[], lectureActivity: string | null = '小课堂') => kidButtons(acts, { activity: (n) => names.includes(n), lectureActivity }).map((b) => b.label).join();
+  check('activity 文件不在的按钮不出:小课堂看完照这位老师 base: lecture 的那个(lectureActivity,不照名字),挂了的照挂的;家里没有就不出', only(['小课堂', '看图说话', '预习']) === '分一分,看图,预' && only(['看图说话']) === '看图' && only(['小课堂']) === '分一分' && only(['看完再问', '看图说话'], '看完再问') === '分一分,看图' && only(['小课堂', '看图说话'], null) === '看图');
   const seen: string[] = [];
-  kidButtons([{ kind: 'activity', label: '出题', activity: '预习', params: { 范围: '春风' } }, { kind: 'lecture', label: '课', bundle: 'b1' }] as never[], { activity: (n, p) => { seen.push(n + JSON.stringify(p)); return true; } });
+  kidButtons([{ kind: 'activity', label: '出题', activity: '预习', params: { 范围: '春风' } }, { kind: 'lecture', label: '课', bundle: 'b1' }] as never[], { activity: (n, p) => { seen.push(n + JSON.stringify(p)); return true; }, lectureActivity: '小课堂' });
   check('判断用不用得了时带上按钮的参数(小课堂挂的不带)', seen.join(' ') === '预习{"范围":"春风"} 小课堂{}', seen.join(' '));
   const looked = kidButtons([{ kind: 'activity', label: '口语', activity: '口语课', params: {} }, { kind: 'activity', label: '预', activity: '预习', params: {} }] as never[], { look: (n) => activityLook(n === '口语课' ? { base: 'photo', listen: 'open' } : { base: '别的' }) });
   check('activity 按钮带上铺哪种页、一直听不听(同方砖;认不得的 base 不带)', JSON.stringify(looked) === '[{"id":0,"kind":"start","label":"口语","base":"photo","listen":"open"},{"id":1,"kind":"start","label":"预"}]', JSON.stringify(looked));

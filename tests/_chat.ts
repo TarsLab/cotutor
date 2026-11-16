@@ -16,7 +16,7 @@ export function chatActivity(display = '老师'): string {
     '---',
     `name: ${CHAT}`,
     'description: 测试用:孩子说什么就聊什么',
-    'cards: text read choice image tianzige word lecture photo code',
+    'cards: text read choice image tianzige word photo code',
     '---',
     '',
     '## 老师怎么带',

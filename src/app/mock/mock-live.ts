@@ -2,12 +2,12 @@
  * mock 的实时老师(`cotutor mock`;老师都走实时):不经百炼、不花钱看实时老师页。
  * 协议同 src/runtime/live/call.ts:松手(或打字、拍照、交卡)马上接住一句 → 发一条消息给 mock 的老师(照脚本出节,带 live)→ 老师写完,讲稿一句一句「念」:
  * 字幕 + 静音的声音(按字数估长短,孩子端照常排着放),read 按孩子端的排法算好时刻发;按下 = 打断(清了,没念的不念)。
- * 讲稿的 [[play]]:那句念完先停,孩子端放完小课堂那一段(staged)再接着念。没有转写:按住说的当成「(按住说的话)」。
+ * 小课堂上放一段的那句([[看 0:19–0:30]] 落在小课堂页上):念完先停,孩子端放完那一段(staged)再接着念。没有转写:按住说的当成「(按住说的话)」。
  */
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { playsLecture } from '../../board/parse.ts';
-import { lineDurationMs, plainLine, type BoardCard, type BoardLine } from '../../board/presentation.ts';
+import { lineDurationMs, plainLine, type BoardLine } from '../../board/presentation.ts';
 import { LEAD_MS } from '../../runtime/delivery/playback.ts';
 import { acceptWebSocket, isUpgrade } from '../ws/ws.ts';
 import type { KidDay } from '../http/app.ts';
@@ -60,17 +60,17 @@ export function mockLiveUpgrade(mock: Mock) {
       if (my !== turn) return;
       const day = (await mock.route('GET', `/api/kid/conversations/${tutor}/today`)).json as KidDay;
       const sec = day.messages.find((x) => x.job === job)?.section;
-      readFrom(job, sec?.lines ?? [], sec?.cards ?? [], 0, my);
+      readFrom(job, sec?.lines ?? [], 0, my);
     };
-    /** 讲稿一句一句「念」;[[play]] 那句念完先停,孩子端放完小课堂那一段(staged)再接着念 */
+    /** 讲稿一句一句「念」;放小课堂一段的那句([[看 0:19–0:30]])念完先停,孩子端放完那一段(staged)再接着念 */
     let rest: (() => void) | null = null;
-    const readFrom = (job: string, lines: BoardLine[], cards: BoardCard[], from: number, my: number): void => {
+    const readFrom = (job: string, lines: BoardLine[], from: number, my: number): void => {
       for (let i = from; i < lines.length; i++) {
         const text = plainLine(lines[i].text);
         const start = say('read', text);
-        const play = playsLecture(lines[i], cards);
+        const play = playsLecture(lines[i]);
         later(start - Date.now(), () => send({ t: 'read', job, line: i, text, ...(play ? { play: true } : {}) }));
-        if (play) { rest = () => { if (my === turn) readFrom(job, lines, cards, i + 1, my); }; return; }
+        if (play) { rest = () => { if (my === turn) readFrom(job, lines, i + 1, my); }; return; }
       }
     };
     const onText = (raw: string): void => {

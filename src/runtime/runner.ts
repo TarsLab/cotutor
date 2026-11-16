@@ -32,7 +32,7 @@ import { parseSections } from '../board/sections.ts';
 import { threadDigest } from './context/thread-digest.ts';
 import { beatTimings } from './journal/events.ts';
 import { type RunEvent, type RunEventEnvelope, type RunEventInput } from '../schema/index.ts';
-import { BOARD_CARD_KINDS, canonicalSubject, subjectLang, MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, VAULT_PACK_ROLES, isApiRuntime, resolvePolicy, type ContextPack, type ConversationIndex, type MemoryProposal, type PendingMemory, type ActivityRun, type ConversationMessage, type Focus, type MessageFrom, type MessageVia, type Policy, type Timing } from '../schema/index.ts';
+import { BOARD_CARD_KINDS, type Lesson, type LessonEvent, canonicalSubject, subjectLang, MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, VAULT_PACK_ROLES, isApiRuntime, resolvePolicy, type ContextPack, type ConversationIndex, type MemoryProposal, type PendingMemory, type ActivityRun, type ConversationMessage, type Focus, type MessageFrom, type MessageVia, type Policy, type Timing } from '../schema/index.ts';
 import { UsageError } from '../shared/errors.ts';
 import type { Workspace } from '../schema/index.ts';
 import { capturePathOk, readCardStates, readIndex, snapshotSources, writeIndex, writeRunFile } from './journal/store.ts';
@@ -52,8 +52,11 @@ import { photoPromptFrom, recognizeWith } from '../scenes/photo-words/recognize.
 import { readWords, startWords } from '../scenes/photo-words/store.ts';
 import { appendBoard, readBoard } from './journal/board-log.ts';
 import { boardPageSection, bookLesson, type BoardPageOpts, type BookBase } from '../board/board-page.ts';
-import { bookSlateParts, slateOf } from './context/board-pack.ts';
-import { BOOK_KIT, BOOK_TOC, bookCut, bookOps, bookSheets, bookView, kitOf, kitOps, kitParams, lessonBlocks, photoLocate, pickable } from '../chalk/index.ts';
+import { bookSlateParts, lessonSlateBits, slateOf } from './context/board-pack.ts';
+import { fitSection, lessonOpen, sectionActs, type LessonBook } from '../board/lesson-fit.ts';
+import { lessonPage, lessonStep } from '../board/lesson.ts';
+import { readLesson, updateLesson } from './journal/lesson-store.ts';
+import { BOOK_TOC, bookCut, bookSheets, bookView, kitOf, kitOps, kitParams, lessonBlocks, photoLocate, pickable } from '../chalk/index.ts';
 import { bookFile, bookIndex, listBooks, pickBook } from '../memory/textbook-pdf.ts';
 
 export class BusyError extends Error {
@@ -126,6 +129,8 @@ interface Active {
   live?: boolean;
   /** 板书落到板上之前替老师把住的(src/board/board-page.ts):以不以板为主、这块底是哪张照片 */
   board?: BoardPageOpts;
+  /** 课本做底:这一轮开始时这节课的样子(讲稿里的动作照它落到页上,src/board/lesson-fit.ts) */
+  lesson?: Lesson;
 }
 
 export type { PackReport } from '../memory/context.ts';
@@ -427,51 +432,59 @@ export class Runner {
         return { thread: b.thread, say: null, shot: true };
       }
       await appendBoard(ws, tutor, date, b.thread, { at: now.toISOString(), k: 'view', text, base: b.base });
+      await this.lessonEvent(ws, tutor, date, b.thread, b.base, { t: 'view', box: b.box as [number, number, number, number] });
       return { thread: b.thread, say: null, still: false };
     }
     if (typeof b.text !== 'string') return null;
     await appendBoard(ws, tutor, date, b.thread, { at: now.toISOString(), k: b.k, text: b.text, base: b.base });
-    if (book) return { thread: b.thread, say: b.k === 'reveal' ? null : b.text };
+    if (book) {
+      await this.lessonEvent(ws, tutor, date, b.thread, b.base, b.k === 'reveal' ? { t: 'reveal', text: b.text } : { t: 'pick', text: b.text });
+      return { thread: b.thread, say: b.k === 'reveal' ? null : b.text };
+    }
     // 揭开拼音:露出来就够了,嘴不念(他在自己认)
     if (b.k === 'reveal') return { thread: b.thread, say: null };
     const item = (await readWords(join(ws.root, b.base)))?.items.find((x) => x.text === b.text);
     return { thread: b.thread, say: item?.say?.trim() || b.text };
   }
 
+  /** 孩子在课本上做的事落进这节课的状态(src/board/lesson.ts);报来的是别的一课(他那头还没换过来)就不落 */
+  private async lessonEvent(ws: Workspace, tutor: string, date: string, thread: string, base: string, ev: LessonEvent): Promise<void> {
+    await updateLesson(ws, tutor, date, thread, (l) => (l.at === base ? lessonStep(l, ev) : l));
+  }
+
   /** 板书落到板上之前替老师把住的(src/board/board-page.ts);这一轮没定(工作台、旧路径)就原样 */
-  private fitBoard(section: BoardSection, active: Active): ReturnType<typeof boardPageSection> {
-    return active.board ? boardPageSection(section, active.board) : { section, dropped: [], unfound: [] };
+  private fitBoard(section: BoardSection, active: Active): ReturnType<typeof boardPageSection> & { why: string[] } {
+    const fit = active.board ? boardPageSection(section, active.board) : { section, dropped: [], unfound: [] };
+    // 讲稿里的动作落到页上(课本做底):照这一轮开始时这节课的样子,一个一个找框
+    const book = active.board?.book;
+    if (!book || !active.lesson) return { ...fit, why: [] };
+    const acts = fitSection(fit.section, active.lesson, { file: book.file, index: book.index });
+    return { ...fit, section: acts.section, why: acts.why };
   }
 
   /**
-   * 课本做底(activity 头上 base: textbook):这位老师学科、这学期的那一册教材 PDF 的索引;板上现在是哪一课(这个话题里老师最后一张课本卡的课)。
+   * 课本做底(activity 头上 base: textbook):这位老师学科、这学期的那一册教材 PDF 的索引;这节课现在的样子(还没铺页就先铺目录,记下来)。
    * 教材目录下没有这一科的 PDF、PDF 读不了:book = null,problem 说一句(给老师的底、家长端)
    */
-  private async bookOn(ws: Workspace, tutor: string, now: Date, thread: readonly ConversationMessage[]): Promise<{ book: BookBase | null; problem?: string; kit: ReturnType<typeof lastBoardKit> }> {
+  private async bookOn(ws: Workspace, tutor: string, now: Date, date: string, thread: string): Promise<{ book: BookBase | null; problem?: string; lesson: Lesson }> {
     const subject = canonicalSubject(ws.config.tutors[tutor]?.subject);
     const name = pickBook(await listBooks(ws.paths.textbooks, subject || null), now);
-    const kit = lastBoardKit(thread);
-    if (!name) return { book: null, problem: `教材文件夹里没有${subject || '这一科'}的课本 PDF`, kit };
+    if (!name) return { book: null, problem: `教材文件夹里没有${subject || '这一科'}的课本 PDF`, lesson: await readLesson(ws, tutor, date, thread) };
     const index = await bookIndex(ws.paths.textbooks, join(ws.root, BOOK_CACHE), name).catch((e: unknown) => { void e; return null; });
-    if (!index) return { book: null, problem: `课本《${name}》读不出来`, kit };
-    let lesson: string | null = null;
-    for (const m of thread) {
-      if (m.result !== 'ok') continue;
-      for (const c of m.section?.cards ?? []) {
-        const p = c.kind === 'kit' && (c.props as { kit?: unknown }).kit === BOOK_KIT ? (c.props as { params?: Record<string, unknown> }).params : undefined;
-        if (p && typeof p['课'] === 'string' && p['课']) lesson = p['课'];
-      }
-    }
-    return { book: { file: name, index, lesson }, kit, ...(index.problems.length ? { problem: `课本《${name}》:${index.problems.join(';')}` } : {}) };
+    if (!index) return { book: null, problem: `课本《${name}》读不出来`, lesson: await readLesson(ws, tutor, date, thread) };
+    const lb: LessonBook = { file: name, index };
+    const lesson = await updateLesson(ws, tutor, date, thread, (l) => lessonOpen(l, lb));
+    const page = lessonPage(lesson);
+    return { book: { file: name, index, lesson: page?.src === name ? page.title : null }, lesson, ...(index.problems.length ? { problem: `课本《${name}》:${index.problems.join(';')}` } : {}) };
   }
 
   /**
-   * 课本做底时的「板此刻的样子」:底是这一课(还没翻就是目录),全文是这一课分好段的正文。
+   * 课本做底时的「板此刻的样子」:底是这一课(还没翻就是目录),全文是这一课分好段的正文;你画的、开放的、揭开了哪些照这节课的状态。
    * 上一轮以后舞台交过窗里的图(shot)就挪成这一轮的(<date>.<job>.shot.jpg),shot 是它的绝对路径,随这一轮附给老师
    */
-  private async bookSlate(ws: Workspace, tutor: string, date: string, thread: string, job: string, b: { book: BookBase | null; problem?: string; kit: ReturnType<typeof lastBoardKit> }, now: Date): Promise<{ slate: NonNullable<ContextPack['slate']>; told?: string; shot?: string }> {
+  private async bookSlate(ws: Workspace, tutor: string, date: string, thread: string, job: string, b: { book: BookBase | null; problem?: string; lesson: Lesson }, now: Date): Promise<{ slate: NonNullable<ContextPack['slate']>; told?: string; shot?: string }> {
     const events = await readBoard(ws, tutor, date, thread);
-    if (!b.book) return slateOf({ photo: null, fresh: false, words: null, events, kit: b.kit, ops: [], now: now.getTime(), book: { show: `课本:${b.problem ?? '没有'}(请家长放进 vault 的教材文件夹)`, key: '#', text: [] } });
+    if (!b.book) return slateOf({ photo: null, fresh: false, words: null, events, kit: null, ops: [], now: now.getTime(), book: { show: `课本:${b.problem ?? '没有'}(请家长放进 vault 的教材文件夹)`, key: '#', text: [] } });
     const at = bookLesson(b.book.index, b.book.lesson) ?? { title: BOOK_TOC, pages: [] };
     const { show, text } = bookSlateParts(b.book.index, at);
     const key = `${b.book.file}#${at.title}`;
@@ -480,7 +493,7 @@ export class Runner {
     const files = conversationFiles(ws.dirs.conversations, tutor, date);
     const fresh = events.slice(from).some((e) => e.k === 'shot' && e.base === key);
     const shot = fresh ? await rename(files.shot(thread), files.shot(job)).then(() => files.shot(job), () => undefined) : undefined;
-    const r = slateOf({ photo: null, fresh: false, words: null, events, kit: b.kit, ops: bookOps(b.book.index.layout, ['点字', '圈', '画']), now: now.getTime(), book: { show, key, text, ...(shot ? { shot: true } : {}) } });
+    const r = slateOf({ photo: null, fresh: false, words: null, events, kit: null, ops: [], lesson: lessonSlateBits(b.lesson), now: now.getTime(), book: { show, key, text, ...(shot ? { shot: true } : {}) } });
     return { ...r, ...(shot ? { shot } : {}) };
   }
 
@@ -675,11 +688,12 @@ export class Runner {
     const actDef = threadRun ? await readActivity(ws, tutor, threadRun.name) : null;
     const boardPage = !input.bookkeep && policy.board !== 'off' && (fresh ? Boolean(activityRun && actDef?.board === 'page') : first?.board === 'page');
     // 课本做底(base: textbook):不看照片,底是这一科的课本 PDF
-    const bookBase = boardPage && actDef?.base === 'textbook' ? await this.bookOn(ws, tutor, now, fresh ? [] : index.messages.filter((_, i) => known[i] === thread)) : null;
+    const bookBase = boardPage && actDef?.base === 'textbook' ? await this.bookOn(ws, tutor, now, date, thread) : null;
     if (bookBase?.problem) activityWarn.push(bookBase.problem);
     // 这块底:这一条带的照片,或这个话题里孩子最近发的那张;照片板没写「图」就是它
     const basePhoto = bookBase ? null : photos.length ? photos[photos.length - 1] : [...index.messages].reverse().find((m, i) => known[index.messages.length - 1 - i] === thread && !fresh && m.from === 'kid' && m.photos?.length)?.photos?.slice(-1)[0] ?? null;
     active.board = { page: boardPage, photo: basePhoto, ...(bookBase?.book ? { book: bookBase.book } : await this.locateOn(ws, basePhoto)) };
+    if (bookBase?.book) active.lesson = bookBase.lesson;
     const slate = bookBase ? await this.bookSlate(ws, tutor, date, thread, job, bookBase, now) : boardPage ? await this.slateFor(ws, tutor, date, { messages: index.messages, ths: known, thread, photos, activity: threadRun?.name ?? null, now }) : null;
     if (slate) pack.slate = slate.slate;
     // 课本窗里的图:随这一轮附给老师(同交上来的板),以后的轮换成一句占位
@@ -890,6 +904,13 @@ export class Runner {
       if (active.board && !active.board.locate) active.board = { ...active.board, ...(await this.locateOn(ws, active.board.photo)) };
       const fit = this.fitBoard(kidView.section, active);
       kidView.section = fit.section;
+      kidView.warnings.push(...fit.why);
+      // 课本做底:这一节的动作(和过渡期的课本卡)照先后落进这节课的状态;落的是现在的样子(这一轮写着的时候孩子可能又画了、揭了)
+      const book = active.board?.book;
+      if (book && active.lesson) {
+        const section = fit.section;
+        await updateLesson(ws, tutor, date, thread, (l) => sectionActs(section, l, { file: book.file, index: book.index }).reduce((s, a) => lessonStep(s, { t: 'act', act: a }), l));
+      }
       if (fit.unfound.length) kidView.warnings.push(active.board?.book ? `课本卡写的「${fit.unfound.join('」「')}」在课本里找不到,没画(课找不到就还是板上那一课)` : `照片板写的「${fit.unfound.join('」「')}」在认出的字、题里找不到,没画(题找不到就是整张)`);
       if (fit.dropped.length) kidView.warnings.push(active.board?.page ? `以板为主:这一节只上板一张板卡,别的没给孩子看(${fit.dropped.map((c) => `${c.kind} ${cardLabel(c)}`.trim()).join(';')})` : `照片板没写「图」,孩子还没发照片,画不出来,没给孩子看`);
     }

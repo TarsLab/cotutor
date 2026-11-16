@@ -1,0 +1,117 @@
+/**
+ * 一节课的状态怎么变(2026-11-16《多模态教学harness-开发计划》阶段 2 任务 2):一个纯函数 lessonStep(这节课, 事) → 这节课。
+ * 老师讲稿里的动作(落到页上以后的样子,LessonAct;src/board/lesson-fit.ts 填好)和孩子在页上做的事(实时那条连接报来的)都走它。
+ * 服务端照它记一节课的状态(src/runtime/journal/lesson-store.ts),孩子端照它一句一句把动作落到页上(念完一句落那一句的),舞台照状态画。
+ * 规矩:
+ *  - 翻:换到那一课(还没铺过就铺上:老师的一层、孩子的一层都是空的、什么都没请);窗回到页顶,白纸条收起来。翻回铺过的课,原来画的都在
+ *  - 看:窗移到那一处;那一处有白纸条就打开它(回到这道题,原来摆的还在),没有就收起开着的
+ *  - 圈、遮、盖:记号加在这一页上(同一处不重复)
+ *  - 写、摆:落进「看」着的那道题的白纸条(没有就开一条,紧贴题的下沿);没在看哪一道题就不做
+ *  - 擦:白纸条开着擦它的最后一样(擦 全部:整条收掉);没开着擦老师最后一个记号
+ *  - 请:这一步开放什么(换掉上一次请的;翻到新的一课清空)
+ *  - 孩子的事都落在现在这一页上:一笔、擦掉自己的、揭开、点字、窗停在哪、白纸条里的图形转到哪
+ * 内联进孩子端页面(剥类型),所以这里只 import type;上限的数和 src/schema/lesson.ts 的一样(tests/lesson.test.ts 盯着)。
+ */
+import type { Box, Lesson, LessonAct, LessonEvent, LessonPage, Strip } from '../schema/index.ts';
+
+const PAGES_MAX = 8;
+const INK_MAX = 160;
+const INK_POINTS = 120;
+const PICK_MAX = 30;
+const MARKS_MAX = 24;
+const STRIP_ITEMS_MAX = 6;
+/** 上限(测试拿去和 schema 比) */
+export const LESSON_CAPS = { PAGES_MAX, INK_MAX, INK_POINTS, PICK_MAX, MARKS_MAX, STRIP_ITEMS_MAX };
+
+/** 还什么都没铺的一节课 */
+export const lessonInit = (): Lesson => ({ v: 1, pages: [], at: null, look: null, view: null, strip: null });
+
+/** 现在铺着的那一页 */
+export const lessonPage = (l: Lesson): LessonPage | null => l.pages.find((p) => p.id === l.at) ?? null;
+
+/** 现在开着的白纸条 */
+export function lessonStrip(l: Lesson): Strip | null {
+  const p = lessonPage(l);
+  return (l.strip && p ? p.teacher.strips.find((s) => s.key === l.strip) : null) ?? null;
+}
+
+/** 换掉现在这一页(别的页原样) */
+const onPage = (l: Lesson, f: (p: LessonPage) => LessonPage): Lesson => {
+  const at = lessonPage(l);
+  const to = at ? f(at) : at;
+  return at && to !== at ? { ...l, pages: l.pages.map((p) => (p === at ? to! : p)) } : l;
+};
+
+const sameBox = (a: Box, b: Box): boolean => a.every((v, i) => v === b[i]);
+
+function act(l: Lesson, a: LessonAct): Lesson {
+  switch (a.k) {
+    case '翻': {
+      const had = l.pages.find((p) => p.id === a.page.id);
+      const fresh: LessonPage = { ...a.page, teacher: { marks: [], strips: [] }, kid: { ink: [], revealed: [], picked: [], turns: {} }, open: [] };
+      // 铺过的留着(翻回来原来画的都在);多了丢最早的
+      const pages = had ? l.pages : [...l.pages, fresh].slice(-PAGES_MAX);
+      return { ...l, pages, at: a.page.id, look: null, view: null, strip: null };
+    }
+    case '看': {
+      const p = lessonPage(l);
+      const strip = p?.teacher.strips.some((s) => s.key === a.label) ? a.label : null;
+      return { ...l, look: { label: a.label, box: a.box, n: (l.look?.n ?? 0) + 1 }, strip };
+    }
+    case '圈':
+    case '遮':
+    case '盖':
+      return onPage(l, (p) => {
+        const add = a.spots.filter((s) => !p.teacher.marks.some((m) => m.k === a.k && m.text === s.text && sameBox(m.box, s.box))).map((s) => ({ k: a.k, text: s.text, box: s.box }));
+        return add.length ? { ...p, teacher: { ...p.teacher, marks: [...p.teacher.marks, ...add].slice(-MARKS_MAX) } } : p;
+      });
+    case '写':
+    case '摆': {
+      const look = l.look;
+      if (!look || !lessonPage(l)) return l;
+      const item = a.k === '写' ? { kind: 'write' as const, text: a.text, size: a.size } : { kind: 'shape' as const, kit: a.kit, params: a.params, size: a.size };
+      const next = onPage(l, (p) => {
+        const had = p.teacher.strips.find((s) => s.key === look.label);
+        const strip: Strip = had ? { ...had, items: [...had.items, item].slice(-STRIP_ITEMS_MAX) } : { key: look.label, box: look.box, items: [item] };
+        return { ...p, teacher: { ...p.teacher, strips: had ? p.teacher.strips.map((s) => (s === had ? strip : s)) : [...p.teacher.strips, strip] } };
+      });
+      return { ...next, strip: look.label };
+    }
+    case '擦': {
+      const open = lessonStrip(l);
+      if (open) {
+        const items = a.all ? [] : open.items.slice(0, -1);
+        const next = onPage(l, (p) => ({ ...p, teacher: { ...p.teacher, strips: items.length ? p.teacher.strips.map((s) => (s === open ? { ...s, items } : s)) : p.teacher.strips.filter((s) => s !== open) } }));
+        return items.length ? next : { ...next, strip: null };
+      }
+      return onPage(l, (p) => (p.teacher.marks.length ? { ...p, teacher: { ...p.teacher, marks: a.all ? [] : p.teacher.marks.slice(0, -1) } } : p));
+    }
+    case '请':
+      return onPage(l, (p) => ({ ...p, open: [...a.ops] }));
+  }
+}
+
+export function lessonStep(l: Lesson, ev: LessonEvent): Lesson {
+  switch (ev.t) {
+    case 'act':
+      return act(l, ev.act);
+    case 'stroke':
+      if (!ev.pts.length) return l;
+      return onPage(l, (p) => ({ ...p, kid: { ...p.kid, ink: [...p.kid.ink, ev.pts.slice(0, INK_POINTS)].slice(-INK_MAX) } }));
+    case 'wipe':
+      return onPage(l, (p) => (p.kid.ink.length ? { ...p, kid: { ...p.kid, ink: [] } } : p));
+    case 'reveal':
+      return onPage(l, (p) => (p.kid.revealed.includes(ev.text) ? p : { ...p, kid: { ...p.kid, revealed: [...p.kid.revealed, ev.text] } }));
+    case 'pick':
+      return onPage(l, (p) => ({ ...p, kid: { ...p.kid, picked: [...p.kid.picked, ev.text].slice(-PICK_MAX) } }));
+    case 'view':
+      return lessonPage(l) ? { ...l, view: ev.box } : l;
+    case 'turn':
+      return onPage(l, (p) => ({ ...p, kid: { ...p.kid, turns: { ...p.kid.turns, [ev.item]: ((Math.round(ev.deg) % 360) + 360) % 360 } } }));
+  }
+}
+
+/** 一节里的动作照先后都落上(第一句前面的、每一句的;落不了的跳过) */
+export function lessonActs(l: Lesson, acts: readonly { do?: LessonAct }[]): Lesson {
+  return acts.reduce((s, a) => (a.do ? lessonStep(s, { t: 'act', act: a.do }) : s), l);
+}

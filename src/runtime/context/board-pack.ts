@@ -13,7 +13,8 @@
  * 课本做底(book)时:底是「课本《册》:《课》第几页」,全文是这一课分好段的正文(src/chalk/kit/book.ts 的 lessonBlocks),目录时是一单元一行。
  */
 import { BOOK_TOC, lessonBlocks } from '../../chalk/index.ts';
-import type { BoardEvent, BookIndex, BookPage, ContextPack } from '../../schema/index.ts';
+import { lessonPage, lessonStrip } from '../../board/lesson.ts';
+import type { BoardEvent, BookIndex, BookPage, ContextPack, Lesson, StripItem } from '../../schema/index.ts';
 
 /** 「最近点的」多久以内算(孩子说「这个」指它);起点,试用后调 */
 export const RECENT_PICK_MS = 30_000;
@@ -36,6 +37,8 @@ export interface SlateInput {
   kit: { kit: string; params: Readonly<Record<string, string>>; ops: readonly string[] } | null;
   /** 老师还没画时孩子就能做的(照片底开了认字 = 点字) */
   ops: readonly string[];
+  /** 一节课的状态说成的那几样(课本做底时代替 kit 与 ops;lessonSlateBits) */
+  lesson?: LessonBits;
   /** 这一刻(毫秒) */
   now: number;
   /**
@@ -65,6 +68,36 @@ function pickLine(picks: readonly string[], what: string): string | null {
 }
 const isEnglish = (t: string): boolean => /^[A-Za-z]/.test(t);
 
+/** 一节课的状态里给老师看的那几样:你画的(一行)、开放的、遮了 / 盖了哪些、揭开了哪些 */
+export interface LessonBits { drawn?: string; ops: string[]; covers: Record<'遮' | '盖', string[]>; revealed: string[] }
+
+/** 白纸条里的一样说成几个字:点阵 6 行 6 个、方向盘(上 东)、写 6×4=24 */
+export function stripItemLine(it: StripItem): string {
+  if (it.kind === 'write') return `写 ${it.text}`;
+  const p = it.params;
+  if (it.kit === '点阵') return `点阵 ${p['共'] ? `共 ${p['共']} 个、每行 ${p['每行']} 个` : `${p['行']} 行 ${p['每行']} 个`}${p['线'] ? `(线 ${p['线']})` : ''}`;
+  if (it.kit === '方向盘') return `方向盘(上 ${p['上'] ?? '北'}${p['小人'] === '没有' ? ',没有小人' : ''})`;
+  return it.kit;
+}
+
+/**
+ * 一节课现在这一页上:你画的(看哪里、圈 / 遮 / 盖了什么、白纸条里摆着什么,应用找的框不说)、开放的(点字是课本自带的,别的是你请的)。
+ * 白纸条收着的(讲别的题时)不说,回到那道题才说
+ */
+export function lessonSlateBits(l: Lesson): LessonBits {
+  const p = lessonPage(l);
+  if (!p) return { ops: [], covers: { 遮: [], 盖: [] }, revealed: [] };
+  const of = (k: '圈' | '遮' | '盖'): string[] => p.teacher.marks.filter((m) => m.k === k).map((m) => m.text);
+  const strip = lessonStrip(l);
+  const parts = [
+    ...(l.look ? [`看 ${l.look.label}`] : []),
+    ...(['圈', '遮', '盖'] as const).flatMap((k) => (of(k).length ? [`${k} ${of(k).join('、')}`] : [])),
+    ...(strip?.items.length ? [`白纸条:${strip.items.map(stripItemLine).join('、')}`] : []),
+  ];
+  const asked = p.open.map((o) => (o === '点' ? '点字' : o));
+  return { ...(parts.length ? { drawn: parts.join(';') } : {}), ops: [...new Set([...(p.pick ? ['点字'] : []), ...asked])], covers: { 遮: of('遮'), 盖: of('盖') }, revealed: [...p.kid.revealed] };
+}
+
 /** 板此刻的样子;told = 这一轮把这块底的全文给了老师(记进日志,下一轮写「未变」) */
 export function slateOf(x: SlateInput): { slate: NonNullable<ContextPack['slate']>; told?: string } {
   const base = x.book ? x.book.key : (x.photo ?? WHITE_BOARD);
@@ -76,9 +109,9 @@ export function slateOf(x: SlateInput): { slate: NonNullable<ContextPack['slate'
   const picked = since.filter(onBase).map((e) => e.text);
   const did = [pickLine(picked.filter((t) => !isEnglish(t)), '笔顺'), pickLine(picked.filter(isEnglish), '单词')].filter((s): s is string => Boolean(s));
   // 遮了拼音的、盖住印好的字的(课本):揭了哪些、没揭哪些(这块底上揭过的都算)
-  const opened = new Set(x.events.filter((e): e is BoardEvent & { k: 'reveal' } => e.k === 'reveal' && e.base === base).map((e) => e.text));
+  const opened = new Set([...x.events.filter((e): e is BoardEvent & { k: 'reveal' } => e.k === 'reveal' && e.base === base).map((e) => e.text), ...(x.lesson?.revealed ?? [])]);
   for (const [key, what] of [['遮', '揭开了拼音'], ['盖', '揭开了盖住的']] as const) {
-    const covered = x.kit?.params[key] ? x.kit.params[key].split(';').map((v) => v.split('|')[0]).filter(Boolean) : [];
+    const covered = x.lesson ? x.lesson.covers[key] : x.kit?.params[key] ? x.kit.params[key].split(';').map((v) => v.split('|')[0]).filter(Boolean) : [];
     if (!covered.length) continue;
     const yes = covered.filter((w) => opened.has(w)), no = covered.filter((w) => !opened.has(w));
     did.push(`${what}:${yes.length ? yes.join('、') : '一个也没有'}${no.length ? `;没揭:${no.join('、')}` : ''}`);
@@ -106,8 +139,8 @@ export function slateOf(x: SlateInput): { slate: NonNullable<ContextPack['slate'
     base: x.book ? x.book.show : x.photo ? (lesson ? `${x.photo}(《${lesson}》)` : x.photo) : WHITE_BOARD,
     ...(text ? { text } : {}),
     ...(x.words?.questions?.length ? { questions: `${x.words.questions.map((n) => `第${n}题`).join('、')}(框写题号就裁出那一道)` } : {}),
-    ...(x.kit ? { drawn: drawnLine(x.kit) } : {}),
-    ops: [...(x.kit ? x.kit.ops : x.ops)],
+    ...(x.lesson ? (x.lesson.drawn ? { drawn: x.lesson.drawn } : {}) : x.kit ? { drawn: drawnLine(x.kit) } : {}),
+    ops: [...(x.lesson ? x.lesson.ops : x.kit ? x.kit.ops : x.ops)],
     did,
     ...(recent ? { recent } : {}),
     ...(view ? { view } : {}),

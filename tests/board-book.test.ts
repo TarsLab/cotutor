@@ -195,7 +195,7 @@ const P = (c: BoardCard): Record<string, string> => c.props.params as Record<str
   await mwait();
   const mth = String(mt1.json.thread);
   const mp1 = mPrompt(String(mt1.json.job));
-  check('数学的目录:一个单元一行,后面是小节、课题;开放里没有点字', mp1.includes('二 1～6的表内乘法(3):1.乘法的初步认识(4)、·5的乘法口诀(5)、·6的乘法口诀(6)') && mp1.includes('开放: "圈、画"'), mp1.slice(mp1.indexOf('board:'), mp1.indexOf('board:') + 300));
+  check('数学的目录:一个单元一行,后面是小节、课题;没请就什么都不开放(数学课本不开点字)', mp1.includes('二 1～6的表内乘法(3):1.乘法的初步认识(4)、·5的乘法口诀(5)、·6的乘法口诀(6)') && mp1.includes('开放: "无"'), mp1.slice(mp1.indexOf('board:'), mp1.indexOf('board:') + 300));
   now = new Date(2026, 10, 14, 11, 1);
   const mt2 = await kidSend(ctx, M, { text: '我要预习乘法口诀', thread: mth });
   await mwait();
@@ -236,7 +236,7 @@ const P = (c: BoardCard): Record<string, string> => c.props.params as Record<str
   const mt6 = await kidSend(ctx, M, { text: '是5', thread: mth });
   await mwait();
   const mp6 = mPrompt(String(mt6.json.job));
-  check('下一轮:你画的是这张课本卡(不写应用填的书、页),孩子做的里有揭开了盖住的', mp6.includes('你画的: "课本:课 5的乘法口诀;看 例2;盖 5×1=5"') && mp6.includes('揭开了盖住的:5×1=5') && !mp6.includes('书 数学'), mp6.slice(mp6.indexOf('你画的'), mp6.indexOf('你画的') + 160));
+  check('下一轮:你画的照这节课的状态(看哪里、盖了什么;课在底里,不写应用填的书、页),孩子做的里有揭开了盖住的', mp6.includes('你画的: "看 例2;盖 5×1=5"') && mp6.includes('揭开了盖住的:5×1=5') && !mp6.includes('书 数学'), mp6.slice(mp6.indexOf('你画的'), mp6.indexOf('你画的') + 160));
   await teacher.close();
 }
 

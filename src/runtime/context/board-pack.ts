@@ -14,6 +14,7 @@
  */
 import { BOOK_TOC, lessonBlocks } from '../../chalk/index.ts';
 import { lessonPage, lessonStrip } from '../../board/lesson.ts';
+import { stripRead } from '../../board/strip.ts';
 import type { BoardEvent, BookIndex, BookPage, ContextPack, Lesson, StripItem } from '../../schema/index.ts';
 
 /** 「最近点的」多久以内算(孩子说「这个」指它);起点,试用后调 */
@@ -69,7 +70,7 @@ function pickLine(picks: readonly string[], what: string): string | null {
 const isEnglish = (t: string): boolean => /^[A-Za-z]/.test(t);
 
 /** 一节课的状态里给老师看的那几样:你画的(一行)、开放的、遮了 / 盖了哪些、揭开了哪些 */
-export interface LessonBits { drawn?: string; ops: string[]; covers: Record<'遮' | '盖', string[]>; revealed: string[] }
+export interface LessonBits { drawn?: string; ops: string[]; covers: Record<'遮' | '盖', string[]>; revealed: string[]; /** 孩子在开着的白纸条上做的(每个图形一句,src/board/strip.ts 的 stripRead) */ strip?: string[] }
 
 /** 白纸条里的一样说成几个字:点阵 6 行 6 个、方向盘(上 东)、写 6×4=24 */
 export function stripItemLine(it: StripItem): string {
@@ -95,7 +96,8 @@ export function lessonSlateBits(l: Lesson): LessonBits {
     ...(strip?.items.length ? [`白纸条:${strip.items.map(stripItemLine).join('、')}`] : []),
   ];
   const asked = p.open.map((o) => (o === '点' ? '点字' : o));
-  return { ...(parts.length ? { drawn: parts.join(';') } : {}), ops: [...new Set([...(p.pick ? ['点字'] : []), ...asked])], covers: { 遮: of('遮'), 盖: of('盖') }, revealed: [...p.kid.revealed] };
+  const onStrip = strip ? stripRead(strip, p.kid.stripInk[strip.key] ?? [], p.kid.turns) : [];
+  return { ...(parts.length ? { drawn: parts.join(';') } : {}), ops: [...new Set([...(p.pick ? ['点字'] : []), ...asked])], covers: { 遮: of('遮'), 盖: of('盖') }, revealed: [...p.kid.revealed], ...(onStrip.length ? { strip: onStrip } : {}) };
 }
 
 /** 板此刻的样子;told = 这一轮把这块底的全文给了老师(记进日志,下一轮写「未变」) */
@@ -114,6 +116,8 @@ export function slateOf(x: SlateInput): { slate: NonNullable<ContextPack['slate'
   const strokes = inks.slice(wiped + 1).length;
   if (wiped >= 0) did.push('擦掉了自己画的');
   if (strokes) did.push(`在课本上写画了 ${strokes} 笔(写了什么看图)`);
+  // 白纸条上的图形:画法照几何算的大概(状态,不是这一轮才做的;以图为准)
+  if (x.lesson?.strip) did.push(...x.lesson.strip);
   // 遮了拼音的、盖住印好的字的(课本):揭了哪些、没揭哪些(这块底上揭过的都算)
   const opened = new Set([...x.events.filter((e): e is BoardEvent & { k: 'reveal' } => e.k === 'reveal' && e.base === base).map((e) => e.text), ...(x.lesson?.revealed ?? [])]);
   for (const [key, what] of [['遮', '揭开了拼音'], ['盖', '揭开了盖住的']] as const) {

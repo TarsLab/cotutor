@@ -1413,13 +1413,14 @@ ${HOME_TILES_JS}
     lsShow();
     if (report && S.thread && base) lvSend({ t: 'board', body: { ...report, thread: S.thread, base } });
   };
-  /** 「给老师看」能不能按:这一轮以后落了新的笔 */
-  const lsInk = () => { const p = LS.l && lessonPage(LS.l); return p ? p.kid.ink.length : 0; };
+  /** 「给老师看」能不能按:这一轮以后落了新的笔(课本上的、白纸条上的) */
+  const lsInk = () => { const p = LS.l && lessonPage(LS.l); return p ? p.kid.ink.length + Object.values(p.kid.stripInk || {}).reduce((n, x) => n + x.length, 0) : 0; };
   /** 舞台说话(课本做底):落笔、擦掉、点字、揭开、挪窗、窗里的图、给老师看 */
   const lsStageMsg = (m) => {
     if (m.type === 'ready') { LS.key = ''; lsShow(); return; }
     if (m.type === 'peek') { previewGot(m.image); return; }
-    if (m.type === 'stroke' && Array.isArray(m.pts)) { lsKid({ t: 'stroke', pts: m.pts }, { k: 'stroke', pts: m.pts }); previewSoon(PV_HAND_MS); return; }
+    if (m.type === 'stroke' && Array.isArray(m.pts)) { const strip = typeof m.strip === 'string' ? m.strip : undefined; lsKid({ t: 'stroke', pts: m.pts, ...(strip ? { strip } : {}) }, { k: 'stroke', pts: m.pts, ...(strip ? { strip } : {}) }); previewSoon(PV_HAND_MS); return; }
+    if (m.type === 'turn' && typeof m.item === 'string' && typeof m.deg === 'number') { lsKid({ t: 'turn', item: m.item, deg: m.deg }, { k: 'turn', item: m.item, deg: m.deg }); previewSoon(PV_HAND_MS); return; }
     if (m.type === 'wipe') { lsKid({ t: 'wipe' }, { k: 'wipe' }); previewSoon(PV_HAND_MS); return; }
     if (m.type === 'pick') { pickShow(m.text); lsKid({ t: 'pick', text: String(m.text || '') }, { k: 'pick', text: m.text }); return; }
     if (m.type === 'reveal') { lsKid({ t: 'reveal', text: String(m.text || '') }, { k: 'reveal', text: m.text }); previewSoon(PV_HAND_MS); return; }

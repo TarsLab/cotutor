@@ -15,8 +15,9 @@
  */
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type * as Pdfjs from 'pdfjs-dist';
-import { BOOK_ASPECT, BOOK_W, KID_INK, KID_INK_WIDTH, bookFrame, bookPick, bookSheets, type BookSheet } from '../../chalk/index.ts';
-import { lessonPage } from '../../board/lesson.ts';
+import { BOOK_ASPECT, BOOK_W, KID_INK, KID_INK_WIDTH, bookFrame, bookPick, bookSheets, turnedSkeletons, type BookSheet, type ChalkSkeleton } from '../../chalk/index.ts';
+import { lessonPage, lessonStrip } from '../../board/lesson.ts';
+import { stripLayout, type StripSlot } from '../../board/strip.ts';
 import { LESSON_INK_POINTS, type BookPage, type Lesson } from '../../schema/index.ts';
 import type { KitStageHandle } from './kit.tsx';
 
@@ -28,8 +29,10 @@ export interface BookStageProps {
   /** 只看(录像、家长端、以前的) */
   readonly?: boolean;
   hand?: 'left' | 'right';
-  /** 孩子落了一笔(场景坐标) */
-  onStroke(pts: [number, number][]): void;
+  /** 孩子落了一笔(场景坐标);strip = 落在开着的白纸条上 */
+  onStroke(pts: [number, number][], strip?: string): void;
+  /** 白纸条里的方向盘转了一格(键 <白纸条>#<第几样>,转到多少度) */
+  onTurn?(item: string, deg: number): void;
   /** 孩子擦掉了自己画的 */
   onWipe(): void;
   /** 「给老师看」:窗里的图先交(onShot),再说交了 */
@@ -69,6 +72,8 @@ const DOUBLE_MS = 280;
 /** 松手时快过这个(像素 / 毫秒)才带惯性;每 16 毫秒剩多少 */
 const FLING_MIN = 0.25;
 const FLING_KEEP = 0.95;
+/** 白纸条开着时窗口里至少留几成给白纸条 */
+const STRIP_SHOW = 0.45;
 /** 老师的「看」滚过去时,那一块上面留多少像素(顶栏浮在板上) */
 const LOOK_TOP_PX = 64;
 /** 交给老师的那张图的长边 */
@@ -130,9 +135,35 @@ interface Geo {
 /** 老师要看的那一块 → 窗里留出来的那一块(四周留边、太小放大;src/chalk/kit/book.ts 的 bookFrame) */
 const frameBox = (box: Box, sheets: readonly BookSheet[]): Box => { const f = bookFrame(box, sheets); return [f[0], f[1], f[0] + f[2], f[1] + f[3]]; };
 
+/** 白纸条的底色(盖住下面的题;比纸色白一点,孩子看得出这是一条白纸) */
+const STRIP_FILL = '#ffffff';
+const STRIP_EDGE = '#d9c9a3';
+/** 白纸条里一样图形的骨架摆到页上(转过的照转到的样子) */
+const slotSkeletons = (slot: StripSlot, deg: number): ChalkSkeleton[] => (slot.scene ? (deg ? turnedSkeletons(slot.scene, { turn: Object.fromEntries(slot.scene.turns.map((t) => [t.id, deg])) }) : slot.scene.skeletons) : []);
+const numOf = (v: unknown, d = 0): number => (typeof v === 'number' && Number.isFinite(v) ? v : d);
+/** 一样骨架画成 SVG(白纸条里的点阵、方向盘只用到圆、线、字、框;不逐笔画,一下子画好) */
+function skeletonEl(k: ChalkSkeleton): SVGElement | null {
+  const x = numOf(k.x), y = numOf(k.y), w = numOf(k.width), h = numOf(k.height);
+  const stroke = { stroke: String(k.strokeColor ?? '#1e1e1e'), 'stroke-width': String(numOf(k.strokeWidth, 2)), fill: typeof k.backgroundColor === 'string' && k.backgroundColor !== 'transparent' ? k.backgroundColor : 'none', 'stroke-linecap': 'round' };
+  if (k.type === 'ellipse') return el('ellipse', { cx: String(x + w / 2), cy: String(y + h / 2), rx: String(w / 2), ry: String(h / 2), ...stroke });
+  if (k.type === 'rectangle') return el('rect', { x: String(x), y: String(y), width: String(w), height: String(h), ...stroke });
+  if (k.type === 'line' || k.type === 'arrow') return el('path', { d: pathD((k.points as [number, number][] ?? []).map(([px, py]) => [x + px, y + py] as [number, number])), ...stroke, fill: 'none' });
+  if (k.type === 'text') { const t = el('text', { x: String(x + w / 2), y: String(y + h / 2), 'text-anchor': 'middle', 'dominant-baseline': 'central', 'font-size': String(numOf(k.fontSize, 20)), fill: String(k.strokeColor ?? '#1e1e1e'), class: 'bk-strip-text' }); t.textContent = String(k.text ?? ''); return t; }
+  return null;
+}
+/** 同一样骨架画在画布上(交给老师的那张图) */
+function skeletonDraw(ctx: CanvasRenderingContext2D, k: ChalkSkeleton): void {
+  const x = numOf(k.x), y = numOf(k.y), w = numOf(k.width), h = numOf(k.height);
+  ctx.strokeStyle = String(k.strokeColor ?? '#1e1e1e'); ctx.fillStyle = String(k.strokeColor ?? '#1e1e1e'); ctx.lineWidth = numOf(k.strokeWidth, 2);
+  if (k.type === 'ellipse') { ctx.beginPath(); ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2); ctx.stroke(); return; }
+  if (k.type === 'rectangle') { ctx.strokeRect(x, y, w, h); return; }
+  if (k.type === 'line' || k.type === 'arrow') { ctx.beginPath(); (k.points as [number, number][] ?? []).forEach(([px, py], i) => (i ? ctx.lineTo(x + px, y + py) : ctx.moveTo(x + px, y + py))); ctx.stroke(); return; }
+  if (k.type === 'text') { ctx.font = `${numOf(k.fontSize, 20)}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(k.text ?? ''), x + w / 2, y + h / 2); }
+}
+
 const pathD = (pts: readonly [number, number][]): string => pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ');
 
-export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function BookStage({ id: _id, lesson, readonly, hand, onStroke, onWipe, onSubmit, onPick, onReveal, onView, onShot, onError }, ref) {
+export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function BookStage({ id: _id, lesson, readonly, hand, onStroke, onTurn, onWipe, onSubmit, onPick, onReveal, onView, onShot, onError }, ref) {
   const view = useRef<HTMLDivElement>(null);
   const paper = useRef<HTMLDivElement>(null);
   const svg = useRef<SVGSVGElement>(null);
@@ -141,6 +172,8 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
   const cam = useRef<Cam>({ cx: BOOK_W / 2, cy: 400, s: 1 });
   /** 孩子的笔画(这一页的;页面发来的状态为准,落笔时先在这里画上) */
   const ink = useRef<[number, number][][]>([]);
+  /** 开着的白纸条上孩子的笔画 */
+  const sInk = useRef<[number, number][][]>([]);
   const glide = useRef(0);
   const settle = useRef(0);
   const sharpTask = useRef<{ cancel(): void } | null>(null);
@@ -156,8 +189,9 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
   const lastTap = useRef<{ t: number; x: number; y: number; timer: number } | null>(null);
   /** 笔:正在画的一笔 */
   const pen = useRef<{ id: number; pts: [number, number][]; el: SVGPathElement; x0: number; y0: number } | null>(null);
-  /** 孩子手上动着的时候老师的新窗先记着,手停了再去 */
+  /** 孩子手上动着的时候老师的新窗先记着,手停了再去(白纸条开着的另记,照 goStrip 去) */
   const pendingFrame = useRef<Box | null>(null);
+  const pendingStrip = useRef<Box | null>(null);
   /** 移过窗的那一次「看」(look.n):同一次不再移 */
   const lookedN = useRef(-1);
   const [phase, setPhase] = useState<'loading' | 'ready'>('loading');
@@ -176,6 +210,12 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
   const cut = page?.cut ?? 0;
   const geoKey = page ? `${page.src}|${pages.join(',')}|${cut}` : '';
   const revealedKey = (page?.kid.revealed ?? []).join('\n');
+  /** 开着的白纸条:排好的样子;孩子在上面画的、转的 */
+  const strip = lessonStrip(lesson);
+  const stripLay = strip ? stripLayout(strip) : null;
+  const latestStrip = useRef<{ key: string; lay: ReturnType<typeof stripLayout> } | null>(null);
+  latestStrip.current = strip && stripLay ? { key: strip.key, lay: stripLay } : null;
+  const canTurn = open.includes('转');
 
   // ---- 窗 ----
   /** 窗的大小(CSS 像素) */
@@ -232,6 +272,19 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
     window.setTimeout(() => r.remove(), 2600);
   };
   const goLook = (b: Box): void => { moveTo(lookAt(b), true); flashLook(b); };
+  /**
+   * 白纸条开着:题目顶着窗口最上面,下面是白纸条;题目太高(带一大幅图),白纸条剩不下窗口的 STRIP_SHOW 就往下挪,
+   * 让白纸条从窗口中间偏上开始(题目上面那截滚出去,孩子要看再往回拖)
+   */
+  const goStrip = (q: Box): void => {
+    if (readonly) { goLook(q); return; }
+    const [vw, vh] = vsize();
+    const s = (vw / BOOK_W) * zoom.current;
+    const top = LOOK_TOP_PX / s, win = vh / s;
+    const y0 = q[3] - q[1] + top <= win * (1 - STRIP_SHOW) ? q[1] - top : q[3] - win * (1 - STRIP_SHOW);
+    moveTo(clamp({ s, cx: BOOK_W / 2, cy: y0 + win / 2 }), true);
+    flashLook(q);
+  };
   /** 老师没写「看」:页宽铺满窗、第一页的顶贴着窗顶(2026-11-14:原来整页塞进窗,横屏两边各空一大块;顶栏浮在上面,不占地方) */
   const pageTop = (): Cam => {
     const [vw, vh] = vsize();
@@ -282,7 +335,7 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
     if (seen.some((sh) => !g.drawn.has(sh.n))) { if (shotTries.current++ < 20) scheduleShot(); return; }
     shotTries.current = 0;
     const box = b.map((v) => Math.round(v)) as Box;
-    const key = `${g.key}|${box.join(',')}|${teacherKey.current}|${ink.current.length}`;
+    const key = `${g.key}|${box.join(',')}|${teacherKey.current}|${ink.current.length}|${stripKeyRef.current}|${sInk.current.length}`;
     if (key === shotKey.current) return;
     const image = snapshot('image/jpeg');
     if (!image) return;
@@ -361,8 +414,49 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
     const common = { fill: 'none', stroke: KID_INK, 'stroke-width': String(KID_INK_WIDTH * 0.7), 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'vector-effect': 'non-scaling-stroke', opacity: '0.9' };
     const out = ink.current.map((st) => el('path', { d: pathD(st), ...common }));
     layer.replaceChildren(...out, ...(pen.current ? [pen.current.el] : []));
-    setMarks(ink.current.length);
+    setMarks(ink.current.length + sInk.current.length);
   }, []);
+
+  /** 白纸条:紧贴题的下沿盖一条白纸,上面照 stripLayout 摆图形、写字;孩子在上面画的跟着它;能转的图形旁边一颗转的钮 */
+  const stripKeyRef = useRef('');
+  const paintStrip = useCallback(() => {
+    const layer = svg.current?.querySelector('.bk-strip');
+    if (!layer) return;
+    const st = latestStrip.current;
+    const p = lessonPage(latest.current);
+    if (!st || !p) { layer.replaceChildren(); return; }
+    const [x1, y1, x2, y2] = st.lay.rect;
+    const out: SVGElement[] = [
+      el('rect', { x: String(x1), y: String(y1), width: String(x2 - x1), height: String(y2 - y1), fill: STRIP_FILL, class: 'bk-strip-bg' }),
+      el('path', { d: `M${x1} ${y1}H${x2}`, stroke: STRIP_EDGE, 'stroke-width': '2', 'stroke-dasharray': '10 8', 'vector-effect': 'non-scaling-stroke', fill: 'none' }),
+    ];
+    for (const slot of st.lay.slots) {
+      if (slot.item.kind === 'write') {
+        const t = el('text', { x: String((slot.box[0] + slot.box[2]) / 2), y: String((slot.box[1] + slot.box[3]) / 2), 'text-anchor': 'middle', 'dominant-baseline': 'central', 'font-size': String(slot.font), fill: '#1e1e1e', class: 'bk-strip-text' });
+        t.textContent = slot.item.text;
+        out.push(t);
+        continue;
+      }
+      const deg = p.kid.turns[`${st.key}#${slot.n}`] ?? 0;
+      const g = el('g', { transform: `translate(${slot.ox} ${slot.oy}) scale(${slot.scale})`, class: 'bk-shape' });
+      for (const k of slotSkeletons(slot, deg)) { const e = skeletonEl(k); if (e) g.append(e); }
+      out.push(g);
+      // 方向盘:右边一颗转的钮(请了转才有)
+      if (slot.scene?.turns.length && canTurnRef.current && !readonly) {
+        const r = 34, cx = Math.min(BOOK_W - r - 8, slot.box[2] + r + 12), cy = slot.box[1] + r + 8;
+        const b = el('g', { class: 'bk-turn', 'data-item': `${st.key}#${slot.n}`, 'data-deg': String(deg), 'data-x': String(cx), 'data-y': String(cy), 'data-r': String(r) });
+        b.append(el('circle', { cx: String(cx), cy: String(cy), r: String(r), fill: '#fff4d6', stroke: '#e0a800', 'stroke-width': '2', 'vector-effect': 'non-scaling-stroke' }));
+        b.append(el('path', { d: `M${cx + 14} ${cy - 6}A16 16 0 1 0 ${cx + 6} ${cy + 14}M${cx + 14} ${cy - 6}l2 -12M${cx + 14} ${cy - 6}l-12 -2`, fill: 'none', stroke: '#b07d00', 'stroke-width': '3', 'stroke-linecap': 'round', 'vector-effect': 'non-scaling-stroke' }));
+        out.push(b);
+      }
+    }
+    const common = { fill: 'none', stroke: KID_INK, 'stroke-width': String(KID_INK_WIDTH * 0.7), 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'vector-effect': 'non-scaling-stroke', opacity: '0.9' };
+    for (const stroke of sInk.current) out.push(el('path', { d: pathD(stroke), ...common }));
+    layer.replaceChildren(...out);
+    setMarks(ink.current.length + sInk.current.length);
+  }, [readonly]);
+  const canTurnRef = useRef(canTurn);
+  canTurnRef.current = canTurn;
 
   // ---- 铺这一课:开 PDF、量页、每页先画一张、拉行和字 ----
   useEffect(() => {
@@ -441,16 +535,28 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
     if (teacherKey.current !== teacherNow) { teacherKey.current = teacherNow; paintTeacher(lesson); scheduleShot(); }
     const want = page?.kid.ink ?? [];
     if (want.length !== ink.current.length || want.some((st, i) => st.length !== ink.current[i]?.length)) { ink.current = want.map((st) => st.slice()); paintInk(); scheduleShot(); }
+    // 白纸条:换了一条、东西变了、孩子在上面画的变了就重摆
+    const sk = JSON.stringify([strip, strip ? page?.kid.stripInk[strip.key] ?? [] : [], page?.kid.turns, canTurn]);
+    const opened = (strip?.key ?? '') !== stripKeyRef.current.split('|')[0];
+    if (sk !== stripKeyRef.current.slice(stripKeyRef.current.indexOf('|') + 1)) {
+      stripKeyRef.current = `${strip?.key ?? ''}|${sk}`;
+      sInk.current = strip ? (page?.kid.stripInk[strip.key] ?? []).map((x) => x.slice()) : [];
+      paintStrip();
+      scheduleShot();
+    }
     const L = lesson.look;
     if (L && L.n !== lookedN.current) {
       lookedN.current = L.n;
-      const b = frameBox(L.box, g.sheets);
-      if (touches.current.size || pen.current) pendingFrame.current = b; else goLook(b);
+      // 白纸条开着:题目在上、白纸条在下;没开:那一块摆到窗里
+      if (strip && strip.key === L.label) { if (touches.current.size || pen.current) pendingStrip.current = strip.box; else goStrip(strip.box); }
+      else { const b = frameBox(L.box, g.sheets); if (touches.current.size || pen.current) pendingFrame.current = b; else goLook(b); }
+    } else if (strip && opened && !readonly) {
+      if (touches.current.size || pen.current) pendingStrip.current = strip.box; else goStrip(strip.box);
     }
     // 录像:孩子的窗跟着
     if (readonly && lesson.view) moveTo(camFor(lesson.view), true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [teacherNow, inkNow, lesson.look?.n, lesson.view?.join(','), phase, geoKey]);
+  }, [teacherNow, inkNow, lesson.look?.n, lesson.view?.join(','), phase, geoKey, JSON.stringify([strip, strip ? page?.kid.stripInk[strip.key]?.length : 0, page?.kid.turns, canTurn])]);
 
   useEffect(() => {
     const ro = new ResizeObserver(() => { cam.current = clamp(cam.current); apply(); scheduleSharp(); });
@@ -469,6 +575,7 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
   /** 挪完了:等一下再报(连着挪就只报最后一次),顺手把窗里那块画清楚;手上动着时老师要看的那块这时去 */
   const settled = (): void => {
     scheduleSharp();
+    if (pendingStrip.current) { const b = pendingStrip.current; pendingStrip.current = null; pendingFrame.current = null; goStrip(b); return; }
     if (pendingFrame.current) { const b = pendingFrame.current; pendingFrame.current = null; goLook(b); return; }
     if (!moved.current) return;
     moved.current = false;
@@ -480,6 +587,11 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
   /** 轻点:先看是不是盖住的拼音,再看是不是一个字 */
   const tap = (x: number, y: number): void => {
     const [sx, sy] = toScene(x, y);
+    // 白纸条里方向盘的转钮:一下转一格(90°)
+    for (const b of Array.from(svg.current?.querySelectorAll<SVGGElement>('.bk-strip .bk-turn') ?? [])) {
+      const bx = Number(b.dataset.x), by = Number(b.dataset.y), br = Number(b.dataset.r);
+      if (Math.hypot(sx - bx, sy - by) <= br * 1.4) { onTurn?.(b.dataset.item ?? '', (Number(b.dataset.deg) + 90) % 360); return; }
+    }
     const layer = svg.current?.querySelector('.bk-teacher');
     for (const c of Array.from(layer?.querySelectorAll<SVGRectElement>('.bk-cover') ?? [])) {
       const bx = Number(c.getAttribute('x')), by = Number(c.getAttribute('y')), bw = Number(c.getAttribute('width')), bh = Number(c.getAttribute('height'));
@@ -629,9 +741,20 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
       if (tiny || !canMark || readonly) { p.el.remove(); if (tiny) tap(e.clientX, e.clientY); settled(); return; }
       const step = Math.ceil(p.pts.length / LESSON_INK_POINTS);
       const pts = p.pts.filter((_, i) => i % step === 0 || i === p.pts.length - 1).slice(-LESSON_INK_POINTS).map(([x, y]) => [Math.round(x), Math.round(y)] as [number, number]);
-      ink.current = [...ink.current, pts];
-      paintInk();
-      onStroke(pts);
+      // 落在开着的白纸条上(中点在白纸条里):跟着白纸条
+      const st = latestStrip.current;
+      const xs = pts.map((q) => q[0]), ys = pts.map((q) => q[1]);
+      const mx = (Math.min(...xs) + Math.max(...xs)) / 2, my = (Math.min(...ys) + Math.max(...ys)) / 2;
+      if (st && mx >= st.lay.rect[0] && mx <= st.lay.rect[2] && my >= st.lay.rect[1] && my <= st.lay.rect[3]) {
+        p.el.remove();
+        sInk.current = [...sInk.current, pts];
+        paintStrip();
+        onStroke(pts, st.key);
+      } else {
+        ink.current = [...ink.current, pts];
+        paintInk();
+        onStroke(pts);
+      }
       settled();
       return;
     }
@@ -676,12 +799,14 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
   const wheelTimer = useRef(0);
 
   const wipe = useCallback(() => {
-    if (readonly || !ink.current.length) return;
+    if (readonly || (!ink.current.length && !sInk.current.length)) return;
     ink.current = [];
+    sInk.current = [];
     paintInk();
+    paintStrip();
     onWipe();
     scheduleShot();
-  }, [readonly, paintInk, onWipe]);
+  }, [readonly, paintInk, paintStrip, onWipe]);
 
   /** 窗此刻的样子导成一张图(交板是 png,交给老师看的窗是 jpeg):每页先画的那张、重画清楚的那一块 + 老师的圈 + 孩子的笔画,纸色打底 */
   const snapshot = useCallback((type: 'image/png' | 'image/jpeg' = 'image/png'): string | undefined => {
@@ -704,8 +829,26 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
       ctx.lineCap = 'round'; ctx.lineJoin = 'round';
       ctx.strokeStyle = RED; ctx.lineWidth = 3 / k;
       for (const e of Array.from(svg.current?.querySelectorAll<SVGEllipseElement>('.bk-ring') ?? [])) { ctx.beginPath(); ctx.ellipse(Number(e.getAttribute('cx')), Number(e.getAttribute('cy')), Number(e.getAttribute('rx')), Number(e.getAttribute('ry')), 0, 0, Math.PI * 2); ctx.stroke(); }
+      // 盖住的(遮、盖):孩子眼前就是盖着的
+      ctx.fillStyle = '#f1e6c8';
+      for (const e of Array.from(svg.current?.querySelectorAll<SVGRectElement>('.bk-teacher .bk-cover') ?? [])) ctx.fillRect(Number(e.getAttribute('x')), Number(e.getAttribute('y')), Number(e.getAttribute('width')), Number(e.getAttribute('height')));
       ctx.strokeStyle = KID_INK; ctx.lineWidth = (KID_INK_WIDTH * 0.7) / k;
       for (const st of ink.current) { ctx.beginPath(); st.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke(); }
+      // 白纸条:白纸、摆的图形、写的字、孩子在上面画的
+      const strip = latestStrip.current, p = lessonPage(latest.current);
+      if (strip && p) {
+        const [sx1, sy1, sx2, sy2] = strip.lay.rect;
+        ctx.fillStyle = STRIP_FILL; ctx.fillRect(sx1, sy1, sx2 - sx1, sy2 - sy1);
+        for (const slot of strip.lay.slots) {
+          if (slot.item.kind === 'write') { ctx.fillStyle = '#1e1e1e'; ctx.font = `${slot.font}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(slot.item.text, (slot.box[0] + slot.box[2]) / 2, (slot.box[1] + slot.box[3]) / 2); continue; }
+          ctx.save();
+          ctx.transform(slot.scale!, 0, 0, slot.scale!, slot.ox!, slot.oy!);
+          for (const sk of slotSkeletons(slot, p.kid.turns[`${strip.key}#${slot.n}`] ?? 0)) skeletonDraw(ctx, sk);
+          ctx.restore();
+        }
+        ctx.strokeStyle = KID_INK; ctx.lineWidth = (KID_INK_WIDTH * 0.7) / k; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        for (const st of sInk.current) { ctx.beginPath(); st.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke(); }
+      }
       return type === 'image/jpeg' ? cv.toDataURL('image/jpeg', 0.8) : cv.toDataURL('image/png');
     } catch {
       return undefined;
@@ -717,7 +860,7 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
       // 「给老师看」:窗里的图这时就交(不等停下来),老师这一轮看到的是他刚写完的样子
       const g = geo.current;
       const image = g && onShot && !readonly ? snapshot('image/jpeg') : undefined;
-      if (image) { const b = viewBox().map((v) => Math.round(v)) as Box; shotKey.current = `${g!.key}|${b.join(',')}|${teacherKey.current}|${ink.current.length}`; onShot!(b, image); }
+      if (image) { const b = viewBox().map((v) => Math.round(v)) as Box; shotKey.current = `${g!.key}|${b.join(',')}|${teacherKey.current}|${ink.current.length}|${stripKeyRef.current}|${sInk.current.length}`; onShot!(b, image); }
       onSubmit();
     },
     peek() { return Promise.resolve(snapshot('image/jpeg') ?? null); },
@@ -732,6 +875,7 @@ export const BookStage = forwardRef<KitStageHandle, BookStageProps>(function Boo
             <svg className="bk-svg" ref={svg} xmlns={SVG_NS}>
               <g className="bk-hl" />
               <g className="bk-teacher" />
+              <g className="bk-strip" />
               <g className="bk-ink" />
             </svg>
           </div>

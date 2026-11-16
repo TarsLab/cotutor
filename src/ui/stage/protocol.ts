@@ -32,7 +32,9 @@ export type FromStage =
   | { source: typeof STAGE_SOURCE; type: 'shot'; box: [number, number, number, number]; image: string }
   | { source: typeof STAGE_SOURCE; type: 'submit'; state: unknown; /** 板导出的 png(data URL),页面转存 */ image?: string }
   /** 一节课(课本):孩子落了一笔(场景坐标)/ 擦掉了自己画的;页面照 lessonStep 改状态、报给服务端 */
-  | { source: typeof STAGE_SOURCE; type: 'stroke'; pts: [number, number][] }
+  | { source: typeof STAGE_SOURCE; type: 'stroke'; pts: [number, number][]; /** 落在开着的白纸条上 */ strip?: string }
+  /** 一节课:白纸条里的方向盘转到了多少度(item = <白纸条>#<第几样>) */
+  | { source: typeof STAGE_SOURCE; type: 'turn'; item: string; deg: number }
   | { source: typeof STAGE_SOURCE; type: 'wipe' }
   /** control peek 的回话:板此刻的样子(长边 480 的 jpeg data URL;课本是窗里那块;导不出、小课堂这种不是板的 null) */
   | { source: typeof STAGE_SOURCE; type: 'peek'; image: string | null }

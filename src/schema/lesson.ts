@@ -74,8 +74,11 @@ export interface LessonPage {
   pick: boolean;
   /** 老师的那一层 */
   teacher: { marks: TeacherMark[]; strips: Strip[] };
-  /** 孩子的那一层:笔画(场景坐标,原样不归整)、揭开了哪些、点开看过哪些字词(先后)、白纸条里的图形转到多少度(键:<白纸条>#<第几样>) */
-  kid: { ink: [number, number][][]; revealed: string[]; picked: string[]; turns: Record<string, number> };
+  /**
+   * 孩子的那一层:笔画(场景坐标,原样不归整)、写在白纸条上的笔画(键:白纸条;收起来就跟着收,回到那道题还在)、
+   * 揭开了哪些、点开看过哪些字词(先后)、白纸条里的图形转到多少度(键:<白纸条>#<第几样>)
+   */
+  kid: { ink: [number, number][][]; stripInk: Record<string, [number, number][][]>; revealed: string[]; picked: string[]; turns: Record<string, number> };
   /** 开放的:这一步请孩子做的(老师的「请」);没请就只能看(和点字) */
   open: AskName[];
 }
@@ -109,9 +112,9 @@ export type LessonAct =
 /** 改一节课的事:老师的动作,或孩子在页上做的(实时那条连接报来的) */
 export type LessonEvent =
   | { t: 'act'; act: LessonAct }
-  /** 孩子落了一笔(场景坐标) */
-  | { t: 'stroke'; pts: [number, number][] }
-  /** 孩子擦掉自己画的(这一页) */
+  /** 孩子落了一笔(场景坐标);strip = 落在开着的那条白纸条上 */
+  | { t: 'stroke'; pts: [number, number][]; strip?: string }
+  /** 孩子擦掉自己画的(这一页上的,和开着的白纸条上的) */
   | { t: 'wipe' }
   /** 揭开了一处盖住的(遮、盖) */
   | { t: 'reveal'; text: string }
@@ -148,6 +151,7 @@ export const LessonPageSchema = z.object({
   }),
   kid: z.object({
     ink: z.array(z.array(z.tuple([num, num])).min(1).max(LESSON_INK_POINTS)).max(LESSON_INK_MAX),
+    stripInk: z.record(z.string(), z.array(z.array(z.tuple([num, num])).min(1).max(LESSON_INK_POINTS)).max(LESSON_INK_MAX)).default({}),
     revealed: z.array(z.string()),
     picked: z.array(z.string()).max(LESSON_PICK_MAX),
     turns: z.record(z.string(), num),

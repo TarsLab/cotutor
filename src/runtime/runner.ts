@@ -408,7 +408,14 @@ export class Runner {
     const book = /^([^#]+\.pdf)#(.+)$/i.exec(b.base);
     // 课本做底:窗停下来以后舞台交来的窗里的图 {k:'shot', box, image}(jpeg data URL);只留最新一张,下一轮附给老师
     const shot = b.k === 'shot' ? jpegBytes(b.image) : null;
-    // 课本上落了一笔 {k:'stroke', pts}(场景坐标)、擦掉了自己画的 {k:'wipe'}:落进这节课的状态,板的日志记一笔(下一轮「孩子做的」数它);不念、不催
+    // 课本上落了一笔 {k:'stroke', pts, strip?}(场景坐标;strip = 落在开着的白纸条上)、擦掉了自己画的 {k:'wipe'}、
+    // 白纸条里的方向盘转了 {k:'turn', item, deg}:落进这节课的状态,板的日志记一笔(下一轮「孩子做的」数它);不念、不催
+    if (b.k === 'turn') {
+      if (!book || typeof b.item !== 'string' || b.item.length > 60 || typeof b.deg !== 'number' || !Number.isFinite(b.deg)) return null;
+      let took = false;
+      await updateLesson(ws, tutor, date, b.thread, (l) => { if (l.at !== b.base) return l; took = true; return lessonStep(l, { t: 'turn', item: b.item as string, deg: b.deg as number }); });
+      return took ? { thread: b.thread, say: null, still: false } : null;
+    }
     if (b.k === 'stroke' || b.k === 'wipe') {
       const pts = b.k === 'stroke' && Array.isArray(b.pts) ? b.pts.slice(0, LESSON_INK_POINTS) : [];
       const ok = pts.every((p) => Array.isArray(p) && p.length === 2 && p.every((n) => typeof n === 'number' && Number.isFinite(n) && Math.abs(n) < 100_000));
@@ -417,7 +424,7 @@ export class Runner {
       if (index.messages.find((_, i) => threads(index.messages)[i] === b.thread)?.board !== 'page') return null;
       const at = (this.opts.now ?? (() => new Date()))().toISOString();
       let took = false;
-      await updateLesson(ws, tutor, date, b.thread, (l) => { if (l.at !== b.base) return l; took = true; return lessonStep(l, b.k === 'stroke' ? { t: 'stroke', pts: pts as [number, number][] } : { t: 'wipe' }); });
+      await updateLesson(ws, tutor, date, b.thread, (l) => { if (l.at !== b.base) return l; took = true; return lessonStep(l, b.k === 'stroke' ? { t: 'stroke', pts: pts as [number, number][], ...(typeof b.strip === 'string' && b.strip.length <= 60 ? { strip: b.strip } : {}) } : { t: 'wipe' }); });
       if (!took) return null;
       await appendBoard(ws, tutor, date, b.thread, { at, k: 'ink', base: b.base as string, ...(b.k === 'wipe' ? { wipe: true as const } : {}) });
       return { thread: b.thread, say: null, still: false };

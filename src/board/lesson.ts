@@ -49,7 +49,7 @@ function lessonAct(l: Lesson, a: LessonAct): Lesson {
   switch (a.k) {
     case '翻': {
       const had = l.pages.find((p) => p.id === a.page.id);
-      const fresh: LessonPage = { ...a.page, teacher: { marks: [], strips: [] }, kid: { ink: [], revealed: [], picked: [], turns: {} }, open: [] };
+      const fresh: LessonPage = { ...a.page, teacher: { marks: [], strips: [] }, kid: { ink: [], stripInk: {}, revealed: [], picked: [], turns: {} }, open: [] };
       // 铺过的留着(翻回来原来画的都在);多了丢最早的
       const pages = had ? l.pages : [...l.pages, fresh].slice(-LS_PAGES_MAX);
       return { ...l, pages, at: a.page.id, look: null, view: null, strip: null };
@@ -82,7 +82,15 @@ function lessonAct(l: Lesson, a: LessonAct): Lesson {
       const open = lessonStrip(l);
       if (open) {
         const items = a.all ? [] : open.items.slice(0, -1);
-        const next = onLessonPage(l, (p) => ({ ...p, teacher: { ...p.teacher, strips: items.length ? p.teacher.strips.map((s) => (s === open ? { ...s, items } : s)) : p.teacher.strips.filter((s) => s !== open) } }));
+        const next = onLessonPage(l, (p) => {
+          const strips = items.length ? p.teacher.strips.map((s) => (s === open ? { ...s, items } : s)) : p.teacher.strips.filter((s) => s !== open);
+          if (items.length) return { ...p, teacher: { ...p.teacher, strips } };
+          // 整条收掉:孩子在上面画的、转的跟着没了(再开一条是新的)
+          const stripInk = { ...p.kid.stripInk };
+          delete stripInk[open.key];
+          const turns = Object.fromEntries(Object.entries(p.kid.turns).filter(([k]) => !k.startsWith(`${open.key}#`)));
+          return { ...p, teacher: { ...p.teacher, strips }, kid: { ...p.kid, stripInk, turns } };
+        });
         return items.length ? next : { ...next, strip: null };
       }
       return onLessonPage(l, (p) => (p.teacher.marks.length ? { ...p, teacher: { ...p.teacher, marks: a.all ? [] : p.teacher.marks.slice(0, -1) } } : p));
@@ -96,11 +104,22 @@ export function lessonStep(l: Lesson, ev: LessonEvent): Lesson {
   switch (ev.t) {
     case 'act':
       return lessonAct(l, ev.act);
-    case 'stroke':
+    case 'stroke': {
       if (!ev.pts.length) return l;
-      return onLessonPage(l, (p) => ({ ...p, kid: { ...p.kid, ink: [...p.kid.ink, ev.pts.slice(0, LS_INK_POINTS)].slice(-LS_INK_MAX) } }));
+      const pts = ev.pts.slice(0, LS_INK_POINTS);
+      // 落在白纸条上的(那一条开着才算):跟着白纸条,收起来就看不见
+      const strip = ev.strip && ev.strip === l.strip && lessonStrip(l) ? ev.strip : null;
+      if (strip) return onLessonPage(l, (p) => ({ ...p, kid: { ...p.kid, stripInk: { ...p.kid.stripInk, [strip]: [...(p.kid.stripInk[strip] ?? []), pts].slice(-LS_INK_MAX) } } }));
+      return onLessonPage(l, (p) => ({ ...p, kid: { ...p.kid, ink: [...p.kid.ink, pts].slice(-LS_INK_MAX) } }));
+    }
     case 'wipe':
-      return onLessonPage(l, (p) => (p.kid.ink.length ? { ...p, kid: { ...p.kid, ink: [] } } : p));
+      return onLessonPage(l, (p) => {
+        const open = l.strip && p.kid.stripInk[l.strip]?.length ? l.strip : null;
+        if (!p.kid.ink.length && !open) return p;
+        const stripInk = { ...p.kid.stripInk };
+        if (open) delete stripInk[open];
+        return { ...p, kid: { ...p.kid, ink: [], stripInk } };
+      });
     case 'reveal':
       return onLessonPage(l, (p) => (p.kid.revealed.includes(ev.text) ? p : { ...p, kid: { ...p.kid, revealed: [...p.kid.revealed, ev.text] } }));
     case 'pick':

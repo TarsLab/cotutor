@@ -90,7 +90,8 @@ function App(): JSX.Element {
   const onBookShot = useCallback((box: [number, number, number, number], image: string) => post({ type: 'shot', box, image }), []);
   const onKitSubmit = useCallback((state: KitState, image?: string) => post({ type: 'submit', state, ...(image ? { image } : {}) }), []);
   const onLessonSubmit = useCallback(() => post({ type: 'submit', state: null }), []);
-  const onStroke = useCallback((pts: [number, number][]) => post({ type: 'stroke', pts }), []);
+  const onStroke = useCallback((pts: [number, number][], strip?: string) => post({ type: 'stroke', pts, ...(strip ? { strip } : {}) }), []);
+  const onTurn = useCallback((item: string, deg: number) => post({ type: 'turn', item, deg }), []);
   const onWipe = useCallback(() => post({ type: 'wipe' }), []);
   const onLectureDone = useCallback((w: LectureWatch) => post({ type: 'lecture', event: 'finished', ...w }), []);
   const onLectureClose = useCallback((w: LectureWatch) => post({ type: 'lecture', event: 'close', ...w }), []);
@@ -103,7 +104,7 @@ function App(): JSX.Element {
   const onMarks = useCallback((marks: StageMark[]) => post({ type: 'marks', marks }), []);
   const onWatch = useCallback((e: WatchEntry) => post({ type: 'watch', ...e }), []);
 
-  if (lesson) return <BookStage ref={kit} key={lesson.id} id={lesson.id} lesson={lesson.lesson as Lesson} readonly={lesson.readonly === true} hand={lesson.hand === 'left' ? 'left' : 'right'} onStroke={onStroke} onWipe={onWipe} onSubmit={onLessonSubmit} onPick={onKitPick} onReveal={onKitReveal} onView={onBookView} onShot={onBookShot} onError={onError} />;
+  if (lesson) return <BookStage ref={kit} key={lesson.id} id={lesson.id} lesson={lesson.lesson as Lesson} readonly={lesson.readonly === true} hand={lesson.hand === 'left' ? 'left' : 'right'} onStroke={onStroke} onTurn={onTurn} onWipe={onWipe} onSubmit={onLessonSubmit} onPick={onKitPick} onReveal={onKitReveal} onView={onBookView} onShot={onBookShot} onError={onError} />;
   if (!card) return <div className="stage-wait" />;
   // 板书上的小课堂卡(老师放课里的一段):props 里有下发时补的起止
   if (card.kind === 'lecture' && card.bundleUrl && typeof card.props.start === 'number' && typeof card.props.end === 'number') {

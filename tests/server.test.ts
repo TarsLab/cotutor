@@ -158,9 +158,8 @@ try {
     }
     check('清单与板书接口:未来的日期 400,没这位老师 404', (await get('/api/overview/2099-01-01')).status === 400 && (await get('/api/conversations/math-tutor/2099-01-01/board')).status === 400 && (await get('/api/conversations/nobody/today/board')).status === 404);
     const page = (await get('/parent')).html ?? '';
-    // 地址按端分(2026-10-14):孩子端 /、/dictation、/talk(只有跟读那一屏);家长端 /parent/*;工作台 /dev/*;旧地址不留
-    const talkKid = (await get('/talk')).html ?? '', talkParent = await get('/parent/talk');
-    check('口语课:/talk 是孩子的拍照、口语单(上课交给英语老师的实时页,这一页不打电话),页面里没有家长端的路径;/parent/talk 删了', talkKid.includes('id="snap"') && talkKid.includes('id="pick"') && !talkKid.includes('id="kid"') && !talkKid.includes('/parent') && talkParent.status === 404);
+    // 地址按端分(2026-10-14):孩子端 /、/dictation;家长端 /parent/*;工作台 /dev/*;旧地址不留(口语课页 /talk 2026-11-17 删了,口语课是方砖)
+    check('口语课页删了:/talk、/api/talk 都没有', (await get('/talk')).status === 404 && (await get('/api/talk')).status === 404);
     check('家长端清单的跳转只在家长页(听写录像),孩子端页面里没有;口语课录像删了(那一课是英语老师的话题)', page.includes('/parent/dictation/reel?id=') && !page.includes('/parent/talk/reel') && !((await get('/')).html ?? '').includes('/parent/') && (await get('/parent/talk/reel')).status === 404);
     check('家长端与工作台的新地址在;旧地址、删掉的识别试验页与小老师 404', (await get('/parent/dictation')).status === 200 && (await get('/parent/dictation/reel')).status === 200 && (await Promise.all(['/dictation/parent', '/dictation/reel', '/xlaoshi', '/parent/xlaoshi', '/api/xlaoshi', '/qr', '/voice-test', '/dev/voice-test'].map(async (u) => (await get(u)).status))).every((x) => x === 404));
     check('家长端 /parent:自己的一页(2026-10-28 起不是孩子端页面的家长模式)、自己的 manifest;manifest 从这页起;工作台在 /dev,/parent/board 没了', page.includes('id="ptl"') && !page.includes('const MODE') && page.includes('href="/parent/manifest.webmanifest"') && page.includes('· 家长</title>') && ((await get('/parent/manifest.webmanifest')).json as { start_url: string; scope: string }).start_url === '/parent' && ((await get('/manifest.webmanifest')).json as { start_url: string }).start_url === '/' && ((await get('/dev')).html ?? '').includes('老师团') && (await get('/parent/board')).status === 404);

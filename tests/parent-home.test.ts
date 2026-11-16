@@ -75,7 +75,7 @@ let now = new Date(2026, 9, 10, 20, 0);
 const ctx = createContext(loadWorkspace(root), { now: () => now });
 const call = (method: string, path: string, body?: unknown) => route(method, path, ctx, body);
 type T = { name: string; hidden: boolean; extras: string[]; extrasSet: string[] | null; buttons: { kind: string; label: string; brief?: string; until?: string }[]; dictation: { chars: string; say?: string }[] | null };
-type PH = { home: { id: string } | null; tutors: T[]; talk: { enabled: boolean; note: string; minutes: number }; today: string };
+type PH = { home: { id: string } | null; tutors: T[]; today: string };
 const get = async (): Promise<PH> => (await call('GET', '/api/parent/home')).json as PH;
 type KH = { cards: { kind: string; owner?: string | null; props: { tutor?: string; buttons?: { id: string | number; label: string }[]; count?: number } }[]; tutors: { name: string; extras: string[] }[] };
 const kid = async (): Promise<KH> => (await call('GET', '/api/kid/home')).json as KH;
@@ -146,19 +146,21 @@ try {
   check('发布件的原文在历史里,家长段等没动到的照旧', Boolean(pub) && readFileSync(join(root, pub!.source), 'utf8').includes('```dictation chinese-tutor'));
 
   // 开关与设置
-  const s1 = await call('PATCH', '/api/parent/settings', { tutors: { 'english-tutor': { extras: ['dictation'], hidden: false }, 'math-tutor': { hidden: true } }, talk: { note: '  这周学颜色  ', minutes: 7 }, listen: 'omni', dailyMessages: 40 });
-  const c1 = JSON.parse(readFileSync(cfgFile, 'utf8')) as { tutors: Record<string, { extras?: string[]; hidden?: boolean }>; talk: { note?: string; minutes: number }; kid: { listen?: string; slug: string }; policyDefaults?: Record<string, unknown> };
-  check('设置写回 cotutor.json:常驻、藏起来、给老师的话(去掉首尾空白)、聊几分钟;孩子的别的字段不丢;老页面交来的每天几条、怎么听都不认(不限条数,按住说话只有实时一种)', s1.status === 200 && c1.tutors['english-tutor'].extras?.join() === 'dictation' && c1.tutors['math-tutor'].hidden === true && c1.talk.note === '这周学颜色' && c1.talk.minutes === 7 && c1.kid.listen === undefined && c1.kid.slug === 'ming' && c1.policyDefaults?.dailyMessages === undefined, JSON.stringify(c1.talk));
+  const s1 = await call('PATCH', '/api/parent/settings', { tutors: { 'english-tutor': { extras: ['dictation'], hidden: false }, 'math-tutor': { hidden: true } }, listen: 'omni', dailyMessages: 40 });
+  const c1 = JSON.parse(readFileSync(cfgFile, 'utf8')) as { tutors: Record<string, { extras?: string[]; hidden?: boolean }>; kid: { listen?: string; slug: string }; policyDefaults?: Record<string, unknown> };
+  check('设置写回 cotutor.json:常驻、藏起来;孩子的别的字段不丢;老页面交来的每天几条、怎么听都不认(不限条数,按住说话只有实时一种)', s1.status === 200 && c1.tutors['english-tutor'].extras?.join() === 'dictation' && c1.tutors['math-tutor'].hidden === true && c1.kid.listen === undefined && c1.kid.slug === 'ming' && c1.policyDefaults?.dailyMessages === undefined, JSON.stringify(c1));
+  const oldTalk = await call('PATCH', '/api/parent/settings', { talk: { note: '这周学颜色' } });
+  check('老页面交来的口语课设置(talk):不认、不写', oldTalk.status === 200 && !('talk' in (JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, unknown>)));
   const g3 = s1.json as PH;
-  check('回的是改过的样子;藏起来的老师家长端还列着', !('listen' in g3) && !('dailyMessages' in g3) && g3.talk.note === '这周学颜色' && g3.tutors.find((t) => t.name === 'math-tutor')!.hidden && g3.tutors.find((t) => t.name === 'english-tutor')!.extras.join() === 'dictation');
+  check('回的是改过的样子;藏起来的老师家长端还列着', !('listen' in g3) && !('dailyMessages' in g3) && !('talk' in g3) && g3.tutors.find((t) => t.name === 'math-tutor')!.hidden && g3.tutors.find((t) => t.name === 'english-tutor')!.extras.join() === 'dictation');
   check('孩子端:藏起来的数学不见了,英语多了听写', (await kid()).tutors.map((t) => t.name + ':' + t.extras.join('+')).join() === 'chinese-tutor:dictation,english-tutor:dictation', (await kid()).tutors.map((t) => t.name + ':' + t.extras.join('+')).join());
-  await call('PATCH', '/api/parent/settings', { tutors: { 'english-tutor': { extras: null }, 'math-tutor': { hidden: false } }, talk: { note: '' } });
-  const c2 = JSON.parse(readFileSync(cfgFile, 'utf8')) as { tutors: Record<string, { extras?: string[] }>; talk: { note?: string } };
-  check('extras null = 回到按学科的缺省(字段删掉);给老师的话清空 = 删掉', !('extras' in c2.tutors['english-tutor']) && !('note' in c2.talk));
+  await call('PATCH', '/api/parent/settings', { tutors: { 'english-tutor': { extras: null }, 'math-tutor': { hidden: false } } });
+  const c2 = JSON.parse(readFileSync(cfgFile, 'utf8')) as { tutors: Record<string, { extras?: string[] }> };
+  check('extras null = 回到按学科的缺省(字段删掉)', !('extras' in c2.tutors['english-tutor']));
   // 方砖:家长端列着三块(老师家里有那个 activity 文件的),开关写回 cotutor.json 的 tiles(只记关掉的)
   type TL = { id: string; label: string; on: boolean; usable: boolean };
   const tilesP = (g: PH, n: string): TL[] => (g.tutors.find((t) => t.name === n) as unknown as { tiles: TL[] }).tiles;
-  check('家长端列着方砖:三位老师都是预习、检查作业、复习,都开着、都用得了', ['chinese-tutor', 'math-tutor', 'english-tutor'].every((n) => tilesP(g3, n).map((x) => `${x.id}:${x.label}:${x.on}:${x.usable}`).join() === 'preview:预习:true:true,check:检查作业:true:true,review:复习:true:true'), JSON.stringify(tilesP(g3, 'math-tutor')));
+  check('家长端列着方砖:三位老师都是预习、检查作业、复习,英语老师还有口语课;都开着、都用得了', ['chinese-tutor', 'math-tutor', 'english-tutor'].every((n) => tilesP(g3, n).map((x) => `${x.id}:${x.label}:${x.on}:${x.usable}`).join() === 'preview:预习:true:true,check:检查作业:true:true,review:复习:true:true' + (n === 'english-tutor' ? ',talk:口语课:true:true' : '')), JSON.stringify(tilesP(g3, 'english-tutor')));
   const t1 = await call('PATCH', '/api/parent/settings', { tutors: { 'math-tutor': { tiles: { review: false } } } });
   const ct1 = JSON.parse(readFileSync(cfgFile, 'utf8')) as { tutors: Record<string, { tiles?: Record<string, boolean> }> };
   check('关掉一块:cotutor.json 记 false,家长端那块 off', t1.status === 200 && JSON.stringify(ct1.tutors['math-tutor'].tiles) === '{"review":false}' && tilesP(t1.json as PH, 'math-tutor').find((x) => x.id === 'review')?.on === false);

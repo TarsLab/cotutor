@@ -21,7 +21,7 @@ import { cardAssets, parseCardState, stripSecrets, DictationPropsSchema } from '
 import { fileURLToPath } from 'node:url';
 import { bundleAsset, stageAsset, stageIndex, stageVersion } from '../http/stage.ts';
 import { sendFile } from '../http/send-file.ts';
-import { HOME_TILES, HOME_TILE_IDS, canonicalSubject, subjectLang, tutorExtras, type ConversationMessage } from '../../schema/index.ts';
+import { HOME_TILES, HOME_TILE_IDS, subjectLang, tutorExtras, type ConversationMessage } from '../../schema/index.ts';
 import { NEUTRAL_COLOR, tutorColors } from '../../ui/shared/tutor-color.ts';
 import { boardMarkOf } from '../../ui/kid/board-mark.ts';
 import { backTutorOf } from '../../ui/kid/tutor-face.ts';
@@ -82,6 +82,7 @@ import { parentPage } from '../../ui/parent/parent-page.ts';
 import { arrangeHome, homeOwners, kidButtons, kidTiles, parseHome } from '../../runtime/home/home.ts';
 import type { TutorButton } from '../../board/cards/index.ts';
 import { packageTheme } from '../cli/themes.ts';
+import { DEFAULT_GRADE, PACKAGE_GRADES_DIR } from '../cli/grades.ts';
 import { cardsCss } from '../../board/cards/docs.ts';
 import { VOICE_GALLERY_PAGE } from '../../ui/dev/voice-gallery-page.ts';
 
@@ -523,7 +524,7 @@ export function createMock(opts: MockOptions = {}): Mock {
   };
   // 学科色同真服务:按老师的先后定(src/ui/shared/tutor-color.ts)
   const colors = tutorColors(Object.fromEntries(MOCK_TUTORS.map((t) => [t.name, { subject: t.subject }])));
-  const tutorsJson = (): KidTutor[] => MOCK_TUTORS.map((t) => ({ name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, color: colors[t.name], mark: boardMarkOf(t.subject), lang: subjectLang(t.subject), hasVoice: false, extras: tutorExtras({ subject: t.subject }).filter((x) => x !== 'talk'), listen: 'hold' }));
+  const tutorsJson = (): KidTutor[] => MOCK_TUTORS.map((t) => ({ name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, color: colors[t.name], mark: boardMarkOf(t.subject), lang: subjectLang(t.subject), hasVoice: false, extras: tutorExtras({ subject: t.subject }), listen: 'hold' }));
   /** 小课堂:样本课包与样本视频在仓库里(tests/fixtures/bundles/、lectures/),起来时和真服务一样读一遍(readLecture)、记住 */
   const lectures = new Map<string, Lecture>();
   const lecturesLoaded = (async () => {
@@ -541,9 +542,9 @@ export function createMock(opts: MockOptions = {}): Mock {
     const cards = arrangeHome(parsed, names).map((c) => {
       if (c.kind !== 'tutor') return { ...stripSecrets({ cards: [c], lines: [] }).cards[0], owner: owners.get(c) ?? null }; // 同真服务:答案(听写卡的字)不下发;非老师卡带归属
       const name = String(c.props.tutor);
-      // 方砖:三门主科出厂都有预习、检查作业、复习(真服务看老师家里有没有那个 activity 文件)
-      const main = ['语文', '数学', '英语'].includes(canonicalSubject(MOCK_TUTORS.find((t) => t.name === name)?.subject) ?? '');
-      return { kind: 'tutor', props: { tutor: name, tiles: main ? kidTiles(HOME_TILE_IDS, { usable: () => true }) : [], buttons: kidButtons((c.props.buttons ?? []) as TutorButton[], { lecture: (id) => Boolean(mockLecture(id)), today: localDate(d) }).map((b) => { const l = b.kind === 'lecture' ? mockLecture(b.bundle) : null; return l ? { ...b, title: l.title, ms: l.ms, ...(l.video ? { video: true as const } : {}) } : b; }) } };
+      // 方砖:照出厂年级包里这位老师家里有没有那个 activity 文件(三门主科有预习、检查作业、复习,英语老师还有口语课;真服务看 workspace 里的)
+      const shipped = (activity: string): boolean => existsSync(join(PACKAGE_GRADES_DIR, `grade-${DEFAULT_GRADE}`, 'agents', name, 'activities', `${activity}.md`));
+      return { kind: 'tutor', props: { tutor: name, tiles: kidTiles(HOME_TILE_IDS, { usable: shipped }), buttons: kidButtons((c.props.buttons ?? []) as TutorButton[], { lecture: (id) => Boolean(mockLecture(id)), today: localDate(d) }).map((b) => { const l = b.kind === 'lecture' ? mockLecture(b.bundle) : null; return l ? { ...b, title: l.title, ms: l.ms, ...(l.video ? { video: true as const } : {}) } : b; }) } };
     });
     // figshot:和配了 figshot 的 workspace 一样给端口;这台电脑上 figshot 没开着,页面照样藏着这张卡
     return { title, date: localDate(d), tutors: tutorsJson(), home: mockHomeId(), cards, figshot: { port: 8477 }, hand: 'right', ready: scenario !== 'nokey', today: mockToday() };
@@ -702,7 +703,7 @@ export function createMock(opts: MockOptions = {}): Mock {
           const n = Math.max(0, ...reelMissRuns(reelHolds(plays), plays.filter((r) => r.k === 'type' && r.e === 'send').map((r) => r.at)).map((x) => x.n));
           if (n) th.misses = n;
         }
-        return { name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, color: colors[t.name], turns: list.length, threads: [...by.values()], booking: false, extras: tutorExtras({ subject: t.subject }).filter((x) => x !== 'talk') };
+        return { name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, color: colors[t.name], turns: list.length, threads: [...by.values()], booking: false, extras: tutorExtras({ subject: t.subject }) };
       });
       const week = weekOf(date, today).map((d) => ({ date: d, tutors: MOCK_TUTORS.filter((t) => listOf(t.name, d).length).map((t) => t.name) }));
       const out: Overview = { title, date, today, tutors, week, ready: scenario !== 'nokey' };

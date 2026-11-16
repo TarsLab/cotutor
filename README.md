@@ -85,7 +85,7 @@ Mac 和 Windows 上,`service install` 会一起装一个菜单栏(任务栏)图�
 
 面向中国大陆小学一至六年级,当前提供二年级教学包。`cotutor grades` 查看可用年级;新建时未指定 `--grade` 默认二年级,未提供的年级不会自动回退。
 
-出厂文件在 `grades/grade-2/`。三科分别提供预习、检查作业、复习(孩子端老师牌上常驻三块方砖);语文有写话与看图写话,英语有口语课,数学小课堂配合提前做好的课包。家长按教材版本、学期和孩子实际进度设置材料。
+出厂文件在 `grades/grade-2/`。三科分别提供预习、检查作业、复习(孩子端老师牌上常驻三块方砖);语文有看图说话,英语还有一块口语课方砖(拍今天学的那页,看着页跟读、一问一答),数学小课堂配合提前做好的课包。家长按教材版本、学期和孩子实际进度设置材料。
 
 孩子当前学期仍由档案决定;升年级不会自动替换家长改过的 activity。旧 workspace 执行 `cotutor refresh` 补记二年级来源,保留自定义内容。贡献其他年级与验证方式见 [年级教学包设计](docs/年级教学包.md)。
 
@@ -117,7 +117,7 @@ import { loadWorkspace } from 'cotutor/workspace';                        // 解
 
 ## 配置模型
 
-**缺省:应用直连百炼。** 嘴和脑都用家长端「首页」填的那份百炼按量 API Key 与业务空间 ID,存在本机 `~/.config/cotutor/bailian.json`(几个孩子的 workspace 共用)。老师用哪个模型写在 `cotutor.json` 的 `runtimes` 里:出厂的 `api`(`qwen3.8-max`,三位老师都用它)和 `api-flash`(`qwen3.8-flash`,便宜些;换之前先跑 `cotutor activity eval` 看例子过不过)。卡的配音、听写认字、口语单、画图也用这份 key。
+**缺省:应用直连百炼。** 嘴和脑都用家长端「首页」填的那份百炼按量 API Key 与业务空间 ID,存在本机 `~/.config/cotutor/bailian.json`(几个孩子的 workspace 共用)。老师用哪个模型写在 `cotutor.json` 的 `runtimes` 里:出厂的 `api`(`qwen3.8-max`,三位老师都用它)和 `api-flash`(`qwen3.8-flash`,便宜些;换之前先跑 `cotutor activity eval` 看例子过不过)。卡的配音、听写认字、照片上认字也用这份 key。
 
 **key 只放 `~/.config/cotutor/`**,所有命令(`serve`、`send`、`replay`、`doctor`……)读同一处,环境变量(`DASHSCOPE_API_KEY` 之类)和别的工具的配置都不看:
 

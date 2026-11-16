@@ -49,8 +49,6 @@ evals/
 bundles/
 lectures/
 snaps/
-# 口语课(孩子的原声、照片)
-talk/
 # 作业照片(孩子在老师页上拍的;paths.captures):体积大、只是这一轮的素材,认出的文字在日记里
 captures/
 # 家长在 workspace 里用 Claude Code 时它的个人设置

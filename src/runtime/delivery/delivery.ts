@@ -57,7 +57,7 @@ export class Delivery {
   get asked(): boolean {
     return this.askedNow;
   }
-  /** 排着没交给嘴的拍数、闸关着没有(小课堂那段、热身那句、打电话的铃) */
+  /** 排着没交给嘴的拍数、闸关着没有(小课堂那段、请他说的那句) */
   get pending(): number {
     return this.q.pending.length;
   }
@@ -111,12 +111,12 @@ export class Delivery {
   }
 
   /** 讲稿又定稿了几句:按序号接着交给排队(重复的、跳号的不收) */
-  lines(lines: { i: number; text: string; play?: boolean; echo?: Echo; call?: true }[]): void {
+  lines(lines: { i: number; text: string; play?: boolean; echo?: Echo }[]): void {
     if (!this.current) return;
     for (const l of lines) {
       if (l.i !== this.queued) continue;
       this.queued++;
-      this.step({ e: 'beat', beat: { job: this.current, lines: [l.i], texts: [l.text], ...(l.play ? { play: true } : {}), ...(l.echo ? { echo: l.echo } : {}), ...(l.call ? { call: true as const } : {}) } });
+      this.step({ e: 'beat', beat: { job: this.current, lines: [l.i], texts: [l.text], ...(l.play ? { play: true } : {}), ...(l.echo ? { echo: l.echo } : {}) } });
     }
   }
 
@@ -126,9 +126,9 @@ export class Delivery {
       if (this.deps.ended() || this.q.dropJob === beat.job) return;
       this.lastRead = { job: beat.job, line: beat.lines[k] };
       this.askedNow = /[?？]\s*$/.test(beat.texts[k] ?? '');
-      // play:这句念完孩子端放小课堂那一段(放完回 staged);echo:念完卡亮「轮到你」;call:念完响铃
+      // play:这句念完孩子端放小课堂那一段(放完回 staged);echo:念完轮到孩子说(按钮、锚着的卡亮「轮到你」)
       const last = k === beat.lines.length - 1;
-      this.deps.send({ t: 'read', job: beat.job, line: beat.lines[k], text: beat.texts[k], ...(beat.play && last ? { play: true } : {}), ...(beat.echo && last ? { echo: true } : {}), ...(beat.call && last ? { call: true } : {}) });
+      this.deps.send({ t: 'read', job: beat.job, line: beat.lines[k], text: beat.texts[k], ...(beat.play && last ? { play: true } : {}), ...(beat.echo && last ? { echo: true } : {}) });
       this.deps.event(beat.job, Date.now(), { lane: 'mouth', kind: 'read', line: beat.lines[k] });
     }, Math.max(0, at - this.deps.now()));
     (k === 0 ? this.firstTimers : this.readTimers).push(t);

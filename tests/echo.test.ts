@@ -5,7 +5,6 @@
 import { check, done } from './_check.ts';
 
 const { echoKind, echoLines, sayFirst } = await import('../src/board/echo.ts');
-const { catchCue } = await import('../src/realtime/cues.ts');
 
 check('说出了记号里的词:跟读(带中文的也算)', echoKind('duck,鸭子。', 'duck') === 'said' && echoKind('under under 在下面。', 'under') === 'said' && echoKind('The dog.', 'The ducks are under the bus') === 'said');
 check('四个英文词以内、没中文:跟读(念偏了的「Boss.」)', echoKind('Boss.', 'bus') === 'said' && echoKind('I am driving car', 'No, you are walking') === 'said');
@@ -31,7 +30,5 @@ check('你先说没开口', lines[4] === '自己说 bus:没开口', lines[4]);
 check('没跟、对老师说的', lines[5] === '跟 duck:没跟,对你说「那我们直接打电话吧」', lines[5]);
 const zh = echoLines([{ word: '床前明月光', say: false, outcome: 'said', text: '床前明光', hit: 0.8 }]);
 check('一行:中文按字数,不写「带中文」', zh[0] === '跟 床前明月光:说了「床前明光」,说出 4/5 个字', zh[0]);
-
-check('嘴先说的:缺省中文;打电话那段英文;说话不出声', catchCue('photo')!.includes('看一看图片') && catchCue('photo', 'en')!.includes('picture') && catchCue('empty', 'en')!.includes('Say it again') && catchCue('voice', 'en') === null && catchCue('warm')!.includes('热热身'));
 
 done();

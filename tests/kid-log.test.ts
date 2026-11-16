@@ -136,7 +136,7 @@ const html = async (p: string): Promise<string> => {
   return r.status === 200 && typeof r.html === 'string' ? r.html : '';
 };
 /** 带孩子端页面那份的:孩子自己开的、录像与预览里开的同一份页面;家长端「记录」是自己的一页,只记出错 */
-const PAGES = [['/', 'kid'], ['/parent', 'parent'], ['/reel', 'kid'], ['/preview', 'kid'], ['/dictation', 'dictation'], ['/dictation?lang=en', 'dictation-en'], ['/talk', 'talk']];
+const PAGES = [['/', 'kid'], ['/parent', 'parent'], ['/reel', 'kid'], ['/preview', 'kid'], ['/dictation', 'dictation'], ['/dictation?lang=en', 'dictation-en']];
 for (const [p, page] of PAGES) {
   const h = await html(p);
   check(`${p} 带 KID_LOG_JS、报的是 ${page}`, h.includes(KID_LOG_JS.trim()) && h.includes(`kidLog.start({ page: '${page}'`), String(h.length));

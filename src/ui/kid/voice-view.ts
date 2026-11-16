@@ -10,12 +10,12 @@
 
 /** 按钮底色:white 平时 · blue 孩子按着 · grey 老师在想 / 叫老师 / 麦关了 · cancel 上滑要取消 · light 一直听(淡蓝) */
 export type VoiceTone = 'white' | 'blue' | 'grey' | 'cancel' | 'light';
-/** 头像:still 不动 · talk 老师在说(只留一道淡淡的外圈,不放大)· listen 在听 · think 一段一段转 · ring 左右晃(响铃)· dim 淡 */
-export type VoiceFace = 'still' | 'talk' | 'listen' | 'think' | 'ring' | 'dim';
+/** 头像:still 不动 · talk 老师在说(只留一道淡淡的外圈,不放大)· listen 在听 · think 一段一段转 · dim 淡 */
+export type VoiceFace = 'still' | 'talk' | 'listen' | 'think' | 'dim';
 /** 声音:out 老师的三道小弧 · in 孩子的竖条往头像里走 · both 插话(两样都在,老师的淡到三成)· none 不画 */
 export type VoiceFlow = 'out' | 'in' | 'both' | 'none';
 /** 大字前的小图标 */
-export type VoiceIcon = '' | 'mic' | 'micOff' | 'photo' | 'up' | 'phone';
+export type VoiceIcon = '' | 'mic' | 'micOff' | 'photo' | 'up';
 /** 按下去:hold 按住说话 · toggle 点一下开 / 关麦(一直听)· hint 不接、晃一下说为什么 */
 export type VoicePress = 'hold' | 'toggle' | 'hint';
 /** 刚才那一下的提示(页面留 2 秒):busy 老师在想时按了 · connecting 嘴还没连上时按了 · unclear 太短 / 麦克风没开上 · tap 点一下没按住 */
@@ -23,7 +23,7 @@ export type VoiceHint = '' | 'busy' | 'connecting' | 'unclear' | 'tap';
 
 export interface VoiceIn {
   /** liveStep 的状态(src/runtime/delivery/player.ts 的 LiveStatus) */
-  status: 'quiet' | 'holding' | 'mouth' | 'card' | 'lecture' | 'ring' | 'replay';
+  status: 'quiet' | 'holding' | 'mouth' | 'card' | 'lecture' | 'replay';
   /** 一直听;hearing 服务端说孩子在说;ducked 嘴的声音压低着;muted 关了麦;turn 请他说的那句念完了,等他说([[请 说 …]]) */
   open: boolean;
   hearing: boolean;
@@ -36,8 +36,6 @@ export interface VoiceIn {
   photo: boolean;
   /** 嘴连上了(页面的 LV.ready) */
   ready: boolean;
-  /** 空板上等孩子先点上面一个(口语单拍好的「先热身,再打电话」、今天点过同一个按钮的「接着那个 / 重新开始」):点之前不接 */
-  choose: boolean;
   /** 在看以前的话题:只能看,不接(左栏底下一行「回到今天」) */
   readonly: boolean;
   /** 按着:麦克风开上了没有、往上滑过门限没有、多久没声音(毫秒) */
@@ -73,7 +71,7 @@ export interface VoiceView {
 export const VOICE_SILENT_MS = 3000;
 
 export function voiceIn(p: Partial<VoiceIn> = {}): VoiceIn {
-  return { status: 'quiet', open: false, hearing: false, ducked: false, muted: false, turn: false, pending: false, photo: false, ready: true, choose: false, readonly: false, holdAudio: false, cancel: false, silentMs: 0, hint: '', ...p };
+  return { status: 'quiet', open: false, hearing: false, ducked: false, muted: false, turn: false, pending: false, photo: false, ready: true, readonly: false, holdAudio: false, cancel: false, silentMs: 0, hint: '', ...p };
 }
 
 const voiceLook = (o: Partial<VoiceView> & { key: string }): VoiceView => ({ tone: 'white', face: 'still', flow: 'none', dots: false, big: '', icon: '', wait: false, small: '', shake: false, breathe: false, press: 'hold', ...o });
@@ -82,7 +80,6 @@ export function voiceView(i: VoiceIn): VoiceView {
   // 以前的话题:灰着、不接(按了晃一下),字照旧;回今天走底下那一行
   if (i.readonly) return voiceLook({ key: 'readonly', tone: 'grey', face: 'dim', icon: 'mic', big: '按住说话', press: 'hint' });
   // 先点上面一个:按钮灰着写「点上面开始」,不接(按了晃一下);嘴连没连上、一直听不一直听都一样
-  if (i.choose) return voiceLook({ key: 'choose', tone: 'grey', big: '点上面开始', press: 'hint' });
   // 刚才那一下的提示:晃一下、字留 2 秒(页面管时长)
   if (i.hint === 'busy') return voiceLook({ key: 'busy', tone: 'grey', face: 'think', big: '老师在想,等一下再说', shake: true, press: 'hint' });
   if (i.hint === 'connecting' || !i.ready) return voiceLook({ key: 'connecting', tone: 'grey', face: 'dim', big: '正在叫老师', wait: true, shake: i.hint === 'connecting', press: 'hint' });
@@ -95,7 +92,6 @@ export function voiceView(i: VoiceIn): VoiceView {
   if (i.open) {
     // 一直听:不用按,这颗是麦克风开关
     const small = i.muted ? '点一下开麦' : '点一下关麦';
-    if (i.status === 'ring') return voiceLook({ key: 'ring', tone: 'light', face: 'ring', icon: 'phone', big: '老师打电话来了', small: '铃响完老师就开口', press: 'toggle' });
     if (i.muted) return i.status === 'mouth'
       ? voiceLook({ key: 'muted-tutor', tone: 'grey', face: 'talk', flow: 'out', small: '麦关了 · 点一下开麦', press: 'toggle' })
       : voiceLook({ key: 'muted', tone: 'grey', face: 'dim', icon: 'micOff', big: '麦关了', small, press: 'toggle' });
@@ -110,7 +106,6 @@ export function voiceView(i: VoiceIn): VoiceView {
   if (i.hint === 'unclear') return voiceLook({ key: 'unclear', big: '没听清,再按住说一次', shake: true });
   if (i.hint === 'tap') return voiceLook({ key: 'tap', big: '按住不放,说完再松手', shake: true });
   if (i.status === 'mouth') return voiceLook({ key: 'tutor', face: 'talk', flow: 'out', small: '按住说话' });
-  if (i.status === 'ring') return voiceLook({ key: 'ring', face: 'ring', icon: 'phone', big: '老师打电话来了' });
   // 卡的声音、重放、小课堂:不是老师在线说话,按钮照安静的样子(按住照样打断它们)
   if (i.status === 'card' || i.status === 'replay' || i.status === 'lecture') return voiceLook({ key: i.status, icon: 'mic', big: '按住说话' });
   // 请他说([[请 说 …]])的那句念完了:按住说也提示轮到他(以前只有口语课一直听)

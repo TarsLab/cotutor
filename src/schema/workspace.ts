@@ -28,7 +28,7 @@ export const SANDBOX_MARK = '.cotutor/sandbox.json';
 export const SANDBOX_TITLE = '试用';
 /** 外面的 vault 拷进 sandbox 后的目录名(相对 sandbox 根) */
 export const SANDBOX_VAULT = 'vault';
-/** workspace 根下是孩子的状态、不拷进 sandbox 的;其余都算设置,照拷(拷多了无妨,拷少了试的就不像真的) */
+/** workspace 根下是孩子的状态、不拷进 sandbox 的;其余都算设置,照拷(拷多了无妨,拷少了试的就不像真的)。talk/ 是以前口语课页(2026-11-17 删)留在老 workspace 里的照片和口语单 */
 export const SANDBOX_SKIP: readonly string[] = ['conversations', 'ledger', 'captures', 'talk', 'dictation', 'evals', 'snaps', '.cotutor', '.git', 'node_modules', '.DS_Store'];
 /** .cotutor/ 里照拷的;其余是缓存、设备表、孩子端流水 */
 export const SANDBOX_KEEP_MACHINE: readonly string[] = ['shipped.json', 'cotutor.schema.json'];

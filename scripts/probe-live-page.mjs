@@ -7,7 +7,6 @@
  *   嘴在说时按下 = 打断(孩子端清了、字幕那句淡加省略号)、上滑松手作废;点开一张卡再按住说 = 问这张卡(消息带 focus);板是脑写的(节头是它那张「# 标题」卡、没写就接着上一节、孩子的话在左栏、不出卡的一轮板上不留字、卡和讲稿不同步);嘴连不上留在实时页「正在叫老师」、自己再连;
  *   首页点 activity 按钮也开实时,开场那条走嘴的连接(P3.1);讲稿的 [[play]] 念完铺满放小课堂那一段,放完嘴才接着念(P3.2);
  *   一直听(孩子端没有开关,家长在 live.listen 开):连接开 VAD、不用按声音一直推、关麦就不推、一段声音收下了就是一轮;
- *   口语课:口语单页过来点一下开始,热身那拍念完卡亮「轮到你」、孩子跟了下一拍,[[call]] 念完响铃、老师说英文。
  * iPad 横屏、手机各截一张。
  * 用法:node scripts/probe-live-page.mjs [--out <截图目录>] [--keep]
  */
@@ -37,7 +36,6 @@ const { createContext, createHandler } = await import(join(repo, 'src', 'app', '
 const { makeLiveUpgrade } = await import(join(repo, 'src', 'app', 'ws', 'route.ts'));
 const { startFakeRealtime } = await import(join(repo, 'tests', '_fake-realtime.ts'));
 const { publishHome } = await import(join(repo, 'src', 'runtime', 'home', 'store.ts'));
-const { catchCue } = await import(join(repo, 'src', 'realtime', 'cues.ts'));
 
 // ---- 临时 workspace:老师都是假 CLI(流式),语文老师开实时;嘴是假百炼 ----
 const fake = await startFakeRealtime();
@@ -487,55 +485,6 @@ try {
   cfg.live.listen = 'hold';
   writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
   await ctx.reload();
-
-  // ---- 口语课:口语单拍好进英语老师页,点一下开始;热身那拍念完卡亮「轮到你」,孩子跟了下一拍;[[call]] 念完响铃,铃响够了老师说英文 ----
-  await untilNode(() => ctx.runner.running('chinese-tutor') === null, 15000);
-  const talkId = '2026-10-17-1106';
-  mkdirSync(join(wsRoot, 'talk', talkId), { recursive: true });
-  writeFileSync(join(wsRoot, 'talk', talkId, 'talk.json'), JSON.stringify({ id: talkId, createdAt: '2026-10-17T03:06:13.381Z', status: 'ready', list: { words: [{ en: 'duck', zh: '鸭子', emoji: '🦆', chunks: ['d', 'u', 'c', 'k'] }], sentences: [{ en: 'The ducks are under the bus.', zh: '鸭子们在公交车下面。' }] } }));
-  cfg.live.voices['english-tutor'] = 'Theo Calm';
-  cfg.talk = { ...(cfg.talk ?? {}), enabled: true };
-  writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
-  await ctx.reload();
-  fake.kidText = '';
-  fake.kidTexts = [];
-  await evaluate(`document.querySelector('#back').click()`);
-  await sleep(300);
-  const ncT = fake.conns.length;
-  await send('Page.navigate', { url: `${base}/?tutor=english-tutor&talk=${talkId}` });
-  const talkBoard = await until(`Boolean(document.querySelector('#talk-go'))`, 40);
-  await untilNode(() => fake.conns.length > ncT && Boolean(conn()?.session), 8000);
-  await sleep(600);
-  const tb = await evaluate(`({ go: document.querySelector('#talk-go').textContent, inLv: Boolean(document.querySelector('#lv #talk-go')), pill: document.querySelector('#pill').hidden, hold: getComputedStyle(document.querySelector('#lv-hold')).display, voice: document.querySelector('#lv-hold').dataset.voice, big: document.querySelector('#lv-hold .vb-big').textContent, tools: getComputedStyle(document.querySelector('#lv-tools')).opacity, open: document.body.classList.contains('lv-open'), ask: document.querySelector('#lv-ask b').textContent, small: document.querySelector('#lv-ask small').textContent, blankShown: getComputedStyle(document.querySelector('#board > .blank')).display !== 'none', name: document.querySelector('#tutor').innerText.includes('英语老师') })`);
-  console.log('  ', await shot('talk-start-ipad.png'));
-  await tap(HOLD);
-  await sleep(300);
-  tb.afterPress = await evaluate(`document.querySelector('#lv-hold').dataset.voice`);
-  const spoke = conn().responses.length;
-  ok('口语单页过来(F4):英语老师页、一直听(live.listen 是 hold 也一样);左栏「口语单拍好啦」、「1 个单词、1 个句子」,下面一颗「先热身,再打电话」,板上那块收着、没有「英语老师」;没点之前输入条收着,左栏那颗灰着写「点上面开始」、按了不接(不开关麦),底下那排淡着,嘴不出声', talkBoard && tb.go.includes('先热身,再打电话') && tb.inLv && tb.ask === '口语单拍好啦' && tb.small === '1 个单词、1 个句子' && !tb.blankShown && !tb.name && tb.pill && tb.hold === 'flex' && tb.voice === 'choose' && tb.big === '点上面开始' && tb.afterPress === 'choose' && tb.tools === '0.45' && tb.open && spoke === 0 && conn().responses.length === 0, JSON.stringify({ ...tb, spoke }));
-  await tap('#talk-go');
-  const warmCaught = await untilNode(() => conn().responses.some((r) => r?.instructions === catchCue('warm')), 10000);
-  const turnLit = await until(`Boolean(document.querySelector('#board .c.lv-turn'))`, 120);
-  const firstEcho = conn().responses.some((r) => (r?.instructions ?? '').includes('我先来:duck!'));
-  ok('点开始:嘴说「好,我们先热热身!」、脑写热身;第一拍念完,那张单词卡亮「轮到你」(服务端在等,不往下念)', warmCaught && firstEcho && turnLit && !conn().responses.some((r) => (r?.instructions ?? '').includes('小声一点')), JSON.stringify({ warmCaught, firstEcho, turnLit }));
-  console.log('  ', await shot('talk-turn-ipad.png'));
-  // 孩子跟:假麦克风嘀一声转写成 duck(开头那几声赶上嘴还在出声的会当回声放过,接着嘀)
-  fake.kidText = 'duck';
-  const nextBeat = await untilNode(() => conn().responses.some((r) => (r?.instructions ?? '').includes('小声一点')), 15000);
-  ok('孩子跟了:下一拍接着念(不开新一轮)', nextBeat);
-  // 你先说那拍也答 duck;念到打电话那句就不说了(那句还在放时孩子说话是对老师说的,会打断、不响铃)
-  await untilNode(() => conn().responses.some((r) => (r?.instructions ?? '').includes('老师给你打个电话')), 20000);
-  fake.kidText = '';
-  const rang = await until(`document.querySelector('#lv-hold').dataset.voice === 'ring' && document.querySelector('#lv-hold .vb-av').classList.contains('vb-ring')`, 120);
-  ok('[[call]] 那句念完:按钮是「老师打电话来了」、头像晃着响铃', rang);
-  if (rang) console.log('  ', await shot('talk-ring-ipad.png'));
-  const opened = await untilNode(() => conn().responses.some((r) => (r?.instructions ?? '').includes('Hello Ray!')), 20000);
-  const stopped = await until(`document.querySelector('#lv-hold').dataset.voice !== 'ring'`, 40);
-  ok('铃响够了:老师说英文开场,铃停', opened && stopped, JSON.stringify({ opened, stopped }));
-  const todayT = await (await fetch(`${base}/api/kid/conversations/english-tutor/today`)).json();
-  const idxT = JSON.parse(readFileSync(join(wsRoot, 'conversations', 'english-tutor', `${todayT.date}.json`), 'utf8'));
-  const firstT = idxT.messages.find((m) => m.from === 'kid' && m.talk === talkId);
-  ok('那个话题跑 activity 口语课、记着口语单是哪份', firstT?.activity?.name === '口语课' && String(firstT.activity.params?.口语单 ?? '').includes('🦆 duck'), JSON.stringify(firstT?.activity ?? null).slice(0, 200));
 
   // ---- 按住说话在右边(kid.hand: left,家长端设置页切):白纸挪到右边、板在左边、按钮里头像在右头;回首页、「更多」的位置同右手(回首页浮在板的左上,「更多」在右上点得到) ----
   const hp = await fetch(`${base}/api/parent/settings`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kid: { hand: 'left' } }) });

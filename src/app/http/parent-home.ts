@@ -3,11 +3,11 @@
  * 按钮与听写的词改的是已发布那份首页的原文(editPublished:检查、留历史、发布);开关与几项常改的设置写回 cotutor.json(patchConfig)。
  * 页面每次现读,不缓存:家长也可能同时在编辑器里改 cotutor.json、在编程助手里发布首页。
  *
- *   GET   /api/parent/home                          老师们(按首页的先后)、各自的按钮(带讲法)、听写的词、常驻入口;口语课与孩子端的几项设置
+ *   GET   /api/parent/home                          老师们(按首页的先后)、各自的按钮(带讲法)、听写的词、常驻入口与方砖
  *   PUT   /api/parent/home/tutors/<老师>/buttons     {buttons: [{kind, label, brief?, until?, activity?, params?, bundle?}]} 换掉这位老师的按钮(只有 activity、小课堂两种)
  *   PUT   /api/parent/home/tutors/<老师>/dictation   {words: [{chars, say?}]} 这周的词;[] = 删掉
  *   PUT   /api/parent/home/order                    {tutors: [老师…]} 老师的先后(排第一的进首页时在最前)
- *   PATCH /api/parent/settings                      {tutors?: {<老师>: {extras?: [..] | null, hidden?}}, talk?: {note?, minutes?}}
+ *   PATCH /api/parent/settings                      {tutors?: {<老师>: {extras?: [..] | null, hidden?, tiles?}}, kid?: {hand}}
  *   GET   /api/parent/qr                            孩子端与家长端地址的二维码(各有主机名一张、局域网 IP 一张)、是不是 HTTPS、孩子的设备连过几台、上次什么时候;服务没在听(测试走 route)→ {ready: false}
  */
 import { DICTATION_EN_MAX, DICTATION_WORD_MAX, DICTATION_WORDS_MAX, TUTOR_BUTTONS_MAX, TutorButtonSchema, dictationWordLang, type DictationLang, type TutorButton } from '../../board/cards/index.ts';
@@ -95,7 +95,7 @@ export async function parentHome(ctx: AppContext): Promise<Record<string, unknow
       avatar: shownAvatar(t),
       subject: t.subject ?? null,
       hidden: t.hidden,
-      extras: tutorExtras(t, c.talk.enabled),
+      extras: tutorExtras(t),
       extrasSet: t.extras ?? null,
       tiles: tiles.get(name) ?? [],
       buttons: ((card?.props.buttons ?? []) as TutorButton[]),
@@ -111,7 +111,6 @@ export async function parentHome(ctx: AppContext): Promise<Record<string, unknow
     today: localDate(ctx.now()),
     home: home ? { id: home.id, publishedAt: home.publishedAt } : null,
     tutors,
-    talk: { enabled: c.talk.enabled, note: c.talk.note ?? '', minutes: c.talk.minutes },
     extrasAll: TUTOR_EXTRAS,
   };
 }
@@ -244,23 +243,13 @@ export async function parentHomeRoute(method: string, p: string, ctx: AppContext
       }
       patch.tutors = tp;
     }
-    if (body.talk !== undefined) {
-      if (!isObj(body.talk)) return bad('talk 要 {note?, minutes?}');
-      const t: Record<string, unknown> = {};
-      if (body.talk.note !== undefined) {
-        if (typeof body.talk.note !== 'string') return bad('talk.note 要一段字');
-        t.note = body.talk.note.trim() ? body.talk.note.trim() : null;
-      }
-      if (body.talk.minutes !== undefined) t.minutes = body.talk.minutes;
-      patch.talk = t;
-    }
     // 孩子的平板(设置页):只收 kid.hand;缺省的 right 不写进文件
     if (body.kid !== undefined) {
       if (!isObj(body.kid) || Object.keys(body.kid).some((k) => k !== 'hand') || (body.kid.hand !== 'left' && body.kid.hand !== 'right')) return bad('kid 只收 {hand: left / right}');
       patch.kid = { hand: body.kid.hand === 'left' ? 'left' : null };
     }
     try {
-      await patchConfig(ctx.ws, patch, { also: ['talk', 'kid'] });
+      await patchConfig(ctx.ws, patch, { also: ['kid'] });
     } catch (err) {
       return bad(err instanceof Error ? err.message : String(err));
     }

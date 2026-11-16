@@ -1,7 +1,7 @@
 /**
  * 家长端「首页」(/parent/home):
  * 左边(手机上是上面)是孩子端首页本身——iframe 装 /preview(孩子端页面的预览模式),按孩子设备的尺寸开、等比缩进来,可切 iPad / 手机;
- * 点牌上的按钮在旁边改它(字、讲法、留多久),改字时牌上跟着变;点后面那张牌换老师;听写、口语课点了去改这周的词、口语课。
+ * 点牌上的按钮在旁边改它(字、讲法、留多久),改字时牌上跟着变;点后面那张牌换老师;听写点了去改这周的词,方砖点了去它的开关。
  * 预览下面一排是老师的先后(按住左右拖)、孩子看不到的按钮;右边是百炼(没配时在最上面)、改着的那颗、这位老师「每天都在」的、在不在首页。
  * 另一个标签「记录」是 /parent。零依赖内联脚本,只走 /api/parent/*;每次现读,改了马上发到孩子的首页(src/app/http/parent-home.ts)。
  * iframe 一挪地方就会重新加载:它在 #pv 里常驻,重画只动 #pv-under 与 #body。
@@ -272,7 +272,7 @@ ${pageDomJs(3200)}
   // 学科色服务端定好随老师下发(src/ui/shared/tutor-color.ts)
   const avatar = (t) => { const el = h('span', { class: 'av', style: 'color:' + t.color }); el.innerHTML = '<svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="44"></circle></svg>'; const f = h('span', { class: 'face' }); if (t.avatar && /\.(png|jpe?g|webp|svg)$/i.test(t.avatar)) f.append(h('img', { src: '/api/kid/avatar/' + t.name, alt: '' })); else f.textContent = t.avatar || (t.subject || t.display || '?').slice(0, 1); el.append(f); return el; };
   // 方砖在「每天都在」里的那句:点进去老师怎么带(参数都空着,老师先请孩子拍材料)
-  const TILE_NOTE = { preview: '孩子拍新课的那页,老师带着先读一读、问一问', check: '作业写完拍给老师,一次看一处、改一处', review: '学过的拿出来,挑一点再练一练' };
+  const TILE_NOTE = { preview: '孩子拍新课的那页,老师带着先读一读、问一问', check: '作业写完拍给老师,一次看一处、改一处', review: '学过的拿出来,挑一点再练一练', talk: '孩子拍今天学的那页,看着页先跟读,再用英文一问一答' };
   const sw = (on, label, click, disabled) => h('button', { type: 'button', class: 'sw', role: 'switch', 'aria-checked': on ? 'true' : 'false', 'aria-label': label, disabled: disabled || null, on: { click } });
   const md = (d) => Number(d.slice(5, 7)) + '/' + Number(d.slice(8, 10));
   // 留多久:只今天 = 今天;到周日 = 这周日(今天是周日就是今天);一直 = 不写
@@ -303,7 +303,7 @@ ${pageDomJs(3200)}
   const pvSet = (o) => { try { const w = $('#pvf').contentWindow; if (w && typeof w.cotutorPreviewSet === 'function') w.cotutorPreviewSet(o); } catch (e) {} };
   /** 告诉预览:最前那张是谁、在改哪颗、改成什么;reload = 发布了,重读孩子的首页 */
   const pvSync = (reload) => pvSet({ front: cur, pv: cur ? { tutor: cur, sel, edit: draft.edit } : null, reload: Boolean(reload) });
-  // 预览里点了什么(孩子端页面经 window.parent.cotutorPreview 说):换老师、改哪颗、去改这周的词 / 口语课
+  // 预览里点了什么(孩子端页面经 window.parent.cotutorPreview 说):换老师、改哪颗、去改这周的词
   window.cotutorPreview = (ev) => {
     if (!ev || !D) return;
     if (ev.act === 'ready') { pvSync(); return; }
@@ -312,7 +312,7 @@ ${pageDomJs(3200)}
     if (t.name !== cur) choose(t.name, true);
     if (ev.act === 'button') { if (typeof ev.id === 'number') pick(ev.id); }
     else if (ev.act === 'tile') { const el = $('#daily-tile-' + ev.id); if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
-    else if (ev.act === 'extra') { if (ev.kind === 'dictation') editWords(t); else { const el = $('#daily-talk'); if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } }
+    else if (ev.act === 'extra') editWords(t);
   };
   for (const b of document.querySelectorAll('#pvdev button')) b.addEventListener('click', () => { dev = picked = b.dataset.d; try { localStorage.setItem('parent-home-dev', dev); } catch (e) {} fit(); });
   window.addEventListener('resize', fit);
@@ -554,19 +554,10 @@ ${pageDomJs(3200)}
     // 每天都在
     const has = (k) => t.extras.includes(k);
     const daily = [];
-    // 方砖:预习、检查作业、复习,老师家里有那个 activity 文件的才列;关掉就是孩子牌上不出那一块
+    // 方砖:预习、检查作业、复习、口语课,老师家里有那个 activity 文件的才列;关掉就是孩子牌上不出那一块
     for (const x of t.tiles || []) daily.push(h('div', { class: 'it', id: 'daily-tile-' + x.id }, h('span', { class: 'tx' }, h('b', {}, x.label), h('small', {}, x.usable ? TILE_NOTE[x.id] : '「' + x.label + '」那份 activity 文件写坏了,孩子那边先不出(工作台看)')), sw(x.on, x.label, () => save('PATCH', '/api/parent/settings', { tutors: { [t.name]: { tiles: { [x.id]: !x.on } } } }))));
     daily.push(h('div', { class: 'it' }, h('span', { class: 'tx' }, h('b', {}, '听写'), h('small', {}, '拍照听写一直在;设了这周的词,孩子点「听写」直接写')), sw(has('dictation'), '听写', () => setExtras(t, 'dictation', !has('dictation')))));
     if (has('dictation') || t.dictation) daily.push(h('button', { type: 'button', class: 'it', on: { click: () => editWords(t) } }, h('span', { class: 'tx' }, h('b', {}, '这周的词'), h('small', {}, t.dictation && t.dictation.length ? t.dictation.length + ' 个词:' + t.dictation.map((w) => w.chars).join('、') : '还没设')), h('span', { class: 'chev', html: CHEV })));
-    daily.push(h('div', { class: 'it', id: 'daily-talk' }, h('span', { class: 'tx' }, h('b', {}, '口语课'), h('small', {}, D.talk.enabled ? '孩子自己拍今天学的那页,先跟读再打电话' : '口语课没开(cotutor.json 的 talk.enabled)')), sw(has('talk'), '口语课', () => setExtras(t, 'talk', !has('talk')), !D.talk.enabled && !has('talk'))));
-    if (has('talk')) {
-      const note = h('textarea', { class: 'fld', rows: '3', placeholder: '这周学什么、想让老师多聊什么(孩子看不到)' }); note.value = D.talk.note;
-      const mins = h('b', {}, String(D.talk.minutes));
-      daily.push(h('div', { class: 'box' },
-        h('label', { class: 'note', style: 'padding:0' }, '给老师的话(跟读和聊都带上;所有口语课一份)'), note,
-        h('div', { class: 'row2' }, h('span', {}, '聊几分钟'), h('span', { class: 'step' }, h('button', { type: 'button', 'aria-label': '少一分钟', on: { click: () => save('PATCH', '/api/parent/settings', { talk: { minutes: Math.max(1, D.talk.minutes - 1) } }) } }, '−'), mins, h('button', { type: 'button', 'aria-label': '多一分钟', on: { click: () => save('PATCH', '/api/parent/settings', { talk: { minutes: Math.min(20, D.talk.minutes + 1) } }) } }, '+'))),
-        h('div', { class: 'row2' }, h('a', { class: 'lnk', href: '/parent' }, '看回放 ›'), h('button', { type: 'button', class: 'step', style: 'border:0;background:transparent;color:var(--accent);cursor:pointer', on: { click: () => save('PATCH', '/api/parent/settings', { talk: { note: note.value } }, '存好了') } }, '存给老师的话'))));
-    }
     const extras = h('div', {}, h('div', { class: 'gh' }, h('span', {}, '每天都在 · ' + t.display)), h('div', { class: 'grp' }, ...daily));
     const self = h('div', {}, h('div', { class: 'gh' }, h('span', {}, '这位老师 · ' + t.display)), h('div', { class: 'grp' },
       h('button', { type: 'button', class: 'it', on: { click: () => openLook(t) } }, avatar(t), h('span', { class: 'tx' }, h('b', {}, '样子与声音'), h('small', {}, '说话:' + t.voices.mouth + ' · 点读:' + (t.voices.card || '没配'))), h('span', { class: 'chev', html: CHEV })),
@@ -807,8 +798,6 @@ ${pageDomJs(3200)}
     openSheet(
       h('div', { class: 'nav' }, h('button', { type: 'button', on: { click: closeSheet } }, '取消'), h('b', {}, t.display + ' · 这周的词'), go),
       h('div', {}, h('div', { class: 'gh' }, h('label', { for: 'w-text' }, '一行一个词,念法空一格写在后面')), ta),
-      // 英语老师:一键用最近给孩子的口语单上的单词(口语课拍的那页)
-      en ? h('button', { type: 'button', class: 'it', style: 'border-radius:14px', on: { click: async () => { try { const j = await api('GET', '/api/talk'); const last = (j.talks || []).find((x) => (x.status === 'ready' || x.status === 'done') && x.list.words.length); const ws = last ? last.list.words.map((w) => String(w.en || '').trim()).filter((w) => /^[A-Za-z][A-Za-z'-]*$/.test(w)) : []; if (!ws.length) return toast('口语单上没有单词'); ta.value = ws.slice(0, 20).join('\n'); } catch (e) { toast('读不到口语单'); } } } }, h('span', { class: 'tx' }, h('b', { style: 'color:var(--accent)' }, '用口语单上的单词'), h('small', {}, '最近给孩子的那份口语单')))  : null,
       h('div', { class: 'note' }, en ? '一行一个英文单词,念法空一格写在后面,最多 20 个。孩子点「单词听写」,老师一个一个念,每个念两遍;他在四线三格里写整个单词,写完自己对。清空 = 不要这周的词。' : '一个词一到四个汉字,最多 20 个。孩子点「听写」,老师一个一个念,每个念两遍。清空 = 不要这周的词。想从课本上挑,在孩子的 iPad 上点「拍照听写」。'));
   };
 

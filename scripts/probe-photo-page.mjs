@@ -6,6 +6,7 @@
  *  二、选那一页:照片马上铺上照片页(舞台 book.tsx 画一张),不等老师;顶栏有拍照、相册。
  *  三、孩子说「讲题吧」:老师写 [[看 第 3 题]] [[圈 心理辅导室]] [[请 圈]],念完那一句落上:窗移到第 3 题、「心理辅导室」圈上了。
  *  四、笔画一道:「给老师看」出现;按它:舞台先交窗里的图(shot),再发一条交了(action submit)。
+ *  五、口语课(英语老师的第四块方砖,头上 base: photo + listen: open):不拍用白纸进来,一直听;老师的热身 [[请 说 duck]] 念完轮到他说,他说了 duck 接着念下一拍。
  * iPad 横屏各截一张。
  * 用法:node scripts/probe-photo-page.mjs [--photo <作业照片>] [--out <截图目录>]
  */
@@ -55,7 +56,7 @@ const cfgFile = join(wsRoot, 'cotutor.json');
 const cfg = JSON.parse(readFileSync(cfgFile, 'utf8'));
 cfg.runtimes = { default: 'stream', stream: { api: 'bailian', model: 'fake-stream' } };
 for (const t of Object.values(cfg.tutors)) delete t.runtime;
-cfg.live = { voices: { 'math-tutor': 'Serena' } };
+cfg.live = { voices: { 'math-tutor': 'Serena', 'english-tutor': 'Theo Calm' } };
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 const wsx = loadWorkspace(wsRoot);
 mkdirSync(join(wsx.paths.textbooks, '数学二年级上册'), { recursive: true });
@@ -95,7 +96,7 @@ try {
   const STAGE = `document.querySelector('#st-frame')?.contentDocument`;
   const stageEval = (js) => evaluate(`(() => { const d = ${STAGE}; if (!d) return null; return (${js})(d, document.querySelector('#st-frame').getBoundingClientRect()); })()`);
   const center = (sel) => evaluate(`(() => { const el = document.querySelector(${JSON.stringify(sel)}); if (!el || el.hidden) return null; const r = el.getBoundingClientRect(); return r.width ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null; })()`);
-  const day = async () => (await (await fetch(`${base}/api/kid/conversations/${T}/today`)).json());
+  const day = async (tutor = T) => (await (await fetch(`${base}/api/kid/conversations/${tutor}/today`)).json());
   const idle = async () => { for (let i = 0; i < 60 && (await day()).messages?.some((m) => m.result === 'running'); i++) await sleep(250); };
   const say = async (text) => {
     const n0 = (await day()).messages?.length ?? 0;
@@ -173,6 +174,37 @@ try {
   const shotAt = after.findIndex((f) => f.t === 'board' && f.body?.k === 'shot');
   const sendAt = after.findIndex((f) => f.t === 'send' && f.body?.action === 'submit');
   ok('给老师看:先交窗里的图(base 作业),再发一条交了', shotAt >= 0 && sendAt > shotAt && after[shotAt].body.base === '作业', JSON.stringify(after.map((f) => `${f.t}:${f.body?.k ?? f.body?.action ?? ''}`)));
+
+  // 五、口语课:回首页点英语老师的「口语课」,不拍用白纸;一直听;热身 [[请 说 duck]] 念完轮到他,他说了接着念
+  await idle();
+  await evaluate(`document.querySelector('#back').click(), true`);
+  await until(`Boolean(document.querySelector('[data-tutor="english-tutor"]'))`);
+  await evaluate(`document.querySelector('[data-tutor="english-tutor"]').click(), true`);
+  await until(`document.querySelector('[data-tutor="english-tutor"]').classList.contains('front')`, 5000);
+  await sleep(800);
+  const talkTile = await until(`(() => { const b = document.querySelector('[data-tutor="english-tutor"] .bt-tile[data-tile="talk"]'); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+  ok('英语老师的牌上有「口语课」方砖', Boolean(talkTile));
+  // 假麦克风一直在嘀:没排着的转写回空的(一直听放过),只有要他说的时候才认成 duck
+  fake.kidText = '';
+  const nc = fake.conns.length;
+  await tapAt(talkTile.x, talkTile.y);
+  await until(`[...document.querySelectorAll('#lv-acts .lv-go, #board .ask-go')].some((x) => x.textContent.includes('不拍') && x.getBoundingClientRect().width > 0)`, 5000);
+  const listenOpen = await (async () => { for (let i = 0; i < 40; i++) { const c = fake.conns.slice(nc).find((x) => x.session); if (c) return c.session.turn_detection?.type ?? null; await sleep(200); } return null; })();
+  ok('口语课进来就一直听(嘴的会话开着 VAD)', listenOpen === 'server_vad', String(listenOpen));
+  const white = await evaluate(`(() => { const b = [...document.querySelectorAll('#lv-acts .lv-go, #board .ask-go')].find((x) => x.textContent.includes('不拍') && x.getBoundingClientRect().width > 0); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+  await tapAt(white.x, white.y);
+  const conn = () => fake.conns[fake.conns.length - 1];
+  const said = () => conn().responses.map((r) => r?.instructions ?? '');
+  const warm = await (async () => { for (let i = 0; i < 100; i++) { if (said().some((x) => x.includes("我先来:duck!"))) return true; await sleep(200); } return false; })();
+  const m0 = (await day('english-tutor')).messages?.[0];
+  ok("不拍用白纸:开了一节口语课(第一条记 base: photo、listen: open),老师写热身", warm && m0?.base === 'photo' && m0?.listen === 'open', JSON.stringify({ warm, base: m0?.base, listen: m0?.listen }));
+  const turn = await until(`document.querySelector('#lv-hold').dataset.voice === 'turn'`, 20000);
+  ok('请他说的那句念完:按钮「轮到你说」,服务端不往下念', Boolean(turn) && !said().some((x) => x.includes('小声一点')), JSON.stringify(said()));
+  console.log('  ', await shot('5-口语课轮到你.png'));
+  fake.kidText = 'duck';
+  const next = await (async () => { for (let i = 0; i < 100; i++) { if (said().some((x) => x.includes('小声一点'))) return true; await sleep(200); } return false; })();
+  fake.kidText = '';
+  ok('他说了 duck:接着念下一拍,不开新的一轮', next && (await day('english-tutor')).messages?.length === 1, JSON.stringify(said()));
   ok('页面没有脚本报错', errors.length === 0, errors.slice(0, 3).join(' | '));
   console.log(`\n截图在 ${shots}`);
   ws.close();

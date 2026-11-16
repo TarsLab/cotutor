@@ -5,8 +5,8 @@
  * 回显那条消息的最后一行(前面有老师的回复就「接着说:」,不然「第一次说:」);上下文包里有 cards 段就把那几行回显在前面(「看到卡:…」);
  * 含「段在前」在最前面加一段「## 记账」;含「想要小课堂」出一张写着 scene 的旧式卡和一段「## 想要小课堂」;含「节头」先出一张只有一行 # 标题的文字卡;
  * 含「板书」出两张卡(「坏卡」再加一张解析不出的,「点读」再加一张两段的点读卡,「图片」再加一张 vault/pic.png 的图片卡);
- * 含「放课」出一张小课堂卡(讲稿带 [[play]]);含「整段」出一张三行的点读卡;含「热身」或「口语课」出口语课的热身(两拍跟我说、一拍你先说的 [[请 说 duck]]、[[call]]),
- * 「直接打电话」回一句带 [[call]],「(打电话)」回英文开场;含「家长段」加「## 家长」;含「记住它」「改记忆」回「## 记忆」(加三条 / 改一条删一条),
+ * 含「放课」出一张小课堂卡(讲稿带 [[play]]);含「整段」出一张三行的点读卡;含「热身」或「口语课」出口语课的热身(两拍跟我说、一拍你先说的 [[请 说 duck]],末句收热身),
+ * 含「最后请说」在回显后面加一句末尾请说的(他说了交给老师);含「家长段」加「## 家长」;含「记住它」「改记忆」回「## 记忆」(加三条 / 改一条删一条),
  * 「带证据」回两条带证据的(一条抄孩子的话、一条抄老师自己的),「记孩子」回一条 孩子: 开头的和一条普通的;记忆整理任务改一条删两条加一条;
  * 记账任务回固定形状的「## 记账」(「记账坏」或 FAKE_BOOKKEEP_BAD=1 少写 name;FAKE_BOOKKEEP_ASKED 里 | 分开的几句当 asked);
  * 上下文包有 photos 段就「看图」:请求带了工具先 read_file 那张照片,再回一句看到了;铺着照片页的一节课(board: 底是作业照片)里含「讲题」回讲稿里的动作(看第 3 题、圈、请圈);含「回读板书」先 read_file 板书写法(回读检查)。
@@ -53,9 +53,7 @@ export function teacherReply(body: ChatBody): FakeReply {
   if (msg.includes('先想一想')) parts.push('你先想一想,5 个 1 是多少?[[看 例 2]] [[盖 5×1=5]]');
   if (msg.includes('预习乘法口诀')) parts.push('[[翻 5的乘法口诀]]\n我们先看例 2 的图。[[看 例 2]]\n你看到了什么?');
   if (msg.includes('不存在的课')) parts.push('我们翻到这一课。[[翻 坐井观天]]');
-  if (msg.includes('热身') || msg.includes('口语课')) parts.push('```word\n🦆 duck\nd-u-ck\n```\n\n我们先热热身!我先来:duck! [[请 说 duck]]\n\n小声一点:duck… [[请 说 duck]]\n\n你先说:鸭子英文怎么说? [[请 说 duck]]\n\n热身好啦!老师给你打个电话。 [[call]]\n\n这句不该念。');
-  if (msg.includes('直接打电话')) parts.push('好,那我们现在就打电话! [[call]]');
-  if (msg.includes('(打电话)')) parts.push('Hello Ray! Where are the ducks?');
+  if (msg.includes('热身') || msg.includes('口语课')) parts.push('```word\n🦆 duck\nd-u-ck\n```\n\n我们先热热身!我先来:duck! [[请 说 duck]]\n\n小声一点:duck… [[请 说 duck]]\n\n你先说:鸭子英文怎么说? [[请 说 duck]]\n\n热身好啦!接下来老师用英文问你。');
   if (msg.includes('整段')) parts.push('```read\n小熊种西瓜。\n小猴睡大觉。\n西瓜熟了。\n```\n\n你看着连起来说一遍?');
   if (msg.includes('节头')) parts.push('```text\n# 认识三角形\n```');
   if (msg.includes('板书')) parts.push('```text\n# 三角形\n拼一拼\n```\n\n先看[三角形]。\n\n```choice\n三角形有几个角?\n- [x] 三个\n- [ ] 四个\n```\n\n三角形有几个角?' + (msg.includes('坏卡') ? '\n\n```choice\n没选项\n```' : '') + (msg.includes('点读') ? '\n\n```read\napple 苹果\nbanana 香蕉\n```\n\n点一下听一下。' : '') + (msg.includes('图片') ? '\n\n```image\nvault/pic.png\n看这张图\n```' : ''));

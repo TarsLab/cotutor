@@ -70,19 +70,22 @@ export const RETIRED_CARD_KINDS: readonly string[] = ['paint', 'canvas', 'kit'];
 /** agent 名:与 agents/<name>.md 的 frontmatter name 一致,小写字母数字连字符 */
 export const AGENT_NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
 
-/** 老师卡上的常驻入口:不经首页发布、一直在那位老师的卡上 */
-export const TUTOR_EXTRAS = ['dictation', 'talk'] as const;
+/** 老师卡上的常驻入口:不经首页发布、一直在那位老师的卡上(不经老师的页;口语课 2026-11-17 起是方砖) */
+export const TUTOR_EXTRAS = ['dictation'] as const;
+/** 不再有的常驻入口:旧 cotutor.json 里写着的读进来就丢掉(talk 口语课页 2026-11-17 删,口语课成了方砖) */
+const RETIRED_EXTRAS: readonly string[] = ['talk'];
 export type TutorExtra = (typeof TUTOR_EXTRAS)[number];
 
 /**
- * 老师卡上常驻的三块方砖(设计稿 https://claude.ai/artifact/NpPFoyvuF17dbRSEUuRJfW):先后就是牌上的先后。
+ * 老师卡上常驻的方砖(设计稿 https://claude.ai/artifact/NpPFoyvuF17dbRSEUuRJfW):先后就是牌上的先后。
  * id 记在消息的 via.button;activity 是老师家里同名的文件(agents/<老师>/activities/<名>.md),孩子看到的字也是它。
- * 家里有那个文件才出那一块(三门主科出厂都有);cotutor.json 的 tiles 只记关掉的,升级来的老 workspace 自动就有
+ * 家里有那个文件才出那一块(预习、检查作业、复习三门主科出厂都有;口语课只有英语老师有,2026-11-17 起);cotutor.json 的 tiles 只记关掉的,升级来的老 workspace 自动就有
  */
 export const HOME_TILES = [
   { id: 'preview', activity: '预习' },
   { id: 'check', activity: '检查作业' },
   { id: 'review', activity: '复习' },
+  { id: 'talk', activity: '口语课' },
 ] as const;
 export type HomeTileId = (typeof HOME_TILES)[number]['id'];
 export const HOME_TILE_IDS = HOME_TILES.map((t) => t.id) as [HomeTileId, ...HomeTileId[]];
@@ -107,9 +110,9 @@ export const TutorSchema = z.object({
   policy: PolicyPatchSchema.optional().describe('覆盖 policyDefaults 的字段,没写的继承'),
   /** 这位老师用哪个运行时(runtimes 里的键);不配用 runtimes.default。要更大预算与时限的老师配一个自己的 */
   runtime: z.string().optional().describe('这位老师用的运行时(runtimes 里的键;不配用 default)——要换模型的老师配自己的'),
-  extras: z.array(z.enum(TUTOR_EXTRAS)).optional().describe('老师卡上的常驻入口:dictation 听写(含拍照听写)、talk 口语课(要 talk.enabled);不写按学科给缺省:语文有听写,其余没有;[] = 都不要'),
+  extras: z.preprocess((v) => (Array.isArray(v) ? v.filter((k) => !RETIRED_EXTRAS.includes(k)) : v), z.array(z.enum(TUTOR_EXTRAS))).optional().describe('老师卡上的常驻入口:dictation 听写(含拍照听写);不写按学科给缺省:语文有听写,其余没有;[] = 都不要'),
   /** 三块方砖(HOME_TILES)哪块关掉:只记 false;没写 = 开着(家里有那个 activity 文件才出) */
-  tiles: z.object(Object.fromEntries(HOME_TILE_IDS.map((id) => [id, z.boolean().optional()])) as Record<HomeTileId, z.ZodOptional<z.ZodBoolean>>).strict().optional().describe('老师卡上常驻的方砖:preview 预习、check 检查作业、review 复习;写 false 关掉,没写 = 开着(老师家里有那个 activity 文件才出)'),
+  tiles: z.object(Object.fromEntries(HOME_TILE_IDS.map((id) => [id, z.boolean().optional()])) as Record<HomeTileId, z.ZodOptional<z.ZodBoolean>>).strict().optional().describe('老师卡上常驻的方砖:preview 预习、check 检查作业、review 复习、talk 口语课;写 false 关掉,没写 = 开着(老师家里有那个 activity 文件才出)'),
 });
 export type Tutor = z.infer<typeof TutorSchema>;
 
@@ -131,12 +134,11 @@ export function subjectLang(subject: string | null | undefined): 'zh' | 'en' {
 }
 
 /**
- * 这位老师卡上的常驻入口:配了照配的;没配按学科——语文 = 听写;英语 = 口语课,要口语课开着(talkOn = talk.enabled)
+ * 这位老师卡上的常驻入口:配了照配的;没配按学科——语文 = 听写
  */
-export function tutorExtras(t: Pick<Tutor, 'extras' | 'subject'>, talkOn = false): TutorExtra[] {
+export function tutorExtras(t: Pick<Tutor, 'extras' | 'subject'>): TutorExtra[] {
   if (t.extras) return [...new Set(t.extras)];
-  const s = canonicalSubject(t.subject);
-  return s === '语文' ? ['dictation'] : s === '英语' && talkOn ? ['talk'] : [];
+  return canonicalSubject(t.subject) === '语文' ? ['dictation'] : [];
 }
 
 /** 这位老师开着的方砖(牌上的先后);家里有没有那个 activity 文件不在这里管 */
@@ -202,19 +204,6 @@ export const VaultPolicySchema = z.object({
 export type VaultPolicy = z.infer<typeof VaultPolicySchema>;
 
 /**
- * 口语课:孩子在口语课页拍一张今天学的那页,改好口语单,交给英语老师的实时页上课
- * (activity「口语课」:先热身、再打电话)。口语课页自己不再打电话。出厂关着;要百炼 key。
- */
-export const TALK_DEFAULT = { enabled: false, listModel: 'qwen3.8-omni-flash', minutes: 5 };
-export const TalkSchema = z.object({
-  enabled: z.boolean().default(false).describe('开不开口语课(/talk);关着页面只说怎么开'),
-  listModel: z.string().min(1).default(TALK_DEFAULT.listModel).describe('照片读成口语单用的模型(兼容接口,不想)'),
-  minutes: z.number().int().min(1).max(20).default(TALK_DEFAULT.minutes).describe('打电话那段聊几分钟(activity「口语课」的参数);到了老师收尾'),
-  note: z.string().max(600).optional().describe('家长给口语课老师的话(这周学什么、想多聊什么);activity「口语课」的参数,孩子看不到'),
-});
-export type TalkConfig = z.infer<typeof TalkSchema>;
-
-/**
  * 实时老师:老师用 realtime 模型开口(嘴),脑(应用直连百炼)在后面写板书;讲稿不配音,交给嘴照念。
  * 有脸的老师都走实时,没有开关;要百炼按量 key 与业务空间 id,没配孩子端打不开。
  */
@@ -229,8 +218,8 @@ export const LiveSchema = z.object({
     .default({})
     .describe(`老师的嘴用哪个 realtime 音色(这个模型认的 56 个在 src/realtime/voices.ts,工作台音色页「实时的嘴」听着挑;写错了第一次开口才报错,doctor 的 live.voices 会提示);没写的出厂老师用出厂的(语文 Serena、数学 Andre、英语 Theo Calm),别的用 ${MOUTH_VOICE}`),
   // 一直听:孩子不用按,百炼的 VAD 判开口 / 说完,应用判收下 / 放过;老师说话时也在听(全双工)。
-  // 孩子端没有开关:10-20 真跑,一问一答以外孩子的停顿、语气词、旁边的话都被当成一句;口语课自己开,不看这里
-  listen: z.enum(['hold', 'open']).default(LIVE_DEFAULT.listen).describe('实时老师页怎么说话:hold 按住说(缺省)、open 一直听(试验;孩子停一下就算说完、旁边的话也会当成一句)。孩子端没有开关;口语课总是一直听,不看这里'),
+  // 孩子端没有开关:10-20 真跑,一问一答以外孩子的停顿、语气词、旁边的话都被当成一句;activity 头上写了 listen: open 的(口语课)自己开,不看这里
+  listen: z.enum(['hold', 'open']).default(LIVE_DEFAULT.listen).describe('实时老师页怎么说话:hold 按住说(缺省)、open 一直听(试验;孩子停一下就算说完、旁边的话也会当成一句)。孩子端没有开关;activity 头上写了 listen: open 的(口语课)总是一直听,不看这里'),
   // 缺省 server_vad:semantic_vad 听不见一两个字的回答(好的、Yes,问过也一样,probe-live-vad context)
   vad: z.enum(['semantic_vad', 'server_vad']).default(LIVE_DEFAULT.vad).describe('一直听时谁判说完:server_vad 按静音(缺省;一两个字的回答也认,「嗯」、笑声也会让老师小声一下);semantic_vad 按语义(切得少、不理「嗯」和笑声,但「好的」「Yes」这类短回答听不见)'),
   silenceMs: z.number().int().min(500).max(4000).default(LIVE_DEFAULT.silenceMs).describe('一直听时停多久算说完(毫秒;孩子一句话中间停一下接着说,太短会切碎)'),
@@ -322,7 +311,6 @@ export const CotutorConfigSchema = z
       .optional()
       .describe('给老师换样子(figshot pick):它在这台电脑的哪个端口(缺省 8477)。配了孩子端首页多一张「给老师们换个样子」,figshot 没开着就不出现;不配就没有这张卡'),
     dictation: DictationSchema.default(DICTATION_DEFAULT).describe('听写(/dictation):拍照认词表用的模型(改了不用重起服务);挑词的要求在听写 activity 文件「认字收到什么」'),
-    talk: TalkSchema.default(TALK_DEFAULT).describe('口语课(/talk):孩子拍一张今天学的,改好口语单交给英语老师的实时页(先热身、再打电话);enabled 出厂 false'),
     live: LiveSchema.default(LIVE_DEFAULT).describe('实时老师:有脸的老师都由 realtime 模型开口、脑在后面写板书(讲稿不配音、嘴照念);voices 挑嘴的音色;要百炼按量 key 与业务空间 id'),
   })
   .superRefine((c, ctx) => {
@@ -387,7 +375,7 @@ export function listTutors(config: CotutorConfig, opts: { kidOnly?: boolean } = 
       enabled: t.enabled,
       hidden: t.hidden,
       policy: resolvePolicy(config, name),
-      extras: tutorExtras(t, config.talk.enabled),
+      extras: tutorExtras(t),
       tiles: tutorTiles(t),
     }));
 }

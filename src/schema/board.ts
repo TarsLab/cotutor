@@ -63,10 +63,8 @@ export interface BoardLine {
   /** 这句上面最近的一张卡(没有 = null);播到这句就滚到它,不依赖老师打括号 */
   anchor: number | null;
   cues: BoardCue[];
-  /** 热身(讲稿的 [[echo 词]] / [[say 词]]):念完等孩子说 word;say = 你先说(老师没说出来) */
+  /** 请孩子说(讲稿的 [[请 说 词]]):念完等孩子说 word;say = 你先说(老师这句里没说出来) */
   echo?: { word: string; say?: true };
-  /** 讲稿的 [[call]]:念完进打电话 */
-  call?: true;
   /** 讲稿里写在这句后面的动作(`[[看 第 3 题]]`):这句念完才生效 */
   acts?: LineAct[];
 }
@@ -106,10 +104,8 @@ export const BoardLineSchema = z.object({
   ask: z.boolean(),
   anchor: z.number().int().nonnegative().nullable(),
   cues: z.array(BoardCueSchema),
-  /** 热身的 [[echo 词]] / [[say 词]]:念完等孩子说 word(say = 你先说) */
+  /** 请孩子说的 [[请 说 词]]:念完等孩子说 word(say = 你先说) */
   echo: z.object({ word: z.string(), say: z.literal(true).optional() }).optional(),
-  /** [[call]]:念完进打电话 */
-  call: z.literal(true).optional(),
   /** 写在这句后面的动作:念完才生效 */
   acts: z.array(LineActSchema).optional(),
 });

@@ -46,7 +46,7 @@ const page = new Response('真的孩子端', { status: 200 });
   const slow = worker(() => new Promise(() => {}), 30);
   const late = await slow('https://ming.local/dictation');
   check('一直没回应(电脑睡着了):到点给离线页', Boolean(late && (await late.text()).includes('老师们休息中')));
-  check('听写、口语课的页面也接管', Boolean(await down('https://ming.local/dictation')) && Boolean(await down('https://ming.local/talk?x=1')));
+  check('听写的页面也接管;以前的口语课页不接管', Boolean(await down('https://ming.local/dictation')) && !(await down('https://ming.local/talk?x=1')));
   check('接口不接管(请求照常失败,页面自己处理)', (await down('https://ming.local/api/kid/home', 'cors')) === null);
   check('家长端、工作台的页面不接管', (await down('https://ming.local/parent/home')) === null && (await down('https://ming.local/dev')) === null);
   check('别的网站不接管', (await down('https://example.com/')) === null);

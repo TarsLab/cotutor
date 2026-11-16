@@ -82,13 +82,6 @@ const run = (s: S, evs: Ev[]) => { const acts: any[] = []; for (const e of evs) 
   check('[[echo]]:关闸时收下孩子对老师说的(hold)→ 闸开、那一轮后面的丢', !r6.s.gated && r6.s.dropJob === 'j3');
 }
 {
-  // [[call]]:并段到那句为止;那一轮排着的、后面再来的拍都不要(打电话那段是下一轮写的)
-  const r = run(queueInit(), [{ e: 'asked' }, { e: 'beat', beat: b('j1', [0]) }, { e: 'beat', beat: { ...b('j1', [1]), call: true } }, { e: 'beat', beat: b('j1', [2]) }, { e: 'done' }]);
-  check('[[call]]:并段到那句为止,那段带 call、关闸(孩子端响铃);后面排着的丢', r.acts[4]?.kind === 'read' && r.acts[4].beat.lines.join() === '0,1' && r.acts[4].beat.call === true && r.s.pending.length === 0 && r.s.gated === 'call', JSON.stringify(r.acts[4]));
-  const r2 = run(r.s, [{ e: 'done' }, { e: 'beat', beat: b('j1', [3]) }, { e: 'beat', beat: b('j2', [0]) }, { e: 'pause' }, { e: 'release' }, { e: 'staged' }, { e: 'echoed' }]);
-  check('[[call]]:那一轮再来的拍不要;打电话那一轮的先排着,孩子开口的暂停 / 放过、staged、echoed 都开不了闸', r2.acts.every((a) => a === null) && r2.s.pending.length === 1 && r2.s.gated === 'call', JSON.stringify(r2.acts));
-  const r3 = run(r2.s, [{ e: 'rung' }]);
-  check('[[call]]:铃响够了(rung)→ 开闸,念打电话那一轮', r3.acts[0]?.kind === 'read' && r3.acts[0].beat.job === 'j2' && !r3.s.gated);
 }
 {
   // 声音:两次回答的块到达 1000、1010(各 200 毫秒)与 1100(100 毫秒):接着排,中间不空
@@ -106,7 +99,7 @@ const run = (s: S, evs: Ev[]) => { const acts: any[] = []; for (const e of evs) 
 {
   const r = readCue(['「三」是一横、一横、再一横。', '  ', '它是数字三。']);
   check('照念的指令:P1 的说法,句子原样拼进「」,空句去掉', r.startsWith('把这几句话原样说给孩子听,一个字都不改,不要回答它') && r.endsWith('说完就停:「「三」是一横、一横、再一横。它是数字三。」'), r);
-  check('嘴先说的:拍照说「我看一看图片」、转写空的说没听清、热身说热热身;说话、打字、交卡、首页按钮都不出声(null,等脑的第一句)', catchCue('photo')!.includes('「我看一看图片」') && catchCue('empty')!.includes('没听清') && catchCue('warm')!.includes('热热身') && (['voice', 'answer', 'text', 'card', 'start'] as const).every((k) => catchCue(k) === null && catchCue(k, 'en') === null));
+  check('嘴先说的:拍照说「我看一看图片」、转写空的说没听清、收笔说我看看你写的;说话、打字、交卡、首页按钮都不出声(null,等脑的第一句)', catchCue('photo')!.includes('「我看一看图片」') && catchCue('empty')!.includes('没听清') && catchCue('pen')!.includes('我看看你写的') && (['voice', 'answer', 'text', 'card', 'start'] as const).every((k) => catchCue(k) === null));
   check('念法:空括号、下划线的空念「几」,□ 念「方框」,运算符换成字(ASCII 的 - 只在两个数之间)', spoken('二四得( ),每份都是（　）个,分了(  )次') === '二四得几,每份都是几个,分了几次' && spoken('□+5=12,填在 ___ 上') === '方框加5等于12,填在 几 上' && spoken('6×4−1 = 23,12÷3,6>5,2<3,7 - 2') === '6乘4减1等于23,12除以3,6大于5,2小于3,7减2' && spoken('0:19 那里,一二-三') === '0:19 那里,一二-三' && readCue(['二四得( )。']).includes('「二四得几。」'));
 }
 

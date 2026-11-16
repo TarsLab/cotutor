@@ -279,7 +279,7 @@ ${pageDomJs(4000)}
     if (off && S.reel) closeReel();
   };
   const shiftDate = (date, n) => { const [y, m, d] = date.split('-').map(Number); const t = new Date(y, m - 1, d + n); return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0'); };
-  // 听写(/api/dictation)的记录:模块自己的接口,15 秒读一次;读回来重画清单。口语课不单列:那一课是英语老师的一个话题
+  // 听写(/api/dictation)的记录:模块自己的接口,15 秒读一次;读回来重画清单。口语课不单列:那一课是英语老师的一节课
   const modFetch = () => {
     if (S.modAt && Date.now() - S.modAt < 15000) return;
     S.modAt = Date.now();
@@ -369,7 +369,7 @@ ${pageDomJs(4000)}
       });
       return b;
     };
-    // ---- 这一天的事,最新的在上:话题、听写、口语课 ----
+    // ---- 这一天的事,最新的在上:话题、听写 ----
     const evs = [];
     for (const t of H.tutors) for (const th of t.threads) {
       const at = atMs(th.at), end = Date.parse(th.endAt || '');

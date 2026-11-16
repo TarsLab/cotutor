@@ -77,7 +77,6 @@ check('两行:PNG 带 sizes 在前,SVG 在后', faviconLinks() === '<link rel="i
 // ---- mock:页面引了、不跟着老师换、路由给得出 ----
 {
   const mock = createMock({ delayMs: 0 });
-  // mock 没有口语课;/talk 在下面真服务那段
   for (const path of ['/', '/parent', '/dictation', '/dictation?lang=en']) {
     const html = (await mock.route('GET', path)).html ?? '';
     check(`${path} 引了网页图标`, html.includes(faviconLinks()), path);
@@ -100,7 +99,7 @@ check('两行:PNG 带 sizes 在前,SVG 在后', faviconLinks() === '<link rel="i
   check('真服务:双 C', Buffer.from(svg.body!).toString() === faviconSvg());
   const png = await route('GET', '/favicon-32.png', ctx);
   check('真服务:PNG、no-cache', png.status === 200 && png.contentType === 'image/png' && png.cacheControl === 'no-cache');
-  for (const path of ['/', '/parent', '/parent/home', '/dev', '/talk', '/dictation']) {
+  for (const path of ['/', '/parent', '/parent/home', '/dev', '/dictation']) {
     const html = (await route('GET', path, ctx)).html ?? '';
     check(`真服务:${path} 引了、不跟着老师换`, html.includes(faviconLinks()) && !html.includes('setFavicon'), path);
   }

@@ -75,7 +75,6 @@ const ICONS: Record<string, string> = {
   micOff: '<svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><rect x="8" y="3" width="6" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M5 10.5 a6 6 0 0 0 12 0 M11 16.5 v3 M4 3 L18 19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>',
   photo: '<svg width="22" height="22" viewBox="0 0 26 26" aria-hidden="true"><rect x="4" y="5" width="18" height="16" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M4 17 l5-5 4 4 3-3 6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>',
   up: '<svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><path d="M11 18 V5 M5 10.5 L11 4.5 L17 10.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-  phone: '<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 3.5 l3 3 -2 2.5 a12 12 0 0 0 7.5 7.5 l2.5 -2 3 3 -2.5 3 a15 15 0 0 1 -14.5 -14.5 z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>',
 };
 
 export const VOICE_CSS = `
@@ -133,14 +132,12 @@ export const VOICE_CSS = `
   .vb-think .ring circle { animation:vb-spin 2.4s linear infinite, vb-breathe 1.2s ease-in-out infinite; }
   .vb-listen:not(.vb-av) .ring circle { animation:vb-turn .35s ease-out both, vb-listen 1.6s ease-in-out .35s infinite; }
   .vb-nod .ring circle { animation:vb-nod .9s ease-in-out; }
-  .vb-ring { animation:vb-phone 1.2s ease-in-out infinite; }
   .vb-dim { opacity:.6; }
   @keyframes vb-spin { from { transform:rotate(36deg); } to { transform:rotate(396deg); } }
   @keyframes vb-breathe { 0%,100% { stroke-dasharray:221.17 55.29; } 50% { stroke-dasharray:204.58 71.88; } }
   @keyframes vb-turn { to { transform:rotate(126deg); } }
   @keyframes vb-listen { 0%,100% { stroke-dasharray:221.17 55.29; transform:rotate(126deg); } 50% { stroke-dasharray:204.58 71.88; transform:rotate(136.8deg); } }
   @keyframes vb-nod { 0%,100% { transform:rotate(36deg); } 30% { transform:rotate(60deg); } 60% { transform:rotate(26deg); } 80% { transform:rotate(41deg); } }
-  @keyframes vb-phone { 0%,70%,100% { transform:rotate(0); } 10% { transform:rotate(-10deg); } 25% { transform:rotate(9deg); } 40% { transform:rotate(-6deg); } 55% { transform:rotate(3deg); } }
   @keyframes vb-halo { 0%,100% { opacity:var(--vb-halo-op, .16); } 50% { opacity:calc(var(--vb-halo-op, .16) * .45); } }
   @keyframes vb-shake { 0%,100% { transform:translateX(0); } 18% { transform:translateX(-6px); } 36% { transform:translateX(6px); } 54% { transform:translateX(-4px); } 72% { transform:translateX(4px); } }
   @keyframes vb-glow { 0%,100% { box-shadow:0 0 0 3px #3d7fd940, 0 0 0 10px #3d7fd90f; } 50% { box-shadow:0 0 0 6px #3d7fd973, 0 0 0 18px #3d7fd914; } }
@@ -152,7 +149,7 @@ export const VOICE_JS = `
   /* ---- 按住说话那颗按钮的画法(src/ui/kid/voice-ui.ts;样子是 voice-view.ts 的 voiceView 给的)---- */
   var VOICE_TUNE = ${JSON.stringify(VOICE_TUNE)};
   var VOICE_ICONS = ${JSON.stringify(ICONS)};
-  var VOICE_FACES = ['still', 'talk', 'listen', 'think', 'ring', 'dim'];
+  var VOICE_FACES = ['still', 'talk', 'listen', 'think', 'dim'];
   try {
     var vbRoot = document.documentElement;
     vbRoot.classList.add('vb-halo-' + VOICE_TUNE.talkHalo);

@@ -525,7 +525,7 @@ export function askCard(section: Pick<BoardSection, 'cards' | 'lines' | 'partial
   if (section.partial) return null;
   for (let k = section.cards.length - 1; k >= 0; k--) if (section.cards[k].kind === 'photo') return k;
   const last = section.lines[section.lines.length - 1];
-  if (!last || !last.ask || last.cues.length || last.echo || last.call) return null;
+  if (!last || !last.ask || last.cues.length || last.echo) return null;
   const n = section.cards.length;
   if (n && section.cards[n - 1].kind === 'text' && section.cards[n - 1].props?.ask === true) return n - 1;
   const t = lineTarget(last);

@@ -9,7 +9,7 @@
  * Service Worker 只在安全上下文里有(https 且平板信任了根证书,或 localhost);http 时孩子端照旧,什么都不变。
  * 改了这个文件就改 VERSION:平板上的旧 worker 靠脚本内容变了才换。
  */
-const VERSION = '2';
+const VERSION = '3';
 
 /** 离线页本身:没有网可取,样式、脚本都内联 */
 const OFFLINE_HTML = [
@@ -25,7 +25,7 @@ const OFFLINE_HTML = [
 ].join('');
 
 export const KID_SW_JS = `// cotutor 孩子端的离线页 v${VERSION}(src/ui/kid/offline-sw.ts)
-const KID = new Set(['/', '/dictation', '/dictation/', '/talk', '/talk/']);
+const KID = new Set(['/', '/dictation', '/dictation/']);
 const WAIT_MS = 12000;
 const OFFLINE = ${JSON.stringify(OFFLINE_HTML)};
 self.addEventListener('install', () => { self.skipWaiting(); });

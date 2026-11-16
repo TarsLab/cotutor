@@ -5,16 +5,15 @@
  * 孩子按下 = 打断:排着的都丢,那一轮后面再来的拍也丢;孩子听到哪由调用方按声音排到哪算(src/runtime/delivery/playback.ts)。
  * 讲稿的 [[play]](小课堂,P3.2):并段到那句为止;交出去以后关闸,孩子端放完那一段(staged)才交后面的。
  * 一直听:孩子开口先 pause(不交新的、也不丢),判出这句是对老师说的才 hold(丢),放过就 release 接着交。
- * 热身:讲稿的 [[echo 词]] / [[say 词]] 同 [[play]],并段到那句为止、交出去关闸,孩子跟完(或等够了)echoed 才交后面的;
- * [[call]] 并段到那句为止、交出去关闸(孩子端响铃),铃响够了 rung 才交打电话那一轮的;那一轮后面再来的拍都不要(打电话那段由下一轮写)。
+ * 请孩子说:讲稿的 [[请 说 词]] 同 [[play]],并段到那句为止、交出去关闸,孩子说完(或等够了)echoed 才交后面的。
  * 嘴卡住(交出去的那段一个字没出,2026-10-31):retry 放回排头、不交,调用方换好连接 done 了再交(和后来的同一轮的并成一段)。
  */
 
-/** 热身那句要孩子说的:word = 记号里的词;say = 你先说(老师没说出这个词) */
+/** 请孩子说的那句:word = 要他说的;say = 你先说(老师没说出这个词) */
 export interface Echo { word: string; say?: true }
 
-/** 一拍的讲稿:哪一轮、讲稿第几句(0 起)、句子;play = 最后一句念完孩子端放小课堂那一段;echo = 最后一句念完等孩子跟;call = 最后一句念完进打电话 */
-export interface Beat { job: string; lines: number[]; texts: string[]; play?: boolean; echo?: Echo; call?: true }
+/** 一拍的讲稿:哪一轮、讲稿第几句(0 起)、句子;play = 最后一句念完孩子端放小课堂那一段;echo = 最后一句念完等孩子说 */
+export interface Beat { job: string; lines: number[]; texts: string[]; play?: boolean; echo?: Echo }
 
 export interface QueueState {
   pending: Beat[];
@@ -24,10 +23,8 @@ export interface QueueState {
   /** 最近交进来的那一轮;打断时它后面再来的拍都丢 */
   lastJob: string | null;
   dropJob: string | null;
-  /** 交给嘴的那段最后一句要放小课堂(play:孩子端放完 staged 之前不交下一段)、要孩子跟(echo:孩子跟完 echoed 之前不交)、进打电话(call:铃响够了 rung 之前不交) */
-  gated: false | 'play' | 'echo' | 'call';
-  /** 念过 [[call]] 的那一轮:后面再来的拍都不要 */
-  closedJob: string | null;
+  /** 交给嘴的那段最后一句要放小课堂(play:孩子端放完 staged 之前不交下一段)、要孩子说(echo:孩子说完 echoed 之前不交) */
+  gated: false | 'play' | 'echo';
 }
 
 export type QueueEvent =
@@ -42,20 +39,18 @@ export type QueueEvent =
   | { e: 'done' }
   /** 孩子端放完了小课堂那一段(或放不了、被关) */
   | { e: 'staged' }
-  /** 孩子跟完了 [[echo]] / [[say]] 那句(或等够了没开口) */
+  /** 孩子说完了 [[请 说]] 那句(或等够了没开口) */
   | { e: 'echoed' }
-  /** [[call]] 那句放完、铃响够了 */
-  | { e: 'rung' }
   /** 交给嘴的那段一个字都没出就卡住了:放回排头(打断过的那一轮不放),闸也开了;这时来的拍也不交,等调用方换好连接 done */
   | { e: 'retry'; beat: Beat };
 
 /** read = 把这几句交给嘴;dropped = 按下时还排着没交的(调用方算孩子听到哪) */
 export type QueueAction = { kind: 'read'; beat: Beat } | { kind: 'dropped'; beats: Beat[] } | null;
 
-export const queueInit = (): QueueState => ({ pending: [], busy: false, holding: false, lastJob: null, dropJob: null, gated: false, closedJob: null });
+export const queueInit = (): QueueState => ({ pending: [], busy: false, holding: false, lastJob: null, dropJob: null, gated: false });
 
-/** 这拍念完要停下来等的(小课堂、孩子跟)或这一轮到此为止的(打电话) */
-const stops = (b: Beat): boolean => Boolean(b.play || b.echo || b.call);
+/** 这拍念完要停下来等的(小课堂、孩子说) */
+const stops = (b: Beat): boolean => Boolean(b.play || b.echo);
 
 function drain(s: QueueState): { s: QueueState; act: QueueAction } {
   if (s.holding || s.busy || s.gated || !s.pending.length) return { s, act: null };
@@ -67,16 +62,15 @@ function drain(s: QueueState): { s: QueueState; act: QueueAction } {
     if (stops(b)) break;
   }
   const last = take[take.length - 1];
-  const beat: Beat = { job, lines: take.flatMap((b) => b.lines), texts: take.flatMap((b) => b.texts), ...(last.play ? { play: true } : {}), ...(last.echo ? { echo: last.echo } : {}), ...(last.call ? { call: true as const } : {}) };
-  // [[call]]:那一轮排着的、后面再来的都不要
-  const pending = s.pending.filter((b) => !take.includes(b) && !(last.call && b.job === job));
-  return { s: { ...s, pending, busy: true, gated: last.play ? 'play' : last.echo ? 'echo' : last.call ? 'call' : false, ...(last.call ? { closedJob: job } : {}) }, act: { kind: 'read', beat } };
+  const beat: Beat = { job, lines: take.flatMap((b) => b.lines), texts: take.flatMap((b) => b.texts), ...(last.play ? { play: true } : {}), ...(last.echo ? { echo: last.echo } : {}) };
+  const pending = s.pending.filter((b) => !take.includes(b));
+  return { s: { ...s, pending, busy: true, gated: last.play ? 'play' : last.echo ? 'echo' : false }, act: { kind: 'read', beat } };
 }
 
 export function queueStep(s: QueueState, ev: QueueEvent): { s: QueueState; act: QueueAction } {
   switch (ev.e) {
     case 'beat':
-      if (ev.beat.job === s.dropJob || ev.beat.job === s.closedJob || !ev.beat.texts.some((x) => x.trim())) return { s, act: null };
+      if (ev.beat.job === s.dropJob || !ev.beat.texts.some((x) => x.trim())) return { s, act: null };
       return drain({ ...s, pending: [...s.pending, ev.beat], lastJob: ev.beat.job });
     case 'hold':
       return { s: { ...s, holding: true, pending: [], gated: false, dropJob: ev.drop ?? s.lastJob }, act: s.pending.length ? { kind: 'dropped', beats: s.pending } : null };
@@ -93,8 +87,6 @@ export function queueStep(s: QueueState, ev: QueueEvent): { s: QueueState; act: 
       return s.gated && s.gated !== 'play' ? { s, act: null } : drain({ ...s, gated: false });
     case 'echoed':
       return s.gated && s.gated !== 'echo' ? { s, act: null } : drain({ ...s, gated: false });
-    case 'rung':
-      return s.gated && s.gated !== 'call' ? { s, act: null } : drain({ ...s, gated: false });
     case 'retry':
       return { s: { ...s, busy: true, gated: false, ...(ev.beat.job === s.dropJob ? {} : { pending: [ev.beat, ...s.pending] }) }, act: null };
   }

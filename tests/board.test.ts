@@ -41,14 +41,11 @@ for (const f of fixtures) {
 }
 {
   // 请孩子说([[请 说 词]]):动作照记,另外记成句子的 echo;不锚卡也认
-  const r = parseBoard('好,我们先热热身!\n\n```word\n🦆 duck\nd-u-ck\n```\n\n我说一个英文,你学一个。我先来:duck! [[请 说 duck]]\n\n搭积木:under the bus. [[请 说 under the bus]]\n\n你先说:鸭子,英文怎么说? [[请 说 duck]]\n\n热身好啦!老师给你打个电话。 [[call]]\n');
+  const r = parseBoard('好,我们先热热身!\n\n```word\n🦆 duck\nd-u-ck\n```\n\n我说一个英文,你学一个。我先来:duck! [[请 说 duck]]\n\n搭积木:under the bus. [[请 说 under the bus]]\n\n你先说:鸭子,英文怎么说? [[请 说 duck]]\n\n热身好啦!接下来老师用英文问你。\n');
   const { lines, cards } = r.section;
   check('[[请 说 词]] → 句子的 echo(跟我说),动作记着请 说,句子里不留痕', lines[1].echo?.word === 'duck' && !lines[1].echo?.say && lines[1].cues.length === 0 && lines[1].acts?.[0]?.arg === '说 duck' && lines[1].text === '我说一个英文,你学一个。我先来:duck!', JSON.stringify(lines[1]));
   check('要说的是几个词:原样留着', lines[2].echo?.word === 'under the bus' && !lines[2].echo?.say, JSON.stringify(lines[2].echo));
   check('老师这句没说那个词 → 你先说;问句末尾也不补提问卡', lines[3].echo?.word === 'duck' && lines[3].echo?.say === true && lines[3].ask && cards.every((c) => c.props.ask !== true), JSON.stringify([lines[3], cards.map((c) => c.kind)]));
-  check('[[call]] → 句子的 call', lines[4].call === true && lines[4].text === '热身好啦!老师给你打个电话。' && !lines[4].echo, JSON.stringify(lines[4]));
-  const bare = parseBoard('好,那我们现在就打电话! [[call]]\n');
-  check('[[call]] 前面没有卡也认(收掉热身那一轮常常没卡)', bare.section.lines[0].call === true && bare.section.cards.length === 0, JSON.stringify(bare.section));
   const open = parseBoard('你想说什么都行。[[请 说]]\n');
   check('[[请 说]] 没写要说的:只开放说,不等', !open.section.lines[0].echo && open.section.lines[0].acts?.[0]?.arg === '说', JSON.stringify(open.section.lines[0]));
   const old = parseBoard('我先来:duck! [[echo duck]]\n');

@@ -17,14 +17,14 @@ export interface TurnsDeps {
   tutor: string;
   /** 哪一台设备(升级请求里的设备 cookie):孩子发的每一条记上 */
   deviceId?: string | null;
-  /** 这一轮实时的那些(接住时说的、念到第几句被打断、摸底、打电话几分钟…);body = 孩子端发来的那条(收下了才问) */
+  /** 这一轮实时的那些(接住时说的、念到第几句被打断、请他说的那几拍…);body = 孩子端发来的那条(收下了才问) */
   live(body: Record<string, unknown>): NonNullable<ContextPack['live']>;
   /** 发给孩子端 */
   send(o: Record<string, unknown>): void;
   /** 脑开始写这一轮 */
   started(s: SendStarted): void;
   /** 一轮写完了,正式的那一节的讲稿(流式时没发出来的由调用方按序号补) */
-  lines(job: string, lines: { i: number; text: string; play?: boolean; echo?: Echo; call?: true }[]): void;
+  lines(job: string, lines: { i: number; text: string; play?: boolean; echo?: Echo }[]): void;
   /** 一轮没成(脑报错、断流、进程没了):why 是记在话题里的原因(api:HTTP 403 …),不知道是空串 */
   failed(job: string, why: string): void;
   /** 一轮写完了(成没成都算)、排着的也发出去了 */

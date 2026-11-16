@@ -85,7 +85,7 @@ try {
   withFigshot(undefined);
   check('去掉配置入口就没了', (await kidHome()).figshot === null);
 
-  // 常驻入口:没配按学科(语文 = 听写);配了照配的;口语课要 talk.enabled
+  // 常驻入口:没配按学科(语文 = 听写);配了照配的;以前的 talk(口语课页)读进来就丢
   type KT = { name: string; extras: string[] };
   const extrasOf = async (): Promise<Record<string, string>> => Object.fromEntries(((await route('GET', '/api/kid/home', ctx)).json as { tutors: KT[] }).tutors.map((t) => [t.name, t.extras.join('+')]));
   const e0 = await extrasOf();
@@ -100,7 +100,7 @@ try {
   withTutor('english-tutor', { extras: ['talk', 'dictation', 'talk'] });
   withTutor('chinese-tutor', { extras: [] });
   const e1 = await extrasOf();
-  check('配了照配的(去重);口语课没开 talk 不出现;[] = 都不要', e1['english-tutor'] === 'dictation' && e1['chinese-tutor'] === '', JSON.stringify(e1));
+  check('配了照配的(去重);以前的 talk 丢掉;[] = 都不要', e1['english-tutor'] === 'dictation' && e1['chinese-tutor'] === '', JSON.stringify(e1));
   withTutor('english-tutor', { extras: undefined });
   withTutor('chinese-tutor', { extras: undefined });
   const html = (await route('GET', '/', ctx)).html ?? '';
@@ -208,7 +208,7 @@ activity 看图说话 我要看图说话
   type Tile = { id: string; label: string };
   const tilesOf = (h: KidHome, tutor: string): Tile[] => (h.cards.find((c) => c.kind === 'tutor' && c.props.tutor === tutor)?.props as { tiles?: Tile[] } | undefined)?.tiles ?? [];
   const ht = await kidHome();
-  check('方砖:三位老师都有预习、检查作业、复习(牌上的先后)', ['chinese-tutor', 'math-tutor', 'english-tutor'].every((n) => tilesOf(ht, n).map((x) => `${x.id}:${x.label}`).join() === 'preview:预习,check:检查作业,review:复习'), JSON.stringify(tilesOf(ht, 'english-tutor')));
+  check('方砖:三位老师都有预习、检查作业、复习(牌上的先后),英语老师还有口语课(一直听)', ['chinese-tutor', 'math-tutor'].every((n) => tilesOf(ht, n).map((x) => `${x.id}:${x.label}`).join() === 'preview:预习,check:检查作业,review:复习') && tilesOf(ht, 'english-tutor').map((x) => `${x.id}:${x.label}`).join() === 'preview:预习,check:检查作业,review:复习,talk:口语课' && (tilesOf(ht, 'english-tutor')[3] as { listen?: string } | undefined)?.listen === 'open', JSON.stringify(tilesOf(ht, 'english-tutor')));
   const sTile = await kidSend('english-tutor', { text: '', via: { home: h1.home, button: 'check' } });
   await wait('english-tutor');
   const mt = (await readIndex(ctx.ws, 'english-tutor', '2026-09-17')).messages.find((m) => m.job === (sTile.json as { job: string }).job);
@@ -216,7 +216,7 @@ activity 看图说话 我要看图说话
   const ht2 = await kidHome();
   check('方砖不带 resume(今天聊过的在首页「今天」接);只说了方砖的字、没出图的话题不上「今天」', tilesOf(ht2, 'english-tutor').every((x) => !('resume' in x)) && !ht2.today.some((x) => x.thread === mt?.thread), JSON.stringify(ht2.today));
   withTutor('english-tutor', { tiles: { check: false } });
-  check('关掉的方砖不出', tilesOf(await kidHome(), 'english-tutor').map((x) => x.id).join() === 'preview,review');
+  check('关掉的方砖不出', tilesOf(await kidHome(), 'english-tutor').map((x) => x.id).join() === 'preview,review,talk');
   check('关掉的方砖点了 400(孩子端刷新首页)', (await kidSend('english-tutor', { text: '', via: { home: h1.home, button: 'check' } })).status === 400);
   withTutor('english-tutor', { tiles: undefined });
   const themeCss = await route('GET', '/kid/theme.css', ctx);

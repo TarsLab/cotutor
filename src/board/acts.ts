@@ -2,7 +2,6 @@
  * 讲稿里的 `[[名 参数]]` 都在这里读(2026-11-16《多模态教学harness-开发计划》阶段 2 任务 1):
  *  - 老师的动作:看、圈、遮、盖、写、擦、摆、请、翻(src/schema/lesson.ts 的 ACT_NAMES),写在句子后面,这句念完才生效;
  *  - 小课堂的 [[play]]:对上一张卡的动作(cue),念完放那一段;
- *  - 口语课打电话的 [[call]]:记在这句上。
  * 纯函数,永不抛:不认得的、写错的回 bad(解析器丢掉它、给家长记一行)。
  * 每种动作的写法(也是给老师的说明,见 ACT_GUIDE):
  *   看 第 3 题 / 例 2 / 练一练第 3 题 / 第 55 页 / 栏目名 / 课本上的一句原话
@@ -21,12 +20,10 @@ import { ACT_NAMES, ASK_NAMES, SIZES, type ActName, type AskName, type LineAct, 
 export type Mark =
   | { kind: 'act'; act: LineAct; /** 读成了,但丢了一部分(请里不认得的那几个) */ warn?: string }
   | { kind: 'cue'; name: string; arg?: string }
-  | { kind: 'line'; name: 'call'; arg: string }
   | { kind: 'bad'; text: string; why: string };
 
 /** 卡上的动作(锚到上一张卡):只剩小课堂的 play */
 const CUES = new Set(['play']);
-const LINE_MARKS = new Set(['call']);
 
 /** 白纸条里能摆的图形(src/chalk/kit/ 的画法) */
 export const SHAPES = ['点阵', '方向盘'] as const;
@@ -153,7 +150,6 @@ export function readMark(raw: string): Mark {
   }
   const [name, ...rest] = inner.split(/\s+/);
   const n = (name ?? '').toLowerCase();
-  if (LINE_MARKS.has(n)) return { kind: 'line', name: 'call', arg: rest.join(' ') };
   if (CUES.has(n)) return { kind: 'cue', name: n, ...(rest.length ? { arg: rest.join(' ') } : {}) };
   return { kind: 'bad', text: inner, why: `不认得这个动作(动作有:${ACT_NAMES.join('、')})` };
 }

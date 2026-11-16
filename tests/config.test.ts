@@ -65,7 +65,11 @@ check('effort:不认的档位过不了契约', !CotutorConfigSchema.safeParse({ 
   const old = CotutorConfigSchema.safeParse({ ...raw, policyDefaults: { scenes: { dailyMax: 3 } }, tutors: { ...raw.tutors, 'scene-maker': { display: '画图老师', hidden: true, runtime: 'qwen', policy: { scenes: { dailyMax: 1 } } } } });
   check('老配置里的 scenes 不拦,有效政策里没有它', old.success && !('scenes' in resolvePolicy(old.data, 'math-tutor')) && !('scenes' in resolvePolicy(old.data, 'scene-maker')));
 }
-check('口语课页不再打电话:talk 只剩开关、读口语单的模型、聊几分钟、家长的话(老配置里通话那几项丢掉)', JSON.stringify(Object.keys(CotutorConfigSchema.parse({ ...raw, talk: { callMaxMinutes: 45, voice: 'Tina', read: { again: 1 } } }).talk).sort()) === '["enabled","listModel","minutes"]');
+{
+  // 口语课页 2026-11-17 删了(口语课是方砖):老配置里的 talk 段、老师 extras 里的 talk 读进来就丢,不拦整份
+  const old = CotutorConfigSchema.safeParse({ ...raw, talk: { enabled: true, minutes: 4 }, tutors: { ...raw.tutors, 'english-tutor': { ...raw.tutors['english-tutor'], extras: ['dictation', 'talk'] } } });
+  check('老配置里的 talk 段、extras 里的 talk:丢掉,不拦', old.success && !('talk' in old.data) && JSON.stringify(old.data.tutors['english-tutor'].extras) === '["dictation"]', JSON.stringify(old.success ? old.data.tutors['english-tutor'] : old.error.issues));
+}
 // API 运行时(2026-10-29):{api, model},应用直连模型;default 可以指它;只认百炼
 {
   const withApi = CotutorConfigSchema.safeParse({ ...raw, runtimes: { ...raw.runtimes, default: 'api', api: { api: 'bailian', model: 'qwen3.8-flash', maxSteps: 4 } } });

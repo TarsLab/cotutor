@@ -52,7 +52,6 @@ import { doctorWorkspace } from '../cli/doctor.ts';
 import { VOICE_GALLERY_PAGE } from '../../ui/dev/voice-gallery-page.ts';
 import { BusyError, Runner } from '../../runtime/runner.ts';
 import { sendFile } from './send-file.ts';
-import { talkRoute } from '../talk/route.ts';
 import { parentHomeRoute } from './parent-home.ts';
 import { parentLookRoute } from './parent-look.ts';
 import { bailianRoute, createBailian, type Bailian } from '../machine/bailian.ts';
@@ -200,7 +199,7 @@ export interface KidTutor {
   /** 他的听写写哪种:学科是英语(含别名)= en */
   lang: 'zh' | 'en';
   hasVoice: boolean;
-  /** 卡上的常驻入口:dictation 听写与拍照听写、talk 口语课(要 talk.enabled) */
+  /** 卡上的常驻入口:dictation 听写与拍照听写 */
   extras: TutorExtra[];
   /** 实时老师页缺省怎么说话(live.listen):hold 按住说、open 一直听;孩子切过的记在设备上,以那个为准 */
   listen: 'hold' | 'open';
@@ -210,7 +209,7 @@ export async function kidTutors(ctx: AppContext): Promise<KidTutor[]> {
   const out: KidTutor[] = [];
   const colors = tutorColors(ctx.ws.config.tutors);
   for (const t of listTutors(ctx.ws.config, { kidOnly: true })) {
-    out.push({ name: t.name, display: t.display, avatar: shownAvatar(t), subject: t.subject ?? null, color: colors[t.name], mark: boardMarkOf(t.subject), lang: subjectLang(t.subject), hasVoice: Boolean(t.voice), extras: t.extras.filter((x) => (x !== 'talk' || ctx.ws.config.talk.enabled)), listen: ctx.ws.config.live.listen });
+    out.push({ name: t.name, display: t.display, avatar: shownAvatar(t), subject: t.subject ?? null, color: colors[t.name], mark: boardMarkOf(t.subject), lang: subjectLang(t.subject), hasVoice: Boolean(t.voice), extras: t.extras, listen: ctx.ws.config.live.listen });
   }
   return out;
 }
@@ -548,7 +547,7 @@ export async function overview(ctx: AppContext, date: string): Promise<Overview>
       if (n) th.misses = n;
     }
     const booking = index.messages.some((m) => (m.bookkeep || m.tidy) && m.result === 'running');
-    tutors.push({ name: t.name, display: t.display, avatar: shownAvatar(t), subject: t.subject ?? null, color: colors[t.name] ?? NEUTRAL_COLOR, turns: index.messages.length, threads: [...by.values()], booking, extras: t.extras.filter((x) => (x !== 'talk' || ctx.ws.config.talk.enabled)) });
+    tutors.push({ name: t.name, display: t.display, avatar: shownAvatar(t), subject: t.subject ?? null, color: colors[t.name] ?? NEUTRAL_COLOR, turns: index.messages.length, threads: [...by.values()], booking, extras: t.extras });
   }
   const today = localDate(ctx.now());
   const names = tutors.map((t) => t.name);
@@ -1130,8 +1129,6 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     const phr = await parentHomeRoute(method, p, ctx, body); if (phr) return phr;
     const plr = await parentLookRoute(method, p, url, ctx, body); if (plr) return plr;
     const blr = await bailianRoute(method, p, ctx, body, who); if (blr) return blr;
-    // 口语课(路由 src/app/talk/,页面 src/ui/talk/,规则与存取 src/scenes/talk/):/talk 与 /api/talk/* 交给它;上课在英语老师的实时页(talk-run.ts)
-    const tk = await talkRoute(method, url, ctx, body); if (tk) return tk;
     // 听写(路由 src/app/dictation/,页面 src/ui/dictation/,规则与存取 src/scenes/dictation/):/dictation 与 /api/dictation/* 交给它;首页的听写卡在 kid-page 画
     const tx = await dictationRoute(method, url, ctx, body); if (tx) return tx;
     if (method !== 'GET') return { status: 405, json: { error: 'method_not_allowed' } };

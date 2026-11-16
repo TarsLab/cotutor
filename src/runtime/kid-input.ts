@@ -13,11 +13,10 @@ import { validDevice } from './journal/kid-log.ts';
 import type { IncomingMark } from './lecture.ts';
 import type { SendInput } from './runner.ts';
 import { capturePathOk, readIndex } from './journal/store.ts';
-import { talkRun } from './talk-run.ts';
 
 export interface KidReject {
   status: 400 | 409;
-  error: 'bad_request' | 'submitted' | 'bad_via' | 'bad_talk' | 'no_thread';
+  error: 'bad_request' | 'submitted' | 'bad_via' | 'no_thread';
   /** 给人看的一句(多数没有) */
   message?: string;
 }
@@ -85,23 +84,13 @@ export async function kidInput(ws: Workspace, tutor: string, body: unknown, date
     pick = undefined;
     activity = { name: button.activity, params: button.params };
   }
-  // 口语课:口语课页拍好、改好的那份口语单,新开话题跑这位老师的 activity「口语课」
-  let talk: string | undefined;
-  if (body.talk !== undefined) {
-    const t = await talkRun(ws, tutor, body.talk);
-    if (!t) return reject(400, 'bad_talk');
-    newThread = true;
-    pick = undefined;
-    activity = t.run;
-    talk = t.id;
-  }
   if (!text.trim() && !action && !photos?.length) return reject(400, 'bad_request');
   // 不开新话题的:要接着今天的一个话题(写了 thread 就是它,没写是最后那个);一个也没有 → 400,孩子端回首页从按钮开始
   if (!newThread) {
     const ths = threads(today.messages);
     if (pick ? !ths.includes(pick) : !ths.length) return reject(400, 'no_thread', '先从首页的按钮开始');
   }
-  return { input: { ...(talk ? { talk } : {}), from: 'kid', text, focus: focus?.data, action, newThread, thread: pick, device: device?.data, ...(validDevice(deviceId) ? { deviceId: deviceId! } : {}), photos, ...(via && button ? { via: messageVia(via.data!, button) } : {}), ...(home ? { home } : {}), ...(activity ? { activity } : {}), ...(lecture ? { lecture } : {}) } };
+  return { input: { from: 'kid', text, focus: focus?.data, action, newThread, thread: pick, device: device?.data, ...(validDevice(deviceId) ? { deviceId: deviceId! } : {}), photos, ...(via && button ? { via: messageVia(via.data!, button) } : {}), ...(home ? { home } : {}), ...(activity ? { activity } : {}), ...(lecture ? { lecture } : {}) } };
 }
 
 /** 消息里的 photos[]:都得是 captures/ 里在的文件(相对 workspace 根);不合法 → null */

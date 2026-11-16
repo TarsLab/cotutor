@@ -403,7 +403,7 @@ ${BRAND_CSS}
   .gaps li .minus { color:var(--muted); }
 
 
-  /* ---------- activity:列表(每位老师先是新话题 = 老师文件)/ 原文 / 检查·预览·和出厂比 ---------- */
+  /* ---------- activity:列表 / 原文 / 检查·预览·和出厂比 ---------- */
   .act-wrap { max-width:none; }
   .act { display:grid; grid-template-columns:212px minmax(0,1fr) minmax(300px,380px); gap:16px; align-items:start; }
   .alist { display:flex; flex-direction:column; gap:10px; position:sticky; top:0; }
@@ -418,8 +418,6 @@ ${BRAND_CSS}
   .ai.on b { font-weight:600; }
   .ai small { font:400 11px/1.5 var(--mono); color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .ai .st { flex:none; font-size:11.5px; }
-  .ai.tf:not(:last-child) { margin-bottom:2px; box-shadow:inset 0 -1px 0 var(--line-soft); border-radius:var(--r-item) var(--r-item) 0 0; }
-  .ai.tf.on { box-shadow:0 0 0 1px var(--line); border-radius:var(--r-item); }
   .aside details summary { cursor:pointer; font-size:12.5px; color:var(--ink-2); padding:4px 0; }
   .aside details[open] summary { margin-bottom:6px; }
   .ed { display:flex; flex-direction:column; min-width:0; overflow:clip; }
@@ -770,10 +768,13 @@ ${pageDomJs(4000)}
       const id = m.thread || m.job;
       if (!seen.has(id)) { seen.add(id); list.push({ id, text: m.text }); }
     }
+    // 新话题都从一个 activity 开始(2026-11-16 起没有自由话题):每个 activity 一行「＋ 新话题:<名>」
+    const acts = (state.acts || []).filter((a) => a.tutor === state.tutor && !a.page);
     $('#thread-pick').replaceChildren(
-      h('option', { value: '' }, list.length ? '接着当前话题' : '新话题'),
-      h('option', { value: 'new' }, '＋ 新话题'),
+      ...(list.length ? [h('option', { value: '' }, '接着当前话题')] : []),
+      ...acts.map((a) => h('option', { value: 'act:' + a.name }, '＋ 新话题:' + a.name)),
       ...list.map((x) => h('option', { value: x.id }, '话题 ' + x.id + ' ' + x.text.slice(0, 10))));
+    if (!state.acts) api('GET', '/api/dev/activities').then((r) => { state.acts = r; renderThreadPick(); }, () => { state.acts = []; });
   };
 
   // ---- 板书:按 kind 渲染成卡,不把围栏原文倒给家长 ----
@@ -949,7 +950,7 @@ ${pageDomJs(4000)}
   const send = async (text, from, extra) => {
     if (!state.tutor) return alert('先选一位老师');
     const pick = $('#thread-pick').value;
-    const body = Object.assign({ text, from: from || $('#from').value, runtime: $('#runtime').value }, pick === 'new' ? { newThread: true } : pick ? { thread: pick } : {}, state.photos.length ? { photos: state.photos.slice() } : {}, extra || {});
+    const body = Object.assign({ text, from: from || $('#from').value, runtime: $('#runtime').value }, pick.startsWith('act:') ? { activity: pick.slice(4) } : pick ? { thread: pick } : {}, state.photos.length ? { photos: state.photos.slice() } : {}, extra || {});
     try {
       $('#send').disabled = true;
       await api('POST', '/api/conversations/' + state.tutor + '/messages', body);
@@ -1009,7 +1010,7 @@ ${pageDomJs(4000)}
         h('pre', {}, raw.pack.prompt),
         h('h5', {}, '命令行 · ' + raw.pack.runtime + (raw.pack.resume ? ' · resume ' + (raw.pack.session || '') : ' · 新开会话')),
         h('pre', {}, cmd),
-        raw.pack.sources ? h('p', { class: 'hintline' }, '当时的老师文件 ' + (raw.pack.sources.agent ? raw.pack.sources.agent.file + ' ' + raw.pack.sources.agent.hash.slice(7) : '(读不到)') + ' · 技能 ' + Object.entries(raw.pack.sources.skills).map(([k, v]) => k + ' ' + v.slice(7, 13)).join(' / ') + '(正文在 run.json 的 sources 里;cotutor show --json 吐)') : h('p', { class: 'hintline' }, '这轮没记老师文件与技能的快照(2026-09-15 之前跑的)'),
+        raw.pack.sources ? h('p', { class: 'hintline' }, '当时的系统提示 ' + (raw.pack.sources.agent ? raw.pack.sources.agent.file + ' ' + raw.pack.sources.agent.hash.slice(7) : '(没有 activity)') + ' · 技能 ' + Object.entries(raw.pack.sources.skills).map(([k, v]) => k + ' ' + v.slice(7, 13)).join(' / ') + '(正文在 run.json 的 sources 里;cotutor show --json 吐)') : h('p', { class: 'hintline' }, '这轮没记系统提示与技能的快照(2026-09-15 之前跑的)'),
         h('div', {},
           h('button', { class: 'btn', type: 'button', on: { click: (e) => copy(raw.pack.prompt, e.target) } }, '复制上下文包'),
           ' ',
@@ -1197,13 +1198,6 @@ ${pageDomJs(4000)}
     return out;
   };
 
-  /** 老师文件在 activity 页改:和 activity 同一个编辑器,带检查、预览、和出厂比、撞车保护 */
-  const fileEditor = (t) => [h('button', { class: 'btn', type: 'button', title: '到 activity 页的「' + (t.name.endsWith('-tutor') ? '新话题' : '老师文件') + '」改:新话题照它带', on: { click: () => {
-    act.want = { tutor: t.name, name: t.name.endsWith('-tutor') ? '新话题' : '老师文件', kind: 'tutor' };
-    location.hash = '#activity?a=' + encodeURIComponent(t.name);
-    showTab('activity');
-  } } }, '改老师文件 →')];
-
   const renderTeam = () => {
     const c = state.config;
     if (!c) return;
@@ -1234,7 +1228,7 @@ ${pageDomJs(4000)}
           try { await api('POST', '/api/tutors', { name, display, subject: $('#n-subject').value.trim(), hidden: $('#n-hidden').checked }); await loadConfig(); renderTeam(); }
           catch (e) { feedback(roster, false, e.message); }
         } } }, '加进来'),
-        h('span', { class: 'hint', style: 'padding:0' }, '会写一份带全部约定的老师文件、进 cotutor.json、建目录;之后点开这位老师改「老师文件」把性子填上。与终端 cotutor add 同一条路。')));
+        h('span', { class: 'hint', style: 'padding:0' }, '进 cotutor.json、建它的家;怎么教写在它家里的 activity(和编程助手说)。与终端 cotutor add 同一条路。')));
     roster.append(h('header', {}, h('h4', {}, c.tutors.length + ' 位老师'), h('span', { class: 'sub' }, '点一行展开政策'),
       h('span', { class: 'right' }, h('span', { class: 'fb' }), h('button', { class: 'btn', type: 'button', on: { click: () => { addBox.style.display = addBox.style.display === 'none' ? 'grid' : 'none'; } } }, '＋ 新老师'))));
     roster.append(addBox);
@@ -1253,9 +1247,9 @@ ${pageDomJs(4000)}
         h('div', { class: 'field chk' }, h('input', { type: 'checkbox', 'data-f': 'hidden', checked: t.hidden }), h('label', {}, '孩子端不露')),
         ...policyFields(patch, t.policy, { inherit: true }));
       const saveBtn = h('button', { class: 'btn primary', type: 'button' }, '保存');
-      const full = h('div', { class: 'full' }, saveBtn, ...fileEditor(t), h('span', { class: 'fb' }));
+      const full = h('div', { class: 'full' }, saveBtn, h('span', { class: 'fb' }));
       if (!c.shipped.includes(t.name)) full.append(h('button', { class: 'btn danger', type: 'button', style: 'margin-left:auto', on: { click: async () => {
-        if (!confirm('删掉 ' + t.display + '?老师文件改名保留,会话与记忆不动。')) return;
+        if (!confirm('删掉 ' + t.display + '?只从 cotutor.json 拿掉;他家里的 activity、会话与记忆不动。')) return;
         try { await api('DELETE', '/api/tutors/' + t.name); await loadConfig(); renderTeam(); }
         catch (e) { feedback(card, false, e.message); }
       } } }, '删掉这位老师'));
@@ -1282,7 +1276,7 @@ ${pageDomJs(4000)}
       list.append(row, card);
     }
     roster.append(list);
-    $('#team').replaceChildren(h('div', { class: 'wrap' }, h('header', { class: 'ph' }, h('h1', {}, '老师团'), h('span', { class: 'sub' }, '按 cotutor.json 里有谁走;键以 -tutor 结尾的是有脸的老师')), top, roster));
+    $('#team').replaceChildren(h('div', { class: 'wrap' }, h('header', { class: 'ph' }, h('h1', {}, '老师团'), h('span', { class: 'sub' }, '按 cotutor.json 里有谁走')), top, roster));
   };
 
   // ---- 设置:路径 / 服务 / 配音;文件仍是真相 ----
@@ -1500,16 +1494,14 @@ ${pageDomJs(4000)}
     $('#overview').replaceChildren(h('div', { class: 'wrap' }, head, tiles, h('div', { class: 'cols3' }, todayBox, weekBox, useBox), h('div', { class: 'cols2' }, left, issueBox)));
   };
 
-  // ---- activity:看、改、边改边查(不落盘)、老师收到什么、和出厂比、恢复出厂;存要带读进来时的 hash。老师文件(新话题)同一个编辑器 ----
+  // ---- activity:看、改、边改边查(不落盘)、老师收到什么、和出厂比、恢复出厂;存要带读进来时的 hash(老师文件 2026-11-16 起没有了) ----
   const FENCE = String.fromCharCode(96, 96, 96);
-  // 老师文件:kind 'tutor' 的那份是「新话题」照的提示词,同一个编辑器;act.tfiles 是它们的行,act.want = 别的页点过来要开的那份
-  const act = { list: null, tfiles: null, want: null, cur: null, saved: '', hash: '', text: '', diff: [], check: null, tab: 'check', pick: 'auto', params: {}, seq: 0, timer: 0, conflict: false, caret: 1, msg: '', msgBad: false, el: null };
+  const act = { list: null, cur: null, saved: '', hash: '', text: '', diff: [], check: null, tab: 'check', pick: 'auto', params: {}, seq: 0, timer: 0, conflict: false, caret: 1, msg: '', msgBad: false, el: null };
   const STATE_TAG = { latest: ['出厂', ''], upgradable: ['可升级', 'info'], custom: ['改过', 'accent'], untracked: ['自家的', ''], own: ['自家的', ''], missing: ['不在', 'err'], broken: ['读不出', 'err'] };
   const actUrl = (t, n) => '/api/dev/activities/' + t + '/' + encodeURIComponent(n);
-  const isTutorFile = (c) => Boolean(c) && c.kind === 'tutor';
-  const docUrl = (c) => (isTutorFile(c) ? '/api/dev/tutor-files/' + c.tutor : actUrl(c.tutor, c.name));
-  const sameDoc = (a, b) => Boolean(a && b) && a.tutor === b.tutor && isTutorFile(a) === isTutorFile(b) && (isTutorFile(a) || a.name === b.name);
-  const rowOf = (c) => (isTutorFile(c) ? act.tfiles || [] : act.list || []).find((r) => sameDoc(r, c)) || null;
+  const docUrl = (c) => actUrl(c.tutor, c.name);
+  const sameDoc = (a, b) => Boolean(a && b) && a.tutor === b.tutor && a.name === b.name;
+  const rowOf = (c) => (act.list || []).find((r) => sameDoc(r, c)) || null;
 
   /** 两份原文按行比(LCS),连着改的合成一块:at = 在 b 里的行号(1 起) */
   const diffLines = (a, b) => {
@@ -1563,14 +1555,13 @@ ${pageDomJs(4000)}
     ...d.now.map((l) => h('div', { class: 'hl add' }, h('b', {}, '+'), h('span', {}, l || ' '))));
 
   const loadActivities = async () => {
-    const [list, tfiles] = await Promise.all([api('GET', '/api/dev/activities'), api('GET', '/api/dev/tutor-files')]);
+    const list = await api('GET', '/api/dev/activities');
     act.list = list;
-    act.tfiles = tfiles;
-    const bad = list.concat(tfiles).filter((r) => r.fixes).length;
+    const bad = list.filter((r) => r.fixes).length;
     $('#act-bad').hidden = !bad;
     $('#act-bad').textContent = bad ? String(bad) : '';
   };
-  const actHead = () => h('header', { class: 'ph' }, h('h1', {}, 'activity'), h('span', { class: 'sub' }, '孩子从首页一个按钮进去的一种做法;一个 activity 一个文件,在老师的家里;「新话题」照老师文件带'));
+  const actHead = () => h('header', { class: 'ph' }, h('h1', {}, 'activity'), h('span', { class: 'sub' }, '孩子从首页一个按钮进去的一种做法;一个 activity 一个文件,在老师的家里;一位老师怎么教都在他的 activity 里'));
 
   const renderActivities = async () => {
     if (!act.list) {
@@ -1578,16 +1569,11 @@ ${pageDomJs(4000)}
       try { await loadActivities(); } catch (e) { $('#activity').replaceChildren(h('div', { class: 'wrap act-wrap' }, actHead(), h('p', { class: 'fb bad' }, '列不出来:' + e.message))); return; }
     }
     if (state.tab !== 'activity') return;
-    if (act.want) {
-      const w = act.want;
-      act.want = null;
-      if (!sameDoc(w, act.cur)) return openActivity(w.tutor, w.name, !act.cur, w.kind);
-    }
     if (act.cur) return buildActivity();
-    // #activity?a=<老师>/<名> 是 activity,a=<老师> 是这位老师的老师文件;都没有就开列表上的第一行
+    // #activity?a=<老师>/<名>;没有就开列表上的第一行
     const want = hashState().a;
     const rows = listRows();
-    const first = (want && rows.find((r) => (isTutorFile(r) ? r.tutor : r.tutor + '/' + r.name) === want)) || rows[0];
+    const first = (want && rows.find((r) => r.tutor + '/' + r.name === want)) || rows[0];
     if (first) return openActivity(first.tutor, first.name, true, first.kind);
     $('#activity').replaceChildren(h('div', { class: 'wrap act-wrap' }, actHead(), h('p', { class: 'note' }, '这个 workspace 里还没有 activity(agents/<老师>/activities/<名>.md);cotutor refresh 会补上出厂的。')));
   };
@@ -1598,7 +1584,7 @@ ${pageDomJs(4000)}
     let d;
     try { d = await api('GET', docUrl(ref)); } catch (e) { alert('读不出来:' + e.message); return; }
     Object.assign(act, { cur: d, saved: d.text, text: d.text, hash: d.hash, diff: [], check: null, conflict: false, pick: 'auto', params: {}, caret: 1, msg: '', msgBad: false });
-    history.replaceState(null, '', '#activity?a=' + encodeURIComponent(isTutorFile(ref) ? t : t + '/' + n));
+    history.replaceState(null, '', '#activity?a=' + encodeURIComponent(t + '/' + n));
     if (state.tab !== 'activity') return;
     buildActivity();
     runCheck();
@@ -1606,7 +1592,7 @@ ${pageDomJs(4000)}
 
   const buildActivity = () => {
     const c = act.cur;
-    const ta = h('textarea', { class: 'eta', spellcheck: 'false', autocomplete: 'off', autocapitalize: 'off', 'aria-label': (isTutorFile(c) ? c.path : c.name + '.md') + ' 原文' });
+    const ta = h('textarea', { class: 'eta', spellcheck: 'false', autocomplete: 'off', autocapitalize: 'off', 'aria-label': c.name + '.md 原文' });
     ta.value = act.text;
     ta.addEventListener('input', () => {
       act.text = ta.value;
@@ -1678,10 +1664,10 @@ ${pageDomJs(4000)}
     if (el) el.scrollIntoView({ block: 'center' });
   };
 
-  /** 列表按老师分组:每组先是这位老师的老师文件(新话题),再是 activity;老师按 cotutor.json 的顺序 */
+  /** 列表按老师分组:每组是这位老师的 activity;老师按 cotutor.json 的顺序 */
   const listGroups = () => {
     const groups = [];
-    for (const r of (act.tfiles || []).concat(act.list || [])) {
+    for (const r of act.list || []) {
       let g = groups.find((x) => x.tutor === r.tutor);
       if (!g) groups.push((g = { tutor: r.tutor, rows: [] }));
       g.rows.push(r);
@@ -1694,13 +1680,13 @@ ${pageDomJs(4000)}
     const item = (r) => {
       const on = sameDoc(act.cur, r);
       const tag = r.fixes ? [r.fixes + ' 处要改', 'err'] : STATE_TAG[r.state] || [r.state, ''];
-      const sub = isTutorFile(r) ? '老师文件 · 首页 ' + r.buttons : r.page ? '不起老师 · 进' + r.page.split(' ')[0] : ['首页 ' + r.buttons, r.examples ? '例子 ' + r.examples : null].filter(Boolean).join(' · ');
-      return h('button', { type: 'button', class: 'ai' + (on ? ' on' : '') + (isTutorFile(r) ? ' tf' : ''), title: r.description, on: { click: () => openActivity(r.tutor, r.name, false, r.kind) } },
+      const sub = r.page ? '不起老师 · 进' + r.page.split(' ')[0] : ['首页 ' + r.buttons, r.examples ? '例子 ' + r.examples : null].filter(Boolean).join(' · ');
+      return h('button', { type: 'button', class: 'ai' + (on ? ' on' : ''), title: r.description, on: { click: () => openActivity(r.tutor, r.name, false, r.kind) } },
         h('span', { class: 'tx' }, h('b', {}, r.name), h('small', {}, sub)), h('span', { class: 'st ' + tag[1] }, tag[0]));
     };
     act.el.list.replaceChildren(
       ...groups.map((g) => { const t = tutorOf(g.tutor); return h('div', { class: 'grp' }, h('div', { class: 'gh' }, avatarEl(Object.assign({ name: g.tutor }, t), 'xs'), h('span', {}, t.display)), ...g.rows.map(item)); }),
-      h('p', { class: 'note' }, '「新话题」改的是老师文件:首页的新话题、开场按钮都照它带。新建、改名、删一个 activity,在 workspace 里和编程助手说;这里只改已有的。'));
+      h('p', { class: 'note' }, '新建、改名、删一个 activity,在 workspace 里和编程助手说;这里只改已有的。'));
   };
 
   const paintHead = () => {
@@ -1718,7 +1704,7 @@ ${pageDomJs(4000)}
           d ? h('span', { class: 'dirty' }, d + ' 处没存') : h('span', { class: 'clean' }, '都存了'),
           h('button', { class: 'btn', type: 'button', disabled: !d, on: { click: undoActivity } }, '撤销'),
           h('button', { class: 'btn primary', type: 'button', disabled: !d || act.conflict, title: '⌘/Ctrl + S', on: { click: saveActivity } }, '保存'))),
-      h('div', { class: 'l2' }, c.path + (isTutorFile(c) ? ' · 首页上照它带的按钮 ' + (row ? row.buttons : 0) + ' 个' : ' · 首页 ' + (row ? row.buttons : 0) + ' 个按钮 · ' + c.examples + ' 个例子')),
+      h('div', { class: 'l2' }, c.path + ' · 首页 ' + (row ? row.buttons : 0) + ' 个按钮 · ' + c.examples + ' 个例子'),
       row && row.description ? h('div', { class: 'l3' }, row.description) : null);
   };
 
@@ -1750,7 +1736,7 @@ ${pageDomJs(4000)}
       h('span', { class: 'num' }, '第 ' + act.caret + ' 行 · 共 ' + act.text.split('\\n').length + ' 行'),
       here.length ? h('span', { class: here.some((i) => i.level === 'fix') ? 'bad' : '' }, here.map((i) => i.text).join(';'))
         : act.msg ? h('span', { class: act.msgBad ? 'bad' : 'ok' }, act.msg)
-          : h('span', {}, isTutorFile(act.cur) ? '存了就生效:新开的话题照新的带;正在聊的那个,老师可能还照旧的' : '存了就生效:下一轮起照新的带,正在进行的话题也换'));
+          : h('span', {}, '存了就生效:下一轮起照新的带,正在进行的话题也换'));
   };
 
   const paintBanner = () => {
@@ -1782,8 +1768,8 @@ ${pageDomJs(4000)}
     try { r = await api('POST', docUrl(c) + '/check', { text: act.text, params: previewParams() }); } catch (e) { act.msg = '检查没跑成:' + e.message; act.msgBad = true; if (act.el) paintBar(); return; }
     if (seq !== act.seq || c !== act.cur) return;
     act.check = r;
-    // 预览缺省按首页上参数最多的那个按钮看;没有按钮就自己填(老师文件没有参数)
-    if (act.pick === 'auto' && !isTutorFile(c)) {
+    // 预览缺省按首页上参数最多的那个按钮看;没有按钮就自己填
+    if (act.pick === 'auto') {
       if (r.buttons.length) {
         let best = 0;
         r.buttons.forEach((b, k) => { if (Object.keys(b.params).length > Object.keys(r.buttons[best].params).length) best = k; });
@@ -1804,8 +1790,7 @@ ${pageDomJs(4000)}
     const tabs = [['check', '检查'], ['preview', '老师收到什么'], ['diff', '和出厂比']];
     const seg = h('div', { class: 'seg', role: 'tablist' }, ...tabs.map(([k, label]) => h('button', { type: 'button', role: 'tab', 'aria-selected': String(act.tab === k), class: act.tab === k ? 'on' : '', on: { click: () => { act.tab = k; paintSide(); } } }, label)));
     const body = h('div', { class: 'body' });
-    const tf = isTutorFile(act.cur);
-    const parts = !r ? [h('p', { class: 'note' }, '在查……')] : act.tab === 'check' ? (tf ? sideCheckTutor(r) : sideCheck(r)) : act.tab === 'preview' ? (tf ? sidePreviewTutor(r) : sidePreview(r)) : sideDiff(r);
+    const parts = !r ? [h('p', { class: 'note' }, '在查……')] : act.tab === 'check' ? sideCheck(r) : act.tab === 'preview' ? sidePreview(r) : sideDiff(r);
     body.append(...parts.filter(Boolean));
     act.el.side.replaceChildren(h('div', { class: 'tabs' }, seg), body);
   };
@@ -1859,7 +1844,7 @@ ${pageDomJs(4000)}
         ...Object.entries(pv.values).map(([k, v]) => h('span', { class: 'tag' }, k + ' ' + v)),
         ...pv.paramIssues.map((x) => h('span', { class: 'st err' }, x))));
       out.push(h('pre', { class: 'pv' }, pv.text));
-      out.push(h('div', { class: 'srow' }, h('span', { class: 'note', style: 'flex:1;min-width:160px' }, '这就是这个话题老师的系统提示:不读老师文件,注释已剥,后面再接这几种卡的板书写法。'), h('button', { class: 'btn small', type: 'button', on: { click: (e) => copy(pv.text, e.target) } }, '复制全文')));
+      out.push(h('div', { class: 'srow' }, h('span', { class: 'note', style: 'flex:1;min-width:160px' }, '这就是这个话题老师的系统提示:注释已剥,后面再接这几种卡的板书写法。'), h('button', { class: 'btn small', type: 'button', on: { click: (e) => copy(pv.text, e.target) } }, '复制全文')));
     }
     for (const t of pv.tools) {
       out.push(rule(), h('h3', {}, t.tool + '收到什么'), h('p', { class: 'note' }, '{{插槽}} 由应用在交出去那一刻填。'), h('pre', { class: 'pv tool' }, t.prompt));
@@ -1870,62 +1855,17 @@ ${pageDomJs(4000)}
 
   const sideDiff = (r) => {
     const c = act.cur;
-    const tf = isTutorFile(c);
-    if (!r.diff) return [h('p', { class: 'note' }, tf ? '自家加的老师,没有出厂那份可比。' : '自家加的 activity,没有出厂那份可比。')];
+    if (!r.diff) return [h('p', { class: 'note' }, '自家加的 activity,没有出厂那份可比。')];
     const out = [h('div', { class: 'srow' }, r.diff.length ? h('span', { class: 'st accent' }, '和出厂不一样 ' + r.diff.length + ' 处') : h('span', { class: 'st ok' }, '和出厂一样'), h('span', { class: 'note' }, '含没存的')),
       ...r.diff.map((d) => hunkEl(d, true))];
     out.push(h('p', { class: 'note' }, c.state === 'upgradable' ? '这份没改过,是旧版出厂的;cotutor refresh 会换成新的。' : c.state === 'latest' ? '存下以后就算改过的出厂件:cotutor refresh 不再自动换新版,只报 diff。' : '改过的出厂件,cotutor refresh 不再自动换新版,只报 diff。'));
     out.push(rule(), h('div', { class: 'srow' },
       h('button', { class: 'btn danger', type: 'button', disabled: !r.diff.length && !dirtyCount(), on: { click: restoreActivityBtn } }, '恢复出厂'),
-      h('span', { class: 'note' }, c.state === 'latest' ? '磁盘上那份就是出厂的,恢复只是丢掉没存的改动。' : '换回出厂那份;你这份存成 ' + bakName(c) + '。' + (tf ? '别的老师、这位老师的 activity 都不碰。' : '别的 activity 不碰。'))));
+      h('span', { class: 'note' }, c.state === 'latest' ? '磁盘上那份就是出厂的,恢复只是丢掉没存的改动。' : '换回出厂那份;你这份存成 ' + bakName(c) + '。别的 activity 不碰。')));
     return out;
   };
 
-  const bakName = (c) => (isTutorFile(c) ? c.path.split('/').pop() : c.name + '.md') + '.bak';
-
-  /** 老师文件的检查:写法、首页上哪些按钮照它带、怎么看效果 */
-  const sideCheckTutor = (r) => {
-    const c = act.cur;
-    const fx = r.issues.filter((i) => i.level === 'fix');
-    const nt = r.issues.filter((i) => i.level === 'note');
-    const faced = c.name === '新话题';
-    return [
-      h('div', { class: 'srow' }, fx.length ? h('span', { class: 'st err' }, fx.length + ' 处要改') : h('span', { class: 'st ok' }, '都对得上'), nt.length ? h('span', { class: 'st warn' }, nt.length + ' 条提醒') : null, h('span', { class: 'note' }, r.issues.length ? '点一条跳到那一行' : '边改边查,不落盘')),
-      r.issues.length ? h('div', { class: 'ilist' }, ...r.issues.map((i) => h('button', { type: 'button', class: 'iss' + (i.level === 'fix' ? ' fix' : ''), on: { click: () => { if (i.line) jumpTo(i.line); } } }, h('b', { class: 'num' }, i.line ? '第 ' + i.line + ' 行' : '整份'), h('span', {}, i.text)))) : null,
-      fx.length ? h('p', { class: 'note' }, '老师文件写坏了这位老师整个起不来,所以改好才能存(activity 写坏了还能先存)。') : null,
-      rule(),
-      h('h3', {}, '照它带的'),
-      faced
-        ? h('p', { class: 'note' }, '不走 activity 的话题:首页的「新话题」、开场按钮,隔天「接着」一个不是 activity 的话题。点 activity 按钮进去的话题不读它。')
-        : h('p', { class: 'note' }, '工具人:没有新话题按钮,由应用在幕后起;正文就是它每次的系统提示。'),
-      ...(faced ? (r.buttons.length ? r.buttons.map((b) => h('div', { class: 'hb' }, h('span', { class: 'tx' }, h('b', {}, b.label), h('small', {}, b.kind === 'new' ? '孩子自己开口,应用放在第一个' : '开场:按钮上的字当孩子的第一句')), h('span', { class: 'st ok' }, '首页上'))) : [h('p', { class: 'note' }, '已发布的首页上没有这位老师的卡,孩子端看不到他的新话题。')]) : []),
-      rule(),
-      h('h3', {}, '老师带得好不好'),
-      h('p', { class: 'note' }, '检查只管写法。要看老师照新的讲得怎样:拿以前的一轮按现在的提示词再跑一遍对照(job 在「对话」页的看原文里),或真发一条;都花钱。'),
-      h('div', { class: 'cmd' }, h('code', {}, 'cotutor replay ' + c.tutor + ' <job>'), h('button', { class: 'btn small', type: 'button', on: { click: (e) => copy(e.target.previousSibling.textContent, e.target) } }, '复制')),
-      h('div', { class: 'cmd' }, h('code', {}, 'cotutor send ' + c.tutor + ' --new "…"'), h('button', { class: 'btn small', type: 'button', on: { click: (e) => copy(e.target.previousSibling.textContent, e.target) } }, '复制')),
-    ];
-  };
-
-  /** 老师文件:新话题里老师收到什么——系统提示(正文 + 板书写法)与话题第一条的守则 */
-  const sidePreviewTutor = (r) => {
-    const c = act.cur;
-    const pv = r.preview;
-    const out = [h('div', { class: 'chips' },
-      h('span', { class: 'tag' }, '正文 ' + pv.chars.toLocaleString() + ' 字'),
-      pv.board ? h('span', { class: 'tag', title: pv.board.cards.length ? '这位老师的卡:' + pv.board.cards.join(' ') : '全部的卡' }, '+ 板书写法 ' + pv.board.chars.toLocaleString() + ' 字') : null,
-      pv.rules ? h('span', { class: 'tag' }, '+ 守则 ' + pv.rules.chars.toLocaleString() + ' 字') : null)];
-    out.push(h('pre', { class: 'pv' }, pv.text || '(空)'));
-    out.push(h('div', { class: 'srow' }, h('span', { class: 'note', style: 'flex:1;min-width:160px' }, '这就是新话题里老师的系统提示:老师文件去掉 frontmatter' + (pv.board ? ',后面再接板书写法' : '') + '。'), h('button', { class: 'btn small', type: 'button', on: { click: (e) => copy(pv.text, e.target) } }, '复制全文')));
-    if (pv.rules) {
-      out.push(rule(), h('h3', {}, '话题第一条还带守则'),
-        h('p', { class: 'note' }, '有脸的老师共用的 ' + pv.rules.path + ',机器件,cotutor refresh 每次覆盖,这里不改。这位老师要不一样的做法,写进上面的老师文件,它优先。'),
-        h('details', {}, h('summary', {}, '看守则原文'), h('pre', { class: 'pv tool' }, pv.rules.text)));
-    }
-    out.push(rule(), h('p', { class: 'note' }, '档案、日记、计划这些每轮现拼进上下文包,不在这里;看一轮会拼成什么(不花钱):'),
-      h('div', { class: 'cmd' }, h('code', {}, 'cotutor pack ' + c.tutor + ' "…"'), h('button', { class: 'btn small', type: 'button', on: { click: (e) => copy(e.target.previousSibling.textContent, e.target) } }, '复制')));
-    return out;
-  };
+  const bakName = (c) => c.name + '.md.bak';
 
   const undoActivity = () => {
     act.text = act.saved;
@@ -1944,7 +1884,6 @@ ${pageDomJs(4000)}
     try { r = await api('POST', docUrl(c) + '/check', { text: act.text, params: previewParams() }); } catch (e) { alert(e.message); return; }
     act.check = r;
     const fx = r.issues.filter((i) => i.level === 'fix');
-    if (fx.length && isTutorFile(c)) { act.msg = '还有 ' + fx.length + ' 处要改,改好才能存:老师文件写坏了,这位老师就起不来'; act.msgBad = true; paintAll(); return; }
     if (fx.length && !(await ask('还有 ' + fx.length + ' 处要改,先存吗?', ['存下就生效。改好之前:', ...(r.buttons.length ? ['首页上用到它的 ' + r.buttons.length + ' 个按钮,孩子端先不出'] : []), '正在进行的「' + c.name + '」话题,下一轮老师照这份带'], '仍然保存', '回去改'))) { paintAll(); return; }
     const res = await fetch(docUrl(c), { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: act.text, base: act.hash }) });
     const j = await res.json().catch(() => null);
@@ -1954,7 +1893,7 @@ ${pageDomJs(4000)}
     act.hash = j.hash;
     c.state = j.state;
     act.diff = [];
-    act.msg = isTutorFile(c) ? '存好了 · 新开的话题照新的带' : '存好了 · 下一轮起照新的带' + (j.fixes ? ';改好之前首页上用它的按钮孩子端不出' : '');
+    act.msg = '存好了 · 下一轮起照新的带' + (j.fixes ? ';改好之前首页上用它的按钮孩子端不出' : '');
     act.msgBad = Boolean(j.fixes);
     try { await loadActivities(); } catch (e) {}
     paintList();
@@ -1963,8 +1902,7 @@ ${pageDomJs(4000)}
 
   const restoreActivityBtn = async () => {
     const c = act.cur;
-    const tf = isTutorFile(c);
-    const lead = c.state === 'latest' ? '磁盘上那份就是出厂的;没存的 ' + dirtyCount() + ' 处丢掉。' : '你这份存成 ' + bakName(c) + (dirtyCount() ? ',没存的 ' + dirtyCount() + ' 处一起丢掉' : '') + '。和 cotutor reset ' + c.tutor + (tf ? '' : '/' + c.name) + ' 同一条路,' + (tf ? '别的老师不碰。' : '别的 activity 不碰。');
+    const lead = c.state === 'latest' ? '磁盘上那份就是出厂的;没存的 ' + dirtyCount() + ' 处丢掉。' : '你这份存成 ' + bakName(c) + (dirtyCount() ? ',没存的 ' + dirtyCount() + ' 处一起丢掉' : '') + '。和 cotutor reset ' + c.tutor + '/' + c.name + ' 同一条路,别的 activity 不碰。';
     if (!(await ask('换回出厂那份?', [lead], '恢复出厂', '算了'))) return;
     let r;
     try { r = await api('POST', docUrl(c) + '/restore', {}); } catch (e) { alert(e.message); return; }

@@ -1,5 +1,5 @@
 /**
- * 回放(2026-09-15):把某一轮的问题,按**现在**的 vault / 老师文件 / 技能重新问一遍,和原轮并排比。
+ * 回放(2026-09-15):把某一轮的问题,按**现在**的 vault / activity 文件 / 技能重新问一遍,和原轮并排比。
  * 手改了提示词或 vault 之后「效果好不好」不靠打分,靠人眼看 diff:上下文包哪几行变了、讲稿哪几句变了、卡变没变、
  * 读了什么文件、token 与用时。只有 CLI(`cotutor replay` / `cotutor compare`),家长端不露;给在 workspace 里开编程助手分析用。
  *
@@ -104,7 +104,7 @@ export interface RunSide {
   warnings: string[];
   /** 上下文包 + 消息(run.json 的 prompt);老 workspace 没落就 null */
   prompt: string | null;
-  /** 当时的老师文件 hash(run.json sources);没记就 null */
+  /** 当时系统提示的来源(activity 文件;以前是老师文件)的 hash(run.json sources);没记就 null */
   agentHash: string | null;
   /** 原轮带给老师的「孩子在卡上做的」几句(回放没有) */
   cardsContext: string[];
@@ -123,7 +123,7 @@ export interface Compare {
   lines: DiffRow[];
   cards: DiffRow[];
   tools: DiffRow[];
-  /** 看的时候要知道的:回放没带 cards: 段、老师文件变没变之类 */
+  /** 看的时候要知道的:回放没带 cards: 段、activity 文件变没变之类 */
   notes: string[];
 }
 
@@ -155,7 +155,7 @@ export function compareSides(base: { tutor: string; date: string; job: string; e
   const notes: string[] = [];
   if (orig.cardsContext.length) notes.push(`原轮带了孩子在卡上做的 ${orig.cardsContext.length} 条(cards: 段),回放是新话题,没带`);
   if (orig.prompt === null) notes.push('原轮没落 run.json(装新版之前跑的),上下文包比不了');
-  if (orig.agentHash && next.agentHash) notes.push(orig.agentHash === next.agentHash ? '老师文件没变(hash 一样):差异来自 vault、技能或模型本身' : `老师文件变了:${orig.agentHash.slice(7)} → ${next.agentHash.slice(7)}`);
+  if (orig.agentHash && next.agentHash) notes.push(orig.agentHash === next.agentHash ? 'activity 文件没变(hash 一样):差异来自 vault、技能或模型本身' : `activity 文件变了:${orig.agentHash.slice(7)} → ${next.agentHash.slice(7)}`);
   if (orig.runtime && next.runtime && orig.runtime !== next.runtime) notes.push(`运行时不同:原轮 ${orig.runtime},回放 ${next.runtime}`);
   const promptLines = (p: string | null): string[] => (p === null ? [] : p.split('\n'));
   return {

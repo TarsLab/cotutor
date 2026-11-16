@@ -190,8 +190,9 @@ check('起名、去掉名字;没有这台 → false', (await renameDevice(ctx.ws
 check('流水文件是一行一个 JSON', readFileSync(join(root, '.cotutor', 'kid-log', '2026-10-22.jsonl'), 'utf8').trim().split('\n').every((l) => JSON.parse(l).device));
 
 // ---- 消息记设备 ----
-const s1 = await ctx.runner.accept('chinese-tutor', { text: '你好' }, '2026-10-22', id);
-const s2 = await ctx.runner.accept('chinese-tutor', { text: '你好' }, '2026-10-22', 'not-an-id');
+// 新话题从首页的按钮开始(2026-11-16):点方砖「复习」
+const s1 = await ctx.runner.accept('chinese-tutor', { text: '', via: { home: null, button: 'review' } }, '2026-10-22', id);
+const s2 = await ctx.runner.accept('chinese-tutor', { text: '', via: { home: null, button: 'review' } }, '2026-10-22', 'not-an-id');
 check('孩子发的一条带上设备编号;不像编号的不带', 'input' in s1 && s1.input.deviceId === id && 'input' in s2 && s2.input.deviceId === undefined);
 
 done();

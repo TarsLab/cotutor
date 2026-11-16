@@ -54,7 +54,7 @@ const api = async (method, path, body) => { const r = await fetch(base + path, {
 const settle = async (who) => { for (let i = 0; i < 80; i++) { const d = (await api('GET', `/api/kid/conversations/${who}/today`)).json; if (d && !d.pending && d.messages.every((m) => !m.pending)) return d; await sleep(250); } return null; };
 /** 英语老师说两条:第一节点读,第二节拍给我看卡;都经实时那条连接 */
 const toPhotoCard = async () => {
-  await liveSend(base, 'english-tutor', { text: 'hi', newThread: true });
+  await liveSend(base, 'english-tutor', { text: 'hi' });
   await settle('english-tutor');
   await liveSend(base, 'english-tutor', { text: 'apple' });
   return settle('english-tutor');

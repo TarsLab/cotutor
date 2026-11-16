@@ -28,6 +28,9 @@ for (const t of Object.values((cfg as { tutors: Record<string, { runtime?: strin
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 
 const ctx = createContext(loadWorkspace(root));
+// 话题都从 activity 开始(2026-11-16):测试开「聊」
+const { chatStart, writeChat } = await import('./_chat.ts');
+writeChat(root, ['math-tutor']);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const wait = async (): Promise<void> => {
   for (let i = 0; i < 400 && ctx.runner.running('math-tutor'); i++) await sleep(25);
@@ -37,7 +40,7 @@ const lines = (f: string): Record<string, unknown>[] => (existsSync(f) ? readFil
 
 // 真时钟:老师进程的 startedAt 用的是真钟,弹窗与改卡要落在两轮开口之间。精确的算术在 reel.test 里用固定时刻测
 try {
-  const r1 = await kidSend(ctx, 'math-tutor', { text: '讲讲板书' });
+  const r1 = await chatStart(ctx, 'math-tutor', { text: '讲讲板书' });
   const job = (r1.json as { job: string }).job;
   const date = (r1.json as { date: string }).date;
   await wait();

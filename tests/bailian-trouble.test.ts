@@ -200,12 +200,12 @@ const health = async () => (await route('GET', '/api/health', ctx)).json as { ba
 // ---- 脑的请求失败也记下;下一轮成了就好 ----
 {
   brainDown = true;
-  await kidSend(ctx, 'math-tutor', { from: 'kid', text: '第一句', newThread: true });
+  await kidSend(ctx, 'math-tutor', { text: '', via: { home: null, button: 'review' } });
   check('脑 401:记下,带状态码', await until(() => bailian.trouble() !== null) && bailian.trouble()?.kind === 'key' && (bailian.trouble()?.why ?? '').includes('api:HTTP 401'), JSON.stringify(bailian.trouble()));
   check('脑坏了不灰孩子端(嘴还连得上)', (await kidHome(ctx, ctx.now())).ready === true);
   await until(() => ctx.runner.running('math-tutor') === null);
   brainDown = false;
-  await kidSend(ctx, 'math-tutor', { from: 'kid', text: '第二句', newThread: true });
+  await kidSend(ctx, 'math-tutor', { text: '', via: { home: null, button: 'review' } });
   check('下一轮成了:好了', await until(() => bailian.trouble() === null), JSON.stringify(bailian.trouble()));
 }
 

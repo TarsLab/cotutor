@@ -143,7 +143,7 @@ interface Day { messages: Msg[]; pending: string | null }
   type TDay = Omit<Day, 'messages'> & { thread: string | null; messages: (Msg & { thread: string })[] };
   const d0 = (await m.route('GET', '/api/kid/conversations/chinese-tutor/today')).json as TDay;
   check('today 带当前话题,消息带 thread', d0.thread === d0.messages[0].job && d0.messages[0].thread === d0.thread);
-  const r1 = await m.kidSend('chinese-tutor', { text: '换个', newThread: true });
+  const r1 = await m.kidSend('chinese-tutor', { text: '', via: { home: null, button: 'review' } });
   await m.settle();
   const j1 = (r1.json as { job: string; thread: string });
   const r2 = await m.kidSend('chinese-tutor', { text: '接着' });
@@ -151,7 +151,7 @@ interface Day { messages: Msg[]; pending: string | null }
   const r3 = await m.kidSend('chinese-tutor', { text: '回旧的', thread: d0.thread });
   await m.settle();
   const d1 = (await m.route('GET', '/api/kid/conversations/chinese-tutor/today')).json as TDay;
-  check('新话题 = 自己的 job;缺省接当前(新)话题;指定旧话题回旧话题;today.thread = 末条的', j1.thread === j1.job && (r2.json as { thread: string }).thread === j1.thread && (r3.json as { thread: string }).thread === d0.thread && d1.thread === d0.thread && d1.messages.map((x) => x.thread).join() === [d0.thread, j1.thread, j1.thread, d0.thread].join(), JSON.stringify(d1.messages.map((x) => x.thread)));
+  check('点方砖开的新话题 = 自己的 job;缺省接当前(新)话题;指定旧话题回旧话题;today.thread = 末条的', j1.thread === j1.job && (r2.json as { thread: string }).thread === j1.thread && (r3.json as { thread: string }).thread === d0.thread && d1.thread === d0.thread && d1.messages.map((x) => x.thread).join() === [d0.thread, j1.thread, j1.thread, d0.thread].join(), JSON.stringify(d1.messages.map((x) => x.thread)));
   check('不存在的话题 400', (await m.kidSend('chinese-tutor', { text: 'x', thread: 'nope' })).status === 400);
   check('「以前的」没有了(孩子端今天的话题在首页「今天」接)', (await m.route('GET', '/api/kid/conversations/chinese-tutor/history')).status >= 400);
   const yd = (await m.route('GET', '/api/kid/conversations/chinese-tutor/2026-09-09')).json as TDay;

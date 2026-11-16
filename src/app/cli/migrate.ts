@@ -113,7 +113,7 @@ export interface UpgradeConfigResult {
   gaps: ConfigGap[];
   /** 真写了没有(--dry-run 与没有差异时都是 false) */
   applied: boolean;
-  /** 新老师进了表之后顺带补的文件与目录(老师文件、agents/<name>/) */
+  /** 新老师进了表之后顺带补的家(agents/<name>/) */
   installed: InstallStep[];
 }
 
@@ -139,7 +139,7 @@ export async function upgradeConfig(root: string, opts: { dryRun?: boolean } = {
   await writeFile(tmp, `${JSON.stringify(merged, null, 2)}\n`);
   await rename(tmp, file);
 
-  // 新老师进了表,她的文件与家还得在,否则 doctor 立刻报「老师文件读不到」——
+  // 新老师进了表,他的家还得在,否则 doctor 立刻报家不在——
   // 补缺就补到底(installTutors 是 init 用的同一条路:缺的拷、有的不动)
   // 老布局先搬:不然新位置是空的,出厂老师先拷进去,家长改过的那份晾在 .claude/agents/
   if (gaps.some((g) => g.kind === 'tutor')) await migrateLayout(root);

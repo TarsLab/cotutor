@@ -1,5 +1,5 @@
-/** 老师文件的出厂 / 自定义状态与 upgrade:没改过的换新、改过的只报 diff、--force 覆盖留 .bak、缺的补;lineDiff。 */
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync, existsSync, unlinkSync } from 'node:fs';
+/** 老师的家:init 不再出厂老师文件(2026-11-16,一科通用的做法并进了每个 activity);旧 workspace 里的老师文件不删、refresh 与 doctor 提一句;自家加老师只建家;lineDiff。 */
+import { mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { check, done } from './_check.ts';
@@ -12,86 +12,45 @@ writeFileSync(join(home, '.config', 'cotutor', 'bailian.json'), JSON.stringify({
 delete process.env.COTUTOR_WORKSPACE;
 
 const { initWorkspace } = await import('../src/app/cli/init.ts');
-const { addTutorFile, installTutors, lineDiff, readManifest, tutorStatuses, upgradeTutors, writeManifest } = await import('../src/app/cli/tutors.ts');
+const { addTutorHome, installTutors, lineDiff, retiredTutorFiles } = await import('../src/app/cli/tutors.ts');
 const { doctorWorkspace } = await import('../src/app/cli/doctor.ts');
-const { loadWorkspace } = await import('../src/app/workspace.ts');
-const { patchConfig } = await import('../src/app/workspace.ts');
-const { parseAgentFile } = await import('../src/runtime/agent-file.ts');
-const { PACKAGE_VERSION } = await import('../src/app/cli/skeleton.ts');
+const { loadWorkspace, patchConfig } = await import('../src/app/workspace.ts');
+const { shippedAgents } = await import('../src/app/cli/skeleton.ts');
 
 try {
   const { root } = await initWorkspace({ slug: 'ming' });
-  const file = (n: string): string => join(root, 'agents', `${n}.md`);
-  const states = () => tutorStatuses(root).then((l) => Object.fromEntries(l.map((s) => [s.name, s.state])));
-  check('刚 init:全部 latest', Object.values(await states()).every((s) => s === 'latest'), JSON.stringify(await states()));
-  const u0 = await upgradeTutors(root);
-  check('都最新 → 全 latest,不动', u0.every((s) => s.action === 'latest'));
+  const agents = readdirSync(join(root, 'agents'));
+  check('刚 init:三位老师各一个家,没有老师文件', ['chinese-tutor', 'english-tutor', 'math-tutor'].every((n) => agents.includes(n)) && !agents.some((f) => f.endsWith('.md')), agents.join());
+  check('出厂老师 = 年级包 agents/ 下的家', (await shippedAgents()).map((a) => a.name).join() === 'chinese-tutor,english-tutor,math-tutor');
+  check('cotutor.json:出厂老师带一句 description', Boolean(loadWorkspace(root).config.tutors['math-tutor'].description));
+  check('没有旧老师文件:不用提', (await retiredTutorFiles(root)).length === 0);
 
-  // 模拟「包更新了、家长没改」:把记录的 hash 与文件一起改成旧内容
-  const old = readFileSync(file('math-tutor'), 'utf8').replace('数学老师', '算术老师');
-  writeFileSync(file('math-tutor'), old);
-  const m = await readManifest(root);
-  const { sha256 } = await import('../src/app/cli/tutors.ts');
-  m.tutors['math-tutor'] = { hash: sha256(old), version: '0.0.9' };
-  await writeManifest(root, m);
-  check('状态 upgradable', (await states())['math-tutor'] === 'upgradable');
-  const u1 = await upgradeTutors(root);
-  check('upgrade 换新版并记新 hash', u1.find((s) => s.name === 'math-tutor')?.action === 'upgraded' && readFileSync(file('math-tutor'), 'utf8').includes('数学老师') && (await readManifest(root)).tutors['math-tutor'].version === PACKAGE_VERSION);
-
-  // 家长改过:upgrade 只报 diff,文件不动
-  writeFileSync(file('chinese-tutor'), readFileSync(file('chinese-tutor'), 'utf8') + '\n多夸夸孩子的字。\n');
-  check('状态 custom', (await states())['chinese-tutor'] === 'custom');
-  const u2 = await upgradeTutors(root);
-  const zh = u2.find((s) => s.name === 'chinese-tutor');
-  check('custom → kept-custom 带 diff', zh?.action === 'kept-custom' && zh.diff?.some((l) => l === '- 多夸夸孩子的字。') === true && readFileSync(file('chinese-tutor'), 'utf8').includes('多夸夸'), JSON.stringify(zh));
-  const u3 = await upgradeTutors(root, { force: ['chinese-tutor'] });
-  check('--force 覆盖并留 .bak', u3.find((s) => s.name === 'chinese-tutor')?.action === 'forced' && !readFileSync(file('chinese-tutor'), 'utf8').includes('多夸夸') && readFileSync(`${file('chinese-tutor')}.bak`, 'utf8').includes('多夸夸'));
-
-  // 没有记录的手写文件:untracked,当 custom
-  const m2 = await readManifest(root);
-  delete m2.tutors['english-tutor'];
-  await writeManifest(root, m2);
-  writeFileSync(file('english-tutor'), '---\nname: english-tutor\n---\n手写的');
-  check('无记录 → untracked', (await states())['english-tutor'] === 'untracked');
-  check('untracked 也不覆盖', (await upgradeTutors(root)).find((s) => s.name === 'english-tutor')?.action === 'kept-custom' && readFileSync(file('english-tutor'), 'utf8').includes('手写'));
-
-  // 缺的补
-  unlinkSync(file('chinese-tutor'));
-  check('缺 → installed', (await upgradeTutors(root)).find((s) => s.name === 'chinese-tutor')?.action === 'installed' && existsSync(file('chinese-tutor')));
+  // 旧 workspace 里家长的老师文件:不删,refresh / doctor 提一句
+  writeFileSync(join(root, 'agents', 'math-tutor.md'), '---\nname: math-tutor\n---\n多夸夸孩子。\n');
+  check('旧老师文件列出来', (await retiredTutorFiles(root)).join() === 'agents/math-tutor.md');
+  const d0 = await doctorWorkspace(root, { probeEnv: false });
+  check('doctor:旧老师文件提一句(不算错),文件不动', d0.checks.some((c) => c.name === 'tutor.files' && c.ok && c.detail.includes('agents/math-tutor.md')) && existsSync(join(root, 'agents', 'math-tutor.md')), JSON.stringify(d0.checks.filter((c) => c.name.startsWith('tutor.'))));
 
   check('lineDiff', lineDiff('a\nb\nc', 'a\nx\nc').join('|') === '- b|+ x' && lineDiff('a', 'a').length === 0 && lineDiff('a\nb', 'a').join('|') === '- b');
 
-  // ---- 自家加老师:add 出模板 + 进 cotutor.json + 目录 + 链;doctor 认它;upgrade 不碰 ----
-  const added = await addTutorFile(root, { name: 'science-tutor', display: '科学老师', subject: '科学' });
-  const fm = parseAgentFile(readFileSync(added.file, 'utf8'));
-  check('模板:frontmatter name 一致、只有人设与学科,公共守则指向 <cotutor-rules>', fm.frontmatter.name === 'science-tutor' && fm.frontmatter.memory === undefined && fm.body.includes('科学老师') && fm.body.includes('入口文件') && fm.body.includes('<cotutor-rules>') && !fm.body.includes('子代理'), fm.body.slice(0, 80));
-  check('目录建好,不再建 .qwen 链', existsSync(join(root, 'agents', 'science-tutor', '.gitkeep')) && !existsSync(join(root, '.qwen', 'agents', 'science-tutor.md')));
-  let dup = '';
-  try {
-    await addTutorFile(root, { name: 'science-tutor', display: 'x' });
-  } catch (e) {
-    dup = (e as Error).message;
-  }
-  check('重名拒绝', dup.includes('已经在了'));
+  // ---- 自家加老师:只建家 + 进 cotutor.json;doctor 认它 ----
+  const added = await addTutorHome(root, 'science-tutor');
+  check('建家', existsSync(join(added.home, '.gitkeep')) && !existsSync(join(root, 'agents', 'science-tutor.md')));
   let badName = '';
   try {
-    await addTutorFile(root, { name: 'Science Tutor', display: 'x' });
+    await addTutorHome(root, 'Science Tutor');
   } catch (e) {
     badName = (e as Error).message;
   }
   check('名字不合规拒绝', badName.includes('不合规'));
   await patchConfig(loadWorkspace(root), { tutors: { 'science-tutor': { display: '科学老师', subject: '科学', avatar: '🔬', enabled: true } } });
   const d = await doctorWorkspace(root, { probeEnv: false });
-  check('doctor:自家老师文件 / 目录都 ✓,origin 标自家的', d.ok && d.checks.some((c) => c.name === 'tutor.science-tutor.file' && c.ok) && !d.checks.some((c) => c.name === 'tutor.science-tutor.qwen') && d.checks.some((c) => c.name === 'tutor.science-tutor.home' && c.ok) && d.checks.some((c) => c.name === 'tutor.science-tutor.origin' && c.detail.includes('自家')), JSON.stringify(d.checks.filter((c) => c.name.includes('science'))));
-  check('upgrade 不碰自家老师', !(await upgradeTutors(root)).some((s) => s.name === 'science-tutor') && readFileSync(added.file, 'utf8').includes('科学老师'));
-  check('tutorStatuses 只列出厂的', !(await tutorStatuses(root)).some((s) => s.name === 'science-tutor'));
+  check('doctor:自家老师的家 ✓,没有老师文件那一项', d.ok && d.checks.some((c) => c.name === 'tutor.science-tutor.home' && c.ok) && !d.checks.some((c) => c.name === 'tutor.science-tutor.file'), JSON.stringify(d.checks.filter((c) => c.name.includes('science'))));
 
-  // 只在 cotutor.json 里加了名字、没写文件:init 补目录,doctor 点名怎么写
+  // 只在 cotutor.json 里加了名字:init 补家
   await patchConfig(loadWorkspace(root), { tutors: { 'art-tutor': { display: '美术老师', enabled: true } } });
   const steps = await installTutors(root, ['science-tutor', 'art-tutor']);
-  check('installTutors 给配置里的老师补目录,文件缺的点名 add', existsSync(join(root, 'agents', 'art-tutor')) && steps.some((s) => s.item === 'agents/art-tutor.md' && s.action === 'kept' && s.note?.includes('cotutor add art-tutor')), JSON.stringify(steps.filter((s) => s.item.includes('art'))));
-  const d2 = await doctorWorkspace(root, { probeEnv: false });
-  check('doctor:文件缺 → 必需失败,修复说写文件或 add', !d2.ok && d2.checks.some((c) => c.name === 'tutor.art-tutor.file' && !c.ok && c.fix?.includes('cotutor add art-tutor')), JSON.stringify(d2.checks.filter((c) => c.name.includes('art'))));
+  check('installTutors 给配置里的老师补家', existsSync(join(root, 'agents', 'art-tutor')) && steps.some((s) => s.item === 'agents/art-tutor/' && s.action === 'created'), JSON.stringify(steps));
 } finally {
   rmSync(home, { recursive: true, force: true });
 }

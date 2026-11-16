@@ -27,13 +27,15 @@ for (const t of Object.values(cfg.tutors as Record<string, { runtime?: string }>
 cfg.paths = { vault: 'vault' };
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 mkdirSync(join(root, 'vault', '记忆'), { recursive: true });
+const { CHAT_RUN, writeChat } = await import('./_chat.ts');
+writeChat(root, ['math-tutor']);
 
 let now = new Date(2026, 9, 26, 10, 0);
 const ctx = createContext(loadWorkspace(root), { now: () => now });
 const at = (d: number, h: number, m = 0): Date => new Date(2026, 9, d, h, m);
 /** 孩子说一句(新话题或接着 thread),跑完;now 往后走一分钟 */
 const say = async (text: string, thread?: string): Promise<string> => {
-  const s = await ctx.runner.send('math-tutor', { from: 'kid', text, ...(thread ? { thread } : { newThread: true }) });
+  const s = await ctx.runner.send('math-tutor', { from: 'kid', text, ...(thread ? { thread } : { newThread: true, activity: CHAT_RUN }) });
   await s.done;
   now = new Date(now.getTime() + 60_000);
   return s.job;

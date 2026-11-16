@@ -1,5 +1,5 @@
 /** 纯函数层:全部离屏可测,不依赖文件系统与网络。 */
-export * from '../runtime/agent-file.ts';
+export * from '../shared/frontmatter.ts';
 export * from '../board/sections.ts';
 export * from '../brain/transcript.ts';
 export * from '../runtime/kid-view.ts';

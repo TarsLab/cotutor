@@ -195,7 +195,9 @@ type Look = import('../src/scenes/look.ts').Look;
   }
 
   // 别的话题:没有 board
-  const free = await kidSend(ctx, T, { text: '你好', newThread: true });
+  const { chatStart, writeChat } = await import('./_chat.ts');
+  writeChat(root, [T]);
+  const free = await chatStart(ctx, T, { text: '你好' });
   await wait();
   check('不从以板为主的 activity 进来的话题:不记 board、上下文包没有 board:', !index().messages.find((m) => m.job === free.json.job)?.board && !promptOf(String(free.json.job)).includes('\n  board:'));
   check('点字只认以板为主的话题', (await ctx.runner.boardEvent(T, date, { k: 'pick', thread: String(free.json.thread), text: '晒', base: p1 })) === null);

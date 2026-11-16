@@ -95,11 +95,11 @@ try {
   const again = await recoverPending(v, r.index);
   check('没有 pending:原样', !again.changed && again.index === r.index);
 
-  // ---- 孩子的记忆(2026-10-30):有脸的老师写的 孩子: 分到 agent: all 那篇,前缀去掉;工具人写的照旧进自己的 ----
+  // ---- 孩子的记忆(2026-10-30):老师写的 孩子: 分到 agent: all 那篇,前缀去掉;不分享(shared: false,不在 tutors 里的)照旧进自己的 ----
   const split = await planMemory(v, { agent: 'math-tutor', display: '数学老师', items: ['孩子:卡住先说我不会。证据:「我不会」', '讲角用手指比划'], max: 2, date: '2026-10-30', said: ['我不会'], shared: true });
   check('有脸的老师:孩子: 那条进 记忆/孩子.md(去掉前缀),另一条进自己的', split.child?.file === '记忆/孩子.md' && split.child.base === null && split.child.text.includes('agent: all') && split.child.changes.join() === '- 2026-10-30 卡住先说我不会。' && split.plan?.file === '记忆/数学老师.md' && split.plan.changes.join() === '- 2026-10-30 讲角用手指比划', JSON.stringify(split));
   const tool = await planMemory(v, { agent: 'helper', display: '小帮手', items: ['孩子:卡住先说我不会'], max: 2, date: '2026-10-30', said: [], shared: false });
-  check('工具人:孩子: 照旧进自己的,前缀留着', tool.child === null && tool.plan?.changes.join() === '- 2026-10-30 孩子:卡住先说我不会', JSON.stringify(tool));
+  check('不分享:孩子: 照旧进自己的,前缀留着', tool.child === null && tool.plan?.changes.join() === '- 2026-10-30 孩子:卡住先说我不会', JSON.stringify(tool));
   check('改、删也能分过去:孩子:删:原话', childItem('孩子:删:卡住先说我不会') === '删:卡住先说我不会' && childItem('孩子: 读题慢') === '读题慢');
   await writeVaultMemory(v, split.child!);
   const cr = await recoverPending(v, { ...emptyIndex('math-tutor', '2026-10-30'), messages: [msg({ job: '1800-1', thread: '1800-1', from: 'kid', text: '我不会', pending: { child: { file: split.child!.file, base: null, hash: textHash(split.child!.text), changes: split.child!.changes, lines: split.child!.lines } } })] });

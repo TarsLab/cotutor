@@ -1,9 +1,9 @@
 /**
- * 老师守则(机器技能 cotutor-tutor):有脸的老师共同的那几段(上下文包、三种回复、记忆段、不变的规矩)。
- * 老师文件拷进 workspace 就归家长、改过 upgrade 就不再换,公共规矩放在那里修不到每一家;放进机器技能每次 upgrade 覆盖,
+ * 老师守则(机器技能 cotutor-tutor):老师们共同的那几段(上下文包、两种回复、记忆段、不变的规矩)。
+ * activity 拷进 workspace 就归家长、改过 refresh 就不再换,公共规矩放在那里修不到每一家;放进机器技能每次 refresh 覆盖,
  * 由应用在每个话题第一条把原文放进上下文包(<cotutor-rules>,同一话题没改过的写「未变」),不靠老师自己去 Read。
  */
-import { parseAgentFile } from '../agent-file.ts';
+import { parseFrontmatter } from '../../shared/frontmatter.ts';
 import { stripHumanNotes } from '../../shared/human-notes.ts';
 import { applyCardGuards } from '../../board/card-guards.ts';
 import { BOARD_CARD_KINDS } from '../../schema/config.ts';
@@ -19,7 +19,7 @@ export const TUTOR_RULES_PATH = `${SKILLS_DIR}/${TUTOR_SKILL}/SKILL.md`;
  * 守卫写坏了(家长改过的机器件)就只去掉守卫行,整篇照给。
  */
 export function tutorRulesBody(skillMd: string, kinds: readonly string[] = BOARD_CARD_KINDS): string {
-  const body = stripHumanNotes(parseAgentFile(skillMd).body);
+  const body = stripHumanNotes(parseFrontmatter(skillMd).body);
   try {
     return applyCardGuards(body, kinds);
   } catch {
@@ -27,17 +27,12 @@ export function tutorRulesBody(skillMd: string, kinds: readonly string[] = BOARD
   }
 }
 
-/** 谁拿守则:有脸的老师(键以 -tutor 结尾);工具人的工作流写在自己文件里 */
-export function takesTutorRules(agent: string): boolean {
-  return agent.endsWith('-tutor');
-}
-
 /** 板书写法(机器技能 cotutor-board 的 SKILL.md),相对 workspace 根。由应用递给老师:运行时能预载就进系统提示,否则进话题第一条的 <cotutor-board> */
 export const BOARD_GUIDE_PATH = `${SKILLS_DIR}/cotutor-board/SKILL.md`;
 
 /** 递给老师的正文:去掉 frontmatter 与给人看的注释 */
 export function boardGuideBody(skillMd: string): string {
-  return stripHumanNotes(parseAgentFile(skillMd).body);
+  return stripHumanNotes(parseFrontmatter(skillMd).body);
 }
 
 /** 上下文包 boardGuide: 行在预载时写的话(事实陈述,不让老师自查) */

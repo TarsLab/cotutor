@@ -17,7 +17,7 @@ import { talkRun } from './talk-run.ts';
 
 export interface KidReject {
   status: 400 | 409;
-  error: 'bad_request' | 'submitted' | 'bad_via' | 'bad_talk';
+  error: 'bad_request' | 'submitted' | 'bad_via' | 'bad_talk' | 'no_thread';
   /** 给人看的一句(多数没有) */
   message?: string;
 }
@@ -49,9 +49,8 @@ export async function kidInput(ws: Workspace, tutor: string, body: unknown, date
   const button = via ? await resolveVia(ws, tutor, via.data!) : null;
   if (via && !button) return reject(400, 'bad_via');
   let text = body.text;
-  // 孩子端只从首页的按钮(activity、方砖、小课堂)和口语课开新话题(2026-11-16 起没有自由话题),不再发 newThread。
-  // 过渡:服务端还认 body.newThread(测试、旧页面靠它开不走 activity 的话题),阶段 1 任务 4 和 runner 里不走 activity 的那条路一起删
-  let newThread = body.newThread === true;
+  // 新话题只从首页的按钮(activity、方砖、小课堂)和口语课开始(2026-11-16 起没有自由话题);别的都接着今天的一个话题
+  let newThread = false;
   let pick = thread;
   let home: { button: string; brief?: string } | undefined;
   let activity: { name: string; params: Record<string, ActivityValue> } | undefined;
@@ -97,6 +96,11 @@ export async function kidInput(ws: Workspace, tutor: string, body: unknown, date
     talk = t.id;
   }
   if (!text.trim() && !action && !photos?.length) return reject(400, 'bad_request');
+  // 不开新话题的:要接着今天的一个话题(写了 thread 就是它,没写是最后那个);一个也没有 → 400,孩子端回首页从按钮开始
+  if (!newThread) {
+    const ths = threads(today.messages);
+    if (pick ? !ths.includes(pick) : !ths.length) return reject(400, 'no_thread', '先从首页的按钮开始');
+  }
   return { input: { ...(talk ? { talk } : {}), from: 'kid', text, focus: focus?.data, action, newThread, thread: pick, device: device?.data, ...(validDevice(deviceId) ? { deviceId: deviceId! } : {}), photos, ...(via && button ? { via: messageVia(via.data!, button) } : {}), ...(home ? { home } : {}), ...(activity ? { activity } : {}), ...(lecture ? { lecture } : {}) } };
 }
 

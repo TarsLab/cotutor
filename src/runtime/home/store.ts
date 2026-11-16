@@ -265,7 +265,7 @@ export type ResolvedVia =
  * 对不上(不是当前发布的那份、这位老师没有这个按钮、老师不上首页、以前发布的那份里的开场 / 接着按钮)→ null,路由回 400。
  */
 export async function resolveVia(ws: Workspace, tutor: string, via: HomeVia): Promise<ResolvedVia | null> {
-  if (!faceTutor(tutor, tutorInfos(ws)[tutor])) return null;
+  if (!faceTutor(tutorInfos(ws)[tutor])) return null;
   // activity 的参数在点的那一刻按 activity 文件解析、补缺省,跟着话题走(家长后来改了只管以后的话题);文件不在、参数不对 → null
   const runOf = async (name: string, params: Record<string, string>): Promise<ActivityRun | null> => {
     const text = await readFile(findActivityFile(ws.root, tutor, name), 'utf8').catch(() => null);

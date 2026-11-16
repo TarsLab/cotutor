@@ -29,7 +29,6 @@ import { ConfigError, patchConfig, reloadIfChanged, workspaceReport } from '../w
 import { UsageError } from '../../shared/errors.ts';
 import { redactHome } from '../../shared/home.ts';
 import type { Workspace } from '../../schema/index.ts';
-import { tutorStatuses } from '../cli/tutors.ts';
 import { configGapsOf, upgradeConfig } from '../cli/migrate.ts';
 import { ICON_SIZES, appIconPng, webManifest } from '../../ui/shared/icon.ts';
 import { faviconResponse } from '../../ui/shared/favicon.ts';
@@ -49,7 +48,6 @@ import { photosOf } from '../../runtime/kid-input.ts';
 import { DEV_PAGE } from '../../ui/dev/dev-page.ts';
 import { devOverview } from './dev-overview.ts';
 import { ActivityConflict, checkDevActivity, findDevActivity, listDevActivities, readDevActivity, restoreDevActivity, saveDevActivity } from './dev-activities.ts';
-import { checkDevTutorFile, hasDevTutorFile, listDevTutorFiles, readDevTutorFile, restoreDevTutorFile, saveDevTutorFile } from './dev-tutor-files.ts';
 import { doctorWorkspace } from '../cli/doctor.ts';
 import { VOICE_GALLERY_PAGE } from '../../ui/dev/voice-gallery-page.ts';
 import { BusyError, Runner } from '../../runtime/runner.ts';
@@ -80,7 +78,10 @@ import { tianzigeData } from '../../ui/kid/tianzige.ts';
 import { lettersData } from '../../ui/kid/letters.ts';
 import { fixtureOf, rawView } from './raw-view.ts';
 import { DeviceSchema } from '../../schema/index.ts';
-import { addTutorFile, readTutorFile, removeTutorFile, writeTutorFile } from '../cli/tutors.ts';
+import { addTutorHome } from '../cli/tutors.ts';
+import { activityRunFor } from '../../runtime/activities.ts';
+import { shippedAgents } from '../cli/skeleton.ts';
+import { workspaceGradePack } from '../cli/grades.ts';
 import type { MouthIndex } from '../../runtime/journal/mouth-index.ts';
 
 export interface RouteResult {
@@ -711,29 +712,6 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       if (sub === '/restore' && method === 'POST') return { status: 200, json: await restoreDevActivity(ws, tutor, name) };
       return { status: 405, json: { error: 'method_not_allowed' } };
     }
-    // 工作台改老师文件:「新话题」照的提示词;和 activity 同一套(存带 hash、对不上 409),检查有要改的不存(400)
-    if (p === '/api/dev/tutor-files' && method === 'GET') return { status: 200, json: await listDevTutorFiles(ws) };
-    const dt = /^\/api\/dev\/tutor-files\/([a-z0-9][a-z0-9-]*)(\/check|\/restore)?$/.exec(p);
-    if (dt) {
-      const [, tutor, sub] = dt;
-      if (!(await hasDevTutorFile(ws, tutor))) return { status: 404, json: { error: 'no_such_tutor', tutor } };
-      if (!sub && method === 'GET') return { status: 200, json: await readDevTutorFile(ws, tutor) };
-      if (sub === '/check' && method === 'POST') {
-        if (!isObj(body) || typeof body.text !== 'string') return { status: 400, json: { error: 'bad_request', message: '要 {text}' } };
-        return { status: 200, json: await checkDevTutorFile(ws, tutor, body.text) };
-      }
-      if (!sub && method === 'PUT') {
-        if (!isObj(body) || typeof body.text !== 'string' || typeof body.base !== 'string') return { status: 400, json: { error: 'bad_request', message: '要 {text, base}' } };
-        try {
-          return { status: 200, json: await saveDevTutorFile(ws, tutor, body.text, body.base) };
-        } catch (err) {
-          if (err instanceof ActivityConflict) return { status: 409, json: { error: 'conflict', message: '这份文件在别处改过了', hash: err.hash } };
-          throw err;
-        }
-      }
-      if (sub === '/restore' && method === 'POST') return { status: 200, json: await restoreDevTutorFile(ws, tutor) };
-      return { status: 405, json: { error: 'method_not_allowed' } };
-    }
     if (p === '/api/workspace' && method === 'GET') return { status: 200, json: workspaceReport(ws) };
     if (p === '/api/config') {
       if (method === 'GET') {
@@ -753,7 +731,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
             live: ws.config.live,
             theme: ws.config.kid.theme,
             https: ws.config.server.https ?? null,
-            shipped: (await tutorStatuses(ws.root)).map((s) => s.name),
+            shipped: (await shippedAgents((await workspaceGradePack(ws.root)).agentsDir)).map((s) => s.name),
             /** 老 workspace 的政策文件缺的出厂件(新老师 / 新运行时 / 模板里的新旗标);设置页据此提示一行 */
             migrate: await configGapsOf(ws.root),
             tutors: listTutors(ws.config),
@@ -783,31 +761,27 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     if (p === '/api/tutors' && method === 'GET') {
       return { status: 200, json: listTutors(ws.config, { kidOnly: url.searchParams.get('kid') === '1' }) };
     }
-    // ---- 加老师 / 老师文件 / 删老师:与 cotutor add 同一条路 ----
+    // ---- 加老师 / 删老师:与 cotutor add 同一条路(老师文件 2026-11-16 起没有了,只建老师的家、改 cotutor.json) ----
     if (p === '/api/tutors' && method === 'POST') {
       if (!isObj(body) || typeof body.name !== 'string' || typeof body.display !== 'string' || !body.display.trim()) return { status: 400, json: { error: 'bad_request', message: '要 {name, display, subject?, avatar?, hidden?, description?}' } };
       const name = body.name.trim();
       if (ws.config.tutors[name]) return { status: 409, json: { error: 'exists', message: `cotutor.json 里已经有 ${name}` } };
       const str = (k: string): string | undefined => (typeof body[k] === 'string' && (body[k] as string).trim() ? (body[k] as string).trim() : undefined);
-      const r = await addTutorFile(ws.root, { name, display: body.display.trim(), subject: str('subject'), description: str('description') });
-      await patchConfig(ws, { tutors: { [name]: { display: body.display.trim(), ...(str('subject') ? { subject: str('subject') } : {}), ...(str('avatar') ? { avatar: str('avatar') } : {}), enabled: true, ...(body.hidden === true ? { hidden: true } : {}) } } });
+      const r = await addTutorHome(ws.root, name);
+      await patchConfig(ws, { tutors: { [name]: { display: body.display.trim(), ...(str('description') ? { description: str('description') } : {}), ...(str('subject') ? { subject: str('subject') } : {}), ...(str('avatar') ? { avatar: str('avatar') } : {}), enabled: true, ...(body.hidden === true ? { hidden: true } : {}) } } });
       await ctx.reload();
       return { status: 201, json: { ok: true, ...r, tutors: listTutors(ctx.ws.config) } };
     }
-    const tf = /^\/api\/tutors\/([a-z0-9][a-z0-9-]*)(\/file)?$/.exec(p);
+    const tf = /^\/api\/tutors\/([a-z0-9][a-z0-9-]*)$/.exec(p);
     if (tf) {
-      const [, name, isFile] = tf;
+      const [, name] = tf;
       if (!ws.config.tutors[name]) return { status: 404, json: { error: 'no_such_tutor', tutor: name } };
-      if (isFile && method === 'GET') return { status: 200, json: await readTutorFile(ws.root, name) };
-      if (isFile && method === 'PUT') {
-        if (!isObj(body) || typeof body.text !== 'string') return { status: 400, json: { error: 'bad_request', message: '要 {text}' } };
-        return { status: 200, json: await writeTutorFile(ws.root, name, body.text) };
-      }
-      if (!isFile && method === 'DELETE') {
-        const r = await removeTutorFile(ws.root, name);
+      // 删老师:只从 cotutor.json 拿掉;老师的家(activity)、会话与记忆不动
+      if (method === 'DELETE') {
+        if ((await shippedAgents((await workspaceGradePack(ws.root)).agentsDir)).some((a) => a.name === name)) return { status: 400, json: { error: 'shipped', message: `${name} 是出厂老师,不删;不想用就在老师团页关掉` } };
         await patchConfig(ws, { tutors: { [name]: null } });
         await ctx.reload();
-        return { status: 200, json: { ok: true, ...r, tutors: listTutors(ctx.ws.config) } };
+        return { status: 200, json: { ok: true, tutors: listTutors(ctx.ws.config) } };
       }
       return { status: 405, json: { error: 'method_not_allowed' } };
     }
@@ -1112,7 +1086,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       // 工作台传照片:与孩子端同一条路(落 captures/,回 {path})
       if (tail === 'photos') return method === 'POST' ? uploadPhoto(ws, body, ctx.now()) : { status: 405, json: { error: 'method_not_allowed' } };
       if (tail === 'messages' && method === 'POST') {
-        if (!isObj(body) || typeof body.text !== 'string') return { status: 400, json: { error: 'bad_request', message: '要 {text, from?, focus?, runtime?, photos?}' } };
+        if (!isObj(body) || typeof body.text !== 'string') return { status: 400, json: { error: 'bad_request', message: '要 {text, from?, focus?, runtime?, photos?, thread?, activity?, params?}' } };
         // 工作台 /dev 与 cotutor send 发的都算孩子的话(2026-10-05 起没有 from: parent;旧客户端带 parent 也当 kid)
         const from = body.from === undefined || body.from === 'parent' ? 'kid' : body.from;
         if (!(MESSAGE_FROM as readonly unknown[]).includes(from)) return { status: 400, json: { error: 'bad_request', message: `from 只能是 ${MESSAGE_FROM.join(' / ')}` } };
@@ -1125,14 +1099,18 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         if (device && !device.success) return { status: 400, json: { error: 'bad_request', message: 'device 只能是 phone / tablet' } };
         const action = body.action === undefined ? undefined : body.action === 'submit' ? ('submit' as const) : null;
         if (action === null) return { status: 400, json: { error: 'bad_request', message: 'action 只能是 submit' } };
-        if (!body.text.trim() && !action && !photos?.length) return { status: 400, json: { error: 'bad_request', message: '要说点什么' } };
+        // 新话题从一个 activity 开始(同 cotutor send --activity;2026-11-16 起没有自由话题):{activity, params?: '名=值;名=值'}
+        const activity = typeof body.activity === 'string' && body.activity ? await activityRunFor(ws.root, tutor, body.activity, typeof body.params === 'string' ? body.params : '') : undefined;
+        const text = body.text.trim() || activity?.name || '';
+        if (!text && !action && !photos?.length) return { status: 400, json: { error: 'bad_request', message: '要说点什么' } };
         const started = await ctx.runner.send(tutor, {
           from: from as (typeof MESSAGE_FROM)[number],
-          text: body.text,
+          text,
           action,
           focus: focus?.data,
           runtime: typeof body.runtime === 'string' ? body.runtime : undefined,
-          newThread: body.newThread === true,
+          newThread: Boolean(activity),
+          ...(activity ? { activity } : {}),
           thread: typeof body.thread === 'string' ? body.thread : undefined,
           photos,
           device: device?.data,

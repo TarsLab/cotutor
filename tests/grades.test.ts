@@ -11,7 +11,7 @@ delete process.env.COTUTOR_WORKSPACE;
 const { gradePacks, requireGradePack, workspaceGradePack } = await import('../src/app/cli/grades.ts');
 const { gradeOfSemester } = await import('../src/memory/grade.ts');
 const { initWorkspace } = await import('../src/app/cli/init.ts');
-const { readManifest, writeManifest, sha256, upgradeTutors, restoreTutor, shippedTutorText } = await import('../src/app/cli/tutors.ts');
+const { readManifest, writeManifest, sha256 } = await import('../src/app/cli/tutors.ts');
 const { upgradeActivities, restoreActivity, shippedActivityText, shippedActivities } = await import('../src/app/cli/activities.ts');
 const { lintActivity, resolveParams, renderTutorSection } = await import('../src/runtime/activity.ts');
 const { parseExamples } = await import('../src/app/activity-eval-rules.ts');
@@ -44,39 +44,27 @@ try {
   const root = join(testHome, 'family');
   const first = await initWorkspace({ slug: 'kid', dir: root, grade: 2 });
   check('显式安装来源写入清单', (await readManifest(root)).teachingPack?.grade === 2 && first.steps.some((s) => s.item === 'teachingPack'));
-  const teacher = join(root, 'agents/math-tutor.md');
   const activity = join(root, 'agents/math-tutor/activities/检查作业.md');
-  const factoryTeacher = readFileSync(teacher, 'utf8');
   const factoryActivity = readFileSync(activity, 'utf8');
-  const mine = factoryTeacher + '\n家长的话:先摆小棒。\n';
   const mineActivity = factoryActivity + '\n家长的话:今天只看一题。\n';
-  writeFileSync(teacher, mine);
   writeFileSync(activity, mineActivity);
   const profile = join(`${root}-vault`, '孩子.md'); // vault 在旁边(2026-11-09)
   const profileText = '---\ncotutor: profile\nsemester: 三年级上\n---\n孩子英语刚起步。\n';
   writeFileSync(profile, profileText);
   const configText = readFileSync(join(root, 'cotutor.json'), 'utf8');
 
-  // 模拟旧版出厂清单:记录一个未改过的旧老师版本,另两份已经自定义。
+  // 模拟旧版出厂清单(没有 teachingPack):自定义的 activity 照样保留
   const m = await readManifest(root);
   delete m.teachingPack;
-  const enFile = join(root, 'agents/english-tutor.md');
-  const oldEnglish = readFileSync(enFile, 'utf8') + '\n旧版出厂教学说明。\n';
-  writeFileSync(enFile, oldEnglish);
-  m.tutors['english-tutor'] = { hash: sha256(oldEnglish), version: '0.1.0' };
-  const customHash = m.tutors['math-tutor'].hash;
   await writeManifest(root, m);
   check('只读旧来源不改记录', (await workspaceGradePack(root)).grade === 2 && !(await readManifest(root)).teachingPack);
-  const upgrade = await upgradeTutors(root);
   const acts = await upgradeActivities(root);
-  check('旧版未改文件按原 hash 更新', upgrade.find((s) => s.name === 'english-tutor')?.action === 'upgraded' && !readFileSync(enFile, 'utf8').includes('旧版出厂教学说明'));
-  check('旧版自定义老师和 activity 保留', upgrade.find((s) => s.name === 'math-tutor')?.action === 'kept-custom' && acts.find((s) => s.key === 'math-tutor/检查作业')?.action === 'kept-custom' && readFileSync(teacher, 'utf8') === mine && readFileSync(activity, 'utf8') === mineActivity);
-  check('迁移补来源但不重置自定义 hash', (await readManifest(root)).teachingPack?.grade === 2 && (await readManifest(root)).tutors['math-tutor'].hash === customHash);
+  check('旧版自定义 activity 保留', acts.find((s) => s.key === 'math-tutor/检查作业')?.action === 'kept-custom' && readFileSync(activity, 'utf8') === mineActivity);
+  check('迁移补来源', (await readManifest(root)).teachingPack?.grade === 2);
   await initWorkspace({ slug: 'kid', dir: root });
-  check('重复 init 保留自定义、档案和配置', readFileSync(teacher, 'utf8') === mine && readFileSync(activity, 'utf8') === mineActivity && readFileSync(profile, 'utf8') === profileText && readFileSync(join(root, 'cotutor.json'), 'utf8') === configText);
-  await restoreTutor(root, 'math-tutor');
+  check('重复 init 保留自定义、档案和配置', readFileSync(activity, 'utf8') === mineActivity && readFileSync(profile, 'utf8') === profileText && readFileSync(join(root, 'cotutor.json'), 'utf8') === configText);
   await restoreActivity(root, 'math-tutor', '检查作业');
-  check('恢复正确包的出厂件并备份', readFileSync(teacher, 'utf8') === factoryTeacher && readFileSync(teacher + '.bak', 'utf8') === mine && readFileSync(activity, 'utf8') === factoryActivity && readFileSync(activity + '.bak', 'utf8') === mineActivity);
+  check('恢复正确包的出厂件并备份', readFileSync(activity, 'utf8') === factoryActivity && readFileSync(activity + '.bak', 'utf8') === mineActivity);
   const report = await doctorWorkspace(root, { probeEnv: false, now: new Date('2026-10-27T00:00:00Z') });
   check('doctor 提醒年级不匹配但不自动换包', report.checks.some((c) => c.name === 'teachingPack.grade' && !c.ok && !c.required) && (await readManifest(root)).teachingPack?.grade === 2);
 
@@ -143,13 +131,13 @@ try {
   broken.teachingPack.grade = 3;
   writeFileSync(join(root, '.cotutor/shipped.json'), JSON.stringify(broken));
   for (const [label, op] of [
-    ['升级老师', () => upgradeTutors(root)], ['升级 activity', () => upgradeActivities(root)],
-    ['恢复老师', () => restoreTutor(root, 'math-tutor')], ['恢复 activity', () => restoreActivity(root, 'math-tutor', '检查作业')],
-    ['查看老师出厂差异', () => shippedTutorText('math-tutor', root)], ['查看 activity 出厂差异', () => shippedActivityText('math-tutor', '检查作业', root)],
+    ['升级 activity', () => upgradeActivities(root)],
+    ['恢复 activity', () => restoreActivity(root, 'math-tutor', '检查作业')],
+    ['查看 activity 出厂差异', () => shippedActivityText('math-tutor', '检查作业', root)],
   ] as const) await rejects(`${label} 不回退到二年级`, op, /没有完整的 3/);
   const missing = await doctorWorkspace(root, { probeEnv: false });
   check('doctor 报缺失包而不崩溃', missing.checks.some((c) => c.name === 'teachingPack' && !c.ok && c.required));
-  check('失败操作不改老师文件', readFileSync(teacher, 'utf8') === factoryTeacher && readFileSync(activity, 'utf8') === factoryActivity);
+  check('失败操作不改 activity', readFileSync(activity, 'utf8') === factoryActivity);
   writeFileSync(join(root, '.cotutor/shipped.json'), '{bad');
   await rejects('损坏记录不重建 hash', () => initWorkspace({ slug: 'kid', dir: root }), /出厂记录用不了/);
   const corrupt = await doctorWorkspace(root, { probeEnv: false });

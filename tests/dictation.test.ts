@@ -450,6 +450,9 @@ try {
       check(`${name}页:按钮的样式只有 ui.ts 那一份`, page.includes(BTN_CSS) && page.split('.tool { display').length === 2 && page.split('.main { display').length === 2);
     }
   }
+} catch (e) {
+  // done() 在 finally 里会 process.exit:抛的异常要记成失败,不然悄悄过了
+  check('跑完没抛', false, String((e as Error)?.stack ?? e));
 } finally {
   done();
 }

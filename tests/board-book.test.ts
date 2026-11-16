@@ -123,7 +123,7 @@ const P = (c: BoardCard): Record<string, string> => c.props.params as Record<str
   writeFileSync(join(root, '.cotutor', 'textbooks', `${sha}.json`), JSON.stringify({ ...ix, sha }));
 
   now = new Date(2026, 10, 14, 10, 5);
-  const first = await kidSend(ctx, T, { text: '', via: { home: h.home, button: 'preview' }, newThread: true });
+  const first = await kidSend(ctx, T, { text: '', via: { home: h.home, button: 'preview' } });
   await wait();
   const job1 = String(first.json.job);
   const thread = String(first.json.thread);
@@ -191,7 +191,7 @@ const P = (c: BoardCard): Record<string, string> => c.props.params as Record<str
   const mIndex = (): { messages: { job: string; section?: BoardSection }[] } => JSON.parse(readFileSync(join(root, 'conversations', M, `${date}.json`), 'utf8'));
   const mwait = async (): Promise<void> => { for (let i = 0; i < 200 && ctx.runner.running(M); i++) await new Promise((r) => setTimeout(r, 25)); await ctx.runner.flush(); };
   now = new Date(2026, 10, 14, 11, 0);
-  const mt1 = await kidSend(ctx, M, { text: '', via: { home: h.home, button: 'preview' }, newThread: true });
+  const mt1 = await kidSend(ctx, M, { text: '', via: { home: h.home, button: 'preview' } });
   await mwait();
   const mth = String(mt1.json.thread);
   const mp1 = mPrompt(String(mt1.json.job));

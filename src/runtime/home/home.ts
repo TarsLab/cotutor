@@ -106,15 +106,15 @@ export interface HomeCheckContext {
   activities?: ReadonlyMap<string, { activity: Activity; fixes: number }>;
 }
 
-/** 老师卡能不能上首页:有脸(-tutor 结尾)、开着、孩子端露 */
-export function faceTutor(name: string, t: HomeTutorInfo | undefined): boolean {
-  return Boolean(t && t.enabled && !t.hidden && name.endsWith('-tutor'));
+/** 老师卡能不能上首页:开着、孩子端露 */
+export function faceTutor(t: HomeTutorInfo | undefined): boolean {
+  return Boolean(t && t.enabled && !t.hidden);
 }
 
 /** 首页的老师(孩子端露的有脸老师),cotutor.json 的顺序 */
 export function homeTutors(tutors: Record<string, HomeTutorInfo>): string[] {
   return Object.entries(tutors)
-    .filter(([name, t]) => faceTutor(name, t))
+    .filter(([, t]) => faceTutor(t))
     .map(([name]) => name);
 }
 
@@ -146,7 +146,6 @@ export function homeIssues(doc: HomeDoc, ctx: HomeCheckContext): HomeIssue[] {
     const name = String(c.props.tutor);
     const t = ctx.tutors[name];
     if (!t) return void out.push({ level: 'fix', line, card: n, text: `老师卡 ${name}:cotutor.json 里没有这位老师(有:${names.join('、')})` });
-    if (!name.endsWith('-tutor')) return void out.push({ level: 'fix', line, card: n, text: `老师卡 ${name}:它是工具人(键不以 -tutor 结尾),孩子不直接找它` });
     if (!t.enabled) return void out.push({ level: 'fix', line, card: n, text: `老师卡 ${name}:${t.display}关着(cotutor.json enabled = false),先打开或删掉这张卡` });
     if (t.hidden) return void out.push({ level: 'fix', line, card: n, text: `老师卡 ${name}:${t.display}孩子端不露(hidden),删掉这张卡` });
     const first = seen.get(name);

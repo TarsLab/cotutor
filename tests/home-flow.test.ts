@@ -262,12 +262,14 @@ activity 看图说话 我要看图说话
   {
     const { existsSync: exists } = await import('node:fs');
     const convDir = join(root, 'conversations', 'math-tutor');
-    const memFile = join(root, 'vault', '记忆', '数学老师.md');
+    // 话题从 activity「聊」开始(tests/_chat.ts):老师记的进那个 activity 那篇
+    const { CHAT_RUN, writeChat } = await import('./_chat.ts');
+    writeChat(root, ['math-tutor']);
+    const memFile = join(root, 'vault', '记忆', '数学老师·聊.md');
     mkdirSync(join(root, 'vault', '记忆'), { recursive: true });
-    const memBefore = '---\ncotutor: memory\nagent: math-tutor\n---\n\n家长写在开头的话。\n\n- 2026-09-01 讲慢点他跟得上\n- 2026-09-01 爱用手指数\n- 2026-09-02 喜欢乐高\n';
+    const memBefore = '---\ncotutor: memory\nagent: math-tutor/聊\n---\n\n家长写在开头的话。\n\n- 2026-09-01 讲慢点他跟得上\n- 2026-09-01 爱用手指数\n- 2026-09-02 喜欢乐高\n';
     writeFileSync(memFile, memBefore);
-    // 不走 activity 的话题孩子端开不了了(2026-11-16);这里要的是老师文件那份记忆,经 Runner 直接发(同 cotutor send)
-    const s1 = await ctx.runner.send('math-tutor', { from: 'kid', text: '板书 记住它', newThread: true, live: {} });
+    const s1 = await ctx.runner.send('math-tutor', { from: 'kid', text: '板书 记住它', newThread: true, activity: CHAT_RUN, live: {} });
     await s1.done;
     const { date: day, thread: th } = s1;
     await (await ctx.runner.send('math-tutor', { from: 'kid', text: '改记忆', thread: th, live: {} })).done;
@@ -291,7 +293,7 @@ activity 看图说话 我要看图说话
     check('删话题:撤了 4 行记忆(加的删掉、改的换回、删的接回末尾)、日记那段摘掉;家长写的与整理那轮加的不动', del.status === 200 && undo.memory === 4 && undo.diary === 1 && !mem2.includes('讲角用手指比划他马上懂') && !mem2.includes('家长说别出选择题') && mem2.includes('- 2026-09-01 讲慢点他跟得上') && mem2.includes('- 2026-09-01 爱用手指数') && mem2.includes('家长写在开头的话。') && mem2.includes('喜欢乐高') && !diary2.includes(bkMsg!.diaryBlock!.trim()), JSON.stringify({ undo, mem2, diary2 }));
     check('删话题:索引、会话、记账标记、文件都没了;再删 404', !after.messages.some((m) => m.thread === th) && !(th in after.sessions) && !(th in after.booked) && files.length === 0 && (await route('DELETE', `/api/conversations/math-tutor/${day}/threads/${encodeURIComponent(th)}`, ctx)).status === 404, JSON.stringify({ files }));
     // 工作台 / cotutor send 发的也是孩子的话(没有 from: parent 了;旧客户端带 parent 也当 kid)
-    const dv = await route('POST', '/api/conversations/math-tutor/messages', ctx, { text: '工作台问一句', from: 'parent', newThread: true });
+    const dv = await route('POST', '/api/conversations/math-tutor/messages', ctx, { text: '工作台问一句', from: 'parent', activity: '聊' });
     await wait('math-tutor');
     const dvi = await readIndex(ctx.ws, 'math-tutor', day);
     const dvm = dvi.messages.find((m) => m.job === (dv.json as { job: string }).job);

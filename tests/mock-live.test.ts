@@ -32,10 +32,10 @@ try {
 
   ws.send(JSON.stringify({ t: 'hold' }));
   ws.send(new Uint8Array(3200));
-  ws.send(JSON.stringify({ t: 'release', body: { newThread: true, device: 'tablet-landscape' } }));
+  ws.send(JSON.stringify({ t: 'release', body: { device: 'tablet-landscape' } }));
   const okTurn = await until(() => msgs.some((m) => m.t === 'turn'));
   const turn = msgs.find((m) => m.t === 'turn')!;
-  check('松手:嘴不先说(没有接住)、孩子那句、脑开写', okTurn && !msgs.some((m) => m.t === 'tutor' && m.of === 'catch') && msgs.some((m) => m.t === 'kid' && m.text === MOCK_LIVE_SAID) && turn.thread === turn.job, JSON.stringify(msgs.slice(0, 6)));
+  check('松手:嘴不先说(没有接住)、孩子那句、脑开写', okTurn && !msgs.some((m) => m.t === 'tutor' && m.of === 'catch') && msgs.some((m) => m.t === 'kid' && m.text === MOCK_LIVE_SAID) && Boolean(turn.thread), JSON.stringify(msgs.slice(0, 6)));
   const day = (await (await fetch(`http://${base}/api/kid/conversations/chinese-tutor/today`)).json()) as { messages: Msg[] };
   await r.mock.settleJob(turn.job);
   const day2 = (await (await fetch(`http://${base}/api/kid/conversations/chinese-tutor/today`)).json()) as { messages: Msg[] };

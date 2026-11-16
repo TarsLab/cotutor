@@ -25,6 +25,9 @@ const cfg = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, unknown>
 cfg.runtimes = { ...FAKE_RUNTIMES };
 for (const t of Object.values((cfg as { tutors: Record<string, { runtime?: string }> }).tutors)) delete t.runtime; // 测试都走假老师
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
+// 新话题从 activity 开始(2026-11-16):测试开「聊」
+const { writeChat } = await import('./_chat.ts');
+writeChat(root, ['chinese-tutor']);
 
 async function run(argv: string[]): Promise<{ out: string; code: number; err: string }> {
   const w = process.stdout.write;
@@ -50,7 +53,7 @@ writeFileSync(png, Buffer.from('89504e470d0a1a0a', 'hex'));
 const date = localDate(new Date());
 
 {
-  const r = await run(['send', 'chinese-tutor', '--photo', png, '--new', '--quiet']);
+  const r = await run(['send', 'chinese-tutor', '--photo', png, '--activity', '聊', '--quiet']);
   check('只带照片也能发', r.code === 0, r.out + r.err);
   const ws = loadWorkspace(root);
   const idx = await readIndex(ws, 'chinese-tutor', date);

@@ -45,6 +45,9 @@ try {
   try { out = execFileSync(process.execPath, [tsc, '-p', join(dir, 'tsconfig.json')], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }); } catch (e) { out = String((e as { stdout?: string }).stdout ?? ''); }
   const unknown = out.split('\n').filter((l) => /error TS(2304|2552):/.test(l)).map((l) => l.replace(dir + '/', ''));
   check(`${files.length} 个页面的内联脚本里没有找不到的名字`, unknown.length === 0, unknown.slice(0, 10).join('\n'));
+} catch (e) {
+  // done() 在 finally 里会 process.exit:抛的异常要记成失败,不然悄悄过了
+  check('跑完没抛', false, String((e as Error)?.stack ?? e));
 } finally {
   rmSync(home, { recursive: true, force: true });
   done();

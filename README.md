@@ -68,14 +68,14 @@ Mac 和 Windows 上,`service install` 会一起装一个菜单栏(任务栏)图�
 
 装好以后也可以让编程助手帮你管:在孩子的 cotutor 文件夹(`~/cotutor/<孩子>/`)里打开 Claude Code 或 Codex,已带的技能直接能用。`cotutor-home` 排孩子的首页,`cotutor-tune` 调老师的口气和规矩,`cotutor-analyze` 分析某次对话为什么那样答。
 
-`init` 把出厂老师拷进 `agents/<老师>.md`,把做课包用的四个技能 chalk-* 和五个机器件 cotutor-tutor / cotutor-board / cotutor-analyze / cotutor-tune / cotutor-home 拷进 `.agents/skills/`(Codex、Qwen Code 直接读;Claude Code 读的 `.claude/skills` 是链到它的);
+`init` 把出厂老师的 activity 拷进 `agents/<老师>/activities/`,把做课包用的四个技能 chalk-* 和五个机器件 cotutor-tutor / cotutor-board / cotutor-analyze / cotutor-tune / cotutor-home 拷进 `.agents/skills/`(Codex、Qwen Code 直接读;Claude Code 读的 `.claude/skills` 是链到它的);
 做小课堂的课包用 `cotutor chalk`(check / build / bake / snap / dub),烤画面与截图用本机的 Chrome(Windows 上没有 Chrome 就用 Edge)。要在平板上用(按住说话要 HTTPS):`cotutor cert` 签一张
 自签证书(要 mkcert:Mac 上 `brew install mkcert`;Windows 上 `winget install FiloSottile.mkcert`,重开终端;Ubuntu、Debian 上 `sudo apt install mkcert libnss3-tools`。再跑 `cotutor cert`,这台电脑还没信任根证书时它会打印要跑的那一行:Mac 弹框输登录密码、Windows 弹窗点「是」,都不用管理员终端),把根证书装到平板并打开信任,`cotutor service restart`(在终端里跑的就重开 `cotutor serve`),扫码打开。iPad 的步骤见 [iPad 与 iPhone](docs/iPad与iPhone.md)。
 
 然后在浏览器里:
 
 - **家长端 `/parent`**:「首页」设孩子的首页(按钮、这周的词、老师的先后),扫码打开(孩子的平板一张、家长自己的手机一张),给老师换头像和声音;「设置」定孩子的平板上按住说话那一栏放哪边;「记录」按天看孩子和每位老师的板书(答案不剥)、看录像、打星、记账、删话题,看这天写进 vault 的每一行,不要的一行一行撤回。右上角「工作台 ↗」去工作台。
-- **工作台 `/dev`**:给有技术背景的家长与开发者。和任何一位老师说话、看一轮的原文;老师团页改人设、政策、老师文件,加新老师;设置页改路径、端口。头像与声音只在家长端改。
+- **工作台 `/dev`**:给有技术背景的家长与开发者。和任何一位老师说话、看一轮的原文;老师团页改人设、政策,activity 页改老师怎么带,加新老师;设置页改路径、端口。头像与声音只在家长端改。
 - **孩子端 `/`**:首页每位老师一张卡,卡上是每天都在的预习、检查作业、复习,和家长排好的按钮(带范围的 activity、先看一堂小课堂);点了进板书页,按住说话或打字。老师的回答是一页板书:卡先铺开(选择题、点读、田字格、单词、图、小课堂、板、拍照),讲稿一句句念、笔跟着声音标注,末句问句停下来等孩子。点一张卡进舞台做题,做完「交给老师」。孩子永远看不到工具、报错、评判。
 
 实时老师的声音由 realtime 模型提供;点读、单词等卡片的配音也走百炼(同一把 key),出厂三位各有一个缺省的。在家长端「首页」点老师的「样子与声音」,再点「换一个」在弹窗里挑(全部音色都在,能搜,能按男女、口音、中英、年纪、场景筛,能试听)。
@@ -87,17 +87,17 @@ Mac 和 Windows 上,`service install` 会一起装一个菜单栏(任务栏)图�
 
 出厂文件在 `grades/grade-2/`。三科分别提供预习、检查作业、复习(孩子端老师牌上常驻三块方砖);语文有写话与看图写话,英语有口语课,数学小课堂配合提前做好的课包。家长按教材版本、学期和孩子实际进度设置材料。
 
-孩子当前学期仍由档案决定;升年级不会自动替换家长的老师文件。旧 workspace 执行 `cotutor refresh` 补记二年级来源,保留自定义内容。贡献其他年级与验证方式见 [年级教学包设计](docs/年级教学包.md)。
+孩子当前学期仍由档案决定;升年级不会自动替换家长改过的 activity。旧 workspace 执行 `cotutor refresh` 补记二年级来源,保留自定义内容。贡献其他年级与验证方式见 [年级教学包设计](docs/年级教学包.md)。
 
 ## 老师是文件
 
-每位老师 = 一个 Markdown 文件(frontmatter + 正文即系统提示)+ cotutor.json 里的一条(显示名、头像、音色、开关、政策)+ 自己的目录与对话。出厂三位(数学、语文、英语)随包发布,init **拷贝**进你的老师们,改了就是你家的;`cotutor refresh` 只换没改过的,改过的打印差异让你定;想回出厂的那份,`cotutor reset <老师>`(你那份存成 .bak)。再加一位:
+每位老师 = cotutor.json 里的一条(显示名、一句介绍、头像、音色、开关、政策)+ 自己的家 `agents/<老师>/`:里面每个 activity 一个 Markdown 文件(孩子从首页一个按钮进去的一种做法,「老师怎么带」那一节就是系统提示,这一科通用的做法每份里都写一遍)+ 对话。出厂三位(数学、语文、英语)随包发布,init **拷贝**进你的老师们,改了就是你家的;`cotutor refresh` 只换没改过的,改过的打印差异让你定;想回出厂的那份,`cotutor reset <老师>/<activity>`(你那份存成 .bak)。2026-11-16 以前每位老师还有一个 `agents/<老师>.md`,现在不读了,refresh 会提一句。再加一位:
 
 ```sh
 cotutor add science-tutor --display 科学老师 --subject 科学 --avatar 🔬
 ```
 
-名字以 `-tutor` 结尾的是老师(有脸),其余是孩子看不到的工具人。没设头像时,语文、数学、英语老师用包里自带的
+新老师的家是空的,照出厂老师拷一份 activity 改,孩子才点得进去。没设头像时,语文、数学、英语老师用包里自带的
 出厂头像(包根 `avatars/`,三个木钉娃娃),别的老师显示学科首字。头像可以是 emoji,也可以是
 workspace 里的一张图(`avatars/<老师>.png`):用 [figshot](https://github.com/tarslab/figshot)
 `figshot pick --workspace ~/cotutor/<孩子>` 让孩子自己搭一个乐高人仔当老师,存盘直接落到这里。
@@ -140,7 +140,7 @@ import { loadWorkspace } from 'cotutor/workspace';                        // 解
 
 ## 数据与升级
 
-默认 workspace(孩子的 cotutor 文件夹)是 `~/cotutor/<孩子>/`:配置在 `cotutor.json`,老师在 `agents/<老师>.md`,activity 在 `agents/<老师>/activities/`,技能在 `.agents/skills/`,对话在 `conversations/`,账本在 `ledger/`,照片在 `captures/`,课包在 `bundles/`,首页在 `home/`。长期档案、记忆和日记在 vault(笔记文件夹),和 workspace 分开放:缺省是旁边的 `~/cotutor/<孩子>-vault/`,位置写在 `cotutor.json` 的 `paths.vault`(0.4.4 及以前建的没写,vault 就是 workspace 本身,照旧能用,`cotutor doctor` 的 `vault.separate` 说怎么分开),规则见 [obsidian 仓库设计](docs/obsidian仓库设计.md)。workspace 与 vault 都要留着。
+默认 workspace(孩子的 cotutor 文件夹)是 `~/cotutor/<孩子>/`:配置在 `cotutor.json`,老师的 activity 在 `agents/<老师>/activities/`,技能在 `.agents/skills/`,对话在 `conversations/`,账本在 `ledger/`,照片在 `captures/`,课包在 `bundles/`,首页在 `home/`。长期档案、记忆和日记在 vault(笔记文件夹),和 workspace 分开放:缺省是旁边的 `~/cotutor/<孩子>-vault/`,位置写在 `cotutor.json` 的 `paths.vault`(0.4.4 及以前建的没写,vault 就是 workspace 本身,照旧能用,`cotutor doctor` 的 `vault.separate` 说怎么分开),规则见 [obsidian 仓库设计](docs/obsidian仓库设计.md)。workspace 与 vault 都要留着。
 
 **备份**放在 cotutor 文件夹旁边的 `.backups/<孩子>/`,一份就是一个普通目录。服务开着时每天自动备一份(留 14 份),`cotutor refresh` 前也备一份(留 5 份),没变的文件不占第二份地方;`cotutor backup` 随时手动备。**录音(wav)不在备份里**,它占了绝大部分地方;想留就自己拷 `conversations/`。笔记文件夹里的 md 也备一份(在那一份的 `_vault/` 里);恢复时不动笔记文件夹,只告诉你那份在哪,要不要拿回来你定。硬盘坏了这些也跟着没了,重要的话把 `.backups` 再拷到别处。
 
@@ -189,7 +189,7 @@ cotutor refresh --config              # 执行配置迁移
 ```sh
 cotutor serve --sandbox               # 试用的那份;没有就先分出来
 cotutor send math-tutor 你好 --sandbox
-cotutor serve --sandbox --fresh       # 丢掉试过的,从真 workspace 重新分(真的那边改了老师文件、vault 也用这个带过来)
+cotutor serve --sandbox --fresh       # 丢掉试过的,从真 workspace 重新分(真的那边改了 activity、vault 也用这个带过来)
 ```
 
 ## 卸载

@@ -116,7 +116,7 @@ try {
   check('系统提示里的 activity:填了词,用词那段在;注释与守卫行不在', guide.includes('### 用上这周的词') && guide.includes('第一句:') && !guide.includes('<!--') && !guide.includes('{{'), guide.slice(0, 300));
   check('系统提示里的板书写法:老师没有的 photo 卡也讲', guide.includes('### photo'));
   check('系统提示里的 activity:不带给人看的节、不带工具人那段', !guide.includes('## 认字收到什么') && !guide.includes('挑出这一页要认的字词') && !guide.includes('## 家长填的'));
-  check('守则说以 activity 为准', p1.includes('有 `<cotutor-activity>`,照它带'));
+  check('守则说以 activity 为准', p1.includes('activity 和这里写的不一样,以 activity 为准'));
 
   // ---- 同一话题下一条:activity 还在,原文未变 ----
   const r2 = await kidSend('chinese-tutor', { text: '小熊和小猴种西瓜', thread: t1 });
@@ -292,11 +292,10 @@ try {
     check('记忆写进 activity 自己那篇(agent: chinese-tutor/练词)', memText.includes('agent: chinese-tutor/练词') && memText.split('\n').some((l) => l.startsWith('- ')) && !readdirSync(memDir).includes('语文老师.md'), readdirSync(memDir).join());
     const s3 = await go({ text: '后来呢', runtime: 'fake', thread: s1.thread });
     check('续话题:上下文包的记忆是 activity 那篇', /memory: "记忆\/语文老师·练词\.md/.test(s3.file.prompt), s3.file.prompt.slice(0, 600));
-    const free = await ctx.runner.send('chinese-tutor', { from: 'kid', text: '随便聊聊', runtime: 'fake', newThread: true });
-    await free.done;
-    const freeRun = (await readRunFile(ctx.ws, 'chinese-tutor', DATE, free.job))!;
-    const freeSys = lastSystem();
-    check('自由话题:照旧是老师文件,记忆是老师的(还没有)', freeSys.includes('### 孩子问怎么写') && freeRun.prompt.includes('memory: "还没有"'), freeRun.prompt.slice(0, 400));
+    // 没有自由话题了(2026-11-16):孩子不带 activity 开新话题,Runner 拒
+    let refused = '';
+    try { await ctx.runner.send('chinese-tutor', { from: 'kid', text: '随便聊聊', runtime: 'fake', newThread: true }); } catch (e) { refused = (e as Error).message; }
+    check('不带 activity 开新话题:拒,说从 activity 开始', refused.includes('从一个 activity 开始'), refused);
     await deleteThread(ctx.ws, 'chinese-tutor', DATE, s1.thread);
     check('删话题:从 activity 那篇记忆里撤', !readFileSync(actMem, 'utf8').split('\n').some((l) => l.startsWith('- ')));
     void s2;

@@ -1,5 +1,5 @@
 /** activity 文件:出厂的过检查、各种写错都报到行、递给老师的那节怎么裁、工具人的插槽、init / upgrade 拷贝与 hash。 */
-import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { check, done } from './_check.ts';
@@ -40,8 +40,19 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   const kantu = readFileSync(join(PACKAGE_AGENTS_DIR, 'chinese-tutor', 'activities', '看图说话.md'), 'utf8');
   check('出厂的看图说话过检查(老师的卡照出厂 cotutor.json)', lintActivity(kantu, { fileName: '看图说话', tutorCards: factoryCards }).issues.length === 0, JSON.stringify(lintActivity(kantu, { fileName: '看图说话', tutorCards: factoryCards }).issues));
   check('看图说话:老师收到的那节不说「点一下能听」', !(renderTutorSection(parseActivity(kantu).activity, { cards: ['read', 'image'] }) ?? '点一下能听').includes('点一下能听'));
-  const teacher = readFileSync(join(PACKAGE_AGENTS_DIR, 'chinese-tutor.md'), 'utf8');
-  check('语文老师文件只留人设与学科功夫:没有看图说话的流程', !/^#{2,4}\s*看图说话/m.test(teacher) && !teacher.includes('这是你说的话,点一下能听') && teacher.includes('### 孩子问怎么写'));
+  // 一科通用的做法(2026-11-16 从老师文件并进 activity):这位老师每个有「老师怎么带」的 activity 里都有「<科>这一科」一节,一字不差
+  for (const [tutor, subject] of [['chinese-tutor', '语文'], ['math-tutor', '数学'], ['english-tutor', '英语']] as const) {
+    const dir = join(PACKAGE_AGENTS_DIR, tutor, 'activities');
+    const blocks = new Map<string, string>();
+    for (const f of readdirSync(dir).filter((f) => f.endsWith('.md') && !f.includes('.例子'))) {
+      const body = parseActivity(readFileSync(join(dir, f), 'utf8')).activity.tutor?.text;
+      if (!body) continue;
+      const m = new RegExp(`^### ${subject}这一科\\n[\\s\\S]*?(?=^### |(?![\\s\\S]))`, 'm').exec(body);
+      blocks.set(f, m ? m[0].trim() : '');
+    }
+    const texts = [...new Set(blocks.values())];
+    check(`${tutor}:每个 activity 都有「${subject}这一科」,几份一字不差`, blocks.size >= 3 && texts.length === 1 && texts[0].length > 0, JSON.stringify([...blocks].map(([f, t]) => [f, t.length])));
+  }
   for (const cards of [undefined, factoryCards]) {
     const { issues } = lintActivity(text, { fileName: '练词', tutorCards: cards });
     check(`样本过检查(老师的卡 ${cards ? '照出厂 cotutor.json' : '全部'})`, issues.length === 0, JSON.stringify(issues));

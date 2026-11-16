@@ -12,12 +12,10 @@ import { homedir } from 'node:os';
 import { access, lstat, readFile, readdir, stat } from 'node:fs/promises';
 import { constants as fsConstants, existsSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
-import { takesTutorRules } from '../../runtime/context/tutor-rules.ts';
-import { parseAgentFile } from '../../runtime/agent-file.ts';
 import { localDate } from '../../shared/time.ts';
 import { MIN_CONTRAST, contrastWithWhite } from '../../ui/shared/tutor-color.ts';
 import { memoryPath, missingEntry, pickNotes } from '../../memory/vault-notes.ts';
-import { SKILLS_DIR, cardVoice, isApiRuntime, listTutors, mouthVoice, resolvePolicy, tutorFilePath } from '../../schema/index.ts';
+import { SKILLS_DIR, cardVoice, isApiRuntime, listTutors, mouthVoice, resolvePolicy } from '../../schema/index.ts';
 import { kindsFor, tutorCardKinds } from '../../board/cards/index.ts';
 import { scanVault } from '../../memory/vault.ts';
 import { parseArtifactEvents } from '../../runtime/journal/ledger.ts';
@@ -29,7 +27,7 @@ import { BUILD } from '../build.ts';
 import { isNewer, upgradeSteps } from '../../shared/upgrade.ts';
 import { gradeOfSemester } from '../../memory/grade.ts';
 import { DIRS } from './skeleton.ts';
-import { tutorStatuses, readManifest } from './tutors.ts';
+import { readManifest, retiredTutorFiles } from './tutors.ts';
 import { workspaceGradePack, type GradePack } from './grades.ts';
 import {
   CONFIG_FILE,
@@ -231,57 +229,19 @@ export async function doctorWorkspace(
   push({ name: 'rules', ok: true, required: false, detail: rulesThere.length ? `家长自建的家规 ${rulesThere.join(' ')} 在,所有老师每轮都读` : '没有根目录的 QWEN.md(不需要:老师要知道的都在老师文件与技能里)' });
 
   if (ws) {
-    // ---- 老师:定义文件(拷贝)+ 名字一致 + 出厂 / 自定义状态 + 老师目录 ----
-    // 老师文件只有 agents/<name>.md 这一份:应用读正文递进系统提示
-    const statuses = new Map((teachingPack ? await tutorStatuses(root) : []).map((s) => [s.name, s]));
+    // ---- 老师:老师的家(activity 在里面);老师文件 2026-11-16 起不读了,还在就提一句 ----
+    const retired = await retiredTutorFiles(root);
+    if (retired.length) push({ name: 'tutor.files', ok: true, required: false, detail: `${retired.join(' ')} 不再读了(一科通用的做法并进了每个 activity);改过的话,把要的挪进那位老师的 activity「老师怎么带」,再删掉这几份` });
     for (const name of Object.keys(ws.config.tutors)) {
-      const shipped = statuses.has(name);
-      const file = tutorFilePath(ws.dirs.agents, name);
-      let detail: string;
-      let ok = false;
-      try {
-        const { frontmatter } = parseAgentFile(await readFile(file, 'utf8'));
-        ok = frontmatter.name === name;
-        detail = ok ? `${redactHome(file)} name 一致` : `${redactHome(file)} 的 frontmatter name 是 "${frontmatter.name ?? ''}",与老师键 ${name} 不一致`;
-      } catch {
-        detail = `${redactHome(file)} 读不到`;
-      }
-      push({
-        name: `tutor.${name}.file`,
-        ok,
-        required: true,
-        detail,
-        fix: ok
-          ? undefined
-          : shipped
-            ? `cotutor init 补拷(拷自本包 agents/${name}.md),或把老师键改成文件里的 name`
-            : `这是自家加的老师:写 agents/${name}.md(frontmatter name: ${name}),cotutor add ${name} --display <显示名> 可出模板;或把 cotutor.json 里这条删掉`,
-        cmd: !ok && shipped ? initCmd() : undefined,
-      });
-      const st = statuses.get(name);
-      if (!st) push({ name: `tutor.${name}.origin`, ok: true, required: false, detail: teachingPack ? '自家加的老师(不是出厂件,refresh 不碰)' : '出厂来源无法确认,先修复 teachingPack 检查项' });
-      if (st) {
-        const label: Record<string, string> = { latest: '出厂件,最新', upgradable: `出厂件,基于 ${st.basedOn},包已更新`, custom: `自定义(基于 ${st.basedOn})`, untracked: '自定义(没有出厂记录)', missing: '缺', broken: '读不到' };
-        push({
-          name: `tutor.${name}.origin`,
-          ok: st.state !== 'upgradable',
-          required: false,
-          detail: label[st.state],
-          fix: st.state === 'upgradable' ? 'cotutor refresh 换新版' : undefined,
-          cmd: st.state === 'upgradable' ? refresh : undefined,
-        });
-      }
       const home = join(ws.dirs.agents, name);
       const there = (await statOrNull(home))?.isDirectory() ?? false;
       push({ name: `tutor.${name}.home`, ok: there, required: true, detail: there ? `agents/${name}/ 在(会话 cwd)` : `agents/${name}/ 不在`, fix: there ? undefined : 'cotutor init 补建', cmd: there ? undefined : initCmd() });
       // 音色:一老师一音色走 API 是正路;没配的孩子端只剩浏览器合成声(只该在测试里);hidden 的老师不对孩子说话,不用音色
       const tc = ws.config.tutors[name];
       if (tc.enabled && !tc.hidden && !cardVoice(ws.config.tutors, name)) push({ name: `tutor.${name}.voice`, ok: false, required: false, detail: `${tc.display} 没配音色(cotutor.json tutors.${name}.voice),卡上的声音(点读卡、单词卡)配不了——只适合测试`, fix: '家长端「首页」点这位老师的「样子与声音」挑一个' });
-      // 卡的清单(《卡片协议.md》「谁拿到哪些卡」):有脸的老师才递板书写法;只是报一声讲哪几种
-      if (takesTutorRules(name)) {
-        const kinds = tutorCardKinds(tc.cards);
-        push({ name: `tutor.${name}.cards`, ok: true, required: false, detail: kinds ? `板书写法讲 ${kinds.join(' ')}` : `没写 cards,板书写法讲全部 ${kindsFor('board').length} 种` });
-      }
+      // 卡的清单(《卡片协议.md》「谁拿到哪些卡」):只是报一声讲哪几种
+      const kinds = tutorCardKinds(tc.cards);
+      push({ name: `tutor.${name}.cards`, ok: true, required: false, detail: kinds ? `板书写法讲 ${kinds.join(' ')}` : `没写 cards,板书写法讲全部 ${kindsFor('board').length} 种` });
       // 头像是图片路径时(figshot 写的 avatars/<name>.png)查文件在不在、在不在根以内;emoji 不查
       if (tc.avatar && /\.(png|jpe?g|webp|gif|svg)$/i.test(tc.avatar)) {
         const file = resolve(root, tc.avatar);
@@ -354,9 +314,6 @@ export async function doctorWorkspace(
         }
         for (const r of await checkActivities(root, ws.config.tutors)) {
           const key = `${r.tutor}/${r.name}`;
-          // 老 workspace 改过老师文件:refresh 只报 diff,里面同名那节还在,两处说法会打架
-          const agentText = await readFile(tutorFilePath(ws.dirs.agents, r.tutor), 'utf8').catch(() => '');
-          if (new RegExp(`^#{2,4}\\s*${r.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'm').test(agentText)) push({ name: `activity.${key}.dup`, ok: false, required: false, detail: `agents/${r.tutor}.md 里还有一节「${r.name}」,和 activity 文件两处说法会打架`, fix: `删掉老师文件里那一节(做法以 agents/${r.tutor}/activities/${r.name}.md 为准)` });
           const st = states.get(key);
           const fixes = r.issues.filter((i) => i.level === 'fix');
           const origin = st ? label[st.state] + (st.basedOn && st.state !== 'latest' ? `(基于 ${st.basedOn})` : '') : teachingPack ? '自家写的' : '出厂来源无法确认';
@@ -485,7 +442,7 @@ export async function doctorWorkspace(
           fix: big ? '在 Obsidian 里把记忆文件理一理:合并重复的、删过时的;或调 policy.contextPack.entryChars' : m.extraMemories.length ? `agent: ${t.name} 的记忆文件只留一篇` : undefined,
         });
       }
-      for (const t of listTutors(ws.config).filter((x) => x.enabled && x.name.endsWith('-tutor'))) {
+      for (const t of listTutors(ws.config).filter((x) => x.enabled)) {
         const p = pickNotes(notes, files, { date: today, subject: t.subject });
         const big = p.entry && p.entry.text.length > limit;
         const where = t.subject && p.semester ? `课程/${p.semester}/${t.subject}.md` : null;

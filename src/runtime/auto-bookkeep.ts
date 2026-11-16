@@ -54,7 +54,7 @@ export async function autoBookkeep(runner: Runner, ws: Workspace, now: Date): Pr
   const out: { tutor: string; date: string; threads: string[]; tidied: boolean }[] = [];
   if (!ws.config.vault.autoBookkeep) return out;
   for (const [tutor, t] of Object.entries(ws.config.tutors)) {
-    if (!tutor.endsWith('-tutor') || t.enabled === false) continue;
+    if (t.enabled === false) continue;
     for (const [date, past] of [[dayBefore(now), true], [localDate(now), false]] as const) {
       if (runner.running(tutor)) break;
       const due = dueBookkeeping(await readIndex(ws, tutor, date), { now, past, runtime: t.runtime ?? ws.config.runtimes.default });

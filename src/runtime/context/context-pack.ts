@@ -23,6 +23,7 @@ export function renderContextPack(pack: ContextPack): string {
   if (p.profile) out.push(`  profile: ${yamlScalar(p.profile)}`);
   if (p.child) out.push(`  child: ${yamlScalar(p.child)}`);
   if (p.entry) out.push(`  entry: ${yamlScalar(p.entry)}`);
+  if (p.teacherMemory) out.push(`  teacherMemory: ${yamlScalar(p.teacherMemory)}`);
   if (p.memory) out.push(`  memory: ${yamlScalar(p.memory)}`);
   if (p.lesson) out.push(`  lesson: ${yamlScalar(p.lesson)}`);
   if (p.refs?.length) {

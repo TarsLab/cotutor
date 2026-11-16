@@ -38,6 +38,8 @@ export interface LearningContext {
   /** 孩子的记忆:有脸的老师才带 */
   child?: string;
   entry?: string;
+  /** activity 话题另带的这位老师那篇记忆(只读);没有就不写 */
+  teacherMemory?: string;
   memory: string;
   refs?: string[];
   plan: string[];
@@ -73,10 +75,10 @@ export async function learningContext(
   const pick = pickNotes(notes, files, { date: localDate(o.at), subject: o.subject, agent: o.agent });
   const limit = o.limits.entryChars;
   if (pick.semester) out.semester = pick.semester;
-  const labels: Partial<Record<'profile' | 'child' | 'entry' | 'memory', string>> = {};
-  for (const [role, n] of [['profile', pick.profile], ['child', o.teacher ? pick.child : null], ['entry', pick.entry], ['memory', pick.memory]] as const) {
+  const labels: Partial<Record<'profile' | 'child' | 'entry' | 'teacherMemory' | 'memory', string>> = {};
+  for (const [role, n] of [['profile', pick.profile], ['child', o.teacher ? pick.child : null], ['entry', pick.entry], ['teacherMemory', pick.teacherMemory], ['memory', pick.memory]] as const) {
     if (!n) continue;
-    const tail = role === 'memory' || role === 'child';
+    const tail = role === 'memory' || role === 'child' || role === 'teacherMemory';
     const clip = clipNote(n.text, limit, tail ? 'tail' : 'head');
     labels[role] = clip.cut ? `${n.path}(原文 ${n.text.length} 字,${tail ? `只带最近 ${limit}` : `截到 ${limit}`})` : n.path;
     out.notes.push({ role, path: n.path, text: clip.text, ...(clip.cut ? { cut: true as const } : {}) });
@@ -86,6 +88,7 @@ export async function learningContext(
   const entry = labels.entry ?? (o.teacher ? missingEntry(o.subject, pick) : undefined);
   if (entry !== undefined) out.entry = entry;
   out.memory = labels.memory ?? '还没有';
+  if (labels.teacherMemory) out.teacherMemory = labels.teacherMemory;
   if (pick.refs.length) out.refs = pick.refs.map((r) => join(v.paths.vault, r));
   if (report) report.vault = { root: v.paths.vault, semester: pick.semester, profile: pick.profile?.path ?? null, extraProfiles: pick.extraProfiles, entry: pick.entry?.path ?? null, extraEntries: pick.extraEntries, memory: pick.memory?.path ?? null, extraMemories: pick.extraMemories, subject: o.subject ?? null, refs: pick.refs, limit, chars: { profile: pick.profile?.text.length ?? 0, entry: pick.entry?.text.length ?? 0, memory: pick.memory?.text.length ?? 0 } };
   const planFile = join(v.paths.plans, `${isoWeek(o.at)}.md`);

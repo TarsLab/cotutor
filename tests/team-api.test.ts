@@ -1,5 +1,5 @@
 /** 家长页背后的接口:新老师 / 老师文件读写 / 删老师、设置页的 paths / server / tts 补丁、JSON Schema、doctor 检查运行时与 API 层错误。 */
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync as writeBytes } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync as writeBytes } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { check, done } from './_check.ts';
@@ -29,7 +29,7 @@ try {
   const bad = await route('POST', '/api/tutors', ctx, { name: 'Bad Name', display: 'x' });
   check('坏名 400', bad.status === 400, JSON.stringify(bad.json));
   const added = await route('POST', '/api/tutors', ctx, { name: 'science-tutor', display: '科学老师', subject: '科学', avatar: '🔬' });
-  check('POST 201,进表、文件、目录', added.status === 201 && ctx.ws.config.tutors['science-tutor']?.subject === '科学' && existsSync(join(root, 'agents', 'science-tutor.md')) && existsSync(join(root, 'agents', 'science-tutor')), JSON.stringify(added.json));
+  check('POST 201,进表、建家(没有老师文件)', added.status === 201 && ctx.ws.config.tutors['science-tutor']?.subject === '科学' && !existsSync(join(root, 'agents', 'science-tutor.md')) && existsSync(join(root, 'agents', 'science-tutor')), JSON.stringify(added.json));
   check('重名 409', (await route('POST', '/api/tutors', ctx, { name: 'science-tutor', display: 'x' })).status === 409);
   const cfg = (await route('GET', '/api/config', ctx)).json as { shipped: string[]; paths: Record<string, string>; resolvedPaths: Record<string, string> };
   check('config 回报出厂名单与路径', cfg.shipped.length === 3 && !cfg.shipped.includes('scene-maker') && !cfg.shipped.includes('planner') && !cfg.shipped.includes('science-tutor') && typeof cfg.resolvedPaths.vault === 'string' && !('tts' in cfg));
@@ -61,24 +61,13 @@ try {
   check('不是图 404', (await setAvatar('cotutor.json')) === 200 && (await route('GET', '/api/kid/avatar/math-tutor', ctx)).status === 404);
   check('换回 emoji', (await setAvatar('🔢')) === 200 && (await route('GET', '/api/kid/avatar/math-tutor', ctx)).status === 404);
 
-  // ---- 老师文件读写 ----
-  const f = (await route('GET', '/api/tutors/science-tutor/file', ctx)).json as { text: string; state: string };
-  check('读自家老师文件 state=own', f.state === 'own' && f.text.includes('name: science-tutor'));
-  const renamed = await route('PUT', '/api/tutors/science-tutor/file', ctx, { text: f.text.replace('name: science-tutor', 'name: other') });
-  check('改 name 被拒', renamed.status === 400, JSON.stringify(renamed.json));
-  const put = await route('PUT', '/api/tutors/science-tutor/file', ctx, { text: f.text.replace('(在这里写', '说话慢一点。(在这里写') });
-  check('PUT 写回', put.status === 200 && readFileSync(join(root, 'agents', 'science-tutor.md'), 'utf8').includes('说话慢一点'));
-  const shippedFile = (await route('GET', '/api/tutors/math-tutor/file', ctx)).json as { state: string };
-  check('出厂老师 state=latest', shippedFile.state === 'latest');
-  const mathFile = (await route('GET', '/api/tutors/math-tutor/file', ctx)).json as { text: string };
-  await route('PUT', '/api/tutors/math-tutor/file', ctx, { text: mathFile.text + '\n温柔。\n' });
-  check('改过出厂老师 → custom', ((await route('GET', '/api/tutors/math-tutor/file', ctx)).json as { state: string }).state === 'custom');
-  check('没这位老师 404', (await route('GET', '/api/tutors/nobody/file', ctx)).status === 404);
+  // ---- 老师文件没有了(2026-11-16) ----
+  check('老师文件的接口没了', (await route('GET', '/api/tutors/science-tutor/file', ctx)).status === 404);
 
   // ---- 删老师 ----
   check('出厂老师不能删', (await route('DELETE', '/api/tutors/math-tutor', ctx)).status === 400);
   const del = await route('DELETE', '/api/tutors/science-tutor', ctx);
-  check('自家老师删掉:表里没了,文件改名保留', del.status === 200 && !ctx.ws.config.tutors['science-tutor'] && !existsSync(join(root, 'agents', 'science-tutor.md')) && readdirSync(join(root, 'agents')).some((n) => n.startsWith('science-tutor.md.removed-')), JSON.stringify(del.json));
+  check('自家老师删掉:表里没了,他的家不动', del.status === 200 && !ctx.ws.config.tutors['science-tutor'] && existsSync(join(root, 'agents', 'science-tutor')), JSON.stringify(del.json));
 
   // ---- 设置页补丁 ----
   const p1 = await route('PATCH', '/api/config', ctx, { paths: { vault: 'vault', timetable: '课程表.md', diary: null }, server: { port: 5199, https: { cert: 'certs/a.pem', key: 'certs/b.pem' } } });

@@ -1006,7 +1006,8 @@ export function createMock(opts: MockOptions = {}): Mock {
         const button = body.via === undefined ? undefined : mockButton(name, body.via);
         if (button === null) return { status: 400, json: { error: 'bad_via' } };
         let said = body.text;
-        let newThread = body.newThread === true;
+        // 新话题只从按钮开始(同真服务);mock 今天还没有话题时下面照收(探针直接发一句就能看老师的脚本)
+        let newThread = false;
         let wantThread = body.thread;
         // 小课堂:看完才能开口,字是孩子说的,新话题;画的那几处现算成一段话(同 runner)。问过以后再看一遍又画了:同一话题的下一条带上(again)
         // 一处几笔(strokes);2026-10-19 以前一笔一处(path),照读

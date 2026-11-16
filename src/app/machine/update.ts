@@ -4,7 +4,7 @@
  * 更新说明写在 package.json 的 releaseNotes,跟着 npm 一起下来(npm、npmmirror 都留自定义字段,2026-11-07 查过),国内连不上 GitHub 也看得到。
  * 只发一个普通的 GET,不带孩子或使用的任何信息;问不到(断网、被墙)不报错,下个小时再问。先问 npm,不通再问 npmmirror(中国家庭常连不上 npm)。
  * latest 这个标签要等 npm 扫描通过才变(2026-07 起发布后先扫描),不会提前提醒。
- * 不自动升级:升级要重起服务,孩子可能正在上课;老师文件的更新也要家长知道。
+ * 不自动升级:升级要重起服务,孩子可能正在上课;activity 的更新也要家长知道。
  * 不想让它问:update.json 写 {"off": true}。从仓库跑的(BUILD.commit 有值)不问,见 main.ts。
  */
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';

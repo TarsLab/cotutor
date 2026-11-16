@@ -47,18 +47,21 @@ writeFileSync(join(root, 'vault', '孩子.md'), '---\ncotutor: profile\nschool_s
 let now = new Date(2026, 8, 8, 16, 20);
 const ws = loadWorkspace(root);
 const runner = new Runner(() => ws, { now: () => now });
+// 话题都从 activity 开始(2026-11-16):测试开「聊」
+const { CHAT_RUN, writeChat } = await import('./_chat.ts');
+writeChat(root, ['math-tutor']);
 
 try {
   // 原轮:带板书(假 CLI 见「板书」出卡)、配音
-  const r1 = await runner.send('math-tutor', { from: 'kid', text: '讲讲板书' });
+  const r1 = await runner.send('math-tutor', { from: 'kid', text: '讲讲板书', activity: CHAT_RUN });
   await r1.done;
   await runner.flush();
   const orig = (await readIndex(ws, 'math-tutor', '2026-09-08')).messages[0];
   check('原轮 ok、有卡;讲稿不配音', orig.result === 'ok' && (orig.section?.cards.length ?? 0) > 0 && orig.section?.lines.every((l) => !l.audio) === true, JSON.stringify({ result: orig.result, cards: orig.section?.cards.length, audio: orig.section?.lines.map((l) => l.audio) }));
 
-  // 改 vault 与老师文件后回放
+  // 改 vault 与 activity 文件后回放
   writeFileSync(join(root, 'vault', '孩子.md'), '---\ncotutor: profile\nschool_start: 2025-09\n---\n\n数学:人教数学一下 第 5 单元 在学\n还没学、别用:竖式\n');
-  const agentFile = join(root, 'agents', 'math-tutor.md');
+  const agentFile = join(root, 'agents', 'math-tutor', 'activities', '聊.md');
   writeFileSync(agentFile, `${readFileSync(agentFile, 'utf8')}\n改了一句。\n`);
   now = new Date(2026, 8, 8, 17, 12);
   const rp = await startReplay(ws, 'math-tutor', '2026-09-08', orig.job, { now: () => now });
@@ -76,7 +79,7 @@ try {
   const c = (await compareReplay(ws, 'math-tutor', '2026-09-08', rp.evalJob))!;
   check('compare:状态 ok、两侧 job 对', c !== null && c.status === 'ok' && c.orig.job === orig.job && c.next.job === rp.evalJob);
   check('compare:上下文包 diff 看得到 vault 的改动(第 4 → 第 5 单元、多一行)', c.pack.some((r) => r.s === '-' && r.text.includes('第 4 单元')) && c.pack.some((r) => r.s === '+' && r.text.includes('第 5 单元')) && c.pack.some((r) => r.s === '+' && r.text.includes('竖式')), JSON.stringify(c.pack));
-  check('compare:notes 说老师文件变了(hash 不同)', c.notes.some((n) => n.startsWith('老师文件变了')), JSON.stringify(c.notes));
+  check('compare:notes 说 activity 文件变了(hash 不同)', c.notes.some((n) => n.startsWith('activity 文件变了')), JSON.stringify(c.notes));
   check('compare:讲稿与卡两边都有、读了什么两边一样', c.lines.length > 0 && c.cards.length > 0 && c.tools.every((r) => r.s === '·'), JSON.stringify({ lines: c.lines.length, cards: c.cards.length, tools: c.tools }));
   const text = formatCompare(c);
   check('formatCompare:标题、两侧一行、各段标题、show --evals 提示', text.includes(`回放 math-tutor 2026-09-08 ${orig.job}`) && text.includes('- 原轮') && text.includes('+ 回放') && text.includes('## 上下文包') && text.includes('## 讲稿') && text.includes(`cotutor show math-tutor ${rp.evalJob} 2026-09-08 --evals`), text);
@@ -85,7 +88,7 @@ try {
   check('listReplays:按 job 过滤', (await listReplays(ws, 'math-tutor', '2026-09-08', 'nope')).length === 0);
 
   // 原轮是实时的:回放也按实时写(消息带 live、上下文包有 live:),新规矩才验得到
-  const lv = await runner.send('math-tutor', { from: 'kid', text: '讲讲板书', newThread: true, live: {} });
+  const lv = await runner.send('math-tutor', { from: 'kid', text: '讲讲板书', newThread: true, activity: CHAT_RUN, live: {} });
   await lv.done;
   await runner.flush();
   const lrp = await startReplay(ws, 'math-tutor', '2026-09-08', lv.job, { now: () => now });

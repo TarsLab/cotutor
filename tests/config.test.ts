@@ -29,7 +29,7 @@ check('出厂老师带卡的清单(text 总在)', cfg.tutors['math-tutor'].cards
 check('cards 只认板书的种类:写错名字、写首页的老师卡都过不了契约;不写也行', !CotutorConfigSchema.safeParse({ ...raw, tutors: { ...raw.tutors, x: { display: 'x', cards: ['txt'] } } }).success && !CotutorConfigSchema.safeParse({ ...raw, tutors: { ...raw.tutors, x: { display: 'x', cards: ['tutor'] } } }).success && CotutorConfigSchema.safeParse({ ...raw, tutors: { ...raw.tutors, x: { display: 'x' } } }).success);
 const retired = CotutorConfigSchema.safeParse({ ...raw, tutors: { ...raw.tutors, x: { display: 'x', cards: ['text', 'paint', 'canvas', 'kit'] } } });
 check('cards 里不再有的卡(paint、canvas)读进来就丢掉,不拦整份配置', retired.success && retired.data.tutors.x.cards?.join() === 'text,kit', JSON.stringify(retired.error?.issues ?? null));
-const withHelper = CotutorConfigSchema.parse({ ...raw, tutors: { ...raw.tutors, helper: { display: '工具人', hidden: true }, 'off-tutor': { display: '关着的', enabled: false } } });
+const withHelper = CotutorConfigSchema.parse({ ...raw, tutors: { ...raw.tutors, helper: { display: '小帮手', hidden: true }, 'off-tutor': { display: '关着的', enabled: false } } });
 const kidOnly = listTutors(withHelper, { kidOnly: true });
 check('孩子端不见 hidden 与关着的', kidOnly.length === 3 && !kidOnly.some((t) => t.name === 'helper' || t.name === 'off-tutor'));
 check('列表带有效政策', listTutors(cfg)[0].policy.replyMaxChars === 60);
@@ -39,9 +39,9 @@ check('老配置里的 live.enabled 不认也不报错(丢掉)', CotutorConfigSc
 check('一直听:缺省按住说、server_vad、停 1.6 秒算说完', cfg.live.listen === 'hold' && cfg.live.vad === 'server_vad' && cfg.live.silenceMs === 1600);
 const liveOn = CotutorConfigSchema.safeParse({ ...raw, live: { voices: { 'chinese-tutor': 'Serena' } } });
 check('实时:列一位老师和音色', liveOn.success && liveOn.data.live.voices['chinese-tutor'] === 'Serena');
-const liveBad = CotutorConfigSchema.safeParse({ ...raw, tutors: { ...raw.tutors, helper: { display: '工具人', hidden: true } }, live: { voices: { 'nobody-tutor': 'Serena', helper: 'Tina' } } });
+const liveBad = CotutorConfigSchema.safeParse({ ...raw, tutors: { ...raw.tutors, helper: { display: '小帮手', hidden: true } }, live: { voices: { 'nobody-tutor': 'Serena', helper: 'Tina' } } });
 const liveLines = liveBad.success ? [] : explainIssues(liveBad.error.issues);
-check('实时:没有这位老师、不是有脸的老师都报,点名到 live.voices.<名>', !liveBad.success && liveLines.some((l) => l.startsWith('live.voices.nobody-tutor')) && liveLines.some((l) => l.startsWith('live.voices.helper')), liveLines.join(' | '));
+check('实时:没有这位老师报,点名到 live.voices.<名>;tutors 里的都是老师(名字不必以 -tutor 结尾)', !liveBad.success && liveLines.some((l) => l.startsWith('live.voices.nobody-tutor')) && !liveLines.some((l) => l.startsWith('live.voices.helper')), liveLines.join(' | '));
 
 const bad = CotutorConfigSchema.safeParse({ version: 2, kid: { slug: 'Bad Slug' }, tutors: { x: { display: '' } }, runtimes: { default: 'nope' } });
 check('坏配置不过', !bad.success);

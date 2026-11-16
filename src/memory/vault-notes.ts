@@ -112,6 +112,8 @@ export interface VaultPick {
   extraMemories: string[];
   /** 孩子的记忆(`agent: all`);还没有 → null */
   child: VaultNote | null;
+  /** activity 话题(agent 是 <老师>/<activity>)另带这位老师自己那篇记忆(agent: <老师>,2026-11-16 老师文件并进 activity 以后照带);不是 activity 话题是 null */
+  teacherMemory: VaultNote | null;
   /** 参考资料的路径:这科这学期的教材 + 档案与入口文件里的 [[链接]](去重,不含它俩自己) */
   refs: string[];
   /** 这科这学期的教材(取材用,memory/retrieval.ts) */
@@ -136,6 +138,8 @@ export function pickNotes(notes: readonly VaultNote[], files: readonly string[],
   const entry = entries[0] ?? null;
   const memories = of('memory').filter((n) => !!opts.agent && n.props.agent?.trim() === opts.agent);
   const child = of('memory').find((n) => n.props.agent?.trim() === CHILD_MEMORY_AGENT) ?? null;
+  const teacher = opts.agent?.includes('/') ? opts.agent.split('/')[0] : null;
+  const teacherMemory = teacher ? (of('memory').find((n) => n.props.agent?.trim() === teacher) ?? null) : null;
   const textbooks = of('textbook').filter(same);
   const refs: string[] = textbooks.map((n) => n.path);
   for (const n of [profile, entry]) {
@@ -155,6 +159,7 @@ export function pickNotes(notes: readonly VaultNote[], files: readonly string[],
     memory: memories[0] ?? null,
     extraMemories: memories.slice(1).map((n) => n.path),
     child,
+    teacherMemory,
     refs: [...new Set(refs)].filter((p) => !self.has(p)),
     textbooks,
   };

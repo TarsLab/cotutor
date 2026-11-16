@@ -56,6 +56,10 @@ cfg.live = { voices: { 'chinese-tutor': 'Serena' } };
 cfg.kid.name = 'Ray';
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 const ctx = createContext(loadWorkspace(wsRoot));
+// 话题都从 activity 开始(2026-11-16):先开一个「聊」,下面按住说的都接着它
+const { CHAT_RUN, writeChat } = await import('./_chat.ts');
+writeChat(wsRoot, ['chinese-tutor']);
+await (await ctx.runner.send('chinese-tutor', { from: 'kid', text: '开始', newThread: true, activity: CHAT_RUN, live: {} })).done;
 await ctx.reload();
 // 每次回答完、安静时就换连接:换了连接还接着留
 const upgrade = makeLiveUpgrade({ endpoint: fake.endpoint, swapTokens: 1 });
@@ -76,11 +80,11 @@ const dir = join(wsRoot, 'conversations', 'chinese-tutor');
 const json = (job: string): Msg | null => { try { return JSON.parse(readFileSync(join(dir, `${today}.${job}.mouth.json`), 'utf8')) as Msg; } catch { return null; } };
 const wavMs = (job: string): number => { try { return (pcmOfWav(readFileSync(join(dir, `${today}.${job}.mouth.wav`)))?.pcm.length ?? 0) / 48; } catch { return 0; } };
 const linesOf = (job: string): string[] => ((JSON.parse(readFileSync(join(dir, `${today}.json`), 'utf8')) as { messages: Msg[] }).messages.find((m) => m.job === job)?.section?.lines ?? []).map((l: Msg) => String(l.text));
-const say = (text: string, newThread = false): void => {
+const say = (text: string, _newThread = false): void => {
   fake.kidText = text;
   ws.send(JSON.stringify({ t: 'hold' }));
   for (let i = 0; i < 4; i++) ws.send(new Uint8Array(3200).fill(9));
-  ws.send(JSON.stringify({ t: 'release', body: newThread ? { newThread: true } : {} }));
+  ws.send(JSON.stringify({ t: 'release', body: {} }));
 };
 const turnAfter = async (n: number): Promise<string> => { await until(() => msgs.slice(n).some((m) => m.t === 'turn'), 8000); return msgs.slice(n).find((m) => m.t === 'turn')?.job ?? ''; };
 

@@ -68,7 +68,7 @@ check('sandbox 在真 workspace 旁边的 .sandbox/<目录名>', box === join(ho
 
 const first = await openSandbox(real);
 check('第一次:分出来', first.created && first.root === box && first.from === real, JSON.stringify(first));
-check('设置照拷:老师文件、activity、首页、技能、shipped', existsSync(join(box, 'agents', 'math-tutor.md')) && readFileSync(join(box, 'agents', 'math-tutor', 'activities', '自家的.md'), 'utf8') === '家长写的 activity\n' && existsSync(join(box, 'home', 'published.json')) && existsSync(join(box, '.agents', 'skills')) && existsSync(join(box, '.cotutor', 'shipped.json')));
+check('设置照拷:老师的家、activity、首页、技能、shipped', existsSync(join(box, 'agents', 'math-tutor')) && readFileSync(join(box, 'agents', 'math-tutor', 'activities', '自家的.md'), 'utf8') === '家长写的 activity\n' && existsSync(join(box, 'home', 'published.json')) && existsSync(join(box, '.agents', 'skills')) && existsSync(join(box, '.cotutor', 'shipped.json')));
 check('.claude/skills 还是相对链,指 sandbox 自己那份', lstatSync(join(box, '.claude', 'skills')).isSymbolicLink() && readlinkSync(join(box, '.claude', 'skills')) === '../.agents/skills' && realpathSync(join(box, '.claude', 'skills')) === join(box, '.agents', 'skills'));
 check('状态不带:对话、照片、听写、口语课、设备表、流水', listAll(join(box, 'conversations')).length === 0 && !existsSync(join(box, 'captures')) && !existsSync(join(box, 'dictation')) && !existsSync(join(box, 'talk')) && !existsSync(join(box, '.cotutor', 'devices.json')) && !existsSync(join(box, '.cotutor', 'kid-log')));
 check('账本是空的新账本', readFileSync(join(box, 'ledger', 'artifacts.jsonl'), 'utf8') === '');

@@ -1,6 +1,6 @@
 ---
 name: cotutor-analyze
-description: 在 cotutor workspace 里分析 AI 老师的对话:某一轮传了什么上下文、读了什么文件、为什么没看见档案或日记里的某句、改了老师文件 / 技能 / vault 之后回放对照、一天的 token 与延迟。家长或开发者在 workspace 根开编程助手问「老师为什么…」「这轮读了什么」「我改了 X 效果如何」「今天花了多少」时用。
+description: 在 cotutor workspace 里分析 AI 老师的对话:某一轮传了什么上下文、读了什么文件、为什么没看见档案或日记里的某句、改了 activity / 技能 / vault 之后回放对照、一天的 token 与延迟。家长或开发者在 workspace 根开编程助手问「老师为什么…」「这轮读了什么」「我改了 X 效果如何」「今天花了多少」时用。
 ---
 
 <!-- 给人看
@@ -30,10 +30,10 @@ description: 在 cotutor workspace 里分析 AI 老师的对话:某一轮传了�
 
 ## 禁区
 
-- agents/<name>.md 是老师文件,由 cotutor 读正文传给 Qwen。**不要把它们当子代理派**,也不要替老师回答孩子。
+- agents/<name>/activities/ 里的 activity 由 cotutor 读给老师当系统提示。**不要把老师当子代理派**,也不要替老师回答孩子。
 - **不改** conversations/、evals/、ledger/ 里的任何文件。
 - **不写 vault**(日记、档案、计划、教材)。那是家长的长期记忆,要改也是家长自己动手。
-- 改老师文件、技能、cotutor.json,要先说清改什么、为什么、会影响哪些老师,得到同意再动。
+- 改 activity、技能、cotutor.json,要先说清改什么、为什么、会影响哪些老师,得到同意再动。
 
 ## 工具箱
 
@@ -41,10 +41,10 @@ description: 在 cotutor workspace 里分析 AI 老师的对话:某一轮传了�
 
 | 想知道 | 跑 | 花钱 |
 |---|---|---|
-| 某一轮的全部:问句、上下文包、当时的老师文件与技能 hash、讲稿、卡、读了什么、token、用时、给家长的尾巴 | `cotutor show <老师> <job> <日期>`(--json 是全量) | 不 |
+| 某一轮的全部:问句、上下文包、当时的 activity 与技能 hash、讲稿、卡、读了什么、token、用时、给家长的尾巴 | `cotutor show <老师> <job> <日期>`(--json 是全量) | 不 |
 | 现在发这句话,老师会看到什么;每段从哪个文件来、那里共几条、截了几条 | `cotutor pack <老师> "<消息>" [--from kid] [--at 时间]` | 不 |
 | 一轮每道工序的时刻:首卡、每句配音、就绪 | `cotutor trace <老师> <job> <日期> [--lane main,tts]` | 不 |
-| 改了老师文件、技能、vault 之后,**同一问答案怎么变** | `cotutor replay <老师> <job> <日期>`,跑完并排打印;`cotutor compare <老师> [evalJob] <日期>` 再看或列 | **是**,花一轮老师的钱(按 token 计),**跑前先问** |
+| 改了 activity、技能、vault 之后,**同一问答案怎么变** | `cotutor replay <老师> <job> <日期>`,跑完并排打印;`cotutor compare <老师> [evalJob] <日期>` 再看或列 | **是**,花一轮老师的钱(按 token 计),**跑前先问** |
 | 回放那轮自己的全部 | `cotutor show <老师> <evalJob> <日期> --evals` | 不 |
 | workspace 哪里坏了:路径、证书、技能、配置缺口 | `cotutor doctor` | 不(--live 花一分钱) |
 
@@ -58,7 +58,7 @@ description: 在 cotutor workspace 里分析 AI 老师的对话:某一轮传了�
 1. show 看那轮的上下文包里有没有 X。
 2. 没有:pack 干跑,看现在会不会有;来源里那一段是「读不到」还是「截掉」。
 3. 有:看 tools,它有没有去读、读到多少字。
-4. 都有:就是模型没用上。去看老师文件里那条规则怎么写的。
+4. 都有:就是模型没用上。去看这轮的 activity 里那条规则怎么写的。
 
 ## 常见问题怎么查
 
@@ -82,9 +82,9 @@ description: 在 cotutor workspace 里分析 AI 老师的对话:某一轮传了�
 - 贵的一般是:话题聊得长(前面几轮都要带上)、读了大文件、或者一轮里来回多。
 - 真要看它读到的原文,grep 那轮的 .log。
 
-**我改了老师文件,效果怎样**
+**我改了 activity,效果怎样**
 
-- 先 show,看原轮的老师文件 hash。
+- 先 show,看原轮的 activity hash。
 - 再 replay 一次(先问),看 notes 里 hash 变没变、讲稿与卡的 diff。
 - 同一问什么都不改,回放两次也会不一样(模型抖动)。别把一次的差异当结论,拿不准就再回放一次。
 

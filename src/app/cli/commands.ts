@@ -201,12 +201,12 @@ export const COMMANDS: readonly CommandSpec[] = [
     examples: ['cotutor refresh', 'cotutor refresh --config --dry-run'],
   },
   {
-    name: 'reset', group: 'custom', summary: '把改过的出厂老师或 activity 换回出厂的',
-    usage: ['cotutor reset <老师>|<老师>/<activity>... [--json]'],
+    name: 'reset', group: 'custom', summary: '把改过的出厂 activity 换回出厂的',
+    usage: ['cotutor reset <老师>/<activity>... [--json]'],
     maxArgs: Infinity, workspace: true, sandbox: true, json: true,
-    notes: ['只动点名的这几份;你那份存成旁边的 .bak,换之前还自动备份一份', '自家加的老师、activity 没有出厂那份,换不了'],
-    effects: ['盖掉家长改过的老师文件:家长明确说要回出厂的才跑'],
-    examples: ['cotutor reset math-tutor', 'cotutor reset chinese-tutor/看图说话'],
+    notes: ['只动点名的这几份;你那份存成旁边的 .bak,换之前还自动备份一份', '自家写的 activity 没有出厂那份,换不了', '老师文件 2026-11-16 起没有了:一位老师怎么教都在他的 activity 里'],
+    effects: ['盖掉家长改过的 activity:家长明确说要回出厂的才跑'],
+    examples: ['cotutor reset chinese-tutor/看图说话'],
   },
   {
     // refresh 的旧名:0.4.x 的 cotutor update 换完程序,会用新程序跑 upgrade --workspace <孩子>,所以一直要认;不进帮助
@@ -214,7 +214,7 @@ export const COMMANDS: readonly CommandSpec[] = [
     usage: ['cotutor upgrade [--force <老师>]... [--config [--dry-run]] [--json]'],
     maxArgs: Infinity, workspace: true, sandbox: true, json: true,
     flags: [
-      { name: 'force', value: '<老师>', desc: '同 cotutor reset' },
+      { name: 'force', value: '<老师>/<activity>', desc: '同 cotutor reset' },
       { name: 'config', desc: '同 cotutor refresh --config' },
       { name: 'dry-run', desc: '和 --config 一起:只看要改什么' },
       { name: 'grade', value: '<1-6>', desc: '', hidden: true },
@@ -230,10 +230,10 @@ export const COMMANDS: readonly CommandSpec[] = [
       { name: 'display', value: '<显示名>', desc: '孩子看到的名字(必填)' },
       { name: 'subject', value: '<学科>', desc: '学科' },
       { name: 'avatar', value: '<emoji|图片>', desc: 'emoji,或 workspace 里图片的相对路径' },
-      { name: 'description', value: '<一句话>', desc: '写进老师文件的一句介绍' },
-      { name: 'hidden', desc: '孩子端不露(只和系统、家长打交道的工具人)' },
+      { name: 'description', value: '<一句话>', desc: '写进 cotutor.json 的一句介绍' },
+      { name: 'hidden', desc: '孩子端不露' },
     ],
-    notes: ['名字以 -tutor 结尾的是有脸的老师,其余是工具人', '出老师文件、写进 cotutor.json、建它的家;服务不用重启'],
+    notes: ['名字小写英文加连字符,习惯以 -tutor 结尾', '写进 cotutor.json、建它的家;怎么教写在它家里的 activity(照出厂老师的写);服务不用重启'],
     examples: ['cotutor add science-tutor --display 科学老师 --subject 科学 --avatar 🔬'],
   },
   {
@@ -328,21 +328,20 @@ export const COMMANDS: readonly CommandSpec[] = [
   {
     name: 'send', group: 'debug', summary: '终端里给老师发一条',
     usage: [
-      'cotutor send <老师> [<消息>] [--new] [--photo <图,图>] [--quiet] [--json]',
-      "cotutor send <老师> --activity <名> [--param '名=值;名=值']",
+      "cotutor send <老师> --activity <名> [--param '名=值;名=值'] [<消息>]",
+      'cotutor send <老师> [<消息>] [--photo <图,图>] [--quiet] [--json]',
     ],
     maxArgs: Infinity, workspace: true, sandbox: true, json: true,
     flags: [
-      { name: 'new', desc: '开新话题' },
       { name: 'photo', value: '<图,图>', desc: '带作业照片(jpg / png,最多 9 张);有照片时消息可以空' },
       ACTIVITY, PARAM, FROM,
       { name: 'runtime', value: '<名>', desc: '换个运行时' },
       LANE,
       { name: 'quiet', desc: '只要结果,不打印过程' },
     ],
-    notes: ['孩子的话照实时写(同孩子端),只是没有嘴;事件落 events.jsonl,事后 cotutor trace 看'],
+    notes: ['新话题都从一个 activity 开始:--activity 开新话题;不带就接着今天这位老师的当前话题(今天还没有话题会报错)', '孩子的话照实时写(同孩子端),只是没有嘴;事件落 events.jsonl,事后 cotutor trace 看'],
     effects: ['花钱', '写进孩子的对话记录(试一下用 --sandbox)'],
-    examples: ['cotutor send math-tutor "这一步为什么要借位"'],
+    examples: ['cotutor send math-tutor --activity 检查作业 "我做完了"', 'cotutor send math-tutor "这一步为什么要借位"'],
   },
   {
     name: 'pack', group: 'debug', summary: '干跑上下文包:不起模型,看老师会拿到什么',

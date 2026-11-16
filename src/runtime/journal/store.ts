@@ -5,10 +5,9 @@
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
-import { parseAgentFile } from '../agent-file.ts';
 import { emptyIndex } from './conversation.ts';
 import { localDate } from '../../shared/time.ts';
-import { cardAssetName, conversationFiles, threads, tutorFilePath, type CardAssets, type CardStateFile, type CardStates } from '../../schema/index.ts';
+import { cardAssetName, conversationFiles, threads, type CardAssets, type CardStateFile, type CardStates } from '../../schema/index.ts';
 import { parseTranscript, type Transcript } from '../../brain/transcript.ts';
 import { parseLogLine } from '../../brain/index.ts';
 import {
@@ -20,7 +19,6 @@ import {
 } from '../../schema/index.ts';
 import { undoThreadVault, type ThreadUndo } from '../../memory/vault.ts';
 import { recoverPending } from '../../memory/commit.ts';
-import { ConfigError } from '../../shared/errors.ts';
 import { redactHome } from '../../shared/home.ts';
 import type { Workspace } from '../../schema/index.ts';
 
@@ -182,7 +180,7 @@ export async function capturePathOk(ws: Workspace, rel: string): Promise<boolean
  * 这一轮真发出去的东西(<date>.<job>.run.json):上下文包与完整命令行。
  * 跑完就丢的话「老师为什么没看见孩子选了 C」永远查不了,所以落一份;只有家长端「看原文」读它。
  */
-/** 这轮用的老师文件与技能的快照(2026-09-15):文件后来改了就查不回当时那份,所以记正文与 hash;技能只记 hash,变没变一眼看 */
+/** 这轮的系统提示来源(activity 文件;2026-11-16 以前是老师文件)与技能的快照(2026-09-15):文件后来改了就查不回当时那份,所以记正文与 hash;技能只记 hash,变没变一眼看 */
 export interface RunSources {
   agent: { file: string; hash: string; body: string } | null;
   /** 技能名 → SKILL.md 的 hash(workspace .agents/skills/ 下有的全部) */
@@ -202,7 +200,7 @@ export interface RunFile {
   argv: string[];
   resume: boolean;
   session: string | null;
-  /** 老师文件与技能的快照;2026-09-15 之前的轮次没有 */
+  /** 系统提示来源与技能的快照;2026-09-15 之前的轮次没有 */
   sources?: RunSources;
   /** 老师正文进了系统提示(API 运行时总是;旧轮次看那时的命令模板) */
   agentBody: boolean;
@@ -245,15 +243,16 @@ export async function readErrLog(ws: Workspace, tutor: string, date: string, job
 
 const sha = (text: string): string => `sha256:${createHash('sha256').update(text).digest('hex').slice(0, 16)}`;
 
-/** 这轮起跑时老师文件与技能长什么样(记进 run.json;读不到的就 null / 空,不拦这一轮) */
-export async function snapshotSources(ws: Workspace, name: string): Promise<RunSources> {
+/** 这轮起跑时系统提示从哪来(activity 文件;没有 activity 的轮是 null)与技能长什么样(记进 run.json;读不到的就 null / 空,不拦这一轮) */
+export async function snapshotSources(ws: Workspace, file: string | null): Promise<RunSources> {
   let agent: RunSources['agent'] = null;
-  const file = tutorFilePath(ws.dirs.agents, name);
-  try {
-    const body = await readFile(file, 'utf8');
-    agent = { file: relative(ws.root, file).split(sep).join('/'), hash: sha(body), body };
-  } catch {
-    /* 读不到:记 null */
+  if (file) {
+    try {
+      const body = await readFile(file, 'utf8');
+      agent = { file: relative(ws.root, file).split(sep).join('/'), hash: sha(body), body };
+    } catch {
+      /* 读不到:记 null */
+    }
   }
   const skills: Record<string, string> = {};
   for (const d of await readdir(ws.dirs.skills, { withFileTypes: true }).catch(() => [])) {
@@ -262,16 +261,6 @@ export async function snapshotSources(ws: Workspace, name: string): Promise<RunS
     if (text !== null) skills[d.name] = sha(text);
   }
   return { agent, skills };
-}
-
-/** 老师文件正文(系统提示的前半);从 agents/<name>.md 读 */
-export async function readAgentBody(ws: Workspace, name: string): Promise<string> {
-  const file = tutorFilePath(ws.dirs.agents, name);
-  try {
-    return parseAgentFile(await readFile(file, 'utf8')).body;
-  } catch {
-    throw new ConfigError(file, '老师文件读不到;cotutor init 补拷');
-  }
 }
 
 /** 给一个话题打星(1–5;null 清掉):话题要在这天的索引里;写回索引 */

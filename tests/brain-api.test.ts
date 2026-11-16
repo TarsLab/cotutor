@@ -49,8 +49,12 @@ try {
   writeKeys(home, { payg: SECRET, workspaceId: 'ws-test' });
   const env = { ...process.env, HOME: home, COTUTOR_BRAIN_ENDPOINT: fake.baseURL };
   const ctx = createContext(loadWorkspace(root), { env, now: () => NOW });
+  // 新话题都从 activity 开始(2026-11-16):开新话题(或今天这位老师还没有话题)的孩子的话开「聊」(tests/_chat.ts)
+  const { CHAT_RUN, writeChat } = await import('./_chat.ts');
+  writeChat(root, ['math-tutor', 'chinese-tutor', 'english-tutor']);
   const send = async (tutor: string, input: Parameters<typeof ctx.runner.send>[1]) => {
-    const started = await ctx.runner.send(tutor, input);
+    const fresh = input.from === 'kid' && !input.thread && (input.newThread || !(await readIndex(ctx.ws, tutor, date)).messages.length);
+    const started = await ctx.runner.send(tutor, fresh ? { ...input, newThread: true, activity: CHAT_RUN } : input);
     const index = await started.done;
     return { started, index, m: index.messages.find((x) => x.job === started.job)! };
   };
@@ -184,7 +188,7 @@ try {
   const bare = { ...Object.fromEntries(Object.entries(env).filter(([k]) => k !== 'COTUTOR_BRAIN_ENDPOINT')), HOME: keysHome() };
   const ctx2 = createContext(loadWorkspace(root), { env: bare, now: () => NOW });
   n = fake.requests.length;
-  const s10 = await ctx2.runner.send('math-tutor', { from: 'kid', text: '你好', newThread: true });
+  const s10 = await ctx2.runner.send('math-tutor', { from: 'kid', text: '你好', newThread: true, activity: CHAT_RUN });
   const m10 = (await s10.done).messages.find((x) => x.job === s10.job)!;
   check('没配百炼:不发请求,这轮没成,提醒去家长端配', fake.requests.length === n && m10.result === 'error' && (m10.warnings ?? []).some((w) => w.includes('百炼还没配好')), JSON.stringify({ result: m10.result, warnings: m10.warnings }));
 
@@ -199,7 +203,7 @@ try {
   writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
   const ctx3 = createContext(loadWorkspace(root), { env, now: () => NOW });
   n = fake.requests.length;
-  const s11 = await ctx3.runner.send('math-tutor', { from: 'kid', text: '你好', newThread: true, runtime: 'api38' });
+  const s11 = await ctx3.runner.send('math-tutor', { from: 'kid', text: '你好', newThread: true, activity: CHAT_RUN, runtime: 'api38' });
   await s11.done;
   const r11 = since(n);
   check('qwen3.8 的运行时:数学老师 medium → 请求带 reasoning_effort: low,不带 thinking_budget', r11.length === 1 && (r11[0] as Record<string, unknown>).reasoning_effort === 'low' && r11[0].thinking_budget === undefined && r11[0].model === 'qwen3.8-max', JSON.stringify(r11.map((r) => ({ model: r.model, effort: (r as Record<string, unknown>).reasoning_effort, budget: r.thinking_budget }))));
@@ -215,6 +219,9 @@ try {
   const ov = await overview(ctx3, date);
   const ovThreads = ov.tutors.find((x) => x.name === 'math-tutor')?.threads ?? [];
   check('换过运行时:家长端那个话题标 oldRuntime(卡上说一句,记账按钮不算它);新话题不标', ovThreads.find((x) => x.thread === s11.thread)?.oldRuntime === 'api38' && !ovThreads.find((x) => x.thread === s12.thread)?.oldRuntime, JSON.stringify(ovThreads.map((x) => ({ thread: x.thread, old: x.oldRuntime }))));
+} catch (e) {
+  // done() 在 finally 里会 process.exit:抛的异常要记成失败,不然悄悄过了
+  check('跑完没抛', false, String((e as Error)?.stack ?? e));
 } finally {
   await fake.close();
   rmSync(home, { recursive: true, force: true });

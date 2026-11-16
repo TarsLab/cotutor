@@ -25,10 +25,10 @@ description: 排 cotutor 孩子端的首页。孩子学完之后,家长在 works
 
 - **发布要家长在这次对话里明说**(「发吧」「可以发布」)。草稿随便改;cotutor home publish 只在明说之后跑。
 - 不写 vault。总结要留下来,走记账(第二步),由应用落进日记。
-- 不改 conversations/、ledger/、cotutor.json、老师文件。
+- 不改 conversations/、ledger/、cotutor.json、agents/。
 - home/published.json 与 home/history/ 是机器件,不手改。
 - 孩子看得到的字(按钮、卡)不评判:不写对错、分数、名次、「真棒」「聪明」「最…」。
-- agents/<name>.md 是老师文件,由 cotutor 读正文传给 Qwen。不要当子代理派,也不要替老师回答孩子。
+- 不要把老师当子代理派,也不要替老师回答孩子。
 
 ## 一、看今天
 

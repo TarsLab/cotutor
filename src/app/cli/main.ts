@@ -14,7 +14,7 @@ import { gradePacks } from './grades.ts';
 import { guideText } from './guide.ts';
 import { makeCert, trustCommand, trustPrompt } from './cert.ts';
 import { PIN_RE, USER_PIN_FILE, clearPin, readPin, setPin } from '../http/access.ts';
-import { addTutorFile, restoreTutor, upgradeTutors } from './tutors.ts';
+import { addTutorHome, retiredTutorFiles } from './tutors.ts';
 import { activityRunFor, checkActivities, restoreActivity, upgradeActivities } from './activities.ts';
 import { configGapsOf, migrateLayout, upgradeConfig } from './migrate.ts';
 import { linkClaudeSkills, upgradeSkills } from './skills.ts';
@@ -521,11 +521,12 @@ export async function main(argv: string[]): Promise<void> {
         const ws = loadWorkspace(workspace);
         if (ws.config.tutors[name]) throw new UsageError(`cotutor.json 里已经有 ${name} 了;要改人设去老师团页或直接改文件`);
         const subject = typeof flags.subject === 'string' ? flags.subject : undefined;
-        const r = await addTutorFile(ws.root, { name, display, subject, description: typeof flags.description === 'string' ? flags.description : undefined });
-        await patchConfig(ws, { tutors: { [name]: { display, ...(subject ? { subject } : {}), ...(typeof flags.avatar === 'string' ? { avatar: flags.avatar } : {}), enabled: true, ...(flags.hidden === true ? { hidden: true } : {}) } } });
+        const description = typeof flags.description === 'string' ? flags.description : undefined;
+        const r = await addTutorHome(ws.root, name);
+        await patchConfig(ws, { tutors: { [name]: { display, ...(description ? { description } : {}), ...(subject ? { subject } : {}), ...(typeof flags.avatar === 'string' ? { avatar: flags.avatar } : {}), enabled: true, ...(flags.hidden === true ? { hidden: true } : {}) } } });
         if (json) process.stdout.write(`${JSON.stringify(redactDeep(r), null, 2)}\n`);
         else {
-          process.stdout.write(`加了 ${display}(${name}):\n  ${redactHome(r.file)}  ← 老师文件,打开把括号里那句换成这位老师的性子\n  cotutor.json tutors.${name}  ← 人设与政策(老师团页也能改)\n  ${redactHome(r.home)}/  ← 它的家\n`);
+          process.stdout.write(`加了 ${display}(${name}):\n  cotutor.json tutors.${name}  ← 人设与政策(老师团页也能改)\n  ${redactHome(r.home)}/  ← 它的家:怎么教写在 activities/<名>.md(照出厂老师的 activity 写,cotutor activity check ${name} 查)\n`);
           process.stdout.write('服务不用重启;孩子端和家长端刷新就有。\n');
         }
         return;
@@ -545,15 +546,17 @@ export async function main(argv: string[]): Promise<void> {
         return;
       }
       case 'reset': {
-        // 只把点名的出厂老师 / activity 换回出厂那份(工作台「恢复出厂」同一条路),别的不碰;现在那份存 .bak
-        if (!positionals.length) throw new ArgError('reset 要说换回哪几份,如 cotutor reset math-tutor 或 cotutor reset chinese-tutor/看图说话');
+        // 只把点名的出厂 activity 换回出厂那份(工作台「恢复出厂」同一条路),别的不碰;现在那份存 .bak。老师文件 2026-11-16 起没有了
+        if (!positionals.length) throw new ArgError('reset 要说换回哪几份,如 cotutor reset chinese-tutor/看图说话');
+        const bare = positionals.find((x) => !x.includes('/'));
+        if (bare) throw new ArgError(`reset 要写「老师/activity」,如 cotutor reset ${bare}/预习(老师文件 2026-11-16 起没有了)`);
         const { root } = resolveRoot(workspace);
         const said = await backupBeforeUpgrade(root);
         if (said && !json) process.stdout.write(`${said}\n`);
         const done: { name: string; bak: string | null }[] = [];
         for (const name of positionals) {
           const [tutor, activity] = name.split('/');
-          const r = activity ? await restoreActivity(root, tutor, activity) : await restoreTutor(root, tutor);
+          const r = await restoreActivity(root, tutor, activity);
           done.push({ name, bak: r.bak });
         }
         if (json) process.stdout.write(`${JSON.stringify(redactDeep({ ok: true, reset: done }), null, 2)}\n`);
@@ -570,7 +573,7 @@ export async function main(argv: string[]): Promise<void> {
           const said = await backupBeforeUpgrade(root);
           if (said && !json) process.stdout.write(`${said}\n`);
         }
-        // --config 是另一件事:政策文件补缺(老师文件与 skill 不碰)
+        // --config 是另一件事:政策文件补缺(activity 与 skill 不碰)
         if (flags.config === true) {
           const dryRun = flags['dry-run'] === true;
           const r = await upgradeConfig(root, { dryRun });
@@ -590,28 +593,21 @@ export async function main(argv: string[]): Promise<void> {
         const force = typeof flags.force === 'string' ? [flags.force, ...positionals] : positionals;
         // 老布局先原样搬到新位置,下面再照常比新旧
         const layoutSteps = await migrateLayout(root);
-        const steps = await upgradeTutors(root, { force });
+        const retired = await retiredTutorFiles(root);
         const activitySteps = await upgradeActivities(root, { force });
         const skillSteps = await upgradeSkills(root);
         const link = await linkClaudeSkills(root);
         const themeSteps = await upgradeThemes(root);
-        // 老师文件换新了,政策文件却不会自动多出新老师与新运行时(cotutor.json 是家长的),提一句
+        // 出厂件换新了,政策文件却不会自动多出新老师与新运行时(cotutor.json 是家长的),提一句
         const gaps = await configGapsOf(root);
-        if (json) process.stdout.write(`${JSON.stringify(redactDeep({ root, layout: layoutSteps, steps, activities: activitySteps, skills: skillSteps, claudeSkills: link, themes: themeSteps, configGaps: gaps }), null, 2)}\n`);
+        if (json) process.stdout.write(`${JSON.stringify(redactDeep({ root, layout: layoutSteps, retiredTutorFiles: retired, activities: activitySteps, skills: skillSteps, claudeSkills: link, themes: themeSteps, configGaps: gaps }), null, 2)}\n`);
         else {
           for (const s of layoutSteps) process.stdout.write(`${s.action === 'kept' ? '!' : '✓'} ${s.item.padEnd(24)} ${s.note ?? ''}\n`);
           if (link.action !== 'exists') process.stdout.write(`${link.action === 'kept' ? '!' : '✓'} ${link.item.padEnd(24)} ${link.note ?? ''}\n`);
           const word: Record<string, string> = { upgraded: '已换新', latest: '已是最新', 'kept-custom': '自定义,保留', forced: '已覆盖(原文 .bak)', installed: '补上了', retired: '不再出厂,删了', renamed: '改了名' };
           for (const s of skillSteps) process.stdout.write(`${s.action === 'kept-custom' ? '!' : '✓'} skill ${s.name.padEnd(18)} ${word[s.action]}${s.basedOn && s.action !== 'latest' ? `(基于 ${s.basedOn})` : ''}${s.machine ? '(机器件)' : ''}\n`);
           for (const s of themeSteps) process.stdout.write(`${s.action === 'kept-custom' ? '!' : '✓'} theme ${s.name.padEnd(18)} ${word[s.action]}${s.basedOn && s.action !== 'latest' ? `(基于 ${s.basedOn})` : ''}${s.action === 'kept-custom' ? '(themes/ 里改过的主题不动)' : ''}\n`);
-          for (const s of steps) {
-            process.stdout.write(`${s.action === 'kept-custom' ? '!' : '✓'} ${s.name.padEnd(18)} ${word[s.action]}${s.basedOn && s.action !== 'latest' ? `(基于 ${s.basedOn})` : ''}\n`);
-            if (s.diff?.length) {
-              process.stdout.write(`    你的 vs 新版(- 你的 / + 新版),想用新版:cotutor reset ${s.name}\n`);
-              for (const l of s.diff.slice(0, 40)) process.stdout.write(`    ${l}\n`);
-              if (s.diff.length > 40) process.stdout.write(`    …还有 ${s.diff.length - 40} 行\n`);
-            }
-          }
+          for (const f of retired) process.stdout.write(`! ${f.padEnd(24)} 不再读了(一科通用的做法并进了每个 activity);改过的话,把要的挪进 activity 的「老师怎么带」,再删掉它\n`);
           for (const s of activitySteps) {
             process.stdout.write(`${s.action === 'kept-custom' ? '!' : '✓'} activity ${s.key.padEnd(18)} ${word[s.action]}${s.from ? `(原来叫「${s.from}」)` : ''}${s.basedOn && s.action !== 'latest' ? `(基于 ${s.basedOn})` : ''}\n`);
             if (s.diff?.length) {
@@ -758,7 +754,7 @@ export async function main(argv: string[]): Promise<void> {
         out.push(`${v.tutor} ${v.date} ${v.job} · ${v.from} 问 · ${v.result}${v.error ? ` · 出错 ${v.error}` : ''}${v.tokens ? ` · ${tokenText(v.tokens)}` : ''}${v.timing ? ` · 首句就绪 ${secs(v.timing.firstReadyMs)} 老师写完 ${secs(v.timing.doneMs)}` : ''}`);
         out.push(`问:${v.text}`);
         const src = v.pack?.sources;
-        out.push(`上下文包:${v.pack ? `${v.pack.prompt.length} 字 · ${v.pack.resume ? 'resume' : '新开'} · ${v.pack.runtime}` : '没落(老轮次)'}${src ? ` · 老师文件 ${src.agent ? `${src.agent.file} ${src.agent.hash.slice(7)}` : '读不到'} · 技能 ${Object.entries(src.skills).map(([k, h]) => `${k} ${h.slice(7, 13)}`).join(' / ') || '无'}` : ''}`);
+        out.push(`上下文包:${v.pack ? `${v.pack.prompt.length} 字 · ${v.pack.resume ? 'resume' : '新开'} · ${v.pack.runtime}` : '没落(老轮次)'}${src ? ` · 系统提示 ${src.agent ? `${src.agent.file} ${src.agent.hash.slice(7)}` : '没有 activity'} · 技能 ${Object.entries(src.skills).map(([k, h]) => `${k} ${h.slice(7, 13)}`).join(' / ') || '无'}` : ''}`);
         if (v.pack) out.push(...v.pack.prompt.split('\n').map((l) => `  │ ${l}`));
         out.push(`读了什么:${v.tools.length ? '' : '没用工具'}`);
         for (const t of v.tools) out.push(`  ${t.ok === false ? '✗' : t.ok === null ? '?' : '·'} ${t.name}${t.sub ? '(子代理)' : ''} ${t.arg}${t.chars ? ` → ${t.chars} 字` : ''}`);
@@ -927,9 +923,9 @@ export async function main(argv: string[]): Promise<void> {
       case 'send': {
         const [tutor, ...words] = positionals;
         const photoFiles = typeof flags.photo === 'string' ? flags.photo.split(',').filter(Boolean) : [];
-        // --activity:像孩子点了首页的 activity 按钮,新开话题;没写消息就发 activity 的名字(按钮上的字)
+        // --activity:像孩子点了首页的 activity 按钮,新开话题;没写消息、也没带照片就发 activity 的名字(按钮上的字)
         const activityName = typeof flags.activity === 'string' ? flags.activity : undefined;
-        const text = words.join(' ') || activityName || '';
+        const text = words.join(' ') || (photoFiles.length ? '' : activityName) || '';
         if (!tutor || (!text && !photoFiles.length)) throw new ArgError(`send 需要老师名和消息,如 cotutor send math-tutor "这一步为什么要借位"`);
         const from = typeof flags.from === 'string' ? flags.from : 'kid';
         if (!(MESSAGE_FROM as readonly string[]).includes(from)) throw new UsageError(`--from 只能是 ${MESSAGE_FROM.join(' / ')}`);
@@ -953,7 +949,7 @@ export async function main(argv: string[]): Promise<void> {
         }
         const activity = activityName ? await activityRunFor(ws.root, tutor, activityName, typeof flags.param === 'string' ? flags.param : '') : undefined;
         // 孩子的话照实时写(同孩子端:上下文包带 live:、不补提问卡、讲稿不截;嘴不在,接住与打断不带);--from system 不算
-        const started = await ctx.runner.send(tutor, { from: from as MessageFrom, text, runtime: typeof flags.runtime === 'string' ? flags.runtime : undefined, newThread: flags.new === true || Boolean(activity), ...(photos.length ? { photos } : {}), ...(activity ? { activity } : {}), ...(from === 'kid' ? { live: {} } : {}) });
+        const started = await ctx.runner.send(tutor, { from: from as MessageFrom, text, runtime: typeof flags.runtime === 'string' ? flags.runtime : undefined, newThread: Boolean(activity), ...(photos.length ? { photos } : {}), ...(activity ? { activity } : {}), ...(from === 'kid' ? { live: {} } : {}) });
         if (!json) process.stdout.write(`→ ${tutor} ${started.date} ${started.job} 话题 ${started.thread}(${started.plan.runtime}${started.plan.resume ? ',resume ' + started.plan.session : ',新会话'})…\n`);
         const index = await started.done;
         const m = index.messages.find((x) => x.job === started.job);

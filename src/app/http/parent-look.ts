@@ -105,7 +105,7 @@ export async function parentLookRoute(method: string, p: string, url: URL, ctx: 
   if (!m) return null;
   const [, name, sub] = m;
   const t = ctx.ws.config.tutors[name];
-  if (!t || !name.endsWith('-tutor')) return { status: 404, json: { error: 'no_such_tutor' } };
+  if (!t) return { status: 404, json: { error: 'no_such_tutor' } };
   const subject = canonicalSubject(t.subject) ?? '';
   if (sub === 'avatar') {
     if (method !== 'GET') return { status: 405, json: { error: 'method_not_allowed' } };

@@ -25,17 +25,20 @@ cfg.runtimes = { ...FAKE_RUNTIMES };
 for (const t of Object.values(cfg.tutors as Record<string, { runtime?: string }>)) delete t.runtime;
 cfg.paths = { vault: 'vault' };
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
-const memFile = join(root, 'vault', '记忆', '数学老师.md');
+// 话题都从 activity 开始(2026-11-16):测试开「聊」,老师记的进那个 activity 那篇
+const { CHAT_RUN, writeChat } = await import('./_chat.ts');
+writeChat(root, ['math-tutor']);
+const memFile = join(root, 'vault', '记忆', '数学老师·聊.md');
 const childFile = join(root, 'vault', '记忆', '孩子.md');
 mkdirSync(join(root, 'vault', '记忆'), { recursive: true });
-writeFileSync(memFile, '---\ncotutor: memory\nagent: math-tutor\n---\n\n- 2026-10-01 讲慢点他跟得上\n- 2026-10-01 爱用手指数\n');
+writeFileSync(memFile, '---\ncotutor: memory\nagent: math-tutor/聊\n---\n\n- 2026-10-01 讲慢点他跟得上\n- 2026-10-01 爱用手指数\n');
 
 const now = new Date(2026, 9, 30, 16, 0);
 const DATE = '2026-10-30';
 const ctx = createContext(loadWorkspace(root), { now: () => now });
 let thread = '';
 const say = async (text: string): Promise<string> => {
-  const s = await ctx.runner.send('math-tutor', { from: 'kid', text, ...(thread ? { thread } : { newThread: true }) });
+  const s = await ctx.runner.send('math-tutor', { from: 'kid', text, ...(thread ? { thread } : { newThread: true, activity: CHAT_RUN }) });
   if (!thread) thread = s.job;
   await s.done;
   return s.job;

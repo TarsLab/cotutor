@@ -106,6 +106,9 @@ try {
   // ---- 页面 ----
   check('孩子端页面:有「老师们还没到」那一行,首页读到 ready false 就灰', KID_PAGE.includes('id="gate"') && KID_PAGE.includes('setGated('));
   check('家长首页:有配百炼那块,走 /api/parent/bailian', PARENT_HOME_PAGE.includes("'/api/parent/bailian'") && PARENT_HOME_PAGE.includes('bl-key'));
+} catch (e) {
+  // done() 在 finally 里会 process.exit:抛的异常要记成失败,不然悄悄过了
+  check('跑完没抛', false, String((e as Error)?.stack ?? e));
 } finally {
   done();
 }

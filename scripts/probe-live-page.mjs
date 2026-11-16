@@ -61,6 +61,10 @@ const server = createServer(createHandler(ctx));
 server.on('upgrade', (req, socket, head) => { void upgrade(req, socket, head, ctx).then((took) => { if (!took) socket.destroy(); }); });
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const base = `http://127.0.0.1:${server.address().port}`;
+// 话题都从 activity 开始(2026-11-16):先开一个「聊」(探针造数据的口子,同 tests/_chat.ts),下面按住说的、打字的都接着它
+const { CHAT_RUN, writeChat } = await import(join(repo, 'tests', '_chat.ts'));
+writeChat(wsRoot, ['chinese-tutor', 'math-tutor', 'english-tutor']);
+await (await ctx.runner.send('chinese-tutor', { from: 'kid', text: '开始', newThread: true, activity: CHAT_RUN, live: {} })).done;
 const conn = () => fake.conns[fake.conns.length - 1];
 
 let browser = null;
@@ -168,9 +172,9 @@ try {
   const busyRow = readFileSync(join(wsRoot, '.cotutor', 'voice-diag.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((x) => x.where === 'busy').pop() ?? null;
   ok('老师在想时按住说话:不接(不在听、不多 commit)、按钮晃一下写「老师在想,等一下再说」、voice-diag 记 busy', busy.pre && busy.voice === 'busy' && busy.text === '老师在想,等一下再说' && !busy.listening && busy.commits === 1 && busyRow?.live === true, JSON.stringify({ ...busy, row: busyRow && { st: busyRow.st, waited: busyRow.waited } }));
   const cards = await until(`document.querySelectorAll('#board .sec .c').length >= 2`, 60);
-  const board1 = await evaluate(`(() => { const sec = document.querySelector('#board .sec'); return { said: sec.querySelector('.sh')?.textContent ?? '', kidHead: document.querySelectorAll('#board .sh.said').length, marks: sec.querySelectorAll('.c .mk').length, now: document.querySelectorAll('#board .c.now').length, cards: sec.querySelectorAll('.c').length, corner: sec.querySelectorAll('.c > .again').length, qmark: [...sec.querySelectorAll('.c')].filter((c) => [...c.children].some((x) => x.textContent === '?')).length }; })()`);
+  const board1 = await evaluate(`(() => { const secs = document.querySelectorAll('#board .sec'), sec = secs[secs.length - 1]; return { said: sec.querySelector('.sh')?.textContent ?? '', kidHead: document.querySelectorAll('#board .sh.said').length, marks: sec.querySelectorAll('.c .mk').length, now: document.querySelectorAll('#board .c.now').length, cards: sec.querySelectorAll('.c').length, corner: sec.querySelectorAll('.c > .again').length, qmark: [...sec.querySelectorAll('.c')].filter((c) => [...c.children].some((x) => x.textContent === '?')).length }; })()`);
   board1.faces = await evaluate(FACES); board1.backLogo = await evaluate(`(() => { const b = document.querySelector('#back'); return !!b.querySelector('svg.ct-logo') && b.classList.contains('tinted') && b.querySelector('.bk-ini').textContent === '语' && getComputedStyle(b).backgroundColor === 'rgb(196, 60, 116)'; })()`);
-  ok('脑写的卡铺上:没写节头的第一节只挂时间、孩子那句不当节头(在左栏);卡落下时标注就画好了、不描边;卡角没有钮(没有「?」、没有再听的喇叭);左上是「‹ logo 语」填语文老师的粉,看得见的老师头像只有左栏一颗', cards && /^\d\d:\d\d$/.test(board1.said) && board1.kidHead === 0 && board1.marks >= 1 && board1.now === 0 && board1.cards >= 2 && board1.corner === 0 && board1.qmark === 0 && board1.faces === 1 && board1.backLogo, JSON.stringify(board1));
+  ok('脑写的卡铺上(接着先开好的话题,这一节不挂时间)、孩子那句不当节头(在左栏);卡落下时标注就画好了、不描边;卡角没有钮(没有「?」、没有再听的喇叭);左上是「‹ logo 语」填语文老师的粉,看得见的老师头像只有左栏一颗', cards && !board1.said && board1.kidHead === 0 && board1.marks >= 1 && board1.now === 0 && board1.cards >= 2 && board1.corner === 0 && board1.qmark === 0 && board1.faces === 1 && board1.backLogo, JSON.stringify(board1));
   const speaking = await until(`document.body.classList.contains('speaking') && document.querySelector('#lv-hold').dataset.voice === 'tutor'`, 40);
   await sleep(250);
   const arcs1 = await evaluate(`document.querySelector('#lv-hold').vb.drawn().arcs`);
@@ -181,7 +185,7 @@ try {
   const kidLine = await until(`document.querySelector('#lv-kid').textContent === '老师板书怎么写' && document.querySelector('#lv-kid').classList.contains('old')`, 40);
   ok('孩子刚说的那句在左栏字幕上面(老师开口了变淡)', kidLine, await evaluate(`document.querySelector('#lv-kid').outerHTML`));
   console.log('  ', await shot('live-speak-ipad.png'));
-  const lastLine = await until(`document.querySelector('#lv-cap .lv-cur').textContent === '第一次说:老师板书怎么写'`, 80);
+  const lastLine = await until(`document.querySelector('#lv-cap .lv-cur').textContent === '接着说:老师板书怎么写'`, 80);
   const c1 = await cap();
   const capBox = await evaluate(`(() => { const st = getComputedStyle(document.querySelector('#lv-cap .lv-cur')); return st.borderTopWidth + ' ' + st.backgroundColor; })()`);
   ok('讲稿一句一句上字幕:念到最后一句,上一句挪上去变淡;字幕是字,不是一张卡(没有边框、底色)', lastLine && c1.p === '三角形有几个角?' && capBox === '0px rgba(0, 0, 0, 0)', JSON.stringify({ ...c1, capBox }));

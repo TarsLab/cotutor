@@ -2,17 +2,16 @@
  * workspace骨架清单:init 建、doctor 查,同一张清单(两边各写一遍必然漂移)。
  * workspace 布局:
  *   cotutor.json / .cotutor/shipped.json(出厂 hash)/ .agents/skills/(技能;.claude/skills 是指过去的链,给 Claude Code)
- *   agents/<name>.md(老师文件,拷自本包 grades/grade-<n>/agents/,是家长的;所有运行时都从这里拿老师正文)与 agents/<name>/(老师的家 = 会话 cwd)
+ *   agents/<name>/(老师的家 = 会话 cwd;activities/ 拷自本包 grades/grade-<n>/agents/<name>/,是家长的)
  *   ledger/(产物账本)/ conversations/(对话索引与转录)
  * vault 侧(《obsidian仓库设计.md》):档案 / 课程表 / 日记 / 教材 / 计划 / 参考,init 只建档案与参考 README(缺了才写);
  *   vault 不在 workspace 里,缺省是旁边的 <目录名>-vault/(2026-11-09;旧版没写 paths.vault 的落在 workspace 根)
  */
 import { readFileSync } from 'node:fs';
-import { readFile, readdir } from 'node:fs/promises';
+import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseAgentFile } from '../../runtime/agent-file.ts';
-import { CONFIG_SCHEMA_FILE, DEFAULT_PORT, DICTATION_DEFAULT, cotutorJsonSchema, type BoardCardKind } from '../../schema/index.ts';
+import { AGENT_NAME_RE, CONFIG_SCHEMA_FILE, DEFAULT_PORT, DICTATION_DEFAULT, cotutorJsonSchema, type BoardCardKind } from '../../schema/index.ts';
 import { FACTORY_API_RUNTIMES } from '../../brain/index.ts';
 import { DEFAULT_GRADE, PACKAGE_GRADES_DIR } from './grades.ts';
 
@@ -29,17 +28,14 @@ export const PACKAGE_VERSION = (JSON.parse(readFileSync(fileURLToPath(new URL('.
 
 export interface ShippedAgent {
   name: string;
-  file: string;
-  description: string;
+  /** 包里这位老师的家 grades/grade-<n>/agents/<name>/(activity 在里面) */
+  dir: string;
 }
 
+/** 出厂的老师:年级包 agents/ 下的每个目录(老师的家;老师文件 2026-11-16 起不出厂了) */
 export async function shippedAgents(dir = PACKAGE_AGENTS_DIR): Promise<ShippedAgent[]> {
   const out: ShippedAgent[] = [];
-  for (const f of (await readdir(dir)).filter((f) => f.endsWith('.md')).sort()) {
-    const file = join(dir, f);
-    const { frontmatter } = parseAgentFile(await readFile(file, 'utf8'));
-    if (frontmatter.name) out.push({ name: frontmatter.name, file, description: frontmatter.description ?? '' });
-  }
+  for (const e of (await readdir(dir, { withFileTypes: true })).filter((e) => e.isDirectory() && AGENT_NAME_RE.test(e.name)).sort((a, b) => a.name.localeCompare(b.name))) out.push({ name: e.name, dir: join(dir, e.name) });
   return out;
 }
 
@@ -90,50 +86,6 @@ export const REFERENCE_README = `# 参考
 让老师看到的办法:在档案或这位老师的入口文件(\`cotutor: subject\` 的那篇)里链过去(\`[[找规律填数]]\`);老师拿到路径,要用时自己读。
 `;
 
-export interface TutorTemplateInput {
-  name: string;
-  display: string;
-  subject?: string;
-  description?: string;
-}
-
-/**
- * 家长自己加老师时的文件模板:和出厂老师一样只有人设与这一科的做法;
- * 公共的守则(上下文包、三种回复、记忆段、不变的规矩)在机器技能 cotutor-tutor,应用每个话题第一条放进上下文包。
- */
-export function tutorTemplate(t: TutorTemplateInput): string {
-  const what = t.subject ? `${t.subject}的事` : '孩子问的事';
-  const subject = t.subject ?? '这一科';
-  return `---
-name: ${t.name}
-description: ${t.description ?? `${t.display}。${what}都找它;随口问的一两句答完,要讲的在板书上一节一节讲`}
----
-你是这个家的${t.display},对面是一个孩子。(在这里写这位老师的性子和讲法,一两句:比如「说话慢一点,爱打比方」。)
-
-上下文包怎么看、三种回复、记忆段、不变的规矩,在每个话题第一条的 \`<cotutor-rules>\` 里,照着做;这里只写${t.display}自己的。
-
-## ${subject}
-
-(下面几节写这一科特有的做法,一条一句。只写对哪个孩子、哪个学期都成立的;关于这个孩子、这学期的,写进 vault 里这一科的入口文件。用不上的小节删掉。)
-
-### 讲之前
-
-(要对一下什么、教材里查什么。)
-
-### 讲
-
-(这一科怎么讲、什么内容用哪种卡。)
-
-### 练
-
-(一节末尾怎么问、用哪种卡。)
-
-### 孩子这样说时
-
-(孩子常见的说法或答偏了,怎么接。)
-`;
-}
-
 export interface ConfigTemplateInput {
   slug: string;
   name?: string;
@@ -145,14 +97,14 @@ export interface ConfigTemplateInput {
 
 /** 出厂老师的条目;cards = 板书写法里讲哪几种卡(《卡片协议.md》「谁拿到哪些卡」,2026-10-07),text 总在;
  *  不写 avatar:三门主科用包里的出厂头像(src/app/http/avatars.ts) */
-const TUTOR_DEFAULTS: Record<string, { display: string; subject?: string; hidden?: boolean; runtime?: string; enabled?: boolean; cards?: BoardCardKind[]; policy?: { effort?: 'low' | 'medium' | 'high'; tools?: 'on' } }> = {
+const TUTOR_DEFAULTS: Record<string, { display: string; description?: string; subject?: string; hidden?: boolean; runtime?: string; enabled?: boolean; cards?: BoardCardKind[]; policy?: { effort?: 'low' | 'medium' | 'high'; tools?: 'on' } }> = {
   // 数学多想一会儿:算错的代价大(别的老师用缺省 low);走 qwen3.8-max(同语文老师)。运行时 api = 应用直连百炼(2026-10-31 起出厂缺省)
-  'math-tutor': { display: '数学老师', subject: '数学', runtime: 'api', cards: ['text', 'choice', 'image', 'lecture', 'kit', 'code'], policy: { effort: 'medium' } },
+  'math-tutor': { display: '数学老师', description: '数学老师。孩子拍数学作业、预习、复习都找它', subject: '数学', runtime: 'api', cards: ['text', 'choice', 'image', 'lecture', 'kit', 'code'], policy: { effort: 'medium' } },
   // 语文老师走 qwen3.8-max(看图说话的 activity eval 在它上面验证;2026-10-31 Ray 上 API 与 Qwen Code 对照过)
-  'chinese-tutor': { display: '语文老师', subject: '语文', runtime: 'api', cards: ['text', 'read', 'choice', 'image', 'tianzige', 'lecture'] },
+  'chinese-tutor': { display: '语文老师', description: '语文老师。生字、词语、课文、看图说话都找它', subject: '语文', runtime: 'api', cards: ['text', 'read', 'choice', 'image', 'tianzige', 'lecture'] },
   // 英语也走 api(qwen3.8-max):2026-10-31 api-flash 真跑英语四个 activity,13 次里 5 次第一轮只出一张拍照卡、没有讲稿(实时页嘴没话可念);max 在 Ray 上都过。
   // 想省钱改 api-flash,先跑 activity eval。medium 是 2026-10-27 给 flash 加的(low 偶尔只出卡或念规则,详见年级教学包验证记录)
-  'english-tutor': { display: '英语老师', subject: '英语', runtime: 'api', cards: ['text', 'read', 'choice', 'image', 'word', 'lecture'], policy: { effort: 'medium' } },
+  'english-tutor': { display: '英语老师', description: '英语老师。单词、句子、课文、口语课都找它', subject: '英语', runtime: 'api', cards: ['text', 'read', 'choice', 'image', 'word', 'lecture'], policy: { effort: 'medium' } },
 };
 
 /** cotutor.json 模板:只在文件不存在时写入;政策文件永不自动重建或覆盖(家长的决定不由机器代做)。 */
@@ -161,7 +113,7 @@ export function configTemplate(input: ConfigTemplateInput): string {
   for (const a of input.tutors) {
     const p = TUTOR_DEFAULTS[a.name];
     tutors[a.name] = p
-      ? { display: p.display, ...(p.subject ? { subject: p.subject } : {}), enabled: p.enabled ?? true, ...(p.hidden ? { hidden: true } : {}), ...(p.runtime ? { runtime: p.runtime } : {}), ...(p.cards ? { cards: p.cards } : {}), ...(p.policy ? { policy: p.policy } : {}) }
+      ? { display: p.display, ...(p.description ? { description: p.description } : {}), ...(p.subject ? { subject: p.subject } : {}), enabled: p.enabled ?? true, ...(p.hidden ? { hidden: true } : {}), ...(p.runtime ? { runtime: p.runtime } : {}), ...(p.cards ? { cards: p.cards } : {}), ...(p.policy ? { policy: p.policy } : {}) }
       : { display: a.name, enabled: true };
   }
   const cfg = {

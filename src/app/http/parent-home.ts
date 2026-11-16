@@ -32,8 +32,8 @@ import { rootCaFile } from '../cli/root-ca.ts';
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const bad = (message: string): RouteResult => ({ status: 400, json: { error: 'bad_request', message } });
 
-/** 家长端列的老师:有脸的(-tutor 结尾)、开着的;藏着的也列(家长要能把他放回首页) */
-const faceTutors = (c: CotutorConfig): string[] => Object.entries(c.tutors).filter(([n, t]) => n.endsWith('-tutor') && t.enabled).map(([n]) => n);
+/** 家长端列的老师:开着的;藏着的也列(家长要能把他放回首页) */
+const faceTutors = (c: CotutorConfig): string[] => Object.entries(c.tutors).filter(([, t]) => t.enabled).map(([n]) => n);
 
 export interface ParentHomeTutor {
   name: string;

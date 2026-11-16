@@ -1,12 +1,11 @@
 /**
  * cotutor-tune 技能的生成部分(2026-09-15):references/字段.md 从 cotutor.json 的契约(schema/config.ts 的 .describe() 与 POLICY_DEFAULTS)、
- * 老师文件 frontmatter 的允许键(runtime/agent-file.ts)与 CLI 用法(app/cli/usage.ts)现生成,scripts/gen-skills.ts 写进包根 skills/cotutor-tune/,
+ * cotutor.json 的字段表与 CLI 用法(app/cli/usage.ts)现生成,scripts/gen-skills.ts 写进包根 skills/cotutor-tune/,
  * tests/skills.test.ts 断言入库的和生成的一致——改老师团时能改哪些字段、缺省是什么,永远和契约同源。SKILL.md 本体(三条路子、禁区)是手写的。
  */
 import { z } from 'zod';
 import { commandsReference } from '../cli/usage.ts';
 import { POLICY_DEFAULTS, PolicySchema, TutorSchema } from '../../schema/config.ts';
-import { AGENT_FRONTMATTER_KEYS, LEGACY_AGENT_KEYS } from '../../runtime/agent-file.ts';
 
 export const TUNE_SKILL = 'cotutor-tune';
 
@@ -48,11 +47,9 @@ export function tuneReferenceDoc(): string {
   const policyRows = rows(PolicySchema.shape as Record<string, z.ZodTypeAny>, POLICY_DEFAULTS as unknown as Record<string, unknown>);
   return `# 能改的字段(机器生成,别改)
 
-## 老师文件 agents/<name>.md
+## 老师怎么教:在 activity 里
 
-frontmatter 只写这几个键:${AGENT_FRONTMATTER_KEYS.map((k) => `\`${k}\``).join('、')}。\`name\` 必须等于文件名,也是 cotutor.json 里 tutors 的键,**不能改**。\`description\` 是工作台里看到的一句介绍。正文就是系统提示。
-
-旧版文件里的 ${LEGACY_AGENT_KEYS.map((k) => `\`${k}\``).join('、')} 现在不起作用,可以删。
+老师文件 agents/<name>.md 2026-11-16 起不读了。一位老师怎么教,写在他家里的每个 activity(\`agents/<name>/activities/<名>.md\`)的「老师怎么带」里;一科通用的做法是其中「<科>这一科」那一节,这位老师的几份一字不差,改一处几份一起改。
 
 ## cotutor.json 的 tutors.<name>(人设、开关、运行时)
 

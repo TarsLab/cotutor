@@ -77,6 +77,16 @@ let feeding = false;
 if (open) setInterval(() => { if (!feeding && ws.readyState === 1) ws.send(Buffer.alloc(3200)); }, 100);
 
 const report = [`# 实时老师整条线真跑(${new Date().toLocaleString('zh-CN')})`, '', `嘴 ${voice},脑 ${brain} ${tutor}(临时 workspace \`${wsRoot}\`)`, ''];
+// 话题都从 activity 开始(2026-11-16):原话题是三块方砖之一就照方砖开(第一条带 via);不是就先开一个「聊」(多一轮脑,花钱)
+const TILE = { 预习: 'preview', 检查作业: 'check', 复习: 'review' };
+const firstMsg = (() => { const [d, j] = says[0]; const idx = JSON.parse(readFileSync(join(src, 'conversations', tutor, `${d}.json`), 'utf8')); const m = idx.messages.find((x) => x.job === j); return idx.messages.find((x) => (x.thread ?? x.job) === (m.thread ?? m.job)); })();
+const tile = TILE[firstMsg?.activity?.name ?? ''];
+const opening = tile ? { via: { home: null, button: tile } } : {};
+if (!tile) {
+  const { CHAT_RUN, writeChat } = await import(join(repo, 'tests', '_chat.ts'));
+  writeChat(wsRoot, [tutor]);
+  await (await ctx.runner.send(tutor, { from: 'kid', text: '开始', newThread: true, activity: CHAT_RUN, live: {} })).done;
+}
 let first = true;
 for (const [date, job] of says) {
   const idx = JSON.parse(readFileSync(join(src, 'conversations', tutor, `${date}.json`), 'utf8'));
@@ -86,7 +96,7 @@ for (const [date, job] of says) {
   if (m.voice) {
     const pcm = execFileSync('ffmpeg', ['-v', 'error', '-i', join(src, 'conversations', tutor, m.voice.audio), '-ac', '1', '-ar', '16000', '-f', 's16le', '-'], { maxBuffer: 64 << 20 });
     if (open) {
-      ws.send(JSON.stringify({ t: 'ctx', body: first ? { newThread: true } : {} }));
+      ws.send(JSON.stringify({ t: 'ctx', body: first ? opening : {} }));
       feeding = true;
       for (let p = 0; p < pcm.length; p += 3200) { ws.send(pcm.subarray(p, p + 3200)); await sleep(100); }
       feeding = false;
@@ -95,13 +105,13 @@ for (const [date, job] of says) {
       ws.send(JSON.stringify({ t: 'hold' }));
       for (let p = 0; p < pcm.length; p += 3200) { ws.send(pcm.subarray(p, p + 3200)); await sleep(100); }
       t0 = Date.now();
-      ws.send(JSON.stringify({ t: 'release', body: first ? { newThread: true } : {} }));
+      ws.send(JSON.stringify({ t: 'release', body: first ? opening : {} }));
     }
   } else {
     // 拍照的那条:照片拷进临时 workspace 同一位置,走 send(同孩子端拍了发)
     for (const ph of m.photos ?? []) { mkdirSync(dirname(join(wsRoot, ph)), { recursive: true }); copyFileSync(join(src, ph), join(wsRoot, ph)); }
     t0 = Date.now();
-    ws.send(JSON.stringify({ t: 'send', body: { text: m.photos?.length ? '' : m.text, ...(m.photos?.length ? { photos: m.photos } : {}), ...(first ? { newThread: true } : {}) } }));
+    ws.send(JSON.stringify({ t: 'send', body: { text: m.photos?.length ? '' : m.text, ...(m.photos?.length ? { photos: m.photos } : {}), ...(first ? opening : {}) } }));
   }
   first = false;
   // 等这一轮讲完:脑写完、讲稿都念到、最后一段声音放完

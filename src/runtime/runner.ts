@@ -35,14 +35,14 @@ import { type RunEvent, type RunEventEnvelope, type RunEventInput } from '../sch
 import { BOARD_CARD_KINDS, canonicalSubject, subjectLang, MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, VAULT_PACK_ROLES, isApiRuntime, resolvePolicy, type ContextPack, type ConversationIndex, type MemoryProposal, type PendingMemory, type ActivityRun, type ConversationMessage, type Focus, type MessageFrom, type MessageVia, type Policy, type Timing } from '../schema/index.ts';
 import { UsageError } from '../shared/errors.ts';
 import type { Workspace } from '../schema/index.ts';
-import { capturePathOk, readAgentBody, readCardStates, readIndex, snapshotSources, writeIndex, writeRunFile } from './journal/store.ts';
+import { capturePathOk, readCardStates, readIndex, snapshotSources, writeIndex, writeRunFile } from './journal/store.ts';
 import { readTextbooks, scanVault, writeVaultMemory, type MemoryPlan } from '../memory/vault.ts';
 import { learningContext, type PackReport } from '../memory/context.ts';
 import { childChanges, planDiary, planMemory, recoverPending, writeDiaryBlock } from '../memory/commit.ts';
 import { kidSaid } from '../memory/proposals.ts';
 import type { Retrieved } from '../memory/retrieval.ts';
 import { memoryCount, textHash, tidyMemoryPrompt } from '../memory/vault-notes.ts';
-import { TUTOR_RULES_PATH, takesTutorRules, tutorRulesBody, BOARD_GUIDE_IN_SYSTEM, BOARD_GUIDE_PATH, boardGuideBody, boardGuideReads } from './context/tutor-rules.ts';
+import { TUTOR_RULES_PATH, tutorRulesBody, BOARD_GUIDE_IN_SYSTEM, BOARD_GUIDE_PATH, boardGuideBody, boardGuideReads } from './context/tutor-rules.ts';
 import { DubQueue } from '../media/tts.ts';
 import { kidInput, type KidAccept } from './kid-input.ts';
 import { compatibleLine } from '../shared/qianwen.ts';
@@ -177,24 +177,23 @@ export async function gatherContext(ws: Workspace, tutor: string, input: { from:
   const policy = resolvePolicy(ws.config, tutor);
   const pack: ContextPack = { at: localMinute(input.at), focus: input.focus, plan: [], recent: [] };
   // vault 那几段(src/memory/context.ts):activity 话题的记忆是它自己的(agent: <老师>/<activity>);档案、入口文件、日记观察照旧共用
-  const mem = await learningContext(ws, { at: input.at, agent: input.agent ?? tutor, subject: t?.subject, display: t?.display, teacher: Boolean(t) && tutor.endsWith('-tutor'), ...(input.query ? { query: input.query } : {}), limits: { entryChars: policy.contextPack.entryChars, planLines: policy.contextPack.planLines, recent: policy.contextPack.recent } }, report);
+  const mem = await learningContext(ws, { at: input.at, agent: input.agent ?? tutor, subject: t?.subject, display: t?.display, teacher: Boolean(t), ...(input.query ? { query: input.query } : {}), limits: { entryChars: policy.contextPack.entryChars, planLines: policy.contextPack.planLines, recent: policy.contextPack.recent } }, report);
   if (mem.slot) pack.slot = mem.slot;
   if (mem.semester) pack.semester = mem.semester;
   pack.notes = [];
-  // 有脸的老师的公共守则:机器技能 cotutor-tutor 的原文,排在家长笔记前面(不截;同一话题没改过由 send 换成「未变」)
-  if (takesTutorRules(tutor)) {
-    try {
-      pack.notes.push({ role: 'rules', path: TUTOR_RULES_PATH, text: tutorRulesBody(await readFile(join(ws.root, TUTOR_RULES_PATH), 'utf8'), input.kinds ?? tutorCardKinds(ws.config.tutors[tutor]?.cards) ?? undefined) });
-      pack.rules = TUTOR_RULES_PATH;
-    } catch {
-      pack.rules = `缺:${TUTOR_RULES_PATH} 不在(cotutor refresh 补),照你老师文件里的做`;
-    }
+  // 老师的公共守则:机器技能 cotutor-tutor 的原文,排在家长笔记前面(不截;同一话题没改过由 send 换成「未变」)
+  try {
+    pack.notes.push({ role: 'rules', path: TUTOR_RULES_PATH, text: tutorRulesBody(await readFile(join(ws.root, TUTOR_RULES_PATH), 'utf8'), input.kinds ?? tutorCardKinds(ws.config.tutors[tutor]?.cards) ?? undefined) });
+    pack.rules = TUTOR_RULES_PATH;
+  } catch {
+    pack.rules = `缺:${TUTOR_RULES_PATH} 不在(cotutor refresh 补)`;
   }
   pack.notes.push(...mem.notes);
   pack.profile = mem.profile;
   if (mem.child !== undefined) pack.child = mem.child;
   if (mem.entry !== undefined) pack.entry = mem.entry;
   pack.memory = mem.memory;
+  if (mem.teacherMemory) pack.teacherMemory = mem.teacherMemory;
   if (mem.lesson) pack.lesson = mem.lesson;
   if (mem.refs) pack.refs = mem.refs;
   pack.plan = mem.plan;
@@ -207,14 +206,14 @@ export async function gatherContext(ws: Workspace, tutor: string, input: { from:
 /**
  * activity 的那两段:`activity:`(名字、参数)每条都带;
  * 「老师怎么带」那节(按参数与这个话题的卡裁过、剥了注释)+ 这个 activity 多带的卡的写法,作为一条笔记放进话题第一条(<cotutor-activity>),
- * 续话题没改过写「未变」(同守则)。文件不在、读不了 → activityGuide 写「缺」,老师照自己的文件做。返回给这轮的提醒。
+ * 续话题没改过写「未变」(同守则)。文件不在、读不了 → activityGuide 写「缺」。返回给这轮的提醒。
  */
 export async function attachActivity(ws: Workspace, tutor: string, pack: ContextPack, run: ActivityRun, inSystem = false): Promise<string[]> {
   pack.activity = { name: run.name, params: run.params };
   const path = relative(ws.root, findActivityFile(ws.root, tutor, run.name)).split(sep).join('/');
   const text = await readFile(join(ws.root, path), 'utf8').catch(() => null);
   if (text === null) {
-    pack.activityGuide = `缺:${path} 不在,照你老师文件里的做`;
+    pack.activityGuide = `缺:${path} 不在`;
     return [`activity ${run.name}:${path} 不在,老师没拿到「老师怎么带」`];
   }
   const a = parseActivity(text).activity;
@@ -241,12 +240,12 @@ export async function attachActivity(ws: Workspace, tutor: string, pack: Context
 export const ACTIVITY_IN_SYSTEM = '已在你的系统提示里(这个话题的 activity,照它带)';
 
 /**
- * activity 话题的系统提示(九点五):不读老师文件,人设与做法都是 activity 自己的。
+ * activity 话题的系统提示(九点五):人设与做法都是 activity 自己的。
  *   body   「老师怎么带」按参数与这个话题的卡裁好、剥了注释
  *   kinds  这个话题的卡:activity 头上的 cards 加 text(不并老师的)
  *   guide  只讲这几种卡的板书写法
  *   memory 这个 activity 自己的记忆:agent: <老师>/<activity>,文件名 <老师显示名>·<activity>
- * activity 文件不在、没有「老师怎么带」→ null(退回老师文件)。
+ * activity 文件不在、没有「老师怎么带」→ null(系统提示只剩一句「你是这个家的…」)。
  */
 export interface ActivityParts {
   body: string;
@@ -276,25 +275,21 @@ export async function boardGuideOf(ws: Workspace, tutor: string): Promise<string
 }
 
 /**
- * 系统提示(2026-09-19 起板书写法跟着进系统提示):有脸的老师、板书没关才带板书写法,上下文包只写一行「已在系统提示里」。
- * activity 话题:系统提示换成 activity 的人设与做法 + 它的卡的写法;工具人(没有守则)的 activity 退回老师文件 + 第一条带原文(attachActivity)。
+ * 系统提示:activity 话题 = 它的「老师怎么带」+ 它的卡的写法(板书没关时),上下文包只写一行「已在系统提示里」。
+ * 没有 activity 的(记账、整理记忆这种系统任务,以前不走 activity 的话题接着聊):一句「你是这个家的…」,要做什么写在消息里。
+ * 老师文件 2026-11-16 起不读了(一科通用的做法并进了每个 activity)。
  */
 async function systemParts(ws: Workspace, tutor: string, policy: Policy, pack: ContextPack, act: ActivityParts | null = null): Promise<{ systemBody: string; activityInSystem: boolean }> {
-  const boardOff = policy.board === 'off';
-  if (act && takesTutorRules(tutor)) {
+  if (act) {
+    const boardOff = policy.board === 'off';
     if (!boardOff) pack.boardGuide = BOARD_GUIDE_IN_SYSTEM;
     return { systemBody: boardOff ? act.body : `${act.body}\n\n${act.guide}`, activityInSystem: true };
   }
-  const agentBody = await readAgentBody(ws, tutor);
-  if (!takesTutorRules(tutor) || boardOff) return { systemBody: agentBody, activityInSystem: false };
-  const guide = await boardGuideOf(ws, tutor);
-  if (!guide) {
-    pack.boardGuide = `缺:${BOARD_GUIDE_PATH} 不在(cotutor refresh 补),照你会的写`;
-    return { systemBody: agentBody, activityInSystem: false };
-  }
-  pack.boardGuide = BOARD_GUIDE_IN_SYSTEM;
-  return { systemBody: `${agentBody}\n\n${guide}`, activityInSystem: false };
+  return { systemBody: bareSystem(ws, tutor), activityInSystem: false };
 }
+
+/** 没有 activity 的那一句系统提示 */
+export const bareSystem = (ws: Workspace, tutor: string): string => `你是这个家的${ws.config.tutors[tutor]?.display ?? tutor},对面是一个孩子。`;
 
 /** 这轮带的笔记版本:role → `路径@hash`(记进消息;同一话题下一轮对得上就不再带原文) */
 export function noteVersions(pack: ContextPack): Record<string, string> {
@@ -628,13 +623,17 @@ export class Runner {
     } else thread = known[known.length - 1];
     const { name: runtimeName, runtime } = getRuntime(ws.config, input.runtime ?? t.runtime);
     // 话题只属于开它的那种运行时(2026-10-31):会话是别的运行时的(换过运行时)就接不上,这条开新话题,不把两种会话混在一个话题里;记账在 bookkeep 里先跳过了
-    if (thread !== job && !input.bookkeep && !sameRuntime(index, thread, runtimeName)) thread = job;
+    // 换了运行时开的新话题照旧是原来那个话题的 activity(话题从 activity 开始,2026-11-16)
+    const carried = thread !== job && !input.bookkeep && !sameRuntime(index, thread, runtimeName) ? threadActivity(index.messages, thread) : undefined;
+    if (carried !== undefined) thread = job;
     const fresh = thread === job;
     const session = fresh ? null : sessionFor(index, thread);
     // 长话题整段压缩(API 运行时):之前的模型历史不再发,前情照索引拼;这一轮笔记带全文,不写「未变」(原文所在的那几轮不发了)
     const compact = !fresh && isApiRuntime(runtime) && dueCompact(index.messages, known, thread);
     // activity:新话题照这条带的,续话题照话题第一条记的。系统提示、卡、记忆都是它的(记账轮也是,接着同一个会话);上下文包的 activity 段记账轮不带
-    const threadRun = fresh ? (input.activity ?? null) : threadActivity(index.messages, thread);
+    const threadRun = fresh ? (input.activity ?? carried ?? null) : threadActivity(index.messages, thread);
+    // 新话题都从一个 activity 开始(2026-11-16 起没有自由话题);系统任务(记账、整理记忆)不在此列
+    if (fresh && !threadRun && input.from === 'kid') throw new UsageError('开新话题要从一个 activity 开始:孩子端点首页的按钮、方砖;cotutor send 加 --activity <名>');
     const act = threadRun ? await activityParts(ws, tutor, threadRun) : null;
     // 取材的查询:孩子这句话,加首页按钮的讲法(系统任务不查)
     const query = input.from === 'kid' ? [text, input.home?.brief].filter(Boolean).join('\n') : '';
@@ -705,9 +704,9 @@ export class Runner {
     if (slate) await appendBoard(ws, tutor, date, thread, { at: now.toISOString(), k: 'turn', job, ...(slate.told ? { told: slate.told } : {}) });
     // 照片上的字词:activity 写了「认字收到什么」就在后台认(和老师写板书同时),照片板的「点字」用;回放、eval 不认(要花钱)
     if (photos.length && activityRun && input.from === 'kid' && !input.replayOf && !input.eval) await this.startPhotoWords(ws, tutor, activityRun.name, photos).catch(() => undefined);
-    // 运行记录(《vault重构方案》§7):除了老师文件与技能,还记这轮带进上下文的每篇笔记、替老师查的每个文件,事后重建得出老师看到的是哪一版
+    // 运行记录(《vault重构方案》§7):除了系统提示的来源(activity 文件)与技能,还记这轮带进上下文的每篇笔记、替老师查的每个文件,事后重建得出老师看到的是哪一版
     const notesSent = (pack.notes ?? []).map((n) => ({ role: n.role, path: n.path, hash: textHash(n.text), chars: n.text.length, ...(n.cut ? { cut: true as const } : {}) }));
-    await writeRunFile(ws, tutor, date, job, { at: pack.at, prompt, plan, agentBody: true, sources: { ...(await snapshotSources(ws, tutor)), notes: notesSent, retrieved: gathered.retrieved } });
+    await writeRunFile(ws, tutor, date, job, { at: pack.at, prompt, plan, agentBody: true, sources: { ...(await snapshotSources(ws, threadRun ? findActivityFile(ws.root, tutor, threadRun.name) : null)), notes: notesSent, retrieved: gathered.retrieved } });
 
     active.job = job;
     if (input.live) active.live = true;
@@ -803,7 +802,7 @@ export class Runner {
     };
     const seen = seenOf(asked?.notes?.memory);
     const childSeen = seenOf(asked?.notes?.child);
-    const shared = Boolean(ws.config.tutors[tutor]) && tutor.endsWith('-tutor');
+    const shared = Boolean(ws.config.tutors[tutor]);
     return planMemory(ws, { agent: owner?.agent ?? tutor, display: owner?.display ?? ws.config.tutors[tutor]?.display ?? tutor, items, max: asked?.tidy ? null : MEMORY_MAX_PER_TURN, date, said, shared, ...(seen ? { seen } : {}), ...(childSeen ? { childSeen } : {}) });
   }
 
@@ -905,7 +904,7 @@ export class Runner {
     // 重新读索引再并入:跑的这段时间里别的字段(比如家长改了别的)不被旧对象盖掉
     const latest = await readIndex(ws, tutor, date);
     // 板书写法已经递到手里(系统提示或话题第一条),老师还用工具去读它 → 预载没起作用,家长端这轮上点名(换模型 / 版本后最先坏的地方)
-    const reread = takesTutorRules(tutor) && policy.board !== 'off' ? boardGuideReads(tools) : [];
+    const reread = policy.board !== 'off' ? boardGuideReads(tools) : [];
     if (reread.length) kidView.warnings.push(`板书写法已经递给老师了,这轮它还是用工具去读了一遍(${reread.join(';')}):多一次模型来回`);
     // 清单外的卡(《卡片协议.md》「谁拿到哪些卡」):照常解析、照常显示,只在这轮记一条,家长据此调清单
     // activity 话题的卡是 activity 自己的(加 text);别的话题照老师的清单

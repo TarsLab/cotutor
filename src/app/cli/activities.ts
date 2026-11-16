@@ -1,7 +1,7 @@
 /**
- * activity 文件的安装、升级与检查。和老师文件同一套:**拷贝,不链**。
+ * activity 文件的安装、升级与检查。和技能、主题同一套:**拷贝,不链**。
  * 包里的 grades/grade-<n>/agents/<老师>/activities/<名>.md 是出厂件;init 拷进 workspace 同一个位置(老师的家里,会话 cwd 下),这份是家长的;
- * 出厂 hash 记 .cotutor/shipped.json 的 activities(键「老师/名」),据此分 latest / upgradable / custom / untracked / missing,意思同 tutors.ts。
+ * 出厂 hash 记 .cotutor/shipped.json 的 activities(键「老师/名」),据此分 latest / upgradable / custom / untracked / missing,意思见 tutors.ts 的 TutorState。
  */
 import { existsSync } from 'node:fs';
 import { readFile, readdir, mkdir, writeFile, lstat, unlink } from 'node:fs/promises';

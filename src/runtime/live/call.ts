@@ -1051,7 +1051,7 @@ const takeName = (dir: string, at: Date): string => {
   return name;
 };
 /** 这一条开新话题(首页的按钮、口语课):不算答上一轮的问 */
-const opensThread = (body: Record<string, unknown>): boolean => isObj(body.via) || isObj(body.talk) || body.newThread === true;
+const opensThread = (body: Record<string, unknown>): boolean => isObj(body.via) || isObj(body.talk);
 /** 这一条带着交的东西(交卡):没说清也要交给脑 */
 const handsIn = (body: Record<string, unknown>): boolean => body.action === 'submit';
 /** 录像里记的那条:去掉图,留一个 image: true */

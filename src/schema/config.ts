@@ -1,7 +1,6 @@
 /**
  * cotutor.json:每个 workspace 一份,一孩一 workspace。`paths` 角色映射 + `runtimes`(用哪个模型)+ 老师表与政策。
- * 字段归属铁律:老师的 .md 文件里只有 name / description + 正文(src/runtime/agent-file.ts);
- * 人设(display / avatar / voice)、政策、开关全在这里。
+ * 字段归属铁律:人设(display / description / avatar / voice)、政策、开关全在这里;怎么教在老师家里的 activity 文件(老师文件 2026-11-16 起没有了)。
  */
 import { z } from 'zod';
 import { DEFAULT_PORT } from '../shared/default-port.ts';
@@ -91,6 +90,8 @@ export const HOME_TILE_IDS = HOME_TILES.map((t) => t.id) as [HomeTileId, ...Home
 export const TutorSchema = z.object({
   /** 显示名(孩子端头像下的字、计划文件的 H2 标题) */
   display: z.string().min(1).describe('显示名:孩子端头像下的字,计划文件的 H2 标题'),
+  /** 一句介绍(工作台、加老师时;2026-11-16 从老师文件头上挪来) */
+  description: z.string().optional().describe('一句介绍:这位老师管什么(工作台显示;老师文件 2026-11-16 起不读了,头上的 description 挪到这里)'),
   subject: z.string().optional().describe('学科:与课程表的学科列、观察的 subject、vault 入口文件的 subject 属性对齐即归到这位老师'),
   /** 头像:一个 emoji 或图片相对路径 */
   avatar: z.string().optional().describe('头像:一个 emoji,或 workspace 根以内的图片相对路径(如 avatars/math-tutor.png;figshot pick --workspace 会写这个);不写 = 语文、数学、英语用出厂头像,其余显示学科首字'),
@@ -99,8 +100,8 @@ export const TutorSchema = z.object({
   /** 卡的配音音色 id(src/media/tts-voices.ts);没有 = 卡不配音 */
   voice: z.string().optional().describe('卡的配音用的音色 id(百炼 Qwen-Audio-TTS,如 qwen-audio-3.0-tts-plus-longcanzhuyue;家长端首页「样子与声音」里挑;点读、单词卡、听写念词的声音)。不写 = 语文、数学、英语老师用出厂的那个,别的老师没有配音。老师开口的嘴在 live.voices'),
   enabled: z.boolean().default(true).describe('开关:false 时两端都不见'),
-  /** 孩子端不露(只和系统、家长打交道的工具人) */
-  hidden: z.boolean().default(false).describe('孩子端不露(只和系统、家长打交道的工具人)'),
+  /** 孩子端不露(家长端「在孩子的首页上」关掉) */
+  hidden: z.boolean().default(false).describe('孩子端不露(家长端「在孩子的首页上」关掉)'),
   /** 这位老师的板书写法里有哪几种卡(《卡片协议.md》「谁拿到哪些卡」);不写 = 全部。text 总是带着(写坏的卡退成它) */
   cards: z.preprocess((v) => (Array.isArray(v) ? v.filter((k) => !RETIRED_CARD_KINDS.includes(k)) : v), z.array(z.enum(BOARD_CARD_KINDS))).optional().describe(`这位老师的板书写法里讲哪几种卡(${BOARD_CARD_KINDS.join(' / ')});不写 = 全部,text 总是带着。只裁递给老师的写法,写了清单外的卡照常显示`),
   policy: PolicyPatchSchema.optional().describe('覆盖 policyDefaults 的字段,没写的继承'),
@@ -306,7 +307,7 @@ export const CotutorConfigSchema = z
     paths: z.record(z.string(), z.string()).default({}).describe('角色 → 目录:vault 指 Obsidian vault 根;diary / plans / profile / timetable / textbooks / reference 相对 vault(缺省 日记 / 计划 / 孩子.md / 课程表.md / 教材 / 参考),不配 vault 就相对 workspace 根;profile 只是 init 新建档案的位置,老师按 cotutor: profile 属性找;captures(作业照片)相对 workspace 根'),
     vault: VaultPolicySchema.default({ keepScore: 4, autoBookkeep: false }).describe('vault 的写入政策:keepScore 话题打几星起才把摘要沉淀进日记(缺省 4);autoBookkeep 自动记账(缺省关)'),
     policyDefaults: PolicyPatchSchema.default({}).describe('所有老师的政策缺省;没写的用出厂缺省(60 字 / 板书 auto / 观察 10 条、计划 10 行、原文 4000 字)'),
-    tutors: z.record(z.string().regex(AGENT_NAME_RE), TutorSchema).default({}).describe('老师表:键 = agents/<键>.md 的 frontmatter name;人设、开关、政策都在这里,老师文件里只有正文'),
+    tutors: z.record(z.string().regex(AGENT_NAME_RE), TutorSchema).default({}).describe('老师表:键 = 老师的家 agents/<键>/ 的名字;人设、开关、政策都在这里,怎么教在他家里的 activity'),
     runtimes: RuntimesSchema.describe('运行时:default 指一个键;每个运行时是 {api, model}(应用直连百炼);老师用哪个模型写在这里'),
     figshot: z
       .object({ port: z.number().int().min(1).max(65535).default(8477) })
@@ -318,7 +319,7 @@ export const CotutorConfigSchema = z
   })
   .superRefine((c, ctx) => {
     for (const name of Object.keys(c.live.voices)) {
-      if (!(name in c.tutors) || !name.endsWith('-tutor')) ctx.addIssue({ code: 'custom', path: ['live', 'voices', name], message: `"${name}" 不是有脸的老师(tutors 里键以 -tutor 结尾的);只有老师能走实时` });
+      if (!(name in c.tutors)) ctx.addIssue({ code: 'custom', path: ['live', 'voices', name], message: `"${name}" 不在 tutors 里;只有老师能走实时` });
     }
     if (!(c.runtimes.default in c.runtimes) || c.runtimes.default === 'default') {
       ctx.addIssue({

@@ -1,5 +1,5 @@
 /**
- * 出厂 skill:与老师文件同一套「拷不链」机制——init 拷进 workspace 的 .agents/skills/<name>/,hash 记 .cotutor/shipped.json 的 skills,
+ * 出厂 skill:与 activity 同一套「拷不链」机制——init 拷进 workspace 的 .agents/skills/<name>/,hash 记 .cotutor/shipped.json 的 skills,
  * (2026-10-30 从 .claude/skills/ 挪来:Codex、Qwen Code 认 .agents/skills;Claude Code 只认 .claude/skills,那里是一条指过来的链,见 linkClaudeSkills。)
  * 出厂表 SHIPPED_SKILLS 每项带 machine 标记(2026-09-15,照 hyperframes 的 skills/ 目录),都在本包根 skills/<name>/(进 npm files;
  * cotutor-board 整个、其余几个的 references/ 是 scripts/gen-skills.ts 生成后入库的,tests/skills.test.ts 断言一致):

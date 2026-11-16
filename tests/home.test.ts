@@ -64,7 +64,7 @@ const tutors: Record<string, HomeTutorInfo> = {
   const fixes = issues.filter((i) => i.level === 'fix');
   check('小课堂的课包读不出来:要改,指到那个按钮', fixes.some((i) => i.card === 0 && i.button === 1 && i.text.includes('2026-09-16-kantu')), JSON.stringify(fixes));
   check('同一位老师第二张:要改,说第一张在第几行', fixes.some((i) => i.card === 4 && i.text.includes('第 14 行')), JSON.stringify(fixes));
-  check('工具人的老师卡:要改', fixes.some((i) => i.card === 5 && i.text.includes('工具人')));
+  check('孩子端不露的老师卡:要改', fixes.some((i) => i.card === 5 && i.text.includes('孩子端不露')));
   check('没写卡的老师:提醒(会补一张);关着的不算缺', issues.some((i) => i.level === 'note' && i.text.startsWith('英语老师没写老师卡')) && !issues.some((i) => i.text.includes('关着的没写')));
   check('问题按行号排,没行号的在后', issues.map((i) => i.line ?? Infinity).every((l, k, a) => k === 0 || a[k - 1] <= l));
   const ok = homeIssues(doc, { tutors, lectures: new Map([['2026-09-16-kantu', '语文']]), today: '2026-09-17' });

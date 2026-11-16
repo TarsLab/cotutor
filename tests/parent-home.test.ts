@@ -193,6 +193,9 @@ try {
   const kidPage = (await call('GET', '/')).html ?? '';
   check('孩子端页面里还是没有家长端的路径', !kidPage.includes('/parent'));
   writeFileSync(join(home, 'ok'), '');
+} catch (e) {
+  // done() 在 finally 里会 process.exit:抛的异常要记成失败,不然悄悄过了
+  check('跑完没抛', false, String((e as Error)?.stack ?? e));
 } finally {
   done();
 }

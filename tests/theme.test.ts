@@ -32,7 +32,7 @@ try {
   const { root, steps } = await initWorkspace({ slug: 'ming' });
   const dir = themeDir(root, 'default');
   check('init 拷进 themes/default/,两个文件都在', existsSync(join(dir, 'theme.json')) && existsSync(join(dir, 'kid.css')) && steps.some((s) => s.item === 'themes/default/' && s.action === 'created'));
-  check('出厂 hash 记进 shipped.json 的 themes,tutors / skills 的记录还在', (await readManifest(root)).themes?.default.hash.startsWith('sha256:') === true && Object.keys((await readManifest(root)).tutors).length > 0 && (await readManifest(root)).skills !== undefined);
+  check('出厂 hash 记进 shipped.json 的 themes,activities / skills 的记录还在', (await readManifest(root)).themes?.default.hash.startsWith('sha256:') === true && Object.keys((await readManifest(root)).activities ?? {}).length > 0 && (await readManifest(root)).skills !== undefined);
   check('刚 init:latest', (await themeStatuses(root))[0].state === 'latest');
   check('重跑 init:exists', (await initWorkspace({ slug: 'ming' })).steps.find((s) => s.item === 'themes/default/')?.action === 'exists');
 

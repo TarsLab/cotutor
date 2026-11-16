@@ -15,7 +15,7 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { QUIET_ARGS } from './_quiet.mjs';
-import { liveSend } from './_live-send.mjs';
+import { liveSend, startChat } from './_live-send.mjs';
 
 const keep = process.argv.includes('--keep');
 const shotsAt = process.argv.indexOf('--shots');
@@ -59,6 +59,9 @@ try {
   const up = await api('POST', '/api/kid/conversations/math-tutor/photos', { image: `data:image/png;base64,${png.toString('base64')}` });
   const photo = up.json?.path;
   ok('传图:201、落 captures/<日期>/<HHMM>-1.png、文件在', up.status === 201 && /^captures\/\d{4}-\d{2}-\d{2}\/\d{4}-1\.png$/.test(photo ?? '') && existsSync(join(root, photo ?? 'x')), JSON.stringify(up.json));
+  // 话题都从 activity 开始(2026-11-16):先开一个「聊」,照片接着它发
+  await startChat(base, root, 'math-tutor');
+  for (let i = 0; i < 80; i++) { const d = (await api('GET', '/api/kid/conversations/math-tutor/today')).json; if (d && !d.pending && d.messages.every((m) => !m.pending)) break; await sleep(250); }
   const sent = await liveSend(base, 'math-tutor', { text: '', photos: [photo], device: 'tablet-landscape' });
   ok('只带照片发一条 → 202', sent.status === 202, JSON.stringify(sent.json));
   let today = null;

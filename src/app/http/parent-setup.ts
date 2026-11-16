@@ -7,7 +7,7 @@
  *   GET  /api/parent/backups        {dir, list: [...], commands}(给家长抄的命令,Windows 上带 .cmd)
  *   POST /api/parent/backups        现在备份一份
  *
- * 步骤用 doctor 的结果,不另查一遍;只挑家长要动手的那几项,说家长听得懂的话。别的(老师文件、技能)doctor --fix 能修,不打扰家长。
+ * 步骤用 doctor 的结果,不另查一遍;只挑家长要动手的那几项,说家长听得懂的话。别的(activity、技能)doctor --fix 能修,不打扰家长。
  */
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';

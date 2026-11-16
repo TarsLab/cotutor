@@ -22,6 +22,9 @@ try {
   check('自动分的八种、三门主科、中性灰:白字对比度都 ≥ 4.5', [...TUTOR_PALETTE, ...Object.values(SUBJECT_COLORS).filter((x) => x !== SUBJECT_COLORS['英语']), NEUTRAL_COLOR].every((x) => contrastWithWhite(x) >= MIN_CONTRAST), [...TUTOR_PALETTE, NEUTRAL_COLOR].map((x) => `${x} ${contrastWithWhite(x).toFixed(2)}`).join(' '));
   check('英语绿 4.38:差一点,大字(新话题 24px 粗体)够 3', contrastWithWhite(SUBJECT_COLORS['英语']) > 4.3);
   check('color 只收 #rrggbb', TutorSchema.safeParse({ display: '科学老师', color: '#a33a2a' }).success && !TutorSchema.safeParse({ display: '科学老师', color: 'red' }).success && !TutorSchema.safeParse({ display: '科学老师', color: '#fff' }).success);
+} catch (e) {
+  // done() 在 finally 里会 process.exit:抛的异常要记成失败,不然悄悄过了
+  check('跑完没抛', false, String((e as Error)?.stack ?? e));
 } finally {
   done();
 }

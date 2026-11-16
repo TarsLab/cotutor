@@ -105,13 +105,13 @@ try {
   check('旧名 upgrade --workspace 照样跑通(旧版本的 update 靠它)', legacy.code === 0, legacy.err);
   check('refresh 不收老师名(回出厂是 reset 的事)', (await run(['refresh', 'math-tutor', '--workspace', ws])).code === 2);
   check('reset 不说换哪份:用法错', (await run(['reset', '--workspace', ws])).code === 2);
-  const mathFile = join(ws, 'agents', 'math-tutor.md');
-  const shipped = readFileSync(mathFile, 'utf8');
-  writeFileSync(mathFile, `${shipped}\n家长加的一句\n`);
-  const reset = await run(['reset', 'math-tutor', '--workspace', ws, '--json']);
+  const actFile = join(ws, 'agents', 'math-tutor', 'activities', '检查作业.md');
+  const shipped = readFileSync(actFile, 'utf8');
+  writeFileSync(actFile, `${shipped}\n家长加的一句\n`);
+  const reset = await run(['reset', 'math-tutor/检查作业', '--workspace', ws, '--json']);
   const resetOut = JSON.parse(reset.out.trim()) as { ok: boolean; reset: { name: string; bak: string | null }[] };
-  check('reset 换回出厂的,你那份存 .bak', reset.code === 0 && resetOut.ok && resetOut.reset[0].bak !== null && readFileSync(mathFile, 'utf8') === shipped && readFileSync(`${mathFile}.bak`, 'utf8').includes('家长加的一句'), reset.out + reset.err);
-  check('reset 自家没有的老师:说清楚,不动', (await run(['reset', 'nobody-tutor', '--workspace', ws])).code === 2);
+  check('reset 换回出厂的 activity,你那份存 .bak', reset.code === 0 && resetOut.ok && resetOut.reset[0].bak !== null && readFileSync(actFile, 'utf8') === shipped && readFileSync(`${actFile}.bak`, 'utf8').includes('家长加的一句'), reset.out + reset.err);
+  check('reset 只写老师名(老师文件没有了):用法错,说要写「老师/activity」', (await run(['reset', 'math-tutor', '--workspace', ws])).code === 2);
 
   // ---- backup --json:做一份、恢复(不加 --yes 只说会做什么) ----
   const made = await run(['backup', '--workspace', ws, '--json']);
@@ -121,6 +121,9 @@ try {
   const askOut = JSON.parse(ask.out.trim()) as { ok: boolean; needsYes: boolean };
   check('restore --json 不加 --yes:needsYes,以 1 退,什么都不动', ask.code === 1 && !askOut.ok && askOut.needsYes, ask.out);
   check('report 不出 --json:报错并指去 doctor / service status', (await run(['report', '--json', '--workspace', ws])).code === 2 && (await run(['report', '--help'])).out.includes('doctor --json'));
+} catch (e) {
+  // done() 在 finally 里会 process.exit:抛的异常要记成失败,不然悄悄过了
+  check('跑完没抛', false, String((e as Error)?.stack ?? e));
 } finally {
   done();
 }

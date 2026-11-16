@@ -1,7 +1,7 @@
 /**
  * 首页全流程(假 CLI,不花钱):没发布 = 缺省首页 → 草稿 → check 两级 → publish 拒绝 / --force / 同一分钟再发 →
- * 孩子端首页(老师卡置顶、讲法不下发、接着刚才的)→ 按钮发来的 via(开场 = 按钮字 + 讲法进上下文包;接着以前 = 新话题 + continue 段)→
- * 点击统计 → 回放带上讲法与 continue → 家长接口与预览页 → doctor → 发布件坏了退回缺省。
+ * 孩子端首页(老师卡置顶、讲法不下发)→ 按钮发来的 via(activity 按钮 = 按钮字 + 讲法进上下文包,新话题;以前的 new / recent 不认)→
+ * 点击统计 → 回放带上讲法 → 家长接口与预览页 → doctor → 发布件坏了退回缺省。
  */
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -64,15 +64,9 @@ const draft = (text: string): void => {
 };
 
 try {
-  // 16 号:语文老师讲了一节(带卡),这是后面「接着」指的话题
-  const r16 = await kidSend('chinese-tutor', { text: '讲讲板书', newThread: true });
-  await wait('chinese-tutor');
-  const t16 = (r16.json as { thread: string }).thread;
-  check('16 号的话题有板书', (await readIndex(ctx.ws, 'chinese-tutor', '2026-09-16')).messages[0].section?.cards.length === 2);
-
   now = new Date(2026, 8, 17, 21, 30);
   const h0 = await kidHome();
-  check('没发布过:缺省首页,每位老师一张只有「新话题」的卡', h0.home === null && h0.cards.map((c) => c.props.tutor).join() === 'chinese-tutor,english-tutor,math-tutor' && h0.cards.every((c) => buttonsOf(h0, c.props.tutor!).map((b) => b.id).join() === 'new'), JSON.stringify(h0.cards));
+  check('没发布过:缺省首页,每位老师一张卡,没有按钮(只有方砖)', h0.home === null && h0.cards.map((c) => c.props.tutor).join() === 'chinese-tutor,english-tutor,math-tutor' && h0.cards.every((c) => buttonsOf(h0, c.props.tutor!).length === 0), JSON.stringify(h0.cards));
   check('孩子端页面:不是预览', ((await route('GET', '/', ctx)).html ?? '').includes('const MODE = {};'));
 
   // 给老师换样子(figshot):cotutor.json 没配就没有入口;配了首页带端口(缺省 8477),页面自己探它开没开
@@ -117,14 +111,14 @@ for: 2026-09-18
 ---
 
 \`\`\`tutor chinese-tutor
-我要预习小蝌蚪找妈妈
+activity 预习 我要预习小蝌蚪找妈妈
 讲法: 第 22 课,先读顺 1–3 段
-接着 2026-09-16 ${t16} 接着讲昨天的
-讲法: 先问他还记不记得
+activity 看图说话 我要看图说话
+讲法: 先问他图上有谁
 \`\`\`
 
 \`\`\`tutor math-tutor
-接着 2026-09-15 0900-1 找不到的
+小课堂 2026-09-15-nope 找不到的
 \`\`\`
 
 \`\`\`choice
@@ -142,14 +136,14 @@ for: 2026-09-18
 `;
   draft(BAD);
   const c1 = await run(['home', 'check']);
-  check('check:要改两条(首页放不了选择题、接着的话题找不到)带行号,exit 1;缺的老师说会补', c1.code === 1 && c1.out.includes('要改 2 条') && c1.out.includes('✗ 第 16 行 首页只放老师卡(tutor)和听写卡(dictation),choice 卡放不了') && c1.out.includes('2026-09-15 没有话题 0900-1') && c1.out.includes('英语老师 english-tutor(没写,应用补):✨ 新话题') && c1.out.includes('▶ 我要预习小蝌蚪找妈妈(讲法 16 字)') && c1.out.includes('dictation「'), c1.out);
+  check('check:要改两条(首页放不了选择题、小课堂的课包不在)带行号,exit 1;缺的老师说会补', c1.code === 1 && c1.out.includes('要改 2 条') && c1.out.includes('✗ 第 16 行 首页只放老师卡(tutor)和听写卡(dictation),choice 卡放不了') && c1.out.includes('2026-09-15-nope') && c1.out.includes('英语老师 english-tutor(没写,应用补):▦ 预习') && c1.out.includes('▶ 我要预习小蝌蚪找妈妈 → activity 预习(讲法 16 字)') && c1.out.includes('dictation「'), c1.out);
   const p1 = await run(['home', 'publish']);
   check('publish:有要改的不发,exit 1,没有 published.json', p1.code === 1 && p1.out.includes('没发布') && !existsSync(join(root, 'home', 'published.json')), p1.out);
 
   const f1j = await publishHome(ctx.ws, { force: true, now });
   check('--force:丢掉选择题与那个坏按钮照发', f1j.ok && f1j.home?.id === '2026-09-17-2130' && f1j.dropped.length === 2 && existsSync(join(root, 'home', 'history', '2026-09-17-2130.md')), JSON.stringify({ ok: f1j.ok, id: f1j.home?.id, dropped: f1j.dropped }));
 
-  const GOOD = BAD.replace('接着 2026-09-15 0900-1 找不到的\n', '再练两道退位减法\n讲法: 52−7、80−3\n').replace('```choice\n问?\n- [x] a\n```\n\n', '');
+  const GOOD = BAD.replace('小课堂 2026-09-15-nope 找不到的\n', 'activity 复习 再练两道退位减法\n讲法: 52−7、80−3\n').replace('```choice\n问?\n- [x] a\n```\n\n', '');
   draft(GOOD);
   const f2 = await publishHome(ctx.ws, { now });
   check('同一分钟再发:id 加序号', f2.ok && f2.home?.id === '2026-09-17-2130-2', JSON.stringify({ ok: f2.ok, id: f2.home?.id }));
@@ -158,7 +152,7 @@ for: 2026-09-18
 
   const h1 = await kidHome();
   const zh = buttonsOf(h1, 'chinese-tutor');
-  check('孩子端首页:发布的 id、老师卡置顶、英语补上、讲法不下发', h1.home === '2026-09-17-2130-2' && h1.cards.map((c) => c.props.tutor ?? c.kind).join() === 'chinese-tutor,math-tutor,english-tutor,dictation' && zh.map((b) => b.id).join() === 'new,0,1' && zh[2].kind === 'continue' && zh[2].thread === t16 && !JSON.stringify(h1).includes('第 22 课') && !JSON.stringify(h1).includes('brief'), JSON.stringify(h1));
+  check('孩子端首页:发布的 id、老师卡置顶、英语补上、讲法不下发', h1.home === '2026-09-17-2130-2' && h1.cards.map((c) => c.props.tutor ?? c.kind).join() === 'chinese-tutor,math-tutor,english-tutor,dictation' && zh.map((b) => b.id).join() === '0,1' && zh.every((b) => b.kind === 'start') && !JSON.stringify(h1).includes('第 22 课') && !JSON.stringify(h1).includes('brief'), JSON.stringify(h1));
 
   // ---- 只展开一位老师:非老师卡的归属、橙点 ----
   type HC = { kind: string; owner?: string | null; props: { tutor?: string; news?: boolean } };
@@ -181,38 +175,34 @@ for: 2026-09-18
   // 没有这位老师的连不上实时(升级被拒,live-flow.test),到不了这里
   check('via 对不上(旧的那份、越界)→ 400', bad.status === 400 && bad2.status === 400, JSON.stringify([bad.json, bad2.json]));
 
-  const s0 = await kidSend('chinese-tutor', { text: '', newThread: true, via: { home: h1.home, button: 0 } });
+  const s0 = await kidSend('chinese-tutor', { text: '', via: { home: h1.home, button: 0 } });
   await wait('chinese-tutor');
   const j0 = (s0.json as { job: string; thread: string }).job;
   const idx17 = await readIndex(ctx.ws, 'chinese-tutor', '2026-09-17');
   const m0 = idx17.messages.find((m) => m.job === j0)!;
   const run0 = await readRunFile(ctx.ws, 'chinese-tutor', '2026-09-17', j0);
   check('孩子找过语文老师了:他的橙点灭,数学的还亮', newsOf(await kidHome()) === 'math-tutor', newsOf(await kidHome()));
-  check('开场按钮:发的是按钮上的字、新话题、消息记 via', m0.text === '我要预习小蝌蚪找妈妈' && m0.thread === j0 && JSON.stringify(m0.via) === JSON.stringify({ home: h1.home, button: 0, label: '我要预习小蝌蚪找妈妈' }) && !m0.continues, JSON.stringify(m0));
-  check('开场按钮:上下文包带 home 段(按钮字与讲法),不带 continue', run0?.prompt.includes('  home:\n    button: "我要预习小蝌蚪找妈妈"\n    brief: "第 22 课,先读顺 1–3 段"') === true && !run0.prompt.includes('\n  continue:'), run0?.prompt);
+  check('activity 按钮:发的是按钮上的字、新话题、消息记 via 与 activity', m0.text === '我要预习小蝌蚪找妈妈' && m0.thread === j0 && JSON.stringify(m0.via) === JSON.stringify({ home: h1.home, button: 0, label: '我要预习小蝌蚪找妈妈' }) && m0.activity?.name === '预习', JSON.stringify(m0));
+  check('activity 按钮:上下文包带 home 段(按钮字与讲法)', run0?.prompt.includes('  home:\n    button: "我要预习小蝌蚪找妈妈"\n    brief: "第 22 课,先读顺 1–3 段"') === true, run0?.prompt);
 
   const s1 = await kidSend('chinese-tutor', { text: '', thread: j0, via: { home: h1.home, button: 1 } });
   await wait('chinese-tutor');
   const j1 = (s1.json as { job: string }).job;
   const m1 = (await readIndex(ctx.ws, 'chinese-tutor', '2026-09-17')).messages.find((m) => m.job === j1)!;
-  const run1 = await readRunFile(ctx.ws, 'chinese-tutor', '2026-09-17', j1);
-  const sec16 = (await readIndex(ctx.ws, 'chinese-tutor', '2026-09-16')).messages[0].section!;
-  check('接着以前的话题:新话题(不接今天的)、按钮上的字、消息记 continues', m1.thread === j1 && m1.text === '接着讲昨天的' && JSON.stringify(m1.continues) === JSON.stringify({ date: '2026-09-16', thread: t16 }), JSON.stringify(m1));
-  check('接着以前的话题:上下文包带 continue 段(哪天哪个、话题名、那一节的讲稿与卡、索引路径)+ 讲法', run1?.prompt.includes(`  continue:\n    from: "2026-09-16 ${t16}"\n    title: "讲讲板书"`) === true && run1.prompt.includes(`      - ${JSON.stringify(sec16.lines[0].text)}`) && run1.prompt.includes(`${t16}/0 ${sec16.cards[0].kind}`) && run1.prompt.includes('conversations/chinese-tutor/2026-09-16.json') && run1.prompt.includes('brief: "先问他还记不记得"'), run1?.prompt);
+  check('按钮总是开新话题(带着 thread 也不接)', m1.thread === j1 && m1.text === '我要看图说话' && m1.activity?.name === '看图说话', JSON.stringify(m1));
 
-  const s2 = await kidSend('math-tutor', { text: '我想问个别的', newThread: true, via: { home: h1.home, button: 'new' } });
-  await wait('math-tutor');
-  const m2 = (await readIndex(ctx.ws, 'math-tutor', '2026-09-17')).messages[0];
-  const run2 = await readRunFile(ctx.ws, 'math-tutor', '2026-09-17', (s2.json as { job: string }).job);
-  check('新话题按钮:孩子自己的话、记 via、上下文包没有 home 段', m2.text === '我想问个别的' && m2.via?.button === 'new' && !run2?.prompt.includes('\n  home:'), JSON.stringify(m2));
+  // 新话题、接着刚才的按钮没有了(2026-11-16):以前的 via new / recent 不认
+  const s2b = await kidSend('math-tutor', { text: '我想问个别的', via: { home: h1.home, button: 'new' } });
+  const s2c = await kidSend('math-tutor', { text: '我想问个别的', via: { home: h1.home, button: 'recent' } });
+  check('via new / recent 不认', s2b.status === 400 && s2c.status === 400 && (await readIndex(ctx.ws, 'math-tutor', '2026-09-17')).messages.length === 0, JSON.stringify([s2b.json, s2c.json]));
 
   const h2 = await kidHome();
   const zh2 = buttonsOf(h2, 'chinese-tutor');
-  check('今天聊过:首页不再加「接着刚才的」;那个话题是「接着」按钮进去的,新话题也不挂它(只接新话题进去的)', zh2.map((b) => b.id).join() === 'new,0,1' && !('resume' in zh2[0]), JSON.stringify(zh2));
-  const s3 = await kidSend('chinese-tutor', { text: '小蝌蚪后来呢', thread: j1, via: { home: h1.home, button: 'recent' } });
+  check('今天聊过:首页的按钮照旧(今天聊过的在首页「今天」接)', zh2.map((b) => b.id).join() === '0,1' && !('resume' in zh2[0]), JSON.stringify(zh2));
+  const s3 = await kidSend('chinese-tutor', { text: '小蝌蚪后来呢', thread: j1 });
   await wait('chinese-tutor');
   const m3 = (await readIndex(ctx.ws, 'chinese-tutor', '2026-09-17')).messages.find((m) => m.job === (s3.json as { job: string }).job)!;
-  check('老页面的「接着刚才的」(via recent)服务端照旧认:接今天那个话题,孩子自己的话', m3.thread === j1 && m3.text === '小蝌蚪后来呢' && m3.via?.button === 'recent');
+  check('不带按钮的接着那个话题:孩子自己的话', m3.thread === j1 && m3.text === '小蝌蚪后来呢' && !m3.via);
 
   // 方砖(预习、检查作业、复习):出厂的老师家里都有,不经发布常驻;点了 = 那个 activity、发方砖上的字;关掉的不出、点了 400
   type Tile = { id: string; label: string };
@@ -235,28 +225,27 @@ for: 2026-09-18
   // ---- 点击统计 ----
   const st = await homeStats(ctx.ws, now);
   const uses = (tutor: string, button: string | number): number => st.clicks.find((c) => c.tutor === tutor && c.button === button)?.uses.length ?? -1;
-  check('点击统计:每个文件里的按钮一行(没点也在),加上点过的新话题 / 接着刚才的', st.home?.id === h1.home && st.days === 0 && uses('chinese-tutor', 0) === 1 && uses('chinese-tutor', 1) === 1 && uses('math-tutor', 0) === 0 && uses('math-tutor', 'new') === 1 && uses('chinese-tutor', 'recent') === 1, JSON.stringify(st.clicks));
+  check('点击统计:每个文件里的按钮一行(没点也在),加上点过的方砖', st.home?.id === h1.home && st.days === 0 && uses('chinese-tutor', 0) === 1 && uses('chinese-tutor', 1) === 1 && uses('math-tutor', 0) === 0 && uses('english-tutor', 'check') === 1, JSON.stringify(st.clicks));
   const sh = await run(['home', 'show']);
   check('cotutor home show', sh.code === 0 && sh.out.includes(`已发布 ${h1.home}`) && sh.out.includes('语文老师 · 我要预习小蝌蚪找妈妈:点了 1 次') && sh.out.includes('数学老师 · 再练两道退位减法:没点过'), sh.out);
   check('工作台 /dev 没有「首页」标签(2026-09-28 退掉:日常用的东西不进工作台);预览页与家长接口也没了', !((await route('GET', '/dev', ctx)).html ?? '').includes('data-tab="home"') && (await route('GET', '/dev/home-preview?which=draft', ctx)).status === 404 && (await route('GET', '/api/home', ctx)).status === 404);
 
-  // ---- 回放:讲法从当时发布的那份原文取,continue 从原 workspace 读 ----
+  // ---- 回放:讲法从当时发布的那份原文取 ----
   const rp0 = await startReplay(ctx.ws, 'chinese-tutor', '2026-09-17', j0, { now: () => now });
   await rp0.done;
   const rp1 = await startReplay(ctx.ws, 'chinese-tutor', '2026-09-17', j1, { now: () => now });
   await rp1.done;
   const evalRun = (job: string): string => (JSON.parse(readFileSync(join(root, 'evals', 'chinese-tutor', `2026-09-17.${job}.run.json`), 'utf8')) as { prompt: string }).prompt;
-  check('回放开场那轮:上下文包照样有讲法', evalRun(rp0.evalJob).includes('brief: "第 22 课,先读顺 1–3 段"'));
-  check('回放接着那轮:上下文包照样有 continue 段', evalRun(rp1.evalJob).includes(`from: "2026-09-16 ${t16}"`));
+  check('回放按钮开的那轮:上下文包照样有讲法', evalRun(rp0.evalJob).includes('brief: "第 22 课,先读顺 1–3 段"') && evalRun(rp1.evalJob).includes('brief: "先问他图上有谁"'));
 
   // ---- doctor 与坏了的时候 ----
   const d1 = await doctorWorkspace(root, { probeEnv: false, now });
   check('doctor:已发布今天的、引用都在', d1.checks.some((c) => c.name === 'home.published' && c.ok && c.detail.includes(h1.home!)) && d1.checks.some((c) => c.name === 'home.refs' && c.ok), JSON.stringify(d1.checks.filter((c) => c.name.startsWith('home.'))));
   const pubFile = join(root, 'home', 'published.json');
   const good = readFileSync(pubFile, 'utf8');
-  writeFileSync(pubFile, good.replace(`"thread": "${t16}"`, '"thread": "0000-9"'));
+  writeFileSync(pubFile, good.replace('"activity": "看图说话"', '"activity": "没有这个"'));
   const d2 = await doctorWorkspace(root, { probeEnv: false, now });
-  check('doctor:引用坏了报出来;孩子端那个按钮不出现', d2.checks.some((c) => c.name === 'home.refs' && !c.ok && c.detail.includes('0000-9')) && buttonsOf(await kidHome(), 'chinese-tutor').every((b) => b.id !== 1));
+  check('doctor:引用坏了(activity 不在)报出来;孩子端那个按钮不出现', d2.checks.some((c) => c.name === 'home.refs' && !c.ok && c.detail.includes('没有这个')) && buttonsOf(await kidHome(), 'chinese-tutor').every((b) => b.id !== 1), JSON.stringify(d2.checks.filter((c) => c.name.startsWith('home.'))));
   writeFileSync(pubFile, '{坏');
   const h3 = await kidHome();
   const d3 = await doctorWorkspace(root, { probeEnv: false, now });
@@ -277,15 +266,15 @@ for: 2026-09-18
     mkdirSync(join(root, 'vault', '记忆'), { recursive: true });
     const memBefore = '---\ncotutor: memory\nagent: math-tutor\n---\n\n家长写在开头的话。\n\n- 2026-09-01 讲慢点他跟得上\n- 2026-09-01 爱用手指数\n- 2026-09-02 喜欢乐高\n';
     writeFileSync(memFile, memBefore);
-    const s1 = await kidSend('math-tutor', { text: '板书 记住它', newThread: true });
-    await wait('math-tutor');
-    const { date: day, thread: th } = s1.json as { date: string; thread: string };
-    await kidSend('math-tutor', { text: '改记忆', thread: th });
-    await wait('math-tutor');
+    // 不走 activity 的话题孩子端开不了了(2026-11-16);这里要的是老师文件那份记忆,经 Runner 直接发(同 cotutor send)
+    const s1 = await ctx.runner.send('math-tutor', { from: 'kid', text: '板书 记住它', newThread: true, live: {} });
+    await s1.done;
+    const { date: day, thread: th } = s1;
+    await (await ctx.runner.send('math-tutor', { from: 'kid', text: '改记忆', thread: th, live: {} })).done;
     const i1 = await readIndex(ctx.ws, 'math-tutor', day);
     const mine = i1.messages.filter((m) => m.thread === th);
     const mem1 = readFileSync(memFile, 'utf8');
-    check('孩子端发的两轮:from kid、记忆真写了(加两条、改一条、删一条),每轮记下整行原文', mine.length === 2 && mine.every((m) => m.from === 'kid') && mem1.includes('讲角用手指比划他马上懂') && mem1.includes('讲慢点才跟得上') && !mem1.includes('爱用手指数') && mine[0].memoryLines?.length === 2 && mine[1].memoryLines?.length === 2 && mine[1].memoryLines?.some((l) => l.before === '- 2026-09-01 爱用手指数' && l.after === null), JSON.stringify(mine.map((m) => m.memoryLines)));
+    check('孩子说的两轮:from kid、记忆真写了(加两条、改一条、删一条),每轮记下整行原文', mine.length === 2 && mine.every((m) => m.from === 'kid') && mem1.includes('讲角用手指比划他马上懂') && mem1.includes('讲慢点才跟得上') && !mem1.includes('爱用手指数') && mine[0].memoryLines?.length === 2 && mine[1].memoryLines?.length === 2 && mine[1].memoryLines?.some((l) => l.before === '- 2026-09-01 爱用手指数' && l.after === null), JSON.stringify(mine.map((m) => m.memoryLines)));
     await route('POST', `/api/conversations/math-tutor/${day}/bookkeep`, ctx, { threads: [th] });
     await ctx.runner.flush();
     const diaryFile = join(root, 'vault', '日记', `${day}.md`);

@@ -7,7 +7,7 @@
  * 没念的拍丢掉,孩子听到第几句(src/runtime/delivery/playback.ts 按声音排到哪算)进下一轮的上下文包 live:。嘴只接住、只照念,不讲新内容(2026-10-19 P1);画板开着时例外(边画边聊,见下)。
  *
  * 孩子端 → 这里:二进制帧 = PCM16 16k 单声道一块(按着时才推);文本帧 = JSON
- *   {t:'hold'} 按下 · {t:'release', body} 松手(body 同 send 的那条少 text:thread / newThread / device…,runner.accept 验)
+ *   {t:'hold'} 按下 · {t:'release', body} 松手(body 同 send 的那条少 text:thread / via / device…,runner.accept 验)
  *   {t:'hush'} 停下不开新一轮(上滑取消):嘴在出就掐、孩子端清了、没念的丢掉
  *   {t:'send', body} 不是说的(打字、拍照、交卡、首页按钮;舞台开着带 focus.card):body 同那条 POST · {t:'view', w, h} 屏幕多大 · {t:'bye'}
  *   {t:'staged'} 讲稿 [[play]] 的小课堂那一段放完了(或放不了、被关):后面的讲稿接着交给嘴
@@ -625,7 +625,7 @@ export class LiveCall {
           break;
         }
         this.session.commit();
-        this.turn(this.d.asked && body.newThread !== true ? 'answer' : 'voice', body);
+        this.turn(this.d.asked && !opensThread(body) ? 'answer' : 'voice', body);
         break;
       }
       case 'hush': {
@@ -805,7 +805,7 @@ export class LiveCall {
     const body = { ...this.ctxBody };
     // draft 先占上(turn 里交给脑是同步起步的,停一下接着说的要并得进来)
     this.draft = { seq: this.turnSeq + 1, texts: [said] };
-    this.turn(this.d.asked && body.newThread !== true ? 'answer' : 'voice', body, said);
+    this.turn(this.d.asked && !opensThread(body) ? 'answer' : 'voice', body, said);
   }
 
   /** 孩子那句转写失败:按住说的照转写是空的办;一直听时不到 1 秒的放过,长的嘴说没听清 */
@@ -907,7 +907,7 @@ export class LiveCall {
     if (kind === 'said') { this.echoed(); return; }
     this.send({ t: 'kid', text });
     this.interrupt();
-    this.turn(this.d.asked && body.newThread !== true ? 'answer' : 'voice', body, text);
+    this.turn(this.d.asked && !opensThread(body) ? 'answer' : 'voice', body, text);
   }
 
   /** [[call]] 那句出齐了:它在孩子端放完时开始响铃、算打电话的起点;马上交脑写英文开场(铃声垫着,嘴不接) */
@@ -1050,6 +1050,8 @@ const takeName = (dir: string, at: Date): string => {
   for (let k = 1; k < 60 && existsSync(join(dir, `${name}.reel.json`)); k++) name = hms(new Date(at.getTime() + k * 1000));
   return name;
 };
+/** 这一条开新话题(首页的按钮、口语课):不算答上一轮的问 */
+const opensThread = (body: Record<string, unknown>): boolean => isObj(body.via) || isObj(body.talk) || body.newThread === true;
 /** 这一条带着交的东西(交卡):没说清也要交给脑 */
 const handsIn = (body: Record<string, unknown>): boolean => body.action === 'submit';
 /** 录像里记的那条:去掉图,留一个 image: true */

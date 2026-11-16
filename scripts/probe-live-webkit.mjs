@@ -79,11 +79,11 @@ try {
   const page = await browser.newPage({ viewport: { width: 1180, height: 820 } });
   await page.addInitScript(INJECT);
   if (process.env.PROBE_DEBUG) { page.on('console', (m) => console.log('  [page]', m.type(), m.text())); page.on('pageerror', (e) => console.log('  [pageerror]', e.message)); }
-  // 先到首页记下给过麦克风权限(进老师页就先把常开那路开好,micWarm),再用 ?tutor= 进老师页的新话题
+  // 先到首页记下给过麦克风权限(进老师页就先把常开那路开好,micWarm),再用 ?tutor= 进老师页(调试入口)
   await page.goto(`${base}/`);
   await page.waitForSelector('#deck .c-tutor', { timeout: 10000 });
   await page.evaluate(() => { try { localStorage.setItem('kid-mic-ok', '1'); } catch {} });
-  await page.goto(`${base}/?tutor=chinese-tutor&new=1`);
+  await page.goto(`${base}/?tutor=chinese-tutor`);
   await page.waitForFunction(() => document.body.classList.contains('live'), null, { timeout: 10000 });
   const t0 = Date.now(); while (!fake.conns.at(-1)?.session && Date.now() - t0 < 8000) await sleep(50);
   await sleep(500);
@@ -129,7 +129,7 @@ try {
   writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
   await ctx.reload();
   const nc = fake.conns.length;
-  await page.goto(`${base}/?tutor=chinese-tutor&new=1`);
+  await page.goto(`${base}/?tutor=chinese-tutor`);
   await sleep(2500);
   const open = await page.evaluate(() => ({ gum: window.__gum, sent: window.__sentBin, lvOpen: document.body.classList.contains('lv-open'), err: window.__err }));
   ok('一直听:连开 VAD 的连接;不按也推;页面没报错', open.lvOpen && fake.conns.length > nc && fake.conns.at(-1).session?.turn_detection?.type === 'server_vad' && open.sent > 0 && open.err.length === 0, JSON.stringify({ ...open, conns: fake.conns.length }));

@@ -304,7 +304,7 @@ ${pageDomJs(4000)}
     if (k === 'new') return h('span', { class: 'bt bt-new', style: '--sc:' + colorOf(t) }, h('span', { class: 'fc', 'aria-hidden': 'true' }, tutorInitial(t)), h('span', { class: 'lb' }, h('span', { class: 'btx' }, '新话题'), h('small', { class: 'ln' }, th.said ? '「' + th.said + '」' : '想问我什么?')), h('span', { class: 'bi', html: ICON.spark }));
     if (k === 'lecture' && th.lecture) { const L = th.lecture; return h('span', { class: 'bt bt-lecture' }, lecturePic({ bundle: L.bundle, video: L.video, ms: L.watchedMs }), h('span', { class: 'lm' }, h('small', { class: 'tg' }, '小课堂'), h('span', { class: 'btx' }, L.title || th.start.label), h('small', { class: 'ln' }, lcLen(L.watchedMs)))); }
     if (k === 'system') return h('span', { class: 'bt bt-start' }, h('span', { class: 'btx' }, th.title));
-    return h('span', { class: 'bt bt-' + (k === 'continue' ? 'continue' : 'start') }, h('span', { class: 'bi', html: ICON[k === 'continue' ? 'again' : 'start'] }), h('span', { class: 'btx' }, th.start.label || th.title));
+    return h('span', { class: 'bt bt-start' }, h('span', { class: 'bi', html: ICON.start }), h('span', { class: 'btx' }, th.start.label || th.title));
   };
   /** 宽屏:时间线与「这一天」并排;窄屏「这一天」接在后面 */
   const WIDE = window.matchMedia('(min-width:1000px)');

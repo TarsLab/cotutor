@@ -9,7 +9,7 @@
 .c-tutor .bt:active { transform:scale(.98); }
 .c-tutor .bt .bi { flex:0 0 auto; width:28px; height:28px; display:grid; place-items:center; color:var(--accent); }
 .c-tutor .bt .bi svg { width:26px; height:26px; }
-/* 新话题:头像下面一个学科色大气泡(--sc,页面按老师给);不带尖角 */
+/* 新话题(2026-11-16 起首页没有了;家长端「记录」里以前的话题照这个样子画):学科色大气泡(--sc,页面按老师给);不带尖角 */
 .c-tutor .bt-new { min-height:84px; padding:10px 20px 10px 22px; border:0; border-radius:24px; background:var(--sc, var(--accent)); color:#fff; }
 .c-tutor .bt-new .lb { display:flex; flex-direction:column; gap:2px; min-width:0; }
 .c-tutor .bt-new .btx { font-size:26px; font-weight:700; letter-spacing:1px; }
@@ -29,7 +29,7 @@
 .c-tutor.off .nm, .c-tutor.off .bt { color:var(--dim); }
 .c-tutor.off .bt .bi { color:var(--dim); }
 .c-tutor.off .bt-new { background:var(--grey); }
-/* 常驻的三块方砖(预习、检查作业、复习;src/ui/kid/home-tiles.ts):新话题下面一行三块,白底学科色细边,图在上字在下;三科同一个样子,分辨全靠图 */
+/* 常驻的三块方砖(预习、检查作业、复习;src/ui/kid/home-tiles.ts):牌上第一行三块,白底学科色细边,图在上字在下;三科同一个样子,分辨全靠图 */
 .c-tutor .tls { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px; }
 .c-tutor .bt.bt-tile { flex-direction:column; justify-content:center; gap:8px; min-height:132px; padding:14px 8px; border-radius:20px; border-color:color-mix(in srgb, var(--sc) 32%, #fff); text-align:center; }
 .c-tutor .bt-tile .ta { display:grid; place-items:center; color:var(--sc); }

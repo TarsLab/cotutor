@@ -30,7 +30,7 @@ for: 2026-10-10
 \`\`\`
 
 \`\`\`tutor chinese-tutor
-我要看图说话
+activity 看图说话 我要看图说话
 讲法: 孩子会拍一张图
 \`\`\`
 
@@ -39,7 +39,7 @@ for: 2026-10-10
 \`\`\`
 
 \`\`\`tutor math-tutor
-再练两道退位减法
+activity 复习 再练两道退位减法
 \`\`\`
 
 ## 为什么这么排
@@ -49,14 +49,14 @@ for: 2026-10-10
   const p = splitHomeMd(MD);
   check('切块:frontmatter、四张卡、家长段', p.front.length === 3 && p.segs.filter((s) => s.kind === 'fence').map((s) => (s.kind === 'fence' ? s.card : '')).join() === 'text,tutor,tianzige,tutor' && p.note[0] === '## 为什么这么排', JSON.stringify(p.segs.map((s) => s.kind)));
   check('切了再拼回去不变', joinHomeMd(p) === MD, joinHomeMd(p));
-  const b1 = setTutorButtons(MD, 'chinese-tutor', [{ kind: 'start', label: '我要预习小蝌蚪找妈妈', brief: '第 22 课\n重点字 塘', until: '2026-10-10' }, { kind: 'lecture', label: '分一分', bundle: '2026-10-08-fenyifen' }]);
+  const b1 = setTutorButtons(MD, 'chinese-tutor', [{ kind: 'activity', label: '我要预习小蝌蚪找妈妈', activity: '预习', params: { 范围: '第 22 课' }, brief: '第 22 课\n重点字 塘', until: '2026-10-10' }, { kind: 'lecture', label: '分一分', bundle: '2026-10-08-fenyifen' }]);
   const d1 = parseHome(b1);
   const zh = d1.cards.find((c) => c.kind === 'tutor' && c.props.tutor === 'chinese-tutor');
-  check('换按钮:讲法多行、留到、小课堂都写回去,解析得回来;别的块与家长段一个字不动', JSON.stringify(zh?.props.buttons) === JSON.stringify([{ kind: 'start', label: '我要预习小蝌蚪找妈妈', brief: '第 22 课\n重点字 塘', until: '2026-10-10' }, { kind: 'lecture', label: '分一分', bundle: '2026-10-08-fenyifen' }]) && b1.includes('```tianzige\n塘脑袋\n```') && b1.includes('- 语文:看图说话') && b1.startsWith('---\nfor: 2026-10-10\n---'), b1);
-  const b2 = setTutorButtons(MD, 'english-tutor', [{ kind: 'start', label: '我想说说我的小汽车' }]);
-  check('没有老师卡的老师:加在最后一位老师后面、家长段前面', /```tutor math-tutor\n再练两道退位减法\n```\n\n```tutor english-tutor\n我想说说我的小汽车\n```\n\n## 为什么这么排/.test(b2), b2);
+  check('换按钮:讲法多行、留到、小课堂都写回去,解析得回来;别的块与家长段一个字不动', JSON.stringify(zh?.props.buttons) === JSON.stringify([{ kind: 'activity', label: '我要预习小蝌蚪找妈妈', activity: '预习', params: { 范围: '第 22 课' }, brief: '第 22 课\n重点字 塘', until: '2026-10-10' }, { kind: 'lecture', label: '分一分', bundle: '2026-10-08-fenyifen' }]) && b1.includes('```tianzige\n塘脑袋\n```') && b1.includes('- 语文:看图说话') && b1.startsWith('---\nfor: 2026-10-10\n---'), b1);
+  const b2 = setTutorButtons(MD, 'english-tutor', [{ kind: 'activity', label: '我想说说我的小汽车', activity: '口语课', params: {} }]);
+  check('没有老师卡的老师:加在最后一位老师后面、家长段前面', /```tutor math-tutor\nactivity 复习 再练两道退位减法\n```\n\n```tutor english-tutor\nactivity 口语课 我想说说我的小汽车\n```\n\n## 为什么这么排/.test(b2), b2);
   const w1 = setTutorDictation(MD, 'chinese-tutor', [{ chars: '春天' }, { chars: '叶', say: '树叶的叶' }]);
-  check('这周的词:紧跟在他的老师卡后面加一张写了他的听写卡', /```tutor chinese-tutor\n我要看图说话\n讲法: 孩子会拍一张图\n```\n\n```dictation chinese-tutor\n春天\n叶 树叶的叶\n```\n\n```tianzige/.test(w1), w1);
+  check('这周的词:紧跟在他的老师卡后面加一张写了他的听写卡', /```tutor chinese-tutor\nactivity 看图说话 我要看图说话\n讲法: 孩子会拍一张图\n```\n\n```dictation chinese-tutor\n春天\n叶 树叶的叶\n```\n\n```tianzige/.test(w1), w1);
   const w2 = setTutorDictation(w1, 'chinese-tutor', [{ chars: '花朵' }]);
   const w3 = setTutorDictation(w2, 'chinese-tutor', []);
   check('再设是换词,清空是删卡;删了和原来一样', w2.includes('```dictation chinese-tutor\n花朵\n```') && !w2.includes('春天') && w3 === MD, w3);
@@ -90,23 +90,23 @@ try {
   }
   check('没发布过:老师按 cotutor.json 的顺序,没有按钮;语文常驻听写(没写 extras 走缺省)', g0.home === null && g0.tutors.map((t) => t.name).join() === 'chinese-tutor,english-tutor,math-tutor' && g0.tutors.every((t) => !t.buttons.length) && g0.tutors[0].extras.join() === 'dictation' && g0.tutors[0].extrasSet === null && g0.today === '2026-10-10', JSON.stringify(g0.tutors.map((t) => [t.name, t.extras])));
 
-  // 加一个开场按钮(只今天)
-  const put = await call('PUT', '/api/parent/home/tutors/english-tutor/buttons', { buttons: [{ kind: 'start', label: '我想说说我的小汽车', brief: '多问他颜色', until: '2026-10-10' }] });
+  // 摆一个 activity 按钮(只今天;家长端只改编程助手排的按钮,接口照样能整排换)
+  const put = await call('PUT', '/api/parent/home/tutors/english-tutor/buttons', { buttons: [{ kind: 'activity', label: '我想说说我的小汽车', activity: '预习', params: {}, brief: '多问他颜色', until: '2026-10-10' }] });
   const g1 = await get();
   const en = g1.tutors.find((t) => t.name === 'english-tutor')!;
   check('加按钮:发布了(没发布过也行)、留了一份历史;读回来讲法与留到都在', put.status === 200 && g1.home !== null && history().length === 1 && en.buttons[0].brief === '多问他颜色' && en.buttons[0].until === '2026-10-10', JSON.stringify([put.json, en]));
   check('排在第一个:新写的老师卡就是第一张', g1.tutors[0].name === 'english-tutor', g1.tutors.map((t) => t.name).join());
   const k1 = await kid();
   const kb = k1.cards.find((c) => c.kind === 'tutor' && c.props.tutor === 'english-tutor')!.props.buttons!;
-  check('孩子端:今天看得到,讲法不下发', kb.map((b) => b.label).join() === '新话题,我想说说我的小汽车' && !JSON.stringify(k1).includes('多问他颜色'), JSON.stringify(kb));
+  check('孩子端:今天看得到,讲法不下发', kb.map((b) => b.label).join() === '我想说说我的小汽车' && !JSON.stringify(k1).includes('多问他颜色'), JSON.stringify(kb));
   now = new Date(2026, 9, 11, 9, 0);
   const kb2 = (await kid()).cards.find((c) => c.kind === 'tutor' && c.props.tutor === 'english-tutor')!.props.buttons!;
-  check('留到过了:第二天孩子端不出现', kb2.map((b) => b.label).join() === '新话题', JSON.stringify(kb2));
+  check('留到过了:第二天孩子端不出现', kb2.length === 0, JSON.stringify(kb2));
 
-  check('按钮不对 400:字超了、五个、没这位老师 404', (await call('PUT', '/api/parent/home/tutors/english-tutor/buttons', { buttons: [{ kind: 'start', label: '一二三四五六七八九十一二三四五六七' }] })).status === 400 && (await call('PUT', '/api/parent/home/tutors/english-tutor/buttons', { buttons: Array.from({ length: 5 }, () => ({ kind: 'start', label: 'a' })) })).status === 400 && (await call('PUT', '/api/parent/home/tutors/nobody-tutor/buttons', { buttons: [] })).status === 404);
-  const bad = await call('PUT', '/api/parent/home/tutors/english-tutor/buttons', { buttons: [{ kind: 'continue', label: '接着', date: '2026-09-01', thread: '0900-1' }] });
-  check('检查没过(接着的话题找不到):不发,说为什么', bad.status === 400 && String((bad.json as { message: string }).message).includes('没有话题') && history().length === 1, JSON.stringify(bad.json));
-  const same = await call('PUT', '/api/parent/home/tutors/english-tutor/buttons', { buttons: [{ kind: 'start', label: '我想说说我的小汽车', brief: '多问他颜色', until: '2026-10-10' }] });
+  check('按钮不对 400:字超了、五个、没这位老师 404', (await call('PUT', '/api/parent/home/tutors/english-tutor/buttons', { buttons: [{ kind: 'activity', label: '一二三四五六七八九十一二三四五六七', activity: '口语课', params: {} }] })).status === 400 && (await call('PUT', '/api/parent/home/tutors/english-tutor/buttons', { buttons: [{ kind: 'start', label: '开场按钮没有了' }] })).status === 400 && (await call('PUT', '/api/parent/home/tutors/english-tutor/buttons', { buttons: Array.from({ length: 5 }, () => ({ kind: 'start', label: 'a' })) })).status === 400 && (await call('PUT', '/api/parent/home/tutors/nobody-tutor/buttons', { buttons: [] })).status === 404);
+  const bad = await call('PUT', '/api/parent/home/tutors/english-tutor/buttons', { buttons: [{ kind: 'lecture', label: '没有的课', bundle: '2026-01-01-nope' }] });
+  check('检查没过(小课堂的课包不在):不发,说为什么', bad.status === 400 && String((bad.json as { message: string }).message).includes('2026-01-01-nope') && history().length === 1, JSON.stringify(bad.json));
+  const same = await call('PUT', '/api/parent/home/tutors/english-tutor/buttons', { buttons: [{ kind: 'activity', label: '我想说说我的小汽车', activity: '预习', params: {}, brief: '多问他颜色', until: '2026-10-10' }] });
   check('和原来一样:不发、不留历史', same.status === 200 && (same.json as { changed: boolean }).changed === false && history().length === 1);
 
   // 这周的词

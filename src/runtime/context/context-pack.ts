@@ -64,20 +64,6 @@ export function renderContextPack(pack: ContextPack): string {
       for (const x of l.marks) out.push(`      - ${yamlScalar(x)}`);
     }
   }
-  if (p.continue) {
-    const c = p.continue;
-    out.push('  continue:', `    from: ${yamlScalar(c.from)}`);
-    if (c.title) out.push(`    title: ${yamlScalar(c.title)}`);
-    if (c.said.length) {
-      out.push('    said:');
-      for (const l of c.said) out.push(`      - ${yamlScalar(l)}`);
-    }
-    if (c.cards.length) {
-      out.push('    cards:');
-      for (const l of c.cards) out.push(`      - ${yamlScalar(l)}`);
-    }
-    out.push(`    index: ${yamlScalar(c.index)}`);
-  }
   if (p.live) {
     const l = p.live;
     if (!l.caught && l.cut === undefined && !l.warmup?.length && l.phone === undefined && !l.app) out.push('  live: true');

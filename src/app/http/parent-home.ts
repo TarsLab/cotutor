@@ -4,7 +4,7 @@
  * 页面每次现读,不缓存:家长也可能同时在编辑器里改 cotutor.json、在编程助手里发布首页。
  *
  *   GET   /api/parent/home                          老师们(按首页的先后)、各自的按钮(带讲法)、听写的词、常驻入口;口语课与孩子端的几项设置
- *   PUT   /api/parent/home/tutors/<老师>/buttons     {buttons: [{kind, label, brief?, until?, date?, thread?, bundle?}]} 换掉这位老师的按钮
+ *   PUT   /api/parent/home/tutors/<老师>/buttons     {buttons: [{kind, label, brief?, until?, activity?, params?, bundle?}]} 换掉这位老师的按钮(只有 activity、小课堂两种)
  *   PUT   /api/parent/home/tutors/<老师>/dictation   {words: [{chars, say?}]} 这周的词;[] = 删掉
  *   PUT   /api/parent/home/order                    {tutors: [老师…]} 老师的先后(排第一的进首页时在最前)
  *   PATCH /api/parent/settings                      {tutors?: {<老师>: {extras?: [..] | null, hidden?}}, talk?: {note?, minutes?}}

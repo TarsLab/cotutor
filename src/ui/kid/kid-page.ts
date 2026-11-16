@@ -195,7 +195,6 @@ ${faviconLinks()}
   body.offline #ct-mark, body.gated #ct-mark { filter:grayscale(1); opacity:.4; }
   body.offline #ct-mark .ct-go, body.offline #ct-mark .ct-gi, body.gated #ct-mark .ct-go, body.gated #ct-mark .ct-gi { transform:rotate(90deg); }
   body.offline .c-tutor .nm, body.offline .c-tutor .bt, body.gated .c-tutor .nm, body.gated .c-tutor .bt { color:var(--dim); }
-  body.offline .c-tutor .bt-new, body.gated .c-tutor .bt-new { background:var(--grey); }
   /* ---- 老师页 = 板书页 ---- */
   #tutor { position:fixed; inset:0; background:var(--paper); display:none; z-index:10; }
   #tutor.on { display:flex; }
@@ -795,20 +794,17 @@ ${BOARD_MARK_JS}
   const silence = () => { voiceToken++; try { audioEl.pause(); } catch {} };
 
   // ---- 首页:老师卡在上,其余卡照发布的顺序;按钮决定进老师页之后的话题 ----
-  const BUTTON_ICON = { new: 'spark', start: 'start', continue: 'again', lecture: 'play' };
+  const BUTTON_ICON = { start: 'start', lecture: 'play' };
   const pickButton = (t, b) => {
     const via = { home: S.home.home, button: b.id };
-    // 每个按钮进去都是新话题;今天聊过的在首页「今天」那一行接(2026-11-15)
-    if (b.kind === 'new') openTutor(t, { kind: 'new', via });
+    // 每个按钮进去都是新话题;今天聊过的在首页「今天」那一行接(2026-11-15)。按钮只有 activity(含方砖,start)和小课堂(2026-11-16)
     // 以板为主、垫课本的 activity(语文预习):不拍照,直接开话题、铺课本的目录
-    else if (b.kind === 'start' && b.board === 'page' && b.base === 'textbook') openTutor(t, { kind: 'new', via, board: true, book: true, label: b.label, send: b.label });
+    if (b.kind === 'start' && b.board === 'page' && b.base === 'textbook') openTutor(t, { kind: 'new', via, board: true, book: true, label: b.label, send: b.label });
     // 以板为主的 activity:先到拍照屏,带着照片(或白板)开话题
     else if (b.kind === 'start' && b.board === 'page') openTutor(t, { kind: 'new', via, board: true, label: b.label });
     else if (b.kind === 'start') openTutor(t, { kind: 'new', via, send: b.label });
     // 小课堂:新话题,先铺满放课;看完才能开口,开口那条带上 via 与看的情况
     else if (b.kind === 'lecture') openTutor(t, { kind: 'new', via, lecture: { bundle: b.bundle, title: b.title || b.label, ...(b.video ? { video: true } : {}) } });
-    else if (b.date === S.home.date) openTutor(t, { kind: 'thread', thread: b.thread, via, send: b.label });
-    else openTutor(t, { kind: 'new', via, send: b.label, cont: b.date });
   };
   /** 小课堂的课长:「1 分 40 秒」 */
   const lcLen = (ms) => { const s = Math.floor(ms / 1000); return s >= 60 ? Math.floor(s / 60) + ' 分' + (s % 60 ? ' ' + (s % 60) + ' 秒' : '') : s + ' 秒'; };
@@ -856,17 +852,14 @@ ${BOARD_MARK_JS}
     if (extras.includes('talk')) { const info = talkInfo(); if (info) out.push(talkBtn(t, info)); }
     return out;
   };
-  // 牌上的按钮(原型 B,https://claude.ai/artifact/HhpuLJXvNr94E9PqSNv6tj):新话题是头像下面一个学科色大气泡(不带尖角);小课堂是带预览图的海报;其余是大胶囊。
-  // 孩子看到的字都在 .btx 里(探针按它读)。新话题打头印名字的首字(.fc):平板横着叠时后面的牌只露左边一格,露出来的那截气泡就是这个字;手机也印,两处一样
+  // 牌上的按钮(原型 B,https://claude.ai/artifact/HhpuLJXvNr94E9PqSNv6tj):小课堂是带预览图的海报;activity 是大胶囊。孩子看到的字都在 .btx 里(探针按它读)
   const tutorButton = (t, b) => {
     const on = { click: () => pickButton(t, b) };
-    const fc = tutorInitial(t);
-    if (b.kind === 'new') return h('button', { type: 'button', class: 'bt bt-new', 'data-bid': String(b.id), style: '--sc:' + colorOf(t), on }, fc ? h('span', { class: 'fc', 'aria-hidden': 'true' }, fc) : null, h('span', { class: 'lb' }, h('span', { class: 'btx' }, b.label), h('small', { class: 'ln' }, '想问我什么?')), h('span', { class: 'bi', html: ICON.spark }));
     if (b.kind === 'lecture') return h('button', { type: 'button', class: 'bt bt-lecture', 'data-bid': String(b.id), on }, lecturePic(b),
       h('span', { class: 'lm' }, h('small', { class: 'tg' }, '小课堂'), h('span', { class: 'btx' }, b.label), b.ms ? h('small', { class: 'ln' }, lcLen(b.ms)) : null));
     return h('button', { type: 'button', class: 'bt bt-' + b.kind, 'data-bid': String(b.id), on }, h('span', { class: 'bi', html: ICON[BUTTON_ICON[b.kind]] || ICON.start }), h('span', { class: 'btx' }, b.label));
   };
-  // ---- 常驻的三块方砖(预习、检查作业、复习;服务端照老师家里的 activity 文件给,src/ui/kid/home-tiles.ts):新话题下面一行;点了和 activity 按钮一样 ----
+  // ---- 常驻的三块方砖(预习、检查作业、复习;服务端照老师家里的 activity 文件给,src/ui/kid/home-tiles.ts):牌上第一行;点了和 activity 按钮一样 ----
 ${HOME_TILES_JS}
   const tileButton = (t, x) => h('button', { type: 'button', class: 'bt bt-tile', 'data-tile': x.id, style: '--sc:' + colorOf(t), on: { click: () => pickButton(t, { id: x.id, kind: 'start', label: x.label, board: x.board, base: x.base }) } },
     h('span', { class: 'ta', html: tileArt(t.mark, x.id) }), h('span', { class: 'btx' }, x.label));
@@ -951,18 +944,17 @@ ${HOME_TILES_JS}
     box.style.marginLeft = box.style.marginRight = axis === 'H' ? 'auto' : '';
     K.order.forEach((name, slot) => deckPlace(K.els.get(name), slot, n));
   };
-  // ---- 家长端「首页」里的预览:S.pv = {tutor, sel, edit: {k, kind, label, until} | null, add: 字 | null},家长页塞进来的,只在预览里 ----
+  // ---- 家长端「首页」里的预览:S.pv = {tutor, sel, edit: {k, kind, label, until} | null},家长页塞进来的,只在预览里 ----
   const pvHost = () => { try { return window.parent !== window && typeof window.parent.cotutorPreview === 'function' ? window.parent : null; } catch { return null; } };
   const pvTell = (ev) => { const host = pvHost(); if (host) host.cotutorPreview(ev); };
-  /** 牌上的按钮换上家长正改着的那颗(字、留到),新加的那颗(id draft)排在最后;没在改就是孩子此刻拿到的 */
+  /** 牌上的按钮换上家长正改着的那颗(字、留到);没在改就是孩子此刻拿到的 */
   const pvButtons = (n, list) => {
     const P = PREVIEW && S.pv && S.pv.tutor === n ? S.pv : null;
-    if (!P || (!P.edit && !P.add)) return list;
+    if (!P || !P.edit) return list;
     const today = S.home && S.home.date;
     const E = P.edit, gone = E && E.until && today && E.until < today;
     let out = list.map((b) => (E && b.id === E.k ? { ...b, label: E.label } : b)).filter((b) => !(gone && E && b.id === E.k));
-    if (E && !gone && !out.some((b) => b.id === E.k)) out.push({ kind: E.kind === 'continue' ? 'continue' : 'start', label: E.label, id: E.k });
-    if (P.add) out.push({ kind: 'start', label: P.add, id: 'draft' });
+    if (E && !gone && !out.some((b) => b.id === E.k)) out.push({ kind: 'start', label: E.label, id: E.k });
     return out;
   };
   if (PREVIEW) {
@@ -984,7 +976,7 @@ ${HOME_TILES_JS}
       if (!bt) return;
       const bid = bt.dataset.bid;
       if (bt.dataset.tile) pvTell({ act: 'tile', tutor: pc.dataset.tutor, id: bt.dataset.tile });
-      else if (bid !== undefined) pvTell({ act: 'button', tutor: pc.dataset.tutor, id: bid === 'new' || bid === 'draft' ? bid : Number(bid) });
+      else if (bid !== undefined) pvTell({ act: 'button', tutor: pc.dataset.tutor, id: Number(bid) });
       else pvTell({ act: 'extra', tutor: pc.dataset.tutor, kind: bt.classList.contains('bt-x-talk') ? 'talk' : 'dictation' });
     }, true);
   }
@@ -1011,8 +1003,8 @@ ${HOME_TILES_JS}
         const extras = extrasFor(t, H);
         el.replaceChildren(...[
           h('div', { class: 'pc-hd' }, deal ? avatarEl(t, 'draw', 0.1 + slot * 0.12) : avatarEl(t), h('span', { class: 'nm' }, t.display)),
-          // 新话题(第一颗)、方砖一行、家长排的按钮
-          h('div', { class: 'kc' }, h('div', { class: 'bts' }, ...((runs) => [runs[0], tilesRow(t, tiles), ...runs.slice(1)])(buttonRuns(t, buttons))), extras.length ? h('div', { class: 'bts extras' }, ...extras) : null),
+          // 方砖一行、家长排的按钮
+          h('div', { class: 'kc' }, h('div', { class: 'bts' }, tilesRow(t, tiles), ...buttonRuns(t, buttons)), extras.length ? h('div', { class: 'bts extras' }, ...extras) : null),
           h('span', { class: 'pc-ix' }, avatarEl(t)),
           h('span', { class: 'veil' }),
         ].filter(Boolean));
@@ -1152,15 +1144,15 @@ ${HOME_TILES_JS}
 
   // ---- 老师页 ----
   /**
-   * intent(首页的按钮定的):new = 空白新话题;thread = 今天的那个话题;today = 今天的当前话题(调试入口 ?tutor=)。
-   * via = 哪个按钮(下一条消息带上);send = 打开就发出去的字(开场 / 接着按钮);cont = 接着的是哪天(头部写「接着 9 月 16 日」)
+   * intent(首页的按钮定的):new = 按钮开的新话题(activity、方砖、小课堂、口语课);thread = 今天的那个话题(首页「今天」);today = 今天的当前话题(调试入口 ?tutor=)。
+   * via = 哪个按钮(下一条消息带上);send = 打开就发出去的字(activity 按钮上的字)
    */
   const openTutor = (t, intent) => {
     unlock();
-    intent = intent || { kind: 'new' };
+    intent = intent || { kind: 'today' };
     S.tutor = t; S.sections = []; S.played = new Set(); dispatch({ type: 'reset' }); S.pending = false; S.stage = null; S.partial = null; $('#stage').classList.remove('on', 'cv');
     S.thread = intent.kind === 'thread' ? intent.thread : null; S.threadAt = null; S.hist = null; S.readonly = false; S.newThread = intent.kind === 'new';
-    S.via = intent.via || null; S.cont = intent.cont || null; S.lecture = intent.lecture ? { ...intent.lecture, watch: null, sent: false, marks: [], flying: [], log: [] } : null;
+    S.via = intent.via || null; S.lecture = intent.lecture ? { ...intent.lecture, watch: null, sent: false, marks: [], flying: [], log: [] } : null;
     // 口语课页拍好了口语单:先等孩子点「先热身,再打电话」(那一下起声音),发出去的第一条带 talk
     S.talk = intent.talk || null; S.talkWait = Boolean(intent.talk);
     BP.on = Boolean(intent.board); BP.book = Boolean(intent.book); BP.base = undefined; BP.label = intent.label || '';
@@ -1173,17 +1165,12 @@ ${HOME_TILES_JS}
     if (S.talkWait) $('#board').append(talkBoard());
     else if (BP.on && BP.book) bpOpenBook();
     else if (BP.on) $('#board').append(bpStartBoard());
-    else if (S.newThread && !intent.send && !S.lecture) $('#board').append(blankBoard('想问什么?'));
     $('#tutor').classList.add('on');
     setBar('idle');
     loadDay(true).then(() => { if (intent.send) send(intent.send); });
     if (S.lecture) openLecture();
     viewKey = ''; viewNote();
   };
-  /** 空板:没有顶栏了,老师是谁写在这里(头像、名字、口头禅),下面才是「想问什么」。
-   *  两种空板(这个、talkBoard)都把老师要说的挂在 _open 上:实时时板上这块收着,左栏照它画(openSync) */
-  const blankBoard = (title) => withOpen(h('div', { class: 'blank' }, S.tutor ? avatarEl(S.tutor, 'draw') : null, S.tutor ? h('span', { class: 'nm' }, S.tutor.display) : null, h('b', {}, title), S.tutor && S.tutor.firstQuestion ? h('small', {}, '比如:' + S.tutor.firstQuestion) : null),
-    { kind: 'new', big: title, small: S.tutor && S.tutor.firstQuestion ? '比如:' + S.tutor.firstQuestion : '', acts: [] });
   /** 空板挂上老师要说的(开场那句 big、下面一行 small、选择 acts:{cls, icon, k 上面的小字, s 大字, sub 下面的小字, tm 时刻, id, go}) */
   const withOpen = (el, o) => { el._open = o; return el; };
   const tutorColor = () => colorOf(S.tutor);
@@ -1370,7 +1357,7 @@ ${HOME_TILES_JS}
     $('#lv-acts').replaceChildren(...(o ? o.acts.map(lvGo) : []));
   }
   new MutationObserver(openSync).observe($('#board'), { childList: true });
-  const closeTutor = () => { clearTimeout(PV.timer); liveDispatch({ type: 'reset' }); liveClose(); hideLecture(); S.lecture = null; reelStop(); clearTimeout(S.pollTimer); dispatch({ type: 'halt' }); psClose(); $('#lb').classList.remove('on'); S.tutor = null; S.via = null; S.cont = null; S.ask = null; BP.on = false; BP.book = false; BP.base = undefined; $('#tutor').classList.remove('on'); document.body.classList.remove('pending', 'speaking'); S.homeDraw = true; loadHome(); };
+  const closeTutor = () => { clearTimeout(PV.timer); liveDispatch({ type: 'reset' }); liveClose(); hideLecture(); S.lecture = null; reelStop(); clearTimeout(S.pollTimer); dispatch({ type: 'halt' }); psClose(); $('#lb').classList.remove('on'); S.tutor = null; S.via = null;  S.ask = null; BP.on = false; BP.book = false; BP.base = undefined; $('#tutor').classList.remove('on'); document.body.classList.remove('pending', 'speaking'); S.homeDraw = true; loadHome(); };
   $('#back').addEventListener('click', closeTutor);
   $('#back-ic').innerHTML = ICON.back;
 
@@ -2433,7 +2420,6 @@ __WORD_DRAW_JS__
       if (fresh.length) dispatch({ type: 'fresh', sections: fresh });
       else renderSubtitle();
       if (S.lecture) renderLecturePending();
-      if (!S.sections.length && !S.partial && !stillPending && !S.readonly && !S.lecture && !$('#board .blank')) $('#board').append(blankBoard('想问什么?'));
       bpSync(mine);
       renderHeader();
       clearTimeout(S.pollTimer);
@@ -2457,7 +2443,6 @@ __WORD_DRAW_JS__
     const today = S.day ? S.day.date : null;
     let mo = '';
     if (S.hist && today) mo = '以前的 · ' + dateLabel(S.hist, S.hist === today ? '' : today) + ' ' + clock(S.threadAt);
-    else if (S.cont && today) { const d = dateLabel(S.cont, today); mo = '接着' + (d === '昨天' ? d : ' ' + d + ' ') + '的话题'; }
     // 新话题不挂小标签(空板本身就说明了);小课堂照旧
     else if (S.newThread && S.lecture) mo = '小课堂';
     else if (S.thread && S.day && S.thread !== S.day.thread) mo = '今天的话题 · ' + clock(S.threadAt);
@@ -2474,7 +2459,7 @@ __WORD_DRAW_JS__
   /** 换到某天的某个话题:今天的能接着聊;以前的只读回放(从第一句播) */
   const switchThread = (date, thread) => {
     resetBoard();
-    S.hist = date; S.readonly = Boolean(date); S.thread = thread; S.newThread = false; S.threadAt = null; S.via = null; S.cont = null; S.lecture = null;
+    S.hist = date; S.readonly = Boolean(date); S.thread = thread; S.newThread = false; S.threadAt = null; S.via = null;  S.lecture = null;
     if (S.readonly) liveClose(); else if (!LV.on && liveWanted(S.tutor)) liveOpen();
     renderBar(); renderSubtitle(); renderHeader();
     loadDay(!S.readonly);
@@ -3335,7 +3320,8 @@ __REEL_DOCK_JS__
   /** 孩子这一句的上下文(话题、设备、首页按钮、舞台上的卡):按住说松手时带上,一直听开口时报一次 */
   const liveBody = () => {
     const body = { device: S.device };
-    if (S.newThread) body.newThread = true; else if (S.thread) body.thread = S.thread;
+    // 新话题只由按钮开(via / 口语课的 talk,服务端定);别的接着这个话题
+    if (!S.newThread && S.thread) body.thread = S.thread;
     if (S.via) body.via = S.via;
     if (S.stage && !S.stage.own) body.focus = { card: S.stage.id };
     return body;
@@ -3502,7 +3488,8 @@ __REEL_DOCK_JS__
     if (opts.photos && opts.photos.length) { body.photos = opts.photos; VB.photo = true; }
     const focus = opts.focus || (S.stage && !S.stage.own ? { card: S.stage.id } : null);
     if (focus) body.focus = focus;
-    if (S.newThread) body.newThread = true; else if (S.thread) body.thread = S.thread;
+    // 新话题只由按钮开(via / 口语课的 talk,服务端定);别的接着这个话题
+    if (!S.newThread && S.thread) body.thread = S.thread;
     if (S.via) body.via = S.via;
     if (S.talk) { body.talk = { id: S.talk }; S.talk = null; }
     const go = (lb) => {
@@ -3800,7 +3787,7 @@ __REEL_DOCK_JS__
       if (t && talk) openTutor(t, { kind: 'new', talk });
       else if (t) {
         // 调试:&new=1 新话题空白态;&hist=<日期>.<话题> 只读回放以前的
-        openTutor(t, debug.get('new') ? { kind: 'new' } : { kind: 'today' });
+        openTutor(t, { kind: 'today' });
         setTimeout(() => {
           const hv = debug.get('hist');
           if (hv) { const [d, th] = hv.split('.'); switchThread(d, th); }

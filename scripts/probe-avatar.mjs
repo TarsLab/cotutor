@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * 老师头像 C 形开口环的手动验收(不进 pnpm test,要本机 Chrome;走 mock,不花钱):
- * 首页老师卡头像是环 + 白底圆、开口朝右、打开时一笔画出来(5 秒一轮的刷新不再画)→ 进数学老师、新话题:空白板的头像画出来 →
+ * 首页老师卡头像是环 + 白底圆、开口朝右、打开时一笔画出来(5 秒一轮的刷新不再画)→ 进数学老师(新话题没有了,用调试入口 ?tutor=):左上的返回胶囊 →
  * 从输入条问一句:等的时候左栏按钮里那张脸「想」(转圈;老师页一律是实时老师页的样子,板中间的大头像与底部字幕行 10-28 起没了);休息(开口朝下、变灰)用类直接看样式。实时老师页的「说」「听」在按钮里,见 /dev/voice 与 probe-live-page。
  * 左上返回胶囊是「‹ logo」不是头像,一页只有一张会动的脸。
  * iPad 横屏,每步截图。
@@ -70,15 +70,12 @@ try {
   const off = await evaluate(`(async () => { const c = document.querySelector('#deck .pc.front'); c.classList.add('off'); await new Promise((r) => setTimeout(r, 700)); const t = getComputedStyle(c.querySelector('.av .ring circle')); const r = { transform: t.transform, filter: getComputedStyle(c.querySelector('.av')).filter }; c.classList.remove('off'); return r; })()`);
   ok('休息:开口朝下、变灰', /matrix\(-0\.58/.test(off.transform) && /grayscale/.test(off.filter), JSON.stringify(off));
 
-  // 进数学老师、新话题:空白板
-  await evaluate(`document.querySelector('#deck .pc[data-tutor="math-tutor"] .pc-hd .av').click()`);
-  await until(`document.querySelector('#deck .pc.front')?.dataset.tutor === 'math-tutor'`);
+  // 进数学老师(调试入口 ?tutor=,今天还没有话题,板是空的)
+  await send('Page.navigate', { url: `${base}/?tutor=math-tutor` });
+  await until(`document.querySelector('#tutor.on')`);
   await sleep(600);
-  await evaluate(`document.querySelector('#deck .pc.front .bt-new').click()`);
-  await until(`document.querySelector('#tutor.on .blank .av')`);
-  const blank = await evaluate(`(${AV})(document.querySelector('.blank .av'))`);
   const back = await evaluate(`(() => { const b = document.querySelector('#back'); return { logo: !!b.querySelector('svg.ct-logo'), av: b.querySelectorAll('.av').length, ini: b.querySelector('.bk-ini')?.textContent ?? '', bg: getComputedStyle(b).backgroundColor, sub: Boolean(document.querySelector('#sub-av')) }; })()`);
-  ok('空白板的头像画出来;左上返回胶囊是「‹ logo 数」、填数学老师的蓝、没有头像(首字不动);没有底部字幕行那颗(一页一张脸,在左栏按钮里)', blank && blank.draw && blank.anim === 'av-draw' && back.logo && back.av === 0 && back.ini === '数' && back.bg === 'rgb(47, 111, 214)' && !back.sub, JSON.stringify({ blank, back }));
+  ok('左上返回胶囊是「‹ logo 数」、填数学老师的蓝、没有头像(首字不动);没有底部字幕行那颗(一页一张脸,在左栏按钮里)', back.logo && back.av === 0 && back.ini === '数' && back.bg === 'rgb(47, 111, 214)' && !back.sub, JSON.stringify({ back }));
   await sleep(1300); await shot('avatar-blank.png');
 
   // 从输入条问一句(页面外 POST 的回答不播放)

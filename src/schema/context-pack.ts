@@ -67,16 +67,6 @@ export const ContextPackSchema = z.object({
     .optional(),
   /** 孩子从首页的按钮进来:按钮上的字与家长备好的讲法;只在带按钮的那条 */
   home: z.object({ button: z.string().min(1), brief: z.string().optional() }).optional(),
-  /** 接着以前的话题:那个话题是哪天哪个、叫什么、最后一节的讲稿与卡、索引在哪;只在新话题的第一条 */
-  continue: z
-    .object({
-      from: z.string().min(1),
-      title: z.string().optional(),
-      said: z.array(z.string()).default([]),
-      cards: z.array(z.string()).default([]),
-      index: z.string().min(1),
-    })
-    .optional(),
   /**
    * 这一轮走实时:嘴(realtime 模型)已经替老师接住了孩子,讲稿交给嘴照念、不配音。caught = 嘴接住时说的那句;cut = 上一轮的讲稿念到第几句被孩子打断(1 起;0 = 一句都没念到就被打断了;没打断不写)。
    * 口语课:warmup = 热身的摸底,一拍一行(应用按转写记);phone = 打电话打了几分钟(0 起,还没打不写);

@@ -36,13 +36,13 @@ try {
   };
 
   // ---- 护栏:孩子端只出用得了的 activity 按钮 ----
-  check('好好的:两个按钮都出', (await labels()) === '新话题,练词,我来出题', await labels());
+  check('好好的:两个按钮都出', (await labels()) === '练词,我来出题', await labels());
   writeFileSync(file, shipped.replace('最多问: 数,可空', '最多问: 整数,可空'));
-  check('写坏了(检查有要改):两个都不出', (await labels()) === '新话题', await labels());
+  check('写坏了(检查有要改):两个都不出', (await labels()) === '', await labels());
   writeFileSync(file, shipped.replace('词: 词表,可空', '词: 数,可空'));
-  check('参数解析不出(「词」改成了数):只有带词的那个不出', (await labels()) === '新话题,练词', await labels());
+  check('参数解析不出(「词」改成了数):只有带词的那个不出', (await labels()) === '练词', await labels());
   writeFileSync(file, shipped);
-  check('改回来:又都出', (await labels()) === '新话题,练词,我来出题');
+  check('改回来:又都出', (await labels()) === '练词,我来出题');
 
   // ---- 纯函数:按行比、节 ----
   check('diffHunks:改一行、加一行、删一行,行号按现在这份', JSON.stringify(diffHunks('a\nb\nc\nd', 'a\nB\nc\nx\nd')) === JSON.stringify([{ at: 2, oldAt: 2, old: ['b'], now: ['B'] }, { at: 4, oldAt: 4, old: [], now: ['x'] }]) && JSON.stringify(diffHunks('a\nb', 'a')) === JSON.stringify([{ at: 2, oldAt: 2, old: ['b'], now: [] }]) && diffHunks('a', 'a').length === 0, JSON.stringify(diffHunks('a\nb\nc\nd', 'a\nB\nc\nx\nd')));

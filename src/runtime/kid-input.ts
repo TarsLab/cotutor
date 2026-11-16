@@ -49,10 +49,11 @@ export async function kidInput(ws: Workspace, tutor: string, body: unknown, date
   const button = via ? await resolveVia(ws, tutor, via.data!) : null;
   if (via && !button) return reject(400, 'bad_via');
   let text = body.text;
+  // 孩子端只从首页的按钮(activity、方砖、小课堂)和口语课开新话题(2026-11-16 起没有自由话题),不再发 newThread。
+  // 过渡:服务端还认 body.newThread(测试、旧页面靠它开不走 activity 的话题),阶段 1 任务 4 和 runner 里不走 activity 的那条路一起删
   let newThread = body.newThread === true;
   let pick = thread;
   let home: { button: string; brief?: string } | undefined;
-  let continues: { date: string; thread: string } | undefined;
   let activity: { name: string; params: Record<string, ActivityValue> } | undefined;
   // 小课堂:看完才能开口——这一条要带 lecture(哪份课包、看完了、看了多久、停过几次、画过的几处),字是孩子说的;新开话题。
   // 问过以后「再看一遍」:同一话题的下一条带 lecture(新画的、又看的过程;话题得是从这份课包开始的)
@@ -77,19 +78,7 @@ export async function kidInput(ws: Workspace, tutor: string, body: unknown, date
     newThread = true;
     pick = undefined;
   }
-  if (button && (button.kind === 'start' || button.kind === 'continue')) {
-    text = button.label;
-    home = { button: button.label, ...(button.brief ? { brief: button.brief } : {}) };
-    if (button.kind === 'continue' && button.date === date) {
-      newThread = false;
-      pick = button.thread;
-    } else {
-      newThread = true;
-      pick = undefined;
-      if (button.kind === 'continue') continues = { date: button.date, thread: button.thread };
-    }
-  }
-  // activity 按钮:和开场按钮一样新开话题、发按钮上的字;参数是 resolveVia 按 activity 文件解析好的,记在这条消息上
+  // activity 按钮(含方砖):新开话题、发按钮上的字;参数是 resolveVia 按 activity 文件解析好的,记在这条消息上
   if (button?.kind === 'activity') {
     text = button.label;
     home = { button: button.label, ...(button.brief ? { brief: button.brief } : {}) };
@@ -108,7 +97,7 @@ export async function kidInput(ws: Workspace, tutor: string, body: unknown, date
     talk = t.id;
   }
   if (!text.trim() && !action && !photos?.length) return reject(400, 'bad_request');
-  return { input: { ...(talk ? { talk } : {}), from: 'kid', text, focus: focus?.data, action, newThread, thread: pick, device: device?.data, ...(validDevice(deviceId) ? { deviceId: deviceId! } : {}), photos, ...(via && button ? { via: messageVia(via.data!, button) } : {}), ...(home ? { home } : {}), ...(continues ? { continues } : {}), ...(activity ? { activity } : {}), ...(lecture ? { lecture } : {}) } };
+  return { input: { ...(talk ? { talk } : {}), from: 'kid', text, focus: focus?.data, action, newThread, thread: pick, device: device?.data, ...(validDevice(deviceId) ? { deviceId: deviceId! } : {}), photos, ...(via && button ? { via: messageVia(via.data!, button) } : {}), ...(home ? { home } : {}), ...(activity ? { activity } : {}), ...(lecture ? { lecture } : {}) } };
 }
 
 /** 消息里的 photos[]:都得是 captures/ 里在的文件(相对 workspace 根);不合法 → null */

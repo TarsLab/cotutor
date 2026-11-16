@@ -228,7 +228,7 @@ try {
   await until(`!document.body.classList.contains('pending')`, 10000);
   await pressText('#lv-acts .lv-go, .bp-start .ask-go', '不拍,用白板');
   ok('不拍:板是白板(没有照片)', Boolean(await until(`document.querySelector('#stage').classList.contains('bp') && document.querySelector('#st-frame')?.contentDocument?.querySelector('.kt-board')?.dataset.phase === 'ready'`, 10000)) && !(await photoHref()));
-  ok('发的是方砖上的字,新话题', (() => { const m = sent.filter((x) => x.t === 'send').slice(-1)[0]; return m?.body?.via?.button === 'preview' && m.body.newThread === true && !m.body.photos; })(), JSON.stringify(sent.filter((x) => x.t === 'send').slice(-1)[0]?.body));
+  ok('发的是方砖上的字,新话题', (() => { const m = sent.filter((x) => x.t === 'send').slice(-1)[0]; return m?.body?.via?.button === 'preview' && !m.body.thread && !m.body.photos; })(), JSON.stringify(sent.filter((x) => x.t === 'send').slice(-1)[0]?.body));
   await until(`!document.body.classList.contains('pending')`, 20000);
   ok('老师说完,白板还在', await stageOn());
   await shot('board-7-white.png');

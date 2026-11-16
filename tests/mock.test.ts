@@ -13,7 +13,7 @@ interface Day { messages: Msg[]; pending: string | null }
   const home = (await get('/api/kid/home')).json as { title: string; home: string; tutors: { name: string }[]; cards: HomeCard[] };
   const tc = home.cards.filter((c) => c.kind === 'tutor');
   check('首页:三位老师;老师卡置顶(语文、数学照原文,英语补一张),再是听写卡;听写卡没有字(中文一张、英文单词一张)', home.title === '小明的老师们' && home.tutors.length === 3 && home.tutors.every((t) => !('available' in t) && !('remaining' in t)) && home.home === '2026-09-09-2130' && tc.map((c) => c.props.tutor).join() === 'chinese-tutor,math-tutor,english-tutor' && home.cards.slice(3).map((c) => c.kind).join() === 'dictation,dictation' && !JSON.stringify(home.cards[3]).includes('鼓励') && (home.cards[4].props as { lang?: string }).lang === 'en' && !JSON.stringify(home.cards[4]).includes('yellow'), JSON.stringify(home.cards.map((c) => c.kind)));
-  check('老师卡的按钮:新话题第一(不挂今天聊过的:那些在首页「今天」)、然后是原文的开场与接着;没写的只有新话题;讲法不下发', tc[0].props.buttons?.map((b) => b.id).join() === 'new,0,1' && !('resume' in (tc[0].props.buttons?.[0] ?? {})) && tc[0].props.buttons?.[2].kind === 'continue' && tc[0].props.buttons?.[2].date === '2026-09-09' && tc[2].props.buttons?.map((b) => b.id).join() === 'new' && !JSON.stringify(home).includes('第 22 课') && !JSON.stringify(home).includes('brief'), JSON.stringify(tc[0].props.buttons));
+  check('老师卡的按钮:原文的 activity 与小课堂(没有新话题;今天聊过的在首页「今天」);没写的没有按钮;讲法不下发', tc[0].props.buttons?.map((b) => `${b.id}:${b.kind}`).join() === '0:start' && tc[1].props.buttons?.map((b) => b.kind).join() === 'lecture,lecture' && tc[2].props.buttons?.length === 0 && !JSON.stringify(home).includes('第 22 课') && !JSON.stringify(home).includes('brief'), JSON.stringify(tc[0].props.buttons));
   const d0 = (await get('/api/kid/conversations/chinese-tutor/today')).json as Day;
   check('语文老师已讲过一节:卡 + 讲稿 + 标注 + 末句问句(脚本过真解析器)', d0.messages.length === 1 && d0.messages[0].section !== null && d0.messages[0].section.cards.map((c) => c.kind).join() === 'text,text,read,choice' && d0.messages[0].section.lines.length === 5 && d0.messages[0].section.lines[1].marks[0]?.card === 1 && d0.messages[0].section.lines[4].ask === true, JSON.stringify(d0.messages[0].section?.lines[1]));
   check('讲稿里念的句子不带方括号', !d0.messages[0].section!.lines.some((l) => l.text.includes('[')));
@@ -157,7 +157,7 @@ interface Day { messages: Msg[]; pending: string | null }
   const yd = (await m.route('GET', '/api/kid/conversations/chinese-tutor/2026-09-09')).json as TDay;
   check('昨天的日期路由:一节板书、thread 在;未来日期 400;别的日期空', yd.messages.length === 1 && yd.messages[0].section !== null && yd.thread === yd.messages[0].thread && (await m.route('GET', '/api/kid/conversations/chinese-tutor/2026-09-11')).status === 400 && ((await m.route('GET', '/api/kid/conversations/chinese-tutor/2026-09-01')).json as TDay).messages.length === 0);
 }
-// 首页按钮发来的 via:对不上 400;开场 = 按钮上的字 + 新话题;接着昨天的 = 新话题;接着刚才的 / 新话题照孩子的话
+// 首页按钮发来的 via:对不上 400;activity 按钮 = 按钮上的字 + 新话题;以前的 new 不认
 {
   const m = createMock({ delayMs: 0, now: () => new Date('2026-09-10T16:30:00') });
   const home = ((await m.route('GET', '/api/kid/home')).json as { home: string }).home;
@@ -167,13 +167,9 @@ interface Day { messages: Msg[]; pending: string | null }
   check('via:不是发布的那份 / 按钮越界 → 400', (await send('chinese-tutor', { text: '', via: { home: '2020-01-01-0000', button: 0 } })).status === 400 && (await send('chinese-tutor', { text: '', via: { home, button: 9 } })).status === 400);
   const s0 = await send('chinese-tutor', { text: '', via: { home, button: 0 } });
   const l0 = await last('chinese-tutor');
-  check('开场按钮:发的是按钮上的字,新开一个话题', s0.status === 202 && l0.question === '我要预习小蝌蚪找妈妈' && l0.thread === l0.job, JSON.stringify(l0));
-  const s1 = await send('chinese-tutor', { text: '', thread: l0.thread, via: { home, button: 1 } });
-  const l1 = await last('chinese-tutor');
-  check('接着昨天的话题:按钮上的字、新话题(不接今天的)', s1.status === 202 && l1.question === '接着讲画蛇添足' && l1.thread === l1.job, JSON.stringify(l1));
-  const s2 = await send('math-tutor', { text: '再讲一遍', newThread: true, via: { home, button: 'new' } });
-  const l2 = await last('math-tutor');
-  check('新话题按钮:孩子自己的话,新话题', s2.status === 202 && l2.question === '再讲一遍' && l2.thread === l2.job);
+  check('activity 按钮:发的是按钮上的字,新开一个话题', s0.status === 202 && l0.question === '我要看图说话' && l0.thread === l0.job, JSON.stringify(l0));
+  const s2 = await send('math-tutor', { text: '再讲一遍', via: { home, button: 'new' } });
+  check('以前的新话题按钮(via new)不认', s2.status === 400);
 }
 
 // 家长板书页:mock 也起——页面能解析、板书接口答案在、第一节带给家长的尾巴、清单今天与昨天

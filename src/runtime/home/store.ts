@@ -1,22 +1,20 @@
 /**
  * 首页的读写:草稿 home/draft.md → 检查(引用读盘查)→ 发布 home/published.json + home/history/<id>.md;
- * 孩子端的首页现算(老师卡置顶、补缺、剥讲法、今天的「接着刚才的」);孩子点按钮发来的 via 在这里对上发布的那份,讲法只从这里取;
- * 接着以前话题时上下文包的 continue 段;家长看的点击统计。CLI(cotutor home)、家长端「首页」页、孩子端都走这里。
+ * 孩子端的首页现算(老师卡置顶、补缺、剥讲法);孩子点按钮发来的 via 在这里对上发布的那份,讲法只从这里取;家长看的点击统计。CLI(cotutor home)、家长端「首页」页、孩子端都走这里。
  */
 import { mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
-import { cardLabel, describeCard, stripSecrets, type TutorButton } from '../../board/cards/index.ts';
+import { cardLabel, stripSecrets, type TutorButton } from '../../board/cards/index.ts';
 import { UsageError } from '../../shared/errors.ts';
 import type { Workspace } from '../../schema/index.ts';
 import { localDate } from '../../shared/time.ts';
-import { conversationFiles, threads } from '../../schema/index.ts';
-import { kidQuestions } from '../../memory/diary.ts';
+import { threads } from '../../schema/index.ts';
 import { activityName, findActivityFile } from '../activities.ts';
 import { lintActivity, parseActivity, resolveParams } from '../activity.ts';
-import { arrangeHome, dropFixes, homeActivities, homeOwners, faceTutor, homeId, homeIssues, homeLectures, homeRefs, homeTutors, kidButtons, kidTiles, parseHome, threadKey, type HomeCheckContext, type HomeDoc, type HomeIssue, type HomeTutorInfo, type KidHomeButton } from './home.ts';
+import { arrangeHome, dropFixes, homeActivities, homeOwners, faceTutor, homeId, homeIssues, homeLectures, homeTutors, kidButtons, kidTiles, parseHome, type HomeCheckContext, type HomeDoc, type HomeIssue, type HomeTutorInfo, type KidHomeButton } from './home.ts';
 import type { BoardCard } from '../../board/presentation.ts';
-import { HOME_ID_RE, HOME_TILES, LECTURE_ACTIVITY, PublishedHomeSchema, tutorTiles, type Activity, type ActivityRun, type ActivityValue, type ContextPack, type ConversationIndex, type HomeTileId, type HomeVia, type MessageVia, type PublishedHome } from '../../schema/index.ts';
-import { listDates, readCardStates, readIndex } from '../journal/store.ts';
+import { HOME_ID_RE, HOME_TILES, LECTURE_ACTIVITY, PublishedHomeSchema, tutorTiles, type Activity, type ActivityRun, type ActivityValue, type HomeTileId, type HomeVia, type MessageVia, type PublishedHome } from '../../schema/index.ts';
+import { listDates, readIndex } from '../journal/store.ts';
 import { bakeSoon, inspectLecture, readLecture, type Lecture } from '../lecture.ts';
 
 export function homeFiles(ws: Pick<Workspace, 'dirs'>): { dir: string; draft: string; published: string; history: string } {
@@ -49,21 +47,6 @@ function tutorInfos(ws: Workspace): Record<string, HomeTutorInfo> {
   return Object.fromEntries(Object.entries(ws.config.tutors).map(([k, t]) => [k, { display: t.display, enabled: t.enabled, hidden: t.hidden, ...(t.subject ? { subject: t.subject } : {}) }]));
 }
 
-/** 这些引用里真在的话题 */
-async function liveThreads(ws: Workspace, refs: readonly { tutor: string; date: string; thread: string }[]): Promise<Set<string>> {
-  const alive = new Set<string>();
-  const cache = new Map<string, ConversationIndex | null>();
-  for (const r of refs) {
-    if (!ws.config.tutors[r.tutor]) continue;
-    const key = `${r.tutor} ${r.date}`;
-    if (!cache.has(key)) cache.set(key, await readIndex(ws, r.tutor, r.date).catch(() => null));
-    const index = cache.get(key);
-    if (!index || !threads(index.messages).includes(r.thread)) continue;
-    alive.add(threadKey(r.tutor, r.date, r.thread));
-  }
-  return alive;
-}
-
 async function checkContext(ws: Workspace, doc: Pick<HomeDoc, 'cards'>, now: Date): Promise<HomeCheckContext> {
   const lectures = new Map<string, string | null>();
   const lectureProblems = new Map<string, string[]>();
@@ -79,7 +62,7 @@ async function checkContext(ws: Workspace, doc: Pick<HomeDoc, 'cards'>, now: Dat
     const { activity, issues } = lintActivity(text, { fileName: activityName(ws.root, r.tutor, r.name), tutorCards: ws.config.tutors[r.tutor]?.cards });
     activities.set(`${r.tutor}/${r.name}`, { activity, fixes: issues.filter((i) => i.level === 'fix').length });
   }
-  return { tutors: tutorInfos(ws), threads: await liveThreads(ws, homeRefs(doc)), lectures, lectureProblems, unbaked, today: localDate(now), activities };
+  return { tutors: tutorInfos(ws), lectures, lectureProblems, unbaked, today: localDate(now), activities };
 }
 
 export interface HomeCheck {
@@ -222,7 +205,6 @@ export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'pu
     }
   }
   const tutors = homeTutors(tutorInfos(ws));
-  const alive = await liveThreads(ws, homeRefs({ cards }));
   // 小课堂按钮:课包读得出来才出现;课名与课长补在按钮上
   const lectures = new Map<string, Lecture | null>();
   for (const id of homeLectures({ cards })) {
@@ -248,7 +230,6 @@ export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'pu
     if (c.kind !== 'tutor') continue;
     const name = String(c.props.tutor);
     const buttons = kidButtons((c.props.buttons ?? []) as TutorButton[], {
-      alive: (date, thread) => alive.has(threadKey(name, date, thread)),
       lecture: (bundle) => Boolean(lectures.get(bundle)),
       activity: (a, params) => { const act = usable.get(`${name}/${a}`); return Boolean(act) && resolveParams(act!, params).issues.length === 0; },
       keepBriefs: opts.keepBriefs,
@@ -274,10 +255,6 @@ export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'pu
 }
 
 export type ResolvedVia =
-  | { kind: 'new'; label: string }
-  | { kind: 'recent'; label: string }
-  | { kind: 'start'; label: string; brief?: string }
-  | { kind: 'continue'; label: string; date: string; thread: string; brief?: string }
   /** activity = 小课堂下面挂的(参数用缺省,点的那一刻解析) */
   | { kind: 'lecture'; label: string; bundle: string; brief?: string; activity?: ActivityRun }
   /** params = 按 activity 文件解析好的值(补了缺省);读不出来或参数不对 → resolveVia 回 null */
@@ -285,12 +262,10 @@ export type ResolvedVia =
 
 /**
  * 孩子发来的 via → 这个按钮是什么(讲法从服务端的发布件取,不经过孩子设备)。
- * 对不上(不是当前发布的那份、这位老师没有这个按钮、老师不上首页)→ null,路由回 400。
+ * 对不上(不是当前发布的那份、这位老师没有这个按钮、老师不上首页、以前发布的那份里的开场 / 接着按钮)→ null,路由回 400。
  */
 export async function resolveVia(ws: Workspace, tutor: string, via: HomeVia): Promise<ResolvedVia | null> {
   if (!faceTutor(tutor, tutorInfos(ws)[tutor])) return null;
-  if (via.button === 'new') return { kind: 'new', label: '新话题' };
-  if (via.button === 'recent') return { kind: 'recent', label: '接着刚才的' };
   // activity 的参数在点的那一刻按 activity 文件解析、补缺省,跟着话题走(家长后来改了只管以后的话题);文件不在、参数不对 → null
   const runOf = async (name: string, params: Record<string, string>): Promise<ActivityRun | null> => {
     const text = await readFile(findActivityFile(ws.root, tutor, name), 'utf8').catch(() => null);
@@ -312,7 +287,6 @@ export async function resolveVia(ws: Workspace, tutor: string, via: HomeVia): Pr
   const b = card ? ((card.props.buttons ?? []) as TutorButton[])[via.button] : undefined;
   if (!b) return null;
   const brief = b.brief ? { brief: b.brief } : {};
-  if (b.kind === 'start') return { kind: 'start', label: b.label, ...brief };
   // 小课堂看完照哪个 activity 聊:写了 activity: 是它,没写是这位老师的「小课堂」;文件不在 → null
   if (b.kind === 'lecture') {
     const run = await runOf(b.activity ?? LECTURE_ACTIVITY, {});
@@ -322,11 +296,11 @@ export async function resolveVia(ws: Workspace, tutor: string, via: HomeVia): Pr
     const run = await runOf(b.activity, b.params);
     return run ? { kind: 'activity', label: b.label, activity: b.activity, params: run.params, ...brief } : null;
   }
-  return { kind: 'continue', label: b.label, date: b.date, thread: b.thread, ...brief };
+  return null;
 }
 
 /** 某份发布过的首页(按 via.home 读历史原文)上这位老师的第几个按钮;回放取讲法用。找不到 → null */
-export async function homeButtonAt(ws: Workspace, tutor: string, via: HomeVia): Promise<TutorButton | null> {
+export async function homeButtonAt(ws: Workspace, tutor: string, via: Pick<MessageVia, 'home' | 'button'>): Promise<TutorButton | null> {
   if (via.home === null || typeof via.button !== 'number') return null;
   const file = historyFile(ws, via.home);
   const md = file ? await readFile(file, 'utf8').catch(() => null) : null;
@@ -339,42 +313,9 @@ export function messageVia(via: HomeVia, r: ResolvedVia): MessageVia {
   return { home: via.home, button: via.button, label: r.label };
 }
 
-const SAID_MAX = 6;
-
-/** 接着以前的话题:那个话题最后一节的讲稿与卡(卡带孩子做的与答案)、话题名、索引路径;话题找不到 → null */
-export async function continueContext(ws: Workspace, tutor: string, date: string, thread: string): Promise<NonNullable<ContextPack['continue']> | null> {
-  let index;
-  try {
-    index = await readIndex(ws, tutor, date);
-  } catch {
-    return null;
-  }
-  const ths = threads(index.messages);
-  if (!ths.includes(thread)) return null;
-  const mine = index.messages.filter((_, i) => ths[i] === thread);
-  const last = [...mine].reverse().find((m) => m.result === 'ok' && m.section && (m.section.cards.length || m.section.lines.length));
-  const states = await readCardStates(ws, tutor, date).catch(() => ({}) as Awaited<ReturnType<typeof readCardStates>>);
-  const booked = index.booked[thread] ? index.messages.find((m) => m.job === index.booked[thread])?.bookkeeping?.entries.find((e) => e.thread === thread)?.name : undefined;
-  const asked = kidQuestions(index.messages, thread)[0] ?? mine.find((m) => m.via)?.via?.label;
-  const title = booked ?? (asked ? Array.from(asked).slice(0, 20).join('') : undefined);
-  const cards = last?.section
-    ? last.section.cards.map((c, n) => {
-        const st = states[last.job]?.[n];
-        return `${last.job}/${n} ${st ? describeCard(c, st.state) : `${c.kind}「${cardLabel(c)}」`}`;
-      })
-    : [];
-  return {
-    from: `${date} ${thread}`,
-    ...(title ? { title } : {}),
-    said: last?.section ? last.section.lines.map((l) => l.text).slice(-SAID_MAX) : [],
-    cards,
-    index: conversationFiles(ws.dirs.conversations, tutor, date).index,
-  };
-}
-
 export interface HomeClick {
   tutor: string;
-  button: HomeVia['button'];
+  button: MessageVia['button'];
   label: string;
   uses: { date: string; job: string; thread: string }[];
 }
@@ -384,7 +325,7 @@ export interface HomeStats {
   error: string | null;
   /** 发布到现在几天(按本地日期) */
   days: number | null;
-  /** 文件里的每个按钮一行(没点过 uses 为空),再加点过的新话题 / 接着刚才的 */
+  /** 文件里的每个按钮一行(没点过 uses 为空),再加点过的方砖 */
   clicks: HomeClick[];
 }
 
@@ -423,7 +364,7 @@ export async function homeStats(ws: Workspace, now: Date): Promise<HomeStats> {
   return { home, error, days, clicks };
 }
 
-const BUTTON_ICON: Record<string, string> = { new: '✨', start: '▶', continue: '↻', lecture: '▷' };
+const BUTTON_ICON: Record<string, string> = { start: '▶', lecture: '▷' };
 
 /** cotutor home check 的文字版 */
 export function formatCheck(ws: Workspace, check: HomeCheck, title: string, kid: KidHomeView): string {
@@ -438,11 +379,11 @@ export function formatCheck(ws: Workspace, check: HomeCheck, title: string, kid:
     const buttons = (c.props.buttons as KidHomeButton[]).map((b) => {
       const brief = typeof b.id === 'number' && briefs[b.id] ? `(讲法 ${Array.from(briefs[b.id]!).length} 字)` : '';
       const act = typeof b.id === 'number' ? ((src?.props.buttons ?? []) as TutorButton[])[b.id] : undefined;
-      const ref = b.kind === 'continue' ? ` → ${b.date} ${b.thread}` : b.kind === 'lecture' ? ` → 小课堂 ${b.bundle}` : act?.kind === 'activity' ? ` → activity ${act.activity}${Object.keys(act.params).length ? `(${Object.entries(act.params).map(([k, v]) => `${k}: ${v}`).join(';')})` : ''}` : '';
+      const ref = b.kind === 'lecture' ? ` → 小课堂 ${b.bundle}` : act?.kind === 'activity' ? ` → activity ${act.activity}${Object.keys(act.params).length ? `(${Object.entries(act.params).map(([k, v]) => `${k}: ${v}`).join(';')})` : ''}` : '';
       return `${BUTTON_ICON[b.kind]} ${b.label}${ref}${brief}`;
     });
     const tiles = ((c.props.tiles ?? []) as { label: string }[]).map((x) => `▦ ${x.label}`);
-    out.push(`  ${display(name)} ${name}${written.has(name) ? '' : '(没写,应用补)'}:${[...buttons.slice(0, 1), ...tiles, ...buttons.slice(1)].join(' | ')}${tiles.length ? '(▦ 是常驻的方砖,不用写)' : ''}`);
+    out.push(`  ${display(name)} ${name}${written.has(name) ? '' : '(没写,应用补)'}:${[...tiles, ...buttons].join(' | ')}${tiles.length ? '(▦ 是常驻的方砖,不用写)' : ''}`);
   }
   const rest = kid.cards.filter((x) => x.kind !== 'tutor');
   if (rest.length) {

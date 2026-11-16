@@ -2,7 +2,7 @@
  * 家长端「首页」(/parent/home):
  * 左边(手机上是上面)是孩子端首页本身——iframe 装 /preview(孩子端页面的预览模式),按孩子设备的尺寸开、等比缩进来,可切 iPad / 手机;
  * 点牌上的按钮在旁边改它(字、讲法、留多久),改字时牌上跟着变;点后面那张牌换老师;听写、口语课点了去改这周的词、口语课。
- * 预览下面一排是老师的先后(按住左右拖)、孩子看不到的按钮、加一个开场按钮;右边是百炼(没配时在最上面)、改着的那颗、这位老师「每天都在」的、在不在首页。
+ * 预览下面一排是老师的先后(按住左右拖)、孩子看不到的按钮;右边是百炼(没配时在最上面)、改着的那颗、这位老师「每天都在」的、在不在首页。
  * 另一个标签「记录」是 /parent。零依赖内联脚本,只走 /api/parent/*;每次现读,改了马上发到孩子的首页(src/app/http/parent-home.ts)。
  * iframe 一挪地方就会重新加载:它在 #pv 里常驻,重画只动 #pv-under 与 #body。
  * 用 String.raw:脚本里的反斜杠原样留着;脚本里不写反引号和 ${。
@@ -91,6 +91,8 @@ ${BRAND_CSS}
   .ch small { font-size:11px; color:var(--mute); font-weight:400; }
   .ch .n { position:absolute; left:8px; top:6px; font-size:11px; color:var(--mute); font-weight:600; }
   .ch.drag { z-index:2; background:#fff; box-shadow:0 8px 20px #2b2b2b26; cursor:grabbing; }
+  /* 头像是 img:鼠标按在它上面拖,浏览器会起原生的拖图、发 pointercancel,排不了 */
+  .ch img { -webkit-user-drag:none; user-drag:none; pointer-events:none; }
   .ch.slide { transition:transform .15s; }
   .hint { padding:28px 20px; text-align:center; color:var(--dim); font-size:15px; line-height:1.6; }
   .btns { display:flex; gap:10px; align-items:center; }
@@ -275,16 +277,15 @@ ${pageDomJs(3200)}
   const md = (d) => Number(d.slice(5, 7)) + '/' + Number(d.slice(8, 10));
   // 留多久:只今天 = 今天;到周日 = 这周日(今天是周日就是今天);一直 = 不写
   const sunday = (today) => { const [y, m, d] = today.split('-').map(Number); const t = new Date(y, m - 1, d); t.setDate(t.getDate() + ((7 - t.getDay()) % 7)); return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0'); };
-  const BUTTONS_MAX = 4;
   const WIDE = window.matchMedia('(min-width:1000px)');
 
   let D = null; let cur = null;
-  /** 在改哪一个按钮(宽屏右栏):下标;-1 = 新加的开场按钮;null = 没选 */
+  /** 在改哪一个按钮(宽屏右栏):下标;null = 没选 */
   let sel = null;
   /** 右栏的表单改了还没发:这时别让心跳重画把字抹掉 */
   let dirty = false;
   /** 预览里改着的(只在预览里,发布了才到孩子那边):edit = 改的那颗 {k, kind, label, until},add = 新加那颗的字 */
-  let draft = { edit: null, add: null };
+  let draft = { edit: null };
 
   // ---- 孩子端首页本身:iframe 装 /preview,按孩子设备的尺寸开,等比缩进来 ----
   const SIZES = { tablet: [1180, 820], phone: [390, 844] };
@@ -301,7 +302,7 @@ ${pageDomJs(3200)}
   };
   const pvSet = (o) => { try { const w = $('#pvf').contentWindow; if (w && typeof w.cotutorPreviewSet === 'function') w.cotutorPreviewSet(o); } catch (e) {} };
   /** 告诉预览:最前那张是谁、在改哪颗、改成什么;reload = 发布了,重读孩子的首页 */
-  const pvSync = (reload) => pvSet({ front: cur, pv: cur ? { tutor: cur, sel: sel === null ? null : sel === -1 ? 'draft' : sel, edit: draft.edit, add: draft.add } : null, reload: Boolean(reload) });
+  const pvSync = (reload) => pvSet({ front: cur, pv: cur ? { tutor: cur, sel, edit: draft.edit } : null, reload: Boolean(reload) });
   // 预览里点了什么(孩子端页面经 window.parent.cotutorPreview 说):换老师、改哪颗、去改这周的词 / 口语课
   window.cotutorPreview = (ev) => {
     if (!ev || !D) return;
@@ -309,7 +310,7 @@ ${pageDomJs(3200)}
     const t = D.tutors.find((x) => x.name === ev.tutor);
     if (!t) return;
     if (t.name !== cur) choose(t.name, true);
-    if (ev.act === 'button') { if (ev.id === 'new') toast('「新话题」是应用自己加的,一直在第一个,这里改不了'); else if (typeof ev.id === 'number') pick(ev.id); }
+    if (ev.act === 'button') { if (typeof ev.id === 'number') pick(ev.id); }
     else if (ev.act === 'tile') { const el = $('#daily-tile-' + ev.id); if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
     else if (ev.act === 'extra') { if (ev.kind === 'dictation') editWords(t); else { const el = $('#daily-talk'); if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } }
   };
@@ -466,23 +467,23 @@ ${pageDomJs(3200)}
     document.title = D.title + ' · 家长';
     $('#title').textContent = D.title;
     $('#pub').textContent = D.home ? md(D.home.publishedAt.slice(0, 10)) + ' ' + new Date(D.home.publishedAt).toTimeString().slice(0, 5) + ' 发布 · 改了马上到孩子的首页' : '还没发布过';
-    if (!cur || !D.tutors.some((t) => t.name === cur)) { const first = D.tutors.find((t) => !t.hidden) || D.tutors[0]; cur = first && first.name; sel = null; draft = { edit: null, add: null }; }
+    if (!cur || !D.tutors.some((t) => t.name === cur)) { const first = D.tutors.find((t) => !t.hidden) || D.tutors[0]; cur = first && first.name; sel = null; draft = { edit: null }; }
     if (!$('#pvf').getAttribute('src')) $('#pvf').setAttribute('src', '/preview?front=' + encodeURIComponent(cur || ''));
     render();
   };
   const save = async (method, path, body, ok) => {
-    try { const r = await api(method, path, body); if (ok) toast(ok); draft = { edit: null, add: null }; return r; }
+    try { const r = await api(method, path, body); if (ok) toast(ok); draft = { edit: null }; return r; }
     catch (e) { toast('没改成:' + e.message); return null; }
     finally { await load(); pvSync(true); }
   };
   const tutorOf = () => D.tutors.find((t) => t.name === cur);
   /** 看哪位老师;fromPreview = 预览里换过去的,不用再告诉它 */
-  const choose = (name, fromPreview) => { if (name === cur) return; cur = name; sel = null; lookStop(); LOOK.open = null; dirty = false; draft = { edit: null, add: null }; render(); if (!fromPreview) pvSync(); };
+  const choose = (name, fromPreview) => { if (name === cur) return; cur = name; sel = null; lookStop(); LOOK.open = null; dirty = false; draft = { edit: null }; render(); if (!fromPreview) pvSync(); };
   /** 改第 k 颗(-1 = 加一个):宽屏在右栏,窄屏整屏的表单 */
   const pick = (k) => {
     const t = tutorOf(); if (!t) return;
     if (!WIDE.matches) { editButton(t, k); return; }
-    sel = k; lookStop(); LOOK.open = null; dirty = false; draft = { edit: null, add: null }; render();
+    sel = k; lookStop(); LOOK.open = null; dirty = false; draft = { edit: null }; render();
     setTimeout(() => { const el = $('#b-label'); if (el) el.focus(); }, 50);
   };
   const setExtras = (t, kind, on) => {
@@ -529,7 +530,7 @@ ${pageDomJs(3200)}
       if (to === from) { for (const r of all) { r.style.transform = ''; r.classList.remove('drag', 'slide'); } return; }
       const names = D.tutors.map((x) => x.name); const n = names.splice(from, 1)[0]; names.splice(to, 0, n);
       // 拖的是谁就看谁:预览里他抽到最前,能看到排过之后的牌堆
-      cur = n; sel = null; dirty = false; draft = { edit: null, add: null };
+      cur = n; sel = null; dirty = false; draft = { edit: null };
       putOrder(names);
     };
     el.addEventListener('pointermove', onMove); el.addEventListener('pointerup', onUp); el.addEventListener('pointercancel', onUp);
@@ -541,12 +542,11 @@ ${pageDomJs(3200)}
     const off = $('#pvoff');
     off.classList.toggle('on', Boolean(t && t.hidden));
     off.textContent = t && t.hidden ? t.display + '现在不在孩子的首页上(「在孩子的首页上」打开)' : '';
-    // 预览下面:老师的先后、孩子看不到的按钮、加一个开场按钮
+    // 预览下面:老师的先后、孩子看不到的按钮
     const under = [h('div', {}, h('div', { class: 'gh' }, h('span', {}, '老师的先后 · 按住左右拖,排第一的在最前')), orderRow())];
     if (t) {
       const gone = t.buttons.map((b, k) => ({ b, k })).filter((x) => x.b.until && x.b.until < D.today);
       if (gone.length) under.push(h('div', {}, h('div', { class: 'gh' }, h('span', {}, '孩子现在看不到的按钮(留到的日子过了)')), h('div', { class: 'grp' }, ...gone.map((x) => h('button', { type: 'button', class: 'it', on: { click: () => pick(x.k) } }, h('span', { class: 'tx' }, h('b', {}, x.b.label), x.b.brief ? h('small', {}, '讲法:' + x.b.brief) : null), h('span', { class: 'tag' }, '过了'), h('span', { class: 'chev', html: CHEV }))))));
-      if (t.buttons.length < BUTTONS_MAX) under.push(h('button', { type: 'button', class: 'addb', on: { click: () => pick(-1) } }, '+ 给' + t.display + '加一个开场按钮'));
     }
     $('#pv-under').replaceChildren(...under);
     if (!t) { blDraw(); $('#body').replaceChildren(h('div', {}, blEl, h('p', { class: 'note' }, '还没有老师(cotutor.json 里 -tutor 结尾、开着的)'))); return; }
@@ -584,9 +584,9 @@ ${pageDomJs(3200)}
     $('#body').replaceChildren(h('div', {}, blTop ? blEl : null, wide ? qrEl : null, pane, extras, self, blTop ? null : blEl));
   };
 
-  // ---- 改一个按钮的表单(k = -1 是新加的开场按钮):窄屏整屏盖上,宽屏在右栏;预览里那颗跟着变 ----
+  // ---- 改一个按钮的表单(按钮由编程助手排,这里只改字、讲法、留多久;开场按钮 2026-11-16 删了):窄屏整屏盖上,宽屏在右栏;预览里那颗跟着变 ----
   const buttonForm = (t, k, done) => {
-    const b = k >= 0 ? Object.assign({}, t.buttons[k]) : { kind: 'start', label: '', until: D.today };
+    const b = Object.assign({}, t.buttons[k]);
     const label = h('input', { class: 'fld', id: 'b-label', maxlength: '40', placeholder: '孩子的口吻,如「我要预习小蝌蚪找妈妈」' }); label.value = b.label;
     const brief = h('textarea', { class: 'fld', id: 'b-brief', rows: '5', placeholder: '写给老师的:从哪开始、重点是什么、讲到哪收' }); brief.value = b.brief || '';
     const count = h('span', {});
@@ -597,24 +597,24 @@ ${pageDomJs(3200)}
     const seg = h('div', { class: 'seg' });
     const drawSeg = () => seg.replaceChildren(...keeps.map(([v, l]) => h('button', { type: 'button', class: v === keep ? 'on' : '', on: { click: () => { keep = v; dirty = true; drawSeg(); tell(); } } }, l)));
     const sync = () => { const n = Array.from(label.value.trim()).length; count.textContent = n + ' / 16'; count.style.color = n > 16 ? 'var(--red)' : ''; go.disabled = !n || n > 16; };
-    // 预览里的那颗跟着变:改的换字,新加的排在最后;只在预览里,发布了才到孩子那边
-    const tell = () => { const lb = label.value.trim(); draft = k >= 0 ? { edit: { k, kind: b.kind, label: lb || b.label, until: keep || undefined }, add: null } : { edit: null, add: lb || '(按钮上的字)' }; pvSync(); };
+    // 预览里的那颗跟着变;只在预览里,发布了才到孩子那边
+    const tell = () => { const lb = label.value.trim(); draft = { edit: { k, kind: b.kind, label: lb || b.label, until: keep || undefined } }; pvSync(); };
     label.addEventListener('input', () => { dirty = true; sync(); tell(); });
     brief.addEventListener('input', () => { dirty = true; });
     drawSeg(); sync(); tell();
     go.addEventListener('click', async () => {
       const nb = Object.assign({}, b, { label: label.value.trim(), brief: brief.value.trim() || undefined, until: keep || undefined });
-      const list = k >= 0 ? t.buttons.map((x, j) => (j === k ? nb : x)) : t.buttons.concat([nb]);
+      const list = t.buttons.map((x, j) => (j === k ? nb : x));
       go.disabled = true; dirty = false;
       const r = await save('PUT', '/api/parent/home/tutors/' + encodeURIComponent(t.name) + '/buttons', { buttons: list }, '发布了');
-      if (r) done(k >= 0 ? k : list.length - 1); else go.disabled = false;
+      if (r) done(k); else go.disabled = false;
     });
-    const del = k >= 0 ? h('button', { type: 'button', class: 'del', on: { click: async () => { dirty = false; const r = await save('PUT', '/api/parent/home/tutors/' + encodeURIComponent(t.name) + '/buttons', { buttons: t.buttons.filter((_x, j) => j !== k) }, '删掉了'); if (r) done(null); } } }, '删掉这个按钮') : null;
-    const what = b.kind === 'continue' ? '接着 ' + md(b.date) + ' 的话题 ' + b.thread : b.kind === 'lecture' ? '小课堂 ' + b.bundle : b.kind === 'activity' ? 'activity ' + b.activity : '';
+    const del = h('button', { type: 'button', class: 'del', on: { click: async () => { dirty = false; const r = await save('PUT', '/api/parent/home/tutors/' + encodeURIComponent(t.name) + '/buttons', { buttons: t.buttons.filter((_x, j) => j !== k) }, '删掉了'); if (r) done(null); } } }, '删掉这个按钮');
+    const what = b.kind === 'lecture' ? '小课堂 ' + b.bundle : 'activity ' + b.activity;
     return {
-      title: t.display + ' · ' + (k >= 0 ? '改按钮' : '开场按钮'), go, del, label,
+      title: t.display + ' · 改按钮', go, del, label,
       fields: [
-        what ? h('div', { class: 'note' }, what + '(从编程助手排的,这里只改字和讲法)') : null,
+        h('div', { class: 'note' }, what + '(从编程助手排的,这里只改字和讲法)'),
         h('div', {}, h('div', { class: 'gh' }, h('label', { for: 'b-label' }, '按钮上的字(孩子的口吻)'), count), label),
         h('div', {}, h('div', { class: 'gh' }, h('label', { for: 'b-brief' }, '讲法(写给老师,孩子看不到)')), brief),
         h('div', {}, h('div', { class: 'gh' }, h('span', {}, '留多久')), seg),
@@ -623,7 +623,7 @@ ${pageDomJs(3200)}
   };
   const inlineForm = (t, k) => {
     const f = buttonForm(t, k, (next) => { sel = next; render(); });
-    const close = h('button', { type: 'button', class: 'x', on: { click: () => { sel = null; dirty = false; draft = { edit: null, add: null }; render(); pvSync(); } } }, '收起');
+    const close = h('button', { type: 'button', class: 'x', on: { click: () => { sel = null; dirty = false; draft = { edit: null }; render(); pvSync(); } } }, '收起');
     return h('div', { class: 'grp box', id: 'pane' }, h('div', { class: 'row2' }, h('b', { style: 'font-size:17px' }, f.title), close), ...f.fields, h('div', { class: 'btns' }, f.del, f.go));
   };
   const openSheet = (...kids) => { $('#sheet-in').replaceChildren(...kids); $('#sheet').classList.add('on'); window.scrollTo(0, 0); };
@@ -791,7 +791,7 @@ ${pageDomJs(3200)}
   }
   const editButton = (t, k) => {
     const f = buttonForm(t, k, () => closeSheet());
-    openSheet(h('div', { class: 'nav' }, h('button', { type: 'button', on: { click: () => { dirty = false; draft = { edit: null, add: null }; closeSheet(); pvSync(); } } }, '取消'), h('b', {}, f.title), f.go), ...f.fields, f.del ? h('button', { type: 'button', class: 'danger', on: { click: () => f.del.click() } }, '删掉这个按钮') : null);
+    openSheet(h('div', { class: 'nav' }, h('button', { type: 'button', on: { click: () => { dirty = false; draft = { edit: null }; closeSheet(); pvSync(); } } }, '取消'), h('b', {}, f.title), f.go), ...f.fields, f.del ? h('button', { type: 'button', class: 'danger', on: { click: () => f.del.click() } }, '删掉这个按钮') : null);
     setTimeout(() => f.label.focus(), 50);
   };
 
@@ -813,7 +813,7 @@ ${pageDomJs(3200)}
   };
 
   load();
-  WIDE.addEventListener('change', () => { if (!picked) dev = WIDE.matches ? 'tablet' : 'phone'; if (D) { closeSheet(); sel = null; draft = { edit: null, add: null }; render(); pvSync(); } else fit(); });
+  WIDE.addEventListener('change', () => { if (!picked) dev = WIDE.matches ? 'tablet' : 'phone'; if (D) { closeSheet(); sel = null; draft = { edit: null }; render(); pvSync(); } else fit(); });
   document.addEventListener('visibilitychange', () => { if (!document.hidden && !$('#sheet').classList.contains('on') && !dirty) load(); });
 })();
 </script>

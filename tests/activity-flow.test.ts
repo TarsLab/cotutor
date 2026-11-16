@@ -94,7 +94,7 @@ try {
   const homeId = pub.home!.id;
   const kid = (await route('GET', '/api/kid/home', ctx)).json as { cards: { kind: string; props: { tutor?: string; buttons?: { id: unknown; kind: string; label: string; params?: unknown; brief?: unknown }[] } }[] };
   const btns = kid.cards.find((c) => c.props.tutor === 'chinese-tutor')?.props.buttons ?? [];
-  check('孩子端:activity 按钮就是开场按钮,参数与讲法不下发', btns.map((b) => `${b.id}:${b.kind}:${b.label}`).join(' ') === 'new:new:新话题 0:start:练词 1:start:我来出题' && btns.every((b) => b.params === undefined && b.brief === undefined), JSON.stringify(btns));
+  check('孩子端:activity 按钮(start),参数与讲法不下发', btns.map((b) => `${b.id}:${b.kind}:${b.label}`).join(' ') === '0:start:练词 1:start:我来出题' && btns.every((b) => b.params === undefined && b.brief === undefined), JSON.stringify(btns));
   check('孩子端 JSON 里没有参数原文', !JSON.stringify(kid).includes('睡大觉'));
 
   // ---- 点「我来出题」----
@@ -292,13 +292,6 @@ try {
     check('记忆写进 activity 自己那篇(agent: chinese-tutor/练词)', memText.includes('agent: chinese-tutor/练词') && memText.split('\n').some((l) => l.startsWith('- ')) && !readdirSync(memDir).includes('语文老师.md'), readdirSync(memDir).join());
     const s3 = await go({ text: '后来呢', runtime: 'fake', thread: s1.thread });
     check('续话题:上下文包的记忆是 activity 那篇', /memory: "记忆\/语文老师·练词\.md/.test(s3.file.prompt), s3.file.prompt.slice(0, 600));
-    // 隔天「接着」:新话题、只带 continues,沿用被接话题的 activity
-    const cont = await ctx.runner.send('chinese-tutor', { from: 'kid', text: '接着刚才的', runtime: 'fake', newThread: true, continues: { date: DATE, thread: s1.thread } });
-    await cont.done;
-    await ctx.runner.flush();
-    const contSys = lastSystem();
-    const contMsg = (await readIndex(ctx.ws, 'chinese-tutor', DATE)).messages.find((m) => m.job === cont.job);
-    check('接着以前的 activity 话题:新话题照旧是那个 activity(系统提示、记在第一条)', contSys.startsWith('你是这个家的语文老师,今天陪孩子练词') && contMsg?.activity?.name === '练词' && contMsg.activity.params.最多问 === 2 && !!contMsg.continues, JSON.stringify({ sys: contSys.slice(0, 40), act: contMsg?.activity, cont: contMsg?.continues }));
     const free = await ctx.runner.send('chinese-tutor', { from: 'kid', text: '随便聊聊', runtime: 'fake', newThread: true });
     await free.done;
     const freeRun = (await readRunFile(ctx.ws, 'chinese-tutor', DATE, free.job))!;

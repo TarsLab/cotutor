@@ -403,7 +403,7 @@ export async function doctorWorkspace(
         const days = daysSince(home, now);
         push({ name: 'home.published', ok: days <= 3, required: false, detail: `已发布 ${home.id}(${days === 0 ? '今天' : `${days} 天前`})· ${home.cards.length} 张卡`, fix: days > 3 ? '首页是好几天前的:孩子学完后在 workspace 根开编程助手,用 cotutor-home 技能排一份新的' : undefined });
         const broken = await publishedIssues(ws, home, now);
-        push({ name: 'home.refs', ok: !broken.length, required: false, detail: broken.length ? broken.map((i) => i.text).join(';') : '已发布那份里的老师与话题都在', fix: broken.length ? '坏了的按钮孩子端不出现;要补就改草稿重发(cotutor home check 看细节)' : undefined });
+        push({ name: 'home.refs', ok: !broken.length, required: false, detail: broken.length ? broken.map((i) => i.text).join(';') : '已发布那份里的老师、activity 与课包都在', fix: broken.length ? '坏了的按钮孩子端不出现;要补就改草稿重发(cotutor home check 看细节)' : undefined });
       }
     }
 

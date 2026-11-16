@@ -92,8 +92,6 @@ export interface HomeTutorInfo {
 
 export interface HomeCheckContext {
   tutors: Record<string, HomeTutorInfo>;
-  /** 查得到的话题:`<老师> <日期> <话题>` */
-  threads: ReadonlySet<string>;
   /** 小课堂按钮引用的课包或视频:读得出来的 → 科目(没写 = null);不在表里 = 不在或坏了 */
   lectures?: ReadonlyMap<string, string | null>;
   /** 读不出来的那几份,为什么(src/runtime/lecture.ts inspectLecture);没给就说一句笼统的 */
@@ -120,8 +118,6 @@ export function homeTutors(tutors: Record<string, HomeTutorInfo>): string[] {
     .map(([name]) => name);
 }
 
-export const threadKey = (tutor: string, date: string, thread: string): string => `${tutor} ${date} ${thread}`;
-
 /** 草稿里小课堂按钮引用的课包 id */
 export function homeLectures(doc: Pick<HomeDoc, 'cards'>): string[] {
   const out = new Set<string>();
@@ -137,16 +133,6 @@ export function homeActivities(doc: Pick<HomeDoc, 'cards'>): { tutor: string; na
     if (name) out.set(`${c.props.tutor}/${name}`, { tutor: String(c.props.tutor), name });
   }
   return [...out.values()];
-}
-
-/** 草稿里要读盘才能查的引用:接着按钮指的话题(调用方按它读索引) */
-export function homeRefs(doc: Pick<HomeDoc, 'cards'>): { tutor: string; date: string; thread: string }[] {
-  const out: { tutor: string; date: string; thread: string }[] = [];
-  for (const c of doc.cards) {
-    if (c.kind !== 'tutor') continue;
-    for (const b of (c.props.buttons ?? []) as TutorButton[]) if (b.kind === 'continue') out.push({ tutor: String(c.props.tutor), date: b.date, thread: b.thread });
-  }
-  return out;
 }
 
 /** 解析的问题 + 引用的问题 + 缺的老师 + 过期 + 没家长段;按行号排 */
@@ -185,9 +171,6 @@ export function homeIssues(doc: HomeDoc, ctx: HomeCheckContext): HomeIssue[] {
         if (ctx.unbaked?.has(b.bundle)) out.push({ level: 'note', line, card: n, button: k, text: `${t.display}的「${b.label}」:课包 ${b.bundle} 没烤过(或画面改过没重烤),孩子端要现画,慢、iPad 上可能不顺;跑 cotutor chalk bake ${b.bundle}(服务端发现了也会在后台补烤)` });
         return;
       }
-      if (b.kind !== 'continue') return;
-      if (b.date > ctx.today) out.push({ level: 'fix', line, card: n, button: k, text: `${t.display}的「${b.label}」:${b.date} 还没到` });
-      else if (!ctx.threads.has(threadKey(name, b.date, b.thread))) out.push({ level: 'fix', line, card: n, button: k, text: `${t.display}的「${b.label}」:${b.date} 没有话题 ${b.thread}(cotutor show ${name} <job> ${b.date} 或 conversations/${name}/${b.date}.json 里找话题 id)` });
     });
   });
   // 听写卡写了念的老师:不在 cotutor.json 就换人念(听写页照样能用,只提醒)
@@ -196,7 +179,7 @@ export function homeIssues(doc: HomeDoc, ctx: HomeCheckContext): HomeIssue[] {
     out.push({ level: 'note', line: doc.cardLines[n], card: n, text: `听写卡写的 ${c.props.tutor} 不在 cotutor.json 里(有:${names.join('、')}),会换成语文老师念` });
   });
   const missing = homeTutors(ctx.tutors).filter((name) => !seen.has(name));
-  if (missing.length) out.push({ level: 'note', text: `${missing.map((m) => ctx.tutors[m].display).join('、')}没写老师卡,孩子端会补一张只有「新话题」的` });
+  if (missing.length) out.push({ level: 'note', text: `${missing.map((m) => ctx.tutors[m].display).join('、')}没写老师卡,孩子端会补一张(只有每天都在的方砖)` });
   if (doc.for && doc.for < ctx.today) out.push({ level: 'note', text: `for 是 ${doc.for},已经过去了(孩子端照样显示)` });
   if (!doc.note.trim()) out.push({ level: 'note', text: '没有家长段(「## 为什么这么排」),下次回头看不知道为什么这么排' });
   return out.sort((a, b) => (a.line ?? Infinity) - (b.line ?? Infinity));
@@ -253,11 +236,12 @@ export function homeOwners(cards: readonly BoardCard[], tutors: readonly string[
   });
 }
 
-/** 孩子端老师卡上的一个按钮:id = 文件里的下标,或应用加的 new(今天聊过的话题在首页「今天」那一行接,按钮进去都是新话题) */
+/**
+ * 孩子端老师卡上的一个按钮:id = 文件里的下标。按钮进去都是新话题;今天聊过的话题在首页「今天」那一行接(2026-11-15)。
+ * start = activity 按钮(孩子那边点了发出按钮上的字;是哪个 activity、参数是什么,服务端照 via 从发布件查)
+ */
 export type KidHomeButton =
-  | { id: 'new'; kind: 'new'; label: string }
   | { id: number; kind: 'start'; label: string; brief?: string }
-  | { id: number; kind: 'continue'; label: string; date: string; thread: string; brief?: string }
   /** 小课堂:title / ms(课名、课长)由服务端读课包后补 */
   | { id: number; kind: 'lecture'; label: string; bundle: string; brief?: string; title?: string; ms?: number; video?: true };
 
@@ -278,25 +262,20 @@ export function kidTiles(on: readonly HomeTileId[], opts: { usable: (activity: s
   });
 }
 
-export const NEW_THREAD_LABEL = '新话题';
-
 /**
- * 一张老师卡的按钮:新话题第一,然后是文件里的。每个按钮进去都是新话题;今天聊过的话题在首页「今天」那一行接(2026-11-15)。
- * 接着按钮指的话题现在找不到(alive 说没有)就不出现。keepBriefs = 家长预览(讲法留着)。
+ * 一张老师卡的按钮:文件里的 activity、小课堂。以前发布的那份里的开场、接着按钮(2026-11-16 删了)不出。keepBriefs = 家长预览(讲法留着)。
  */
-export function kidButtons(buttons: readonly TutorButton[], opts: { alive: (date: string, thread: string) => boolean; lecture?: (bundle: string) => boolean; activity?: (name: string, params: Readonly<Record<string, string>>) => boolean; keepBriefs?: boolean; today?: string }): KidHomeButton[] {
-  const out: KidHomeButton[] = [{ id: 'new', kind: 'new', label: NEW_THREAD_LABEL }];
+export function kidButtons(buttons: readonly TutorButton[], opts: { lecture?: (bundle: string) => boolean; activity?: (name: string, params: Readonly<Record<string, string>>) => boolean; keepBriefs?: boolean; today?: string }): KidHomeButton[] {
+  const out: KidHomeButton[] = [];
   buttons.forEach((b, k) => {
     // 留到那天为止(家长端表单的「只今天 / 到周日」);过了就不出现,id 还是文件里的下标
     if (b.until && opts.today && b.until < opts.today) return;
     const brief = opts.keepBriefs && b.brief ? { brief: b.brief } : {};
-    // activity 按钮在孩子那边就是开场按钮:点了发出按钮上的字;是哪个 activity、参数是什么,服务端照 via 从发布件查
+    // activity 按钮在孩子那边是 start:点了发出按钮上的字;是哪个 activity、参数是什么,服务端照 via 从发布件查
     // activity 用不了(文件不在、写坏了、这个按钮的参数按现在的文件解析不出),按钮不出:不让孩子点进一个没人带或带不了的话题;小课堂看完照它聊,同样
     const hasActivity = (name: string, params: Readonly<Record<string, string>> = {}): boolean => opts.activity?.(name, params) ?? true;
-    if (b.kind === 'start') out.push({ id: k, kind: 'start', label: b.label, ...brief });
-    else if (b.kind === 'activity') { if (hasActivity(b.activity, b.params)) out.push({ id: k, kind: 'start', label: b.label, ...brief }); }
+    if (b.kind === 'activity') { if (hasActivity(b.activity, b.params)) out.push({ id: k, kind: 'start', label: b.label, ...brief }); }
     else if (b.kind === 'lecture') { if ((opts.lecture?.(b.bundle) ?? true) && hasActivity(b.activity ?? LECTURE_ACTIVITY)) out.push({ id: k, kind: 'lecture', label: b.label, bundle: b.bundle, ...brief }); }
-    else if (opts.alive(b.date, b.thread)) out.push({ id: k, kind: 'continue', label: b.label, date: b.date, thread: b.thread, ...brief });
   });
   return out;
 }

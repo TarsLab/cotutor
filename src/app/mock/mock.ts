@@ -6,8 +6,8 @@
  * 老师「想」的期间按流式模拟:卡在 delay 里一张张出现(pending 条目带 partial 板书),想完才有讲稿与声音。
  * 卡的状态 PUT 假存在内存里(过真的 state 契约),today 里并回卡上;发消息接 {text, action, focus},「交给老师」后照常追加下一节。
  * 场景:normal(缺省)/ nokey(没配百炼,孩子端只出「老师们还没到」)。
- * 首页是一份写死的「已发布」(mockHomeMd,过真解析器与真排法):语文老师有开场与接着昨天的按钮,数学老师有开场,英语老师没写(补一张);
- * 发消息带 via 时照真服务的规则换成按钮上的字、定话题。
+ * 首页是一份写死的「已发布」(mockHomeMd,过真解析器与真排法):语文老师有一个 activity 按钮,数学老师有两个小课堂,英语老师没写(补一张);
+ * 发消息带 via 时照真服务的规则换成按钮上的字、开新话题。
  * 老师都走实时老师页,那条 WebSocket 是 mock-live.ts 的假嘴(照脚本「念」静音的声音,不花钱)。
  */
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -518,22 +518,18 @@ interface MockMessage {
   board?: 'page';
 }
 
-/** mock 的首页原文(昨晚 21:30 发布的那份;接着按钮指向 past 里昨天的话题,job = 0930-<老师名长度>) */
-export function mockHomeMd(today: string, yesterday: string): string {
+/** mock 的首页原文(昨晚 21:30 发布的那份) */
+export function mockHomeMd(today: string): string {
   return `---
 for: ${today}
 ---
 
 \`\`\`tutor chinese-tutor
-我要预习小蝌蚪找妈妈
-讲法: 第 22 课。先带他把 1–3 自然段读顺,重点字 塘、脑、袋
-接着 ${yesterday} 0930-13 接着讲画蛇添足
-讲法: 昨天讲到第二节,先问他还记不记得那杯酒
+activity 看图说话 我要看图说话
+讲法: 先请他拍一张图来
 \`\`\`
 
 \`\`\`tutor math-tutor
-再练两道退位减法
-讲法: 出 52−7、80−3,先让他说怎么想
 小课堂 2026-09-18-po13-jian-8 13 减 8 怎么拆
 小课堂 2026-10-06-pingjunfen 平均分怎么分
 \`\`\`
@@ -685,18 +681,16 @@ export function createMock(opts: MockOptions = {}): Mock {
   const mockLecture = (id: string): (Lecture & { ms: number }) | null => { const l = lectures.get(id); return l ? { ...l, ms: l.clock.total } : null; };
   const home = (): KidHome => {
     const d = now();
-    const parsed = parseHome(mockHomeMd(localDate(d), yesterday())).cards;
+    const parsed = parseHome(mockHomeMd(localDate(d))).cards;
     const names = MOCK_TUTORS.map((t) => t.name);
     const ownerOf = homeOwners(parsed, names);
     const owners = new Map(parsed.map((c, i) => [c, ownerOf[i]]));
     const cards = arrangeHome(parsed, names).map((c) => {
       if (c.kind !== 'tutor') return { ...stripSecrets({ cards: [c], lines: [] }).cards[0], owner: owners.get(c) ?? null }; // 同真服务:答案(听写卡的字)不下发;非老师卡带归属
       const name = String(c.props.tutor);
-      const list = messages.get(name) ?? [];
-      const alive = (date: string, thread: string): boolean => (date === yesterday() && (past.get(name) ?? []).some((m) => m.thread === thread)) || (date === localDate(d) && list.some((m) => m.thread === thread));
       // 方砖:三门主科出厂都有预习、检查作业、复习(真服务看老师家里有没有那个 activity 文件)
       const main = ['语文', '数学', '英语'].includes(canonicalSubject(MOCK_TUTORS.find((t) => t.name === name)?.subject) ?? '');
-      return { kind: 'tutor', props: { tutor: name, tiles: main ? kidTiles(HOME_TILE_IDS, { usable: () => true, ...(name === 'chinese-tutor' ? { boards: new Set(['预习']) } : {}) }) : [], buttons: kidButtons((c.props.buttons ?? []) as TutorButton[], { alive, lecture: (id) => Boolean(mockLecture(id)), today: localDate(d) }).map((b) => { const l = b.kind === 'lecture' ? mockLecture(b.bundle) : null; return l ? { ...b, title: l.title, ms: l.ms, ...(l.video ? { video: true as const } : {}) } : b; }) } };
+      return { kind: 'tutor', props: { tutor: name, tiles: main ? kidTiles(HOME_TILE_IDS, { usable: () => true, ...(name === 'chinese-tutor' ? { boards: new Set(['预习']) } : {}) }) : [], buttons: kidButtons((c.props.buttons ?? []) as TutorButton[], { lecture: (id) => Boolean(mockLecture(id)), today: localDate(d) }).map((b) => { const l = b.kind === 'lecture' ? mockLecture(b.bundle) : null; return l ? { ...b, title: l.title, ms: l.ms, ...(l.video ? { video: true as const } : {}) } : b; }) } };
     });
     // figshot:和配了 figshot 的 workspace 一样给端口;这台电脑上 figshot 没开着,页面照样藏着这张卡
     return { title, date: localDate(d), tutors: tutorsJson(), home: mockHomeId(), cards, figshot: { port: 8477 }, hand: 'right', ready: scenario !== 'nokey', today: mockToday() };
@@ -732,7 +726,7 @@ export function createMock(opts: MockOptions = {}): Mock {
     now,
     card: async (home, n) => {
       if (home !== mockHomeId()) return null;
-      const c = parseHome(mockHomeMd(localDate(now()), yesterday())).cards.filter((x) => x.kind === 'dictation')[n];
+      const c = parseHome(mockHomeMd(localDate(now()))).cards.filter((x) => x.kind === 'dictation')[n];
       const r = c ? DictationPropsSchema.safeParse(c.props) : null;
       return r?.success ? r.data : null;
     },
@@ -751,13 +745,12 @@ export function createMock(opts: MockOptions = {}): Mock {
     recognize: mockRecognize,
   });
   /** via → 按钮(真服务在 runtime/home/store.ts resolveVia;mock 从同一份原文取) */
-  const mockButton = (name: string, via: unknown): TutorButton | 'new' | 'recent' | null => {
+  const mockButton = (name: string, via: unknown): TutorButton | null => {
     if (!isObj(via)) return null;
-    if (via.button === 'new' || via.button === 'recent') return via.button;
     const tile = HOME_TILES.find((t) => t.id === via.button);
     if (tile) return { kind: 'activity', label: tile.activity, activity: tile.activity, params: {} };
     if (via.home !== mockHomeId() || typeof via.button !== 'number') return null;
-    const card = parseHome(mockHomeMd(localDate(now()), yesterday())).cards.find((c) => c.kind === 'tutor' && c.props.tutor === name);
+    const card = parseHome(mockHomeMd(localDate(now()))).cards.find((c) => c.kind === 'tutor' && c.props.tutor === name);
     return ((card?.props.buttons ?? []) as TutorButton[])[via.button] ?? null;
   };
   const answer = (m: MockMessage, full: BoardSection | null): void => {
@@ -1028,10 +1021,9 @@ export function createMock(opts: MockOptions = {}): Mock {
         if (typeof button === 'object' && button !== null && button.kind === 'lecture') {
           if (!lec || lec.bundle !== button.bundle || !lec.finished) return { status: 400, json: { error: 'bad_request' } };
           newThread = true; wantThread = undefined;
-        } else if (button && button !== 'new' && button !== 'recent') {
+        } else if (button) {
           said = button.label;
-          if (button.kind === 'continue' && button.date === date) { wantThread = button.thread; newThread = false; }
-          else { newThread = true; wantThread = undefined; }
+          newThread = true; wantThread = undefined;
         }
         if (!said.trim() && !action && !photos.length) return { status: 400, json: { error: 'bad_request' } };
         if (list.some((m) => m.pending)) return { status: 409, json: { error: 'busy' } };

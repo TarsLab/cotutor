@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
  * 首页的手动验收(不进 pnpm test,要本机 Chrome;老师是假 CLI,不花钱):
- * 临时 workspace + HTTP serve → 语文老师先讲一轮(给「接着」一个话题)→ 写草稿、cotutor home publish →
- * Chrome 开孩子端(牌堆,一位老师一张牌):叠的顺序、最前那张在最上层、卡的归属、橙点;手机竖着叠、平板横着叠;点后面那张抽出换到最前;手机与平板各截一张 →
- * 点「新话题」是空白老师页 → 回首页点开场按钮:老师页打开、按钮上的字发出去、索引里那条带 via → 回首页点方砖「检查作业」:照那个 activity 起新话题 →
+ * 临时 workspace + HTTP serve → 写草稿(老师卡上只有 activity 与小课堂按钮)、cotutor home publish →
+ * Chrome 开孩子端(牌堆,一位老师一张牌):叠的顺序、最前那张在最上层、方砖、橙点;手机竖着叠、平板横着叠;点后面那张抽出换到最前;手机与平板各截一张 →
+ * 点 activity 按钮:老师页打开、按钮上的字发出去、索引里那条带 via 与 activity → 回首页点方砖「检查作业」:照那个 activity 起新话题 →
  *
  * 用法:node scripts/probe-home.mjs [--out <截图目录>] [--keep](留下临时 workspace 与 serve)
  */
@@ -12,7 +12,6 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { QUIET_ARGS } from './_quiet.mjs';
-import { liveSend } from './_live-send.mjs';
 
 const keep = process.argv.includes('--keep');
 const outAt = process.argv.indexOf('--out');
@@ -52,10 +51,6 @@ const settle = async (tutor) => { for (let i = 0; i < 80; i++) { const d = (awai
 
 let browser = null;
 try {
-  // ---- 语文老师先讲一轮,首页的「接着」指它 ----
-  const first = await liveSend(base, 'chinese-tutor', { text: '讲讲板书', newThread: true });
-  await settle('chinese-tutor');
-  const thread = first.json?.thread;
   const today = new Date();
   const day = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
   mkdirSync(join(root, 'home'), { recursive: true });
@@ -63,24 +58,15 @@ try {
 for: ${day}
 ---
 
-\`\`\`text
-# 今晚
-先读课文,再练两道题
-\`\`\`
-
 \`\`\`tutor chinese-tutor
-我要预习小蝌蚪找妈妈
+activity 预习 我要预习小蝌蚪找妈妈
 讲法: 第 22 课。先带他把 1–3 自然段读顺,重点字 塘、脑、袋
-接着 ${day} ${thread} 接着讲刚才的板书
+activity 看图说话 我要看图说话
 \`\`\`
 
 \`\`\`tutor math-tutor
-再练两道退位减法
+activity 复习 再练两道退位减法
 讲法: 出 52−7、80−3,先让他说怎么想
-\`\`\`
-
-\`\`\`tianzige
-塘脑袋
 \`\`\`
 
 ## 为什么这么排
@@ -115,10 +101,10 @@ for: ${day}
   await open(`${base}/`);
   const v0 = await stack();
   ok('叠的顺序:家长排第一的(语文)在最前(最上层),排第二的(数学)紧挨在后面,补的英语在最底下', v0.order.join() === 'english-tutor,math-tutor,chinese-tutor' && v0.front.join() === 'chinese-tutor' && v0.card === 'chinese-tutor' && v0.name === '语文老师', JSON.stringify(v0));
-  ok('语文的卡:按钮齐(接着的就是今天那个话题,不再加「接着刚才的」);「每天都在」有拍照听写;讲法不在页面里', v0.buttons.join('|') === '新话题|我要预习小蝌蚪找妈妈|接着讲刚才的板书' && v0.extras.join() === '/dictation?tutor=chinese-tutor' && !v0.brief, JSON.stringify(v0.buttons));
-  ok('方砖:新话题下面一行三块,预习、检查作业、复习,都有图', v0.tiles.join() === 'preview:预习:true,check:检查作业:true,review:复习:true', JSON.stringify(v0.tiles));
+  ok('语文的卡:按钮齐(没有新话题、开场、接着);「每天都在」有拍照听写;讲法不在页面里', v0.buttons.join('|') === '我要预习小蝌蚪找妈妈|我要看图说话' && v0.extras.join() === '/dictation?tutor=chinese-tutor' && !v0.brief, JSON.stringify(v0.buttons));
+  ok('方砖:牌上第一行三块,预习、检查作业、复习,都有图', v0.tiles.join() === 'preview:预习:true,check:检查作业:true,review:复习:true', JSON.stringify(v0.tiles));
   ok('手机竖着叠:后面的牌在上面、一张比一张高,左边对齐;几张牌一样高', v0.rects[0][1] < v0.rects[1][1] && v0.rects[1][1] < v0.rects[2][1] && v0.heights.length === 1, JSON.stringify([v0.rects, v0.heights]));
-  ok('卡的归属:写在老师卡前面的一段字是公共的(牌堆上面);跟在数学后面的田字格不在语文的牌里', v0.shared.length === 1 && v0.shared[0].includes('c-text') && v0.owned.length === 0, JSON.stringify([v0.shared, v0.owned]));
+  ok('首页只有老师卡:牌堆上面、牌里都没有别的卡', v0.shared.length === 0 && v0.owned.length === 0, JSON.stringify([v0.shared, v0.owned]));
   ok('橙点:数学(家长排了按钮、孩子还没找过)亮;最前的语文、什么都没排的英语不亮', v0.dots.join() === 'math-tutor', JSON.stringify(v0.dots));
   console.log('  ', await shot('home-phone.png'));
 
@@ -132,7 +118,7 @@ for: ${day}
   ok('落下时张嘴:新的最前那张开口一张一合', bite);
   await sleep(700);
   const v1 = await stack();
-  ok('换位:数学到最前,语文往上让一格,英语不动;田字格归数学、在他的牌里;橙点灭', v1.order.join() === 'english-tutor,chinese-tutor,math-tutor' && v1.front.join() === 'math-tutor' && v1.card === 'math-tutor' && v1.name === '数学老师' && v1.buttons.join('|') === '新话题|再练两道退位减法' && v1.owned.length === 1 && v1.owned[0].includes('c-tianzige') && v1.dots.length === 0 && v1.extras.length === 0, JSON.stringify(v1));
+  ok('换位:数学到最前,语文往上让一格,英语不动;橙点灭', v1.order.join() === 'english-tutor,chinese-tutor,math-tutor' && v1.front.join() === 'math-tutor' && v1.card === 'math-tutor' && v1.name === '数学老师' && v1.buttons.join('|') === '再练两道退位减法' && v1.dots.length === 0 && v1.extras.length === 0, JSON.stringify(v1));
   await tapAvatar('math-tutor');
   await sleep(400);
   ok('点最前那张:不换人', (await stack()).order.join() === v1.order.join());
@@ -145,39 +131,31 @@ for: ${day}
   ok('平板横屏:横着叠,后面的牌在左边、一张比一张靠左,底对齐(往后一张缩一点,是从左下角缩的)', vt.rects[0][0] < vt.rects[1][0] && vt.rects[1][0] < vt.rects[2][0] && Math.abs(vt.rects[2][2] - vt.rects[0][2]) < 2 && vt.card === 'math-tutor', JSON.stringify(vt.rects));
   console.log('  ', await shot('home-tablet.png'));
 
-  // ---- 新话题:空白老师页;回来停在刚才那位 ----
   await device(390, 844, 2, true);
-  await evaluate(`document.querySelector('#deck .pc.front .bt-new').click()`);
-  await sleep(600);
-  const blank = await evaluate(`({ on: document.querySelector('#tutor').classList.contains('on'), blank: document.querySelector('#board .blank b')?.textContent, mo: document.querySelector('#c-mo').textContent })`);
-  ok('新话题:空白老师页,等孩子开口;胶囊旁不挂「新话题」小标签', blank.on && blank.blank === '想问什么?' && blank.mo === '', JSON.stringify(blank));
-  await evaluate(`document.querySelector('#back').click()`);
-  await sleep(1500);
-  ok('从老师页回来:还是数学在最前', (await stack()).card === 'math-tutor');
   await tapAvatar('chinese-tutor');
   await sleep(900);
 
-  // ---- 开场按钮:老师页打开,按钮上的字发出去 ----
-  await evaluate(`[...document.querySelectorAll('#deck .pc.front[data-tutor="chinese-tutor"] .bt:not(.bt-tile)')].find((b) => b.textContent.includes('预习')).click()`);
+  // ---- activity 按钮:老师页打开,按钮上的字发出去 ----
+  await evaluate(`[...document.querySelectorAll('#deck .pc.front[data-tutor="chinese-tutor"] .bt:not(.bt-tile)')].find((b) => b.textContent.includes('看图说话')).click()`);
   await sleep(500);
   const d = await settle('chinese-tutor');
   const idx = (await api('GET', '/api/conversations/chinese-tutor/today')).json?.index;
   const last = idx?.messages[idx.messages.length - 1];
-  ok('开场:按钮上的字发给语文老师、新话题、带 via', last?.text === '我要预习小蝌蚪找妈妈' && last?.via?.button === 0 && last.thread === last.job, JSON.stringify({ text: last?.text, via: last?.via, thread: last?.thread }));
+  ok('activity 按钮:按钮上的字发给语文老师、新话题、带 via、照 activity 带', last?.text === '我要看图说话' && last?.via?.button === 1 && last?.activity?.name === '看图说话' && last.thread === last.job, JSON.stringify({ text: last?.text, via: last?.via, activity: last?.activity, thread: last?.thread }));
   await sleep(1500);
   const page = await evaluate(`({ secs: document.querySelectorAll('#board .sec').length, blank: !!document.querySelector('#board .blank') })`);
   ok('老师页铺上了这一节', d && page.secs === 1 && !page.blank, JSON.stringify(page));
   console.log('  ', await shot('tutor-after-start.png'));
 
-  // ---- 方砖:点「检查作业」= 新话题、发方砖上的字、话题照 activity「检查作业」 ----
+  // ---- 方砖:三块都以板为主(board: page),点「检查作业」先到拍照屏,拍了才发 ----
   await evaluate(`document.querySelector('#back').click()`);
   await sleep(1500);
+  const before = (await api('GET', '/api/conversations/chinese-tutor/today')).json?.index?.messages.length ?? 0;
   await evaluate(`document.querySelector('#deck .pc.front[data-tutor="chinese-tutor"] .bt-tile[data-tile="check"]').click()`);
-  await sleep(500);
-  await settle('chinese-tutor');
-  const idx2 = (await api('GET', '/api/conversations/chinese-tutor/today')).json?.index;
-  const last2 = idx2?.messages[idx2.messages.length - 1];
-  ok('方砖:「检查作业」发给语文老师、新话题、带 via、照 activity 带', last2?.text === '检查作业' && last2?.via?.button === 'check' && last2?.activity?.name === '检查作业' && last2.thread === last2.job, JSON.stringify({ text: last2?.text, via: last2?.via, activity: last2?.activity, thread: last2?.thread }));
+  await sleep(1200);
+  const bp = await evaluate(`({ on: document.querySelector('#tutor').classList.contains('on'), start: Boolean(document.querySelector('#board .bp-start')) })`);
+  const after = (await api('GET', '/api/conversations/chinese-tutor/today')).json?.index?.messages.length ?? 0;
+  ok('方砖「检查作业」:老师页打开、先到拍照屏,还没发消息', bp.on && bp.start && after === before, JSON.stringify({ ...bp, before, after }));
 
   ws.close();
 } finally {

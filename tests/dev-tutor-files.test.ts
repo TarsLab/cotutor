@@ -47,7 +47,7 @@ try {
   const list = await rows();
   const math = list.find((r) => r.tutor === 'math-tutor');
   check('列:cotutor.json 里每位老师一行,有脸的叫「新话题」', list.length === Object.keys(ctx.ws.config.tutors).length && list.every((r) => r.kind === 'tutor' && r.name === '新话题'), JSON.stringify(list));
-  check('列:没发布首页 = 缺省首页,新话题一个按钮;出厂最新', math?.state === 'latest' && math.buttons === 1 && math.fixes === 0, JSON.stringify(math));
+  check('列:首页上没有照它带的按钮;出厂最新', math?.state === 'latest' && math.buttons === 0 && math.fixes === 0, JSON.stringify(math));
   check('activity 的列表不变(老师文件另走一条)', ((await route('GET', '/api/dev/activities', ctx)).json as Row[]).every((r) => r.kind === undefined));
 
   // ---- 读 ----
@@ -55,9 +55,9 @@ try {
   check('读:原文、hash、相对路径、是出厂的', doc.kind === 'tutor' && doc.name === '新话题' && doc.text === shipped && doc.hash.startsWith('sha256:') && doc.path === 'agents/math-tutor.md' && doc.shipped && doc.state === 'latest', JSON.stringify({ ...doc, text: undefined }));
   check('cotutor.json 里没有的老师 404;拼路径的不匹配', (await route('GET', '/api/dev/tutor-files/nobody-tutor', ctx)).status === 404 && (await route('GET', '/api/dev/tutor-files/..%2Fcotutor', ctx)).status !== 200);
 
-  // ---- 首页上照它带的按钮:新话题 + 开场按钮,activity 按钮不算 ----
+  // ---- 首页上照它带的按钮:没有了(新话题、开场按钮删了),activity 按钮不算 ----
   mkdirSync(join(root, 'home'), { recursive: true });
-  writeFileSync(join(root, 'home', 'draft.md'), '```tutor math-tutor\n今天的口算\n讲法: 先出两道\nactivity 小课堂\n```\n\n## 为什么这么排\n\n试\n');
+  writeFileSync(join(root, 'home', 'draft.md'), '```tutor math-tutor\nactivity 小课堂\n```\n\n## 为什么这么排\n\n试\n');
   const pub = await publishHome(ctx.ws, { now: new Date() });
   check('发布了', pub.ok, JSON.stringify(pub.check.issues));
 
@@ -65,7 +65,7 @@ try {
   type Chk = { issues: { level: string; line?: number }[]; sections: { title: string }[]; buttons: { label: string; kind: string }[]; preview: { text: string; chars: number; board: { chars: number } | null; rules: { text: string; path: string } | null }; diff: { at: number; now: string[] }[] | null };
   const edited = shipped.replace('说话慢,一次只讲一个想法', '说话慢,一次只讲一个想法,多夸一句');
   const c1 = (await route('POST', base + '/check', ctx, { text: edited })).json as Chk;
-  check('查:首页上照它带的是新话题与开场按钮', c1.buttons.map((b) => b.kind + ':' + b.label).join(',') === 'new:新话题,start:今天的口算', JSON.stringify(c1.buttons));
+  check('查:首页上没有照它带的按钮', c1.buttons.length === 0, JSON.stringify(c1.buttons));
   check('查:老师收到的是去掉 frontmatter 的正文 + 板书写法,话题第一条带守则', c1.preview.text.startsWith('你是这个家的数学老师') && c1.preview.text.includes('多夸一句') && !c1.preview.text.includes('maxTurns') && (c1.preview.board?.chars ?? 0) > 100 && c1.preview.rules?.path === '.agents/skills/cotutor-tutor/SKILL.md' && (c1.preview.rules?.text.length ?? 0) > 100, JSON.stringify({ ...c1.preview, text: c1.preview.text.slice(0, 40), rules: undefined }));
   check('查:和出厂比一块', c1.diff?.length === 1 && c1.diff[0].now[0].includes('多夸一句'), JSON.stringify(c1.diff));
   check('查:不落盘', readFileSync(file, 'utf8') === shipped);

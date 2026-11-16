@@ -11,9 +11,8 @@ import { UsageError } from '../../shared/errors.ts';
 import type { Workspace } from '../../schema/index.ts';
 import { lintAgentFile, parseAgentFile, type AgentFileIssue } from '../../runtime/agent-file.ts';
 import { TUTOR_RULES_PATH, takesTutorRules, tutorRulesBody } from '../../runtime/context/tutor-rules.ts';
-import { tutorCardKinds, type TutorButton } from '../../board/cards/index.ts';
+import { tutorCardKinds } from '../../board/cards/index.ts';
 import { resolvePolicy } from '../../schema/index.ts';
-import { readPublished } from '../../runtime/home/store.ts';
 import { boardGuideOf } from '../../runtime/runner.ts';
 import { ActivityConflict, diffHunks, type DiffHunk } from './dev-activities.ts';
 
@@ -43,15 +42,9 @@ async function stateOf(ws: Workspace, tutor: string): Promise<{ state: TutorFile
   return { state: st.state, ...(st.basedOn ? { basedOn: st.basedOn } : {}) };
 }
 
-/** 孩子端首页上照老师文件带的按钮:新话题(永远第一个)+ 开场按钮;没发布过首页就是缺省首页(孩子端露的老师一张只有新话题的卡) */
-async function homeButtons(ws: Workspace, tutor: string): Promise<{ label: string; kind: 'new' | 'start' }[]> {
-  if (!takesTutorRules(tutor)) return [];
-  const { home } = await readPublished(ws);
-  const t = ws.config.tutors[tutor];
-  if (!home) return t?.enabled && !t.hidden ? [{ label: '新话题', kind: 'new' }] : [];
-  const card = home.cards.find((c) => c.kind === 'tutor' && c.props.tutor === tutor);
-  if (!card) return [];
-  return [{ label: '新话题', kind: 'new' as const }, ...((card.props.buttons ?? []) as TutorButton[]).filter((b) => b.kind === 'start').map((b) => ({ label: b.label, kind: 'start' as const }))];
+/** 孩子端首页上照老师文件带的按钮:没有了(新话题、开场按钮 2026-11-16 删了,话题都从 activity 开始);老师文件整个在阶段 1 任务 4 删 */
+async function homeButtons(_ws: Workspace, _tutor: string): Promise<{ label: string; kind: 'new' | 'start' }[]> {
+  return [];
 }
 
 export async function listDevTutorFiles(ws: Workspace): Promise<DevTutorFileRow[]> {

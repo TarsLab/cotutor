@@ -44,7 +44,6 @@ import type { Retrieved } from '../memory/retrieval.ts';
 import { memoryCount, textHash, tidyMemoryPrompt } from '../memory/vault-notes.ts';
 import { TUTOR_RULES_PATH, takesTutorRules, tutorRulesBody, BOARD_GUIDE_IN_SYSTEM, BOARD_GUIDE_PATH, boardGuideBody, boardGuideReads } from './context/tutor-rules.ts';
 import { DubQueue } from '../media/tts.ts';
-import { continueContext } from './home/store.ts';
 import { kidInput, type KidAccept } from './kid-input.ts';
 import { compatibleLine } from '../shared/qianwen.ts';
 import { lookAt } from '../media/vision.ts';
@@ -104,8 +103,6 @@ export interface SendInput {
   home?: { button: string; brief?: string };
   /** 这一轮走实时:讲稿不配音(拍关就就绪)、交给嘴照念;消息记 live,上下文包带 live:(嘴接住时说的、上一轮念到第几句被打断;口语课的摸底、打电话几分钟、应用起的这一轮) */
   live?: NonNullable<ContextPack['live']>;
-  /** 接着以前哪天的哪个话题:这条开新话题时上下文包带那个话题的尾巴(continue: 段),消息记 continues;pack 给了就不现读(回放从原 workspace 读好的) */
-  continues?: { date: string; thread: string; pack?: NonNullable<ContextPack['continue']> };
 }
 
 export interface SendStarted {
@@ -637,8 +634,7 @@ export class Runner {
     // 长话题整段压缩(API 运行时):之前的模型历史不再发,前情照索引拼;这一轮笔记带全文,不写「未变」(原文所在的那几轮不发了)
     const compact = !fresh && isApiRuntime(runtime) && dueCompact(index.messages, known, thread);
     // activity:新话题照这条带的,续话题照话题第一条记的。系统提示、卡、记忆都是它的(记账轮也是,接着同一个会话);上下文包的 activity 段记账轮不带
-    // 隔天「接着」是新话题:没带 activity 就沿用被接的那个话题的(参数也是那时的),不然退回老师文件,没有那套做法和卡
-    const threadRun = fresh ? (input.activity ?? (input.continues ? threadActivity((await readIndex(ws, tutor, input.continues.date)).messages, input.continues.thread) : null)) : threadActivity(index.messages, thread);
+    const threadRun = fresh ? (input.activity ?? null) : threadActivity(index.messages, thread);
     const act = threadRun ? await activityParts(ws, tutor, threadRun) : null;
     // 取材的查询:孩子这句话,加首页按钮的讲法(系统任务不查)
     const query = input.from === 'kid' ? [text, input.home?.brief].filter(Boolean).join('\n') : '';
@@ -694,8 +690,6 @@ export class Runner {
     const marks = input.lecture?.marks?.length ? storedMarks(lecture, input.lecture.marks, photos.length) : [];
     if (input.lecture && lecture) pack.lecture = lecturePack(lecture, input.lecture, marks);
     const lectureWarn = input.lecture && !lecture ? [`小课堂:${input.lecture.bundle} 读不出来(bundles/ 与 lectures/ 下都没有能放的),老师没拿到课的内容`] : [];
-    const continued = input.continues && fresh ? (input.continues.pack ?? (await continueContext(ws, tutor, input.continues.date, input.continues.thread))) : null;
-    if (continued) pack.continue = continued;
     if (input.live) {
       const l = input.live;
       pack.live = { ...(l.caught ? { caught: l.caught } : {}), ...(l.cut !== undefined ? { cut: l.cut } : {}), ...(l.warmup?.length ? { warmup: l.warmup } : {}), ...(l.phone !== undefined ? { phone: l.phone } : {}), ...(l.app ? { app: l.app } : {}) };
@@ -705,7 +699,7 @@ export class Runner {
     const plan = this.brain.plan(req);
 
     // 原声:落在这轮旁边(删话题一起删);写不下就当没有,消息照发
-    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards: cards.map(({ card, text }) => ({ card, text })) } : {}), ...(photos.length ? { photos } : {}), ...(input.device ? { device: input.device } : {}), ...(input.deviceId ? { deviceId: input.deviceId } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.tidy ? { tidy: true as const } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(input.eval ? { eval: true as const } : {}), ...(input.live ? { live: true as const } : {}), ...(input.via ? { via: input.via } : {}), ...(continued && input.continues ? { continues: { date: input.continues.date, thread: input.continues.thread } } : {}), ...(input.lecture ? { lecture: { bundle: input.lecture.bundle, title: lecture?.title ?? input.lecture.bundle, watchedMs: input.lecture.watchedMs, finished: input.lecture.finished, pauses: input.lecture.pauses, ...(input.lecture.again ? { again: true as const } : {}), ...(lecture?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}), ...(input.lecture.log?.length ? { log: input.lecture.log } : {}) } } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(fresh && activityRun ? { activity: activityRun } : {}), ...(fresh && boardPage ? { board: 'page' as const } : {}), ...(fresh && input.talk ? { talk: input.talk } : {}), ...(compact ? { compacted: true as const } : {}), ...(lectureWarn.length || activityWarn.length ? { warnings: [...lectureWarn, ...activityWarn] } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
+    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards: cards.map(({ card, text }) => ({ card, text })) } : {}), ...(photos.length ? { photos } : {}), ...(input.device ? { device: input.device } : {}), ...(input.deviceId ? { deviceId: input.deviceId } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.tidy ? { tidy: true as const } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(input.eval ? { eval: true as const } : {}), ...(input.live ? { live: true as const } : {}), ...(input.via ? { via: input.via } : {}), ...(input.lecture ? { lecture: { bundle: input.lecture.bundle, title: lecture?.title ?? input.lecture.bundle, watchedMs: input.lecture.watchedMs, finished: input.lecture.finished, pauses: input.lecture.pauses, ...(input.lecture.again ? { again: true as const } : {}), ...(lecture?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}), ...(input.lecture.log?.length ? { log: input.lecture.log } : {}) } } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(fresh && activityRun ? { activity: activityRun } : {}), ...(fresh && boardPage ? { board: 'page' as const } : {}), ...(fresh && input.talk ? { talk: input.talk } : {}), ...(compact ? { compacted: true as const } : {}), ...(lectureWarn.length || activityWarn.length ? { warnings: [...lectureWarn, ...activityWarn] } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
     await writeIndex(ws, started);
     // 板的日志记一笔:这一轮把板交给了老师(下一轮「孩子做的」从这之后算;给了全文的下一轮写「未变」)
     if (slate) await appendBoard(ws, tutor, date, thread, { at: now.toISOString(), k: 'turn', job, ...(slate.told ? { told: slate.told } : {}) });

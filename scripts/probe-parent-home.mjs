@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * 家长端「首页」(/parent/home)的手动验收(不进 pnpm test,要本机 Chrome;假老师、假百炼,不花钱):
- * 临时 workspace + HTTP serve → 手机尺寸开 /parent/home:预览是孩子端首页本身(/preview)→ 给英语老师加一个开场按钮 → 发布了、孩子端与预览都有 →
+ * 临时 workspace + HTTP serve(先给英语老师排一个 activity 按钮;家长端只改排好的按钮,开场按钮 2026-11-16 删了)→ 手机尺寸开 /parent/home:预览是孩子端首页本身(/preview)→ 改英语老师那颗的字和讲法 → 发布了、孩子端与预览都有 →
  * 在预览里点后面那张换老师、设语文这周的词 → 一排里拖数学到第一 → 宽屏:在预览里点那颗、右栏改、改字时预览跟着变、切手机样子、拖语文到第一 →
  * 去工作台的链接、「扫码打开」(还没有平板连过 → 开着;孩子的平板 / 我的手机两张;能收起展开)、「样子与声音」(宽屏在右栏:挑头像;「换一个」开弹窗挑声音:筛、搜、试听、用;手机整屏、弹窗从底下升起)→
  * 「记录」有两个标签,时间线上有这次听写;截图。
@@ -50,6 +50,9 @@ const settle = async (tutor) => { for (let i = 0; i < 80; i++) { const d = (awai
 
 let browser = null;
 try {
+  const pre = await api('PUT', '/api/parent/home/tutors/english-tutor/buttons', { buttons: [{ kind: 'activity', label: '预习', activity: '预习', params: {} }] });
+  ok('先排一个 activity 按钮(编程助手排的那种)', pre.status === 200, JSON.stringify(pre.json));
+  await api('PUT', '/api/parent/home/order', { tutors: ['chinese-tutor', 'english-tutor', 'math-tutor'] });
   browser = spawn(chrome, [...QUIET_ARGS, '--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', `--remote-debugging-port=${cdp}`, '--window-size=780,1688', `--user-data-dir=${join(home, 'chrome')}`, 'about:blank'], { stdio: 'ignore' });
   let wsUrl = null;
   for (let i = 0; i < 40 && !wsUrl; i++) { try { const list = await (await fetch(`http://127.0.0.1:${cdp}/json`)).json(); wsUrl = list.find((t) => t.type === 'page')?.webSocketDebuggerUrl ?? null; } catch {} if (!wsUrl) await sleep(250); }
@@ -88,11 +91,12 @@ try {
   ok('打开:三位老师一排,语文在前;「首页」标签亮着;预览里是孩子端首页本身(牌堆三张,语文在最前)', await until(`document.querySelectorAll('.ord .ch').length === 3 && document.querySelector('.seg .on')?.textContent === '首页' && document.querySelector('.ord .ch.on')?.textContent.includes('语文') && ${pv(`d.querySelectorAll('#deck .pc').length === 3`)} && ${front} === 'chinese-tutor'`, 60));
   console.log('  ', await shot('parent-home.png'));
 
-  // ---- 英语老师加一个开场按钮(手机:点下面的「加一个」→ 整屏的表单) ----
+  // ---- 改英语老师那颗按钮(手机:在预览里点它 → 整屏的表单) ----
   await tap(byText('.ord .ch', '英语'));
   ok('点一排里的英语:预览里英语那张换到最前', await until(`${front} === 'english-tutor'`));
-  await tap(`document.querySelector('#pv-under .addb')`);
-  ok('表单:缺省「只今天」,字为空时发布灰着', await until(`document.querySelector('#sheet').classList.contains('on') && document.querySelector('#sheet .seg .on')?.textContent === '只今天' && document.querySelector('#sheet .nav button:last-child').disabled`));
+  await sleep(1000);
+  await tapPv(`[...d.querySelectorAll('#deck .pc.front .bt:not(.bt-tile)')].find((x) => x.textContent.includes('预习'))`);
+  ok('表单:字是那颗的,「一直留着」;没有「加一个开场按钮」', await until(`document.querySelector('#sheet').classList.contains('on') && document.querySelector('#b-label')?.value === '预习' && document.querySelector('#sheet .seg .on')?.textContent === '一直留着'`) && !(await evaluate(`Boolean(document.querySelector('#pv-under .addb'))`)));
   await typeInto('#b-label', '我想说说我的小汽车');
   await typeInto('#b-brief', '多问他喜欢什么颜色');
   const form = await evaluate(`({ count: document.querySelector('#sheet .gh span').textContent, go: document.querySelector('#sheet .nav button:last-child').disabled })`);
@@ -102,7 +106,7 @@ try {
   await until(`!document.querySelector('#sheet').classList.contains('on')`);
   const kid1 = (await api('GET', '/api/kid/home')).json;
   const enBtns = kid1.cards.find((c) => c.kind === 'tutor' && c.props.tutor === 'english-tutor')?.props.buttons.map((b) => b.label);
-  ok('发布了:孩子端英语老师多了这个按钮,讲法不下发;预览里英语那张也有了', enBtns?.join() === '新话题,我想说说我的小汽车' && !JSON.stringify(kid1).includes('颜色') && await until(pv(`[...d.querySelectorAll('#deck .pc[data-tutor="english-tutor"] .btx')].some((x) => x.textContent === '我想说说我的小汽车')`)), JSON.stringify(enBtns));
+  ok('发布了:孩子端英语老师那颗换了字,讲法不下发;预览里英语那张也换了', enBtns?.join() === '我想说说我的小汽车' && !JSON.stringify(kid1).includes('颜色') && await until(pv(`[...d.querySelectorAll('#deck .pc[data-tutor="english-tutor"] .btx')].some((x) => x.textContent === '我想说说我的小汽车')`)), JSON.stringify(enBtns));
 
   // ---- 语文这周的词:在预览里点语文那张(后面那张,照孩子端换到最前),再改这周的词 ----
   await tapPv(`d.querySelector('#deck .pc[data-tutor="chinese-tutor"] .pc-hd')`);

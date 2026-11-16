@@ -18,7 +18,7 @@ import { compactDiff, diffLines, type DiffRow } from './diff.ts';
 import { tokenText, type Tokens } from '../shared/tokens.ts';
 import { toolCalls, type ToolCall } from '../brain/transcript.ts';
 import type { ConversationMessage, Timing } from '../schema/index.ts';
-import { continueContext, homeButtonAt } from '../runtime/home/store.ts';
+import { homeButtonAt } from '../runtime/home/store.ts';
 import { Runner } from '../runtime/runner.ts';
 import { threadActivity } from '../runtime/activity-state.ts';
 import { readIndex, readRunFile } from '../runtime/journal/store.ts';
@@ -63,9 +63,8 @@ export async function startReplay(ws: Workspace, tutor: string, date: string, jo
   if (m.bookkeep) throw new UsageError('记账那轮不回放(它 resume 话题的会话,单独跑没有意义)');
   const evalWs = evalWorkspace(ws);
   const runner = new Runner(() => evalWs, { now: opts.now, env: opts.env });
-  // 从首页按钮进来的那轮:讲法从当时发布的那份原文取,接着的话题从原 workspace 读(回放的 workspace 指到 evals/)
+  // 从首页按钮进来的那轮:讲法从当时发布的那份原文取
   const button = m.via && typeof m.via.button === 'number' ? await homeButtonAt(ws, tutor, m.via) : null;
-  const continued = m.continues ? await continueContext(ws, tutor, m.continues.date, m.continues.thread) : null;
   // activity 话题里的哪一轮:照话题第一条记的 activity 带(回放是新会话,activity 那段整篇带)
   const activity = threadActivity(index.messages, threads(index.messages)[index.messages.indexOf(m)]);
   const started = await runner.send(tutor, {
@@ -81,7 +80,6 @@ export async function startReplay(ws: Workspace, tutor: string, date: string, jo
     runtime: opts.runtime,
     ...(m.via ? { via: m.via } : {}),
     ...(m.via && viaSendsLabel(m.via) ? { home: { button: m.via.label, ...(button?.brief ? { brief: button.brief } : {}) } } : {}),
-    ...(m.continues && continued ? { continues: { ...m.continues, pack: continued } } : {}),
     ...(activity ? { activity } : {}),
     // 原轮是实时的:回放也按实时写(上下文包带 live:、不补提问卡);嘴不在,接住与打断的 caught / cut 不带
     ...(m.live ? { live: {} } : {}),

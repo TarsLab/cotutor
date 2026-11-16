@@ -448,7 +448,7 @@ export interface OverviewThread {
    * 孩子是点哪颗进来的(记录的卡照搬孩子端那颗):new 新话题(或没从首页进来)、start 开场、continue 接着、lecture 小课堂、activity、system 系统起的;
    * label = 按钮上的字(new 是「新话题」)
    */
-  start: { kind: 'new' | 'start' | 'continue' | 'lecture' | 'activity' | 'system'; label: string };
+  start: { kind: 'new' | 'start' | 'lecture' | 'activity' | 'system'; label: string };
   /** 孩子自己说的第一句(截 30 字;按钮发的那句不算):新话题气泡上的小字 */
   said: string | null;
   /** 最后一轮老师写完(配好音)的时刻(ISO);没有计时的老数据 null */
@@ -533,7 +533,7 @@ export async function overview(ctx: AppContext, date: string): Promise<Overview>
         const via = m.via?.label ?? null;
         const raw = via ? `首页 · ${via}` : m.from === 'kid' ? m.text : `系统:${m.text}`;
         const b = m.via?.button;
-        const kind = m.from === 'system' ? 'system' : m.lecture ? 'lecture' : m.continues ? 'continue' : m.activity ? 'activity' : typeof b === 'number' ? 'start' : 'new';
+        const kind = m.from === 'system' ? 'system' : m.lecture ? 'lecture' : m.activity ? 'activity' : typeof b === 'number' ? 'start' : 'new';
         th = { thread: id, at: m.at, title: Array.from(raw.trim()).slice(0, 20).join(''), from: m.from, via, start: { kind, label: kind === 'new' ? '新话题' : (via ?? m.lecture?.title ?? '') }, said: null, endAt: null, notes: [], remembered: [], writes: [], sections: 0, cards: 0, stoppedAt: null, rating: index.ratings[id] ?? null, booked: id in index.booked };
         by.set(id, th);
       }

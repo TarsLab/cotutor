@@ -1,9 +1,9 @@
 /**
- * dub:课包配音。manifest 各步的讲稿 → 配音(src/media/tts.ts,和卡的配音同一条线、同一份缓存)→ bundles/<id>/audio/step-<n>.mp3 →
+ * dub:课包配音。manifest 各步的讲稿 → 配音(src/media/tts.ts,和听写念词同一条线、同一份缓存)→ bundles/<id>/audio/step-<n>.mp3 →
  * audio/index.json(步 ↔ 文件 ↔ 讲稿 hash ↔ 时长)→ 回填 manifest 的 audioSrc / audioDurationMs。
  * 课包自包含不变(audio/ 是拷贝,iPad 整目录离线播)。讲稿与音色都没变的步不重配;变了的去合成(缓存里有就不花钱)。
  * 时长从 mp3 帧头量(src/media/mp3.ts):播放器按它把这一步的笔画拉伸到讲稿那么长。
- * 2026-10-31 以前是起 voxtell batch;audio/index.json 的格式与 schema 名(drawtell-audio)照旧,已经配好的课包不用重配。
+ * audio/index.json 的 schema 名叫 drawtell-audio(画面引擎以前的名字),格式没变,以前配好的课包不用重配。
  */
 import { createHash } from 'node:crypto';
 import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -43,7 +43,7 @@ export interface DubOptions {
 export interface DubResult {
   ok: boolean;
   dryRun: boolean;
-  /** 约多少计费字符(汉字算 2、别的算 1;voxtell 实测和账单差 ±5%) */
+  /** 约多少计费字符(汉字算 2、别的算 1;实测和账单差 ±5%) */
   characters: number;
   /** kept = 讲稿与音色都没变,沿用课包里那份 */
   steps: Array<{ step: number; file: string | null; kept: boolean; characters: number; durationMs: number | null; error?: string }>;

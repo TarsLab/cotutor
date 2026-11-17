@@ -1,5 +1,5 @@
 /**
- * 孩子端发一条的验与拼:孩子端只走实时那条连接(src/runtime/live/turns.ts;HTTP 的发 2026-11-04 删了),经 Runner.accept 进来。
+ * 孩子端发一条的验与拼:孩子端只走实时那条连接(src/runtime/live/turns.ts),经 Runner.accept 进来。
  * 验正文、话题、首页按钮、小课堂、activity、照片,拼成 Runner.send 的入参;不对回 reject(状态码 + 错误名),连接上回 {t:'err'}。不起老师。
  */
 import { HomeViaSchema, DeviceSchema, type ActivityValue } from '../schema/index.ts';
@@ -43,7 +43,7 @@ export async function kidInput(ws: Workspace, tutor: string, body: unknown, date
   const button = via ? await resolveVia(ws, tutor, via.data!) : null;
   if (via && !button) return reject(400, 'bad_via');
   let text = body.text;
-  // 新话题只从首页的按钮(activity、方砖、小课堂)和口语课开始(2026-11-16 起没有自由话题);别的都接着今天的一个话题
+  // 新话题只从首页的按钮(activity、方砖、小课堂)开始(没有自由话题);别的都接着今天的一个话题
   let newThread = false;
   let pick = thread;
   let home: { button: string; brief?: string } | undefined;
@@ -114,7 +114,7 @@ function lectureOf(v: unknown): { bundle: string; watchedMs: number; finished: b
   const point = (p: unknown): [number, number] | null => (Array.isArray(p) && p.length === 2 && p.every((x) => typeof x === 'number' && Number.isFinite(x) && Math.abs(x) < 1e5) ? [Math.round(p[0] as number), Math.round(p[1] as number)] : null);
   for (const m of raw as unknown[]) {
     if (!isObj(m) || typeof m.atMs !== 'number' || !(m.atMs >= 0) || m.atMs > 6 * 3600_000) return null;
-    // 一处 = 停在同一刻画的几笔(strokes);2026-10-19 以前一笔一处(path),照读
+    // 一处 = 停在同一刻画的几笔(strokes);以前一笔一处(path),照读
     const rawStrokes = Array.isArray(m.strokes) ? (m.strokes as unknown[]) : Array.isArray(m.path) ? [m.path] : null;
     if (!rawStrokes || !rawStrokes.length || rawStrokes.length > MARK_MAX_STROKES) return null;
     const strokes: [number, number][][] = [];

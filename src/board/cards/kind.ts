@@ -1,6 +1,6 @@
 /**
- * 一种首页卡(老师牌、听写牌)的服务端定义:props 契约、围栏正文怎么解析、哪些字段不下发孩子端;写法在包根 cards/<kind>/card.md(src/board/cards/docs.ts 读它)。
- * 页面那一半(首页上怎么画)在 kid-page.ts;两边靠 kind 名对上。课里的卡 2026-11-17 删了。
+ * 一种首页的牌(老师牌、听写牌)的服务端定义:props 契约、围栏正文怎么解析、哪些字段不下发孩子端;写法在包根 cards/<kind>/card.md(src/board/cards/docs.ts 读它)。
+ * 页面那一半(首页上怎么画)在 kid-page.ts;两边靠 kind 名对上。
  */
 import type { z } from 'zod';
 

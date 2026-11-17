@@ -1,5 +1,5 @@
 /**
- * 照片页的文字层(2026-11-16《多模态教学harness-开发计划》阶段 3 任务 1):孩子拍的作业照片上认出的字
+ * 照片页的文字层:孩子拍的作业照片上认出的字
  * (src/scenes/photo-words/:挑出的字词、正文的行、每道题的框,都是整张照片的千分比)换成课本的样子——行与字(BookPage)、题(BookBlock)。
  * 这样照片页和课本页用同一份找框(bookFind、bookTarget)、点字(bookPick)、说窗里是哪(bookView),圈、遮、盖、点字只有一份实现。
  * 一张照片当一页:宽 1000(BOOK_W),高 1000 × 高宽比,几张从上往下连着(同 src/board/lesson.ts 的 photoSheetBox)。

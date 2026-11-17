@@ -1,9 +1,9 @@
 /**
- * 工作台 /dev(2026-09-22 之前叫家长端 /parent;现在家长端是 /parent = 记录与首页,给不懂技术的家长日常用,这页给有技术背景的家长与开发者):
- * 六个标签(概览 / 对话 / 老师团 / activity / 音色 / 设置)+「看原文」抽屉,零依赖内联脚本,只走 /api/*。
- * 2026-09-11 重做:一轮 = 一张卡(问句 → 讲稿与动作 → 埋点 → 孩子看到 → 通知块);课里的卡 2026-11-17 删了,讲稿一句一行、动作写在句末;
+ * 工作台 /dev(给有技术背景的家长与开发者;不懂技术的家长日常用家长端 /parent):
+ * 五个标签(概览 / 对话 / 老师团 / activity / 设置)和按钮样张的链接(/dev/voice)+「看原文」抽屉,零依赖内联脚本,只走 /api/*。
+ * 对话里一轮 = 一块(问句 → 讲稿与动作 → 埋点 → 孩子看到 → 通知块),讲稿一句一行、动作写在句末;
  * 顶栏与输入框各自钉死(grid-rows auto/1fr/auto + min-height:0,不再硬算 100vh - 47px:顶栏一换行就错位,composer 被顶出视口);
- * 老师团一位一行、九项政策折叠、改过的才亮;设置分路径 / 服务 / 配音三块,配音能当场试一句。
+ * 老师团一位一行、政策折叠、改过的才亮;设置分路径 / 服务 / 配音三块,配音能当场试一句。
  * 看原文 = 把一轮拆成几站(上下文包 / 时间线 / 老师原文 / 解析结果 / 下发给孩子 / 读了什么 / 转录),数据来自 /api/conversations/<老师>/<日期>/raw/<job>。
  * 放在 .ts 里而不是 .html,是因为 tsc 不拷贝静态文件,dist 里就少一份。
  * 改这里注意:整份是模板字符串——页面脚本里不要用反引号与 ${},换行写 \\n,正则里别写 \\/。
@@ -548,7 +548,7 @@ ${BRAND_CSS}
     <a href="/dev/voice" target="_blank" title="老师页那颗「头像 + 按住说话」的每一种样子(声音是模拟的);调动画时看这一页"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="12" r="4.5"/><path d="M15 9.5a4 4 0 0 1 0 5M18 7a7.5 7.5 0 0 1 0 10"/></svg>按钮样张<span class="out">↗</span></a>
     <span class="grp">去看</span>
     <a href="/" target="_blank" title="孩子端:孩子在 iPad 上看到的"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2.5"/><path d="M10.5 18h3"/></svg>孩子端<span class="out">↗</span></a>
-    <a href="/parent" target="_blank" title="家长端:日常看孩子的板书、看录像、打星、删话题、记账;iPad 上扫码进的就是它"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"/><path d="M9 10h6M9 14h4"/></svg>家长端<span class="out">↗</span></a>
+    <a href="/parent" target="_blank" title="家长端:日常看孩子的记录、看录像、打星、删话题、记账;iPad 上扫码进的就是它"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"/><path d="M9 10h6M9 14h4"/></svg>家长端<span class="out">↗</span></a>
     <hr>
     <a href="#settings" data-tab="settings"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg>设置</a>
   </nav>
@@ -768,7 +768,7 @@ ${pageDomJs(4000)}
       const id = m.thread || m.job;
       if (!seen.has(id)) { seen.add(id); list.push({ id, text: m.text }); }
     }
-    // 新话题都从一个 activity 开始(2026-11-16 起没有自由话题):每个 activity 一行「＋ 新话题:<名>」
+    // 新话题都从一个 activity 开始(没有自由话题):每个 activity 一行「＋ 新话题:<名>」
     const acts = (state.acts || []).filter((a) => a.tutor === state.tutor);
     $('#thread-pick').replaceChildren(
       ...(list.length ? [h('option', { value: '' }, '接着当前话题')] : []),
@@ -1003,7 +1003,7 @@ ${pageDomJs(4000)}
       for (const r of raw.source.rows) lines.append(...rawLineEl(r, raw.source.warnings));
       box.append(lines);
       if (raw.dropped.length) {
-        const d = h('details', { class: 'dsec' }, h('summary', {}, '没进板书正文的中间话 · ' + raw.dropped.length + ' 段'));
+        const d = h('details', { class: 'dsec' }, h('summary', {}, '没进讲稿正文的中间话 · ' + raw.dropped.length + ' 段'));
         for (const b of raw.dropped) d.append(h('pre', {}, b));
         box.append(d);
       }
@@ -1013,7 +1013,7 @@ ${pageDomJs(4000)}
       const box = h('div', { class: 'dsec' });
       box.append(h('h5', {}, raw.fresh.same ? '用当前解析器重解 = 索引里存的' : '用当前解析器重解,与索引里存的不一样'));
       for (const d of raw.fresh.diff) box.append(h('div', { class: 'dline ' + (d.s === '+' ? 'add' : d.s === '-' ? 'del' : 'same') }, h('span', { class: 's' }, d.s), h('span', {}, d.text)));
-      if (!raw.fresh.diff.length) box.append(h('p', { class: 'hintline' }, '这轮没有板书。'));
+      if (!raw.fresh.diff.length) box.append(h('p', { class: 'hintline' }, '这轮没有讲稿。'));
       box.append(h('p', { class: 'hintline' }, '索引是物化的:这一轮存的是当时那版解析器的结果。改完 parseBoard 想知道老样本会不会变,就在这里看差异——确认好了再回上一站「存成 fixture」。'));
       const warns = raw.fresh.warnings.concat((raw.stored.warnings || []).map((x) => ({ text: x })));
       if (warns.length) {
@@ -1034,7 +1034,7 @@ ${pageDomJs(4000)}
       return box;
     }
     if (s === 'tools') {
-      // 读了什么(2026-09-15):一行一次工具调用——名字、路径 / 命令、成没成、结果多少字;答「老师为什么没看见档案那一行」
+      // 读了什么:一行一次工具调用——名字、路径 / 命令、成没成、结果多少字;答「老师为什么没看见档案那一行」
       const box = h('div', { class: 'dsec' });
       if (!raw.tools.length) { box.append(h('p', { class: 'hintline' }, '这轮没用工具:老师只凭上下文包答的(问答缺省就是这样)。')); return box; }
       const files = [...new Set(raw.tools.filter((t) => t.kind === 'read' && t.arg).map((t) => t.arg))];
@@ -1081,8 +1081,8 @@ ${pageDomJs(4000)}
   };
 
   // ---- 老师团:一位一行,政策折叠,改过的才亮 ----
-  const POLICY_FIELDS = [['replyMaxChars', '每句字数上限', 'number'], ['effort', '动笔前想多久(low = 开口快;medium = 多想一会儿,算题用;high = 最慢最细)', 'enum', ['low', 'medium', 'high']], ['tools', '孩子的话带不带工具(off = 不带,开口快;on = 能查教材、读 vault,慢)', 'enum', ['off', 'on']], ['board', '板书(auto = 老师判断;off = 只说话)', 'enum', ['auto', 'off']], ['contextPack.recent', '上下文包:最近观察条数', 'number'], ['contextPack.planLines', '上下文包:计划行数', 'number'], ['contextPack.entryChars', '上下文包:档案 / 入口文件 / 记忆各带多少字', 'number']];
-  const SHORT = { replyMaxChars: '每句 ', effort: '思考 ', tools: '工具 ', board: '板书 ', 'contextPack.recent': '观察 ', 'contextPack.planLines': '计划 ', 'contextPack.entryChars': '原文 ' };
+  const POLICY_FIELDS = [['replyMaxChars', '每句字数上限', 'number'], ['effort', '动笔前想多久(low = 开口快;medium = 多想一会儿,算题用;high = 最慢最细)', 'enum', ['low', 'medium', 'high']], ['tools', '孩子的话带不带工具(off = 不带,开口快;on = 能查教材、读 vault,慢)', 'enum', ['off', 'on']], ['contextPack.recent', '上下文包:最近观察条数', 'number'], ['contextPack.planLines', '上下文包:计划行数', 'number'], ['contextPack.entryChars', '上下文包:档案 / 入口文件 / 记忆各带多少字', 'number']];
+  const SHORT = { replyMaxChars: '每句 ', effort: '思考 ', tools: '工具 ', 'contextPack.recent': '观察 ', 'contextPack.planLines': '计划 ', 'contextPack.entryChars': '原文 ' };
   const getPath = (o, p) => p.split('.').reduce((a, k) => (a == null ? undefined : a[k]), o);
   const setPath = (o, p, v) => { const ks = p.split('.'); let cur = o; for (const k of ks.slice(0, -1)) cur = cur[k] = cur[k] || {}; cur[ks[ks.length - 1]] = v; };
 
@@ -1434,7 +1434,7 @@ ${pageDomJs(4000)}
     $('#overview').replaceChildren(h('div', { class: 'wrap' }, head, tiles, h('div', { class: 'cols3' }, todayBox, weekBox, useBox), h('div', { class: 'cols2' }, left, issueBox)));
   };
 
-  // ---- activity:看、改、边改边查(不落盘)、老师收到什么、和出厂比、恢复出厂;存要带读进来时的 hash(老师文件 2026-11-16 起没有了) ----
+  // ---- activity:看、改、边改边查(不落盘)、老师收到什么、和出厂比、恢复出厂;存要带读进来时的 hash ----
   const FENCE = String.fromCharCode(96, 96, 96);
   const act = { list: null, cur: null, saved: '', hash: '', text: '', diff: [], check: null, tab: 'check', pick: 'auto', params: {}, seq: 0, timer: 0, conflict: false, caret: 1, msg: '', msgBad: false, el: null };
   const STATE_TAG = { latest: ['出厂', ''], upgradable: ['可升级', 'info'], custom: ['改过', 'accent'], untracked: ['自家的', ''], own: ['自家的', ''], missing: ['不在', 'err'], broken: ['读不出', 'err'] };

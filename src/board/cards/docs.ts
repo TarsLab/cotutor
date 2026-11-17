@@ -1,8 +1,7 @@
 /**
- * 卡的协议文件:首页的两种卡(老师牌、听写牌)在包根 cards/<kind>/ 下有 card.md(协议)与 card.css(结构样式,只用主题变量);
+ * 牌的协议文件:首页的两种牌(老师牌、听写牌)在包根 cards/<kind>/ 下有 card.md(协议)与 card.css(结构样式,只用主题变量);
  * 首页技能 cotutor-home 的 references 由它拼(src/app/skills/home-doc.ts)。例子即测试:tests/cards-doc.test.ts 把每个 card.md 里的围栏喂 parseCard。
  * 还有给老师的一篇:cards/动作怎么写.md(讲稿与动作,铺着页的一节课的写法)进系统提示(actsGuide)。
- * 2026-11-17 起课里没有卡:板书写法、cotutor-board 技能、课里的那八种卡的协议删了。
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -53,7 +52,7 @@ export function readCardDoc(kind: string, dir = PACKAGE_CARDS_DIR): CardDoc {
   return { kind, md, sections, headline };
 }
 
-/** 讲稿怎么写、老师对页做什么写在讲稿的句子后面(src/board/acts.ts):这一篇进系统提示(2026-11-17 起代替板书写法) */
+/** 讲稿怎么写、老师对页做什么写在讲稿的句子后面(src/board/acts.ts):这一篇进系统提示 */
 export const ACTS_GUIDE_SOURCE = '动作怎么写.md';
 export function actsGuide(dir = PACKAGE_CARDS_DIR): string {
   return stripHumanNotes(readFileSync(join(dir, ACTS_GUIDE_SOURCE), 'utf8')).trim();

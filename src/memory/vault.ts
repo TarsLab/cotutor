@@ -1,5 +1,5 @@
 /**
- * 家长的 vault(从 runtime/journal/store.ts 搬来,2026-10-29,行为不变):《obsidian仓库设计.md》§6 的封闭清单——日记只追加,教材只读,
+ * 家长的 vault:《obsidian仓库设计.md》§6 的封闭清单——日记只追加,教材只读,
  * 记忆文件按「## 记忆」段增、改、删,删话题时撤回这个话题写进去的。扫 vault 按 `cotutor:` 属性找档案、入口、记忆。
  * 只要 vault 那几个路径(paths),不认整个 workspace;先 .tmp 再 rename。
  */
@@ -154,9 +154,9 @@ export interface MemoryPlan {
 
 /**
  * 「## 记忆」段 → 这位 agent 的记忆文件要怎么改(按 `cotutor: memory` + `agent:` 找;没有就建 记忆/<显示名>.md,孩子的记忆建 记忆/孩子.md),只算不写:
- * 新增追加到末尾,「改:」「删:」按原话找行改、删(任何一行都能动,2026-09-18);缺省位置已有一篇没属性的同名文件就不碰,进提醒。
+ * 新增追加到末尾,「改:」「删:」按原话找行改、删(任何一行都能动);缺省位置已有一篇没属性的同名文件就不碰,进提醒。
  * seen = 这一轮上下文包里老师看到的那版(截过的那段的 textHash 与截的字数):文件和它对不上 = 这轮里家长改过,
- * 改、删只认一字不差的原话,找不到的不改——按「包含」找会把家长刚补上的半句一起盖掉(2026-10-30)。
+ * 改、删只认一字不差的原话,找不到的不改——按「包含」找会把家长刚补上的半句一起盖掉。
  * 孩子的记忆(agent: all)最多 CHILD_MEMORY_CAP 条,满了新增的不进,提醒家长删几条。
  */
 export async function planVaultMemory(v: Vault, o: { agent: string; display: string; items: readonly string[]; date: string; seen?: { path: string; hash: string; clip: number } }): Promise<{ plan: MemoryPlan | null; warnings: string[] }> {

@@ -1,6 +1,6 @@
 /**
  * activity 文件的纯函数(形状在 src/schema/activity.ts):
- * 解析(永不抛,写坏的行变成问题)、检查(带行号,fix = 要改 / note = 提醒)、递给老师的那节(剥注释、按参数与卡裁段)、工具人模板填插槽。不读文件。
+ * 解析(永不抛,写坏的行变成问题)、检查(带行号,fix = 要改 / note = 提醒)、递给老师的那节(剥注释、按参数裁段)、工具人模板填插槽。不读文件。
  */
 import {
   ACTIVITY_BASES,
@@ -162,7 +162,7 @@ export function parseActivity(text: string): ParsedActivity {
     sections[sections.length - 1]?.lines.push(l);
   }
 
-  // 旧的头还认一段时间:board: page 没写 base 的当 base: photo(ACTIVITY_OLD_BOARD);cards 读进来就丢(课里没有卡了,2026-11-17)
+  // 旧的头还认一段时间:board: page 没写 base 的当 base: photo(ACTIVITY_OLD_BOARD);cards 读进来就丢(课里没有卡了)
   const oldBoard = frontmatter.board?.trim() === ACTIVITY_OLD_BOARD;
   const old = [...(frontmatter.board?.trim() ? [`board: ${frontmatter.board.trim()}`] : []), ...(frontmatter.cards?.trim() ? [`cards: ${frontmatter.cards.trim()}`] : [])];
   const activity: Activity = {
@@ -224,7 +224,7 @@ export interface CheckOptions {
   fileName?: string;
 }
 
-/** 这一节课铺哪种页:头上的 base;没写当 photo(进来先拍照,不拍就是白纸;2026-11-17 起没有不铺页的课) */
+/** 这一节课铺哪种页:头上的 base;没写当 photo(进来先拍照,不拍就是白纸;没有不铺页的课) */
 export const activityBase = (a: Pick<Activity, 'base'>): ActivityBase => (a.base === 'textbook' || a.base === 'lecture' ? a.base : 'photo');
 
 /** 对注册表查:参数、裁段的名字、插槽、第一句与收 */

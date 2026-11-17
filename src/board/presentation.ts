@@ -2,14 +2,14 @@
  * 孩子端老师页的纯逻辑:讲稿一句的清洗、板上的节(老师开始写、写完、出错撤掉)、输入条的状态。
  * 这份文件两处共用:服务端(解析器、测试)与孩子端页面——kid-page.ts 把它剥掉类型内联进 <script>,
  * 所以**不能有运行时 import、不能碰 DOM、不能用 enum / namespace**(Node 的 stripTypeScriptTypes 只剥类型)。
- * 2026-11-17(《多模态教学harness-开发计划》阶段 5)起课里没有卡:排卡、铺卡、标注、提问卡、交卡的那些删了;老师对页做什么是讲稿里的动作(src/board/acts.ts)。
+ * 老师对页做什么是讲稿里的动作(src/board/acts.ts),不在这里。
  */
 
 // 讲稿的数据类型(进索引、下发孩子端的那份契约)在 src/schema/board.ts;这里只 import type(剥类型时一起没了,内联照样成立)
 import type { BoardCard, Device, BoardLine, BoardSection } from '../schema/board.ts';
 export type { BoardCard, Device, BoardLine, BoardSection };
 
-/** 去掉讲稿一句里的方括号(念的时候不念括号;以前标注卡上的词,2026-11-17 起没有卡了,老师写了照样去掉) */
+/** 去掉讲稿一句里的方括号(念的时候不念括号) */
 export function plainLine(line: string): string {
   return line.replace(/\[([^\[\]]+)\]/g, '$1');
 }
@@ -164,7 +164,7 @@ export type PlayerEvent =
   | { type: 'liveDropped' }
   | { type: 'fresh'; sections: number[] };
 
-/** stop 只停声音(点开的单词卡、田字格);render = 重画字幕、输入条 */
+/** stop 只停声音(点开的四线三格、田字格);render = 重画字幕、输入条 */
 export type PlayerEffect =
   | { kind: 'stop' }
   | { kind: 'render' };

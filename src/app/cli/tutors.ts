@@ -1,6 +1,6 @@
 /**
  * 老师的家(agents/<name>/,activity 在里面)的安装。
- * 老师文件(agents/<name>.md)2026-11-16 起不出厂、不读了:一科通用的做法并进了每个 activity(「<科>这一科」那一节)。
+ * 老师文件(agents/<name>.md)不出厂、不读:一科通用的做法并进了每个 activity(「<科>这一科」那一节)。
  * 已有 workspace 里的那份不删(家长可能改过),cotutor refresh 提醒一句(retiredTutorFiles)。
  */
 import { lstat, mkdir, readdir, writeFile } from 'node:fs/promises';

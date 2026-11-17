@@ -1,5 +1,5 @@
 /**
- * 在浏览器里画烤好的课包(bake.json),不用 excalidraw、不用 SMIL(drawtell 重新设计的第 4 步)。
+ * 在浏览器里画烤好的课包(bake.json),不用 excalidraw、不用 SMIL。
  * mountBaked 把画面建成一张 SVG(只建一次),paint(frame) 按这一刻每个元素画了多少改属性:描边画到哪(dashoffset)、
  * 字露到哪(裁剪框)、实心填充淡入、笔尖在哪。没变的元素不碰,一帧只动正在画的那一两个。
  * 「这一刻画了多少」是 src/chalk 的 frameAt(时钟)给的,两边同一份 paintElement,和服务端 renderFrameSvg 出的图一样。

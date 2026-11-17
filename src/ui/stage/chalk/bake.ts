@@ -1,5 +1,5 @@
 /**
- * 在浏览器里把一幅场景烤成 bake.json 的画面部分(drawtell 重新设计的第 4 步;格式与渲染在 src/chalk/paint.ts)。
+ * 在浏览器里把一幅场景烤成 bake.json 的画面部分(格式与渲染在 src/chalk/paint.ts)。
  * excalidraw 只在这里跑一次:静态导出(和播放器原来用的同一个 exportToSvg,画面一模一样),
  * 挂进文档量每条路径的长度、笔尖要走的轨迹;字体是导出时内嵌的那份。cotutor chalk bake 起 Chrome 打开舞台的 ?chalk=bake 来调它(./tool.ts),没烤过的课包舞台也现烤。
  */

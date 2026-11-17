@@ -1,5 +1,5 @@
 /**
- * 板书底纹的学科字轮廓:scripts/bake-board-marks.py 生成的,别手改(改字体、排法改那个脚本再跑一遍)。
+ * 板的底纹的学科字轮廓:scripts/bake-board-marks.py 生成的,别手改(改字体、排法改那个脚本再跑一遍)。
  * 单位:中文一个字的字号 = 1;w、h 是贴紧的外框,d 的坐标是这个单位的千分之一(viewBox 0 0 w*1000 h*1000),y 朝下。
  * 字体都是 SIL Open Font License 1.1(见仓根 NOTICE)。
  */

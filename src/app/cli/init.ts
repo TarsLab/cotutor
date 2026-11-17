@@ -1,8 +1,8 @@
 /**
- * cotutor init <slug>:建 ~/cotutor/<slug>/ 骨架,vault 建在旁边的 ~/cotutor/<slug>-vault/(--vault 另指;2026-11-09 起两边分开)。语义是**幂等补缺**——已有的文件与目录一律不动,缺什么补什么。
- * 三条边界(沿 drawtell init):政策文件只在缺失时写模板;用户配置只在还没指定 workspace 时补;不动 git。
+ * cotutor init <slug>:建 ~/cotutor/<slug>/ 骨架,vault 建在旁边的 ~/cotutor/<slug>-vault/(--vault 另指)。语义是**幂等补缺**——已有的文件与目录一律不动,缺什么补什么。
+ * 三条边界:政策文件只在缺失时写模板;用户配置只在还没指定 workspace 时补;不动 git。
  * 老师的家 agents/<name>/ 与出厂的 activity **拷贝**进去:拷进来就是家长的,想改就改;出厂 hash 记 .cotutor/shipped.json,
- * cotutor refresh 据此换新或报 diff(老师文件 2026-11-16 起不出厂)。老布局(.claude/agents、.claude/skills)先原样挪到新位置(migrate.ts 的 migrateLayout)。
+ * cotutor refresh 据此换新或报 diff(老师文件不出厂)。老布局(.claude/agents、.claude/skills)先原样挪到新位置(migrate.ts 的 migrateLayout)。
  */
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
@@ -142,10 +142,10 @@ export async function initWorkspace(opts: InitOptions): Promise<InitResult> {
   const schemaThere = await exists(join(root, '.cotutor', 'cotutor.schema.json'));
   await writeSchemaFile(root);
   steps.push({ item: '.cotutor/cotutor.schema.json', action: schemaThere ? 'exists' : 'created', note: schemaThere ? '已按本包刷新(机器文件)' : 'cotutor.json 的 JSON Schema,编辑器补全用' });
-  // 出厂 skill(机器件 cotutor-board 等 + 做课包的四个 chalk-*)
+  // 出厂 skill(机器件 cotutor-tutor 等 + 做课包的四个 chalk-*)
   steps.push(...(await installSkills(root)));
   steps.push(await linkClaudeSkills(root));
-  // 出厂主题(孩子端板书的样子):拷进 themes/default/,是家长的
+  // 出厂主题(孩子端的样子):拷进 themes/default/,是家长的
   steps.push(...(await installThemes(root)));
 
   for (const f of LEDGER_FILES) {
@@ -157,7 +157,7 @@ export async function initWorkspace(opts: InitOptions): Promise<InitResult> {
     }
   }
 
-  // vault 侧(《obsidian仓库设计.md》§2):只补档案与参考 README,缺了才写;档案按 cotutor: profile 找(2026-09-17),vault 里已有一篇就不补;
+  // vault 侧(《obsidian仓库设计.md》§2):只补档案与参考 README,缺了才写;档案按 cotutor: profile 找,vault 里已有一篇就不补;
   // 入口文件(每科每学期一篇)不自动建,doctor 提醒;日记由记账现建,计划家长自己写
   let vaultAt: string | null = null;
   try {

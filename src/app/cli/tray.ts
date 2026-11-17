@@ -5,7 +5,7 @@
  *   显示脚本(tray-mac.ts 的 JXA、tray-windows.ts 的 PowerShell,都是系统自带、不用签名):只管画和回报点击,不判断。
  *   登录项:macOS 一个 LaunchAgent,Windows 一条 Run 项 + wscript 隐藏启动器;service install 时一起装(--no-tray 不装,cotutor tray off 关掉并记住)。
  * 为什么不放在 serve 里:服务挂了图标也没了,就说不出「没在跑」;多个孩子时一台电脑也只该有一个图标。
- * 为什么不用 npm 的托盘库、Electron:见 docs/wip;systray2 只有 x86 的 Mac 二进制且没签名,Electron 要多下一百多 MB。
+ * 为什么不用 npm 的托盘库、Electron:systray2 只有 x86 的 Mac 二进制且没签名,Electron 要多下一百多 MB。
  * 状态:正常只有 logo(和菜单栏别的图标一样单色);有事才出状态点,橙 = 要处理,红 = 没在跑(logo 同时变淡)。正常 → 有事、→ 没在跑时通知一次,恢复不通知。
  * 「退出 cotutor」= 停掉所有后台服务并退出图标,下次登录自己回来;正开着电话时先问一声。
  */

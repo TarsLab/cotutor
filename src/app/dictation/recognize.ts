@@ -1,5 +1,5 @@
 /**
- * 旧路径与接线:拍照认词的规则在 src/scenes/photo-words/recognize.ts,看图的请求在 src/media/vision.ts;recognizePhoto 把两样接起来(路由、测试用)
+ * 接线:拍照认词的规则在 src/scenes/photo-words/recognize.ts,看图的请求在 src/media/vision.ts;recognizePhoto 把两样接起来(路由、测试用)
  */
 import type { DictationLang } from '../../board/cards/index.ts';
 import { lookAt } from '../../media/vision.ts';

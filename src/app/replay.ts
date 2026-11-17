@@ -1,11 +1,11 @@
 /**
- * 回放(2026-09-15):把某一轮的问题,按**现在**的 vault / activity 文件 / 技能重新问一遍,和原轮并排比。
- * 手改了提示词或 vault 之后「效果好不好」不靠打分,靠人眼看 diff:上下文包哪几行变了、讲稿哪几句变了、卡变没变、
+ * 回放:把某一轮的问题,按**现在**的 vault / activity 文件 / 技能重新问一遍,和原轮并排比。
+ * 手改了提示词或 vault 之后「效果好不好」不靠打分,靠人眼看 diff:上下文包哪几行变了、讲稿哪几句变了、
  * 读了什么文件、token 与用时。只有 CLI(`cotutor replay` / `cotutor compare`),家长端不露;给在 workspace 里开编程助手分析用。
  *
  * 落在 workspace 的 evals/(和 conversations/ 同一套文件:索引 / run.json / log / events),不进孩子的对话、
  * 永远新话题新会话;不配音。做法是给 Runner 一个改了目录与配置的 Workspace,
- * 跑的仍是同一条路(gatherContext → buildContextPack → spawn → 解析 → 物化),所以看到的就是真跑会看到的。
+ * 跑的仍是同一条路(gatherContext → buildContextPack → 请脑 → 解析 → 物化),所以看到的就是真跑会看到的。
  */
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -78,7 +78,7 @@ export async function startReplay(ws: Workspace, tutor: string, date: string, jo
     ...(m.via ? { via: m.via } : {}),
     ...(m.via && viaSendsLabel(m.via) ? { home: { button: m.via.label, ...(button?.brief ? { brief: button.brief } : {}) } } : {}),
     ...(activity ? { activity } : {}),
-    // 原轮是实时的:回放也按实时写(上下文包带 live:、不补提问卡);嘴不在,接住与打断的 caught / cut 不带
+    // 原轮是实时的:回放也按实时写(上下文包带 live:);嘴不在,接住与打断的 caught / cut 不带
     ...(m.live ? { live: {} } : {}),
   });
   return { tutor, date, job, evalJob: started.job, done: started.done.then(() => runner.flush()) };

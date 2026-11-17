@@ -1,5 +1,5 @@
 /**
- * 听写卡(kind 名 dictation,只用在首页):家长写一串词,孩子在首页点开,老师一个一个念、孩子在田字格里写,写完自己对。
+ * 听写牌(kind 名 dictation,只用在首页):家长写一串词,孩子在首页点开,老师一个一个念、孩子在田字格里写,写完自己对。
  * 英文单词也行:词都是英文单词时 props.lang = 'en',孩子在四线三格里写整个单词。
  * 标签修饰 = 念的老师(cotutor.json 的键,用他的音色;不写用语文老师或第一位配了音色的);正文一行一个词,词后面空一格可以跟「怎么念」。
  * 英文单词前面可以配一个 emoji:只在孩子写完对一对时出,写的时候看不到。
@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { HAN } from '../../shared/script.ts';
 import { bodyLines, type CardKind } from './kind.ts';
 
-/** 一个词最多几个字(一个字一个田字格,同田字格卡) */
+/** 一个词最多几个字(一个字一个田字格) */
 export const DICTATION_WORD_MAX = 4;
 /** 英文单词最多几个字母(一个单词一个四线三格) */
 export const DICTATION_EN_MAX = 20;
@@ -70,7 +70,7 @@ export const dictation: CardKind<DictationProps> = {
     const words: DictationWord[] = [];
     for (const raw of bodyLines(body)) {
       let line = raw.replace(LIST_PREFIX, '');
-      // 前面可以配一个 emoji(同单词卡的「🍎 apple」)
+      // 前面可以配一个 emoji(「🍎 apple」)
       const lead = /^(\S+)\s+(.+)$/.exec(line);
       const emoji = lead ? dictationEmoji(lead[1]) : undefined;
       if (emoji && lead) line = lead[2];

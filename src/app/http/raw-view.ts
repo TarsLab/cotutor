@@ -1,8 +1,8 @@
 /**
- * 家长端「看原文」的一轮全景(2026-09-11):把一次运行拆成几站,一个接口给全。
+ * 家长端「看原文」的一轮全景:把一次运行拆成几站,一个接口给全。
  * 调试时要回答的不是「老师写了什么」,而是「这一层是谁吃掉的」——孩子没听到那句、页上没动,可能是老师没写、
  * 可能 kidSource 没挑中那一段、可能 parseBoard 没认出那个动作。
- * 每站的数据都从盘上现读现算,不进索引:原文在 .log,发出去的在 .run.json。2026-11-17 起课里没有卡,卡那几站跟着删了。
+ * 每站的数据都从盘上现读现算,不进索引:原文在 .log,发出去的在 .run.json。
  * 「重解」= 拿当前解析器再跑一遍原文与索引里存的比 —— 索引是物化的,改完解析器老样本会不会变,只有这样才知道。
  */
 import { readFile } from 'node:fs/promises';
@@ -66,7 +66,7 @@ export interface RawView {
   trace: TranscriptRow[];
   /** 这轮用了哪些工具、读了什么(索引物化的;老轮次从 .log 现抽);kind 是工具的类别(src/brain/types.ts 的 toolKind,页面按它认「读了几个文件」,不比工具名) */
   tools: (ToolCall & { kind: ToolKind })[];
-  /** 时间线:这轮的事件(<日期>.<job>.events.jsonl;2026-09-13 之前的轮次没有 → 空)+ 甘特的段 + 控制台那种一行一条 */
+  /** 时间线:这轮的事件(<日期>.<job>.events.jsonl;更早的轮次没有 → 空)+ 甘特的段 + 控制台那种一行一条 */
   events: RunEvent[];
   /** from = 最早一条的 t(嘴这一道在老师进程起来之前,负的;没有就是 0);total = 最晚一条 */
   timeline: { spans: TimelineSpan[]; lines: string[]; total: number; from: number };

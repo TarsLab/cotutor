@@ -1,5 +1,5 @@
 /**
- * 百炼 Qwen-Omni-Realtime 的 WebSocket 客户端:口语课和实时老师共用。
+ * 百炼 Qwen-Omni-Realtime 的 WebSocket 客户端。
  * 一次通话一条会话。服务端连,key 不出服务端;孩子端的声音由调用方推进来,老师的声音从这里出去。
  *
  * 协议(OpenAI realtime 同族,2026-10-10 真连核对):
@@ -16,7 +16,7 @@
  *   转写约 0.2 秒后到;semantic_vad 不收的一段回 error「not accepted by semantic turn detection」(走 onRejected,不是错);commit 了 300 秒没回答报 response_idle_timeout,会话死。
  *   semantic_vad 一两个词的回答(好的、Yes、Red)不报开口,嘴先问了也不报;噪声、「嗯」、笑声也不报。server_vad 短的都收,「嗯」、笑声也报(噪声不报)。
  *   服务端的规矩(2026-10-10 真连):turn_detection 的 silence_duration_ms 喂过音频就不能再改(切成 null 再切回来也回到缺省 800),
- *   type 在 null 与 vad 之间随时能切。所以跟读与聊各开一条会话(跟读手动;聊 semantic_vad 带自己的 silence),setTurn 只在不改 silence 时用。
+ *   type 在 null 与 vad 之间随时能切。所以要不同的 silence 就另开一条会话,setTurn 只在不改 silence 时用。
  * 不抛:连不上、断了、服务端报错都走 onClose / onError;send 在没连上时丢弃并回 false。
  */
 import { bailianWorkspaceId, qianwenKeys, workspaceHost } from '../shared/qianwen.ts';
@@ -191,7 +191,7 @@ export class RealtimeSession {
           const msg = `${err?.code ? `${err.code}: ` : ''}${err?.message ?? JSON.stringify(e).slice(0, 200)}`;
           if (!this.ready) { finish(msg); this.close('error'); return; }
           if (this.pendingUpdate) { clearTimeout(this.pendingUpdate.timer); this.pendingUpdate.resolve(false); this.pendingUpdate = null; }
-          // semantic_vad 不收的一段(2026-10-20 照 Qwen-Live-Harness:不致命,回到在听)
+          // semantic_vad 不收的一段(不致命,回到在听)
           if (/not accepted by semantic turn detection/i.test(err?.message ?? '')) { this.ev.onRejected?.(); return; }
           this.ev.onError?.(msg);
           // user_idle_timeout / response_idle_timeout:服务端说会话关了,连接却还开着,再发什么都没回音(2026-10-19 ray 那次挂了 10 分钟才 close),当场关
@@ -244,7 +244,7 @@ export class RealtimeSession {
 
   /** 一块孩子的声音(PCM16 16k 单声道) */
   appendAudio(pcm: Buffer): boolean { return this.isReady && this.sendRaw({ type: 'input_audio_buffer.append', audio: pcm.toString('base64') }); }
-  /** 一张图(JPEG)跟着这一段声音交:百炼要先有声音再有图(Qwen-Live-Harness 也这样),commit 时一起进对话;太大(见 MAX_IMAGE_B64)不发、回 false,调用方先缩 */
+  /** 一张图(JPEG)跟着这一段声音交:百炼要先有声音再有图,commit 时一起进对话;太大(见 MAX_IMAGE_B64)不发、回 false,调用方先缩 */
   appendImage(jpeg: Buffer): boolean {
     const image = jpeg.toString('base64');
     return this.isReady && image.length <= MAX_IMAGE_B64 && this.sendRaw({ type: 'input_image_buffer.append', image });
@@ -253,7 +253,7 @@ export class RealtimeSession {
   commit(): boolean { return this.isReady && this.sendRaw({ type: 'input_audio_buffer.commit' }); }
   clearAudio(): boolean { return this.isReady && this.sendRaw({ type: 'input_audio_buffer.clear' }); }
   /**
-   * 心跳:1 秒全零的声音接着 clear,不 commit、不要回答(照 Qwen-Live-Harness 的静音心跳)。百炼 300 秒没输入就关会话(user_idle_timeout)。
+   * 心跳:1 秒全零的声音接着 clear,不 commit、不要回答。百炼 300 秒没输入就关会话(user_idle_timeout)。
    * 2026-10-20 真连(scripts/probe-live-idle.mjs,手动轮次,每 30 秒一次):不发的 302 秒被关;只 append 不 clear 的 300 秒报 response_idle_timeout
    * (缓冲里有输入一直没回答),会话就死了;append 完马上 clear 的过了 400 秒照常说话。
    */

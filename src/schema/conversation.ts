@@ -1,5 +1,5 @@
 /**
- * 对话索引:一老师一天一份。每条消息 = 一次 -p 运行 = 一份 NDJSON 转录;
+ * 对话索引:一老师一天一份。每条消息 = 脑的一轮 = 一份转录(.log);
  * 索引里的 kidText / artifacts 是孩子视图的物化结果,孩子端不解析日志。跨天自动新开。
  */
 import { z } from 'zod';
@@ -17,7 +17,7 @@ export const DEVICE_ID_RE = /^[0-9a-f]{12}$/;
 export const TimingSchema = z.object({
   /** 进程起来的时刻(ISO,精确到毫秒;消息的 at 只到分钟) */
   startedAt: z.string().min(1),
-  /** 这轮用的是提前起好的老师进程(预热,2026-09-29);startedAt 仍是孩子开口那刻 */
+  /** 这轮用的是提前起好的老师进程(预热);startedAt 仍是孩子开口那刻 */
   warm: z.literal(true).optional(),
   /** 首句就绪:嘴能开口的那一刻(头号埋点),第一句出来了就算(讲稿不配音) */
   firstReadyMs: z.number().int().nonnegative().optional(),
@@ -41,13 +41,13 @@ const MessageObjectSchema = z.object({
   text: z.string(),
   /** 孩子端不打字的动作:「给老师看」(窗里的图已经交了) */
   action: z.enum(['submit']).optional(),
-  /** 这条消息带的作业照片(R5,2026-09-14):相对 workspace 根的路径(captures/<日期>/<HHMM>-<n>.jpg),上下文包 photos: 段原样给老师 Read;日记永不引用它 */
+  /** 这条消息带的作业照片(R5):相对 workspace 根的路径(captures/<日期>/<HHMM>-<n>.jpg),上下文包 photos: 段原样给老师 Read;日记永不引用它 */
   photos: z.array(z.string().min(1)).optional(),
   result: z.enum(['running', 'ok', 'error']).default('running'),
   /** 这一轮的 token:输入(含缓存读)与输出;记账、显示都按它(src/shared/tokens.ts)。运行时没报(出错没收尾)就没有 */
   /** cached = 输入里命中缓存的,context = 最后一次请求的输入(这一轮结束时上下文多大);这两样只有 API 运行时报 */
   tokens: z.object({ in: z.number().int().nonnegative(), out: z.number().int().nonnegative(), cached: z.number().int().nonnegative().optional(), context: z.number().int().nonnegative().optional() }).optional(),
-  /** 老数据:2026-10-28 之前 claude 那几轮记的美元。不再写、不显示,留在这里免得改写索引时丢掉 */
+  /** 老数据:早先那几轮记的美元。不再写、不显示,留在这里免得改写索引时丢掉 */
   costUsd: z.number().optional(),
   /** 孩子视图文本;null = 这次运行没有给孩子的话(出错或空) */
   kidText: z.string().nullable().optional(),
@@ -57,27 +57,27 @@ const MessageObjectSchema = z.object({
   runtime: z.string().optional(),
   /** 不 ok 时的原因(subtype / terminal_reason),家长视图红条 */
   error: z.string().nullable().optional(),
-  /** 最终文本解析出的板书节(卡 + 讲稿;孩子端下发前剥答案);null = 这轮没有 */
+  /** 最终文本解析出的讲稿的一节;null = 这轮没有 */
   section: BoardSectionSchema.nullable().optional(),
   /** 最终文本里第一个 H2 起给家长的尾巴(老师写的任何标题段),孩子看不到 */
   parentText: z.string().optional(),
-  /** 解析板书时的提醒(卡没解析成等),家长视图显示;孩子端不报 */
+  /** 解析讲稿时的提醒(动作写错了等),家长视图显示;孩子端不报 */
   warnings: z.array(z.string()).optional(),
   /** 这轮「## 记忆」段真落进 vault 记忆文件的改动:新增的行(带日期)、「改:旧 → 新」、「删:旧」;进孩子的记忆的前面加「孩子的记忆:」;家长视图显示 */
   remembered: z.array(z.string()).optional(),
-  /** 同一批改动的整行原文(删话题时按它撤销,2026-10-05):before = 改之前那行(新增的为 null),after = 改之后那行(删掉的为 null) */
+  /** 同一批改动的整行原文(删话题时按它撤销):before = 改之前那行(新增的为 null),after = 改之后那行(删掉的为 null) */
   memoryLines: z.array(MemoryLineSchema).optional(),
-  /** 同上,写进孩子的记忆(`agent: all`)的那几行(2026-10-30) */
+  /** 同上,写进孩子的记忆(`agent: all`)的那几行 */
   childLines: z.array(MemoryLineSchema).optional(),
-  /** 记账那轮追加进日记的那一段原文(删话题时从日记里摘掉,2026-10-05) */
+  /** 记账那轮追加进日记的那一段原文(删话题时从日记里摘掉) */
   diaryBlock: z.string().optional(),
   /** 这轮「## 记忆」段的每一条建议与证据对没对上(2026-10-30,schema/memory.ts);家长视图看哪些没证据、哪些对不上没记 */
   memoryProposals: z.array(MemoryProposalSchema).optional(),
   /** 写 vault 之前记的一笔,写完就没了;还在 = 写到一半断了,下次记账、删话题之前对照文件补记或丢掉(schema/memory.ts) */
   pending: PendingCommitSchema.optional(),
-  /** 这轮上下文包里家长笔记的版本:role(profile / entry)→ `路径@hash`;同一话题下一轮对得上就只写「未变」(2026-09-17) */
+  /** 这轮上下文包里家长笔记的版本:role(profile / entry)→ `路径@hash`;同一话题下一轮对得上就只写「未变」 */
   notes: z.record(z.string(), z.string()).optional(),
-  /** 这轮的用时(埋点,2026-09-11):都是从 startedAt 起的毫秒数;家长视图每轮一行「首卡 10s · 整轮 23s」 */
+  /** 这轮的用时(埋点):都是从 startedAt 起的毫秒数;家长视图每轮一行 */
   timing: TimingSchema.optional(),
   /** 发这条时孩子端是什么端(缺省当平板横屏) */
   device: DeviceSchema.optional(),
@@ -85,7 +85,7 @@ const MessageObjectSchema = z.object({
   deviceId: z.string().regex(DEVICE_ID_RE).optional(),
   /** 这轮是给某个话题记账的任务(from: system,resume 那个话题的会话);跑完老师回的「## 记账」段经应用落进日记 */
   bookkeep: z.object({ thread: z.string().min(1) }).optional(),
-  /** 这轮是记账后整理记忆的任务(from: system,新会话;2026-09-18):老师回「## 记忆」段的一串增 / 改 / 删,不受每轮条数上限;孩子端看不到 */
+  /** 这轮是记账后整理记忆的任务(from: system,新会话):老师回「## 记忆」段的一串增 / 改 / 删,不受每轮条数上限;孩子端看不到 */
   tidy: z.literal(true).optional(),
   /** 这一轮整段压缩过(API 运行时,上一轮结束时上下文过了 32k):之前的模型历史不再发,前情由应用照索引拼(src/runtime/context/thread-digest.ts) */
   compacted: z.literal(true).optional(),
@@ -100,8 +100,8 @@ const MessageObjectSchema = z.object({
   /** 这一轮走实时:讲稿没配音,由 realtime 模型(嘴)照念;孩子端放的是嘴的声音,以前的话题里这几句不出声 */
   live: z.literal(true).optional(),
   /**
-   * 这条是孩子看完小课堂后的第一条:哪份课包、课名、看了多久、看完没、停过几次、画过的几处;节前的小课堂卡与画的卡从这里画。
-   * again = 问过以后「再看一遍」又画了,这条只为带上新画的(节前只画画的卡)。一处画:时刻、SVG 停在哪(缩略图)、几笔(课包坐标)、给老师的那段话、截图
+   * 这条是孩子看完小课堂后的第一条:哪份课包、课名、看了多久、看完没、停过几次、画过的几处;家长端「记录」和录像从这里取。
+   * again = 问过以后「再看一遍」又画了,这条只为带上新画的。一处画:时刻、SVG 停在哪(缩略图)、几笔(课包坐标)、给老师的那段话、截图
    */
   lecture: z
     .object({
@@ -113,7 +113,7 @@ const MessageObjectSchema = z.object({
       again: z.literal(true).optional(),
       /** 视频小课堂(lectures/<id>/);没有 = 课包 */
       video: z.literal(true).optional(),
-      /** 一处 = 停在同一刻画的几笔;截图在 captures/ 里(画面叠上那几笔;路径相对 workspace 根)。2026-10-19 以前一笔一处(path),读成一笔的 strokes */
+      /** 一处 = 停在同一刻画的几笔;截图在 captures/ 里(画面叠上那几笔;路径相对 workspace 根)。以前一笔一处(path),读成一笔的 strokes */
       marks: z.array(z.object({ atMs: z.number().nonnegative(), svgMs: z.number().nonnegative(), strokes: z.array(z.array(z.tuple([z.number(), z.number()]))), text: z.string().optional(), image: z.string().optional(), t: z.number().optional() })).optional(),
       /**
        * 看的过程(录像用第 5 步):放 / 停 / 拖到哪 / 放完,一次一条。t = 离这条消息发出去多少毫秒(≤ 0,孩子端自己的钟算,
@@ -122,16 +122,16 @@ const MessageObjectSchema = z.object({
       log: z.array(z.object({ t: z.number(), pos: z.number().nonnegative(), play: z.boolean() })).optional(),
     })
     .optional(),
-  /** 孩子从首页哪个按钮进来的;开场按钮的 text 就是按钮上的字,不是孩子说的 */
+  /** 孩子从首页哪个按钮进来的;按钮的 text 就是按钮上的字,不是孩子说的 */
   via: MessageViaSchema.optional(),
   /** 这个话题是从哪个 activity 起的(只记在话题第一条):名字与点的那一刻的参数,话题后面每条都照它带 */
   activity: ActivityRunSchema.optional(),
   /**
-   * 话题第一条:这一节课铺哪种页(activity 头上的 base:;2026-11-16 阶段 3 起 photo 也是);这节课的样子在 <date>.<话题>.lesson.json,板的日志在 <date>.<话题>.board.jsonl。
+   * 话题第一条:这一节课铺哪种页(activity 头上的 base:);这节课的样子在 <date>.<话题>.lesson.json,板的日志在 <date>.<话题>.board.jsonl。
    * 以前的记录里还有 board: 'page'(以板为主、照片板):读进来就丢,那些话题不再当一节课
    */
   base: z.enum(['textbook', 'photo', 'lecture']).optional(),
-  /** 话题第一条:这节课一直听(activity 头上 listen: open;2026-11-17 阶段 4);孩子端回到这节课照它换 */
+  /** 话题第一条:这节课一直听(activity 头上 listen: open);孩子端回到这节课照它换 */
   listen: z.literal('open').optional(),
 });
 

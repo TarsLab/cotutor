@@ -5,7 +5,7 @@
  * 代价是包更新带来的新出厂件不会自己出现在老 workspace 里,而且「没有」的表现是**静默**的——
  * 所以有这一层:把「出厂模板有、你这份没有」算出来(doctor 的 `config.migrate` 点名、家长端设置页顶部提示),
  * `cotutor refresh --config` 只**补缺**——加缺的键;家长写过的值一个都不动(改小的预算、换掉的 default 运行时全都原样留着)。
- * 唯一删的是 RETIRED 里点了名的出厂段(机器写进去、应用已经不读的,如 2026-10-31 的 tts);家长自己加的键不在表里,不碰。
+ * 唯一删的是 RETIRED 里点了名的出厂段(机器写进去、应用已经不读的,如 tts);家长自己加的键不在表里,不碰。
  *
  * 差异是**现算的**:拿家长自己的 slug / name / port 生成一份出厂模板,和她这份逐项比,
  * 所以以后模板再加东西,这里不用跟着改。
@@ -64,7 +64,7 @@ export async function configGaps(raw: unknown, agentsDir?: string): Promise<Conf
     const display = isObj(entry) && typeof entry.display === 'string' ? entry.display : name;
     gaps.push({ kind: 'tutor', path: `tutors.${name}`, detail: `出厂老师 ${display}(${name})不在 tutors 里`, value: entry });
   }
-  // 课里的卡 2026-11-17 删了:老师条目里的卡的清单(cards)与板书开关(policy.board)不再读,补缺时删掉
+  // 课里没有卡:老师条目里的卡的清单(cards)与板书开关(policy.board)不再读,补缺时删掉
   for (const [name, mine] of Object.entries(mineTutors)) {
     if (!isObj(mine)) continue;
     if ('cards' in mine) gaps.push({ kind: 'retired', path: `tutors.${name}.cards`, detail: `${name} 的 cards(卡的清单)不再用了:课里没有卡,老师在讲稿里写动作,删掉`, value: undefined });
@@ -159,9 +159,9 @@ export async function configGapsOf(root: string): Promise<ConfigGap[]> {
   }
 }
 
-// ---- 目录搬家(2026-10-30):老师文件 .claude/agents/ → agents/,技能 .claude/skills/ → .agents/skills/ ----
+// ---- 目录搬家:老师文件 .claude/agents/ → agents/,技能 .claude/skills/ → .agents/skills/ ----
 // 起因:Claude CLI 2026-10-28 移除后 .claude/ 只是历史名字;Codex、Qwen Code 认 .agents/skills,老师文件和老师的家并排才和包里一样。
-// 老 workspace 都搬完了这一段就删(同 2026-10-22 删 .qwen 链的迁移)。
+// 老 workspace 都搬完了这一段就删。
 
 /** 还没搬完的老位置(实体目录才算;.claude/skills 是链就是新布局) */
 const LEGACY_DIRS = [
@@ -192,7 +192,7 @@ export async function legacyLayout(root: string): Promise<string[]> {
 }
 
 /**
- * init / upgrade 第一步:老位置里的东西原样挪到新位置(不改内容、不看 hash),出厂件新不新由后面安装那一步照常查。
+ * init / refresh 第一步:老位置里的东西原样挪到新位置(不改内容、不看 hash),出厂件新不新由后面安装那一步照常查。
  * 必须在 installTutors / installSkills 之前:不然新位置是空的,出厂件先拷进去,家长改过的那份就晾在老位置。
  * 新位置已经有同名的不挪、报一声;老目录搬空了删掉(.claude/skills 随后换成链,见 skills.ts 的 linkClaudeSkills),.claude/ 里别的东西不碰。
  * 顺带删掉 RETIRED_FILES(机器文件,删了也只是缓存没了)。

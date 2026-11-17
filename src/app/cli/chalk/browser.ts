@@ -1,5 +1,5 @@
 /**
- * 做课包用的浏览器(2026-10-31 替掉 drawtell 的 playwright):起本机的 Chrome(无头、自己的临时 profile,不碰平时用的那个),
+ * 做课包用的浏览器:起本机的 Chrome(无头、自己的临时 profile,不碰平时用的那个),
  * 走 DevTools 协议(CDP)开页面、等、取值、截图。不另装浏览器:烤画面、截图与孩子端是同一种渲染就够。
  * 每条命令都有超时(回包不来就报错,不挂着);收尾杀进程、删临时 profile,出错也在 finally 里收(scripts/_guard.mjs 那次的教训:无头 Chrome 挂了两天)。
  * Chrome 在哪:环境变量 CHROME > macOS 的 /Applications/Google Chrome.app > Windows 的 Chrome、再 Edge(装在 Program Files 或自己的 AppData 下,不在 PATH 里)

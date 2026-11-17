@@ -1,6 +1,6 @@
 /**
  * 舞台包入口(打成 dist/stage/stage.js,页面在 iframe 里装 /stage/?card=<id>):照页面发来的一节课的状态画现在那一页——
- * 课本、作业照片、白纸 = book.tsx;小课堂(2026-11-17 起是一节课里的一页)= lecture.tsx。所有对外说话都走 postMessage(protocol.ts)。
+ * 课本、作业照片、白纸 = book.tsx;小课堂 = lecture.tsx。所有对外说话都走 postMessage(protocol.ts)。
  * ?bundle=<课包 URL> 不用页面也能开小课堂(调试、截图);?chalk=bake|snap 是做课包时 CDP 开的(chalk/tool.ts),不是孩子端。
  * 界面上没有错误文案:装不上就发 error,什么都不显示。
  */

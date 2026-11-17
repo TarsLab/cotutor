@@ -14,7 +14,7 @@ export const ContextPackSchema = z.object({
   at: z.string().min(1),
   /** 课程表命中的时段,如「数学 16:00-17:00」 */
   slot: z.string().optional(),
-  /** 老师守则(机器技能 cotutor-tutor 的 SKILL.md,有脸的老师才带):相对 workspace 根的路径 + 状态(未变 / 缺);原文在 notes */
+  /** 老师守则(机器技能 cotutor-tutor 的 SKILL.md,老师才带):相对 workspace 根的路径 + 状态(未变 / 缺);原文在 notes */
   rules: z.string().optional(),
   /** 当前学期(档案的 school_start 按日期算,或档案 semester 覆盖),如「二年级上」;算不出不写 */
   semester: z.string().optional(),
@@ -24,11 +24,11 @@ export const ContextPackSchema = z.object({
   entry: z.string().optional(),
   /** 这位 agent 的记忆文件(`cotutor: memory`、`agent: <名>`):路径 + 状态,或「还没有」;原文在 notes */
   memory: z.string().optional(),
-  /** 孩子的记忆(`cotutor: memory`、`agent: all`,所有有脸的老师共用,2026-10-30):路径 + 状态,或「还没有」;原文在 notes。有脸的老师才带 */
+  /** 孩子的记忆(`cotutor: memory`、`agent: all`,所有老师共用):路径 + 状态,或「还没有」;原文在 notes。老师才带 */
   child: z.string().optional(),
-  /** activity 话题另带这位老师自己那篇记忆(`agent: <老师>`;老师文件 2026-11-16 并进 activity 以前,不走 activity 的话题记在这里):路径 + 状态;原文在 notes。只读,新记的进 memory 那篇 */
+  /** activity 话题另带这位老师自己那篇记忆(`agent: <老师>`;以前不走 activity 的话题记在这里):路径 + 状态;原文在 notes。只读,新记的进 memory 那篇 */
   teacherMemory: z.string().optional(),
-  /** 应用替老师查好的(memory/retrieval.ts,2026-10-30):孩子问到的字在这学期生字表的哪一课、会认还是会写;以前讲过那一课的骨架。孩子的话不带工具,这几行代替老师自己 Grep */
+  /** 应用替老师查好的(memory/retrieval.ts):孩子问到的字在这学期生字表的哪一课、会认还是会写;以前讲过那一课的骨架。孩子的话不带工具,这几行代替老师自己 Grep */
   lookup: z.array(z.string()).optional(),
   /** 家长写的那一课的口径(教材那一节的 `### 口径`)在哪:路径 + 课题 + 状态;原文在 notes(<vault-note role="lesson">)。孩子提到那一课、或问到那一课要会写的字时才有 */
   lesson: z.string().optional(),
@@ -77,7 +77,7 @@ export const ContextPackSchema = z.object({
     })
     .optional(),
   /**
-   * 页的文字层(2026-11-16 阶段 3):这一轮第一次看到的那几页上印的字,一页一条(<page id name>);给过的不重给,压缩以后重给现在这一页。
+   * 页的文字层:这一轮第一次看到的那几页上印的字,一页一条(<page id name>);给过的不重给,压缩以后重给现在这一页。
    * 课本是一课分好段的正文,照片是认字认出的行(带题号),一行一句
    */
   pageNotes: z.array(z.object({ id: z.string().min(1), name: z.string().min(1), text: z.array(z.string()) })).optional(),

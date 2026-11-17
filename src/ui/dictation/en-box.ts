@@ -29,7 +29,7 @@ function glyphTable(): Record<string, [number, (string | number)[][]]> {
 export const EN_BOX_JS = `
   var EN_W = 2048, EN_H = 512, EN_LINES = [80, 200, 320, 440], EN_TOP = -192, EN_VH = 896, EN_VIEW = '0 -192 2048 896';
   var enLines = function (sv) { var g = sv('g', { 'class': 'enl' }); for (var k = 0; k < EN_LINES.length; k++) g.append(sv('line', { x1: -EN_W, y1: EN_LINES[k], x2: 2 * EN_W, y2: EN_LINES[k], 'class': k === 2 ? 'base' : 'ln' })); return g; };
-  /** 字形(单词卡同一套):x 高 = 中格 120,基线在第三条线 */
+  /** 字形(点字弹的四线三格同一套):x 高 = 中格 120,基线在第三条线 */
   var EN_GL = ${JSON.stringify(glyphTable())}, EN_GAP = ${GAP}, EN_SPACE = ${SPACE_ADVANCE}, EN_U = 120, EN_BASE = 320;
   /** 一笔 → path 的 d(尺子坐标);x0 是这个字母的左边,sx 横着压(弧的 rx 跟着压,笔画粗细不变);弧一段不超过 90 度,省得大弧小弧分不清 */
   var enStrokeD = function (st, x0, sx) {
@@ -44,7 +44,7 @@ export const EN_BOX_JS = `
     }
     return d;
   };
-  /** 一个单词多宽(x 高为 1,字间距同单词卡);有写不出的字 → -1 */
+  /** 一个单词多宽(x 高为 1,字间距同点字弹的四线三格);有写不出的字 → -1 */
   var enWidth = function (word) {
     var x = 0, last = false;
     for (var i = 0; i < word.length; i++) { var ch = word.charAt(i); if (ch === ' ') { x += EN_SPACE; last = false; continue; } var g = EN_GL[ch]; if (!g) return -1; x += g[0] + EN_GAP; last = true; }

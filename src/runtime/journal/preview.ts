@@ -1,5 +1,5 @@
 /**
- * 话题的预览图(2026-11-15):孩子端板停下来时舞台导一张小图交上来,存成 <date>.<话题>.preview.jpg,只留最新一张;
+ * 话题的预览图:孩子端板停下来时舞台导一张小图交上来,存成 <date>.<话题>.preview.jpg,只留最新一张;
  * 首页「今天」那一格用它(src/runtime/kid-view.ts 的 startedThreads 定哪些话题上首页)。还没有预览图就拿孩子发的最后一张照片。
  */
 import { mkdir, rename, stat, writeFile } from 'node:fs/promises';

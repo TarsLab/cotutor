@@ -1,8 +1,8 @@
 /**
- * 实时那一轮的交付(从 call.ts 拆出来,2026-10-29,行为不变):
+ * 实时那一轮的交付:
  * 讲稿排队(src/runtime/delivery/queue.ts)、嘴的声音在孩子端排到哪(src/runtime/delivery/playback.ts)、告诉孩子端第几句开始放、打断时孩子听到第几句。
- * 哪一拍该交给嘴由排队定,交给嘴(要嘴说、热身那句要不要等孩子)由 LiveCall 在 onRead 里做;嘴这次回答的进度(要了没、出完没)也在 LiveCall。
- * - 按句不按拍(2026-10-19):讲稿定稿一句交一句(lines),嘴一空就把排着的几句一起交给它照念
+ * 哪一拍该交给嘴由排队定,交给嘴(要嘴说、请他说的那句要不要等孩子)由 LiveCall 在 onRead 里做;嘴这次回答的进度(要了没、出完没)也在 LiveCall。
+ * - 按句不按拍:讲稿定稿一句交一句(lines),嘴一空就把排着的几句一起交给它照念
  * - 一段照念的第一句按第一块声音到孩子端的时刻发 read;第二句起等这段的声音出齐、按字数比例摊(readRest)
  * - 打断(cut):孩子端在放的那段里亮到了哪句就报哪句,还没亮报段首;这一轮一句都没念到就被打断报 0;进下一轮的上下文包 live:,带了就清
  */
@@ -10,8 +10,6 @@ import type { MouthEvent } from '../journal/mouth.ts';
 import { addChunk, flushAt, playbackInit, playingAt, type Playback } from './playback.ts';
 import { queueInit, queueStep, type Beat, type Echo, type QueueEvent, type QueueState } from './queue.ts';
 
-/** 嘴这次回答是什么:接住(孩子这一轮)、照念哪几句、边画边聊(哪张画) */
-/** 嘴这一次说的是什么:接住、照念讲稿、边画边聊,或照念应用手里现成的一句(say:板上点字时这个字的念法) */
 /** 嘴这一次说的是什么:catch 接住 · read 照念讲稿 · say 照念点到的字 · reply 嘴先答时提示孩子再说一遍(src/realtime/cues.ts 的 replyCue miss) */
 export type Said = { kind: 'catch' } | { kind: 'read'; beat: Beat } | { kind: 'say' } | { kind: 'reply' };
 

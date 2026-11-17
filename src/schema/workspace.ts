@@ -1,13 +1,13 @@
 /**
- * 一个孩子的 workspace 解析好的样子(app/workspace.ts 的 loadWorkspace 给;从那边挪来,2026-10-29):根、从哪认出来的、cotutor.json、各角色的绝对路径、几个目录。
+ * 一个孩子的 workspace 解析好的样子(app/workspace.ts 的 loadWorkspace 给):根、从哪认出来的、cotutor.json、各角色的绝对路径、几个目录。
  * 类型放在 schema:运行层、记忆、场景都按它取自己要的那几样,不用去引命令行那一层。
  */
 import { z } from 'zod';
 import type { CotutorConfig, PathRole } from './config.ts';
 
 /**
- * 技能目录,相对 workspace 根(2026-10-30 从 .claude/skills 挪来):Codex、Qwen Code 在 workspace 里对话时直接读它;
- * Claude Code 只认 .claude/skills,那里是一条指过来的相对链(init / upgrade 建)
+ * 技能目录,相对 workspace 根:Codex、Qwen Code 在 workspace 里对话时直接读它;
+ * Claude Code 只认 .claude/skills,那里是一条指过来的相对链(init / refresh 建)
  */
 export const SKILLS_DIR = '.agents/skills';
 
@@ -15,7 +15,7 @@ export const SKILLS_DIR = '.agents/skills';
 export type RootSource = 'flag' | 'env' | 'cwd' | 'user-config' | 'home-single';
 
 /**
- * sandbox(2026-11-04):手动试功能用的 workspace,从真的那个分出来;对话、照片、vault 的写入都留在它里面,不进孩子的记录。
+ * sandbox:手动试功能用的 workspace,从真的那个分出来;对话、照片、vault 的写入都留在它里面,不进孩子的记录。
  * 命令加 --sandbox 就换到它(src/app/cli/sandbox.ts),下游照常当一个 workspace 用。
  * 位置:真 workspace 旁边的 .sandbox/<目录名>/(~/cotutor/ray → ~/cotutor/.sandbox/ray);点开头,「~/cotutor 下唯一目录」的兜底看不见它。
  * 分的时候根下照拷,只跳过孩子的状态(SANDBOX_SKIP;.cotutor/ 只拷 SANDBOX_KEEP_MACHINE);vault 在 workspace 外面就整份拷到 sandbox 的 vault/。
@@ -28,7 +28,7 @@ export const SANDBOX_MARK = '.cotutor/sandbox.json';
 export const SANDBOX_TITLE = '试用';
 /** 外面的 vault 拷进 sandbox 后的目录名(相对 sandbox 根) */
 export const SANDBOX_VAULT = 'vault';
-/** workspace 根下是孩子的状态、不拷进 sandbox 的;其余都算设置,照拷(拷多了无妨,拷少了试的就不像真的)。talk/ 是以前口语课页(2026-11-17 删)留在老 workspace 里的照片和口语单 */
+/** workspace 根下是孩子的状态、不拷进 sandbox 的;其余都算设置,照拷(拷多了无妨,拷少了试的就不像真的)。talk/ 是以前口语课页留在老 workspace 里的照片和口语单 */
 export const SANDBOX_SKIP: readonly string[] = ['conversations', 'ledger', 'captures', 'talk', 'dictation', 'evals', 'snaps', '.cotutor', '.git', 'node_modules', '.DS_Store'];
 /** .cotutor/ 里照拷的;其余是缓存、设备表、孩子端流水 */
 export const SANDBOX_KEEP_MACHINE: readonly string[] = ['shipped.json', 'cotutor.schema.json'];

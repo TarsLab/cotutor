@@ -1,7 +1,6 @@
 /**
  * 课包(lesson bundle)输出契约 —— build 的产物,serve/播放器的输入。
  * 自包含目录:scene.json + manifest.json(+ audio/,TTS 就绪后)。
- * 前身是 growth-apps packages/schema 的 LessonManifestDraft,随架构重设计迁入并定版 v1。
  */
 
 import type { ChalkBlock, ChalkGroup, ChalkScene, ChalkStep, ChalkSubscene } from './types.ts';

@@ -25,6 +25,6 @@ export function qrSvg(text: string): string | null {
 
 export function qrNotes(https: boolean): string[] {
   const wifi = 'iPad / iPhone 和这台电脑连同一个 Wi-Fi,用相机扫';
-  if (!https) return [wifi, '现在是 HTTP:能看板书,按住说话用不了;要用就在电脑上跑 cotutor cert,再重启服务'];
+  if (!https) return [wifi, '现在是 HTTP:能打开页面,按住说话用不了;要用就在电脑上跑 cotutor cert,再重启服务'];
   return [wifi, '第一次用的设备先信任根证书:设置 › 通用 › 关于本机 › 证书信任设置(docs/iPad与iPhone.md)', '提示「不安全」:在电脑上重跑 cotutor cert,再重启服务'];
 }

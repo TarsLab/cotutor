@@ -1,6 +1,6 @@
 /**
- * 一轮的转录(.log,一行一个 JSON)→ 家长视图条目 + 最终文本。起初抄自 growth-apps 的 gen-transcript(2026-08-26,claude 2.1.220),
- * 现在读成统一事件再拼(./log.ts:API 轮次的统一事件,旧轮次的 stream-json):子代理的条目标 sub(旧轮次的 CLI 才有),
+ * 一轮的转录(.log,一行一个 JSON)→ 家长视图条目 + 最终文本。
+ * 读成统一事件再拼(./log.ts:API 轮次的统一事件,旧轮次的 stream-json):子代理的条目标 sub(旧轮次的 CLI 才有),
  * 收尾的最终正文单独取出作 final,孩子视图只看它。
  */
 import { parseLogLine } from './log.ts';

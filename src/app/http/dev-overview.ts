@@ -11,7 +11,7 @@ import { readIndex } from '../../runtime/journal/store.ts';
 import { readDevices, readKidLog, type KidDevice, type KidLogLine } from '../../runtime/journal/kid-log.ts';
 import { deviceLabel } from '../../schema/kid-device.ts';
 
-/** 首句就绪(没有就首卡)超过它算慢;与工作台对话页的 SLOW_FIRST 同数 */
+/** 首句就绪超过它算慢;与工作台对话页的 SLOW_FIRST 同数 */
 export const SLOW_FIRST_MS = 15_000;
 const MAX_ISSUES = 8;
 
@@ -128,7 +128,7 @@ export async function devOverview(ws: Workspace, now: Date = new Date()): Promis
         const first = firstOf(m);
         const base = { tutor: t.name, date, job: m.job, at: m.at, text: clip(m.text) };
         if (m.result === 'error') issues.push({ ...base, kind: 'error', detail: m.error || '出错了' });
-        else if (first !== undefined && first > SLOW_FIRST_MS) issues.push({ ...base, kind: 'slow', detail: (m.timing?.firstReadyMs !== undefined ? '首句就绪 ' : '首卡 ') + secs(first) });
+        else if (first !== undefined && first > SLOW_FIRST_MS) issues.push({ ...base, kind: 'slow', detail: '首句就绪 ' + secs(first) });
         else if (m.warnings?.length) issues.push({ ...base, kind: 'warn', detail: clip(m.warnings[0], 60) + (m.warnings.length > 1 ? ` 等 ${m.warnings.length} 条` : '') });
         if (date !== today) continue;
         if (!kid) { todayTasks++; continue; }

@@ -1,5 +1,5 @@
 /**
- * cotutor activity eval:照例子文件,真老师 + 模拟孩子跑多轮,判只看板书。
+ * cotutor activity eval:照例子文件,真老师 + 模拟孩子跑多轮,判只看讲稿。
  * 跑在 evals/ 里(同回放:不进孩子的对话、不配音、不写记忆)。一个例子跑几次,次次都过才算过(pass^k)。
  * 模拟孩子交给千问的对话模型(缺省 qwen3.8-flash,有 Token Plan 走它,不然百炼按量);写死的那几句先说完再交给它。
  */
@@ -130,7 +130,7 @@ export async function evalActivity(ws: Workspace, tutor: string, name: string, o
       let photos: string[] = [];
       let lecture = e.lecture ? { bundle: e.lecture.bundle, watchedMs: 0, finished: true, pauses: e.lecture.pauses, marks: e.lecture.marks.map((m) => ({ atMs: m.atMs, strokes: [] as [number, number][][], hit: m.text })) } : undefined;
       while (say !== null && turns.length < e.maxTurns) {
-        // 真孩子都是实时的:模拟孩子的每一句也照实时写(上下文包带 live:、不补提问卡、讲稿不截);嘴不在,接住与打断不带
+        // 真孩子都是实时的:模拟孩子的每一句也照实时写(上下文包带 live:、讲稿不截);嘴不在,接住与打断不带
         const started = await runner.send(tutor, { from: 'kid', text: say, eval: true, live: {}, ...(photos.length ? { photos } : {}), ...(lecture ? { lecture } : {}), ...(thread ? { thread } : { newThread: true, activity: run }) });
         photos = [];
         lecture = undefined;

@@ -22,7 +22,7 @@ export async function gradePacks(base = PACKAGE_GRADES_DIR): Promise<GradePack[]
     const agentsDir = join(dir, 'agents');
     const required = ['chinese-tutor', 'math-tutor', 'english-tutor'];
     if (!(await stat(join(dir, 'README.md')).catch(() => null))?.isFile()) continue;
-    // 三位主科老师的家都要有 activity(老师文件 2026-11-16 起不出厂)
+    // 三位主科老师的家都要有 activity
     if (!(await Promise.all(required.map(async (name) => (await stat(join(agentsDir, name, 'activities')).catch(() => null))?.isDirectory()))).every(Boolean)) continue;
     packs.push({ grade: Number(match[1]), dir, agentsDir });
   }

@@ -1,8 +1,8 @@
 /**
- * 主题(themes/<name>/theme.json + kid.css):孩子端板书的样子。样子的真相在主题里,不在卡的协议里。
+ * 主题(themes/<name>/theme.json + kid.css):孩子端的样子。样子的真相在主题里,不在牌的协议里。
  * 出厂主题 default 在包根 themes/default/;init **拷贝**进 workspace 的 themes/default/(拷进来就是家长的,改了刷新就有),
  * 目录 hash 记 .cotutor/shipped.json 的 themes,与 activity / skill 同一套:没改过的随 cotutor refresh 换新,改过的报 diff 保留。
- * 自家的主题(cotutor add-theme <name> 拷一份 default 来改,或直接建目录)永远 untracked,upgrade 不碰。
+ * 自家的主题(cotutor add-theme <name> 拷一份 default 来改,或直接建目录)永远 untracked,refresh 不碰。
  */
 import { cp, lstat, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -69,7 +69,7 @@ export interface ThemeStatus {
   state: ThemeState;
   dir: string;
   basedOn?: string;
-  /** 出厂件与否(自家加的主题 upgrade 不碰) */
+  /** 出厂件与否(自家加的主题 refresh 不碰) */
   shipped: boolean;
 }
 
@@ -136,7 +136,7 @@ export interface ThemeUpgradeStep {
   basedOn?: string;
 }
 
-/** upgrade 用:latest 跳过;upgradable 换新;custom / untracked 保留只报;缺的补 */
+/** refresh 用:latest 跳过;upgradable 换新;custom / untracked 保留只报;缺的补 */
 export async function upgradeThemes(root: string): Promise<ThemeUpgradeStep[]> {
   const manifest = await readManifest(root);
   const steps: ThemeUpgradeStep[] = [];

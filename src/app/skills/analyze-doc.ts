@@ -1,5 +1,5 @@
 /**
- * cotutor-analyze 技能的生成部分(2026-09-15):references/命令与文件.md 从命令表(app/cli/commands.ts,经 usage.ts 的 commandsReference)与对话文件的命名规则(runtime/journal/conversation.ts
+ * cotutor-analyze 技能的生成部分:references/命令与文件.md 从命令表(app/cli/commands.ts,经 usage.ts 的 commandsReference)与对话文件的命名规则(runtime/journal/conversation.ts
  * conversationFiles)现生成,scripts/gen-skills.ts 写进包根 skills/cotutor-analyze/,tests/skills.test.ts 断言入库的和生成的一致——
  * 技能里的命令与文件名永远和代码同源。SKILL.md 本体(怎么查、禁区)是手写的。
  */

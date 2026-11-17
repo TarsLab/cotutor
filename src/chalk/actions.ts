@@ -1,5 +1,5 @@
 /**
- * 笔顺里的动作(drawtell 重新设计第 3 步):erase 擦掉前面画过的几样,board 换一块画板(旧板上的连背景图一起擦干净)。
+ * 笔顺里的动作:erase 擦掉前面画过的几样,board 换一块画板(旧板上的连背景图一起擦干净)。
  * 动作和画一笔一样占时间、被步覆盖;这里只管「谁擦了谁、谁在第几块画板」,时钟、bake、check、圈住了什么都用这一份。
  * 纯函数,不抛:引用不对的记进 problems(check 报),其余照样算。
  */
@@ -66,15 +66,4 @@ export function resolveActions(skeletons: readonly ChalkSkeleton[], background?:
     seen.add(e.id);
   }
   return { boardOf, erasedBy, targets, boards, problems };
-}
-
-/**
- * 课讲完时画面上还留着的:最后一块画板上没擦掉的画的元素,与那块板的背景图。
- * 应用把课包当底图放进编辑器(画板卡)用它;动作不交给 excalidraw。
- */
-export function finalBoard<T extends ChalkSkeleton>(skeletons: readonly T[], background?: ChalkBackground): { skeletons: T[]; background?: ChalkBackground } {
-  const r = resolveActions(skeletons, background);
-  const last = r.boards.length - 1;
-  const bg = r.boards[last].background;
-  return { skeletons: skeletons.filter((e) => !isAction(e) && !r.erasedBy.has(e.id) && r.boardOf.get(e.id) === last), ...(bg ? { background: bg } : {}) };
 }

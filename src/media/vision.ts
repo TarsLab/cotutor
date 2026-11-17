@@ -1,5 +1,5 @@
 /**
- * 看一张图(百炼 Chat Completions 的流式接口:一张图 + 一段提示词)。从 app/dictation/recognize.ts 和以前的口语单拆出来(2026-10-29):
+ * 看一张图(百炼 Chat Completions 的流式接口:一张图 + 一段提示词)。
  * key 与端点按模型定(src/shared/qianwen.ts:Token Plan 有这个模型就走它,否则百炼按量),key 只进请求头;出错、超时都不抛。
  * 两种读法:
  * - 不给 onDelta:整段收完再拼(readStream),流里有一块报错就算没成(bad_reply)

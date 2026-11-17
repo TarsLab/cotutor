@@ -1,6 +1,6 @@
 /**
  * 首页的读写:草稿 home/draft.md → 检查(引用读盘查)→ 发布 home/published.json + home/history/<id>.md;
- * 孩子端的首页现算(老师卡置顶、补缺、剥讲法);孩子点按钮发来的 via 在这里对上发布的那份,讲法只从这里取;家长看的点击统计。CLI(cotutor home)、家长端「首页」页、孩子端都走这里。
+ * 孩子端的首页现算(老师牌置顶、补缺、剥讲法);孩子点按钮发来的 via 在这里对上发布的那份,讲法只从这里取;家长看的点击统计。CLI(cotutor home)、家长端「首页」页、孩子端都走这里。
  */
 import { mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
@@ -234,7 +234,7 @@ export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'pu
   const owners = new Map(cards.map((c, i) => [c, ownerOf[i]]));
   const out: KidHomeCard[] = [];
   for (const c of arrangeHome(cards, tutors)) {
-    // 首页只认老师卡与听写卡(2026-11-16);以前发布的那份里别的卡不下发
+    // 首页只认老师卡与听写卡;以前发布的那份里别的卡不下发
     if (c.kind === 'dictation') {
       out.push({ ...stripCard(c), owner: owners.get(c) ?? null });
       continue;

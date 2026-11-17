@@ -1,6 +1,6 @@
 /**
  * cotutor.json:每个 workspace 一份,一孩一 workspace。`paths` 角色映射 + `runtimes`(用哪个模型)+ 老师表与政策。
- * 字段归属铁律:人设(display / description / avatar / voice)、政策、开关全在这里;怎么教在老师家里的 activity 文件(老师文件 2026-11-16 起没有了)。
+ * 字段归属铁律:人设(display / description / avatar / voice)、政策、开关全在这里;怎么教在老师家里的 activity 文件。
  */
 import { z } from 'zod';
 import { DEFAULT_PORT } from '../shared/default-port.ts';
@@ -8,8 +8,8 @@ import { DEFAULT_PORT } from '../shared/default-port.ts';
 export { DEFAULT_PORT };
 
 export const PolicySchema = z.object({
-  /** 老师说给孩子听的每一句的字数上限;超出在句末截断(板书后按句算) */
-  replyMaxChars: z.number().int().positive().describe('老师说给孩子听的每一句的字数上限(板书讲稿一行一句,按句截);超出在句末截断'),
+  /** 老师说给孩子听的每一句的字数上限;超出在句末截断(按句算) */
+  replyMaxChars: z.number().int().positive().describe('老师说给孩子听的每一句的字数上限(讲稿一行一句,按句截);超出在句末截断'),
   /** 上下文包的三个数:最近观察条数(从日记的「- 观察:」行抽,最近 14 天)、计划行数、档案 / 入口文件 / 记忆原文各带多少字 */
   contextPack: z.object({
     recent: z.number().int().nonnegative().describe('上下文包带最近几条观察(最近 14 天日记里本学科的「- 观察:」行,取最新的)'),
@@ -17,18 +17,18 @@ export const PolicySchema = z.object({
     entryChars: z.number().int().positive().describe('档案与这位老师的入口文件(vault 里 cotutor: subject 那篇)原文各最多带多少字;超出截断并在上下文包里注明'),
   }),
   /**
-   * 老师动笔前想多久(2026-09-20):脑把它换成思考开关与思考量(src/brain/api.ts 的 thinkingOf、effortOf)。孩子在等第一个字:9 月 18–19 日真跑,输出 token 的 60–95% 是思考,
+   * 老师动笔前想多久:脑把它换成思考开关与思考量(src/brain/api.ts 的 thinkingOf、effortOf)。孩子在等第一个字:9 月 18–19 日真跑,输出 token 的 60–95% 是思考,
    * 用工具的轮次首拍就绪 38–50 秒;low 把思考从 1000–1900 token 压到几十、来回从 5–6 个变 2 个,首拍 11–16 秒。
    * 不用 MAX_THINKING_TOKENS=0:同日真跑,思考归零后老师把盘算写进了讲稿(会念给孩子听)、字源开始编
    */
   effort: z.enum(['low', 'medium', 'high']).describe('老师动笔前想多久:low = 不想、开口快(缺省,孩子等 10–15 秒);medium = 想一点(算题的老师);high = 不限,最慢最细。带工具的那轮至少想一点'),
   /**
-   * 孩子的话,老师带不带工具(2026-10-04)。ray 9 月的真实对话,用了工具的轮首拍就绪中位数 31.7 秒(24 轮),没用的 6.8 秒(37 轮);
+   * 孩子的话,老师带不带工具。ray 9 月的真实对话,用了工具的轮首拍就绪中位数 31.7 秒(24 轮),没用的 6.8 秒(37 轮);
    * 孩子最喜欢的是回得快的那位老师。off 时要用的东西由应用放进上下文包
    */
   tools: z.enum(['off', 'on']).describe('孩子说的话,老师带不带工具:off = 不带,只凭上下文包答,开口快(缺省);on = 带只读工具(查教材、读 vault,慢)。带照片的那条、记账,总是带只读工具(read_file / glob / grep_search)'),
   /**
-   * 断流看门狗(2026-09-21):脑的流多久没有一块到就停,这轮记没成(src/brain/api.ts)。不接着跑:重发会把念过的再念一遍。
+   * 断流看门狗:脑的流多久没有一块到就停,这轮记没成(src/brain/api.ts)。不接着跑:重发会把念过的再念一遍。
    * 9 月 21 日真跑连断两次,「讲个故事」一轮等了 6 分钟,模型真干活不到 10 秒。
    * 以前还有 retries(断了接着跑几次),起 CLI 那时用;旧 cotutor.json 里写着的读进来就丢掉
    */
@@ -60,16 +60,16 @@ export const POLICY_DEFAULTS: Policy = {
 /** agent 名:与 agents/<name>.md 的 frontmatter name 一致,小写字母数字连字符 */
 export const AGENT_NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
 
-/** 老师卡上的常驻入口:不经首页发布、一直在那位老师的卡上(不经老师的页;口语课 2026-11-17 起是方砖) */
+/** 老师卡上的常驻入口:不经首页发布、一直在那位老师的卡上(不经老师的页;口语课是方砖) */
 export const TUTOR_EXTRAS = ['dictation'] as const;
-/** 不再有的常驻入口:旧 cotutor.json 里写着的读进来就丢掉(talk 口语课页 2026-11-17 删,口语课成了方砖) */
+/** 不再有的常驻入口:旧 cotutor.json 里写着的读进来就丢掉(talk:以前的口语课页) */
 const RETIRED_EXTRAS: readonly string[] = ['talk'];
 export type TutorExtra = (typeof TUTOR_EXTRAS)[number];
 
 /**
- * 老师卡上常驻的方砖(设计稿 https://claude.ai/artifact/NpPFoyvuF17dbRSEUuRJfW):先后就是牌上的先后。
+ * 老师卡上常驻的方砖:先后就是牌上的先后。
  * id 记在消息的 via.button;activity 是老师家里同名的文件(agents/<老师>/activities/<名>.md),孩子看到的字也是它。
- * 家里有那个文件才出那一块(预习、检查作业、复习三门主科出厂都有;口语课只有英语老师有,2026-11-17 起);cotutor.json 的 tiles 只记关掉的,升级来的老 workspace 自动就有
+ * 家里有那个文件才出那一块(预习、检查作业、复习三门主科出厂都有;口语课只有英语老师有);cotutor.json 的 tiles 只记关掉的,升级来的老 workspace 自动就有
  */
 export const HOME_TILES = [
   { id: 'preview', activity: '预习' },
@@ -83,7 +83,7 @@ export const HOME_TILE_IDS = HOME_TILES.map((t) => t.id) as [HomeTileId, ...Home
 export const TutorSchema = z.object({
   /** 显示名(孩子端头像下的字、计划文件的 H2 标题) */
   display: z.string().min(1).describe('显示名:孩子端头像下的字,计划文件的 H2 标题'),
-  /** 一句介绍(工作台、加老师时;2026-11-16 从老师文件头上挪来) */
+  /** 一句介绍(工作台、加老师时) */
   description: z.string().optional().describe('一句介绍:这位老师管什么(工作台显示;老师文件 2026-11-16 起不读了,头上的 description 挪到这里)'),
   subject: z.string().optional().describe('学科:与课程表的学科列、观察的 subject、vault 入口文件的 subject 属性对齐即归到这位老师'),
   /** 头像:一个 emoji 或图片相对路径 */
@@ -135,7 +135,7 @@ export function tutorTiles(t: Pick<Tutor, 'tiles'>): HomeTileId[] {
 }
 
 /**
- * 旧的命令行运行时:一组 {run, resume} 命令模板(起 Qwen Code;更早是 Claude CLI)。2026-11-02 起不再支持,
+ * 旧的命令行运行时:一组 {run, resume} 命令模板(起 Qwen Code;更早是 Claude CLI)。不再支持,
  * 留着这个形状只为旧 cotutor.json 读得进来:doctor 报出来,用到它的老师发不出去(src/brain/runtime.ts)。
  */
 export const CliRuntimeSchema = z.object({
@@ -147,9 +147,9 @@ export const CliRuntimeSchema = z.object({
 export type CliRuntime = z.infer<typeof CliRuntimeSchema>;
 
 /**
- * API 运行时(2026-10-29;2026-11-02 起只有它):应用自己直连模型(src/brain/api.ts)。
+ * API 运行时(只有它):应用自己直连模型(src/brain/api.ts)。
  * 现在只有百炼(OpenAI 兼容的 Chat Completions);凭证是机器级的 ~/.config/cotutor/(家长端「首页」填的按量 key 与业务空间 id,开发机还有 Token Plan)。
- * 系统提示 = 老师正文 + 板书写法;同一话题的模型历史由应用存;effort 映射成思考开关与思考量;工具只有只读的三样。
+ * 系统提示 = activity 的「老师怎么带」+ 讲稿与动作的写法;同一话题的模型历史由应用存;effort 映射成思考开关与思考量;工具只有只读的三样。
  */
 export const ApiRuntimeSchema = z.object({
   api: z.literal('bailian').describe('哪家的接口:现在只有百炼'),
@@ -167,7 +167,7 @@ export const RuntimesSchema = z.object({ default: z.string().min(1) }).catchall(
 /**
  * paths 里 CLI 认识的角色;其余角色原样保留给应用层。vault 侧角色相对 vault 解析,没配 vault 就相对 workspace 根;
  * captures(应用拍的作业照片)是 workspace 侧,相对 workspace 根(《obsidian仓库设计.md》§5:vault 里存文字不存图)。
- * 缺省是中文名(2026-09-14):vault 是家长在 Obsidian 里看的,目录名要像人写的。
+ * 缺省是中文名:vault 是家长在 Obsidian 里看的,目录名要像人写的。
  */
 export const PATH_ROLES = ['vault', 'diary', 'plans', 'profile', 'timetable', 'textbooks', 'reference', 'captures'] as const;
 export type PathRole = (typeof PATH_ROLES)[number];
@@ -192,10 +192,10 @@ export const VaultPolicySchema = z.object({
 export type VaultPolicy = z.infer<typeof VaultPolicySchema>;
 
 /**
- * 实时老师:老师用 realtime 模型开口(嘴),脑(应用直连百炼)在后面写板书;讲稿不配音,交给嘴照念。
- * 有脸的老师都走实时,没有开关;要百炼按量 key 与业务空间 id,没配孩子端打不开。
+ * 实时老师:老师用 realtime 模型开口(嘴),脑(应用直连百炼)在后面写讲稿;讲稿不配音,交给嘴照念。
+ * 老师都走实时,没有开关;要百炼按量 key 与业务空间 id,没配孩子端打不开。
  */
-/** 嘴的缺省音色:出厂三位各一个(10-19 起 Ray 那里用着的),别的老师用 MOUTH_VOICE。不进 voices 的缺省值:voices 的键要是在的老师 */
+/** 嘴的缺省音色:出厂三位各一个(Ray 那里用着的),别的老师用 MOUTH_VOICE。不进 voices 的缺省值:voices 的键要是在的老师 */
 export const MOUTH_VOICE = 'Serena';
 export const SHIPPED_MOUTHS: Readonly<Record<string, string>> = { 'chinese-tutor': 'Serena', 'math-tutor': 'Andre', 'english-tutor': 'Theo Calm' };
 export const LIVE_DEFAULT = { model: 'qwen3.8-omni-flash-realtime', voices: {} as Record<string, string>, listen: 'hold' as const, vad: 'server_vad' as const, silenceMs: 1600, pen: { blankMs: 2500, stripMs: 6000 } };
@@ -211,7 +211,7 @@ export const LiveSchema = z.object({
   // 缺省 server_vad:semantic_vad 听不见一两个字的回答(好的、Yes,问过也一样,probe-live-vad context)
   vad: z.enum(['semantic_vad', 'server_vad']).default(LIVE_DEFAULT.vad).describe('一直听时谁判说完:server_vad 按静音(缺省;一两个字的回答也认,「嗯」、笑声也会让老师小声一下);semantic_vad 按语义(切得少、不理「嗯」和笑声,但「好的」「Yes」这类短回答听不见)'),
   silenceMs: z.number().int().min(500).max(4000).default(LIVE_DEFAULT.silenceMs).describe('一直听时停多久算说完(毫秒;孩子一句话中间停一下接着说,太短会切碎)'),
-  // 收笔(src/runtime/live/pen.ts):一节课里孩子在页上写完、抬笔以后停多久替他交给老师。2026-11-16 定的起点,真机上看孩子怎么写再调
+  // 收笔(src/runtime/live/pen.ts):一节课里孩子在页上写完、抬笔以后停多久替他交给老师。是起点,真机上看孩子怎么写再调
   pen: z
     .object({
       blankMs: z.number().int().min(800).max(20_000).default(LIVE_DEFAULT.pen.blankMs).describe('在题目的空位上写完以后等多久(毫秒)'),
@@ -224,7 +224,7 @@ export type LiveConfig = z.infer<typeof LiveSchema>;
 /** 这位老师的嘴用哪个音色 */
 export const mouthVoice = (live: Pick<LiveConfig, 'voices'>, tutor: string): string => live.voices[tutor] ?? SHIPPED_MOUTHS[tutor] ?? MOUTH_VOICE;
 
-/** 卡的配音(点读、单词卡、听写念词)的缺省:出厂三位各一个(2026-11-03 照 Ray 那里用着的),不写进 cotutor.json;别的老师没配就不配音 */
+/** 配音(听写念词、课包)的缺省:出厂三位各一个(照 Ray 那里用着的),不写进 cotutor.json;别的老师没配就不配音 */
 export const SHIPPED_CARD_VOICES: Readonly<Record<string, string>> = {
   'chinese-tutor': 'qwen-audio-3.0-tts-plus-longfengyutong',
   'math-tutor': 'qwen-audio-3.0-tts-plus-longyingsongliu',
@@ -291,7 +291,7 @@ export const CotutorConfigSchema = z
       .default({ port: DEFAULT_PORT }),
     paths: z.record(z.string(), z.string()).default({}).describe('角色 → 目录:vault 指 Obsidian vault 根;diary / plans / profile / timetable / textbooks / reference 相对 vault(缺省 日记 / 计划 / 孩子.md / 课程表.md / 教材 / 参考),不配 vault 就相对 workspace 根;profile 只是 init 新建档案的位置,老师按 cotutor: profile 属性找;captures(作业照片)相对 workspace 根'),
     vault: VaultPolicySchema.default({ keepScore: 4, autoBookkeep: false }).describe('vault 的写入政策:keepScore 话题打几星起才把摘要沉淀进日记(缺省 4);autoBookkeep 自动记账(缺省关)'),
-    policyDefaults: PolicyPatchSchema.default({}).describe('所有老师的政策缺省;没写的用出厂缺省(60 字 / 板书 auto / 观察 10 条、计划 10 行、原文 4000 字)'),
+    policyDefaults: PolicyPatchSchema.default({}).describe('所有老师的政策缺省;没写的用出厂缺省(60 字 / 观察 10 条、计划 10 行、原文 4000 字)'),
     tutors: z.record(z.string().regex(AGENT_NAME_RE), TutorSchema).default({}).describe('老师表:键 = 老师的家 agents/<键>/ 的名字;人设、开关、政策都在这里,怎么教在他家里的 activity'),
     runtimes: RuntimesSchema.describe('运行时:default 指一个键;每个运行时是 {api, model}(应用直连百炼);老师用哪个模型写在这里'),
     figshot: z
@@ -299,7 +299,7 @@ export const CotutorConfigSchema = z
       .optional()
       .describe('给老师换样子(figshot pick):它在这台电脑的哪个端口(缺省 8477)。配了孩子端首页多一张「给老师们换个样子」,figshot 没开着就不出现;不配就没有这张卡'),
     dictation: DictationSchema.default(DICTATION_DEFAULT).describe('听写(/dictation):拍照认词表用的模型(改了不用重起服务);挑词的要求在老师家里听写.md 的「认字收到什么」'),
-    live: LiveSchema.default(LIVE_DEFAULT).describe('实时老师:有脸的老师都由 realtime 模型开口、脑在后面写板书(讲稿不配音、嘴照念);voices 挑嘴的音色;要百炼按量 key 与业务空间 id'),
+    live: LiveSchema.default(LIVE_DEFAULT).describe('实时老师:老师都由 realtime 模型开口、脑在后面写讲稿(讲稿不配音、嘴照念);voices 挑嘴的音色;要百炼按量 key 与业务空间 id'),
   })
   .superRefine((c, ctx) => {
     for (const name of Object.keys(c.live.voices)) {

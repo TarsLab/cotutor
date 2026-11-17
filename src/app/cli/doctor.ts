@@ -1,7 +1,7 @@
 /**
  * cotutor doctor:环境 + workspace逐项体检,失败项附修复命令(错误信息即修复指南)。
  * 静默失败摆到明面:配置坏了、老师链断了、账本有坏行、角色指向踩空。
- * exit 约定同 drawtell / voxtell doctor:必需项全过 exit 0,否则 1;--json 带 ok 与整份 checks。
+ * exit 约定:必需项全过 exit 0,否则 1;--json 带 ok 与整份 checks。
  */
 import { isRealtimeVoice } from '../../realtime/voices.ts';
 import { dashscopeAuth } from '../../realtime/bailian.ts';
@@ -220,15 +220,15 @@ export async function doctorWorkspace(
     fix: missing.length ? `cotutor init <slug> --dir ${redactHome(root)}(幂等补缺)` : undefined,
     cmd: missing.length ? initCmd() : undefined,
   });
-  // 老布局(2026-10-30 之前):老师文件在 .claude/agents/、技能在 .claude/skills/,现在都读不到了
+  // 老布局:老师文件在 .claude/agents/、技能在 .claude/skills/,现在都读不到了
   const legacy = await legacyLayout(root);
   if (legacy.length) push({ name: 'layout', ok: false, required: true, detail: `${legacy.join(' ')} 是老位置:老师文件现在在 agents/<老师>.md,技能在 ${SKILLS_DIR}/`, fix: 'cotutor refresh(原样挪过去,不改内容;新位置已有同名的不挪、会点名)', cmd: refresh });
-  // 家规(根的 QWEN.md)2026-09-15 起不出厂:有就是家长自建的共同规矩,提一句;没有不缺
+  // 家规(根的 QWEN.md)不出厂:有就是家长自建的共同规矩,提一句;没有不缺
   const rulesThere = (await Promise.all(['QWEN.md'].map(async (f) => ((await statOrNull(join(root, f))) ? f : null)))).filter(Boolean);
   push({ name: 'rules', ok: true, required: false, detail: rulesThere.length ? `家长自建的家规 ${rulesThere.join(' ')} 在,所有老师每轮都读` : '没有根目录的 QWEN.md(不需要:老师要知道的都在老师文件与技能里)' });
 
   if (ws) {
-    // ---- 老师:老师的家(activity 在里面);老师文件 2026-11-16 起不读了,还在就提一句 ----
+    // ---- 老师:老师的家(activity 在里面);老师文件不读,还在就提一句 ----
     const retired = await retiredTutorFiles(root);
     if (retired.length) push({ name: 'tutor.files', ok: true, required: false, detail: `${retired.join(' ')} 不再读了(一科通用的做法并进了每个 activity);改过的话,把要的挪进那位老师的 activity「老师怎么带」,再删掉这几份` });
     for (const name of Object.keys(ws.config.tutors)) {
@@ -281,7 +281,7 @@ export async function doctorWorkspace(
     }
 
     {
-      // 舞台包:小课堂 / 画板卡要它;没有只是重卡打不开,轻卡与对话照常。做课包(cotutor chalk bake / snap)与服务端烤画面也开它,在本机的 Chrome 里
+      // 舞台包:一节课的页都在它里面画,没有它老师页开不了。做课包(cotutor chalk bake / snap)与服务端烤画面也开它,在本机的 Chrome 里
       const { stageBuilt } = await import('../http/stage.ts');
       const built = stageBuilt();
       push({ name: 'stage.bundle', ok: built, required: false, detail: built ? 'dist/stage/ 在(舞台包:小课堂与画板卡的舞台)' : 'dist/stage/ 不在,小课堂与画板卡的舞台打不开(轻卡照常)', fix: built ? undefined : '仓库根 pnpm run build:stage(npm 装的包自带)' });
@@ -323,7 +323,7 @@ export async function doctorWorkspace(
           });
         }
       }
-      // ---- 主题:孩子端板书的样子,themes/<kid.theme>/;清单要过契约、css 要在;坏了服务退回出厂 default,孩子端不会没样子 ----
+      // ---- 主题:孩子端的样子,themes/<kid.theme>/;清单要过契约、css 要在;坏了服务退回出厂 default,孩子端不会没样子 ----
       {
         const { readTheme, themeDir, themeStatuses } = await import('./themes.ts');
         const name = ws.config.kid.theme;
@@ -392,7 +392,7 @@ export async function doctorWorkspace(
       push({ name: 'captures', ok: inside && writable, required: false, detail: !inside ? `${redactHome(cap)} 在 workspace 根以外,页面看不到照片(/api/kid/image 只给根以内的)` : !writable ? `${redactHome(cap)} 写不了(最近的已有目录 ${redactHome(dir)} 没有写权限)` : there ? `${redactHome(cap)}:${n} 天的作业照片` : `${redactHome(cap)} 还没有(第一张照片时建)`, fix: !inside ? '把 cotutor.json 的 paths.captures 改回根以内(缺省 captures)' : !writable ? '改目录权限,或换 paths.captures' : undefined });
     }
 
-    // ---- vault 与 workspace 分开(2026-11-09):旧版 init 不写 paths.vault,vault 就是 workspace 根;照旧能用,这里说怎么分。sandbox 的 vault 本来就拷在里面,不查 ----
+    // ---- vault 与 workspace 分开:旧版 init 不写 paths.vault,vault 就是 workspace 根;照旧能用,这里说怎么分。sandbox 的 vault 本来就拷在里面,不查 ----
     if (!ws.sandbox) {
       const vault = ws.paths.vault;
       const separate = vaultSeparate(ws.root, vault);
@@ -442,7 +442,7 @@ export async function doctorWorkspace(
         const p = pickNotes(notes, files, { date: today, subject: t.subject });
         const big = p.entry && p.entry.text.length > limit;
         const where = t.subject && p.semester ? `课程/${p.semester}/${t.subject}.md` : null;
-        // 入口文件是可选的(2026-10-30):配置都对、只是没写,算过,detail 里说一句可以怎么写;没配 subject、算不出学期才不过
+        // 入口文件是可选的:配置都对、只是没写,算过,detail 里说一句可以怎么写;没配 subject、算不出学期才不过
         const optional = !p.entry && !!t.subject && !!p.semester && !!where;
         push({
           name: `vault.entry.${t.name}`,
@@ -489,7 +489,7 @@ export async function doctorWorkspace(
     push({ name: 'https', ok: tls !== null, required: false, detail: tls ? `${redactHome(tls.cert)}` : '没有证书,serve 走 HTTP(平板、手机上按住说话不可用)', fix: tls ? undefined : `cotutor cert(需要 mkcert:${mkcertHint()}),签完 cotutor service restart`, cmd: canSign ? 'cotutor cert' : undefined });
 
     // ---- 百炼:老师靠实时模型开口,没配孩子端打不开;--live 真试连一次(握手就挂,不花钱) ----
-    // key 只认 ~/.config/cotutor/(2026-11-02 起);shell 里还 export 着旧的,说一句免得以为配了
+    // key 只认 ~/.config/cotutor/;shell 里还 export 着旧的,说一句免得以为配了
     const bl = dashscopeAuth(env);
     const oldEnv = env.DASHSCOPE_API_KEY ? '(环境变量 DASHSCOPE_API_KEY 已经不读了)' : '';
     push({ name: 'bailian', ok: Boolean(bl), required: true, detail: bl ? `百炼按量 key …${bl.key.slice(-4)}、业务空间 ${bl.workspaceId}` : `没有百炼按量的 key 或业务空间 id:孩子端打不开(只出「老师们还没到」)${oldEnv}`, fix: bl ? undefined : '家长端「首页」里配(在这台电脑上开,或者先 cotutor pin 设家长密码),存在 ~/.config/cotutor/bailian.json' });
@@ -503,7 +503,7 @@ export async function doctorWorkspace(
       const why = await probeRealtime({ env, model: ws.config.live.model });
       push({ name: 'live.bailian', ok: why === null, required: true, detail: why === null ? '试连百炼实时模型:通' : probeMessage(why), fix: why === null ? undefined : '家长端「首页」里换一把 key,或查百炼控制台的余额与业务空间' });
     }
-    // 卡的配音(点读段、单词、听写念的词):应用直连百炼合成,看 key 与业务空间齐不齐;--live 真合成一句(live.tts)
+    // 配音(听写念的词、课包):应用直连百炼合成,看 key 与业务空间齐不齐;--live 真合成一句(live.tts)
     const tt = ttsTarget(TTS_MODEL, env);
     push({ name: 'tts', ok: !('error' in tt), required: false, detail: 'error' in tt ? `卡不配音(点读、单词卡没有声音):${tt.error}` : `卡的配音走${tt.plan ? ' Token Plan' : '百炼按量'};老师配了 voice 的,点读段、单词会配音`, fix: 'error' in tt ? '家长端「首页」里填百炼' : undefined });
 
@@ -520,7 +520,7 @@ export async function doctorWorkspace(
     for (const [name, rt] of Object.entries(ws.config.runtimes)) {
       if (typeof rt === 'string' || isApiRuntime(rt)) continue;
       const issue = runtimeIssue(rt);
-      if (issue) push({ name: `runtime.${name}`, ok: false, required: usedRuntimes.has(name), detail: issue, fix: '按 README.md 的「旧 workspace 换运行时」说明改' });
+      if (issue) push({ name: `runtime.${name}`, ok: false, required: usedRuntimes.has(name), detail: issue, fix: 'cotutor refresh --config 补上出厂的 api,把 cotutor.json 里的 runtimes.default 和 tutors.*.runtime 改成 api,再删掉这一条' });
     }
 
     // ---- 运行时:API 的走哪条线 ----

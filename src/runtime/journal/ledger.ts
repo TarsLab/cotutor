@@ -1,6 +1,6 @@
 /**
  * 产物账本的纯函数部分:逐行 JSON + zod,坏行报行号不中断;按 id 折叠,后者为准。
- * (观察不在账本里了,2026-09-14:真相在 vault 的日记,见 memory/diary.ts)
+ * (观察不在账本里:真相在 vault 的日记,见 memory/diary.ts)
  */
 import type { z } from 'zod';
 import { ArtifactEventSchema, type Artifact, type ArtifactEvent, explainIssues } from '../../schema/index.ts';

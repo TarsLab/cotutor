@@ -1,6 +1,6 @@
 /**
  * 把一个纯函数文件内联进页面的脚本:仓库里是 .ts(剥类型),npm 包里是 dist 的 .js;去掉 export 与 import 行。
- * kid-page 的板书(board/presentation.ts)、声音(runtime/delivery/player.ts)、photo-edit、reel,听写页的录像都走这里。
+ * kid-page 板上的节(board/presentation.ts)、声音(runtime/delivery/player.ts)、photo-edit、reel,听写页的录像都走这里。
  */
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';

@@ -1,13 +1,13 @@
 /**
- * 单词卡(cards/word)的画法:四线三格、按笔顺写、舞台里分段两色与合拢。插进孩子端老师页(kid-page.ts)的内联脚本。
- * 插进去的地方要已经有 h(tag, attrs, ...kids)与 sv(tag, attrs)(建 SVG 元素);样式在 cards/word/card.css(页面装 /kid/theme.css 就有)。
+ * 英文单词的画法:四线三格、按笔顺写、分段两色与合拢。插进孩子端老师页(kid-page.ts)的内联脚本。
+ * 插进去的地方要已经有 h(tag, attrs, ...kids)与 sv(tag, attrs)(建 SVG 元素);样式在 kid-page.ts 的 .wg。
  * 念这个词由页面做(老师页走配音与播放仲裁)。脚本里不写反斜杠、反引号、美元加花括号(模板字符串)。
  */
 import { inlineScript } from '../shared/inline-lib.ts';
 import { letterAdvances } from './letters.ts';
 
 const WORD_DRAW = `
-  // ---- 单词卡:四线三格(x 高为 1:升部 / 大写顶 -2、x 高顶 -1、基线 0、降部 +1),笔顺 /api/kid/letters/<词>(src/chalk/glyphs 采好的中线点);
+  // ---- 英文单词:四线三格(x 高为 1:升部 / 大写顶 -2、x 高顶 -1、基线 0、降部 +1),笔顺 /api/kid/letters/<词>(src/chalk/glyphs 采好的中线点);
   // 写 = 每一笔一条粗线,stroke-dashoffset 从头长到尾,和田字格一个手法;数据没有(写不出的词)退成字体的字、不动 ----
   const WL = new Map();
   const lettersFor = (w) => { if (!WL.has(w)) WL.set(w, fetch('/api/kid/letters/' + encodeURIComponent(w)).then((r) => (r.ok ? r.json() : null)).catch(() => null)); return WL.get(w); };
@@ -103,7 +103,7 @@ const WORD_DRAW = `
   };
 `;
 
-/** 单词卡的整段脚本:排版(src/ui/kid/word-layout.ts 内联)+ 画法;字母的宽现拼进来 */
+/** 英文单词的整段脚本:排版(src/ui/kid/word-layout.ts 内联)+ 画法;字母的宽现拼进来 */
 export function wordDrawJs(): string {
   return inlineScript(new URL('./word-layout.ts', import.meta.url)) + WORD_DRAW.replace('__WORD_ADV__', () => JSON.stringify(letterAdvances()));
 }

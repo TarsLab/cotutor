@@ -1,5 +1,5 @@
 /**
- * mp3 的时长(零依赖,读帧头):有 Xing/Info 头按帧数算,否则按码率算(CBR,和 afinfo 差不到 1%)。2026-10-31 从 voxtell 的 audio-info 搬来:
+ * mp3 的时长(零依赖,读帧头):有 Xing/Info 头按帧数算,否则按码率算(CBR,和 afinfo 差不到 1%)。用处:
  * 课包配音(cotutor chalk dub)量每步讲稿多长,播放器按它把这一步的笔画拉伸到讲稿那么长。
  */
 

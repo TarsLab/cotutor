@@ -2,7 +2,7 @@
  * 测试用的一本小书(照人教统编版排法造的,字是编的):PDF 第 1 页是目录;印刷页码 = PDF 页 − 1,印在页脚。
  *   《小鱼吹泡泡》1–2 页:正文带拼音(自造编码:jJng = jǐng),第 1 段一行、第 2 段从第 1 页底跨到第 2 页顶,后面是认字栏;
  *   《古诗两首》3–4 页,下面两首各一页;语文园地一 5–7 页,按栏目分(第 7 页空着);识字表在最后。
- * tests/textbook.test.ts、tests/board-page.test.ts 用。真的 PDF(pdf.js 读文字层)走 scripts/probe-textbook.mjs,拿家长放的教材跑
+ * tests/textbook.test.ts、tests/board-page.test.ts 用。真的 PDF(pdf.js 读文字层)走 scripts/probe-book.mjs,拿家长放的教材跑
  */
 import { PINYIN_TONES, buildBookIndex } from '../src/memory/textbook-index.ts';
 import type { BookIndex, PdfItem, PdfPage } from '../src/schema/index.ts';

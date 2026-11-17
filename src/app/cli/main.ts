@@ -1,5 +1,5 @@
 /**
- * cotutor CLI 入口。命令:init / doctor / serve;全局 --workspace <dir>、--sandbox [--fresh]、--json。
+ * cotutor CLI 入口:照命令表(commands.ts)查旗标与参数个数,再分派到各条命令。全局 --workspace <dir>、--sandbox [--fresh]、--json。
  * exit:0 通过 / 1 体检不过 / 2 用法错误 / 4 内部错误。
  */
 import { createInterface } from 'node:readline/promises';
@@ -546,7 +546,7 @@ export async function main(argv: string[]): Promise<void> {
         return;
       }
       case 'reset': {
-        // 只把点名的出厂 activity 换回出厂那份(工作台「恢复出厂」同一条路),别的不碰;现在那份存 .bak。老师文件 2026-11-16 起没有了
+        // 只把点名的出厂 activity 换回出厂那份(工作台「恢复出厂」同一条路),别的不碰;现在那份存 .bak
         if (!positionals.length) throw new ArgError('reset 要说换回哪几份,如 cotutor reset chinese-tutor/看图说话');
         const bare = positionals.find((x) => !x.includes('/'));
         if (bare) throw new ArgError(`reset 要写「老师/activity」,如 cotutor reset ${bare}/预习(老师文件 2026-11-16 起没有了)`);
@@ -947,7 +947,7 @@ export async function main(argv: string[]): Promise<void> {
           ctx.runner.onEvent((e) => { if (e.tutor === tutor && keep(e.event)) process.stdout.write(`${formatEvent(e.event)}\n`); });
         }
         const activity = activityName ? await activityRunFor(ws.root, tutor, activityName, typeof flags.param === 'string' ? flags.param : '') : undefined;
-        // 孩子的话照实时写(同孩子端:上下文包带 live:、不补提问卡、讲稿不截;嘴不在,接住与打断不带);--from system 不算
+        // 孩子的话照实时写(同孩子端:上下文包带 live:、讲稿不截;嘴不在,接住与打断不带);--from system 不算
         const started = await ctx.runner.send(tutor, { from: from as MessageFrom, text, runtime: typeof flags.runtime === 'string' ? flags.runtime : undefined, newThread: Boolean(activity), ...(photos.length ? { photos } : {}), ...(activity ? { activity } : {}), ...(from === 'kid' ? { live: {} } : {}) });
         if (!json) process.stdout.write(`→ ${tutor} ${started.date} ${started.job} 话题 ${started.thread}(${started.plan.runtime}${started.plan.resume ? ',resume ' + started.plan.session : ',新会话'})…\n`);
         const index = await started.done;

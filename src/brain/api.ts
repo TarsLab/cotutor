@@ -1,7 +1,7 @@
 /**
- * 脑执行的 API 实现(2026-10-29):不起 CLI,应用在服务进程里直连百炼的 Chat Completions(AI SDK + @ai-sdk/alibaba,cotutor-api-prototype 验过这条路)。
- * - 发到哪按模型选(src/shared/qianwen.ts 的 compatibleLine):Token Plan 有这个模型、本机有 token-plan.json 就走 Token Plan(2026-11-02 起),否则百炼按量
- * - 系统提示 = runner 给的 systemBody(老师正文或 activity + 板书写法);消息 = 上下文包 + 孩子的话,本轮的照片直接附成图,不靠老师自己去读
+ * 脑执行的 API 实现:应用在服务进程里直连百炼的 Chat Completions(AI SDK + @ai-sdk/alibaba)。
+ * - 发到哪按模型选(src/shared/qianwen.ts 的 compatibleLine):Token Plan 有这个模型、本机有 token-plan.json 就走 Token Plan,否则百炼按量
+ * - 系统提示 = runner 给的 systemBody(activity 的「老师怎么带」+ 讲稿与动作的写法;系统任务是一句人设);消息 = 上下文包 + 孩子的话,本轮的照片直接附成图,不靠老师自己去读
  * - 同一话题的模型历史应用自己存:<日期>.<话题>.brain.jsonl,一行一轮(会话 id、模型、这轮的用户消息、模型回的全部消息、成没成);
  *   接着话题时把同一会话的那几行拼回去。照片只记相对 workspace 根的路径,发的时候再编码。没回完的一轮只留写出来的正文,下一条消息前头注明
  * - 拼回去的已经结束的轮是瘦过的(slimTurn):思考不带(只在本轮工具来回里回传),工具往返换成一句话;照片只附最近交的那组,更早的换成一句占位。
@@ -9,9 +9,9 @@
  * - 整段压缩(runner 在上下文过了 32k 的下一轮给 compact):之前的历史不再发,前情(应用照索引拼的)放在这一轮的消息前头,
  *   最近交的照片带过来;这一轮记 compacted,以后从它算起
  * - 工具:这轮带工具(read / on)就给只读的三样(./api-tools.ts),不带就一样没有;一轮最多来回 maxSteps 次
- * - 思考:同 qwen 的档(low 不想、medium 想一点、high 不限;带工具的轮次至少想一点)。qwen3.8 系列、qwen4 系列发 reasoning_effort(effortOf,两代的档不一样),
+ * - 思考:三档(low 不想、medium 想一点、high 不限;带工具的轮次至少想一点)。qwen3.8 系列、qwen4 系列发 reasoning_effort(effortOf,两代的档不一样),
  *   别的模型按 thinking_budget 卡;2026-10-31 Ray 上对照过:qwen3.8-max 卡 1024 时有照片的话题每轮想满,首句 18 秒,qwen 运行时 6 秒
- * - .log 落统一事件(一行一条 CliEvent,parseEventLine 认),孩子端的流式板书、家长端看原文、转录、工具清单都走原来那套读法;
+ * - .log 落统一事件(一行一条 CliEvent,parseEventLine 认),孩子端的流式讲稿、家长端看原文、转录、工具清单都走原来那套读法;
  *   用量按每次请求累计,有一次没回 usage 就不记(不当成零);另记命中缓存的输入与最后一次请求的输入(这一轮结束时上下文多大)
  * - 没有断流接着跑:流 stall.ms 没动静就停,这轮记没成(重发会把念过的再念一遍,先不做)
  * 请求体与 key 都不落盘:报错只记状态码(SDK 的异常里带着整个请求,孩子的照片也在里面)。
@@ -73,7 +73,7 @@ export function thinkingOf(effort: Policy['effort'] | undefined, tools: BrainReq
 
 /**
  * 有思考档的模型发 reasoning_effort:想一点 = low、不限 = 这一代的那一档(TIERS);不想或没有档 → null,照 thinkingOf 发。
- * low 是它自己看着想:闲聊想一两百 token,认照片题想得多;thinking_budget 是死卡,1024 时有照片的话题每轮都想满(2026-10-31)
+ * low 是它自己看着想:闲聊想一两百 token,认照片题想得多;thinking_budget 是死卡,1024 时有照片的话题每轮都想满
  */
 export function effortOf(model: string, effort: Policy['effort'] | undefined, tools: BrainRequest['tools']): Effort | null {
   const tier = TIERS.find((x) => x.model.test(model));
@@ -99,7 +99,7 @@ interface TurnRecord {
   model: string;
   codec: string;
   /** 这轮的用户消息:上下文包 + 孩子的话;照片相对 workspace 根 */
-  user: { text: string; images: string[]; /** 这一轮交的板(板卡的图):只在这一轮附,以后换成一句占位 */ boards?: string[] };
+  user: { text: string; images: string[]; /** 这一轮交的窗图:只在这一轮附,以后换成一句占位 */ boards?: string[] };
   /** 模型回的全部消息(含工具往返);没回完的轮次是空的 */
   messages: ModelMessage[];
   /** 没回完的轮次写出来的正文 */

@@ -1,5 +1,5 @@
 /**
- * 单词卡的笔顺数据:`GET /api/kid/letters/<词>` 用 src/chalk/glyphs(52 个拉丁字母的印刷体笔顺,四线三格归一化)把词里每个字母采成点序列——
+ * 英文单词的笔顺数据:`GET /api/kid/letters/<词>` 用 src/chalk/glyphs(52 个拉丁字母的印刷体笔顺,四线三格归一化)把词里每个字母采成点序列——
  * 坐标以 x 高为 1:基线 y = 0、x 高顶 -1、升部顶 / 大写顶 -2、降部底 +1,y 向下;每个字母左边界 x = 0,advance 是它的宽。
  * 连字符、撇号字形包里没有,这里补两笔。数据是确定性资源,不经模型;词里有写不出的字 → null,页面退成字体的字。
  */
@@ -41,8 +41,8 @@ function glyphOf(ch: string): LetterGlyph | null {
 }
 
 /**
- * 每个字母的宽(x 高为 1)与字间距、空格宽:拼进孩子端页面(__WORD_ADV__),单词卡同步就排得出、画出准确的大小,
- * 笔画数据(/api/kid/letters/<词>)晚到只往里填——排版的量具量的是终态(《卡片协议.md》「单词卡」)
+ * 每个字母的宽(x 高为 1)与字间距、空格宽:拼进孩子端页面(__WORD_ADV__),四线三格同步就排得出、画出准确的大小,
+ * 笔画数据(/api/kid/letters/<词>)晚到只往里填——排版的量具量的是终态
  */
 export function letterAdvances(): { adv: Record<string, number>; gap: number; space: number } {
   const adv: Record<string, number> = {};
@@ -51,7 +51,7 @@ export function letterAdvances(): { adv: Record<string, number>; gap: number; sp
   return { adv, gap: GAP, space: SPACE_ADVANCE };
 }
 
-/** 一个词里用到的字形;不是单词卡写得出的词 → null */
+/** 一个词里用到的字形;写不出的词 → null */
 export function lettersData(word: string): LettersData | null {
   if (!WORD_RE.test(word) || word.length > WORD_MAX) return null;
   const glyphs: Record<string, LetterGlyph> = {};

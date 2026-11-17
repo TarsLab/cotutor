@@ -1,6 +1,6 @@
 /**
- * 首页文件的纯函数:解析草稿、查问题(两级)、排卡(老师卡置顶、缺的补)、孩子端按钮。
- * 解析走板书同一个解析器(place = home);永不抛错,问题都带行号(1 起)与修法。要读盘的引用(话题在不在)由调用方查好传进来。
+ * 首页文件的纯函数:解析草稿、查问题(两级)、排牌(老师牌置顶、缺的补)、孩子端按钮。
+ * 解析走 src/board/parse.ts 的 parseHomeBody;永不抛错,问题都带行号(1 起)与修法。要读盘的引用(话题在不在)由调用方查好传进来。
  */
 import type { TutorButton } from '../../board/cards/index.ts';
 import { HOME_TILES, type Activity, type ActivityBase, type HomeTileId } from '../../schema/index.ts';
@@ -240,7 +240,7 @@ export function homeOwners(cards: readonly BoardCard[], tutors: readonly string[
 }
 
 /**
- * 孩子端老师卡上的一个按钮:id = 文件里的下标。按钮进去都是新话题;今天聊过的话题在首页「今天」那一行接(2026-11-15)。
+ * 孩子端老师卡上的一个按钮:id = 文件里的下标。按钮进去都是新话题;今天聊过的话题在首页「今天」那一行接。
  * start = activity 按钮(孩子那边点了发出按钮上的字;是哪个 activity、参数是什么,服务端照 via 从发布件查)
  */
 export type KidHomeButton =
@@ -271,7 +271,7 @@ export function kidTiles(on: readonly HomeTileId[], opts: { usable: (activity: s
 }
 
 /**
- * 一张老师卡的按钮:文件里的 activity、小课堂。以前发布的那份里的开场、接着按钮(2026-11-16 删了)不出。keepBriefs = 家长预览(讲法留着)。
+ * 一张老师牌的按钮:文件里的 activity、小课堂。以前发布的那份里的开场、接着按钮不出。keepBriefs = 家长预览(讲法留着)。
  */
 export function kidButtons(buttons: readonly TutorButton[], opts: { lecture?: (bundle: string) => boolean; activity?: (name: string, params: Readonly<Record<string, string>>) => boolean; look?: (name: string) => ActivityLook; keepBriefs?: boolean; today?: string; /** 这位老师铺小课堂的 activity(base: lecture);没有就不出没写 activity: 的小课堂按钮 */ lectureActivity?: string | null }): KidHomeButton[] {
   const out: KidHomeButton[] = [];
@@ -282,7 +282,7 @@ export function kidButtons(buttons: readonly TutorButton[], opts: { lecture?: (b
     // activity 按钮在孩子那边是 start:点了发出按钮上的字;是哪个 activity、参数是什么,服务端照 via 从发布件查
     // activity 用不了(文件不在、写坏了、这个按钮的参数按现在的文件解析不出),按钮不出:不让孩子点进一个没人带或带不了的话题;小课堂看完照它聊,同样
     const hasActivity = (name: string, params: Readonly<Record<string, string>> = {}): boolean => opts.activity?.(name, params) ?? true;
-    // 铺哪种页、一直听不听同方砖(2026-11-17 起 activity 按钮也带;以前按钮点进去不铺页)
+    // 铺哪种页、一直听不听同方砖(activity 按钮也带)
     if (b.kind === 'activity') { if (hasActivity(b.activity, b.params)) out.push({ id: k, kind: 'start', label: b.label, ...opts.look?.(b.activity), ...brief }); }
     else if (b.kind === 'lecture') {
       const name = b.activity ?? opts.lectureActivity ?? null;

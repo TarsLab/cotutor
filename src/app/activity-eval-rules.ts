@@ -1,6 +1,6 @@
 /**
  * activity 的例子与判分:`agents/<老师>/activities/<名>.例子.md`,一个 `## ` 一个例子。
- * 例子 = 孩子心里的故事 + 人设(模拟孩子照它答)+ 开头几句写死的孩子的话 + 参数 + 几条判。判只看板书(讲稿、讲稿里的动作与卡),应用就能判,不用再请模型。
+ * 例子 = 孩子心里的故事 + 人设(模拟孩子照它答)+ 开头几句写死的孩子的话 + 参数 + 几条判。判只看讲稿与讲稿里的动作,应用就能判,不用再请模型。
  * 纯函数:解析、判分;跑在 src/app/activity-eval.ts。
  */
 import type { BoardSection } from '../board/presentation.ts';
@@ -106,7 +106,7 @@ export function parseExamples(text: string): { activity: string; examples: Activ
       const n = /停过\s*(\d+)\s*次/.exec(value);
       cur.lecture = { bundle: cur.lecture?.bundle ?? '', pauses: n ? Number(n[1]) : 0, marks: cur.lecture?.marks ?? [] };
     } else if (key === '画' || key === '圈') {
-      // 「圈:」是 2026-10-19 改成画一画以前的写法,照认
+      // 「圈:」是画一画的旧写法,照认
       const m2 = /^(\d+:\d\d)\s*(.*)$/.exec(value.trim());
       const at = m2 ? clockMs(m2[1]) : null;
       if (at === null) issues.push({ text: `「${key}:」后面先写时刻,再写画的地方盖着什么:「画: 0:14 画的地方盖着:散的 3 根小棒」`, line: no });

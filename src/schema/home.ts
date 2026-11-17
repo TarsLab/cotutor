@@ -1,6 +1,6 @@
 /**
- * 首页:家长批准后发布的那页卡。草稿 home/draft.md 是板书同一套围栏语法(src/runtime/home/home.ts 解析),
- * `cotutor home publish` 校验后写 home/published.json,孩子端只读它。卡的 props 契约在 src/board/cards/<kind>.ts(老师卡的讲法留在这里,下发孩子前剥掉)。
+ * 首页:家长批准后发布的那页牌。草稿 home/draft.md 是围栏语法(src/runtime/home/home.ts 解析),
+ * `cotutor home publish` 校验后写 home/published.json,孩子端只读它。牌的 props 契约在 src/board/cards/<kind>.ts(老师牌的讲法留在这里,下发孩子前剥掉)。
  */
 import { z } from 'zod';
 import { BoardCardSchema } from './board.ts';
@@ -38,7 +38,7 @@ export function viaSendsLabel(via: { button: number | string }): boolean {
 }
 export type HomeVia = z.infer<typeof HomeViaSchema>;
 
-/** 消息里记的 via:再带上按钮上的字(发布的首页以后会换,记下来 home show 才说得清);new / recent 是 2026-11-16 以前的记录(新话题、接着刚才的),照读 */
+/** 消息里记的 via:再带上按钮上的字(发布的首页以后会换,记下来 home show 才说得清);new / recent 是以前的记录(新话题、接着刚才的),照读 */
 export const MessageViaSchema = z.object({
   home: z.string().regex(HOME_ID_RE).nullable(),
   button: z.union([z.number().int().nonnegative(), z.enum(['new', 'recent', ...HOME_TILE_IDS])]),

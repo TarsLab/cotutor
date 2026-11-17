@@ -1,5 +1,5 @@
 /**
- * 读 activity 文件(从 app/cli/activities.ts 拆出来,2026-10-29,行为不变):在哪、每位老师有哪几个、按「名=值」的参数拼成一次跑。
+ * 读 activity 文件:在哪、每位老师有哪几个、按「名=值」的参数拼成一次跑。
  * 运行层每轮都要读,所以不放在命令行那一层;装、升级、还原、检查仍在 app/cli/activities.ts。
  */
 import { existsSync } from 'node:fs';
@@ -21,7 +21,7 @@ export interface ActivityRef {
 }
 
 /**
- * 听写(2026-11-17《多模态教学harness-开发计划》阶段 5 任务 4,Jack 定的):小测验,不经老师,不是 activity。
+ * 听写:小测验,不经老师,不是 activity。
  * 老师的家里一份 `听写.md`,应用只读它的「认字收到什么」(拍照认词;头上 `lang: en` 是英文单词听写)。以前在 activities/ 下,refresh 挪过来
  */
 export const DICTATION_NAME = '听写';
@@ -49,7 +49,7 @@ export async function listActivities(agentsDir: string, tutor?: string, opts: { 
 }
 
 /**
- * 小课堂按钮没写 `activity:` 时看完照哪个 activity 聊:这位老师家里头上写着 base: lecture 的那个(按名字排第一个;2026-11-17 起不再照名字「小课堂」找)。
+ * 小课堂按钮没写 `activity:` 时看完照哪个 activity 聊:这位老师家里头上写着 base: lecture 的那个(按名字排第一个;不照名字「小课堂」找)。
  * 没有 → null(首页检查报,孩子端不出这个按钮)
  */
 export async function lectureActivity(root: string, tutor: string): Promise<string | null> {
@@ -67,12 +67,12 @@ export function activityFile(root: string, tutor: string, name: string): string 
 
 /**
  * 改过名的出厂 activity:旧名 → 新名。2026-11-03 批改 → 检查作业(孩子端方砖上的字)。
- * upgrade 把 workspace 里的旧文件挪成新名(src/app/cli/activities.ts);旧草稿里的 `activity 批改`、旧话题记的名字照样认(activityName)
+ * refresh 把 workspace 里的旧文件挪成新名(src/app/cli/activities.ts);旧草稿里的 `activity 批改`、旧话题记的名字照样认(activityName)
  */
 export const ACTIVITY_RENAMES: Readonly<Record<string, string>> = { 批改: '检查作业' };
 
 /**
- * 这个名字在这位老师家里实际是哪个文件:有同名的就是它;旧名的文件挪走了认新名;新名的还没有(没 upgrade 过)认旧名。都没有 → 原样
+ * 这个名字在这位老师家里实际是哪个文件:有同名的就是它;旧名的文件挪走了认新名;新名的还没有(没 refresh 过)认旧名。都没有 → 原样
  * (读的时候用:跑话题、首页检查、方砖;lint 的 fileName 也要用这个,不然 name 对不上)
  */
 export function activityName(root: string, tutor: string, name: string): string {

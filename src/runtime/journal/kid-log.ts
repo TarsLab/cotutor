@@ -13,7 +13,7 @@ import { localDate } from '../../shared/time.ts';
 import { DEVICE_COOKIE, DEVICE_COOKIE_DAYS, DEVICE_ID_RE, deviceLabel } from '../../schema/kid-device.ts';
 
 
-/** 打开时的权限与能力(7.2):麦克风权限、有没有 getUserMedia(2026-10-22 删了浏览器识别,不再探语音识别;老设备表里的 sr 留着不读) */
+/** 打开时的权限与能力(7.2):麦克风权限、有没有 getUserMedia(不探语音识别;老设备表里的 sr 留着不读) */
 export interface KidCaps {
   mic: 'granted' | 'denied' | 'prompt' | 'unknown';
   gum: boolean;

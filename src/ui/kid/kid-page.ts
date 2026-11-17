@@ -1,7 +1,7 @@
 /**
- * 孩子端 `/`:首页(老师卡 + 家长发布的首页卡)与老师页(= 板书页)。零依赖内联脚本,只走 /api/kid/* 与 /api/audio。
- * 首页的老师卡上按钮决定进老师页之后的话题:新话题 / 接着某个话题 / 开场(按钮上的字立刻发出去);老师页不再自己猜话题。
- * 家长端「记录」(/parent)2026-10-28 拆成自己的一页(parent-page.ts),这里没有家长的分支了。
+ * 孩子端 `/`:首页(老师牌 + 家长发布的牌)与老师页。零依赖内联脚本,只走 /api/kid/* 与 /api/audio。
+ * 首页老师牌上的按钮、方砖都开一个新话题(从一个 activity 开始,按钮上的字立刻发出去);「今天」那一行回到开了头的话题。
+ * 家长端「记录」(/parent)是自己的一页(parent-page.ts),这里没有家长的分支。
  * 录像里孩子的屏幕(/reel)是同一个页面:__MODE__ 里 reel = true——孩子端的样子,数据是 /reel 给的一个话题,
  * S.readonly 照样是真(不开麦克风、不记实录),由录像的时钟驱动。REEL 的分支只准出现在:声音(用家长页那个 Audio)、chrome(输入条露着、点不动)、
  * 一节课的舞台(只读)、启动与重载,以及录像那一块;别处看到 REEL 就是写错了。
@@ -10,7 +10,7 @@
  * 铁律:界面上永远没有错误与评判——后端不通、老师出错、识别失败,都只是「什么都不出现」或头像灰;
  * 文字尽量少,语音优先。孩子设备上没有通往家长端的入口。
  *
- * 老师页是一节课(2026-11-17《多模态教学harness-开发计划》阶段 5 起课里没有卡):页铺满在舞台上(课本、作业照片、白纸、小课堂;
+ * 老师页是一节课:页铺满在舞台上(课本、作业照片、白纸、小课堂;
  * 舞台包 src/ui/stage/ 在 iframe 里画,postMessage 协议见 src/ui/stage/protocol.ts),一节课的状态照 src/board/lesson.ts 的 lessonStep 变(LS);
  * 老师对页做什么是讲稿里的动作,嘴念到哪句落哪句的。今天能说话的话题都走实时(body.live):嘴照念脑的讲稿、声音从 WebSocket 下来,孩子端不念;
  * 孩子的话不上板(在左栏);谁出声谁停走 ../../runtime/delivery/player.ts 的 liveStep(同样剥类型内联);连不上、断了回到「正在叫老师」再连。
@@ -136,7 +136,7 @@ ${faviconLinks()}
   body.offline #rest { display:block; }
   body.offline .c-tutor, body.gated .c-tutor, body.gated .c, body.gated .hcards, body.offline #today, body.gated #today { pointer-events:none; }
   body.offline #today, body.gated #today { opacity:.45; filter:grayscale(1); }
-  /* 首页「今天」(2026-11-15):今天开了头的话题一格一张预览图(板停下来时的样子;还没有就是孩子拍的照片),横着划;点一格回到那个话题接着聊 */
+  /* 首页「今天」:今天开了头的话题一格一张预览图(板停下来时的样子;还没有就是孩子拍的照片),横着划;点一格回到那个话题接着聊 */
   #today { display:flex; flex-direction:column; gap:8px; }
   #today[hidden] { display:none; }
   #today .td-hd { font-size:15px; font-weight:600; color:var(--dim); padding-left:2px; }
@@ -157,13 +157,13 @@ ${faviconLinks()}
   body.offline #ct-mark, body.gated #ct-mark { filter:grayscale(1); opacity:.4; }
   body.offline #ct-mark .ct-go, body.offline #ct-mark .ct-gi, body.gated #ct-mark .ct-go, body.gated #ct-mark .ct-gi { transform:rotate(90deg); }
   body.offline .c-tutor .nm, body.offline .c-tutor .bt, body.gated .c-tutor .nm, body.gated .c-tutor .bt { color:var(--dim); }
-  /* ---- 老师页 = 板书页 ---- */
+  /* ---- 老师页 ---- */
   #tutor { position:fixed; inset:0; background:var(--paper); display:none; z-index:10; }
   #tutor.on { display:flex; }
   /* 三门主科在板右边竖着写一个很淡的学科名(board-mark.ts) */
 ${BOARD_MARK_CSS}
   #main { flex:1; min-width:0; min-height:0; display:flex; flex-direction:column; }
-  /* 没有顶栏:左上角一颗胶囊「‹ logo」(整颗点了回首页,放 logo,老师的脸在实时的左栏 / 手机的字幕行),右上角「更多」;浮在板书上面、舞台遮罩(z 4)下面,舞台开了就被压暗盖住 */
+  /* 没有顶栏:左上角一颗胶囊「‹ logo」(整颗点了回首页,放 logo,老师的脸在实时的左栏 / 手机的字幕行),右上角「更多」;浮在板上面、舞台遮罩(z 4)下面,舞台开了就被压暗盖住 */
   .tb { position:absolute; top:calc(env(safe-area-inset-top) + 10px); z-index:3; display:flex; align-items:center; gap:10px; }
   .tb.l { left:calc(env(safe-area-inset-left) + 12px); }
   #back { display:flex; align-items:center; gap:2px; height:48px; padding:0 4px 0 8px; border-radius:24px; background:#fffffff0; border:1px solid var(--line); box-shadow:0 2px 10px #00000018; }
@@ -191,10 +191,10 @@ ${BACK_TINT_CSS}
   #pill[hidden] { display:none; }
   #pill .ic[hidden] { display:none; }
   #wrap { position:relative; flex:1; min-height:0; display:flex; flex-direction:column; }
-  /* 板书顶上一条渐隐:滚上去的内容在两角按钮那一带淡成纸色,不和胶囊、话题标签叠字。只是盖一层颜色,不占位置、不收触摸;
-     夹在板书(卡上的「再听」z 1)与两角按钮(z 3)之间。滚到顶时第一节在 68px 以下,基本碰不到它 */
+  /* 板顶上一条渐隐:滚上去的内容在两角按钮那一带淡成纸色,不和胶囊、话题标签叠字。只是盖一层颜色,不占位置、不收触摸;
+     夹在板(z 1)与两角按钮(z 3)之间。滚到顶时第一节在 68px 以下,基本碰不到它 */
   #wrap::before { content:""; position:absolute; left:0; right:0; top:0; height:calc(env(safe-area-inset-top) + 72px); z-index:2; pointer-events:none; background:linear-gradient(var(--paper) calc(env(safe-area-inset-top) + 16px), transparent); }
-  /* 舞台的遮罩:板书与顶栏压暗,点一下 = 点 ×;字幕行与输入条不盖(舞台开着孩子照样能说话) */
+  /* 舞台的遮罩:板与顶栏压暗,点一下 = 点 ×;字幕行与输入条不盖(舞台开着孩子照样能说话) */
   #st-dim { position:absolute; left:0; right:0; bottom:0; top:-100vh; z-index:4; background:#00000073; display:none; }
   #stage.on ~ #st-dim { display:block; }
   /* ---- 板铺满:铺满整屏、盖住左栏;顶栏 × · 题目一行(点开看全)· 给老师看(轻点只交板,按住说 = 板和这句话一起给老师);
@@ -210,7 +210,7 @@ ${BACK_TINT_CSS}
   #st-pick { position:absolute; z-index:3; top:calc(env(safe-area-inset-top) + 72px); right:calc(env(safe-area-inset-right) + 16px); padding:54px 14px 12px; background:#fff; border-radius:24px; box-shadow:0 10px 36px rgba(60,50,30,.22), 0 0 0 1px rgba(60,50,30,.06); animation:st-pick-in .22s cubic-bezier(.2,.8,.2,1); }
   #st-pick[hidden] { display:none; }
   body.hand-left #st-pick { right:auto; left:calc(env(safe-area-inset-left) + 16px); }
-  /* 点字弹的田字格:每字一个格,一笔一笔写,点格子再写一遍(原来田字格卡的样子,卡 2026-11-17 删了) */
+  /* 点字弹的田字格:每字一个格,一笔一笔写,点格子再写一遍 */
   #st-pick .pk-hz { display:flex; flex-wrap:nowrap; gap:10px; justify-content:center; align-items:flex-start; }
   .hz { position:relative; width:168px; height:168px; cursor:pointer; -webkit-tap-highlight-color:transparent; }
   .hz svg { display:block; width:100%; height:100%; }
@@ -220,7 +220,7 @@ ${BACK_TINT_CSS}
   .hz .ghost.done { fill:var(--ink); }
   .hz .ink { stroke:var(--ink); stroke-width:200; fill:none; stroke-linecap:round; stroke-linejoin:round; }
   .hz .n { position:absolute; right:6px; bottom:2px; font-size:13px; color:#8a857c; line-height:1; }
-  /* 点字弹的四线三格:英文单词写一遍(原来单词卡的样子) */
+  /* 点字弹的四线三格:英文单词写一遍 */
   #st-pick .pk-wd { padding:4px 8px; max-width:min(520px, 60vw); overflow:hidden; }
   .wg svg { display:block; max-width:100%; height:auto; overflow:visible; }
   .wg .grid line { stroke:var(--tint-sand-line); stroke-width:1.2; vector-effect:non-scaling-stroke; }
@@ -238,7 +238,7 @@ ${BACK_TINT_CSS}
   #cv-hold, #cv-cap { display:none !important; }
   body.live #stage.cv #cv-hold { display:flex !important; position:absolute; z-index:2; left:calc(env(safe-area-inset-left) + 4px); bottom:calc(env(safe-area-inset-bottom) + 20px); }
   body.live.hand-left #stage.cv #cv-hold { left:auto; right:calc(env(safe-area-inset-right) + 4px); }
-  /* 以板为主(2026-11-14):老师是左边中间浮着的一张卡——大头像,底下一行跟着左栏那颗变(按住说话 / 在听…);左手的在右边。原来是左下 64px 的小圆,孩子按不准 */
+  /* 老师是左边中间浮着的一张卡——大头像,底下一行跟着左栏那颗变(按住说话 / 在听…);左手的在右边。原来是左下 64px 的小圆,孩子按不准 */
   body.live #stage.cv.bp #cv-hold { left:calc(env(safe-area-inset-left) + 16px); right:auto; top:50%; bottom:auto; translate:0 -50%; width:136px; height:auto; padding:14px 8px 12px; flex-direction:column; gap:8px; border-radius:30px; box-shadow:0 8px 28px #46371e33; }
   body.live.hand-left #stage.cv.bp #cv-hold { left:auto; right:calc(env(safe-area-inset-right) + 16px); }
   #stage.bp #cv-hold .vb-av { width:104px; height:104px; --vb-h1:-4px; --vb-h2:-12px; }
@@ -249,13 +249,13 @@ ${BACK_TINT_CSS}
   #stage.bp #cv-hold .vb-small { display:none; }
   #stage.cv #cv-cap { display:block !important; position:absolute; z-index:2; top:calc(env(safe-area-inset-top) + 68px); left:50%; translate:-50% 0; width:max-content; max-width:min(720px, calc(100% - 200px)); box-sizing:border-box; padding:10px 18px; border-radius:16px; background:#fffffff2; box-shadow:0 4px 18px #0000001f; font-size:20px; line-height:1.45; font-weight:600; color:var(--ink); opacity:0; pointer-events:none; transition:opacity .3s; }
   #stage.cv #cv-cap.on { opacity:1; }
-  /* 以板为主:板是页面;顶栏多两颗换底的钮(拍照、相册),左上的 × 是回首页 */
+  /* 板是页面;顶栏多两颗换底的钮(拍照、相册),左上的 × 是回首页 */
   #st-bp { display:none; }
   #stage.bp #st-bp { display:flex; gap:8px; flex:none; }
   #stage.bp.bk:not(.ph) #st-bp { display:none; }
   #st-bp button { display:flex; align-items:center; gap:6px; height:40px; padding:0 14px; border:1.5px solid var(--line, #e5e1d8); border-radius:20px; background:#fff; font:inherit; font-size:16px; font-weight:600; color:var(--ink); cursor:pointer; }
   #st-bp button svg { width:20px; height:20px; }
-  /* 以板为主:板铺到顶,顶栏是浮在板上的一层(只有按钮收触摸;2026-11-14 原来是一条 56px 的白栏,11-15 去掉顶上那层纸色渐隐:它把课本头两行和「给老师看」都罩虚了,几颗钮各自垫实底);
+  /* 板铺到顶,顶栏是浮在板上的一层(只有按钮收触摸;顶上不垫纸色渐隐:它会把课本头两行和「给老师看」罩虚,几颗钮各自垫实底);
      左上的 × 换成和老师页一样的「‹ 语」胶囊(回首页,stageBackSync);老师板卡的题目有字才露,垫白底 */
   #stage.bp .top { position:absolute; left:0; right:0; top:0; z-index:4; min-height:0; border:0; background:none; padding:calc(env(safe-area-inset-top) + 12px) calc(env(safe-area-inset-right) + 220px) 24px calc(env(safe-area-inset-left) + 16px); pointer-events:none; }
   #stage.bp .top > * { pointer-events:auto; }
@@ -264,16 +264,16 @@ ${BACK_TINT_CSS}
   #stage.bp .top .ttl:not(:empty) { padding:10px 16px; border-radius:20px; background:#fffffff0; box-shadow:0 2px 10px #00000014; }
   #stage.bp #st-bp { margin-left:auto; }
   #stage.bp #st-frame { position:absolute; inset:0; height:100%; }
-  /* 「给老师看」(2026-11-15):没东西可交就不出现(原来是半透明的一颗,像是坏了);能交了是实心的学科色。旁边那行小字垫白底 */
+  /* 「给老师看」:没东西可交就不出现(原来是半透明的一颗,像是坏了);能交了是实心的学科色。旁边那行小字垫白底 */
   #stage.bp #st-act { top:calc(env(safe-area-inset-top) + 10px); right:calc(env(safe-area-inset-right) + 4px); }
   #stage.bp #st-go { height:52px; border-radius:26px; background:var(--bk, var(--accent)); font-size:18px; font-weight:700; box-shadow:0 6px 20px #46371e40; }
   #stage.bp #st-go:disabled { display:none; }
-  /* 小课堂那一页(2026-11-17):播放器有自己的课名、画一画、进度条;「给老师看」不出,老师说的话浮在进度条上面 */
+  /* 小课堂那一页:播放器有自己的课名、画一画、进度条;「给老师看」不出,老师说的话浮在进度条上面 */
   #stage.bp.lcp #st-act { display:none; }
   #stage.cv.bp.bk.lcp #cv-cap { bottom:calc(env(safe-area-inset-bottom) + 132px); }
   #stage.bp #st-go.holding { background:#3d7fd9; }
   #stage.bp #st-note:not(:empty) { flex:none; padding:6px 12px; border-radius:14px; background:#fffffff0; }
-  /* 课本做底(2026-11-15):课本铺满屏宽,老师贴着屏幕边(一张只有外侧圆角的签),落在课本自己的页边里、不压正文;「擦掉」在舞台里、贴在它正下方(stage.css 的 .bk-wipe)。
+  /* 课本做底:课本铺满屏宽,老师贴着屏幕边(一张只有外侧圆角的签),落在课本自己的页边里、不压正文;「擦掉」在舞台里、贴在它正下方(stage.css 的 .bk-wipe)。
      老师说的话是底下一条字幕,不压在正文头上 */
   body.live #stage.cv.bp.bk #cv-hold { left:0; width:88px; padding:12px 0 22px; gap:12px; border-left:0; border-radius:0 24px 24px 0; }
   body.live.hand-left #stage.cv.bp.bk #cv-hold { left:auto; right:0; border-left:1.5px solid #e2dfd6; border-right:0; border-radius:24px 0 0 24px; }
@@ -323,7 +323,7 @@ ${BACK_TINT_CSS}
   /* 录像栏(reel-dock.ts,话题与听写共用):直接打开 /reel(不在家长页的 iframe 里)时在孩子的屏幕底下 */
 __REEL_DOCK_CSS__
 __BRAND_CSS__
-  /* 孩子的屏幕(iframe 里):孩子端原样,只是点不动;板书能上下翻(点在 reelBoot 里挡掉) */
+  /* 孩子的屏幕(iframe 里):孩子端原样,只是点不动;板能上下翻(点在 reelBoot 里挡掉) */
   body.rlk #tutor .tb, body.rlk #bar { pointer-events:none; }
   /* 直接打开孩子的屏幕(调试)时录像栏在它自己底下:压在按住浮层、小课堂上面 */
   body.rlk #reel { position:relative; z-index:25; background:var(--paper); }
@@ -363,7 +363,7 @@ __BRAND_CSS__
   /* 发照片屏:看一眼、裁剪 / 圈画 / 转 90°、配一句话,再发 */
   #ps { position:absolute; inset:0; z-index:40; background:#1d1c1a; color:#fff; display:none; flex-direction:column; }
   #ps.on { display:flex; }
-  /* 发给谁(设计稿 https://claude.ai/artifact/SPtjRhH9aLoLQoGfCNJaVz):头像和名字;「发给」按钮用这位老师的颜色,和拍照听写拍完的「开始听写」分得开 */
+  /* 发给谁:头像和名字;「发给」按钮用这位老师的颜色,和拍照听写拍完的「开始听写」分得开 */
   #ps-top { display:flex; align-items:center; padding:calc(env(safe-area-inset-top) + 12px) 16px 0; }
   #ps-to { display:inline-flex; align-items:center; gap:10px; height:50px; padding:0 18px 0 6px; border-radius:25px; background:#ffffff14; border:1px solid #ffffff26; font-size:17px; }
   #ps-to:empty { display:none; }
@@ -468,8 +468,8 @@ __VOICE_CSS__
   #lv-replay .tx { display:none; }
   #lv-cap .lv-cur .rp { display:inline-flex; vertical-align:-2px; margin-right:6px; color:var(--dim); }
   #lv-cap.rp .lv-cur { color:#4d4a44; font-weight:600; }
-  /* 空板(原型 F 排):老师对孩子说的话都在左栏(手机是字幕行),板只放板书——板上的 .blank 收着,
-     开场那句(+「比如」)在 #lv-ask、老师给的选择(接着刚才的、接着那个 / 重新开始、先热身)在 #lv-acts;这时字幕、孩子那句、再听一遍让开。
+  /* 空板(原型 F 排):老师对孩子说的话都在左栏(手机是字幕行),板只放节——板上的 .blank 收着,
+     开场那句(+「比如」)在 #lv-ask、拍照屏的那几颗(拍一页、从相册选、不拍用白纸)在 #lv-acts;这时字幕、孩子那句、再听一遍让开。
      手机(F5):开场那句在小头像旁(大一点、粗),选择在它上面一条 */
   #lv-ask, #lv-acts { display:none; }
   body.live #board > .blank { display:none; }
@@ -506,7 +506,7 @@ __VOICE_CSS__
     .tb.l { left:calc(env(safe-area-inset-left) + 20px); }
     #board { width:100%; max-width:1040px; margin:0 auto; padding:calc(env(safe-area-inset-top) + 68px) 32px 24px; }
     #bar, #reel { width:100%; max-width:1040px; margin:0 auto; padding-left:32px; padding-right:32px; }
-    /* 实时的老师(原型 https://claude.ai/artifact/RNjBdhuvRmnsBjKn521fkE 的 D 排):
+    /* 实时的老师:
        板是主体——占满整屏、纸色,内容从左栏右边排起,往下翻时从浮着的「更多」底下过去;
        左栏是贴边的一整张白纸(上、左、下不留边,右边一道细线加很淡的影子),宽 360:顶上回首页,字幕占回首页下面到按钮上面
        (孩子刚说的那句、上一句、在说那句、再听一遍;跟着视口高走——iPad Safari 有地址栏时只有 ~760 高,10-21 真机上按 820 写死的把字幕挤没了);
@@ -636,7 +636,7 @@ __BRAND_JS__
   if (!REEL && !PREVIEW) { ${KID_NAV_JS} }
   // 只有孩子端报「打开」、登记设备;家长端、录像、预览开在家长自己的设备上,只记出错。ctx 出错时才取(S、LV 在下面)
   kidLog.start({ page: 'kid', mode: REEL ? 'reel' : PREVIEW ? 'preview' : 'kid', v: PAGE_V, ctx: () => ({ tutor: S.tutor ? S.tutor.name : null, thread: S.thread || null, live: Boolean(LV.on) }) });
-  /** 孩子端对话接口的前缀(messages / photos / history);家长端只看,一天的板书走自己的路 */
+  /** 孩子端对话接口的前缀(messages / photos / history);家长端只看,一天的记录走自己的路 */
   const CONV = '/api/kid/conversations/';
   const AUDIO = '/api/audio/';
   // $ / h / toast / api(page-dom.ts,几页共用)
@@ -677,7 +677,7 @@ ${pageDomJs(4000)}
   // 回首页胶囊带上老师(tutorInitial 同首页牌上的首字,backTint 填颜色)
 ${BACK_TINT_JS}
   const tintBack = (t) => backTint($('#back'), t ? { color: colorOf(t), display: t.display } : null);
-  // 板书底纹的学科字(三门主科):老师换了跟着换,别的老师不写字
+  // 板的底纹的学科字(三门主科):老师换了跟着换,别的老师不写字
 ${BOARD_MARK_JS}
   /** 老师头像:学科色的 C 形开口环 + 白底圆里的图或字(样子见 .av 的样式);cls 'draw' = 一笔画出来,delay 是错开的秒数 */
   const AV_RING = '<svg class="ring" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="44"></circle></svg>';
@@ -693,7 +693,7 @@ ${BOARD_MARK_JS}
   const debug = new URLSearchParams(location.search);
 
   // ---- 状态 ----
-  /** 以板为主的 activity(头上 board: page):on = 这个话题的页面是板;base = 现在的底(照片路径,null 白板,undefined 还没定);label = 方砖上的字(不拍照直接开始时发它) */
+  /** 铺页的话题:on = 这个话题的页面是板;base = 现在的底(照片路径,null 白板,undefined 还没定);label = 方砖上的字(不拍照直接开始时发它) */
   const BP = { on: false, base: null, label: '', books: [] };
   const S = { home: null, tutor: null, day: null, sections: [], played: new Set(), state: { section: -1, line: -1, status: 'idle' }, pending: false, waitSince: null, offline: false, bar: 'idle', pollTimer: null, stage: null, partial: null, thread: null, threadAt: null, hist: null, readonly: false, newThread: false, device: 'phone', via: null, cont: null, ask: null, reel: null, pendSaid: null, homeDraw: true, autoOpened: new Set() };
   // 实时的老师这一次(连、发、收、画在下面「实时的老师」那一块):on = 这位老师这一次走实时(左栏的样子);ready = 嘴连上了;
@@ -731,7 +731,7 @@ ${BOARD_MARK_JS}
     const via = { home: S.home.home, button: b.id };
     // activity 头上写了 listen: open:进去就一直听
     const look = b.listen === 'open' ? { listen: 'open' } : {};
-    // 每个按钮进去都是新话题;今天聊过的在首页「今天」那一行接(2026-11-15)。按钮只有 activity(含方砖,start)和小课堂(2026-11-16)
+    // 每个按钮进去都是新话题;今天聊过的在首页「今天」那一行接。按钮只有 activity(含方砖,start)和小课堂
     // 铺课本的 activity(预习):不拍照,直接开话题、铺课本的目录
     if (b.kind === 'start' && b.base === 'textbook') openTutor(t, { kind: 'new', via, base: 'textbook', label: b.label, send: b.label, ...look });
     // 铺作业照片的 activity(检查作业、复习):先到拍照屏,带着照片(或白纸)开话题
@@ -742,9 +742,9 @@ ${BOARD_MARK_JS}
   };
   /** 小课堂的课长:「1 分 40 秒」 */
   const lcLen = (ms) => { const s = Math.floor(ms / 1000); return s >= 60 ? Math.floor(s / 60) + ' 分' + (s % 60 ? ' ' + (s % 60) + ' 秒' : '') : s + ' 秒'; };
-  // ---- 常驻入口:听写、拍照听写一直在那位老师的卡上,不经首页发布(口语课 2026-11-17 起是方砖) ----
+  // ---- 常驻入口:听写、拍照听写一直在那位老师的卡上,不经首页发布(口语课是方砖) ----
   const EXTRA_ICON = { dictation: SVG('<path d="M4 20l4-1 11-11-3-3L5 16z"></path><path d="M14 7l3 3"></path>', 20), photo: __CAMERA_20__ };
-  /** 听写(原型 B,https://claude.ai/artifact/HhpuLJXvNr94E9PqSNv6tj):一整条,上面一排空格子,几个词几格(最多 6,英文是四线三格),下面「听写 · 几个词」和「去写」 */
+  /** 听写:一整条,上面一排空格子,几个词几格(最多 6,英文是四线三格),下面「听写 · 几个词」和「去写」 */
   const dictationBtn = (label, sub, n, en, href) => h('a', { class: 'bt bt-extra bt-x-dictation' + (en ? ' en' : ''), href },
     h('span', { class: 'dg', 'aria-hidden': 'true' }, ...Array.from({ length: Math.max(1, Math.min(n, en ? 4 : 6)) }, () => h('i'))),
     h('span', { class: 'dr' }, h('span', { class: 'lb' }, h('span', { class: 'btx' }, label), h('small', { class: 'ln' }, sub)), h('span', { class: 'go' }, '去写')));
@@ -765,7 +765,7 @@ ${BOARD_MARK_JS}
     if (extras.includes('dictation')) out.push(photoBtn(t));
     return out;
   };
-  // 牌上的按钮(原型 B,https://claude.ai/artifact/HhpuLJXvNr94E9PqSNv6tj):小课堂是带预览图的海报;activity 是大胶囊。孩子看到的字都在 .btx 里(探针按它读)
+  // 牌上的按钮:小课堂是带预览图的海报;activity 是大胶囊。孩子看到的字都在 .btx 里(探针按它读)
   const tutorButton = (t, b) => {
     const on = { click: () => pickButton(t, b) };
     if (b.kind === 'lecture') return h('button', { type: 'button', class: 'bt bt-lecture', 'data-bid': String(b.id), on }, lecturePic(b),
@@ -797,7 +797,7 @@ ${HOME_TILES_JS}
     return box;
   };
 
-  // ---- 首页牌堆(原型 https://claude.ai/artifact/BAUVUj9TgCKpiQkRyZtvLy):一位老师一张牌,平着叠,最前那张在最上层 ----
+  // ---- 首页牌堆:一位老师一张牌,平着叠,最前那张在最上层 ----
   // 手机竖着叠:后面的牌在上面,每张往上露出头那一行(头像 + 名字);平板横着叠:后面的牌在左边,每张往左露出一格(左上角的头像)。
   // 叠的顺序 K.order:最后一个在最前。进首页时家长排第一的在最前、排第二的紧挨在后面;点过谁谁到最前(最近点过的在前);
   // 从老师页回来不变,刷新页面回到家长排的。牌一样高(取最高那张)。牌元素常驻,5 秒一轮的刷新只在这张牌的内容变了时重画它、不放动画
@@ -1085,7 +1085,7 @@ ${HOME_TILES_JS}
   /** 空板挂上老师要说的(开场那句 big、下面一行 small、选择 acts:{cls, icon, k 上面的小字, s 大字, sub 下面的小字, tm 时刻, id, go}) */
   const withOpen = (el, o) => { el._open = o; return el; };
   const tutorColor = () => colorOf(S.tutor);
-  // ---- 一节课铺的页(2026-11-16 阶段 3):base: textbook 进来铺课本的目录;base: photo 进来先拍照(或不拍用白纸),照片一发就铺上照片页、不等老师;页一直在,点回首页才结束 ----
+  // ---- 一节课铺的页:base: textbook 进来铺课本的目录;base: photo 进来先拍照(或不拍用白纸),照片一发就铺上照片页、不等老师;页一直在,点回首页才结束 ----
   /** 拍照屏:拍一页、从相册选、不拍用白纸(左栏照 _open 画同样三颗) */
   const bpStartBoard = () => {
     const go = (cls, icon, label, f) => h('button', { type: 'button', class: 'ask-go ' + cls, style: cls === 'fresh' ? 'background:' + tutorColor() : 'color:' + tutorColor() + ';border-color:' + tutorColor(), on: { click: f } }, h('span', { class: 't' }, h('span', { class: 'ic', html: ICON[icon] }), label));
@@ -1186,7 +1186,7 @@ ${HOME_TILES_JS}
     BP.on = true; BP.base = first.base;
     if (!LS.on) bpOpenLesson(); else lsFeed();
   };
-  // ---- 一节课(2026-11-16;阶段 3 起课本、作业照片、白纸都是):服务端记着一节课的状态(<date>.<话题>.lesson.json);这里照 lessonStep(src/board/lesson.ts,内联)把老师念过的那几句的动作落上,
+  // ---- 一节课(课本、作业照片、白纸都是):服务端记着一节课的状态(<date>.<话题>.lesson.json);这里照 lessonStep(src/board/lesson.ts,内联)把老师念过的那几句的动作落上,
   //      孩子在页上做的事也落上、报给服务端,变了就整份发给舞台画(舞台 book.tsx 只照状态画)。
   //      老师一节的动作:第一句前面的马上落;每一句的等它念完(下一句开始放、或嘴放完了)才落;孩子打断、老师开了下一轮、不在实时里,没落的一下子都落上。
   //      回到这节课、刷新:照服务端的(lesson.jobs 是已经落进去的那几轮,不再落) ----
@@ -1430,7 +1430,7 @@ ${HOME_TILES_JS}
   };
   // ---- 点字弹的四线三格(wordGrid / wordWrite / wordMerge、wordLayout)在 word-draw.ts,和听写页共用 ----
 __WORD_DRAW_JS__
-  // ---- 小课堂(2026-11-17 阶段 5):一节课里的一页(页集里的「小课堂」),舞台照一节课的状态在页上放(stage/lecture.tsx)。
+  // ---- 小课堂:一节课里的一页(页集里的「小课堂」),舞台照一节课的状态在页上放(stage/lecture.tsx)。
   //      首页小课堂按钮进来先铺它,孩子从头看完才能开口(canSend);停住了能画,停在同一刻画的几笔算一处,整张单子发回来(S.lecture.marks,带截图);
   //      开口那条带上看的情况与还没带过的画(body.lecture);老师 [[看 0:19–0:30]] 就是在这页上放那一段(放完回 phase done,嘴接着念) ----
   /** 小课堂在哪:课包 /api/bundles/<id>/;视频 /api/kid/lectures/<id>/(lecture.json + video.mp4) */
@@ -1461,7 +1461,7 @@ __WORD_DRAW_JS__
     if (m.event === 'finished' && !L.watch) { L.watch = { watchedMs: m.watchedMs, finished: true, pauses: m.pauses }; renderBar(); renderSubtitle(); }
     else if (L.watch) L.rewatch = { watchedMs: m.watchedMs, finished: m.finished, pauses: m.pauses };
   };
-  // ---- 一个话题一节(板上只有实时一种画法,2026-11-04;以前的话题也这样画)。课里没有卡(2026-11-17):节里只有讲稿,板上一节只挂时间,
+  // ---- 一个话题一节(板上只有实时一种画法,2026-11-04;以前的话题也这样画)。课里没有卡:节里只有讲稿,板上一节只挂时间,
   //      页铺在舞台上;孩子的话在左栏 #lv-kid ----
   const headEls = (s, i) => [i === 0 && s.at ? h('div', { class: 'sh lh' }, h('span', { class: 'ln' }), h('span', { class: 'tm' }, clock(s.at))) : null];
   /** 拿起相机老师就停;拍完 / 选完进发照片屏。相册最多 4 张,多的只取前 4 张。输入条、加号面板、拍照屏都走这里 */
@@ -1564,7 +1564,7 @@ __WORD_DRAW_JS__
   const STAGE_SOURCE = 'cotutor-stage';
   const frame = $('#st-frame');
   const postStage = (m) => { try { frame.contentWindow.postMessage({ source: STAGE_SOURCE, ...m }, '*'); } catch {} };
-  // ---- 话题的预览图(首页「今天」那一格,2026-11-15):板停下来一会儿问舞台要一张小图(peek)交给服务端,只留最新一张。
+  // ---- 话题的预览图(首页「今天」那一格):板停下来一会儿问舞台要一张小图(peek)交给服务端,只留最新一张。
   //      页刚铺上等它画完再要;孩子动了手停下来就要。录像、只读、家长预览不交;话题还没有 id(第一条还没回)先等 ----
   const PV = { timer: 0, last: '', tries: 0 };
   const PV_HAND_MS = 1500;
@@ -1595,7 +1595,7 @@ __WORD_DRAW_JS__
   // 孩子关:一节课里是回首页
   const closeByKid = () => { if (BP.on && !S.readonly) { closeTutor(); return; } closeStage(); };
   $('#st-x').addEventListener('click', closeByKid);
-  /** 以板为主(舞台带 bp):板是整页,左上的 × 换成老师页那颗「‹ 语」胶囊(照抄 #back,颜色跟着老师);别的舞台还是 × */
+  /** 一节课的页(舞台带 bp):板是整页,左上的 × 换成老师页那颗「‹ 语」胶囊(照抄 #back,颜色跟着老师);别的舞台还是 × */
   const stageBackSync = () => {
     const bp = $('#stage').classList.contains('bp'), x = $('#st-x');
     const b = $('#back');
@@ -1722,7 +1722,7 @@ __WORD_DRAW_JS__
       const d = await api('GET', CONV + S.tutor.name + '/' + (S.hist || 'today'));
       setOffline(false);
       S.day = d;
-      // 话题:没选过就是当前(末条所在)的;板书只铺这个话题的节。新话题空白态什么都不铺,发出第一句才有话题
+      // 话题:没选过就是当前(末条所在)的;板上只铺这个话题的节。新话题空白态什么都不铺,发出第一句才有话题
       if (!S.thread && !S.newThread) S.thread = d.thread;
       const mine = S.newThread ? [] : d.messages.filter((m) => m.thread === S.thread);
       const first = mine.find((m) => m.question !== null) || mine[0];
@@ -1800,7 +1800,7 @@ __WORD_DRAW_JS__
     loadDay(!S.readonly);
   };
   /**
-   * 小课堂:看完后的第一条带看的情况与画的;问过以后再看一遍又画了,下一条带新画的(板书、实时都走这里)。
+   * 小课堂:看完后的第一条带看的情况与画的;问过以后再看一遍又画了,下一条带新画的。
    * 画的一处带截图:先传成 captures/ 里的文件(同照片),换成路径;传不上就不带这张图。时刻换成离发出去多少毫秒(孩子端自己的钟,不用对钟)
    */
   const lectureBody = async () => {
@@ -1832,7 +1832,7 @@ __WORD_DRAW_JS__
 
   // ---- 看录像:录像 = 孩子的屏幕 + 录像栏。
   //      孩子的屏幕:这个页面以 MODE.reel 开在 iframe 里(/reel?tutor=&date=&thread=),按孩子那台设备的尺寸开,家长页等比缩。
-  //      轨道是服务端排好的(ui/kid/reel.ts,已内联),每 100 毫秒算一次 reelFrameAt:板书用 renderSection 现画(孩子端条目:孩子的话当节头、进答案栏)、
+  //      轨道是服务端排好的(ui/kid/reel.ts,已内联),每 100 毫秒算一次 reelFrameAt:板上的节用 renderSection 现画(孩子端条目:孩子的话当节头、进答案栏)、
   //      哪几节、一节课的样子照它、放那次通话的声音(从这句起);头像、「等你说…」照孩子端自己的逻辑(这一刻的位置放进 S.reel.view 再 renderSubtitle)。
   //      不经过 step、不 dispatch;轮询停着(loadDay 见 S.reel 就回)。
   //      录像栏(进度条、这一刻的说明、播放、跳过空白、倍速、退出)在家长页上,只经 iframe 的 window.cotutorReel 说话:同源直接调,家长点「播放」的那一下调进去;
@@ -1862,7 +1862,7 @@ __WORD_DRAW_JS__
     }
     if (S.stage) { closeStage(); R.now = ''; }
   };
-  /** 板书:哪几节变了就整块重画(往回拖也是);孩子刚发出去的话每次对一下 */
+  /** 板上的节:哪几节变了就整块重画(往回拖也是);孩子刚发出去的话每次对一下 */
   const reelDraw = (f) => {
     const R = S.reel;
     const shown = f.sections.filter((fs) => R.entries.some((e) => e.job === fs.job));
@@ -2105,13 +2105,13 @@ __WORD_DRAW_JS__
       for (const g of rl.gaps) if (g.kind === 'think') add(g.from, 'wait', g.cont ? '又过了' : '孩子想了', reelDuration(g.ms));
       for (const x of rl.types) add(x.from, 'said', '打字', (x.vals.length ? x.vals[x.vals.length - 1].v : '') + (x.sent ? '' : ' · 没发'));
       for (const x of rl.photoScreens) add(x.from, 'said', '拍照', x.sent ? '发了照片' : '打开又取消了');
-      // 节尾的旁注(给家长的、记住了):原来插在板书里,现在在这里
+      // 节尾的旁注(给家长的、记住了):不插在板上,在这里
       for (const n of rl.notes) {
         const pm = msgOf(n.job); if (!pm) continue;
         if (pm.parentText) add(n.postAt, 'tail', '给家长', pm.parentText.replace('## 家长', '').trim());
         if (pm.remembered && pm.remembered.length) add(n.postAt, 'tail', '记住了', pm.remembered.join(';'));
       }
-      // 家长板书页别的旁注:小课堂里画的那段话、提醒;记账与整理记忆那两轮不进录像,记在最后
+      // 家长端「记录」别的旁注:小课堂里画的那段话、提醒;记账与整理记忆那两轮不进录像,记在最后
       for (const pm of R.d.messages) {
         const tr = rl.tracks.find((x) => x.job === pm.job), nt = rl.notes.find((x) => x.job === pm.job);
         const own = reelParse(pm.timing && pm.timing.startedAt), at0 = nt ? nt.at : tr ? tr.at : Math.min(rl.endAt, Number.isNaN(own) ? rl.endAt : own);
@@ -2202,16 +2202,15 @@ __REEL_DOCK_JS__
   $('#sheet .dimmer').addEventListener('click', () => $('#sheet').classList.remove('on'));
   $('#hold .w').replaceChildren(...[6, 10, 16, 22, 12, 26, 18, 8, 14, 24, 20, 10, 16, 28, 12, 8, 18, 22, 10, 14, 6, 12, 20, 16, 8].map((v, i) => h('i', { style: 'height:' + v + 'px;animation-delay:' + (i * 37 % 400) + 'ms' })));
 
-  // 中间那段:点 = 打字;实时老师页上按住 150ms = 说话(推给嘴),松手发,上滑 60px 取消。浏览器识别 2026-10-22 删了(经验归档在本机 docs/archive/浏览器识别@2026-10-22/)
+  // 中间那段:点 = 打字;实时老师页上按住 150ms = 说话(推给嘴),松手发,上滑 60px 取消
   const PH_IDLE = () => (LV.on && LV.model.open ? (LV.model.muted ? '麦关了,点右边的麦克风再听' : '我在听,直接说就行…') : '发消息或按住说话…');
   /** 输入条上是空闲那句就按现在的重写(实时连上、一直听开关),「没听清」那几秒不动 */
   const phIdle = () => { const ph = $('#ph'); if (ph && /^(发消息|我在听|麦关了)/.test(ph.textContent)) ph.textContent = PH_IDLE(); };
   $('#ph').textContent = PH_IDLE();
   let press = null;
-  // 麦克风常开(真机诊断 2026-09-19)。这台 iPad 上的三条事实:
-  // ① Safari 的识别每次自己开关话筒,常交来一路纯静音,一个字不出、一停就 aborted;页面自己先 getUserMedia 留一路,识别再起就有声(先麦克风、后识别)
-  // ② 麦克风关了再开,也常开到哑的 → 开了就不关(只有页面退到后台才放,那时系统本来也会掐);开完自检 600ms,纯 0 就拆掉重开,最多 3 回
-  // ③ 冷开要 1 秒多,这段时间说的字进不去 → 给过权限之后,进老师页就先开好(micWarm)
+  // 麦克风常开(真机诊断 2026-09-19)。这台 iPad 上的两条事实:
+  // ① 麦克风关了再开,也常开到哑的 → 开了就不关(只有页面退到后台才放,那时系统本来也会掐);开完自检 600ms,纯 0 就拆掉重开,最多 3 回
+  // ② 冷开要 1 秒多,这段时间说的字进不去 → 给过权限之后,进老师页就先开好(micWarm)
   // 这一路画音量条。每次开麦克风也记一行诊断(where: 'mic')
   const mic = { stream: null, ac: null, an: null, buf: null, opening: null, ok: true };
   const micLive = () => { const t = mic.stream && mic.stream.getAudioTracks()[0]; return Boolean(t && t.readyState === 'live' && !t.muted && mic.ok); };
@@ -2291,7 +2290,7 @@ __REEL_DOCK_JS__
   const holdBars = [...document.querySelectorAll('#hold .w i')], holdLv = new Array(25).fill(0);
   const holdLevel = (v) => { holdLvRec(v); $('#hold').classList.add('real'); holdLv.shift(); holdLv.push(v); for (let i = 0; i < 25; i++) holdBars[i].style.height = Math.round(4 + holdLv[i] * 24) + 'px'; };
   // ---- 实时的老师:嘴是 realtime,讲稿由它照念,声音从 WebSocket /api/live/<老师>/ws 下来,
-  //      孩子端不念讲稿(板书的 step 照旧收事件、只是不自动念);讲稿和动作照旧从「今天」拉。谁出声、谁停走 liveDispatch → liveStep(runtime/delivery/player.ts),
+  //      孩子端不念讲稿(板上的节的 step 照旧收事件);讲稿和动作照旧从「今天」拉。谁出声、谁停走 liveDispatch → liveStep(runtime/delivery/player.ts),
   //      这里只照单执行。按住说话推 PCM(常开那路麦克风,makeAudio().use);连不上、断了 → 回到「正在叫老师」,过一会儿再连 ----
   /** 这次进老师页走不走实时:孩子端今天能说话的话题都走;以前的、家长端、录像、预览不走(只看) */
   const liveWanted = (t) => Boolean(t) && !REEL && !PREVIEW && !S.readonly;
@@ -2312,7 +2311,7 @@ __REEL_DOCK_JS__
         // 老师放的小课堂那一段停下(孩子打断了):舞台停在那一帧,放完也不再回 phase done
         case 'stopLecture': if (LS.playN) { LS.playN = 0; LS.key = ''; postStage({ type: 'control', action: 'pause' }); lsShow(); } break;
         case 'staged': lvSend({ t: 'staged' }); break;
-        // 连不上、断了:不回板书,回到「正在叫老师」,过一会儿再连;排着的那条(开场、打字)连上再发
+        // 连不上、断了:回到「正在叫老师」,过一会儿再连;排着的那条(开场、打字)连上再发
         case 'retry': liveRetry(); break;
         case 'render': renderSubtitle(); break;
         case 'listen': lvSend({ t: 'listen', open: LV.model.open }); break;
@@ -2521,7 +2520,7 @@ __REEL_DOCK_JS__
       default: break;
     }
   };
-  /** 一直听时推不推:liveStep 的(关麦、小课堂那一段、重放)再加页面的——这会儿能不能发(小课堂还没看完、「接着那个还是重新开始」、只读)、到了每天的上限;
+  /** 一直听时推不推:liveStep 的(关麦、小课堂那一段、重放)再加页面的——这会儿能不能发(小课堂还没看完、只读)、到了每天的上限;
    *  变了才告诉服务端 gate(关的时候孩子说到一半的那句作废)。每块声音来时看一眼,能不能发变了不用另外通知 */
   const liveGateSync = () => {
     const on = liveGate(LV.model) && canSend();
@@ -2545,7 +2544,7 @@ __REEL_DOCK_JS__
    * 一直听还是按住说:activity 头上写了 listen: open 的一直听(口语课这种一问一答多的);别的照 cotutor.json 的 live.listen,缺省按住说。
    * 孩子端没有开关:10-20 真跑,孩子想一下停住、「老师。」「那。」、旁边的话都成了一句
    */
-  /** 老师页一律是实时老师页的样子(左栏 + 白板),连不连嘴都一样:以前的话题、不是实时的录像也照它(2026-10-28 起;原来退回底部字幕行那一版) */
+  /** 老师页一律是实时老师页的样子(左栏 + 白板),连不连嘴都一样:以前的话题、不是实时的录像也照它 */
   const liveFace = (t) => {
     document.body.classList.add('live');
     $('#tutor').style.setProperty('--tc', colorOf(t));
@@ -2578,7 +2577,7 @@ __REEL_DOCK_JS__
       };
     }
     LV.audio.wake().catch(() => {});
-    // 麦克风之前开在别的 AudioContext 里(板书页开的):放掉,下面 micWarm 重开在实时这个里
+    // 麦克风之前开在别的 AudioContext 里:放掉,下面 micWarm 重开在实时这个里
     if (mic.ac && mic.ac !== LV.audio.ctx) micDrop();
     LV.retries = 0;
     liveConnect();
@@ -2619,7 +2618,7 @@ __REEL_DOCK_JS__
   document.addEventListener('visibilitychange', () => { if (document.hidden) liveAudioDrop(); else liveMicOn(); });
   // 输入条里的麦克风(一直听时):关麦 / 开麦
   $('#lv-mic').addEventListener('click', (e) => { e.stopPropagation(); if (LV.on) liveDispatch({ type: LV.model.muted ? 'unmute' : 'mute' }); });
-  /** 收:告诉服务端挂了、关连接、清嘴的声音、关实时那个 AudioContext;页面回到板书的样子(按着的那一下作废) */
+  /** 收:告诉服务端挂了、关连接、清嘴的声音、关实时那个 AudioContext;页面回到没连嘴的样子(按着的那一下作废) */
   const liveClose = () => {
     const ws = LV.ws; LV.ws = null; LV.ready = false; LV.queued = null; clearTimeout(LV.retryTimer);
     if (ws) { ws.onclose = null; try { if (ws.readyState === 1) ws.send(JSON.stringify({ t: 'bye' })); ws.close(); } catch {} }

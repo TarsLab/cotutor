@@ -1,5 +1,5 @@
 /**
- * cotutor-tune 技能的生成部分(2026-09-15):references/字段.md 从 cotutor.json 的契约(schema/config.ts 的 .describe() 与 POLICY_DEFAULTS)、
+ * cotutor-tune 技能的生成部分:references/字段.md 从 cotutor.json 的契约(schema/config.ts 的 .describe() 与 POLICY_DEFAULTS)、
  * cotutor.json 的字段表与 CLI 用法(app/cli/usage.ts)现生成,scripts/gen-skills.ts 写进包根 skills/cotutor-tune/,
  * tests/skills.test.ts 断言入库的和生成的一致——改老师团时能改哪些字段、缺省是什么,永远和契约同源。SKILL.md 本体(三条路子、禁区)是手写的。
  */

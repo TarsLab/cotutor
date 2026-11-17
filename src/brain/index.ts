@@ -1,7 +1,7 @@
 /**
  * 脑执行:一轮教学里「让脑想、写出正文」的那一步。
  * runner 拼好上下文包与系统提示交到这里;这里请模型(应用直连百炼,./api.ts)、读输出,随流回报正文与工具,收尾给出整轮的转录。
- * 执行完不等于这一轮交付完:板书解析、配音、记忆与日记的收尾归 runner。
+ * 执行完不等于这一轮交付完:讲稿解析、记忆与日记的收尾归 runner。
  * 2026-11-02 以前还能起 Qwen Code(命令行);那时的轮次照样读得出(./log.ts),运行时用不了了(./runtime.ts)。
  */
 import type { ToolCall, Transcript } from './transcript.ts';
@@ -24,7 +24,7 @@ export interface BrainRequest {
   session: { id: string; runtime: string } | null;
   agent: string;
   prompt: string;
-  /** 系统提示:老师正文(或 activity)+ 板书写法 */
+  /** 系统提示:activity 的「老师怎么带」+ 讲稿与动作的写法(系统任务是一句人设) */
   systemBody?: string;
   effort?: Policy['effort'];
   tools: ToolSet;
@@ -32,7 +32,7 @@ export interface BrainRequest {
   readDirs: readonly string[];
   /** 本轮附的照片(绝对路径),直接附成图 */
   images?: readonly string[];
-  /** 孩子这一轮交的板(板卡的图,绝对路径):只附在这一轮,不算作业照片——不把前面交的作业照片挤掉 */
+  /** 孩子这一轮交的窗图(绝对路径):只附在这一轮,不算作业照片——不把前面交的作业照片挤掉 */
   boards?: readonly string[];
   /** 整段压缩(上一轮结束时上下文过了 32k):之前的模型历史不再发,digest 是应用照索引拼的前情;prompt 这一轮带笔记全文 */
   compact?: { digest: string };

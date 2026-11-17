@@ -65,7 +65,7 @@ export interface GlyphPenOptions {
   /**
    * 字形表(provider):缺省内置拉丁包(a–z / A–Z)。别的字形做成同构的 Map 从这里传入,就和字母共用同一支笔;
    * 归一化约定由传入方定并写明(拉丁 = 四线三格;汉字可取格子高 1、底线 y=0、顶 y=-1)。
-   * 汉字要逐笔写时从 hanzi-writer-data 的 medians 现做(本包已依赖它,田字格卡就读它),不另挑字表。
+   * 汉字要逐笔写时从 hanzi-writer-data 的 medians 现做(本包已依赖它,田字格就读它),不另挑字表。
    */
   glyphs?: ReadonlyMap<string, Glyph>;
 }

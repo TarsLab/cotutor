@@ -1,5 +1,5 @@
 /**
- * 卡的注册表:卡只剩首页的两种——老师牌(tutor)、听写牌(dictation)(2026-11-17《多模态教学harness-开发计划》阶段 5:课里没有卡了,
+ * 卡的注册表:卡只剩首页的两种——老师牌(tutor)、听写牌(dictation)(课里没有卡,
  * 老师对页做什么是讲稿里的动作,src/board/acts.ts)。首页文件的解析(src/board/parse.ts 的 parseHomeBody)、语法表、孩子端剥秘密都从这里走。
  * 页面那一半在 kid-page.ts(首页画牌);协议文档与结构样式在包根 cards/<kind>/(src/board/cards/docs.ts)。
  */

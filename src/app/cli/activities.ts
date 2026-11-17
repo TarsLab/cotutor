@@ -108,7 +108,7 @@ async function migrateRenames(root: string, manifest: ShippedManifest): Promise<
 }
 
 /**
- * 听写不是 activity 了(2026-11-17):workspace 里 activities/听写.md 挪到老师的家 agents/<老师>/听写.md;键「老师/听写」不变,
+ * 听写不是 activity 了:workspace 里 activities/听写.md 挪到老师的家 agents/<老师>/听写.md;键「老师/听写」不变,
  * 出厂记录照旧(没改过的接着换新版,改过的照旧算自定义,内容不动)。新位置已经有了就不动旧的
  */
 async function migrateDictations(root: string): Promise<string[]> {
@@ -165,7 +165,7 @@ export interface ActivityUpgradeStep {
   from?: string;
 }
 
-/** upgrade 用:同 upgradeTutors;force 里写「老师/名」才覆盖(原文留 .bak) */
+/** refresh 用:同 upgradeTutors;force 里写「老师/名」才覆盖(原文留 .bak) */
 export async function upgradeActivities(root: string, opts: { force?: string[] } = {}): Promise<ActivityUpgradeStep[]> {
   const manifest = await readManifest(root);
   manifest.teachingPack ??= { grade: (await workspaceGradePack(root)).grade };

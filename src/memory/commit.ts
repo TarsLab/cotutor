@@ -1,11 +1,11 @@
 /**
- * 老师回的结构化段落进 vault(从 runner 拆出来,2026-10-29):老师(LLM)不直接写 vault,回结构化段由应用落盘,
+ * 老师回的结构化段落进 vault:老师(LLM)不直接写 vault,回结构化段由应用落盘,
  * 写了什么、没写成为什么都回给调用方,进这一轮的提醒。
  * - 「## 记忆」:每条先成建议、证据对孩子说过的话(proposals.ts),对不上的不记;其余增 / 改 / 删落进这位 agent 的记忆文件,
- *   `孩子:` 开头的(有脸的老师写的)落进孩子的记忆(agent: all,所有有脸的老师共用);讲课的轮每轮最多 max 条,多的丢(整理轮 max = null 不限)
+ *   `孩子:` 开头的落进孩子的记忆(agent: all,所有老师共用);讲课的轮每轮最多 max 条,多的丢(整理轮 max = null 不限)
  * - 「## 记账」:这个话题在日记里的一段(打分不够只留孩子问与观察),追加到当天日记
  * 只算不写(planMemory、planDiary):调用方先在这一轮的索引上记 pending,再写(writeVaultMemory、writeDiaryBlock),
- * 写完把 pending 换成 memoryLines / diaryBlock / booked(《运行层行为设计》§5,2026-10-30)。中间断了由 recoverPending 补。
+ * 写完把 pending 换成 memoryLines / diaryBlock / booked。中间断了由 recoverPending 补。
  */
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -19,7 +19,7 @@ type Seen = { path: string; hash: string; clip: number };
 
 /**
  * 「## 记忆」段 → 建议与要怎么改(不写)。said = 孩子说过的话(proposals.ts 的 kidSaid),证据拿它对;
- * shared = 这位是有脸的老师,`孩子:` 的那几条进孩子的记忆(不是的照旧进自己的,前缀留着);
+ * shared = 这位是老师,`孩子:` 的那几条进孩子的记忆(不是的照旧进自己的,前缀留着);
  * seen / childSeen = 这轮上下文包里老师看到的两篇的版本(见 planVaultMemory)。写不进(vault 不在、同名文件没属性)进提醒,不影响这一轮
  */
 export async function planMemory(

@@ -1,5 +1,5 @@
 /**
- * 田字格卡的笔顺数据:`GET /api/kid/tianzige/<字>` 从 node_modules 的 hanzi-writer-data(makemeatianzige 的衍生,Arphic 许可)现读一个字的 JSON——
+ * 田字格的笔顺数据:`GET /api/kid/tianzige/<字>` 从 node_modules 的 hanzi-writer-data(makemeatianzige 的衍生,Arphic 许可)现读一个字的 JSON——
  * strokes 是每一笔的 SVG 轮廓、medians 是每一笔的中线,坐标 1024 见方、y 向上(页面用 scale(1,-1) translate(0,-900) 摆正)。
  * 数据是确定性资源,不经模型;iPad 不碰外网。字不在数据里(生僻字)→ null,页面只显示字形不动。
  */

@@ -1,14 +1,12 @@
 /**
  * 发消息 = 拼上下文包 → 请脑(src/brain/,应用直连百炼;同一话题接着它的会话)→ 统一事件落 conversations/<老师>/<日期>.<job>.log → 索引更新
- * (最终文本 → 板书节 section + 家长尾巴 parentText + 解析提醒 warnings)。
- * 流式:脑的正文随流回报,这里拼当前回复正文 → parseBoard(partial) → 内存里的 partial section
- * (孩子端 pending 条目带着它,卡随围栏闭合逐张出现);讲稿不配音,交给实时的嘴照念。
- * 点读段、单词等卡的资产在索引写好之后后台配,孩子端点到还没好的段等它到,等不到就不出声。
+ * (最终文本 → 讲稿的一节 section + 家长尾巴 parentText + 解析提醒 warnings)。
+ * 流式:脑的正文随流回报,这里拼当前回复正文 → parseBoard(partial) → 内存里的 partial section(孩子端 pending 条目带着它);讲稿不配音,交给实时的嘴照念。
  * 一老师同时只跑一条(老师还在回上一条就 409),跨天自动新开(索引按本地日期分文件,新文件没有会话就新开)。
- * 话题(2026-09-11):一天可多个,每个话题自己的会话(index.sessions[thread]);newThread / 系统消息 / 今天第一条开新话题(不接会话、不带旧卡),
+ * 话题:一天可多个,每个话题自己的会话(index.sessions[thread]);newThread / 系统消息 / 今天第一条开新话题(不接会话),
  * 指定 thread 接着今天的旧话题(接它的会话),缺省接当前话题。
- * 埋点(2026-09-11):每轮记 timing(这一轮起的时刻、首卡、脑回完、配音收尾,毫秒),家长视图每轮一行。
- * 2026-11-02 以前是 spawn 命令行(Qwen Code)读 stream-json;注释里还叫「进程」的地方指的就是脑这一轮。
+ * 埋点:每轮记 timing(这一轮起的时刻、第一句出来、脑回完,毫秒),家长视图每轮一行。
+ * 代码里还叫「进程」的地方指的就是脑这一轮。
  */
 import { imageSize, jpegFromDataUrl } from '../shared/jpeg.ts';
 import { lectureDid, lecturePage, readLecture, storedMarks, type IncomingMark, type Lecture } from './lecture.ts';
@@ -84,7 +82,7 @@ export interface SendInput {
   date?: string;
   /** 这轮是记账任务(《obsidian仓库设计.md》§6):resume 那个话题的会话,老师回「## 记账」段,应用写日记 */
   bookkeep?: { thread: string };
-  /** 这轮是记账后整理记忆(2026-09-18):新会话,「## 记忆」段不受每轮条数上限,孩子端看不到 */
+  /** 这轮是记账后整理记忆:新会话,「## 记忆」段不受每轮条数上限,孩子端看不到 */
   tidy?: boolean;
   /** 这条带的作业照片(相对 workspace 根,已由路由验过在 captures/ 里;R5):进上下文包 photos: 段,老师自己 Read 看图;文字可以空 */
   photos?: string[];
@@ -119,7 +117,7 @@ interface Active {
   job: string;
   date: string;
   done: Promise<ConversationIndex>;
-  /** 还在说的时候已经解析出来的板书(卡只增不改;讲稿句已按 replyMaxChars 截) */
+  /** 还在说的时候已经解析出来的讲稿(句已按 replyMaxChars 截) */
   partial: BoardSection | null;
   /** 这一轮走实时:讲稿不配音 */
   live?: boolean;
@@ -155,7 +153,7 @@ function dueCompact(messages: readonly ConversationMessage[], ths: readonly stri
 }
 
 /**
- * 上下文包的取材(《obsidian仓库设计.md》§7 每轮那行,2026-09-17 改):课程表命中的时段 + 老师守则(有脸的老师)+ 当前学期 + 档案与入口文件的原文(按 entryChars 截)
+ * 上下文包的取材(《obsidian仓库设计.md》§7 每轮那行):课程表命中的时段 + 老师守则(老师)+ 当前学期 + 档案与入口文件的原文(按 entryChars 截)
  * + 参考路径 + 本周计划里本老师的行 + 最近 14 天日记里本学科的「- 观察:」行。
  * 守则与笔记原文总是带上;同一话题里没改过的由 send 换成「未变」。
  */
@@ -225,7 +223,7 @@ export const ACTIVITY_IN_SYSTEM = '已在你的系统提示里(这个话题的 a
 /**
  * activity 话题的系统提示(九点五):人设与做法都是 activity 自己的。
  *   body   「老师怎么带」按参数裁好、剥了注释
- *   guide  讲稿与动作怎么写(cards/动作怎么写.md;2026-11-17 起代替板书写法,课里没有卡)
+ *   guide  讲稿与动作怎么写(cards/动作怎么写.md)
  *   memory 这个 activity 自己的记忆:agent: <老师>/<activity>,文件名 <老师显示名>·<activity>
  * activity 文件不在、没有「老师怎么带」→ null(系统提示只剩一句「你是这个家的…」)。
  */
@@ -246,7 +244,6 @@ export async function activityParts(ws: Workspace, tutor: string, run: ActivityR
 /**
  * 系统提示:activity 话题 = 它的「老师怎么带」+ 讲稿与动作怎么写,上下文包只写一行「已在系统提示里」。
  * 没有 activity 的(记账、整理记忆这种系统任务,以前不走 activity 的话题接着聊):一句「你是这个家的…」,要做什么写在消息里。
- * 老师文件 2026-11-16 起不读了(一科通用的做法并进了每个 activity)。
  */
 async function systemParts(ws: Workspace, tutor: string, act: ActivityParts | null = null): Promise<{ systemBody: string; activityInSystem: boolean }> {
   if (act) return { systemBody: `${act.body}\n\n${act.guide}`, activityInSystem: true };
@@ -589,7 +586,7 @@ export class Runner {
     }
   }
 
-  /** 正在回的那条已经出来的板书(流式);没在跑或还没出卡 → null */
+  /** 正在回的那条已经出来的讲稿(流式);没在跑或还没出来 → null */
   partial(tutor: string): BoardSection | null {
     return this.active.get(tutor)?.partial ?? null;
   }
@@ -609,7 +606,7 @@ export class Runner {
     if (busy) throw new BusyError(tutor, busy.job);
     const now = (this.opts.now ?? (() => new Date()))();
     const date = input.date ?? localDate(now);
-    // 占位要在第一个 await 之前(2026-10-17):查完 busy 到 spawn 之间十几个 await,孩子连点两下两条都过检查、算出同一个 job、起两个进程。
+    // 占位要在第一个 await 之前:查完 busy 到请脑之间十几个 await,孩子连点两下两条都过检查、算出同一个 job、起两轮。
     // 占位先进 map,job 等读了索引再填;起不来(索引坏、话题不在、CLI 没起)就放掉占位
     const active: Active = { job: '(准备中)', date, partial: null, done: new Promise<never>(() => {}) };
     this.active.set(tutor, active);
@@ -655,8 +652,8 @@ export class Runner {
       thread = input.thread;
     } else thread = known[known.length - 1];
     const { name: runtimeName, runtime } = getRuntime(ws.config, input.runtime ?? t.runtime);
-    // 话题只属于开它的那种运行时(2026-10-31):会话是别的运行时的(换过运行时)就接不上,这条开新话题,不把两种会话混在一个话题里;记账在 bookkeep 里先跳过了
-    // 换了运行时开的新话题照旧是原来那个话题的 activity(话题从 activity 开始,2026-11-16)
+    // 话题只属于开它的那种运行时:会话是别的运行时的(换过运行时)就接不上,这条开新话题,不把两种会话混在一个话题里;记账在 bookkeep 里先跳过了
+    // 换了运行时开的新话题照旧是原来那个话题的 activity(话题从 activity 开始)
     const carried = thread !== job && !input.bookkeep && !sameRuntime(index, thread, runtimeName) ? threadActivity(index.messages, thread) : undefined;
     if (carried !== undefined) thread = job;
     const fresh = thread === job;
@@ -665,7 +662,7 @@ export class Runner {
     const compact = !fresh && isApiRuntime(runtime) && dueCompact(index.messages, known, thread);
     // activity:新话题照这条带的,续话题照话题第一条记的。系统提示、卡、记忆都是它的(记账轮也是,接着同一个会话);上下文包的 activity 段记账轮不带
     const threadRun = fresh ? (input.activity ?? carried ?? null) : threadActivity(index.messages, thread);
-    // 新话题都从一个 activity 开始(2026-11-16 起没有自由话题);系统任务(记账、整理记忆)不在此列
+    // 新话题都从一个 activity 开始(没有自由话题);系统任务(记账、整理记忆)不在此列
     if (fresh && !threadRun && input.from === 'kid') throw new UsageError('开新话题要从一个 activity 开始:孩子端点首页的按钮、方砖;cotutor send 加 --activity <名>');
     const act = threadRun ? await activityParts(ws, tutor, threadRun) : null;
     // 取材的查询:孩子这句话,加首页按钮的讲法(系统任务不查)
@@ -678,7 +675,7 @@ export class Runner {
     // 家长笔记原文:新会话整篇带;续会话时这个话题带过、没改的只写「未变」
     const notes = noteVersions(gathered);
     const pack = session && !compact ? dropSeenNotes(gathered, seenNotes(index.messages, thread)) : gathered;
-    // 这轮带不带工具(policy.tools,2026-10-04):孩子说的话缺省不带,只凭上下文包答;带照片的(要 Read 看图)、
+    // 这轮带不带工具(policy.tools):孩子说的话缺省不带,只凭上下文包答;带照片的(要 Read 看图)、
     // 系统任务带只读的(以前是整份白名单,照片里一句话就能让老师拿 Bash 读写 workspace 外);policy.tools: on 的老师总是整份。
     // 不带的那轮,只有工具才用得上的路径(refs / vault)不进包
     const tools: ToolSet = policy.tools === 'on' ? 'on' : input.from !== 'kid' || seen.length > 0 ? 'read' : 'off';
@@ -722,9 +719,9 @@ export class Runner {
     await writeIndex(ws, started);
     // 板的日志记一笔:这一轮把板交给了老师(下一轮「孩子做的」从这之后算;给了全文的下一轮写「未变」)
     if (slate) await appendBoard(ws, tutor, date, thread, { at: now.toISOString(), k: 'turn', job, ...(slate.told.length ? { told: slate.told } : {}) });
-    // 照片上的字词:activity 写了「认字收到什么」就在后台认(和老师写板书同时),照片页的文字层(看题、圈字、点字)用;回放、eval 不认(要花钱)
+    // 照片上的字词:activity 写了「认字收到什么」就在后台认(和老师写讲稿同时),照片页的文字层(看题、圈字、点字)用;回放、eval 不认(要花钱)
     if (photos.length && activityRun && input.from === 'kid' && !input.replayOf && !input.eval) await this.startPhotoWords(ws, tutor, activityRun.name, photos).catch(() => undefined);
-    // 运行记录(《vault重构方案》§7):除了系统提示的来源(activity 文件)与技能,还记这轮带进上下文的每篇笔记、替老师查的每个文件,事后重建得出老师看到的是哪一版
+    // 运行记录:除了系统提示的来源(activity 文件)与技能,还记这轮带进上下文的每篇笔记、替老师查的每个文件,事后重建得出老师看到的是哪一版
     const notesSent = (pack.notes ?? []).map((n) => ({ role: n.role, path: n.path, hash: textHash(n.text), chars: n.text.length, ...(n.cut ? { cut: true as const } : {}) }));
     await writeRunFile(ws, tutor, date, job, { at: pack.at, prompt, plan, agentBody: true, sources: { ...(await snapshotSources(ws, threadRun ? findActivityFile(ws.root, tutor, threadRun.name) : null)), notes: notesSent, retrieved: gathered.retrieved } });
 
@@ -811,7 +808,7 @@ export class Runner {
 
   /**
    * 「## 记忆」段 → 建议与要怎么改,还不写:讲课的轮每轮最多 MEMORY_MAX_PER_TURN 条(整理轮不限);回放、eval 不写。
-   * 证据对孩子在这个话题里说过的话(整理轮自成话题,对这一天的);有脸的老师写的 `孩子:` 进孩子的记忆。
+   * 证据对孩子在这个话题里说过的话(整理轮自成话题,对这一天的);老师写的 `孩子:` 进孩子的记忆。
    * seen = 这轮上下文包里老师看到的那两篇的版本(消息的 notes.memory / notes.child,`路径@hash`)
    */
   private async planMemoryOf(ws: Workspace, tutor: string, date: string, items: string[], asked: ConversationMessage | undefined, said: readonly string[], clip: number, owner?: { agent: string; display: string }): Promise<{ proposals: MemoryProposal[]; plan: MemoryPlan | null; child: MemoryPlan | null; warnings: string[] }> {
@@ -829,7 +826,7 @@ export class Runner {
   private async spawn(ws: Workspace, tutor: string, date: string, job: string, thread: string, req: BrainRequest, plan: RunPlan, policy: Policy, active: Active): Promise<ConversationIndex> {
     const replyMaxChars = policy.replyMaxChars;
     const files = conversationFiles(ws.dirs.conversations, tutor, date);
-    // 埋点:从这一轮起算,首卡 = partial 板书第一次有卡(孩子端第一次看到东西),done = 进程退出,dubbed = 配音收尾
+    // 埋点:从这一轮起算,firstReadyMs = 第一句出来(嘴能开口),doneMs = 脑回完
     const t0 = Date.now();
     const timing: Timing = { startedAt: new Date(t0).toISOString() };
     const since = (): number => Date.now() - t0;
@@ -855,7 +852,7 @@ export class Runner {
       timing.firstReadyMs = since();
       emit({ lane: 'ready', kind: 'speak' });
     };
-    // 流式:脑的正文变了就(节流 150ms)重解析成 partial 板书
+    // 流式:脑的正文变了就(节流 150ms)重解析成 partial 讲稿
     let dirty = false;
     let timer: NodeJS.Timeout | null = null;
     const reparse = (): void => {

@@ -2,7 +2,7 @@
  * 嘴(百炼 realtime,qwen3.8-omni-flash-realtime)认的音色:官方列表 https://www.alibabacloud.com/help/zh/model-studio/omni-voice-list 里
  * 「Qwen3.8-Omni 系列」那 56 个(2026-10-19 照抄;每个都真连过一次让它说一个字,都出声)。trait 是官方描述的概括,lang 是除外语以外会说的(都另会 28 种外语)。
  * 旧模型的 Bella、Pip、Chelsie、Ethan 这个模型不认:连接照样连得上,第一次开口才报 InvalidParameter——所以写错的音色要在配置这一头拦(工作台、doctor)。
- * 工作台音色页「实时的嘴」那一半照这张表列、试听、挑(写进 cotutor.json 的 live.voices)。
+ * 家长端「样子与声音」说话的声音照这张表列、试听、挑(写进 cotutor.json 的 live.voices)。
  * 英语老师的讲稿是中文里夹英文(「apple 苹果,banana 香蕉」):2026-10-20 真连(照念 → 转写回字)Serena、Tina、Maia、Liora Mira、Mione、Theo Calm 都念对,
  * Jennifer、Mia 的中文带英文腔(Jennifer:「腿」成了 tway,「它是什么颜色」没了),trait 里记着。
  */

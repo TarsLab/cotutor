@@ -5,7 +5,7 @@
  *   agents/<name>/(老师的家 = 会话 cwd;activities/ 拷自本包 grades/grade-<n>/agents/<name>/,是家长的)
  *   ledger/(产物账本)/ conversations/(对话索引与转录)
  * vault 侧(《obsidian仓库设计.md》):档案 / 课程表 / 日记 / 教材 / 计划 / 参考,init 只建档案与参考 README(缺了才写);
- *   vault 不在 workspace 里,缺省是旁边的 <目录名>-vault/(2026-11-09;旧版没写 paths.vault 的落在 workspace 根)
+ *   vault 不在 workspace 里,缺省是旁边的 <目录名>-vault/(旧版没写 paths.vault 的落在 workspace 根)
  */
 import { readFileSync } from 'node:fs';
 import { readdir } from 'node:fs/promises';
@@ -32,7 +32,7 @@ export interface ShippedAgent {
   dir: string;
 }
 
-/** 出厂的老师:年级包 agents/ 下的每个目录(老师的家;老师文件 2026-11-16 起不出厂了) */
+/** 出厂的老师:年级包 agents/ 下的每个目录(老师的家) */
 export async function shippedAgents(dir = PACKAGE_AGENTS_DIR): Promise<ShippedAgent[]> {
   const out: ShippedAgent[] = [];
   for (const e of (await readdir(dir, { withFileTypes: true })).filter((e) => e.isDirectory() && AGENT_NAME_RE.test(e.name)).sort((a, b) => a.name.localeCompare(b.name))) out.push({ name: e.name, dir: join(dir, e.name) });
@@ -100,7 +100,7 @@ const TUTOR_DEFAULTS: Record<string, { display: string; description?: string; su
   // 语文老师走 api,缺省 low 不想
   'chinese-tutor': { display: '语文老师', description: '语文老师。生字、词语、课文、看图说话都找它', subject: '语文', runtime: 'api' },
   // 英语也走 api,不走 api-flash:2026-10-31 api-flash 真跑英语四个 activity,13 次里 5 次第一轮只出一张拍照卡、没有讲稿(那时还有卡)(实时页嘴没话可念);max 在 Ray 上都过。
-  // 想省钱改 api-flash,先跑 activity eval。medium 是 2026-10-27 给 flash 加的(low 偶尔只出卡或念规则,详见年级教学包验证记录)
+  // 想省钱改 api-flash,先跑 activity eval。medium 是给 flash 加的(low 偶尔不写讲稿或念规则,详见年级教学包验证记录)
   'english-tutor': { display: '英语老师', description: '英语老师。单词、句子、课文、口语课都找它', subject: '英语', runtime: 'api', policy: { effort: 'medium' } },
 };
 
@@ -122,17 +122,17 @@ export function configTemplate(input: ConfigTemplateInput): string {
     paths: input.vault ? { vault: input.vault } : {},
     policyDefaults: {},
     tutors,
-    // 缺省 api:应用直连百炼,家长端「首页」填一次按量 key + 业务空间 id 就能用(2026-10-31);2026-11-02 起只有 API 运行时
+    // 缺省 api:应用直连百炼,家长端「首页」填一次按量 key + 业务空间 id 就能用;只有 API 运行时
     runtimes: { default: 'api', ...FACTORY_API_RUNTIMES },
     // 听写的拍照认词:模型与挑词要求(prompt 一行一个字符串)写进文件,家长看得见、改得动
     dictation: DICTATION_DEFAULT,
-    // 字段说明不写在这里:一写进去就冻住(政策文件永不覆盖),$schema 指的 schema 文件每次 init / upgrade 从 zod 的 .describe() 刷新
+    // 字段说明不写在这里:一写进去就冻住(政策文件永不覆盖),$schema 指的 schema 文件每次 init / refresh 从 zod 的 .describe() 刷新
     _note: '一孩一 workspace 的政策文件,家长改这里,机器不覆盖(写坏了靠 git 回退,cotutor doctor 可体检);每个字段的说明在 $schema 指的 .cotutor/cotutor.schema.json,编辑器里悬停就能看到。',
   };
   return `${JSON.stringify(cfg, null, 2)}\n`;
 }
 
-/** 把 JSON Schema 写进 workspace(机器文件,每次 init / upgrade 都刷新);板书语法表出厂成技能 cotutor-board,见 skills.ts `writeBoardSkill` */
+/** 把 JSON Schema 写进 workspace(机器文件,每次 init / refresh 都刷新) */
 export async function writeSchemaFile(root: string): Promise<string> {
   const file = join(root, CONFIG_SCHEMA_FILE);
   await mkdir(join(root, '.cotutor'), { recursive: true });

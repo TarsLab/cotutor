@@ -1,5 +1,5 @@
 /**
- * 对话的文件层:索引读写(坏索引响亮报错,不静默覆盖)、日期列表、转录读取、老师正文、卡的状态、作业照片、删话题与撤回。
+ * 对话的文件层:索引读写(坏索引响亮报错,不静默覆盖)、日期列表、转录读取、老师正文、作业照片、删话题与撤回。
  * 纯函数在 ./conversation.ts,这里只碰文件系统;cotutor.json 的补丁写回在 src/app/workspace.ts。
  */
 import { createHash } from 'node:crypto';
@@ -80,7 +80,7 @@ export async function readTranscript(ws: Workspace, tutor: string, date: string,
 }
 
 /**
- * 作业照片(R5,2026-09-14):落 workspace 的 captures/<日期>/<HHMM>-<n>.<ext>(paths.captures,相对 workspace 根),
+ * 作业照片(R5):落 workspace 的 captures/<日期>/<HHMM>-<n>.<ext>(paths.captures,相对 workspace 根),
  * 不落 vault。返回相对 workspace 根的路径(消息的 photos、上下文包的 photos: 段、/api/kid/image?p= 都用它)。
  */
 export async function writeCapture(ws: Workspace, at: Date, data: Buffer, ext: 'jpg' | 'png'): Promise<string> {
@@ -108,7 +108,7 @@ export async function capturePathOk(ws: Workspace, rel: string): Promise<boolean
  * 这一轮真发出去的东西(<date>.<job>.run.json):上下文包与完整命令行。
  * 跑完就丢的话「老师为什么没看见孩子选了 C」永远查不了,所以落一份;只有家长端「看原文」读它。
  */
-/** 这轮的系统提示来源(activity 文件;2026-11-16 以前是老师文件)与技能的快照(2026-09-15):文件后来改了就查不回当时那份,所以记正文与 hash;技能只记 hash,变没变一眼看 */
+/** 这轮的系统提示来源(activity 文件;旧轮次是老师文件)与技能的快照:文件后来改了就查不回当时那份,所以记正文与 hash;技能只记 hash,变没变一眼看 */
 export interface RunSources {
   agent: { file: string; hash: string; body: string } | null;
   /** 技能名 → SKILL.md 的 hash(workspace .agents/skills/ 下有的全部) */
@@ -128,7 +128,7 @@ export interface RunFile {
   argv: string[];
   resume: boolean;
   session: string | null;
-  /** 系统提示来源与技能的快照;2026-09-15 之前的轮次没有 */
+  /** 系统提示来源与技能的快照;更早的轮次没有 */
   sources?: RunSources;
   /** 老师正文进了系统提示(API 运行时总是;旧轮次看那时的命令模板) */
   agentBody: boolean;
@@ -204,9 +204,9 @@ export async function rateThread(ws: Workspace, tutor: string, date: string, thr
 }
 
 /**
- * 删掉一天里的一个话题(家长板书页清单上的「删」,2026-09-22):索引里它的消息、会话、星、记账标记都去掉,
+ * 删掉一天里的一个话题(家长端「记录」清单上的「删」):索引里它的消息、会话、星、记账标记都去掉,
  * 这些轮的文件(转录、run、事件、配音、卡的状态与资产)按 <日期>.<job>.* 整个删。
- * 这个话题留下的痕迹一起撤(2026-10-05,家长在孩子端试过再删):各轮写进 vault 记忆的行(memoryLines)倒着撤、记账写进日记的那段(diaryBlock)摘掉;
+ * 这个话题留下的痕迹一起撤(家长在孩子端试过再删):各轮写进 vault 记忆的行(memoryLines)倒着撤、记账写进日记的那段(diaryBlock)摘掉;
  * 写到一半断了的(还带着 pending)先对照文件补记,写成了的一样撤。不动的:captures/ 里的照片。跑着的轮由路由先挡(409)。
  */
 export async function deleteThread(ws: Workspace, tutor: string, date: string, thread: string): Promise<{ index: ConversationIndex; undo: ThreadUndo }> {
@@ -235,7 +235,7 @@ export async function deleteThread(ws: Workspace, tutor: string, date: string, t
 export type VaultWrite = { job: string; kind: 'memory' | 'child' | 'diary'; n: number };
 
 /**
- * 撤回一个话题写进 vault 的一笔(家长端「记录」的「撤回」,2026-10-30,《vault重构方案》§8):n = 那一轮 memoryLines / childLines 的第几条(diary 不用)。
+ * 撤回一个话题写进 vault 的一笔(家长端「记录」的「撤回」):n = 那一轮 memoryLines / childLines 的第几条(diary 不用)。
  * 撤法同删话题(undoThreadVault):家长后来改过那行就找不到,不动,回 misses。撤成了就从那一轮的记录里去掉(删话题时不再撤一遍);
  * 日记那段撤了 booked 照留,不再自动记它。写到一半断了的先补记。跑着的轮由路由先挡(409)。
  */

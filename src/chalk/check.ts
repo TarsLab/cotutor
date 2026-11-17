@@ -1,6 +1,6 @@
 /**
  * 阶梯层 2–3:schema 校验、语义 lint、确定性布局检查。
- * 纯函数,不碰文件系统;错误信息 = 修复指南(README「Design principles」)。
+ * 纯函数,不碰文件系统;错误信息 = 修复指南。
  * 层 1(类型,内嵌 tsc)在 typecheck.ts,模块求值在 load-scene.ts;层 4(keyframe 截图)归 snap。
  */
 

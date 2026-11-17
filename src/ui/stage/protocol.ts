@@ -10,7 +10,7 @@ export const STAGE_SOURCE = 'cotutor-stage';
 export type ToStage =
   /** 一节课此刻的样子(src/schema/lesson.ts):页面一句一句落好老师的动作、孩子做的事也落上,变了就发;舞台照它画页(book.tsx:课本、作业照片、白纸;lecture.tsx:小课堂) */
   | { source: typeof STAGE_SOURCE; type: 'lesson'; id: string; lesson: unknown; readonly?: boolean; hand?: 'left' | 'right';
-    /** 现在这一页是小课堂(2026-11-17):课包 / 视频在哪、孩子手上还没交的画、录像跟着放(follow);play = 页面要放老师那一段了(look 的 n,变了就放) */
+    /** 现在这一页是小课堂:课包 / 视频在哪、孩子手上还没交的画、录像跟着放(follow);play = 页面要放老师那一段了(look 的 n,变了就放) */
     lecture?: { url: string; marks: unknown[]; follow?: boolean; play?: number } }
   /** peek = 板此刻的样子导一张小图(话题的预览图,首页「今天」用;回 peek) */
   | { source: typeof STAGE_SOURCE; type: 'control'; action: 'toggle' | 'next' | 'prev' | 'play' | 'pause' | 'submit' | 'peek' }
@@ -22,7 +22,7 @@ export type FromStage =
   | { source: typeof STAGE_SOURCE; type: 'ready' }
   /** 小课堂上老师那一段放完了(停在末帧):页面接着念 */
   | { source: typeof STAGE_SOURCE; type: 'phase'; phase: 'done' }
-  /** 点字:孩子点中了页上一个字(汉字)或一个英文单词,页面在页上面弹它的田字格 / 单词卡 */
+  /** 点字:孩子点中了页上一个字(汉字)或一个英文单词,页面在页上面弹它的田字格 / 四线三格 */
   | { source: typeof STAGE_SOURCE; type: 'pick'; text: string }
   /** 点开了一块盖住的(老师写的「遮」「盖」) */
   | { source: typeof STAGE_SOURCE; type: 'reveal'; text: string }

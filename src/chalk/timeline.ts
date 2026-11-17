@@ -1,6 +1,6 @@
 /**
  * 步进时间轴:笔画按数组顺序串行,单笔时长 animateDuration(缺省 500ms),起点 START_MS(1000)。
- * 最早是镜像 excalidraw-animate 的调度规则(0.7.2);播放改成烤好的画面 + 自己的时钟以后(drawtell 重新设计第 4 步),
+ * 最早是镜像 excalidraw-animate 的调度规则(0.7.2);播放改成烤好的画面 + 自己的时钟以后,
  * 这里就是时间的唯一来源:ChalkPlayer、core 的 lessonClock、应用的时钟都从这里算,规则没变,老课包的节奏不变。
  * groupIds、id 里带 animate 指令仍然拒绝(老规矩,check 也拦)。
  */

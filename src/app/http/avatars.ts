@@ -11,7 +11,7 @@ import { canonicalSubject } from '../../schema/index.ts';
 /** 本包自带的头像目录(仓库检出与 npm 安装都在包根 avatars/) */
 export const PACKAGE_AVATARS_DIR = fileURLToPath(new URL('../../../avatars/', import.meta.url));
 const SUBJECT_AVATARS: Readonly<Record<string, string>> = { 语文: 'chinese.webp', 数学: 'math.webp', 英语: 'english.webp' };
-/** 2026-11-02 以前 init 写进 cotutor.json 的出厂 emoji:当作没写 */
+/** 旧版 init 写进 cotutor.json 的出厂 emoji:当作没写 */
 const OLD_FACTORY_EMOJI = new Set(['📚', '🧮', '🔤']);
 /** 下发给页面的出厂头像名的前缀(不是 workspace 里的路径) */
 export const FACTORY_PREFIX = 'factory:';

@@ -212,7 +212,7 @@ export async function lectureFrameSvg(ws: Pick<LectureDirs, 'dirs'>, id: string,
   }
 }
 
-/** frame.svg 的 svg 参数:SVG 时刻(毫秒);`end` = 最后一帧(小课堂卡的缩略图);认不出来 = 0 */
+/** frame.svg 的 svg 参数:SVG 时刻(毫秒);`end` = 最后一帧(小课堂按钮的缩略图);认不出来 = 0 */
 export function parseSvgMs(s: string | null): number {
   return s === 'end' ? Infinity : Number(s) || 0;
 }

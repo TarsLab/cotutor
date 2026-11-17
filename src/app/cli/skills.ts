@@ -1,10 +1,9 @@
 /**
  * 出厂 skill:与 activity 同一套「拷不链」机制——init 拷进 workspace 的 .agents/skills/<name>/,hash 记 .cotutor/shipped.json 的 skills,
- * (2026-10-30 从 .claude/skills/ 挪来:Codex、Qwen Code 认 .agents/skills;Claude Code 只认 .claude/skills,那里是一条指过来的链,见 linkClaudeSkills。)
- * 出厂表 SHIPPED_SKILLS 每项带 machine 标记(2026-09-15,照 hyperframes 的 skills/ 目录),都在本包根 skills/<name>/(进 npm files;
+ * 出厂表 SHIPPED_SKILLS 每项带 machine 标记,都在本包根 skills/<name>/(进 npm files;
  * 几个机器件的 references/ 是 scripts/gen-skills.ts 生成后入库的,tests/skills.test.ts 断言一致):
- * - machine: true 的是机器件(cotutor-tutor / cotutor-analyze / cotutor-tune / cotutor-home:它们和解析器、契约、CLI 要一起变),init / upgrade 每次按包里的覆盖、家长改了也刷,状态只有 latest / upgradable;
- *   其余拷进来就是家长的:upgrade 没改过的换新、改过的报 diff 保留(custom / untracked)。chalk-* 四个是做课包的(2026-10-31 随 drawtell 并进来,原名 drawtell-*)。
+ * - machine: true 的是机器件(cotutor-tutor / cotutor-analyze / cotutor-tune / cotutor-home:它们和解析器、契约、CLI 要一起变),init / refresh 每次按包里的覆盖、家长改了也刷,状态只有 latest / upgradable;
+ *   其余拷进来就是家长的:refresh 没改过的换新、改过的报 diff 保留(custom / untracked)。chalk-* 四个是做课包的。Codex、Qwen Code 认 .agents/skills;Claude Code 只认 .claude/skills,那里是一条指过来的链(linkClaudeSkills)。
  */
 import { createHash } from 'node:crypto';
 import { cp, lstat, mkdir, readFile, readdir, readlink, rm, symlink } from 'node:fs/promises';
@@ -21,7 +20,7 @@ import { readManifest, writeManifest, type ShippedManifest } from './tutors.ts';
 
 export interface ShippedSkill {
   name: string;
-  /** 机器件:每次 init / upgrade 都按包里的覆盖,不认家长的改动 */
+  /** 机器件:每次 init / refresh 都按包里的覆盖,不认家长的改动 */
   machine?: boolean;
 }
 
@@ -37,11 +36,11 @@ export const SHIPPED_SKILLS: readonly ShippedSkill[] = [
 ];
 
 /**
- * 不再出厂的技能:upgrade 时 workspace 里还有(出厂记录里有它)就删掉,免得编程助手照旧技能干活。
+ * 不再出厂的技能:refresh 时 workspace 里还有(出厂记录里有它)就删掉,免得编程助手照旧技能干活。
  * 机器件(machine)向来不认家长的改动,照删;别的家长改过就留着,只是不再记在出厂清单里。
  * cotutor-vault(2026-10-30,机器件):老师从没读过它(孩子的话不带工具,记账那条消息自带写法),要紧的几句并进了守则 cotutor-tutor。
- * drawtell-*(2026-10-31):drawtell 并进本包,改名 chalk-*,命令是 cotutor chalk。
- * cotutor-board(2026-11-17,机器件):课里没有卡了,板书写法换成了进系统提示的「动作怎么写」(cards/动作怎么写.md)
+ * drawtell-*:drawtell 并进本包,改名 chalk-*,命令是 cotutor chalk。
+ * cotutor-board(机器件):课里没有卡,板书写法换成了进系统提示的「动作怎么写」(cards/动作怎么写.md)
  */
 export const RETIRED_SKILLS: readonly ShippedSkill[] = [{ name: 'cotutor-vault', machine: true }, { name: 'cotutor-board', machine: true }, { name: 'drawtell-scene' }, { name: 'drawtell-teaching' }, { name: 'drawtell-cli' }, { name: 'drawtell-verify' }];
 
@@ -161,7 +160,7 @@ export interface SkillUpgradeStep {
   /** 顺手清掉的旧位置 */
 }
 
-/** upgrade 用:latest 跳过;upgradable 换新(机器件改过也换);custom / untracked 保留只报;缺的补;不再出厂的删(改过的留) */
+/** refresh 用:latest 跳过;upgradable 换新(机器件改过也换);custom / untracked 保留只报;缺的补;不再出厂的删(改过的留) */
 export async function upgradeSkills(root: string): Promise<SkillUpgradeStep[]> {
   const steps: SkillUpgradeStep[] = [];
   const manifest = await readManifest(root);
@@ -196,7 +195,7 @@ export async function upgradeSkills(root: string): Promise<SkillUpgradeStep[]> {
 export const CLAUDE_SKILLS_LINK = '.claude/skills';
 
 /**
- * init / upgrade 用:没有就建链;已经是链不动;是实体目录(老 workspace 没搬完)不碰,报一声。
+ * init / refresh 用:没有就建链;已经是链不动;是实体目录(老 workspace 没搬完)不碰,报一声。
  * Windows 上建目录联接(junction):符号链接要「创建符号链接」权限,家长平常开的终端没有(UAC 拿掉了,开发者模式也多半没开)。
  * 联接读回来是绝对路径,所以按指到哪儿比、不按字面比。还是建不了就跳过:这条链只给在 workspace 里用 Claude Code 的人,cotutor 自己不读它。
  */

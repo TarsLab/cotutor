@@ -1,8 +1,8 @@
 /**
- * 上下文包里从 vault 来的那几段(从 runner.gatherContext 拆出来,2026-10-29,行为不变):
+ * 上下文包里从 vault 来的那几段:
  * 课程表命中的时段、当前学期、档案 / 孩子的记忆 / 入口文件 / 记忆的原文(按 entryChars 截;记忆留最近的)、参考路径、本周计划里本老师的行、
  * 最近 14 天日记里本学科的「- 观察:」行(《obsidian仓库设计.md》§7)。都是现读的:家长改了这些文件,下一轮取材就是新的。
- * 有脸的老师的守则(机器技能的原文)不在 vault 里,runner 自己加在这几条笔记前面。
+ * 老师守则(机器技能的原文)不在 vault 里,runner 自己加在这几条笔记前面。
  */
 import { readFile } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
@@ -35,7 +35,7 @@ export interface LearningContext {
   notes: NonNullable<ContextPack['notes']>;
   /** 上下文包里那几行:路径(截了注明)或「缺:…」「还没有」 */
   profile: string;
-  /** 孩子的记忆:有脸的老师才带 */
+  /** 孩子的记忆:老师才带 */
   child?: string;
   entry?: string;
   /** activity 话题另带的这位老师那篇记忆(只读);没有就不写 */
@@ -53,8 +53,8 @@ export interface LearningContext {
 
 /**
  * 这一轮从 vault 取的材。agent = 记忆认谁的(activity 话题是 <老师>/<activity>,档案、入口文件、日记观察照旧共用);
- * teacher = 这位是有脸的老师(没有入口文件时写「缺」;带孩子的记忆——它是有意的例外,activity 话题也带同一篇);display = 计划里认他的名字(不在 tutors 里就不带计划)
- * query = 孩子这一轮说的话(加首页按钮的讲法):有脸的老师才拿它替老师查生字表、口径、以前讲过的骨架(retrieval.ts)
+ * teacher = 这位是老师(没有入口文件时写「缺」;带孩子的记忆——它是有意的例外,activity 话题也带同一篇);display = 计划里认他的名字(不在 tutors 里就不带计划)
+ * query = 孩子这一轮说的话(加首页按钮的讲法):老师才拿它替老师查生字表、口径、以前讲过的骨架(retrieval.ts)
  */
 export async function learningContext(
   v: Vault,

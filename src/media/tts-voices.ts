@@ -1,7 +1,7 @@
 /**
- * 卡的配音认的音色:百炼 Qwen-Audio-TTS(qwen-audio-3.0-tts-plus)的 597 个基础音色。2026-10-31 从 voxtell 的 data/voices.json 搬来
- * (那份是官方音色列表经 video-script 的 docs/qwen3-tts 整理的);id 带模型前缀,旧代短名(如 longanlingxin)也能合成,但不在表里。
- * 工作台音色页「卡的配音」照这张表列、试听、挑(写进 cotutor.json 的 tutors.<名>.voice);老师开口的嘴是另一张表(src/realtime/voices.ts)。
+ * 配音(听写念词、课包)认的音色:百炼 Qwen-Audio-TTS(qwen-audio-3.0-tts-plus)的 597 个基础音色,照官方音色列表整理的;
+ * id 带模型前缀,旧代短名(如 longanlingxin)也能合成,但不在表里。
+ * 家长端「样子与声音」点读的声音照这张表列、试听、挑(写进 cotutor.json 的 tutors.<名>.voice);老师开口的嘴是另一张表(src/realtime/voices.ts)。
  */
 
 export interface TtsVoice {

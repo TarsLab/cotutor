@@ -2,7 +2,7 @@
  * 课本做底(语文预习,activity 头上 base: textbook;2026-11-14《语文预习:PDF 课本与镜头交互》)服务端那一半:
  * 讲稿里的动作落到页上(src/board/lesson-fit.ts,翻、看、圈换成框);板此刻的样子里的课本(board-pack 的 bookSlateParts);
  * 全流程:点「预习」方砖(不拍照)→ 底是目录 → 老师翻到一课、看第 1 段再看第 2 段 → 孩子挪窗、点字记进日志 → 下一轮老师看到他在看哪里。
- * 书用 tests/_book.ts 造的那本;PDF 是个假文件,它的指纹对上一份事先写好的索引缓存(读 PDF 的那一层走 scripts/probe-textbook.mjs)。
+ * 书用 tests/_book.ts 造的那本;PDF 是个假文件,它的指纹对上一份事先写好的索引缓存(读 PDF 的那一层走 scripts/probe-book.mjs)。
  */
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';

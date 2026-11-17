@@ -1,6 +1,6 @@
 /**
  * 一轮运行的事件(<日期>.<job>.events.jsonl 的一行;控制台与时间线的唯一来源)。格式化与读在 runtime/journal/events.ts。
- * 2026-11-17 以前的记录里还有卡的事件(main card、ready beat):读进来不认就跳过。
+ * 以前的记录里还有卡的事件(main card、ready beat):读进来不认就跳过。
  */
 import type { Tokens } from '../shared/tokens.ts';
 

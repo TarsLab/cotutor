@@ -1,7 +1,7 @@
 /**
  * 一节讲稿(老师的一轮回复)的契约:讲稿一句一行,句子后面的动作念完生效;卡只剩首页的老师牌、听写牌(BoardCard,src/board/cards/)。
  * 类型在这里;src/board/presentation.ts 内联进页面,只 import type 这几样(剥类型时一起没了)。下面的 zod 与类型对齐,文件底部用赋值断言锁住。
- * 2026-11-17(《多模态教学harness-开发计划》阶段 5)起课里没有卡:以前记录里一节的 cards、layout、句子的 marks / anchor / cues 读进来就丢。
+ * 课里没有卡:以前记录里一节的 cards、layout、句子的 marks / anchor / cues 读进来就丢。
  */
 import { z } from 'zod';
 import { LineActSchema, type LineAct } from './lesson.ts';

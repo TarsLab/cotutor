@@ -1,6 +1,6 @@
 /**
  * mock 的实时老师(`cotutor mock`;老师都走实时):不经百炼、不花钱看实时老师页。
- * 协议同 src/runtime/live/call.ts:松手(或打字、拍照、交卡)马上接住一句 → 发一条消息给 mock 的老师(照脚本出节,带 live)→ 老师写完,讲稿一句一句「念」:
+ * 协议同 src/runtime/live/call.ts:松手(或打字、拍照、「给老师看」)马上接住一句 → 发一条消息给 mock 的老师(照脚本出节,带 live)→ 老师写完,讲稿一句一句「念」:
  * 字幕 + 静音的声音(按字数估长短,孩子端照常排着放),read 按孩子端的排法算好时刻发;按下 = 打断(清了,没念的不念)。
  * 小课堂上放一段的那句([[看 0:19–0:30]] 落在小课堂页上):念完先停,孩子端放完那一段(staged)再接着念。没有转写:按住说的当成「(按住说的话)」。
  */
@@ -85,7 +85,7 @@ export function mockLiveUpgrade(mock: Mock) {
           void begin({ ...(isObj(x.body) ? x.body : {}), text: MOCK_LIVE_SAID }, null);
           break;
         case 'hush': holding = false; interrupt(); break;
-        // 以板为主:孩子点了一个字,安静时假嘴念它(真服务念认字时写好的念法)
+        // 页上点字:孩子点了一个字,安静时假嘴念它(真服务念认字时写好的念法)
         case 'board':
           if (!holding && playEnd <= Date.now() && isObj(x.body) && typeof x.body.text === 'string') say('catch', x.body.text);
           break;

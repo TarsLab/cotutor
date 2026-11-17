@@ -1,8 +1,7 @@
 /**
  * 服务的路由层:route(method, path, ctx, body) → {status, json|html},测试不用起端口。
- * R1 的查询接口照旧;R2 加:对话(列日期、看一天的家长视图、发消息)、cotutor.json 补丁(老师团页)、工作台 /dev(2026-09-22 之前叫家长页 /parent;
- * 现在 /parent 是家长端 = 家长板书页,给不懂技术的家长日常用)。
- * R3 加:孩子端 `/`(kidPage)与 /api/kid/*(首页:课程表 + 老师卡 + 家长发布的首页卡;对话:服务端过滤后的孩子视图;发消息:from 固定 kid)、配音文件 /api/audio。
+ * 三端的页面与接口都从这里走:孩子端 `/`(kidPage)与 /api/kid/*(首页:课程表 + 老师牌 + 家长发布的牌;对话:服务端过滤后的孩子视图)、
+ * 家长端 /parent 与 /api/parent/*(给不懂技术的家长日常用)、工作台 /dev 与其余 /api/*(对话、看原文、cotutor.json 补丁);声音文件从 /api/audio 取。
  * 配置热重载:每个请求先读一遍 cotutor.json,原文变了就重读(不比修改时间,Windows 上连写两次常常一样);改坏了留旧配置并把错误挂在 /api/health 上。
  */
 import { existsSync } from 'node:fs';
@@ -193,7 +192,7 @@ export interface KidTutor {
   subject: string | null;
   /** 学科色(服务端定好,src/ui/shared/tutor-color.ts;页面不自己算) */
   color: string;
-  /** 板书底纹上写哪个学科字(board-mark.ts):三门主科各一个,别的老师 null 不写字 */
+  /** 板的底纹上写哪个学科字(board-mark.ts):三门主科各一个,别的老师 null 不写字 */
   mark: BoardMarkId | null;
   /** 他的听写写哪种:学科是英语(含别名)= en */
   lang: 'zh' | 'en';
@@ -284,7 +283,7 @@ export async function kidDay(ctx: AppContext, tutor: string, date: string): Prom
   return { tutor, date, messages, pending: active && active.date === date ? active.job : null, thread: currentThread(index) };
 }
 
-/** 家长板书页的一天:形状同 KidDay;答案不剥,系统发的也在 */
+/** 家长端「记录」的一天:形状同 KidDay;答案不剥,系统发的也在 */
 export interface ParentDay {
   tutor: string;
   date: string;
@@ -391,7 +390,7 @@ async function liveCalls(ctx: AppContext, tutor: string, date: string, jobs: Set
 }
 
 
-/** 家长板书页的清单:这一天每位有脸的老师几轮、几个话题、停在哪 */
+/** 家长端「记录」的清单:这一天每位老师几轮、几个话题、停在哪 */
 export interface OverviewThread {
   thread: string;
   at: string;
@@ -413,14 +412,14 @@ export interface OverviewThread {
   /** 各轮给家长的(去掉「## 家长」)与记住了:宽屏右栏「这一天老师跟你说的」 */
   notes: string[];
   remembered: string[];
-  /** 这个话题写进 vault 的每一笔(2026-10-30,《vault重构方案》§8):家长过目、单行撤回(job / kind / n 交给撤回接口);quote = 对上了的孩子原话 */
+  /** 这个话题写进 vault 的每一笔:家长过目、单行撤回(job / kind / n 交给撤回接口);quote = 对上了的孩子原话 */
   writes: { job: string; kind: VaultWrite['kind']; n: number; text: string; quote?: string }[];
   sections: number;
   /** 老师还在写 / 末句问句停下等孩子 / 没停 */
   stoppedAt: 'writing' | 'ask' | null;
   rating: number | null;
   booked: boolean;
-  /** 换过运行时(2026-10-31):这个话题是在哪个运行时下聊的;老师现在用别的,接不上那时的对话,不记账 */
+  /** 换过运行时:这个话题是在哪个运行时下聊的;老师现在用别的,接不上那时的对话,不记账 */
   oldRuntime?: string;
   /** 按住说话连着几次没发出去(最长的一串,够 REEL_MISS_STREAK 才有) */
   misses?: number;
@@ -444,14 +443,14 @@ export interface Overview {
   date: string;
   today: string;
   tutors: OverviewTutor[];
-  /** 七天日期条:date 所在的七天,每天有话题的老师(听写、口语课页面自己从模块接口补) */
+  /** 七天日期条:date 所在的七天,每天有话题的老师(听写页面自己从模块接口补) */
   week: { date: string; tutors: string[] }[];
   /** 百炼配好了;没配清单顶上一行叫家长去「首页」配 */
   ready: boolean;
 }
 
 /**
- * 一轮写进 vault 的每一笔,给家长过目(2026-10-30):记忆的行(memoryLines)、孩子的记忆的行(childLines)、日记那段(diaryBlock)。
+ * 一轮写进 vault 的每一笔,给家长过目:记忆的行(memoryLines)、孩子的记忆的行(childLines)、日记那段(diaryBlock)。
  * quote = 那一行对上了的孩子原话(这一轮的 memoryProposals 里核对过的那条)
  */
 function vaultWrites(m: ConversationMessage): OverviewThread['writes'] {
@@ -492,7 +491,7 @@ export async function overview(ctx: AppContext, date: string): Promise<Overview>
         by.set(id, th);
       }
       if (m.lecture && !th.lecture) th.lecture = { bundle: m.lecture.bundle, title: m.lecture.title, ...(m.lecture.video ? { video: true as const } : {}), watchedMs: m.lecture.watchedMs, finished: m.lecture.finished, marks: (m.lecture.marks ?? []).length };
-      // 孩子自己说的第一句:首页开场 / 接着按钮发出去的那句(正文就是按钮上的字)不算
+      // 孩子自己说的第一句:首页按钮发出去的那句(正文就是按钮上的字)不算
       if (th.said === null && m.from === 'kid' && m.text.trim() && !(m.via && viaSendsLabel(m.via) && m.via.label === m.text)) th.said = Array.from(m.text.trim()).slice(0, 30).join('');
       const t0 = Date.parse(m.timing?.startedAt ?? '');
       const dt = m.timing?.doneMs;
@@ -682,7 +681,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     if (p === '/api/tutors' && method === 'GET') {
       return { status: 200, json: listTutors(ws.config, { kidOnly: url.searchParams.get('kid') === '1' }) };
     }
-    // ---- 加老师 / 删老师:与 cotutor add 同一条路(老师文件 2026-11-16 起没有了,只建老师的家、改 cotutor.json) ----
+    // ---- 加老师 / 删老师:与 cotutor add 同一条路(只建老师的家、改 cotutor.json) ----
     if (p === '/api/tutors' && method === 'POST') {
       if (!isObj(body) || typeof body.name !== 'string' || typeof body.display !== 'string' || !body.display.trim()) return { status: 400, json: { error: 'bad_request', message: '要 {name, display, subject?, avatar?, hidden?, description?}' } };
       const name = body.name.trim();
@@ -774,7 +773,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         const pv = DATE_RE.test(d) ? await previewOf(ws, tutor, d, url.searchParams.get('thread') ?? '') : null;
         return pv ? { status: 200, file: pv.file, contentType: 'image/jpeg', cacheControl: 'no-cache' } : { status: 404, json: { error: 'not_found' } };
       }
-      // 孩子端发一条只走实时那条连接(/api/live/<老师>/ws,src/runtime/live/turns.ts);2026-11-04 删了 HTTP 的发
+      // 孩子端发一条只走实时那条连接(/api/live/<老师>/ws,src/runtime/live/turns.ts);没有 HTTP 的发
       return { status: 405, json: { error: 'method_not_allowed' } };
     }
     // 字幕重放:实时那一轮嘴照念的声音在哪、多长、讲稿每句从哪开始(毫秒);只给实时的轮,没落过声音 404
@@ -793,7 +792,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       if (!idx?.lines?.length) return { status: 404, json: { error: 'not_found' } };
       return { status: 200, json: { audio: `/api/audio/${tutor}/${d}.${job}.mouth.wav`, ms: idx.ms, lines: idx.lines } };
     }
-    // 老师头像(R5b,2026-09-16):cotutor.json 里 avatar 是图片相对路径时(figshot 写的 avatars/<老师>.png)从这里取;
+    // 老师头像(R5b):cotutor.json 里 avatar 是图片相对路径时(figshot 写的 avatars/<老师>.png)从这里取;
     // 没写(或还是旧的出厂 emoji)的三门主科给包里的出厂头像(avatars.ts);
     // emoji 头像、越界、不是图、不存在都 404(孩子端退回显示 emoji / 首字)。no-cache:figshot 换了脸孩子端要马上见到
     const av = /^\/api\/kid\/avatar\/([a-z0-9][a-z0-9-]*)$/.exec(p);
@@ -813,7 +812,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       const d = await tianzigeData(decodeURIComponent(hz[1]));
       return d ? { status: 200, json: d, cacheControl: 'max-age=86400' } : { status: 404, json: { error: 'not_found' } };
     }
-    // 单词卡的笔顺:词里每个字母的点序列(src/chalk/glyphs 现采);写不出的词 404(页面退成字体的字)
+    // 英文单词的笔顺:词里每个字母的点序列(src/chalk/glyphs 现采);写不出的词 404(页面退成字体的字)
     const lt = /^\/api\/kid\/letters\/([^/]+)$/.exec(p);
     if (lt && method === 'GET') {
       const d = lettersData(decodeURIComponent(lt[1]));
@@ -837,7 +836,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       return { status: 200, file, contentType: IMAGE_TYPES[ext] };
     }
     // 照片页的点字:这张作业照片上认出的字词与行框(认是 runner 在后台起的,流式落在照片旁边;舞台轮询)。只认 captures/ 里在的照片
-    // 课本页(vault 里教材那篇旁边同名文件夹里的图):以板为主的拍照屏上「选课本页」;只列这位老师学科的册子
+    // 课本页(vault 里教材那篇旁边同名文件夹里的图):拍照屏上「选课本页」;只列这位老师学科的册子
     if (p === '/api/kid/textbook-pages' && method === 'GET') {
       const tutor = url.searchParams.get('tutor') ?? '';
       const t = ws.config.tutors[tutor];
@@ -898,7 +897,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       return { status: 200, file, contentType: 'audio/wav', ...(MOUTH_FILE_RE.test(name) ? { cacheControl: 'no-cache' } : {}) };
     }
 
-    // 看原文(2026-09-11):一轮拆成六站,一个接口给全;/fixture 是原文原样一份,开发者放进 tests/fixtures/board/
+    // 看原文:一轮拆成六站,一个接口给全;/fixture 是原文原样一份,开发者放进 tests/fixtures/board/
     const rawRe = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2}|today)\/raw\/(\d{4}-\d+)(\/fixture)?$/.exec(p);
     if (rawRe) {
       const [, tutor, d, job, fixture] = rawRe;
@@ -933,7 +932,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       const r = await parentReel(ctx, tutor, date, decodeURIComponent(raw));
       return r ? { status: 200, json: r } : { status: 404, json: { error: 'no_reel', message: '这个话题没有录像' } };
     }
-    // 删掉一个话题(家长板书页清单上的「删」,2026-09-22):那个话题还有轮在跑就 409;这个话题写进记忆、日记的一起撤(store.deleteThread,2026-10-05),回撤了多少
+    // 删掉一个话题(家长端「记录」清单上的「删」):那个话题还有轮在跑就 409;这个话题写进记忆、日记的一起撤(store.deleteThread),回撤了多少
     const del = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2})\/threads\/([^/]+)$/.exec(p);
     if (del && method === 'DELETE') {
       const [, tutor, date, raw] = del;
@@ -954,7 +953,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         throw err;
       }
     }
-    // 撤回话题写进 vault 的一笔(家长端「记录」的「记住了」,2026-10-30):{job, kind, n},kind = memory / child / diary;这位老师这天还有轮在跑就 409(会写同一篇)
+    // 撤回话题写进 vault 的一笔(家长端「记录」的「记住了」):{job, kind, n},kind = memory / child / diary;这位老师这天还有轮在跑就 409(会写同一篇)
     const unw = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2})\/threads\/([^/]+)\/vault\/undo$/.exec(p);
     if (unw && method === 'POST') {
       const [, tutor, date, raw] = unw;
@@ -979,7 +978,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       return { status: 202, json: { tutor, date, queued, skipped } };
     }
 
-    // 家长板书页:清单与一天的板书,都在家长命名空间下;/api/kid/* 不动
+    // 家长端「记录」:清单与一天的讲稿,都在家长命名空间下;/api/kid/* 不动
     const ov = /^\/api\/overview\/(today|\d{4}-\d{2}-\d{2})$/.exec(p);
     if (ov && method === 'GET') {
       const date = ov[1] === 'today' ? localDate(ctx.now()) : ov[1];
@@ -1006,7 +1005,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       if (tail === 'photos') return method === 'POST' ? uploadPhoto(ws, body, ctx.now()) : { status: 405, json: { error: 'method_not_allowed' } };
       if (tail === 'messages' && method === 'POST') {
         if (!isObj(body) || typeof body.text !== 'string') return { status: 400, json: { error: 'bad_request', message: '要 {text, from?, runtime?, photos?, thread?, activity?, params?}' } };
-        // 工作台 /dev 与 cotutor send 发的都算孩子的话(2026-10-05 起没有 from: parent;旧客户端带 parent 也当 kid)
+        // 工作台 /dev 与 cotutor send 发的都算孩子的话(没有 from: parent;旧客户端带 parent 也当 kid)
         const from = body.from === undefined || body.from === 'parent' ? 'kid' : body.from;
         if (!(MESSAGE_FROM as readonly unknown[]).includes(from)) return { status: 400, json: { error: 'bad_request', message: `from 只能是 ${MESSAGE_FROM.join(' / ')}` } };
         const photos = await photosOf(ws, body.photos);
@@ -1016,7 +1015,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         if (device && !device.success) return { status: 400, json: { error: 'bad_request', message: 'device 只能是 phone / tablet' } };
         const action = body.action === undefined ? undefined : body.action === 'submit' ? ('submit' as const) : null;
         if (action === null) return { status: 400, json: { error: 'bad_request', message: 'action 只能是 submit' } };
-        // 新话题从一个 activity 开始(同 cotutor send --activity;2026-11-16 起没有自由话题):{activity, params?: '名=值;名=值'}
+        // 新话题从一个 activity 开始(同 cotutor send --activity;没有自由话题):{activity, params?: '名=值;名=值'}
         const activity = typeof body.activity === 'string' && body.activity ? await activityRunFor(ws.root, tutor, body.activity, typeof body.params === 'string' ? body.params : '') : undefined;
         const text = body.text.trim() || activity?.name || '';
         if (!text && !action && !photos?.length) return { status: 400, json: { error: 'bad_request', message: '要说点什么' } };
@@ -1030,7 +1029,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
           thread: typeof body.thread === 'string' ? body.thread : undefined,
           photos,
           device: device?.data,
-          // 孩子的话照实时写(同孩子端、同 replay:上下文包带 live:、不补提问卡、讲稿不截);嘴不在,接住与打断不带。系统发的不算(2026-11-04)
+          // 孩子的话照实时写(同孩子端、同 replay:上下文包带 live:、讲稿不截);嘴不在,接住与打断不带。系统发的不算
           ...(from === 'kid' ? { live: {} } : {}),
         });
         return { status: 202, json: { tutor, date: started.date, job: started.job, thread: started.thread, runtime: started.plan.runtime, resume: started.plan.resume } };

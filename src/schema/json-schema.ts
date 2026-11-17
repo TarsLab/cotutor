@@ -1,6 +1,6 @@
 /**
  * cotutor.json 的 JSON Schema:从 zod 契约现生成(类型即文档,不手写第二份)。
- * init / upgrade 把它写到 workspace 的 .cotutor/cotutor.schema.json,cotutor.json 首行 "$schema" 指过去,
+ * init / refresh 把它写到 workspace 的 .cotutor/cotutor.schema.json,cotutor.json 首行 "$schema" 指过去,
  * 编辑器(VS Code、Obsidian 的 JSON 插件……)就有补全、悬停说明与红线,家长不必背字段。
  */
 import { z } from 'zod';

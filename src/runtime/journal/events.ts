@@ -52,7 +52,7 @@ export function laneFilter(spec: string | undefined): (e: RunEvent) => boolean {
   return set.size ? (e) => set.has(e.lane) : () => true;
 }
 
-/** 课里有卡那时候的事件(卡闭合、一拍就绪,2026-11-17 删了):老的 events.jsonl 里读到就跳过 */
+/** 课里有卡那时候的事件(卡闭合、一拍就绪):老的 events.jsonl 里读到就跳过 */
 const RETIRED_KINDS = new Set(['main:card', 'ready:beat']);
 
 /** events.jsonl → 事件(坏行跳过,不抛);按 t 排(嘴这一道是事后补的,t 比文件里前面的还早) */

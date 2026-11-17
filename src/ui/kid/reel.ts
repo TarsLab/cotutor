@@ -1,7 +1,6 @@
 /**
  * 录像:一个话题按时间排好的一条轨道——每一刻出来了哪几节、嘴在念哪句、一节课的样子、该出哪些旁注。
  * 实时的轮照通话放(<日期>.live/ 的 reel.json + wav:按下、松手、嘴每句开始放的时刻都记着);不是实时的轮(家长端试发、cotutor send)写完那一刻整节铺上、不念。
- * 2026-10-22 之前还有按每句 mp3 时长推算着「念」、拿孩子端的播放位置校正、原声与 voice-diag 补老话题的那一套,跟着讲稿配音一起删了。
  *
  * 两处共用,和 board/presentation.ts 一个做法:服务端 buildReel 算好下发;家长端页面把这份剥掉类型内联,拖进度条时现算 reelFrameAt / reelClock。
  * 所以**只准从 board/presentation.ts 取运行时的东西**(内联时 import 行删掉,页面里本来就有那些函数)、不碰 DOM、不用 enum;顶层名字都带 reel 前缀,免得和页面撞。
@@ -27,7 +26,7 @@ export type ReelHoldResult = 'sent' | 'unclear' | 'cancel';
 
 /**
  * 实录(第二期):孩子端记下的一条,落 <日期>.<job>.play.jsonl。at 是服务端的墙钟(路由按发来时两边的钟差校过)。
- * visible = 页面切到后台 / 回来(2026-11-17 以前还有卡的弹窗开关 stage、卡的一次存 card、翻板书 scroll:课里没有卡了,读到就丢)。
+ * visible = 页面切到后台 / 回来(以前的记录里还有 stage、card、scroll:读到就丢)。
  * 改版(孩子看到什么记什么):view = 孩子屏幕的 CSS 尺寸、键盘高、页面版本;
  * hold = 按住说话的一步(down 按下 / audio 话筒开了 / slide 上滑取消 on 或滑回来 / up 松手,cancel = 不是孩子松的手、是系统抢走了触摸(pointercancel,iPadOS 底部手势),照旧当松手 / end 收尾,r 见 ReelHoldResult,lv = 按下起每 100 毫秒一位的音量 0–9);
  * type = 打字(focus 点进输入框 / v 值变了 / send 发了 / blur 收起);ps = 发照片屏(open / tool:crop 裁剪 · pen 圈画 · rot 转 / send / cancel);
@@ -636,7 +635,7 @@ export function reelFrameAt(reel: Reel, t: number): ReelFrame {
   for (const x of reel.lessons ?? []) { if (x.at > t) break; lesson = x.l; }
   if (!lesson && reel.lessons?.length) lesson = reel.lessons[0].l;
   const lecture = reelLectureAt(reel.lectures ?? [], t);
-  // 在看小课堂:页上是那堂课(2026-11-17 起小课堂是一节课里的一页;第一遍看的时候第一条还没发,孩子端还没记一节课的样子,照这堂课铺一页)
+  // 在看小课堂:页上是那堂课(第一遍看的时候第一条还没发,孩子端还没记一节课的样子,照这堂课铺一页)
   if (lecture) lesson = lectureLesson(lesson, lecture);
   return { sections, saying, clip, last, notes, wait: w ? { job: w.job, ms: t - w.from } : null, gap, asking, lesson, away, lecture, hold, unclear, typing, photoScreen, view, miss };
 }

@@ -32,7 +32,7 @@ export function kidQuestions(messages: readonly Pick<ConversationMessage, 'job' 
   const ths = threads(messages);
   const out: string[] = [];
   messages.forEach((m, i) => {
-    // 首页的开场 / 接着按钮、方砖发的是按钮上的字,不是孩子说的
+    // 首页的按钮、方砖发的是按钮上的字,不是孩子说的
     if (ths[i] !== thread || m.from !== 'kid' || m.action || (m.via && viaSendsLabel(m.via))) return;
     const text = m.text.replace(/\s+/g, ' ').trim();
     if (text && text !== '继续') out.push(text);
@@ -44,7 +44,7 @@ export function kidQuestions(messages: readonly Pick<ConversationMessage, 'job' 
 const FILLER = /[嗯呃啊哦噢喔唉哎诶欸额呀吧呢嘛哈]|(?:语文|数学|英语)?老师/g;
 
 /**
- * 老师没挑「孩子问」(或挑的都对不上)时,从孩子的话里筛(2026-10-30):去掉标点、语气词与称呼后不到四个字的、和前面重复的不要,最多 max 句。
+ * 老师没挑「孩子问」(或挑的都对不上)时,从孩子的话里筛:去掉标点、语气词与称呼后不到四个字的、和前面重复的不要,最多 max 句。
  * 语音转写里「嗯,老师,呃」「语文老师。」这种碎句不进日记;孩子的原话全在 workspace 的录像里。
  */
 export function tidyQuestions(said: readonly string[], max = 5): string[] {
@@ -109,7 +109,7 @@ export function renderDiaryBlock(t: DiaryTopic): string | null {
   return `${lines.join('\n')}\n`;
 }
 
-/** 从日记里摘掉一段(删话题时,2026-10-05):按记账时追加的原文找;家长改过那段就找不到,返回 null,不动 */
+/** 从日记里摘掉一段(删话题时):按记账时追加的原文找;家长改过那段就找不到,返回 null,不动 */
 export function removeDiaryBlock(existing: string, block: string): string | null {
   const want = block.trim();
   const i = existing.indexOf(want);

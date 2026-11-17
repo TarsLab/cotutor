@@ -1,5 +1,5 @@
 /**
- * cotutor chalk:做小课堂的课包(2026-10-31 drawtell 并进来,原来的 drawtell CLI 只留做课包这五样;workspace、课包目录、音色都照 cotutor 的)。
+ * cotutor chalk:做小课堂的课包(workspace、课包目录、音色都照 cotutor 的)。
  *   check <scene.ts|目录> [--no-types]       类型(内嵌 tsc)→ 求值 → 契约 + 笔顺 + 布局;有错 exit 1
  *   build <scene.ts|目录> [--out <dir>]      先 check,再出课包目录(scene.json + manifest.json),缺省 <workspace>/bundles/<id>/
  *   bake  <scene.ts|课包 id> [--bundles <dir>]                  画面烤成 bake.json(本机 Chrome 里跑一次 excalidraw)

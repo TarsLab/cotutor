@@ -1,5 +1,5 @@
 /**
- * 烤好的课包画面(bake.json,drawtell 重新设计的第 4 步):excalidraw 在 build 之后、在浏览器里只跑一次(cotutor chalk bake),
+ * 烤好的课包画面(bake.json):excalidraw 在 build 之后、在浏览器里只跑一次(cotutor chalk bake),
  * 把每个元素的静态 SVG 节点、每条路径的长度、笔尖走的轨迹、内嵌字体存下来;播放时不再有 excalidraw 与 SMIL,
  * 某一刻的画面 = 每个元素画了多少(frameAt 的 progress)→ 描边画到哪(stroke-dashoffset)、字露到哪(裁剪框)。
  * 时长不进 bake:配音、拉伸只改时钟,画面变了才要重烤(source.hash 对不上)。
@@ -53,7 +53,7 @@ export interface BakedBoard {
 
 /**
  * bake.json 的格式版本;画法变了就加一,旧的一律当没烤(应用后台重烤、snap 顺手重烤)。
- * 2(2026-10-07):手绘一笔的两遍拆成两条 path、记 pass,一起画——1 的两遍先后画,笔画完一遍跳回起点再画,看着像抖
+ * 2:手绘一笔的两遍拆成两条 path、记 pass,一起画——1 的两遍先后画,笔画完一遍跳回起点再画,看着像抖
  */
 export const BAKE_VERSION = 2;
 

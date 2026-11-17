@@ -1,7 +1,7 @@
 /**
  * cotutor-home 技能的生成部分:references/ 整个由这里现生成,scripts/gen-skills.ts 写进包根 skills/cotutor-home/,
- * tests/skills.test.ts 断言入库的和生成的一致。首页语法.md 从首页能用的卡(老师卡、听写卡)的 card.md 拼,
- * <kind>.md 是首页专属卡的协议全文,命令.md 从 CLI 用法文本取。SKILL.md 本体(流程、铁律)是手写的。
+ * tests/skills.test.ts 断言入库的和生成的一致。首页语法.md 从首页的牌(老师牌、听写牌)的 card.md 拼,
+ * <kind>.md 是这种牌的协议全文,命令.md 从 CLI 用法文本取。SKILL.md 本体(流程、铁律)是手写的。
  */
 import { commandsReference } from '../cli/usage.ts';
 import { BUTTON_LABEL_MAX, CARD_KINDS, TUTOR_BUTTONS_MAX } from '../../board/cards/index.ts';
@@ -12,7 +12,7 @@ export const HOME_SKILL = 'cotutor-home';
 const EXPECT_RE = /^\s*<!--\s*expect\b.*?-->\s*\n?/gm;
 const HOME_COMMANDS = ['home', 'show', 'rate', 'bookkeep'];
 
-/** 首页能用的种类:老师卡、听写卡(2026-11-16 起只有这两种) */
+/** 首页能用的种类:老师牌、听写牌 */
 function homeOnly(): string[] {
   return CARD_KINDS.map((k) => k.name);
 }

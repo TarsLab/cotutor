@@ -1,7 +1,7 @@
 /**
  * 试听一个音色(家长端「样子与声音」):
  * 嘴(realtime)真连一次照念这一句(几分钱),存在 .cotutor/live-preview/,同一句同一音色以后直接给文件;
- * 卡的配音合成一句,在配音缓存里(.cotutor/tts/),之后直接给文件。失败回 JSON 说原因(页面拿 message 显示)。
+ * 点读的声音合成一句,在配音缓存里(.cotutor/tts/),之后直接给文件。失败回 JSON 说原因(页面拿 message 显示)。
  */
 import { createHash } from 'node:crypto';
 import { mkdir, stat, writeFile } from 'node:fs/promises';

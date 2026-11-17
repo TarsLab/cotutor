@@ -1,8 +1,8 @@
 /**
  * 千问的两套账:千问 AI 平台的 Token Plan(`sk-sp-`,只认 token-plan 域名,按订阅 Credits 抵)
  * 与百炼按量(`sk-` / `sk-ws-`,dashscope 域名)。两把 key 互不通用。
- * 一条线调哪个模型:Token Plan 有这个模型、本机又有它的 key 就走 Token Plan,否则走按量(2026-10-13 定)。key 只进请求头。
- * key 只放机器级的 ~/.config/cotutor/(2026-11-02 起,所有命令读同一处;环境变量、本机 qwen、voxtell 的配置都不看):
+ * 一条线调哪个模型:Token Plan 有这个模型、本机又有它的 key 就走 Token Plan,否则走按量。key 只进请求头。
+ * key 只放机器级的 ~/.config/cotutor/(所有命令读同一处;环境变量、别的工具的配置都不看):
  * - bailian.json:百炼按量 key + 业务空间 id,家长端「首页」写(src/app/machine/bailian.ts),每台都要有;
  * - token-plan.json:Token Plan 的 key,只有开发机有,手写;文件在就是开关。
  */
@@ -130,7 +130,7 @@ export const chatUrl = (host: string): string => `https://${host}/compatible-mod
 export const compatibleBase = (host: string): string => `https://${host}/compatible-mode/v1`;
 
 /**
- * 兼容接口(老师的脑,src/brain/api.ts)这个模型发到哪:Token Plan 有它、本机有 token-plan.json 就走 Token Plan(2026-11-02 起,同配音、画图);
+ * 兼容接口(老师的脑,src/brain/api.ts)这个模型发到哪:Token Plan 有它、本机有 token-plan.json 就走 Token Plan(同配音);
  * 否则百炼按量,知道业务空间 id 走它的域名,不知道走公网域名
  */
 export function compatibleLine(model: string, env: NodeJS.ProcessEnv = process.env): { baseURL: string; key: string; plan: boolean } | null {

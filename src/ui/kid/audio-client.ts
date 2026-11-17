@@ -1,5 +1,5 @@
 /**
- * 孩子端的声音(口语课与实时老师共用,插进各页的内联脚本):getUserMedia → AudioWorklet 降到 16k PCM16,100 毫秒一块交给 onChunk(静音时不交);
+ * 孩子端的声音(插进页面的内联脚本):getUserMedia → AudioWorklet 降到 16k PCM16,100 毫秒一块交给 onChunk(静音时不交);
  * 下来的 24k PCM16 一块块排进 AudioContext 放(上一块放完或现在 + 60 毫秒,取晚的;录像的混音 src/runtime/journal/mix.ts 照这个排法)。
  * makeAudio() 回一个对象:open()(要在一次点击里调,Safari 才给起 AudioContext 与麦)、play(ArrayBuffer)、playing()、flush()、close(),
  * 回调 onChunk(ArrayBuffer) / onLevel(0–1),muted 缺省 true(连上了再放开)。没有 AudioWorklet 的退到 ScriptProcessor。

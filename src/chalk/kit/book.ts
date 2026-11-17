@@ -1,12 +1,12 @@
 /**
- * 课本:vault 里的教材 PDF 做页(2026-11-14《语文预习:PDF 课本与镜头交互》)。一课的几页竖着排成一长条,屏幕是看它的一扇窗:
+ * 课本:vault 里的教材 PDF 做页。一课的几页竖着排成一长条,屏幕是看它的一扇窗:
  * 老师说看哪里(`[[看 第 6–7 段]]`、`[[看 日积月累]]`、`[[看 小鸟回答说]]`),应用照课本的索引算出那一块在哪、窗移过去;孩子用手指拖、点两下放大,Apple Pencil 写画。
  * 字的位置来自 PDF 的文字层(src/memory/textbook-index.ts),不认图:圈字、遮拼音、盖字、点字都照它找,不用老师估坐标。
  *
  * 场景坐标:一页的宽是 1000,高 = 1000 × 页的高宽比;几页从上往下排。每页底下没有字的那一条裁掉(bookCut:教育平台盖的「仅供个人学习使用」就印在那里),
  * 页和页直接连着(没裁的页之间空 BOOK_GAP)。老师的记号、孩子的笔画、窗都在这套坐标里,所以窗怎么动,孩子画在第 55 页上的那一笔都还在那里。
  * 这个文件是纯函数:索引(BookPage)由服务端读好给进来(落到页上之前找框、上下文包)或舞台拉来(点字)。
- * 2026-11-16 起老师不再写 ```课本 卡(讲稿里的动作,src/board/lesson-fit.ts);这里只剩课本的几何。
+ * 老师的动作落到页上在 src/board/lesson-fit.ts;这里只有课本的几何。
  */
 
 import { MATH_COLUMNS, bodySize, mathHeading, type BookLayout, type BookLesson, type BookLine, type BookPage } from '../../schema/index.ts';
@@ -388,12 +388,12 @@ export function bookTarget(pages: readonly BookPage[], sheets: readonly BookShee
   return { label: q.length > 12 ? `${Array.from(q).slice(0, 12).join('')}…` : q, box: refsBox(pages, sheets, hit.refs)! };
 }
 
-/** 能弹出来的:一到四个汉字(田字格),或一个英文单词(单词卡,最多 20 个字母) */
+/** 能弹出来的:一到四个汉字(田字格),或一个英文单词(四线三格,最多 20 个字母) */
 const HANZI = /^[\u3400-\u9fff]+$/;
 const EN_WORD = /^[A-Za-z][A-Za-z'-]{0,19}$/;
 export const PICK_CHARS = 4;
 export const pickable = (text: string): boolean => (HANZI.test(text) && Array.from(text).length <= PICK_CHARS) || EN_WORD.test(text);
-/** 这一项是英文单词(浮层是单词卡,不是田字格) */
+/** 这一项是英文单词(浮层是四线三格,不是田字格) */
 export const pickEnglish = (text: string): boolean => EN_WORD.test(text);
 
 /** 孩子点到的是哪个字(场景坐标的一点):落在一行里(上下各宽出两成)、离哪个字最近;英文是那个字母所在的词;别的(数字、标点)= null */

@@ -115,7 +115,7 @@ export function dictationDeps(ctx: AppContext): DictationDeps {
 
 /**
  * 认词的要求:老师家里的听写.md(agents/<老师>/听写.md,不是 activity)里「认字收到什么」那段;头上 `lang: en` 的是英文单词听写
- * (2026-11-17 以前在 activities/ 下、头上写 page: dictation-en,refresh 挪过来,改过的头照旧认)。按老师排第一份;没有 → null(照出厂的要求)
+ * (以前在 activities/ 下、头上写 page: dictation-en,refresh 挪过来,改过的头照旧认)。按老师排第一份;没有 → null(照出厂的要求)
  */
 export async function dictationTemplate(root: string, lang: DictationLang): Promise<string | null> {
   for (const r of await listDictations(join(root, 'agents'))) {

@@ -156,7 +156,7 @@ export const VOICE_JS = `
     vbRoot.style.setProperty('--vb-halo-op', String(VOICE_TUNE.talkHaloOpacity));
     vbRoot.style.setProperty('--vb-halo-ms', VOICE_TUNE.talkHaloBreathMs + 'ms');
   } catch (e) {}
-  /** 头像的动作:el 是装着 .av 的那一格(或 .av 本身);face 是 voiceView 的 face(底部字幕行那颗「开口一张一合」的 mouth 10-28 跟着删了) */
+  /** 头像的动作:el 是装着 .av 的那一格(或 .av 本身);face 是 voiceView 的 face */
   function voiceFace(el, face) {
     if (!el) return;
     for (var i = 0; i < VOICE_FACES.length; i++) el.classList.remove('vb-' + VOICE_FACES[i]);

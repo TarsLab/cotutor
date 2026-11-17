@@ -1,6 +1,6 @@
 /**
  * 实时老师的孩子端:谁出声、谁停、谁让谁(见 tests/live-player.test.ts)。纯函数,页面只 dispatch、照单执行。
- * 实时时孩子端不念讲稿(嘴照念,声音从 WebSocket 下来,src/runtime/live/call.ts);出声的只有嘴、页上放的小课堂那一段与重放(卡的声音 2026-11-17 跟着卡删了)。
+ * 实时时孩子端不念讲稿(嘴照念,声音从 WebSocket 下来,src/runtime/live/call.ts);出声的只有嘴、页上放的小课堂那一段与重放。
  * 板上的节(铺、写完、撤掉)是另一个状态机 board/presentation.ts 的 step;这里只管声音。
  * 改规则的顺序:先改 tests/live-player.test.ts 的预期 → 再改这里。
  * 一直听(全双工):孩子不用按,服务端的 VAD 判开口 / 说完;推不推孩子的声音是状态的函数(liveGate),一变就告诉服务端 gate。
@@ -56,7 +56,7 @@ export type LiveEvent =
 /**
  * 要做的事,按顺序执行。hold / release / hush / send = 告诉服务端(send 的 body 页面带上);enqueue = 放刚到的这块嘴的声音(没有就丢掉);
  * flush = 清掉孩子端没放的嘴的声音;openLecture / stopLecture = 铺满放 / 停下小课堂那一段(舞台停在那一帧);
- * staged = 告诉服务端那一段放完了(后面的讲稿接着交给嘴);retry = 连不上、断了:回到「正在叫老师」,过一会儿再连(不回板书);render = 重画字幕与头像;
+ * staged = 告诉服务端那一段放完了(后面的讲稿接着交给嘴);retry = 连不上、断了:回到「正在叫老师」,过一会儿再连;render = 重画字幕与头像;
  * 一直听:listen = 告诉服务端换了模式;gate = 告诉服务端推 / 不推了(on);duck / unduck = 嘴的声音压到三成 / 恢复;
  * 重放:playReplay / stopReplay = 从这一轮第一句放 / 停(页面取服务端留的那份声音)
  */
@@ -135,7 +135,7 @@ function liveTransition(model: LiveModel, ev: LiveEvent): { model: LiveModel; ef
       break;
     case 'drained':
       if (m.status !== 'mouth') break;
-      // [[play]]:那句念完了铺满放那一段;放不了就告诉服务端接着交。[[请 说]]:安静,轮到他说
+      // 放小课堂一段的那句:念完了放那一段;放不了就告诉服务端接着交。[[请 说]]:安静,轮到他说
       if (ev.play === 'open') { fx.push({ kind: 'openLecture' }); to('lecture'); }
       else { if (ev.play === 'skip') fx.push({ kind: 'staged' }); to('quiet', ev.echo ? { turn: true } : {}); }
       fx.push({ kind: 'render' });

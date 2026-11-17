@@ -5,7 +5,7 @@
  *  - subject:一科一学期一个,就是这位老师的**入口文件**,原文整篇进上下文包
  *  - textbook:可以没有、可以多本;只给路径,老师要用自己 Read
  *  - memory:一个 agent 一篇(`agent: <name>`),老师在回复里写「## 记忆」、应用追加;家长可读可改,原文整篇进上下文包。
- *    `agent: all` 那篇是孩子的记忆(2026-10-30):关于孩子本人、换一科也成立的,所有有脸的老师共用,老师写 `孩子:` 开头的行进这里
+ *    `agent: all` 那篇是孩子的记忆:关于孩子本人、换一科也成立的,所有老师共用,老师写 `孩子:` 开头的行进这里
  * 程序读的键用英文(cotutor / subject / semester / school_start / agent),中文键是给人看的描述,这里不读。
  */
 
@@ -112,7 +112,7 @@ export interface VaultPick {
   extraMemories: string[];
   /** 孩子的记忆(`agent: all`);还没有 → null */
   child: VaultNote | null;
-  /** activity 话题(agent 是 <老师>/<activity>)另带这位老师自己那篇记忆(agent: <老师>,2026-11-16 老师文件并进 activity 以后照带);不是 activity 话题是 null */
+  /** activity 话题(agent 是 <老师>/<activity>)另带这位老师自己那篇记忆(agent: <老师>,以前普通话题记的,照带);不是 activity 话题是 null */
   teacherMemory: VaultNote | null;
   /** 参考资料的路径:这科这学期的教材 + 档案与入口文件里的 [[链接]](去重,不含它俩自己) */
   refs: string[];
@@ -190,7 +190,7 @@ ${display}自己记下的,每个话题开头会整篇读到。你可以随便改
 `;
 }
 
-/** 孩子的记忆(2026-10-30):`agent: all` 的那篇,缺省在 记忆/孩子.md;满了(列表行到 CHILD_MEMORY_CAP 条)新的不再进,提醒家长删 */
+/** 孩子的记忆:`agent: all` 的那篇,缺省在 记忆/孩子.md;满了(列表行到 CHILD_MEMORY_CAP 条)新的不再进,提醒家长删 */
 export const CHILD_MEMORY_AGENT = 'all';
 export const CHILD_MEMORY_PATH = '记忆/孩子.md';
 export const CHILD_MEMORY_CAP = 20;
@@ -229,9 +229,9 @@ export function appendMemory(existing: string, items: readonly string[], date: s
 }
 
 /**
- * 「## 记忆」段的一条(2026-09-18):缺省是新增;`改:原话 → 新的` 改一行;`删:原话` 删一行。
+ * 「## 记忆」段的一条:缺省是新增;`改:原话 → 新的` 改一行;`删:原话` 删一行。
  * 冒号全角半角都认,箭头认 → 与 ->。原话或新的里也有箭头(「宇宙→太空员」、骨架「数一数 → 分一分」)时切法不止一种:
- * from / to 是从第一个箭头切的,alt 是其余箭头的切法(从左到右),applyMemoryOps 挑原话对得上的那种(2026-10-31)。
+ * from / to 是从第一个箭头切的,alt 是其余箭头的切法(从左到右),applyMemoryOps 挑原话对得上的那种。
  */
 export type MemoryOp = { op: 'add'; text: string } | { op: 'change'; from: string; to: string; alt?: { from: string; to: string }[] } | { op: 'delete'; from: string };
 
@@ -257,7 +257,7 @@ export function memoryLineText(l: MemoryLine): string {
 
 /**
  * 按原话找一行:正文(frontmatter 之后)里原话一字不差的那行;没有就找唯一一行包含它的(原话至少 4 个字);都不是 → -1。
- * 不分老师写的、家长写的(2026-09-18 定:机器一律可以改)。fuzzy = false 只认一字不差的(这轮里家长改过文件,2026-10-30)。
+ * 不分老师写的、家长写的(2026-09-18 定:机器一律可以改)。fuzzy = false 只认一字不差的(这轮里家长改过文件)。
  */
 export function findMemoryLine(lines: readonly string[], from: string, bodyStart: number, fuzzy = true): number {
   const want = bareLine(from);
@@ -337,7 +337,7 @@ export function applyMemoryOps(existing: string, ops: readonly MemoryOp[], date:
 }
 
 /**
- * 撤销一串改动(删话题时,2026-10-05):倒着来——改了的换回原来那行,新增的删掉,删了的接回末尾(原来的位置不记)。
+ * 撤销一串改动(删话题时):倒着来——改了的换回原来那行,新增的删掉,删了的接回末尾(原来的位置不记)。
  * 按整行原文找;家长或整理那轮后来又改过那行就找不到,进 misses,不动。
  */
 export function undoMemoryLines(existing: string, edits: readonly MemoryLine[]): { text: string; undone: number; misses: string[] } {
@@ -370,7 +370,7 @@ export function memoryCount(text: string): number {
 }
 
 /**
- * 记账后整理记忆那轮的消息正文(2026-09-18):新会话、from: system;记忆原文在上下文包的 <vault-note role="memory">。
+ * 记账后整理记忆那轮的消息正文:新会话、from: system;记忆原文在上下文包的 <vault-note role="memory">。
  * 回的「## 记忆」段不受每轮条数上限,应用照单落盘、不问家长(家长在 Obsidian 里兜底)。
  */
 export function tidyMemoryPrompt(opts: { date: string; count: number; cap: number; diaryFile: string }): string {
@@ -390,7 +390,7 @@ export function tidyMemoryPrompt(opts: { date: string; count: number; cap: numbe
 
 /**
  * 按 entryChars 截一篇笔记带进上下文包。档案、入口文件留开头(家长写在前面的最要紧);
- * 记忆留末尾——应用往末尾追加,最新的在后面,截开头丢的是旧的(2026-09-18 之前留的是开头,越记越看不到新的)。
+ * 记忆留末尾——应用往末尾追加,最新的在后面,截开头丢的是旧的(留开头的话越记越看不到新的)。
  * 末尾那头从一行的开头起,不截半行。
  */
 export function clipNote(text: string, limit: number, keep: 'head' | 'tail'): { text: string; cut: boolean } {

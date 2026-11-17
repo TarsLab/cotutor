@@ -1,7 +1,7 @@
 /**
  * 场景契约的运行时校验(zod)。
  * 类型真相在 ./types.ts,本 schema 与之对齐,文件底部用赋值断言在编译期锁住。
- * 校验错误面向 agent:每条都要能指出改哪里(README「Design principles」)。
+ * 校验错误面向 agent:每条都要能指出改哪里。
  */
 
 import { z } from 'zod';

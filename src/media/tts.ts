@@ -1,15 +1,15 @@
 /**
- * 配音:卡自己的声音(点读段、单词、听写念的词)与音色页的试听;讲稿不配音,由实时的嘴照念。
- * 百炼 Qwen-Audio-TTS 的非实时合成(2026-10-31 从 voxtell 并进来,不再起子进程):POST 回一个 24 小时有效的音频地址,马上下载。
- * 走哪条线按模型定(src/shared/qianwen.ts):Token Plan 有这个模型就走它;否则百炼按量,端点是业务空间的域名(voxtell 2026-08-07 实测,公网域名不认)。
+ * 配音:听写念的词、课包配音与家长端的试听;讲稿不配音,由实时的嘴照念。
+ * 百炼 Qwen-Audio-TTS 的非实时合成:POST 回一个 24 小时有效的音频地址,马上下载。
+ * 走哪条线按模型定(src/shared/qianwen.ts):Token Plan 有这个模型就走它;否则百炼按量,端点是业务空间的域名(2026-08-07 实测,公网域名不认)。
  * 模型看音色 id 的前缀(qwen-audio-3.0-tts-plus-xxx / -flash-xxx,flash 的音色给 plus 回 400);没前缀的老短名走 TTS_MODEL。
  * 缓存:按「模型 + 音色 + 字 + 格式(+ 语气)」寻址,放在调用方给的目录(workspace 的 .cotutor/tts/);同一句同一个音色合成过就直接给那个文件,不再花钱。
- * 语气(instruction)只有课包配音用(cotutor chalk dub --instruction),卡的配音不带。
+ * 语气(instruction)只有课包配音用(cotutor chalk dub --instruction),别的不带。
  * 失败不抛、不响:结果带原因(不含 key),调用方写进 err.log 或回给家长端;孩子端点了不出声。
  * 测试与探针:COTUTOR_TTS_ENDPOINT 指到假百炼(tests/_fake-tts.ts)。
  */
 import { createHash } from 'node:crypto';
-import { appendFile, copyFile, mkdir, rename, stat, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, rename, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { bailianWorkspaceId, qianwenKeys, qianwenLine, ttsUrl, workspaceHost } from '../shared/qianwen.ts';
 
@@ -145,51 +145,4 @@ async function fetchAudio(model: string, say: Say, file: string, opts: TtsOption
     }
   }
   return fail(last);
-}
-
-/**
- * 一轮的配音队列:卡自己的声音(点读段、单词),三个并行,先进先出。
- * 每个文件一项;失败写 err.log、结果 null。
- */
-export class DubQueue {
-  private readonly queue: (() => Promise<void>)[] = [];
-  private running = 0;
-  private readonly voice: string;
-  private readonly err: string;
-  private readonly opts: TtsOptions;
-  /** 每条的进展(排队 / 完成 / 失败)报给谁:runner 把它变成 tts 道的事件 */
-  report?: (e: { kind: 'queued' | 'done' | 'failed'; label: string; ms: number; file?: string; error?: string }) => void;
-  constructor(voice: string, err: string, opts: TtsOptions) {
-    this.voice = voice;
-    this.err = err;
-    this.opts = opts;
-  }
-
-  /** 合成 text 到 out;resolve 成文件名(最后一段)或 null;label 是 err.log 里的称呼 */
-  add(out: string, text: string, label: string): Promise<string | null> {
-    return new Promise((resolve) => {
-      this.report?.({ kind: 'queued', label, ms: 0 });
-      const t0 = Date.now();
-      this.queue.push(async () => {
-        const r = await synthesize({ text, voice: this.voice, out }, this.opts);
-        if (r.error) await appendFile(this.err, `cotutor tts: ${label}没合成(${r.error});这段不出声\n`).catch(() => {});
-        const file = out.slice(out.lastIndexOf('/') + 1);
-        if (r.error) this.report?.({ kind: 'failed', label, ms: Date.now() - t0, error: r.error });
-        else this.report?.({ kind: 'done', label, ms: Date.now() - t0, file });
-        resolve(r.error ? null : file);
-      });
-      this.pump();
-    });
-  }
-
-  private pump(): void {
-    while (this.running < 3 && this.queue.length) {
-      const job = this.queue.shift()!;
-      this.running++;
-      void job().finally(() => {
-        this.running--;
-        this.pump();
-      });
-    }
-  }
 }

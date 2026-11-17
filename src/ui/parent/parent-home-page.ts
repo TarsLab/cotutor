@@ -575,7 +575,7 @@ ${pageDomJs(3200)}
     $('#body').replaceChildren(h('div', {}, blTop ? blEl : null, wide ? qrEl : null, pane, extras, self, blTop ? null : blEl));
   };
 
-  // ---- 改一个按钮的表单(按钮由编程助手排,这里只改字、讲法、留多久;开场按钮 2026-11-16 删了):窄屏整屏盖上,宽屏在右栏;预览里那颗跟着变 ----
+  // ---- 改一个按钮的表单(按钮由编程助手排,这里只改字、讲法、留多久):窄屏整屏盖上,宽屏在右栏;预览里那颗跟着变 ----
   const buttonForm = (t, k, done) => {
     const b = Object.assign({}, t.buttons[k]);
     const label = h('input', { class: 'fld', id: 'b-label', maxlength: '40', placeholder: '孩子的口吻,如「我要预习小蝌蚪找妈妈」' }); label.value = b.label;

@@ -4,7 +4,7 @@
  * (老师的 cwd 是 <ws>/agents/<name>/,从那里跑 doctor 也要找得到根)→ 用户配置
  * ~/.config/cotutor/config.json 的 workspace → ~/cotutor/ 下**唯一**的一个孩子目录 → 都没有就报错附修复指南。
  * 没有"cwd 兜底":cotutor.json 是必需的政策文件(老师表在里面),没有它什么都跑不了。
- * 配置"在但解析不了"响亮报错,不静默走缺省(沿 drawtell 的教训)。
+ * 配置"在但解析不了"响亮报错,不静默走缺省。
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { readFile, writeFile, rename } from 'node:fs/promises';
@@ -48,7 +48,7 @@ export function isInside(p: string, dir: string): boolean {
 }
 
 /**
- * vault 与 workspace 分开:谁也不在谁里面(2026-11-09)。vault 是家长的长期记忆,workspace 是机器的运行记录;
+ * vault 与 workspace 分开:谁也不在谁里面。vault 是家长的长期记忆,workspace 是机器的运行记录;
  * 混在一起时 Obsidian 里满是 agents/、conversations/,扫 vault 要走遍对话与照片,备份恢复把家长的笔记跟着 workspace 一起盖掉。
  * 旧版 init 不写 paths.vault(缺省 `.`,vault 就是 workspace 根),那样的照旧读得进来,doctor 的 vault.separate 提一句。
  */
@@ -245,7 +245,7 @@ export function workspaceReport(ws: Workspace): Record<string, unknown> {
   });
 }
 
-// ---- cotutor.json 的补丁写回与热重载(从 runtime/journal/store.ts 搬来,2026-10-29) ----
+// ---- cotutor.json 的补丁写回与热重载 ----
 
 /** PATCH 允许改的顶层键(老师团页与设置页);runtimes 只让改 default(用哪个运行时);kid / version / 运行时本身走编辑器 */
 export const CONFIG_PATCH_KEYS = ['title', 'policyDefaults', 'tutors', 'runtimes', 'paths', 'server', 'vault', 'live'] as const;

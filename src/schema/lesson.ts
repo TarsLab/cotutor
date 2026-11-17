@@ -1,5 +1,5 @@
 /**
- * 一节课(2026-11-16《多模态教学harness-底层设计》):孩子从首页点进一个 activity 到回首页。一节课铺着页,老师一边说一边在页上做动作,孩子在页上写、点、说。
+ * 一节课:孩子从首页点进一个 activity 到回首页。一节课铺着页,老师一边说一边在页上做动作,孩子在页上写、点、说。
  * 这里是契约:讲稿里的动作(老师写在句子后面的 `[[看 第 3 题]]`)、动作落到页上以后的样子(LessonAct)、一节课的状态(Lesson)和改它的事(LessonEvent)。
  * 一节课的状态落在 conversations/<老师>/<date>.<话题>.lesson.json(src/runtime/journal/lesson-store.ts),旁边还是板的日志(board-log)。
  * 词:「动作」是老师对页做的事;解析在 src/board/acts.ts,落到页上(找到框)在 src/board/lesson-fit.ts,一节课的状态怎么变在 src/board/lesson.ts。
@@ -67,11 +67,11 @@ export const WHITE_PAGE = '白纸';
 export const LECTURE_PAGE = '小课堂';
 
 /**
- * 一页铺的是什么(2026-11-16 阶段 3 起不只课本):
+ * 一页铺的是什么:
  *  book  课本的一课:几页 PDF 竖着连成一条。id = 「册子#课名」(同板的日志里的 base)
  *  photo 孩子拍的作业:几张照片竖着连成一条(先拍的在上),文字层是认字认出的行和题(src/scenes/photo-words/)
  *  white 白纸:什么都没印,老师在上面摆图形、写字(整页就是一条白纸条)
- *  lecture 小课堂(2026-11-17 阶段 5):一堂做好的课(课包 bundles/<id>/ 或视频 lectures/<id>/),按时刻编号的页——放就是窗自己往前走;
+ *  lecture 小课堂:一堂做好的课(课包 bundles/<id>/ 或视频 lectures/<id>/),按时刻编号的页——放就是窗自己往前走;
  *          文字层是每一句的起点与原话(src/board/lecture.ts 的时钟),老师 [[看 0:19–0:30]] 就是放那一段
  */
 export type PageSource =

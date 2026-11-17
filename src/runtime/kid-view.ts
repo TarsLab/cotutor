@@ -52,8 +52,8 @@ const none = (ok: boolean, bookkeeping: Bookkeeping | null = null): KidView => (
 const FENCE_OR_H2 = /^\s*(?:```|~~~|## )/m;
 
 /**
- * 孩子看的正文从哪来:`result.result` 只是这轮**最后一段**顶层文本——老师写完板书再用一次工具、再补一句,
- * 板书和「## 记账」段就没了。所以正文 = 这轮里**带围栏(卡)或带 H2 固定段的顶层文本段** + **最后一段**(顺序不变,重复不算两次);
+ * 孩子看的正文从哪来:`result.result` 只是这轮**最后一段**顶层文本——老师写完讲稿再用一次工具、再补一句,
+ * 讲稿和「## 记账」段就没了。所以正文 = 这轮里**带围栏(卡)或带 H2 固定段的顶层文本段** + **最后一段**(顺序不变,重复不算两次);
  * 中间那些「我先看看账本」之类没卡没段的话不进。子代理的话本来就不在顶层。
  */
 export function kidSource(t: Transcript): string | null {
@@ -140,7 +140,7 @@ export function kidConversation(index: { messages: readonly ConversationMessage[
 }
 
 /**
- * 家长板书页的一条:形状同 KidMessage,家长多看到的都是可选字段;
+ * 家长端「记录」的一条:形状同 KidMessage,家长多看到的都是可选字段;
  * `question` 不管谁发的都给;记账 / 整理记忆那两种轮也在(旁注写「已记进日记」「整理了记忆」)。
  */
 export interface ParentMessage extends KidMessage {
@@ -158,7 +158,7 @@ export interface ParentMessage extends KidMessage {
   lectureWatch?: Pick<NonNullable<ConversationMessage['lecture']>, 'watchedMs' | 'finished' | 'pauses'>;
 }
 
-/** 对话索引 → 家长板书页条目:和 kidConversation 同一个循环,差集恰好是 ParentMessage 里多出的字段 */
+/** 对话索引 → 家长端「记录」的条目:和 kidConversation 同一个循环,差集恰好是 ParentMessage 里多出的字段 */
 export function parentConversation(index: { messages: readonly ConversationMessage[] }): ParentMessage[] {
   const out: ParentMessage[] = [];
   const ths = threads(index.messages);

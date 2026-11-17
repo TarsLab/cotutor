@@ -1,6 +1,6 @@
 /**
  * excalidraw 的窄接口层:只剩静态导出(bake 用)。深路径类型脆弱,包内一律走这层。
- * 播放不再经过这里(drawtell 重新设计的第 4 步):画面烤成 bake.json,运行时由 ./render.ts 现画。
+ * 播放不再经过这里:画面烤成 bake.json,运行时由 ./render.ts 现画。
  */
 
 import { convertToExcalidrawElements, exportToSvg, getCommonBounds } from '@excalidraw/excalidraw';

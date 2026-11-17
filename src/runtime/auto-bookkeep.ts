@@ -1,9 +1,9 @@
 /**
- * 自动记账(《vault重构方案》§5,2026-10-30;cotutor.json 的 vault.autoBookkeep,缺省关):serve 隔一阵跑一次 autoBookkeep。
+ * 自动记账(cotutor.json 的 vault.autoBookkeep,缺省关):serve 隔一阵跑一次 autoBookkeep。
  * - 今天的:话题空闲过 AUTO_BOOKKEEP_IDLE_MS(2 小时)才记;不整理记忆——孩子晚上可能还来,一天只整理一次
  * - 昨天的:没记的都记,记完整理一次记忆(那天还没整理过才整理);服务停了一夜,第二天起来补上
  * - 更早的不管:刚打开开关时不把以前的一股脑记了(花钱),要记家长点「记账」
- * 只记有脸的老师的;没有孩子的话也没打分的不记(同家长点记账);记账没成的(老师没回记账段)一个话题最多试 AUTO_BOOKKEEP_TRIES 次。
+ * 只记老师的;没有孩子的话也没打分的不记(同家长点记账);记账没成的(老师没回记账段)一个话题最多试 AUTO_BOOKKEEP_TRIES 次。
  * 打分只决定写不写摘要与骨架(diary.ts),自动记账不等家长打分。
  */
 import { kidQuestions } from '../memory/diary.ts';
@@ -47,7 +47,7 @@ export function dueBookkeeping(index: Pick<ConversationIndex, 'messages' | 'book
 const dayBefore = (now: Date): string => localDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1));
 
 /**
- * 跑一次:开关(vault.autoBookkeep)关着什么都不做;每位有脸的老师,先昨天再今天,该记的记、该整理的整理,一位一位来(等上一位记完)。
+ * 跑一次:开关(vault.autoBookkeep)关着什么都不做;每位老师,先昨天再今天,该记的记、该整理的整理,一位一位来(等上一位记完)。
  * 老师正在回(孩子在用)就跳过,下次再看。返回这次记了什么(给测试看)
  */
 export async function autoBookkeep(runner: Runner, ws: Workspace, now: Date): Promise<{ tutor: string; date: string; threads: string[]; tidied: boolean }[]> {

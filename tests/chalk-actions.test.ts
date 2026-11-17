@@ -1,13 +1,13 @@
 /**
  * 笔顺里的动作(《重新设计.md》第 3 步):erase 擦掉前面画过的几样,board 换一块画板。
  * 谁擦了谁、谁在第几块画板(resolveActions);时钟里被擦的那段、某一刻在第几块画板、正在擦的还剩几成;
- * 圈住了什么不算擦掉的;课讲完时留着的(finalBoard);check 的引用与放置;build 拷每块画板的背景图;
+ * 圈住了什么不算擦掉的;check 的引用与放置;build 拷每块画板的背景图;
  * 烤好的画面按动作的进度换板、淡出(renderFrameSvg)。
  */
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { actionState, boardAtSvgTime, circleHits, elementsAtSvgTime, finalBoard, frameAt, lessonClock, renderFrameSvg, resolveActions, sceneBounds, type BakedLesson } from '../src/chalk/index.ts';
+import { actionState, boardAtSvgTime, circleHits, elementsAtSvgTime, frameAt, lessonClock, renderFrameSvg, resolveActions, sceneBounds, type BakedLesson } from '../src/chalk/index.ts';
 import { checkScene } from '../src/chalk/check.ts';
 import { buildBundle, readBundle } from '../src/app/cli/chalk/build.ts';
 import { sceneSchema } from '../src/chalk/scene-schema.ts';
@@ -46,9 +46,6 @@ const scene: ChalkScene = { id: 'acts', title: '动作', problem: '题', model: 
   const msgs = bad.problems.map((p) => p.message).join('\n');
   check('引用不对的都记下:后画的、不存在的、已经擦掉的(换画板时)、动作', /'b' 在它后面才画/.test(msgs) && /'nope' 不存在/.test(msgs) && /'a' 已经被 'e1' 擦掉了/.test(msgs) && /'e1' 是动作/.test(msgs), msgs);
   check('sceneBounds 不给动作算包围盒', !('clean' in sceneBounds(skeletons)) && 'c1' in sceneBounds(skeletons));
-  const fin = finalBoard(skeletons, scene.background);
-  check('finalBoard:最后一块板上没擦掉的画的元素,那块板的背景图(白板 = 没有)', JSON.stringify(fin.skeletons.map((e) => e.id)) === '["c1","c2","ans"]' && !fin.background);
-  check('finalBoard:没换过画板 = 全部没擦掉的 + 场景背景图', finalBoard([line('a', 0, 0), line('b', 0, 0), { type: 'erase', id: 'e', targets: ['a'] }], scene.background).skeletons.map((e) => e.id).join() === 'b' && finalBoard([line('a', 0, 0)], scene.background).background?.src === 'photo.png');
 }
 
 // ---- 时钟 ----

@@ -2,16 +2,16 @@
  * 实时老师的一次通话:孩子端的 WebSocket ↔ 嘴(百炼 realtime,手动轮次)+ 脑(应用直连百炼,经 Runner)。
  * 一轮:孩子按住说 → 松手(嘴不接话,拍照才先说一句「我看一看图片」,src/realtime/cues.ts)→ 孩子那句的转写交给脑(实时轮:讲稿不配音)→ 脑的讲稿定稿一句交一句,
  * 嘴一空就把排着的几句一起交给它照念(src/runtime/delivery/queue.ts,流水线:嘴出完上一段就交下一段,声音在孩子端接着排)→ 讲完就停。
- * 按句不按拍(2026-10-19):卡宁缺毋滥以后一节常常只有一拍、甚至没卡,按拍要等脑整段写完才念;卡只管自己闭合了就铺,和念哪句不挂钩。
  * 转写是空的(按了没说清):嘴在说就掐掉,改说「没听清」,不交给脑;按着时声音不到 100 毫秒(不 commit)、commit 没收下也一样。孩子在嘴的声音还在放时按下 = 打断:掐掉、孩子端清播放队列,
- * 没念的拍丢掉,孩子听到第几句(src/runtime/delivery/playback.ts 按声音排到哪算)进下一轮的上下文包 live:。嘴只接住、只照念,不讲新内容(2026-10-19 P1);画板开着时例外(边画边聊,见下)。
+ * 没念的拍丢掉,孩子听到第几句(src/runtime/delivery/playback.ts 按声音排到哪算)进下一轮的上下文包 live:。嘴只接住、只照念,不讲新内容;嘴先答的 activity 例外(reply: mouth)。
+ * 断线重连、换连接、一直听、请孩子说、嘴先答、录像按段、字幕重放、事件这些规矩写在 docs/dev/实时通话.md 的「一次通话里的规矩」。
  *
  * 孩子端 → 这里:二进制帧 = PCM16 16k 单声道一块(按着时才推);文本帧 = JSON
  *   {t:'hold'} 按下 · {t:'release', body} 松手(body 同 send 的那条少 text:thread / via / device…,runner.accept 验)
  *   {t:'hush'} 停下不开新一轮(上滑取消):嘴在出就掐、孩子端清了、没念的丢掉
- *   {t:'send', body} 不是说的(打字、拍照、交卡、首页按钮;舞台开着带 focus.card):body 同那条 POST · {t:'view', w, h} 屏幕多大 · {t:'bye'}
- *   {t:'staged'} 讲稿 [[play]] 的小课堂那一段放完了(或放不了、被关):后面的讲稿接着交给嘴
- *   {t:'board', body} 以板为主的话题里孩子在板上做了一件事(点字 {k:'pick', thread, text, base};课本上挪了窗 {k:'view', thread, base, box}):记进板的日志(Runner.boardEvent),不起脑;
+ *   {t:'send', body} 不是说的(打字、拍照、「给老师看」、首页按钮):body 是那一条(text / thread / via / photos…,runner.accept 验) · {t:'view', w, h} 屏幕多大 · {t:'bye'}
+ *   {t:'staged'} 放小课堂一段的那句([[看 0:19–0:30]])那一段放完了(或放不了、被关):后面的讲稿接着交给嘴
+ *   {t:'board', body} 一节课里孩子在页上做了一件事(点字 {k:'pick', thread, text, base};课本上挪了窗 {k:'view', thread, base, box}):记进板的日志(Runner.boardEvent),不起脑;
  *     课本的窗停下来以后舞台交的图 {k:'shot', thread, base, box, image} 也走这里:存下来等下一轮附给脑,不算孩子动了手;
  *     课本上落的一笔 {k:'stroke', thread, base, pts}、擦掉 {k:'wipe'} 落进一节课的状态;报来的一件一件排着记,交给脑之前先等记完;
  *   安静时嘴照念这个字词的念法(认字时写好的「傍,傍晚的傍」),老师正在说就不念;再点下一个,上一句掐掉。
@@ -22,28 +22,6 @@
  *   {t:'turn', job, thread} 脑开始写这一轮 · {t:'read', job, line, text, play?} 讲稿这一句开始放(play = 念完放小课堂那一段;一句一个,按孩子端放到的时刻发:一段里第一句在段首,
  *   后面几句等这段的声音出齐、按字数比例摊)· {t:'flush'} 清播放队列
  *   {t:'state', speaking, holding} · {t:'err', status, error} 发不出去(400 / 409 …)· {t:'end', why}
- * 嘴的会话断了(百炼 300 秒没输入就关,2026-10-20 照 Qwen-Live-Harness 的换连接):电话不挂、孩子端不知道;下次按下或发来时现连,
- *   连上之前来的照序攒着补(录像里记一条 {t:'lost'},只记不发)。平时孩子没按着就 30 秒一次心跳,最后一次动静 15 分钟后停跳。
- * 换连接:嘴的历史越长每次回答越贵,输入过了 SWAP_TOKENS 就在安静时换一条新的(录像里记 {t:'swap'},只记不发)。
- * 一直听(孩子端只在 activity 头上写了 listen: open、或 live.listen 是 open 时连接带 ?listen=open,中途发 {t:'listen', open} 也能换):孩子端一直推声音(卡的声音、录音、小课堂、关麦时不推,{t:'gate', on} 告诉这里),
- *   嘴的会话开 VAD(live.vad 缺省 server_vad、live.silenceMs),create_response / interrupt_response 关着:开口(speech_started)先暂停照念、嘴在放就让孩子端压低({t:'duck'}),
- *   转写回来 src/realtime/listen.ts 判收下 / 放过——收下才算按下 + 松手(打断、接住、交给脑;交给脑之前孩子停一下又开口的并成一句),放过的恢复音量接着念({t:'skip', why} / {t:'unduck'})。
- *   孩子那一句的上下文(话题、设备、舞台上的卡)孩子端开口时报一次 {t:'ctx', body}。换模式 = 安静时换一条连接(silence 只有新连接能给)。
- *   commit 了不回答 300 秒百炼就关(response_idle_timeout,探针 probe-live-vad):放过的多了,离上次回答 IDLE_SWAP_MS 就在安静时换连接。
- * 请孩子说(讲稿的 [[请 说 词]],哪个 activity 都能写):那句念完关闸(src/runtime/delivery/queue.ts),
- *   孩子说完(像说了那句,src/board/echo.ts)开闸下一拍,不接住、不交脑;对老师说的照收下办(打断、接住、交脑);ECHO_WAIT_MS 没开口接着走,连着两拍没开口停下交脑(app: quiet)。
- *   请他说的是这一轮最后一句(脑写完了、后面没排着),他说了也交脑,没开口也交脑(app: quiet)。每拍记一笔(录像 {t:'echo'},只记不发),交脑时带上(live.echo)。
- * 嘴先答(这节课的 activity 头上 reply: mouth,runner 起这一轮时告诉这里;2026-11-17 阶段 4 任务 2,照 b423c3e 以前「边画边聊」把图交给嘴的做法):
- *   最后一句请他说的,他答了嘴先在那个范围里接(src/realtime/cues.ts 的 replyCue;范围 = 那句话 + 要他说出的那一句)——说中了嘴接一句、当这一轮的接住,接着交脑;
- *   没说中嘴提示一下、接着等他,连着 REPLY_MISSES 次没说中交脑;说的是别的照旧交脑。孩子眼前那块图(舞台交的窗图 {k:'shot'})跟着他那段声音交给嘴,
- *   一条连接里给了 MOUTH_IMAGES_SWAP 张就在安静时换连接;嘴替脑接的那几句(孩子说的、嘴说的)下一轮交脑时带上(live.mouth)。
- * 录像:进出的消息、两边的声音都记(CallRecorder),落在 conversations/<老师>/<日期>.live/<时分秒>.reel.json / .wav(时分秒 = 这一段开始的时刻)。
- *   按段落(2026-11-06):两轮之间安静着(心跳时看),这一段 IDLE_CUT_MS 没动静、或录了 MAX_TAKE_MS,就收下这一段落盘、接着录新的一段;挂了落最后一段。
- *   一段一轮都不会切开(录像按轮在一段里找按下、松手、turn、read);没动静的一段不落。
- * 字幕重放:嘴照念的声音按轮另留一份,出了的都留(孩子按下时清掉、没放出来的也在),
- *   一段出完(或被掐、断了)就落 <日期>.<job>.mouth.wav 与每句的起点 .mouth.json(src/runtime/journal/mouth-index.ts);接住那句不在里面。孩子端从 /api/kid/conversations/<老师>/mouth/<日期>/<job> 取。
- * 事件:嘴这一道(mouth:按下、松手 / 发了、接住开始放、第几句开始放、打断)补进那一轮的 events.jsonl(Runner.noteEvent),工作台的时间线上看;
- * 按下、松手、接住在脑起来之前,先攒着,等那一轮的老师进程起来(main:start)再按它的起点换成相对毫秒(负的)。
  */
 import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -115,14 +93,14 @@ const CATCH_WAIT_MS = 1500;
 const BYTES_PER_MS = (OUTPUT_RATE * 2) / 1000;
 /** 按着时到的声音不到 100 毫秒就不 commit:百炼回「buffer too small, or have no audio」,不会有转写(2026-10-19 iPad 麦克风没开,嘴照样接住说了「你想问什么」) */
 const MIN_COMMIT_BYTES = (INPUT_RATE * 2 * 100) / 1000;
-/** 心跳间隔(Qwen-Live-Harness 也是 30 秒);孩子最后一次动静之后跳多久(过了就让百炼 300 秒后关,回来按下再连,连一次约半秒) */
+/** 心跳间隔;孩子最后一次动静之后跳多久(过了就让百炼 300 秒后关,回来按下再连,连一次约半秒) */
 const HEARTBEAT_MS = 30_000;
 const KEEP_ALIVE_MS = 15 * 60_000;
 /** 嘴最近一次回答的输入过了这么多 token,安静时换一条新连接(约 9 轮一换) */
 const SWAP_TOKENS = 3000;
-/** 讲稿的 [[play]]:孩子端放小课堂那一段,最多等它这么久就接着念(孩子端没回 staged 时不卡死) */
+/** 放小课堂一段的那句:孩子端放那一段,最多等它这么久就接着念(孩子端没回 staged 时不卡死) */
 const GATE_MS = 180_000;
-/** 现连时攒着的声音最多一分钟(同 Qwen-Live-Harness 的 MAX_RECOVERY_AUDIO_BYTES);一直听时只留最近 10 秒(更早的孩子早不等了) */
+/** 现连时攒着的声音最多一分钟;一直听时只留最近 10 秒(更早的孩子早不等了) */
 const MAX_BACKLOG_BYTES = INPUT_RATE * 2 * 60;
 const MAX_OPEN_BACKLOG_BYTES = INPUT_RATE * 2 * 10;
 /** 一直听:收下一句以后,孩子停一下又开口(或刚说完在等转写),交给脑最多再等这么久,收下的并进来 */
@@ -147,7 +125,7 @@ const MOUTH_IMAGES_SWAP = 3;
  */
 const IDLE_CUT_MS = 5 * 60_000;
 const MAX_TAKE_MS = 30 * 60_000;
-/** 板上点完字多久没动静,应用替孩子叫一次老师(《画板为主设计》下篇;起点,试用后调) */
+/** 板上点完字多久没动静,应用替孩子叫一次老师(起点,试用后调) */
 const STILL_MS = 12_000;
 /**
  * 要嘴说了,这么久一块声音、一个字都没出就算卡住(真百炼首包约 0.5 秒;2026-10-31 照念第二段回了 created 就再没动静,孩子只听到第一句):
@@ -320,7 +298,7 @@ export class LiveCall {
     this.timers.push(setTimeout(() => this.stalled(said), this.deps.stallMs ?? STALL_MS));
   }
 
-  /** 要嘴说的这次一个字、一块声音都没出(STALL_MS):当这条连接坏了,照念的那段放回排头、换一条接着念;接住、边画边聊那句不补 */
+  /** 要嘴说的这次一个字、一块声音都没出(STALL_MS):当这条连接坏了,照念的那段放回排头、换一条接着念;别的(接住、点字照念、嘴先答的提示)不补 */
   private stalled(said: Said): void {
     if (this.ended || this.said !== said || this.saidOut) return;
     const old = this.session;
@@ -655,7 +633,7 @@ export class LiveCall {
         }
         if (this.heldBytes < MIN_COMMIT_BYTES) {
           this.session.clearAudio();
-          // 按住「给老师看」没说出话:照交板(板卡已经锁了),嘴不先说
+          // 按住「给老师看」没说出话:照交,嘴不先说
           if (handsIn(body)) { this.turn('card', body, ''); break; }
           this.send({ t: 'kid', text: '' });
           this.turn('empty', body);
@@ -687,7 +665,7 @@ export class LiveCall {
       }
       // 孩子端放完了小课堂那一段(或放不了、被关):后面的讲稿接着交给嘴
       case 'staged': this.d.step({ e: 'staged' }); break;
-      // 以板为主:孩子在板上点了一个字
+      // 孩子在页上点了一个字
       // 一件一件排着记(「给老师看」前舞台先交的那张窗图要先落下,交给脑那一轮在 toBrain 里等它)
       case 'board': { const body = m.body, seq = this.turnSeq; this.boards = this.boards.then(() => this.board(body, seq)).catch(() => undefined); break; }
       // 一直听:孩子端开口时报的上下文(收下时当松手的 body)
@@ -1037,7 +1015,7 @@ export class LiveCall {
   }
 
   /**
-   * 以板为主:孩子在板上点了一个字(孩子端已经弹了田字格)。验过记进板的日志;安静时嘴照念它的念法,
+   * 孩子在页上点了一个字(孩子端已经弹了田字格)。验过记进板的日志;安静时嘴照念它的念法,
    * 嘴正在念上一个字就掐掉换这个;老师在说(照念讲稿、接住、脑在写、孩子在说)不念。之后等 STILL_MS 看他开不开口
    */
   private async board(body: unknown, seq: number): Promise<void> {
@@ -1195,7 +1173,7 @@ const jpegOf = (v: unknown): Buffer | null => {
   const m = typeof v === 'string' ? /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(v) : null;
   return m && m[1].length <= MAX_IMAGE_B64 ? Buffer.from(m[1], 'base64') : null;
 };
-/** 这一条带着交的东西(交卡):没说清也要交给脑 */
+/** 这一条带着交的东西(「给老师看」):没说清也要交给脑 */
 const handsIn = (body: Record<string, unknown>): boolean => body.action === 'submit';
 /** 录像里记的那条:去掉图,留一个 image: true */
 const withoutImages = (m: Record<string, unknown>): Record<string, unknown> => {

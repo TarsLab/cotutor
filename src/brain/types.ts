@@ -1,9 +1,9 @@
 /**
- * 脑的统一事件与工具:API 脑(./api.ts)写进 .log、孩子端的流式板书、家长端看原文、转录都只认这些。
+ * 脑的统一事件与工具:API 脑(./api.ts)写进 .log、孩子端的流式讲稿、家长端看原文、转录都只认这些。
  * 名字里的 Cli 是 2026-11-02 以前起 Qwen Code 时留下的;那时的 .log 是 stream-json,由 ./stream-json.ts 读成同样的事件。
  */
 
-/** 工具的类别:应用要知道「读了哪个文件」「是不是用技能回读板书写法」时按类别认,不比工具名 */
+/** 工具的类别:应用要知道「读了哪个文件」「用没用技能」时按类别认,不比工具名 */
 export type ToolKind = 'read' | 'shell' | 'search' | 'edit' | 'skill' | 'other';
 
 /** 工具名 → 类别:API 脑的三样(./api-tools.ts)与旧轮次里 Qwen Code、Claude Code 的工具名;不认识的是 other */

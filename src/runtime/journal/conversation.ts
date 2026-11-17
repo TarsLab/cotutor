@@ -28,7 +28,7 @@ export function sessionFor(index: { sessions: Record<string, Session> }, thread:
 }
 
 /**
- * 这个话题还接得上这个运行时吗(2026-10-31):话题只属于开它的那种运行时,换过运行时就当话题已经结束——接着说开新话题,不记账,记录照样看;
+ * 这个话题还接得上这个运行时吗:话题只属于开它的那种运行时,换过运行时就当话题已经结束——接着说开新话题,不记账,记录照样看;
  * 历史不迁移、不导入。还没有会话的(这个话题一轮都没成)算接得上
  */
 export function sameRuntime(index: { sessions: Record<string, Session> }, thread: string, runtime: string): boolean {

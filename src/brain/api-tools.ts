@@ -2,7 +2,6 @@
  * API 脑的只读工具:read_file、glob、grep_search,名字与参数同 qwen 那三样(家长端的工具清单、工具分类照旧认)。
  * 只读 roots 里的(workspace 根与 vault,runner 的 readDirsOf):真实路径出了 roots 不读(符号链接越界也算),隐藏目录(.cotutor、.git、.obsidian)不读;
  * 单文件、每次返回的字数、查找的文件数都有上限;只读文本(教材、日记、档案),图片读不了——本轮的照片已经附在消息里。
- * 从 cotutor-api-prototype 的 materials.ts 来,那边验过越界与大文件。
  */
 import { constants } from 'node:fs';
 import { open, readdir, realpath } from 'node:fs/promises';

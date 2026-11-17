@@ -1,10 +1,7 @@
 /**
- * 模拟接口(`cotutor mock`):不经真实老师与百炼,用固定的板书 JSON 把孩子端页面喂起来,
- * 专门测前端的交互逻辑与渲染效果(卡一张张铺、停下等、追问追加)。老师都走实时老师页,假嘴念静音的声音、字幕照走。
- * 不需要 workspace。老师的每一轮从各自的脚本里按顺序取(脚本就是老师会写的正文,过真解析器);脚本用完给一句收尾话。
- * 卡不配音:点读段、单词卡挂上段名(同真服务的 card.assets),/api/audio 一律回一段静音,页面照真服务那样放音频、等放完(不用浏览器合成声)。
- * 老师「想」的期间按流式模拟:卡在 delay 里一张张出现(pending 条目带 partial 板书),想完才有讲稿与声音。
- * 卡的状态 PUT 假存在内存里(过真的 state 契约),today 里并回卡上;发消息接 {text, action, focus},「交给老师」后照常追加下一节。
+ * 模拟接口(`cotutor mock`):不经真实老师与百炼,用写死的脚本把孩子端页面喂起来,专门测前端的交互逻辑与渲染效果。不需要 workspace。
+ * 老师的每一轮从各自的脚本里按顺序取(脚本就是老师会写的正文,过真解析器);脚本用完给一句收尾话。
+ * 老师「想」的期间按流式模拟:pending 条目带 partial 讲稿,讲稿一句一句多出来。/api/audio 一律回一段静音(不用浏览器合成声)。
  * 场景:normal(缺省)/ nokey(没配百炼,孩子端只出「老师们还没到」)。
  * 首页是一份写死的「已发布」(mockHomeMd,过真解析器与真排法):语文老师有一个 activity 按钮,数学老师有两个小课堂,英语老师没写(补一张);
  * 发消息带 via 时照真服务的规则换成按钮上的字、开新话题。
@@ -92,7 +89,7 @@ export interface MockTutor {
   firstQuestion: string;
 }
 
-/** 脚本 → 板书节:走真解析器(mock 也是解析器的一次演练) */
+/** 脚本 → 讲稿的一节:走真解析器(mock 也是解析器的一次演练) */
 export function sectionFromScript(md: string): BoardSection {
   return parseBoard(md).section;
 }
@@ -468,7 +465,7 @@ export function createMock(opts: MockOptions = {}): Mock {
       setTimeout(reveal, tick);
     });
   };
-  /** internal = 实时那条连接交来的孩子发的一条(kidSend);HTTP 上不收(同真服务,2026-11-04 删了 HTTP 的发) */
+  /** internal = 实时那条连接交来的孩子发的一条(kidSend);HTTP 上不收(同真服务) */
   const routeIn = async (method: string, path: string, body?: unknown, internal = false): Promise<MockRouteResult> => {
     await lecturesLoaded;
     const url = new URL(path, 'http://x');
@@ -514,7 +511,7 @@ export function createMock(opts: MockOptions = {}): Mock {
             th = { thread: m.thread, at: m.at, title: Array.from((m.question ?? '').trim()).slice(0, 20).join(''), from: 'kid', via: null, start: { kind: 'new', label: '新话题' }, said: (m.question ?? '').trim() || null, endAt: null, notes: [], remembered: [], writes: [], sections: 0, stoppedAt: null, rating: ratings.get(`${t.name}/${m.thread}`) ?? null, booked: booked.has(`${t.name}/${m.thread}`) };
             by.set(m.thread, th);
           }
-          // 给家长的、记住了:同 mock 的板书接口,那天第一条带
+          // 给家长的、记住了:同下面一天的记录那个接口,那天第一条带
           if (m === list[0] && !m.pending) { th.notes.push('第一遍就答上了,后面那句是我故意留的:看他会不会自己往下想。'); th.remembered.push(`${date} 讲故事时爱抢着说结局,可以先让他猜`); }
           if (m.pending) th.stoppedAt = 'writing';
           else if (m.section && m.section.lines.length) { th.sections++; th.stoppedAt = m.section.lines[m.section.lines.length - 1]?.ask ? 'ask' : null; }
@@ -671,7 +668,7 @@ export function createMock(opts: MockOptions = {}): Mock {
         let newThread = false;
         let wantThread = body.thread;
         // 小课堂:看完才能开口,字是孩子说的,新话题;画的那几处现算成一段话(同 runner)。问过以后再看一遍又画了:同一话题的下一条带上(again)
-        // 一处几笔(strokes);2026-10-19 以前一笔一处(path),照读
+        // 一处几笔(strokes);以前一笔一处(path),照读
         const marksIn = isObj(body.lecture) && Array.isArray(body.lecture.marks) ? (body.lecture.marks as { atMs: number; strokes?: [number, number][][]; path?: [number, number][]; image?: string; t?: number }[]).map(({ path, strokes, ...m }) => ({ ...m, strokes: strokes ?? (path ? [path] : []) })) : [];
         const logIn = isObj(body.lecture) && Array.isArray(body.lecture.log) ? (body.lecture.log as { t: number; pos: number; play: boolean }[]) : [];
         const lec = isObj(body.lecture) && typeof body.lecture.bundle === 'string' ? { bundle: body.lecture.bundle, finished: body.lecture.finished === true, again: false, watchedMs: Number(body.lecture.watchedMs) || 0, pauses: Number(body.lecture.pauses) || 0 } : null;
@@ -711,13 +708,13 @@ export function createMock(opts: MockOptions = {}): Mock {
     }
     const hz = /^\/api\/kid\/tianzige\/([^/]+)$/.exec(p);
     if (hz) {
-      // 田字格卡:数据包就在 node_modules 里,mock 也给真笔顺
+      // 田字格:数据包就在 node_modules 里,mock 也给真笔顺
       const d = await tianzigeData(decodeURIComponent(hz[1]));
       return d ? { status: 200, json: d } : { status: 404, json: { error: 'not_found' } };
     }
     const lt = /^\/api\/kid\/letters\/([^/]+)$/.exec(p);
     if (lt) {
-      // 单词卡:字形包就在 node_modules 里,mock 也给真笔顺
+      // 英文单词:字形包就在 node_modules 里,mock 也给真笔顺
       const d = lettersData(decodeURIComponent(lt[1]));
       return d ? { status: 200, json: d } : { status: 404, json: { error: 'not_found' } };
     }
@@ -760,7 +757,7 @@ export function createMock(opts: MockOptions = {}): Mock {
       const f = await bundleAsset(MOCK_BUNDLES_DIR, p);
       return f ? { status: 200, file: f.file, contentType: f.contentType } : { status: 404, json: { error: 'not_found' } };
     }
-    // 卡的配音(点读段、单词):mock 不配音,一律回 0.8 秒的静音
+    // 配音:mock 不配音,一律回 0.8 秒的静音
     if (p.startsWith('/api/audio/') && method === 'GET') return { status: 200, contentType: 'audio/wav', body: wavOfPcm(Buffer.alloc(24000 * 2 * 0.8), 24000) };
     // 字幕重放:真服务端给 src/runtime/live/call.ts 落的那份嘴的声音;mock 没有嘴,每句按字数估多长、放一段静音
     const mouth = /^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/mouth\/(\d{4}-\d{2}-\d{2})\/(\d{4}-\d+)$/.exec(p);

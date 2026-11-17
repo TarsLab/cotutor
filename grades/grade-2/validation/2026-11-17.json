@@ -1,0 +1,541 @@
+{
+  "date": "2026-11-17",
+  "note": "合成孩子,不是实际儿童教学效果测量。同一份出厂文件、同样的出厂设置,两个模型各把 41 个例子跑 1 次(cotutor activity eval --runs 1),按量。新建的试用 workspace,vault 里没有课本 PDF;eval 不经舞台,老师收不到窗图;带照片的例子不触发认字。秒数是三位老师并行跑时量的。source_sha256 是跑的时候仓里的出厂文件(math-board,5257d98 之后没动过)。没有对话摘要。",
+  "runtime": {
+    "chinese": "api / low",
+    "math": "api / medium",
+    "english": "api / medium",
+    "kid": "qwen3.8-flash"
+  },
+  "source_sha256": {
+    "agents/chinese-tutor/activities/复习.md": "97a8700300c17aa884e6b8ec877b64480af5cf0620c457d3fcae7126e0440c3d",
+    "agents/chinese-tutor/activities/复习.例子.md": "c2a50194d53680811b9abba1d426a0aab83e0b91a89c9d0ffeef98955304d9ae",
+    "agents/chinese-tutor/activities/小课堂.md": "1a2ea9f2ba330143edb28cb03129500c44cec278f45718450c7c3009a4d0bbe5",
+    "agents/chinese-tutor/activities/检查作业.md": "94452df2574b4d765706b2c308054ec01a41ea9944d2df0dff0a18b35388ba62",
+    "agents/chinese-tutor/activities/检查作业.例子.md": "62c964d3ea32908be9a3fc9a1604e64585615b07b20811ace86462ec081f90db",
+    "agents/chinese-tutor/activities/看图说话.md": "40c6786a102488ce1ec8809893bce12f3ffdbd7057e22610559270da43f84284",
+    "agents/chinese-tutor/activities/看图说话.例子.md": "4c3e54b805e4f3b7b1db16f73adbc4d56e8c6ce9033c87e29d5a3ef875da6cee",
+    "agents/chinese-tutor/activities/预习.md": "6367d5760c734ebbb9c4bf2e6c53eb8d6e443d350ff59d78280346c83ab3d368",
+    "agents/chinese-tutor/activities/预习.例子.md": "3ae0ad0e2ad6733cd3f6a76b18a7b7941a4384104cc9d203ed84253994f5fc1a",
+    "agents/english-tutor/activities/口语课.md": "5cf5262eca731dfb2fa09bd7e31ad56cc2f6abd9756278d0897fdb553d5bdab9",
+    "agents/english-tutor/activities/口语课.例子.md": "8b7cf588eb1f4681d0a7fc8a80ff7a7210dc25a8b68564726ac9b87fe3690ea0",
+    "agents/english-tutor/activities/复习.md": "5e1df148bcd8424f14d255f994b303a1cda70d889291e02e32de38bc95bb65ac",
+    "agents/english-tutor/activities/复习.例子.md": "bca90a2b2719ff8cffc9329113175b36544a4b85ffc08c82d7f1fd246ccfd47f",
+    "agents/english-tutor/activities/小课堂.md": "af7a282eeb777aaf806b50cb35dbae3d9ce21cc2685ae536c9b9ef3276718aa7",
+    "agents/english-tutor/activities/检查作业.md": "655f752cf07100dee583804aa267474fbfa47218c35b9be331e21fe0a86a31c8",
+    "agents/english-tutor/activities/检查作业.例子.md": "bafeb40772df83bde44e34c96180f16f997b7ae4f552875df54f877f3a94adcf",
+    "agents/english-tutor/activities/预习.md": "f8f3fa38670b79fd2c814d8a2667fa5fda61011dd3dfa45f271bdcde03cb8e56",
+    "agents/english-tutor/activities/预习.例子.md": "84b432ba227303979b8a988117e043f77cd181297f6750486000aa50d6e95282",
+    "agents/math-tutor/activities/复习.md": "a7f78361be9eaaba2b1bc02bd005c2b7a2a90cf57159cb8d150a3424dfa72ab2",
+    "agents/math-tutor/activities/复习.例子.md": "2ec5e3adaee7a1d16d8c1518f67c63022f413d22d6fea509b4fa47a2f3a7b7ba",
+    "agents/math-tutor/activities/小课堂.md": "3156f81ef0aee7602863b20debd494db837a7921df311607ef98a2f00649d0e3",
+    "agents/math-tutor/activities/小课堂.例子.md": "17b41ce8c4797f73e6f3c6328d53b83f8c69c8e3471de401042949efa50c46e4",
+    "agents/math-tutor/activities/检查作业.md": "0adb3f9b93cd00031ccaa21bf49c3c3edb0a0fbd2987acc449d504804685c9c8",
+    "agents/math-tutor/activities/检查作业.例子.md": "dac31e6fcb65a2831b7ddd595b7d927e44061b8aba3349119daf3c517cddc5e0",
+    "agents/math-tutor/activities/预习.md": "d814436599d228bf5224ea8d3e34b2ccdba0f24a217bb842e24f6a292a88e96f",
+    "agents/math-tutor/activities/预习.例子.md": "d2c71279a84d2377ab817fe4f383ba16e943bfdf39c3bedcc7e8a2ab8fae4452",
+    "cards/动作怎么写.md": "693bdef3abc1704237aa53bd503246d224dbdf81b7d222e3e6f14bae223d52dc",
+    "skills/cotutor-tutor/SKILL.md": "96ba40e392564c1e6925c7cebba9a9b7547e5d098937dfe8df3fd9e1b40d2277"
+  },
+  "models": {
+    "qwen3.8-max": {
+      "examples": 41,
+      "passed": 33,
+      "turns": 157,
+      "tokens": {
+        "teacher_in": 1108928,
+        "teacher_out": 25670,
+        "cached": 831872
+      },
+      "seconds_per_turn": {
+        "chinese-tutor": {
+          "median": 2.0,
+          "first_sentence_median": 1.7,
+          "first_sentence_max": 5.7
+        },
+        "math-tutor": {
+          "median": 4.9,
+          "first_sentence_median": 4.8,
+          "first_sentence_max": 50.2
+        },
+        "english-tutor": {
+          "median": 6.7,
+          "first_sentence_median": 6.4,
+          "first_sentence_max": 12.1
+        }
+      },
+      "acts": {
+        "chinese-tutor": {
+          "acts": 89,
+          "turns_with_acts": 37,
+          "dropped_warnings": 0
+        },
+        "math-tutor": {
+          "acts": 37,
+          "turns_with_acts": 28,
+          "dropped_warnings": 0
+        },
+        "english-tutor": {
+          "acts": 31,
+          "turns_with_acts": 10,
+          "dropped_warnings": 1
+        }
+      },
+      "activities": [
+        {
+          "tutor": "chinese-tutor",
+          "activity": "复习",
+          "examples": 3,
+          "passed": 2,
+          "turns": 9,
+          "tokens": {
+            "in": 55303,
+            "out": 464
+          },
+          "failed": [
+            {
+              "example": "给定范围后尝试并结束",
+              "why": [
+                {
+                  "check": "一节一问",
+                  "why": "第 3 轮问了 2 个"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tutor": "chinese-tutor",
+          "activity": "检查作业",
+          "examples": 3,
+          "passed": 2,
+          "turns": 9,
+          "tokens": {
+            "in": 56103,
+            "out": 229
+          },
+          "failed": [
+            {
+              "example": "给定范围后尝试并结束",
+              "why": [
+                {
+                  "check": "请动手就开放",
+                  "why": "第 1 轮请他点,页上开放的是没有"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tutor": "chinese-tutor",
+          "activity": "看图说话",
+          "examples": 4,
+          "passed": 3,
+          "turns": 37,
+          "tokens": {
+            "in": 325776,
+            "out": 2454
+          },
+          "failed": [
+            {
+              "example": "四幅图一口气说",
+              "why": [
+                {
+                  "check": "一节一问",
+                  "why": "第 8 轮问了 2 个"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tutor": "chinese-tutor",
+          "activity": "预习",
+          "examples": 3,
+          "passed": 3,
+          "turns": 9,
+          "tokens": {
+            "in": 55871,
+            "out": 385
+          },
+          "failed": []
+        },
+        {
+          "tutor": "english-tutor",
+          "activity": "口语课",
+          "examples": 2,
+          "passed": 1,
+          "turns": 6,
+          "tokens": {
+            "in": 43181,
+            "out": 1795
+          },
+          "failed": [
+            {
+              "example": "没拍照片(白纸)",
+              "why": [
+                {
+                  "check": "说到: duck",
+                  "why": "没说过:duck"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tutor": "english-tutor",
+          "activity": "复习",
+          "examples": 3,
+          "passed": 3,
+          "turns": 9,
+          "tokens": {
+            "in": 55446,
+            "out": 1869
+          },
+          "failed": []
+        },
+        {
+          "tutor": "english-tutor",
+          "activity": "检查作业",
+          "examples": 3,
+          "passed": 3,
+          "turns": 9,
+          "tokens": {
+            "in": 55900,
+            "out": 1346
+          },
+          "failed": []
+        },
+        {
+          "tutor": "english-tutor",
+          "activity": "预习",
+          "examples": 3,
+          "passed": 3,
+          "turns": 9,
+          "tokens": {
+            "in": 55824,
+            "out": 1396
+          },
+          "failed": []
+        },
+        {
+          "tutor": "math-tutor",
+          "activity": "复习",
+          "examples": 3,
+          "passed": 2,
+          "turns": 9,
+          "tokens": {
+            "in": 55690,
+            "out": 1610
+          },
+          "failed": [
+            {
+              "example": "给定范围后尝试并结束",
+              "why": [
+                {
+                  "check": "一节一问",
+                  "why": "第 1 轮问了 2 个"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tutor": "math-tutor",
+          "activity": "小课堂",
+          "examples": 3,
+          "passed": 2,
+          "turns": 9,
+          "tokens": {
+            "in": 54985,
+            "out": 1526
+          },
+          "failed": [
+            {
+              "example": "问课里没讲的",
+              "why": [
+                {
+                  "check": "收尾不问",
+                  "why": "第 2 轮(最后一轮)末句「现在从 10 里面拿走 9,还剩几?」"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tutor": "math-tutor",
+          "activity": "检查作业",
+          "examples": 8,
+          "passed": 6,
+          "turns": 33,
+          "tokens": {
+            "in": 236082,
+            "out": 11025
+          },
+          "failed": [
+            {
+              "example": "方向题先摆出来",
+              "why": [
+                {
+                  "check": "摆图形: 方向盘",
+                  "why": "5 轮都没摆「方向盘」"
+                }
+              ]
+            },
+            {
+              "example": "添几个才够分",
+              "why": [
+                {
+                  "check": "页上有: 17",
+                  "why": "页上没有:17"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tutor": "math-tutor",
+          "activity": "预习",
+          "examples": 3,
+          "passed": 3,
+          "turns": 9,
+          "tokens": {
+            "in": 58767,
+            "out": 1571
+          },
+          "failed": []
+        }
+      ]
+    },
+    "qwen4-max": {
+      "examples": 41,
+      "passed": 37,
+      "turns": 157,
+      "tokens": {
+        "teacher_in": 1111334,
+        "teacher_out": 20517,
+        "cached": 916480
+      },
+      "seconds_per_turn": {
+        "chinese-tutor": {
+          "median": 3.2,
+          "first_sentence_median": 2.6,
+          "first_sentence_max": 8.6
+        },
+        "math-tutor": {
+          "median": 4.8,
+          "first_sentence_median": 4.5,
+          "first_sentence_max": 16.2
+        },
+        "english-tutor": {
+          "median": 6.1,
+          "first_sentence_median": 5.6,
+          "first_sentence_max": 16.5
+        }
+      },
+      "acts": {
+        "chinese-tutor": {
+          "acts": 68,
+          "turns_with_acts": 30,
+          "dropped_warnings": 0
+        },
+        "math-tutor": {
+          "acts": 41,
+          "turns_with_acts": 28,
+          "dropped_warnings": 0
+        },
+        "english-tutor": {
+          "acts": 41,
+          "turns_with_acts": 16,
+          "dropped_warnings": 0
+        }
+      },
+      "activities": [
+        {
+          "tutor": "chinese-tutor",
+          "activity": "复习",
+          "examples": 3,
+          "passed": 3,
+          "turns": 9,
+          "tokens": {
+            "in": 55084,
+            "out": 383
+          },
+          "failed": []
+        },
+        {
+          "tutor": "chinese-tutor",
+          "activity": "检查作业",
+          "examples": 3,
+          "passed": 3,
+          "turns": 9,
+          "tokens": {
+            "in": 55866,
+            "out": 271
+          },
+          "failed": []
+        },
+        {
+          "tutor": "chinese-tutor",
+          "activity": "看图说话",
+          "examples": 4,
+          "passed": 4,
+          "turns": 37,
+          "tokens": {
+            "in": 325748,
+            "out": 2607
+          },
+          "failed": []
+        },
+        {
+          "tutor": "chinese-tutor",
+          "activity": "预习",
+          "examples": 3,
+          "passed": 3,
+          "turns": 9,
+          "tokens": {
+            "in": 55873,
+            "out": 365
+          },
+          "failed": []
+        },
+        {
+          "tutor": "english-tutor",
+          "activity": "口语课",
+          "examples": 2,
+          "passed": 1,
+          "turns": 6,
+          "tokens": {
+            "in": 43234,
+            "out": 2116
+          },
+          "failed": [
+            {
+              "example": "没拍照片(白纸)",
+              "why": [
+                {
+                  "check": "说到: duck",
+                  "why": "没说过:duck"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tutor": "english-tutor",
+          "activity": "复习",
+          "examples": 3,
+          "passed": 2,
+          "turns": 9,
+          "tokens": {
+            "in": 55744,
+            "out": 2015
+          },
+          "failed": [
+            {
+              "example": "给定范围后尝试并结束",
+              "why": [
+                {
+                  "check": "一节一问",
+                  "why": "第 3 轮问了 2 个"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tutor": "english-tutor",
+          "activity": "检查作业",
+          "examples": 3,
+          "passed": 3,
+          "turns": 9,
+          "tokens": {
+            "in": 56144,
+            "out": 1345
+          },
+          "failed": []
+        },
+        {
+          "tutor": "english-tutor",
+          "activity": "预习",
+          "examples": 3,
+          "passed": 3,
+          "turns": 9,
+          "tokens": {
+            "in": 56273,
+            "out": 1413
+          },
+          "failed": []
+        },
+        {
+          "tutor": "math-tutor",
+          "activity": "复习",
+          "examples": 3,
+          "passed": 2,
+          "turns": 9,
+          "tokens": {
+            "in": 55758,
+            "out": 955
+          },
+          "failed": [
+            {
+              "example": "没拍照片(白纸)",
+              "why": [
+                {
+                  "check": "一节一问",
+                  "why": "第 1 轮问了 2 个"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tutor": "math-tutor",
+          "activity": "小课堂",
+          "examples": 3,
+          "passed": 3,
+          "turns": 9,
+          "tokens": {
+            "in": 55266,
+            "out": 1529
+          },
+          "failed": []
+        },
+        {
+          "tutor": "math-tutor",
+          "activity": "检查作业",
+          "examples": 8,
+          "passed": 7,
+          "turns": 33,
+          "tokens": {
+            "in": 237248,
+            "out": 5930
+          },
+          "failed": [
+            {
+              "example": "添几个才够分",
+              "why": [
+                {
+                  "check": "页上有: 17",
+                  "why": "页上没有:17"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tutor": "math-tutor",
+          "activity": "预习",
+          "examples": 3,
+          "passed": 3,
+          "turns": 9,
+          "tokens": {
+            "in": 59096,
+            "out": 1588
+          },
+          "failed": []
+        }
+      ]
+    }
+  }
+}

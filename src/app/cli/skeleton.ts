@@ -95,11 +95,11 @@ export interface ConfigTemplateInput {
 
 /** 出厂老师的条目;不写 avatar:三门主科用包里的出厂头像(src/app/http/avatars.ts) */
 const TUTOR_DEFAULTS: Record<string, { display: string; description?: string; subject?: string; hidden?: boolean; runtime?: string; enabled?: boolean; policy?: { effort?: 'low' | 'medium' | 'high'; tools?: 'on' } }> = {
-  // 数学多想一会儿:算错的代价大(别的老师用缺省 low);走 qwen3.8-max(同语文老师)。运行时 api = 应用直连百炼(2026-10-31 起出厂缺省)
+  // 数学多想一会儿:算错的代价大(别的老师用缺省 low);和语文老师一样走运行时 api(应用直连百炼,模型见 src/brain/api.ts 的 FACTORY_API_RUNTIMES)
   'math-tutor': { display: '数学老师', description: '数学老师。孩子拍数学作业、预习、复习都找它', subject: '数学', runtime: 'api', policy: { effort: 'medium' } },
-  // 语文老师走 qwen3.8-max(看图说话的 activity eval 在它上面验证;2026-10-31 Ray 上 API 与 Qwen Code 对照过)
+  // 语文老师走 api,缺省 low 不想
   'chinese-tutor': { display: '语文老师', description: '语文老师。生字、词语、课文、看图说话都找它', subject: '语文', runtime: 'api' },
-  // 英语也走 api(qwen3.8-max):2026-10-31 api-flash 真跑英语四个 activity,13 次里 5 次第一轮只出一张拍照卡、没有讲稿(那时还有卡)(实时页嘴没话可念);max 在 Ray 上都过。
+  // 英语也走 api,不走 api-flash:2026-10-31 api-flash 真跑英语四个 activity,13 次里 5 次第一轮只出一张拍照卡、没有讲稿(那时还有卡)(实时页嘴没话可念);max 在 Ray 上都过。
   // 想省钱改 api-flash,先跑 activity eval。medium 是 2026-10-27 给 flash 加的(low 偶尔只出卡或念规则,详见年级教学包验证记录)
   'english-tutor': { display: '英语老师', description: '英语老师。单词、句子、课文、口语课都找它', subject: '英语', runtime: 'api', policy: { effort: 'medium' } },
 };

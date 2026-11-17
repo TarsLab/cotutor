@@ -18,7 +18,7 @@
 请阅读 https://cdn.jsdelivr.net/npm/cotutor@latest/INSTALL.md ,一步一步带我在这台电脑上安装 cotutor
 ```
 
-**自己装:** 需要一台电脑(Mac 最省事)、[Node.js](https://nodejs.org) ≥ 22.18(装 LTS 版),和一个百炼账号(北京地域,按量付费)。老师的嘴和脑都走百炼,由应用直接调用,不用另装模型客户端:嘴是 `qwen3.8-omni-flash-realtime`,听孩子说、照着讲稿念;脑是 `qwen3.8-max`,写讲稿和页上的动作。
+**自己装:** 需要一台电脑(Mac 最省事)、[Node.js](https://nodejs.org) ≥ 22.18(装 LTS 版),和一个百炼账号(北京地域,按量付费)。老师的嘴和脑都走百炼,由应用直接调用,不用另装模型客户端:嘴是 `qwen3.8-omni-flash-realtime`,听孩子说、照着讲稿念;脑是 `qwen4-max`,写讲稿和页上的动作。
 
 一行装好(会查 Node 的版本、连不上 npm 就用国内镜像;不用 sudo、不改系统设置)。最后那三个是孩子的短名(小写字母,不用真名)、称呼、年级,不写就只装程序:
 
@@ -117,7 +117,7 @@ import { loadWorkspace } from 'cotutor/workspace';                        // 解
 
 ## 配置模型
 
-**缺省:应用直连百炼。** 嘴和脑都用家长端「首页」填的那份百炼按量 API Key 与业务空间 ID,存在本机 `~/.config/cotutor/bailian.json`(几个孩子的 workspace 共用)。老师用哪个模型写在 `cotutor.json` 的 `runtimes` 里:出厂的 `api`(`qwen3.8-max`,三位老师都用它)和 `api-flash`(`qwen3.8-flash`,便宜些;换之前先跑 `cotutor activity eval` 看例子过不过)。听写念词的配音、听写认字、照片上认字也用这份 key。
+**缺省:应用直连百炼。** 嘴和脑都用家长端「首页」填的那份百炼按量 API Key 与业务空间 ID,存在本机 `~/.config/cotutor/bailian.json`(几个孩子的 workspace 共用)。老师用哪个模型写在 `cotutor.json` 的 `runtimes` 里:出厂的 `api`(`qwen4-max`,三位老师都用它;2026-11-17 以前装的是 `qwen3.8-max`,升级不会替你换,想换就把 `runtimes.api.model` 改成 `qwen4-max`)和 `api-flash`(`qwen3.8-flash`,便宜些;换之前先跑 `cotutor activity eval` 看例子过不过)。听写念词的配音、听写认字、照片上认字也用这份 key。
 
 **key 只放 `~/.config/cotutor/`**,所有命令(`serve`、`send`、`replay`、`doctor`……)读同一处,环境变量(`DASHSCOPE_API_KEY` 之类)和别的工具的配置都不看:
 

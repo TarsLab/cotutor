@@ -153,7 +153,7 @@ export type CliRuntime = z.infer<typeof CliRuntimeSchema>;
  */
 export const ApiRuntimeSchema = z.object({
   api: z.literal('bailian').describe('哪家的接口:现在只有百炼'),
-  model: z.string().min(1).describe('模型名,如 qwen3.8-max'),
+  model: z.string().min(1).describe('模型名,如 qwen4-max'),
   maxSteps: z.number().int().min(1).max(20).optional().describe('一轮里模型最多来回几次(每用一次工具多一次);缺省 6'),
 });
 export type ApiRuntime = z.infer<typeof ApiRuntimeSchema>;

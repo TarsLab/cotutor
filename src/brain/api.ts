@@ -9,7 +9,7 @@
  * - 整段压缩(runner 在上下文过了 32k 的下一轮给 compact):之前的历史不再发,前情(应用照索引拼的)放在这一轮的消息前头,
  *   最近交的照片带过来;这一轮记 compacted,以后从它算起
  * - 工具:这轮带工具(read / on)就给只读的三样(./api-tools.ts),不带就一样没有;一轮最多来回 maxSteps 次
- * - 思考:同 qwen 的档(low 不想、medium 想一点、high 不限;带工具的轮次至少想一点)。qwen3.8 系列和 Qwen Code 一样发 reasoning_effort(effortOf),
+ * - 思考:同 qwen 的档(low 不想、medium 想一点、high 不限;带工具的轮次至少想一点)。qwen3.8 系列、qwen4 系列发 reasoning_effort(effortOf,两代的档不一样),
  *   别的模型按 thinking_budget 卡;2026-10-31 Ray 上对照过:qwen3.8-max 卡 1024 时有照片的话题每轮想满,首句 18 秒,qwen 运行时 6 秒
  * - .log 落统一事件(一行一条 CliEvent,parseEventLine 认),孩子端的流式板书、家长端看原文、转录、工具清单都走原来那套读法;
  *   用量按每次请求累计,有一次没回 usage 就不记(不当成零);另记命中缓存的输入与最后一次请求的输入(这一轮结束时上下文多大)
@@ -35,17 +35,27 @@ import type { BrainHooks, BrainRequest, BrainResult, BrainRun } from './index.ts
 /** 计划里记的 cli 名:API 的轮次按它分流 */
 export const API_CLI = 'api';
 /**
- * 出厂的 API 运行时(2026-10-31 起新装缺省 api,Qwen Code 那两条留作备用):模型同那两条——api 对 qwen(qwen3.8-max),api-flash 对 qwen-flash(qwen3.8-flash)
+ * 出厂的 API 运行时:api 是三位老师用的(qwen4-max;2026-11-17 和 qwen3.8-max 各跑一遍出厂例子后换的,记录在 grades/grade-2/VALIDATION.md),
+ * api-flash 便宜些(qwen3.8-flash;qwen4 还没有 flash)
  */
 export const FACTORY_API_RUNTIMES: Record<string, ApiRuntime> = {
-  api: { api: 'bailian', model: 'qwen3.8-max' },
+  api: { api: 'bailian', model: 'qwen4-max' },
   'api-flash': { api: 'bailian', model: 'qwen3.8-flash' },
 };
 const DEFAULT_STEPS = 6;
 /** 想一点:没有思考档的模型思考最多多少 token(有档的发 reasoning_effort,见 effortOf) */
 const THINK_LITTLE = 1024;
-/** 有思考档的模型:qwen3.8 系列(2026-10-31 照当时 Qwen Code 的档对过),百炼兼容接口认 reasoning_effort */
-const TIERED = /^qwen3\.8-/;
+/** 百炼兼容接口的 reasoning_effort 能发哪几档 */
+export type Effort = 'low' | 'high' | 'xhigh';
+/**
+ * 有思考档的模型,和「不限」对到哪一档:
+ *  - qwen3.8 系列(low / medium / xhigh,2026-10-31 照当时 Qwen Code 的档对过):不限 = xhigh;
+ *  - qwen4 系列(low / high / xhigh,缺省 high;2026-11-17 照百炼文档,没真跑过):不限 = high——它的 xhigh 是 13 万 token 以上的思考,孩子等不起。
+ */
+const TIERS: readonly { model: RegExp; most: Effort }[] = [
+  { model: /^qwen3\.8-/, most: 'xhigh' },
+  { model: /^qwen4-/, most: 'high' },
+];
 /** 一张照片最大多少字节(百炼按 base64 收,太大的不附,记一条提醒) */
 const IMAGE_MAX = 10 * 1024 * 1024;
 const MIME: Record<string, string> = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif' };
@@ -62,17 +72,18 @@ export function thinkingOf(effort: Policy['effort'] | undefined, tools: BrainReq
 }
 
 /**
- * 有思考档的模型发 reasoning_effort(照当时 Qwen Code 的档):想一点 = low、不限 = xhigh;不想或没有档 → null,照 thinkingOf 发。
+ * 有思考档的模型发 reasoning_effort:想一点 = low、不限 = 这一代的那一档(TIERS);不想或没有档 → null,照 thinkingOf 发。
  * low 是它自己看着想:闲聊想一两百 token,认照片题想得多;thinking_budget 是死卡,1024 时有照片的话题每轮都想满(2026-10-31)
  */
-export function effortOf(model: string, effort: Policy['effort'] | undefined, tools: BrainRequest['tools']): 'low' | 'xhigh' | null {
-  if (!TIERED.test(model)) return null;
+export function effortOf(model: string, effort: Policy['effort'] | undefined, tools: BrainRequest['tools']): Effort | null {
+  const tier = TIERS.find((x) => x.model.test(model));
+  if (!tier) return null;
   const t = thinkingOf(effort, tools);
-  return !t.enableThinking ? null : t.thinkingBudget ? 'low' : 'xhigh';
+  return !t.enableThinking ? null : t.thinkingBudget ? 'low' : tier.most;
 }
 
 /** AI SDK 的 alibaba 只认 thinking_budget:在 fetch 这一层把请求体里的换成 reasoning_effort(SDK 给的中间件口子) */
-export function effortFetch(effort: 'low' | 'xhigh', base: typeof fetch = fetch): typeof fetch {
+export function effortFetch(effort: Effort, base: typeof fetch = fetch): typeof fetch {
   return (input, init) => {
     if (typeof init?.body !== 'string') return base(input, init);
     const { thinking_budget: _budget, ...body } = JSON.parse(init.body) as Record<string, unknown>;

@@ -15,9 +15,10 @@ export const DASHSCOPE_HOST = 'dashscope.aliyuncs.com';
 
 /**
  * Token Plan 个人版调得通的模型(2026-10-13:文档表、token-plan 的 /models、实测三处对过)。
- * 没有 omni 系列、qwen-image-2.0、qwen-plus
+ * 没有 omni 系列、qwen-image-2.0、qwen-plus。qwen4-max 是 2026-11-17 照发布说明加的,没实测;个人版要是没有它,回的多半不是 planRefusal 认的那几类,不会自己改走按量,从这里拿掉
  */
 export const TOKEN_PLAN_MODELS: ReadonlySet<string> = new Set([
+  'qwen4-max',
   'qwen3.8-max',
   'qwen3.8-flash',
   'qwen3.7-max',

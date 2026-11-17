@@ -268,7 +268,7 @@ try {
 {
   const { configTemplate } = await import('../src/app/cli/skeleton.ts');
   const tpl = JSON.parse(configTemplate({ slug: 'x', name: 'x', tutors: [] }));
-  check('出厂运行时:缺省 api,还有 api-flash', Object.keys(tpl.runtimes).join() === 'default,api,api-flash' && tpl.runtimes.default === 'api' && tpl.runtimes.api.model === 'qwen3.8-max' && tpl.runtimes['api-flash'].model === 'qwen3.8-flash', JSON.stringify(tpl.runtimes));
+  check('出厂运行时:缺省 api,还有 api-flash', Object.keys(tpl.runtimes).join() === 'default,api,api-flash' && tpl.runtimes.default === 'api' && tpl.runtimes.api.model === 'qwen4-max' && tpl.runtimes['api-flash'].model === 'qwen3.8-flash', JSON.stringify(tpl.runtimes));
 }
 // ---- 老 workspace 迁移(步 2):cotutor.json 是政策文件,机器不自动改,所以要算差异 + 只补缺 ----
 {

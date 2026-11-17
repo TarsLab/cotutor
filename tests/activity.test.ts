@@ -99,7 +99,7 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   check('没有这个工具人(画家 2026-11-15 删了)', has(fixesAfter('## 认字收到什么', '## 魔法师收到什么'), '没有「魔法师」这个工具人') && has(fixesAfter('## 认字收到什么', '## 画家收到什么'), '没有「画家」这个工具人'));
   check('工具人那节没有围栏', has(fixesAfter('```认字\n', '```text\n'), '要有一个 ```认字 围栏'));
   const factoryTutors = (JSON.parse(configTemplate({ slug: 'x', tutors: await shippedAgents() })) as { tutors: Record<string, { runtime?: string }> }).tutors;
-  check('出厂三位老师都走 api(应用直连百炼 qwen3.8-max;英语 api-flash 第一轮常只出卡,2026-10-31)', ['chinese-tutor', 'math-tutor', 'english-tutor'].every((t) => factoryTutors[t].runtime === 'api'));
+  check('出厂三位老师都走 api(应用直连百炼;英语 api-flash 第一轮常只出卡,2026-10-31)', ['chinese-tutor', 'math-tutor', 'english-tutor'].every((t) => factoryTutors[t].runtime === 'api'));
   check('缺第一句', has(fixesAfter('第一句: ', '先说: '), '「第一句: …」'));
   check('缺人设', has(fixesAfter('你是这个家的语文老师,今天陪孩子练词', '今天陪孩子练词'), '以「你是」开头'));
   check('缺收', has(fixesAfter('收: 问完', '最后: 问完'), '「收: …」'));

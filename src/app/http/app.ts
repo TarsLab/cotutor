@@ -4,6 +4,7 @@
  * 家长端 /parent 与 /api/parent/*(给不懂技术的家长日常用)、工作台 /dev 与其余 /api/*(对话、看原文、cotutor.json 补丁);声音文件从 /api/audio 取。
  * 配置热重载:每个请求先读一遍 cotutor.json,原文变了就重读(不比修改时间,Windows 上连写两次常常一样);改坏了留旧配置并把错误挂在 /api/health 上。
  */
+import { trialVoice } from './trial-voice.ts';
 import { existsSync } from 'node:fs';
 import { appendFile, mkdir, readFile, readdir, stat } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -717,6 +718,8 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       await recordKidLog(ws, row, { device, ip: client.ip, srv: { v: BUILD.version, commit: shortCommit(BUILD.commit), started: BUILD.started } }, ctx.now()).catch((err) => console.error('kid-log: 落盘失败', err));
       return { status: 200, json: { ok: true }, ...(known ? {} : { setCookie: deviceCookie(device, Boolean(ctx.listen?.().https)) }) };
     }
+    // 试用(--sandbox):打的字配成孩子的声音,孩子端当麦克风推给嘴(trial-voice.ts);别处 404
+    if (p === '/api/kid/trial/voice' && method === 'POST') return trialVoice(ws, body);
     // 按住说话的诊断:真机上出错是静默的,哪一步断了只有页面自己知道;只收事件码与毫秒,不收字也不收声音
     if (p === '/api/kid/voice-diag' && method === 'POST') {
       if (!isObj(body) || JSON.stringify(body).length > 4000) return { status: 400, json: { error: 'bad_request' } };
@@ -1088,7 +1091,8 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     // 网页图标(src/ui/shared/favicon.ts):所有页面都是 cotutor 的双 C;no-cache:换了 logo 马上见到
     const fav = faviconResponse(p);
     if (fav) return { status: 200, ...fav, cacheControl: 'no-cache' };
-    if (p === '/') return { status: 200, html: kidPage(esc(ws.config.title), {}, await stageVersion()) };
+    // 试用(--sandbox):孩子端多一条键盘打字(kid-page.ts 的 TRIAL)
+    if (p === '/') return { status: 200, html: kidPage(esc(ws.config.title), ws.sandbox ? { trial: true } : {}, await stageVersion()) };
     // 家长端:也是孩子端页面本身,数据走家长接口(答案在、家长的话在),卡锁着;自己的清单,加到主屏幕才不会拿到孩子端那份
     if (p === '/parent') return { status: 200, html: parentPage(esc(ws.config.title)) };
     // 家长端「首页」(设孩子的首页与几项常改的设置)

@@ -470,7 +470,8 @@ export function createMock(opts: MockOptions = {}): Mock {
     await lecturesLoaded;
     const url = new URL(path, 'http://x');
     const p = url.pathname;
-    if (p === '/') return { status: 200, html: kidPage(title, {}, await stageVersion()) };
+    // mock 就是开发者在试:孩子端多一条键盘打字(kid-page.ts 的 TRIAL)
+    if (p === '/') return { status: 200, html: kidPage(title, { trial: true }, await stageVersion()) };
     if (p === '/parent/qr') return mock.listen ? { status: 200, html: qrPage(title, mock.listen(), url.searchParams.get('via') === 'ip' ? 'ip' : 'name', url.searchParams.get('to') === 'parent' ? 'parent' : 'kid') } : { status: 404, json: { error: 'not_listening' } };
     if (p === '/dev/voice') return { status: 200, html: VOICE_GALLERY_PAGE };
     if (p === '/manifest.webmanifest') return { status: 200, json: webManifest(title), contentType: 'application/manifest+json; charset=utf-8' };

@@ -33,7 +33,7 @@ description: 排 cotutor 孩子端的首页。孩子学完之后,家长在 works
 ## 一、看今天
 
 1. `cotutor home show`:现在发布的是哪份、每个按钮被点了几次。先知道上次推荐的,孩子选了什么。
-2. 有脸的老师逐位读 conversations/<老师>/<今天>.json。有脸的老师 = cotutor.json 里键以 -tutor 结尾、enabled、不 hidden 的。要看的:
+2. 老师逐位读 conversations/<老师>/<今天>.json。要读的老师 = cotutor.json 的 tutors 里 enabled、不 hidden 的。要看的:
    - 话题(thread)。
    - 孩子的话(from: kid)。带 via、且 button 是数字的那条,是按钮上的字,不是孩子说的。
    - 每轮的 kidText 与 section.cards。

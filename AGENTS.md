@@ -2,40 +2,41 @@
 
 本文件给开发本仓库的 agent;在家长的电脑上安装 cotutor 看 `INSTALL.md`。
 
-家里的 AI 老师团,和家长一起教。应用仓,2026-09-08 起。2026-10-31 起原来的两个旁仓都并进来了:画面引擎 drawtell 成了 `src/chalk/`(命令 `cotutor chalk`),配音 voxtell 成了 `src/media/tts.ts`。
+家里的 AI 老师团,和家长一起教。画面引擎(原来的旁仓 drawtell)在 `src/chalk/`(命令 `cotutor chalk`),配音(原来的 voxtell)在 `src/media/tts.ts`。
 
-本文件写仓库结构、开发方式与当前约束。历史讨论看 git log。Codex 直接读本文件,Claude Code 经 `CLAUDE.md` 的 `@AGENTS.md` 引入;改规矩只改这里。
+本文件写仓库结构、开发方式与当前约束,每个会话都整篇读,所以只放哪一块都用得上的;一块自己的细节在 `docs/dev/`,动手前读对应那篇(下面「动哪一块先读哪篇」)。历史讨论看 git log。Codex 直接读本文件,Claude Code 经 `CLAUDE.md` 的 `@AGENTS.md` 引入;改规矩只改这里和 `docs/dev/`,一条规矩只写一处。
 
 - 使用、配置与开发启动见 `README.md`;iPad 真机见 `docs/iPad与iPhone.md`。
-- `docs/` 只维护六篇:设备使用、vault、提示词、卡片协议、年级教学包和词表;根目录的 `INSTALL.md` 给替家长安装的 agent 看,随 npm 包发,`cotutor guide`(`src/app/cli/guide.ts`)原样打印,README 给家长的那句就是叫助手跑 `npx cotutor@latest guide`(不用输网址、走 npm 能换国内镜像、和装上的版本对得上);`tests/install-doc.test.ts` 盯着里面的命令、旗标和字段。契约以 `src/schema/` 为准,具体行为以实现和测试为准。
-- 改 `grades/`、`skills/`、`cards/` 下的 md 先看 `docs/写提示词.md`;自造的词查 `docs/词表.md`。
+- `docs/` 根下七篇给家长和写提示词的人:设备使用、日常使用、老师与配置、vault、提示词、年级教学包和词表(README 只走家长装起来的主线,细节在这几篇);`docs/dev/` 给开发 agent,一块一篇,写现在是什么样、不写怎么变成这样的。根目录的 `INSTALL.md` 给替家长安装的 agent 看,随 npm 包发,`cotutor guide`(`src/app/cli/guide.ts`)原样打印,README 给家长的那句就是叫助手跑 `npx cotutor@latest guide`(不用输网址、走 npm 能换国内镜像、和装上的版本对得上);`tests/install-doc.test.ts` 盯着里面的命令、旗标和字段。契约以 `src/schema/` 为准,具体行为以实现和测试为准。
+- 改 `grades/`、`skills/`、`cards/` 下的 md 先看 `docs/写提示词.md`;自造的词查 `docs/词表.md`。年级教学包的来源、旧版迁移和贡献要求见 `docs/年级教学包.md`。
 - 草稿与随手记放 `docs/wip/`(gitignore)。已有的 `docs/archive/` 是本机材料;清理正式文档时不删除这些未入库文件。过时的正式文档直接删除,历史由 Git 保存。
-
-年级教学包的来源、旧版迁移和贡献要求见 `docs/年级教学包.md`。
 
 ## 目录
 
-- `grades/grade-<n>/agents/<老师>/activities/<名>.md` 出厂 activity(孩子从首页一个按钮进去的一种做法):一节一个读者,「老师怎么带」就是这个话题老师的整份系统提示(人设、`第一句:`、`收:` 都在里面);一科通用的做法是其中「### <科>这一科」那一节,这位老师的每个 activity 里一字不差(`tests/activity.test.ts` 盯着)。init 拷进 workspace 的 `agents/<老师>/activities/`(老师的家),hash 记 `.cotutor/shipped.json`;形状在 `src/schema/activity.ts`,解析与检查在 `src/runtime/activity.ts`;文件写法在 `docs/写提示词.md`。老师文件(`agents/<老师>.md`)2026-11-16 起不出厂、不读了;旧 workspace 里的不删,refresh 与 doctor 的 `tutor.files` 提一句(`src/app/cli/tutors.ts` 的 `retiredTutorFiles`)
-- `skills/<name>/` 出厂技能:cotutor-tutor(老师们共同的守则,应用注入上下文包)、cotutor-analyze、cotutor-tune、cotutor-home(家长在 workspace 里排首页,references 里有 `cards/*/card.md`);init 拷进 workspace 的 `.agents/skills/`(Codex、Qwen Code 认这里),`.claude/skills` 是链到它的(Claude Code 只认那里);不再出厂的机器件列在 `src/app/cli/skills.ts` 的 `RETIRED_SKILLS`,refresh 时删(板书写法 cotutor-board 2026-11-17 退了)
-- `cards/<kind>/` 首页两种牌(老师牌 `tutor`、听写牌 `dictation`)的协议:`card.md` 八栏(例子即测试)+ `card.css`;`cards/动作怎么写.md` 是给老师的讲稿与动作写法(进系统提示)。课里的卡 2026-11-17(阶段 5)删了:老师写了围栏不上页、不念,给家长记一句;以前记录里的卡不再显示
-- 一节课铺哪种页(2026-11-16 阶段 3):activity 头上 `base: textbook | photo | lecture`(`src/schema/activity.ts` 的 `ACTIVITY_BASES`;不写当 `photo`,`src/runtime/activity.ts` 的 `activityBase`)。以前头上的 `board: page`、`cards:` 读进来就丢,activity check 提一句。话题第一条记 `base`(以前记录里的 `board: 'page'` 读进来就丢,那些话题不再当一节课)。方砖和 activity 按钮都带 `base`、`listen`(`src/runtime/home/` 的 `activityLook`),孩子端照它走:textbook 直接开话题铺目录,photo 先到拍照屏(拍照、相册、选课本页、不拍用白纸;kid-page 的 `BP`、`bpStartBoard`、`bpPhotos`、`bpWhite`、`bpOpenLesson`)
-- 照片页(2026-11-16 阶段 3 任务 1、2):孩子拍的作业像课本一样页宽铺、上下滚,几张从上往下连着(`PageSource` 的 `photo`,最多 `PAGE_PHOTOS_MAX` 张;id 是「作业」)。上传回宽高(`src/shared/jpeg.ts` 的 `imageSize` 读文件头),孩子端照它马上铺(`lessonStep` 的 `{t:'photo'}`),服务端收到那一条照同样的规矩铺(runner 的 `lessonOn`);没拍就铺一张白纸页(`[[翻 白纸]]` 也加它,id「白纸」,整页就是一条白纸条)。文字层:runner 一收到照片就在后台照 activity 的「认字收到什么」认(`startPhotoWords`,规则 `src/scenes/photo-words/recognize.ts`,要了行框和题框 `FORMAT_BOXED`;结果流式落在照片旁边 `<照片>.words.json`),`src/chalk/kit/photo.ts` 的 `photoBookPage` 把认出的行、题、字词换成课本的样子(BookPage + 带题框 `area` 的 problem 块),看、圈、遮、盖、点字和课本用同一份(`bookTarget`、`bookFind`、`bookPick`、`bookView`);照片页还认「第 2 张」「第 2 张第 3 题」(`lesson-fit.ts` 的 `photoTarget`)。手拍的歪照片题框还行、行框偏(结论在 `scripts/probe-photo-boxes.mjs` 末尾)。舞台照片画进画布,点字照 `/api/kid/photo-words` 认出的(认完以前隔一会儿再拉)。数学的照片、课本上不弹田字格(页的 `pick`)。英文单词也能点(`bookPick` 点中字母取整个词)
-- 白纸条上的图形(`src/chalk/kit/` 的点阵 `dots.ts`、方向盘 `compass.ts`;`[[摆 …]]` 的参数照 `readKitLines` 读):参数 → 画面的纯函数,孩子在上面圈、切、转,`Kit.read` 照几何说大概(`src/board/strip.ts` 的 `stripRead`)。教具卡(`kit`、```照片、```白板)2026-11-16 删了:课里老师不写卡,写讲稿里的动作;以前记录里的教具卡、照片板不再显示
-- 小课堂(2026-11-17 阶段 5):一节课里的一页(`PageSource` 的 `lecture`,id「小课堂」),课包、视频照时刻编号,舞台 `src/ui/stage/lecture.tsx` 照一节课的状态放;从首页小课堂按钮进来先铺它,孩子从头看完才能开口(kid-page 的 `canSend`),停住能画,画的几处带截图随开口那条交给脑;老师写 `[[看 0:19–0:30]]` 放课里一段(那句念完放、放完接着念,`lineFlags` 的 `play`)。看图说话:`base: photo` + `listen: open`,孩子的话老师 `[[写 …]]` 在图下面的白纸条上
-- 一节课与讲稿里的动作(2026-11-16 阶段 2、3,计划在 `docs/wip/多模态教学harness-开发计划.md`;出厂的 activity 都是):老师不写卡,对页做什么写在讲稿的句子后面——`[[翻 6的乘法口诀]]` `[[看 例 4]]` `[[圈 …]]` `[[遮 …]]` `[[盖 3×5=15]]` `[[摆 点阵 6 行 6 个]]` `[[写 …]]` `[[擦]]` `[[请 圈]]`,写法给老师的那页是 `cards/动作怎么写.md`(系统提示里跟在 activity 后面,`actsGuide`)。解析在 `src/board/acts.ts`(讲稿里所有 `[[ ]]` 都在这里读;以前的 `[[play]]` `[[echo]]` 不认了,丢掉记一行),动作记在句子上(`BoardLine.acts`,第一句前面的在 `BoardSection.acts`);落到页上(照页的文字层找框,`LineAct.do`;页的文字层从哪来是 `LessonSource`:课本、照片认出的字)在 `src/board/lesson-fit.ts`,落不了的给家长记一句。一节课的状态(页集:课本的一课、作业照片、白纸;窗、每页老师的一层 / 孩子的一层 / 开放的、白纸条)形状在 `src/schema/lesson.ts`,怎么变是纯函数 `lessonStep`(`src/board/lesson.ts`,只引类型、内联进孩子端),落盘 `<date>.<话题>.lesson.json`(`src/runtime/journal/lesson-store.ts`,改动排成一条链)。服务端一轮定稿把这一节的动作落进状态(`lesson.jobs` 记落过的那几轮);孩子端(kid-page 的 `LS`)第一句前面的马上落、每一句的等它念完(下一句开始放或嘴放完)才落,孩子打断、开了下一轮就一下子落完;回到这节课照 `/api/kid/lesson`。孩子在页上的点字、揭开、挪窗、落笔(`{k:'stroke'}`、`wipe`、白纸条里方向盘的 `turn`)经实时那条线报给服务端,也走 `lessonStep`;call.ts 里板的事排成一条,交给脑之前等它记完(「给老师看」先交窗图)。上下文包分两层(`src/runtime/context/board-pack.ts`,runner 的 `lessonSlate`):`board:` 每轮只说会变的(底、页集、你画的、开放、孩子做的、最近点的、孩子在看;`lessonSlateBits`),页上印的字一页一条 `<page>`(`pageNotes`;课本一课一条、照片一张一条),第一次看到时给、之后不重给(板的日志 `turn.told`),压缩以后重给现在这一页;压缩的前情加一段「讲到哪了」(`thread-digest.ts` 的 `lessonProgress`)。附给脑的图一条路:这一轮新拍的照片附整张(`images`),窗里那一块附这一轮(`boards`,过后换占位)。收笔(`src/runtime/live/pen.ts` 的 `turnStep`,秒数 `live.pen`):舞台落笔报 `{k:'pen'}`、抬笔是收下的那一笔,停一会儿没再写 call.ts 替他交一轮(`live.app: pen`,嘴先说「我看看你写的」,`cues.ts` 的 `pen`)。白纸条(`src/board/strip.ts` 排、舞台画):`看` 着一道题时 `摆`、`写` 落进它下面的一条白纸,页宽、跟着页滚,一道题一条、看别处收起来、回来原样在;题目太高时白纸条从窗口中间偏上开始;孩子写在白纸条上的笔跟着它(`kid.stripInk`)。录像照孩子端记的一节课的样子放(play 的 `lesson`)。没有课本卡了(画法「课本」2026-11-16 删,以前记录里的不再显示)
-- 课本做底(2026-11-14,讨论在 `docs/wip/语文预习-PDF课本与镜头交互.md`):activity 头上 `base: textbook`(语文、数学的「预习」)不拍照,页上铺 vault `教材/` 下这一科这学期的课本 PDF(家长从教育网站下载,个人学习用;仓库和 npm 包里都不放教材)。服务端只读 PDF 的文字层,不认图:`src/memory/textbook-index.ts` 拆字、分行、解拼音(人教的拼音是自造编码的字体,一个大写字母 = 带调的韵母,表在 `PINYIN_TONES`)、读目录与页脚页码,`textbook-pdf.ts` 挑册子、做索引存 `.cotutor/textbooks/<指纹>.json`(不进备份)。数学课本(文件名带「数学」,索引的 `layout: math`,2026-11-15 照人教版数学二上定的):目录没有点线(序号、单元名、页码各一段),单元下面的小节、课题从页里的标题读出来(`mathRows`;标题怎么认在 `src/schema/textbook.ts` 的 `mathHeading`);一课分成标题、例题、栏目(做一做、练一练)和栏目下面的题(`book.ts` 的 `mathBlocks`),老师写 `[[看 例 2]]`、`[[看 练一练第 3 题]]`;一课最多铺 `BOOK_MAX_PAGES` 页;测试的书是 `tests/_math-book.ts`。数学课本不开点字(页的 `pick`)。老师看不见图,所以窗停下来以后(刚铺好、老师「看」移完、孩子挪完、落笔)舞台把窗里那块导成 jpeg(`book.tsx` 的 `shoot`,画上老师的圈、盖住的块、白纸条和孩子的笔),经实时那条线 `{t:'board', body:{k:'shot'}}` 交给服务端,只留最新一张 `<date>.<话题>.shot.jpg`;下一轮挪成 `<date>.<job>.shot.jpg` 附给脑(`BrainRequest.boards`),`board:` 的「孩子在看」注一句。窗图:数学课本、照片、白纸收,语文课本和目录不收(字都在文字层里;`boardEvent`)。`[[盖 3×5=15]]` 整个字框盖住(拼音的 `遮` 只盖字头上一条),孩子点开报 `reveal`,下一轮「孩子做的」里有「揭开了盖住的」。读 PDF 的坐标要经视口(`convertToViewportPoint`):人教的页面框原点是 (8.5, 8.5),只用页高翻 y 时字框整体偏右上 8.5pt。课本的几何在 `src/chalk/kit/book.ts`:一课几页竖排(页宽 1000),分自然段 / 栏目 / 诗一句一段,`看` 认段、页、栏目、原话。舞台 `src/ui/stage/book.tsx` 照一节课的状态画(页面发 `{type:'lesson'}`):pdf.js 现画(先一张中等清晰度、停下再把窗里那块按屏幕像素重画);窗只有页宽、两倍两种大小(2026-11-15),双击切,不两指缩放,页宽时手指只上下滚、松手带惯性,老师的「看」只滚过去、那一块左边亮一道竖条(只读的录像照记录的窗摆,`camFor`);Apple Pencil(pointerType pen)写画(请了写、圈…才能落笔),手指永远不落笔;轻点报 pick,挪完报 view(板的日志说成「第 55 页:第 7 段」,上下文包 `board:` 的「孩子在看」)。课本页的样子(2026-11-15):课本铺满屏宽、没有工具栏;老师是贴着屏幕边的一张签(`#stage.bp.bk #cv-hold`,落在课本的页边里),「擦掉」在舞台里贴在它正下方(`.bk-wipe`,画了才出现);「给老师看」这一轮以后落了笔才能按(`#stage.bp #st-go:disabled`),能交了是实心的学科色;顶栏写课名、不垫渐隐;老师说的话是底下一条字幕。平台盖的水印不铺(2026-11-15):页顶的社标是 PDF 的水印批注,舞台渲染时不画批注(`annotationMode: 0`);页底那行「仅供个人学习使用」不在文字层,照整册印得最低的那行字(页码)以下裁掉(`bookCut`,一册一个数,记在页的 `cut`),裁了的页直接连着、不留缝;vault 里的 PDF 不改。pdf.js 不是运行时依赖:`pdfjs-dist` 在 devDependencies,`build:stage` 把压缩件拷进 `dist/stage/pdf/`,服务端和舞台用同一份。孩子端:方砖带 `base`,点了直接开话题、铺 `/api/kid/textbook/base` 给的目录(一节课的样子),顶栏没有拍照(kid-page 的 `bpOpenLesson`;照片页才有 `#stage.ph`)
-- 孩子说当一种作答(2026-11-17 阶段 4):讲稿里 `[[请 说 duck]]` 哪个 activity 都能写(以前口语课热身的 `[[echo]]` `[[say]]`):还是开放「说」的动作,另外记成这句的 `echo`,念完停下等孩子说;他说的是不是那一句照转写比(`src/board/echo.ts`,英文按词、中文按字),说了接着念下一拍、说的是别的交脑、两拍没开口交脑(`app: quiet`),那句是这一轮最后一句时他说了、没开口都交脑;每拍一行交给脑(上下文包 `live.echo`)。activity 头上 `listen: open` 一直听(`ACTIVITY_LISTENS`;话题第一条记 `listen`,回到这节课照它换);`reply: mouth` 嘴先答(`ACTIVITY_REPLIES`;runner 起一轮时经 `SendStarted.reply` 告诉 call.ts):最后那句请他说的,他答了嘴先在那个范围里接——说中了嘴接一句当接住、交脑;没说中嘴提示一下接着等他,连着两次第三次交脑(`REPLY_MISSES`);嘴提示过的下一轮带给脑(`live.mouth`)。嘴先答时舞台交的窗图(shot)跟着孩子那段声音进嘴的对话(`giveShot`),一条连接里给够 `MOUTH_IMAGES_SWAP` 张安静时换连接(起点,没量过)
-- 首页「今天」(2026-11-15):话题有孩子参与的图出现了才算开了头(孩子发照片;老师在白纸条上摆了图形;课本只算 `[[翻 …]]` 到一课的,目录不算;只说话的不算),规则在 `src/runtime/kid-view.ts` 的 `startsThread` / `startedThreads`;没开头的照存、家长照看,孩子端不列。首页标题下面一行(`/api/kid/home` 的 `today`,kid-page 的 `renderToday`)一格一个今天开了头的话题,点了回那个话题接着聊;老师页没有「更多」(以前的、新话题)了,首页按钮、方砖进去都是新话题,不再问「接着刚才那个」。首页没有新话题、开场按钮、接着按钮(2026-11-16):话题都从 activity(按钮、方砖、小课堂)开始。孩子端的一条只有带 `via`(按钮、方砖)才开新话题,今天还没有话题又没带的回 400 `no_thread`(`src/runtime/kid-input.ts`);runner 里孩子开新话题不带 activity 就拦(`cotutor send` 要 `--activity`,工作台选「＋ 新话题:<activity>」);不带 activity 的只剩系统任务(记账、整理),系统提示是一句「你是这个家的<显示名>」(runner 的 `bareSystem`)。测试要「随便一轮」开 `tests/_chat.ts` 的「聊」,探针用 `scripts/_live-send.mjs` 的 `startChat`。格子上的图是预览图:舞台停下来(页刚铺上 4 秒、孩子动手停下 1.5 秒)页面发 `control peek`,舞台回长边 480 的 jpeg,PUT `/api/kid/conversations/<老师>/preview` 存成 `<date>.<话题>.preview.jpg`(`src/runtime/journal/preview.ts`,只留最新一张);还没有就用孩子最后发的照片
+- `grades/grade-<n>/agents/<老师>/activities/<名>.md` 出厂 activity(孩子从首页一个按钮进去的一种做法):一节一个读者,「老师怎么带」就是这个话题老师的整份系统提示(人设、`第一句:`、`收:` 都在里面);一科通用的做法是其中「### <科>这一科」那一节,这位老师的每个 activity 里一字不差(`tests/activity.test.ts` 盯着)。init 拷进 workspace 的 `agents/<老师>/activities/`(老师的家),hash 记 `.cotutor/shipped.json`;形状在 `src/schema/activity.ts`,解析与检查在 `src/runtime/activity.ts`;文件写法在 `docs/写提示词.md`。老师文件(`agents/<老师>.md`)不出厂、不读;旧 workspace 里的不删,refresh 与 doctor 的 `tutor.files` 提一句(`src/app/cli/tutors.ts` 的 `retiredTutorFiles`)
+- `skills/<name>/` 出厂技能:cotutor-tutor(老师们共同的守则,应用注入上下文包)、cotutor-analyze、cotutor-tune、cotutor-home(家长在 workspace 里排首页,references 里有 `cards/*/card.md`);init 拷进 workspace 的 `.agents/skills/`(Codex、Qwen Code 认这里),`.claude/skills` 是链到它的(Claude Code 只认那里);不再出厂的机器件列在 `src/app/cli/skills.ts` 的 `RETIRED_SKILLS`,refresh 时删
+- `cards/<kind>/` 首页两种牌(老师牌 `tutor`、听写牌 `dictation`)的协议:`card.md` 八栏(例子即测试)+ `card.css`;`cards/动作怎么写.md` 是给老师的讲稿与动作写法(进系统提示)
 - `themes/default/` 出厂主题:`theme.json` 槽表、`kid.css`
-- `avatars/` 出厂头像:三门主科各一张木钉娃娃(webp),跟着包走、不拷进 workspace;老师没写 avatar(或还是旧版 init 写的 🧮 📚 🔤)时由 `src/app/http/avatars.ts` 给出;重渲见 `scripts/avatars/peg.py`(借 figshot 的影棚);配音(听写念词、课包配音)同样有出厂缺省,`SHIPPED_CARD_VOICES`(`src/schema/config.ts`,不写进 cotutor.json),读一律经 `cardVoice()`。家长端首页「样子与声音」(头像点了就存;说话与点读的声音各一行,「换一个」开弹窗:全部声音,按男女、口音 / 中英、年纪、场景筛,按「用」才存)在 `src/app/http/parent-look.ts`;嘴的男女标在 `src/realtime/voices.ts`(官方表没有这一栏)
+- `avatars/` 出厂头像,跟着包走、不拷进 workspace
 - `src/` 按模块分,谁能引谁见 `tests/layers.test.ts` 的 `ALLOW`:底层 `schema/`(契约,zod,类型即文档;落盘的形状与文件布局也在这)与 `shared/`(没有业务归属的小函数);再上一层是画面引擎 `chalk/`(课包的骨架、时钟、擦掉与换画板、圈住了什么、烤好的画面怎么逐笔画、字母笔顺 `glyphs/`;只能在浏览器里跑的在 `ui/stage/chalk/`,做课包的命令 `cotutor chalk` 在 `app/cli/chalk/`),板书、运行层、页面、命令都能引它;中间 `brain/` 脑、`realtime/` 嘴、`board/` 讲稿、一节课与首页的牌、`memory/` vault、`media/` 配音认图(每种一家),彼此不引;`scenes/` 场景的规则与存取(只引 board);`runtime/` 教学运行层,只有它把这些串起来(runner、上下文包 `context/`、交付 `delivery/`、运行记录 `journal/`、实时通话 `live/`、首页 `home/`);`ui/` 页面(孩子 `kid/`、家长 `parent/`、工作台 `dev/`、舞台 `stage/`、场景页 `dictation/`、几页共用 `shared/`);`app/` 入口(命令 `cli/`、HTTP `http/`、WS `ws/`、`mock/`、机器级配置 `machine/`、场景的路由 `dictation/`、技能里机器生成的那几篇 `skills/`)。`src/lib/index.ts` 只给 npm 的 `./lib` 出口转发几样纯函数
-- `src/brain/` 脑执行(`BrainExecutor`:定这一轮怎么跑、请老师、读输出,收尾给整轮转录),runner 只经它请老师;运行时只有 `{api: "bailian", model}` 一种,应用直连百炼(`api.ts`,AI SDK;只读工具在 `api-tools.ts`,话题的模型历史在 `<日期>.<话题>.brain.jsonl`,拼回去时结束的轮瘦身(不带思考、工具往返成一句、照片只附最近那组),上一轮上下文过 32k 就整段压缩(前情 `src/runtime/context/thread-digest.ts` 照索引拼,不调模型);`.log` 落一行一条统一事件(`types.ts`)。2026-11-02 起不再起 Qwen Code:旧 cotutor.json 里的 `{run, resume}` 读得进来、用不了(`runtime.ts`),那时的 `.log` 是 stream-json,`log.ts` 两种行都读)
-- 老师牌上常驻的方砖(预习、检查作业、复习,2026-11-17 起还有口语课,出厂只有英语老师家里有):表在 `src/schema/config.ts` 的 `HOME_TILES`(id 记在 `via.button`),cotutor.json 的 `tiles` 只记关掉的;服务端照老师家里有没有那个 activity 文件给(`src/runtime/home/`),图在 `src/ui/kid/home-tiles.ts`,样式在 `cards/tutor/card.css`。「检查作业」2026-11-03 以前叫「批改」:旧名经 `src/runtime/activities.ts` 的 `ACTIVITY_RENAMES` 照样认,refresh 挪文件
 - `src/board/` 讲稿与一节课:正文解析 `parse.ts`(讲稿与动作;第一个 H2 起的尾巴 `sections.ts`;首页文件的牌 `parseHomeBody`),首页牌的注册表 `cards/`(一种一个文件;协议文档在包根 `cards/<kind>/`),孩子端板上的节 `presentation.ts`(只剩骨架与输入条,内联进页面)
-- `src/ui/stage/` 舞台包(React,esbuild 打到 `dist/stage/`);路由在 `src/app/http/app.ts`,页面在 `src/ui/<端>/`,地址按端分:孩子端 `/`、`/dictation`(口语课页 `/talk` 2026-11-17 删了,口语课是方砖);家长端都在 `/parent` 下(记录 `/parent`、设首页 `/parent/home`、设置 `/parent/settings`、打印二维码 `/parent/qr`、听写 `/parent/dictation`;扫码打开、头像与声音在家长端首页,工作台不重复;`cotutor serve` 只打印家长端首页的地址);工作台都在 `/dev` 下。录像里孩子的屏幕(`/reel`、`/dictation?reel=`)与家长「首页」里的预览(`/preview`)是孩子端页面本身,只开在家长端的 iframe 里;孩子端页面的源码里不出现 `/parent`;家长端「记录」是自己的一页(`src/ui/parent/parent-page.ts`,录像开 `/reel` 的 iframe),几页共用的 `$` / `h` / `toast` / `api` 在 `src/ui/shared/page-dom.ts`;家长端与工作台的锁在 `src/app/http/access.ts`(机器级 PIN,`cotutor pin`;没设就全开;孩子端新加的路径要在那里的白名单登记,`tests/access.test.ts` 盯着)
-- realtime 那条线:老师都走它。嘴在 `src/realtime/`(百炼 realtime 客户端 `bailian.ts`、开口指令 `cues.ts`、一直听时这句收不收 `listen.ts`);实时老师的一次通话在 `src/runtime/live/call.ts`(孩子端的协议、嘴的连接、一直听、请他说、嘴先答),交给脑在 `turns.ts`;交付在 `src/runtime/delivery/`(`delivery.ts`:嘴的声音排到哪、第几句开始放、打断听到第几句;照念排队 `queue.ts`);录像记录 `CallRecorder`、嘴这一道的事件与字幕重放的声音在 `src/runtime/journal/`(`recorder.ts`、`mouth.ts`);孩子端采音放音的内联源 `src/ui/kid/audio-client.ts`;WS `/api/live/<老师>/ws` 在 `src/app/ws/`(零依赖 WebSocket 服务端 `ws.ts`),serve.ts 的 refresh 接一行;孩子端发一条只走这条连接(HTTP 的发 2026-11-04 删了),验与拼在 `runner.accept`(`src/runtime/kid-input.ts`);测试照这条路发用 `tests/_kid-send.ts`(经 `Turns`,少的只有嘴),探针用 `scripts/_live-send.mjs`;`cotutor send`、工作台、`replay`、`activity eval` 发的孩子的话也照实时写(`live: {}`,没有嘴),只有系统发的(`--from system`、记账)不是;板上只有实时一种画法(以前的话题也这样画)。百炼(按量 key + 业务空间 id)是机器级的 `~/.config/cotutor/bailian.json`,家长端「首页」里填(`src/app/machine/bailian.ts`);没配孩子端只出「老师们还没到」
-- 场景(听写)分三处,cotutor 只在 app.ts 接一行:路由在 `src/app/<场景>/`,页面在 `src/ui/<场景>/`,规则与存取在 `src/scenes/<场景>/`(不引 media 与厂商实现,看图的请求 `src/media/vision.ts` 由路由那层交进去)。口语课 2026-11-17 起是铺页的课(activity「口语课」:`base: photo`、`listen: open`、`reply: mouth`),不再是场景;老 workspace 里 `talk/` 下以前的口语单照片不再读。听写(`/dictation`:从首页的听写牌点进来,所以多了牌的注册、kid-page 画牌、mock 接一行;老师牌上常驻「拍照听写」,照片交百炼视觉模型流式认词;英文单词听写是另一页 `/dictation?lang=en`(四线三格,不逐字母比);比对照搬 hanzi-writer 的一笔像不像(`src/scenes/dictation/match.ts`),改它先过 `tests/dictation.test.ts`,页面走 `scripts/probe-dictation.mjs` 与 `probe-dictation-en.mjs`)
 - `tests/` 一文件一子进程,零依赖 `check()`;假老师 `_fake-teacher.ts`(API 运行时 + 假百炼,按关键词回)、假配音 `_fake-tts.ts` 让全流程不花钱;`fixtures/board/` 真跑样本
+
+## 动哪一块先读哪篇
+
+每篇里有这一块的结构、规矩、坑和「改之前先过」哪些测试、走哪个探针。
+
+| 动什么 | 代码主要在 | 先读 |
+| --- | --- | --- |
+| 讲稿里的动作 `[[ ]]`、一节课的状态、白纸条与上面的图形、收笔、上下文包的 `board:` | `src/board/`、`src/schema/lesson.ts`、`src/runtime/context/`、`src/runtime/live/pen.ts`、kid-page 的 `LS` | `docs/dev/一节课.md`(讲稿怎么解析也在这篇) |
+| 课本(PDF 的文字层、索引、课本页的舞台、窗图) | `src/memory/textbook-*.ts`、`src/chalk/kit/book.ts`、`src/ui/stage/book.tsx` | `docs/dev/课本.md` |
+| 照片页、照片上认字词 | `src/chalk/kit/photo.ts`、`src/scenes/photo-words/`、kid-page 的 `BP` | `docs/dev/照片页.md` |
+| 小课堂、课包、画面引擎 | `src/chalk/`、`src/app/cli/chalk/`、`src/ui/stage/chalk/`、`src/ui/stage/lecture.tsx` | `docs/dev/小课堂与课包.md` |
+| 嘴、通话、交付与播放、请他说、嘴先答、一直听 | `src/realtime/`、`src/runtime/live/`、`src/runtime/delivery/`、`src/app/ws/`、`src/board/echo.ts` | `docs/dev/实时通话.md`(核心约束在本文件末尾) |
+| 脑 | `src/brain/` | `docs/dev/脑.md` |
+| 首页「今天」、方砖、首页的牌、头像与声音、听写 | `src/runtime/home/`、`src/runtime/kid-view.ts`、`cards/`、`src/scenes/dictation/` | `docs/dev/首页与听写.md`;加一种牌看 `docs/dev/首页的牌.md` |
+| 页面地址与家长端的锁、工作台、孩子端流水、离线页、录像、CDP 探针 | `src/app/http/`、`src/ui/` | `docs/dev/页面.md` |
+| 后台服务、托盘图标、端口与证书、doctor 与安装、升级与发版、百炼故障、备份、诊断信息、Windows 与 JXA 的坑 | `src/app/cli/`、`src/app/machine/` | `docs/dev/安装与机器.md` |
 
 ## 运行与验证
 
@@ -44,70 +45,50 @@
 - 跨目录的 import 由 `tests/layers.test.ts` 盯着:模块之间谁能引谁在它的 `ALLOW`;`LEGACY`(「模块 → 被引的文件」的旧账)已经清空,不再加;内联进页面的文件运行时只能从别的内联文件拿值
 - 命令行照命令表走(`src/app/cli/commands.ts`:每条命令的一句话、用法、旗标与只给哪个子命令、参数个数、会花钱或写孩子数据的、例子)。顶层帮助、`cotutor <命令> --help`、技能里的命令参考、参数检查都从它来:不认的旗标、用错子命令的旗标、多余的参数一律 exit 2,一句话加「看 cotutor <命令> --help」,不倒整篇帮助。加命令或旗标先进表(不然被当成打错的拦掉),再跑 `pnpm run gen:skills`,先过 `tests/main.test.ts`(代码读的旗标都在表里、例子照表能过)与 `tests/install-doc.test.ts`
 - 改了 `cards/` 下的 md、`src/app/skills/*-doc.ts` 跑 `pnpm run gen:skills`(不跑 skills.test 会红);改了 `src/ui/stage/` 跑 `pnpm run build:stage`(dist 不在 git,没打包时舞台开不了)
-- 改解析器或首页的牌先过 `tests/board.test.ts` 与 `tests/cards.test.ts`;改页面模板后 mock.test 兜「内联脚本能解析」、page-names.test 兜「没有找不到的名字」;改 `src/brain/` 先过 `tests/brain-api.test.ts`(假百炼 `tests/_fake-bailian-chat.ts`,`COTUTOR_BRAIN_ENDPOINT` 指过去)与 `tests/stream-json.test.ts`(读旧轮次的日志);改实时那条线(`src/realtime/`、`src/runtime/live/`、`src/runtime/delivery/`、`src/app/ws/`)或请他说(`src/board/echo.ts`)先过 `tests/live*.test.ts` 与 `tests/echo.test.ts`(假百炼 `tests/_fake-realtime.ts`;请他说、嘴先答在 live-flow 里);口语课(一直听的照片页)走 `scripts/probe-photo-page.mjs` 的第五段;实时老师页走 `scripts/probe-live-page.mjs`(假百炼 + 假老师 + 无头 Chrome 假麦克风),Safari 走 `probe-live-webkit.mjs`,整条线真跑走 `probe-live-call.mjs`
+- 改解析器或首页的牌先过 `tests/board.test.ts` 与 `tests/cards.test.ts`;改页面模板后 mock.test 兜「内联脚本能解析」、page-names.test 兜「没有找不到的名字」
 - 改 activity 文件或 `src/runtime/activity.ts` 先过 `tests/activity.test.ts`,workspace 里的跑 `cotutor activity check`
-- 改工作台(`src/app/http/dev-*.ts`、`src/ui/dev/`)先过 `tests/dev-overview.test.ts` 与 `tests/dev-activities.test.ts`,颜色只用 `dev-theme.ts` 的变量;页面走 `scripts/probe-dev.mjs`(只看不改)
-- 改孩子端流水(页面脚本 `src/ui/kid/kid-log.ts`、收与存 `src/runtime/journal/kid-log.ts`、`src/schema/kid-device.ts`)先过 `tests/kid-log.test.ts` 与 `tests/dev-overview.test.ts`;新加孩子端页面要带 `KID_LOG_JS`(kid-log.test 的 PAGES 里登记);页面走 `scripts/probe-kid-log.mjs`(会写流水与设备表,拿试用 workspace)
-- 改白纸条上的图形、照片页的文字层(`src/chalk/kit/`)先过 `tests/chalk-kit.test.ts` 与 `tests/strip.test.ts`
-- 改照片上认字词(`src/scenes/photo-words/`、runner 的 `startPhotoWords`)先过 `tests/photo-words.test.ts` 与 `tests/dictation.test.ts`(听写用同一份认词规则);页上的点字先过 `tests/chalk-kit.test.ts`;手拍的照片上题框、行框准不准用 `scripts/probe-photo-boxes.mjs`(真连百炼,先说)。测试与探针里脑指到假百炼时看图不连真的(`COTUTOR_VISION_ENDPOINT` 指假的才连)
-- 改讲稿里的动作、一节课的状态、白纸条(`src/board/acts.ts`、`lesson.ts`、`lesson-fit.ts`、`strip.ts`、`src/schema/lesson.ts`、`cards/动作怎么写.md`、kid-page 的 `LS`)先过 `tests/acts.test.ts`、`tests/lesson.test.ts`、`tests/lesson-fit.test.ts`、`tests/strip.test.ts` 与 `tests/board-book.test.ts`;`lessonStep` 内联进页面,只能 import type
-- 改课本(`src/memory/textbook-*.ts`、`src/chalk/kit/book.ts`、board-pack 的 `bookSlateParts`、`src/ui/stage/book.tsx`)先过 `tests/textbook.test.ts` 与 `tests/board-book.test.ts`(书是 `tests/_book.ts` 造的,字是编的;拿真 PDF 的那一层不进测试);舞台走 `scripts/probe-book.mjs` 与白纸条的 `scripts/probe-book-strip.mjs`(先起一个 vault 教材/ 里放了课本 PDF 的 `cotutor serve --http`;前者用语文、后者用数学课本),孩子端整条线走 `scripts/probe-book-page.mjs --pdf <语文课本>`(本进程起服务、假老师假嘴);改了舞台先 `pnpm run build:stage`
-- 改一节课的服务端与照片页(`src/runtime/context/board-pack.ts`、`src/runtime/journal/board-log.ts`、runner 的 `lessonOn`、`lessonSlate`、`boardEvent`、call.ts 的 `{t:'board'}`、`src/runtime/live/pen.ts`、kid-page 的 `BP`)先过 `tests/board-page.test.ts`、`tests/live-board.test.ts` 与 `tests/pen.test.ts`;孩子端整条线走 `scripts/probe-photo-page.mjs`(本进程起服务、假老师假嘴假看图;改了舞台先 `pnpm run build:stage`)
-- 改画面引擎 `src/chalk/` 先过 `tests/chalk-*.test.ts`(烤好的画面、圈住了什么、擦掉与换画板、字母笔顺),改做课包的命令 `src/app/cli/chalk/` 或舞台的 `src/ui/stage/chalk/` 再拿年级包的例子真跑一遍 `cotutor chalk build / bake / snap`(要本机的 Chrome;烤出的 bake.json 和入库的那份该一字不差)
-- 改孩子端播放(嘴、小课堂那一段、重放、孩子谁打断谁)先在 `tests/live-player.test.ts` 明确预期,再改 `runtime/delivery/player.ts` 的 `liveStep`;页面只 `liveDispatch`。板上的节(铺、写完、撤掉)是 `board/presentation.ts` 的 `step`,对 `tests/player.test.ts`,页面只 `dispatch`
-- 后台服务 `cotutor service`(`src/app/cli/service.ts`):macOS launchd、Linux systemd 用户服务,Windows 是 Run 注册表项 + wscript 跑的隐藏启动器 + 看护进程(`service-windows.ts`,为什么不用计划任务、`conhost --headless` 写在它开头);服务里的 serve 带 `--log-dir`,输出按天落文件(`serve-log.ts`);有通话或老师在写时拦闲置睡眠(`serve.ts` 的 `holdAwake`)。改了先过 `tests/service.test.ts`(假 launchctl / systemctl / reg);真装拿临时 workspace 换个端口试,试完 uninstall,别给真孩子的 workspace 装
-- 备份(`src/app/cli/backup.ts`):workspace 旁边的 `.backups/<目录名>/`,一份一个普通目录,没变的文件和上一份硬链接;不含 wav、mp4、evals、缓存;每天一份(serve 的定时器)、`cotutor refresh` 前一份;恢复先备现在的。新加孩子的状态目录默认就进备份,大文件和能重新生成的才要进跳过表。改了先过 `tests/backup.test.ts`
-- 诊断信息(`src/app/cli/report.ts`,`cotutor report`、家长端「设置」):只收版本、状态、体检、报错原因,最后整篇 `scrub`。往里加东西前想清楚有没有孩子的话;孩子端错误只取 msg、where,不取 ctx。改了先过 `tests/report.test.ts`
-- 家长端「还差几步」(`src/app/http/parent-setup.ts`):用 doctor 的结果,只挑家长要动手的项,说家长的话。`cotutor doctor --fix`(`doctor-fix.ts`)跑带 `cmd` 的项,不经 shell,只认 cotutor 和 git
-- 写进服务文件和登录项的 node 走 `stableNode`:Homebrew 的 `process.execPath` 带版本号,`brew upgrade` 后服务和图标都起不来,没人报警
-- 第一次 `service install` 打开一次家长端(`opensAfterInstall`,`--no-open` 不开),别的启动都不开:登录、崩溃重起、升级都不是人要看页面。agent 走 `--no-open`,装完再 `cotutor open`
-- 托盘图标 `cotutor tray`(`src/app/cli/tray.ts`):node 进程(`cotutor tray run`,bin 直接走轻入口 `tray-run.ts`,不带 zod,`tests/tray.test.ts` 盯着)判断状态、发通知;显示脚本(`tray-mac.ts` 的 JXA、`tray-windows.ts` 的 PowerShell)只管画和回报点击,协议一行一条 JSON。改了先过 `tests/tray.test.ts`,显示脚本要在真系统里看;真装服务时不想带图标加 `--no-tray`
-- 端口(`src/app/cli/port.ts`)与地址(`serve.ts` 的 `computerName`、`siteUrl`):改了先过 `tests/port.test.ts`
-- 新版本提醒(`src/app/machine/update.ts`、比较与升级步骤 `src/shared/upgrade.ts`):服务每天问一次 npm 的 `latest`,存 `~/.config/cotutor/update.json`,经 `/api/health` 的 `latest`、`latestNotes` 给托盘菜单、家长端首页、`service status`;从仓库跑的不问;不自动升级。升级是 `cotutor update`(`src/app/cli/update-cmd.ts`):换完程序只用子进程跑新的 bin,这个文件别改成动态 import。改了先过 `tests/update.test.ts`、`tests/update-cmd.test.ts` 与 `tests/tray.test.ts`
-- 百炼跑起来以后的故障(`src/app/machine/bailian.ts` 的 `note` / `trouble` / `blocked` / `recheck`):嘴连不上(`mouthHealth`)、脑的请求失败记下,经 `/api/health` 的 `bailianTrouble` 给图标、家长端、`service status`、`doctor`;要家长动手的类别让孩子端首页 `ready` 变 false。WebSocket 看不到握手被拒的状态码,`askRealtime` 用普通 HTTPS 问错误码。欠费没法真测,照官方错误码表写。改了先过 `tests/bailian-trouble.test.ts`
-- 改 `cotutor doctor`、`service status --json` 或安装流程先过 `tests/init-doctor.test.ts`、`tests/service.test.ts` 与 `tests/install-doc.test.ts`,照着改 `INSTALL.md`。doctor 不过的项要么有 `cmd`(agent 直接跑:幂等、不碰孩子的数据、不用人输东西),要么由 `finish` 标 `human`
-- 发版:先写 `CHANGELOG.md` 和 `package.json` 的 `releaseNotes`(家长在提示条上看到的就是它,随 npm 下发;`tests/update.test.ts` 盯着两边一致)。账号开了发布 2FA,验证码 30 秒失效,所以先跑完 `prepublishOnly` 里的检查,再由人在自己的终端跑 `npm publish --ignore-scripts`。npm 回 `202` 后要扫描,公开前 `npm view` 查不到这个版本(0.4.0 等了约 26 分钟),要轮询;`INSTALL.md` 里新的命令和字段、README 里给家长的那几行都等 npm 公开后再推 main,因为推上去就生效(家长照 README 跑的 `npx cotutor@latest guide` 拿的是 npm 上的版本)
-- 分析一段录像(家长给的链接,录像顶上「复制链接」拷的):`cotutor reel '<链接>' --shots <目录>`(`src/app/cli/reel.ts`)——先读时间线(孩子开口、老师第一声等几秒、念的每句、课本翻到哪、点字、没成的原因),再看截图;截图是按现在的画法重放的(录像栏写「画法已更新」的那种),样子不对先想是不是画法改过。拿孩子真的 workspace 跑只读,截图写到 workspace 外面。改了先过 `tests/reel-cmd.test.ts` 与 `tests/reel.test.ts`
 - 冒烟:`init <slug> --dir <tmp>` → `doctor --workspace <tmp> --live` → `serve`;真跑老师 `cotutor send`;不花钱看前端 `cotutor mock`(老师都走实时老师页,假嘴念静音的声音;`--scenario nokey` 看没配百炼)
-- 页面里的 JS 有两个 CDP 探针进了 `pnpm test`(`tests/probe.test.ts` 起 `probe-layout`、`probe-play`,走 mock;要本机 Chrome,没有就跳过;`COTUTOR_SKIP_PROBES=1` 跳过),改 `kid-page.ts` 先看它们红不红;其余手动验收走 `scripts/probe-*.mjs`(CDP);舞台里的东西用 CDP 驱动;截图也走 CDP(`Page.captureScreenshot`),孩子端、工作台在轮询,无头 Chrome 的 `--screenshot` 会挂;手机尺寸要 `--force-device-scale-factor=2 --window-size=780,1688`;探针不出声:起 Chrome 加 `QUIET_ARGS`(`scripts/_quiet.mjs`,`--mute-audio`;页面不用浏览器合成声,mock 里的配音也是静音),要听加 `COTUTOR_PROBE_SOUND=1`
+- 页面里的 JS 有两个 CDP 探针进了 `pnpm test`(`tests/probe.test.ts`,走 mock;要本机 Chrome,没有就跳过;`COTUTOR_SKIP_PROBES=1` 跳过),改 `kid-page.ts` 先看它们红不红;其余手动验收走 `scripts/probe-*.mjs`,怎么起 Chrome、截图、不出声见 `docs/dev/页面.md`
 
 ## 坑(不可推导的)
 
 - 页面模板是模板字符串:反斜杠写 `\\n`,正则里 `\/` 写 `\\/`,吃掉一层那行就成了注释而脚本照样能解析
 - serve 只热重载 cotutor.json;改 `src/` 要重起。装成后台服务的(`cotutor service`)用 `cotutor service restart`:它跑的是 install 那一刻写死的 node 与 bin,换了 Node 版本要再 install
 - 提交按文件名 stage,仓里常有并行的未提交改动
-- 舞台页(`/stage/`)也装孩子端的 `theme.css`:舞台里自己的类名要带前缀(`lc-` 这种),撞上 `.pen` `.c` 之类会被那边的样式改掉(`.pen` 关着 pointer-events,圈不上)
-- Windows 的 PowerShell 缺省策略拦 `npm`、`cotutor` 的 `.ps1`(开发机上的账户可能改过策略,看不出来),给家长看的命令要带 `.cmd`(`upgradeSteps`);cmd.exe 不展开 `doctor` 的 `cmd` 里的 `$HOME`,会建出一个字面叫 `$HOME` 的文件夹(所以 INSTALL 让 agent 跑 `doctor --fix`,不抄 `cmd`)。在那边跑脚本:PowerShell 5.1 读无 BOM 的中文脚本会解析错;`irm` 把没标 charset 的回应按 Latin-1 解(jsDelivr 给 `.ps1` 是 `application/octet-stream`),所以 README 里 jsDelivr 那行自己按 UTF-8 解,GitHub raw 标了 utf-8 不用;调原生程序时吃掉参数里的双引号,要试 Git Bash 就写成 `.sh` 文件
-- Windows 上 node 的非 detached 子进程在「父进程退出就杀」的 job 里(libuv):命令行起完就退的,子进程要 `detached: true`(配 `windowsHide`,不然有窗口)。不报错,退出码也是 0;验证要看对面真收到了,常驻进程里试不出来(`openCommand`)
-- Windows 上 `os.homedir()` 读 `USERPROFILE`,只设 `HOME` 隔离不住,测试会写进真的用户目录。`tests/_check.ts` 让它跟着 `HOME` 走,所有测试都要经过它;在别的机器上跑测试、脚本前先确认写到哪
-- 别的程序只占着 `127.0.0.1:<端口>` 时,绑 `0.0.0.0:<端口>` 照样成功(macOS、Windows 都这样),光试绑看不出被占,要先连一下(`port.ts` 的 `answersLocally`)
-- JXA(macOS 的显示脚本):`$.NSAttributedString.alloc.initWithStringAttributes` 不存在,要 `NSMutableAttributedString.alloc.init` 再填;枚举常量取不到值,写数字;返回整数的方法给的是字符串(`a.runModal` 是 `"1001"`),比较前要 `Number()`;回调里的异常被吞掉,不报错也不动作;菜单项标号别用 0(别的行缺省是 0)
-- 探针模拟手指用 CDP `Input.dispatchMouseEvent`,别用 `dispatchEvent`:后者直接派到元素上,不走命中判定,盖住了、pointer-events 关了都照样过
 - 舞台包(`dist/stage/`)打包时把 excalidraw 编进去、字体拷进 `dist/stage/fonts/`;excalidraw、react、react-dom 在 devDependencies,运行时不要(smoke 盯着)。新加只在打包时用的依赖也放 devDependencies
-- 课包的画面是 build 后烤好的(`bake.json`),孩子端不跑 excalidraw 也没有 SMIL;改了画面要重烤(`cotutor chalk bake`,snap 顺手烤,要本机的 Chrome),不然孩子端在浏览器里现烤、服务端后台补烤
-- Safari 才有的毛病拿 Playwright 的 WebKit 复现(`scripts/probe-lecture-webkit.mjs`,本仓不装 playwright,借一份)
-- 百炼 realtime:`turn_detection.silence_duration_ms` 喂过音频就改不了(切 null 再切回也回缺省 800),要不同的 silence 就另开会话;端点用业务空间 id 的域名,公网域名连上 1 秒就断;300 秒没输入就关,只 append 不 clear 会报 `response_idle_timeout` 而连接不断(死会话),心跳要 append 完马上 clear(`scripts/probe-live-idle.mjs`);`semantic_vad` 听不见一两个词的回答(好的、Yes,问过也一样),`server_vad` 听得见但「嗯」、笑声也算开口(`scripts/probe-live-vad.mjs context / noise`);Node 的 WebSocket 客户端握手被拒只发 error 不发 close,`close()` 后服务端那头要 5–10 秒才回;CDP 的鼠标事件派不到视口外的元素,先 `scrollIntoView`
+- 探针模拟手指用 CDP `Input.dispatchMouseEvent`,别用 `dispatchEvent`(不走命中判定);别的页面与探针的坑见 `docs/dev/页面.md`,Windows、端口、JXA 的见 `docs/dev/安装与机器.md`,百炼 realtime 的见 `docs/dev/实时通话.md`
 
 ## 约定
 
 - 一孩一 workspace 一 vault 一服务进程;`agents/<name>/` 是老师的家(activity 在里面,老师怎么教只写在 activity 里)
-- vault 和 workspace 分开放(2026-11-09):init 缺省建在旁边的 `<目录名>-vault/`,`--vault` 指家长已有的库,写进 `paths.vault`(家目录下写 `~/…`);谁也不能在谁里面、不能和别的孩子共用,init 拦着(`checkVaultPlace`)。旧版没写 `paths.vault` 的 vault 就是根,照旧读、不迁移,doctor 的 `vault.separate` 提一句;sandbox 的 vault 拷在它里面的 `vault/`,不查
+- vault 和 workspace 分开放:init 缺省建在旁边的 `<目录名>-vault/`,`--vault` 指家长已有的库,写进 `paths.vault`(家目录下写 `~/…`);谁也不能在谁里面、不能和别的孩子共用,init 拦着(`checkVaultPlace`)。旧版没写 `paths.vault` 的 vault 就是根,照旧读、不迁移,doctor 的 `vault.separate` 提一句;sandbox 的 vault 拷在它里面的 `vault/`,不查
 - 出厂件(activity、主题、技能)拷贝不链;workspace 里唯一的链是 `.claude/skills → ../.agents/skills`;hash 记 shipped.json,refresh 只换没改过的、改过的报 diff;`machine: true` 的技能每次覆盖
-- 老师按 cotutor.json 里有谁走,没有注册表;里面的都是老师(2026-11-16 起没有工具人了,名字结尾不再有含义),孩子端露不露看 `enabled` 与 `hidden`
+- 老师按 cotutor.json 里有谁走,没有注册表;里面的都是老师(没有工具人,名字结尾没有含义),孩子端露不露看 `enabled` 与 `hidden`
 - display / description / avatar / voice / enabled / hidden / policy / runtime 在 cotutor.json;怎么教在 activity 里
 - 话题都从一个 activity 开始(孩子端的按钮、方砖、小课堂;`cotutor send --activity`;工作台选 activity)。不带 activity 的只有系统任务(记账、整理),系统提示一句人设。一位老师的记忆:新记的进那个 activity 那篇,这位老师自己那篇(以前普通话题记的)每个 activity 都带、只读
 - 老师的回复就是讲稿:普通行 = 讲稿一句,`[[ ]]` = 对页做的动作,围栏不上页,第一个 H2 起是给家长的尾巴;解析器永不抛
+- 每个代码文件开头一段注释,只写现在的样子:这个文件是什么、谁用、推不出来的原因和实测(实测带日期)。不记改动(「从哪拆出来」「哪天起」),删掉的功能不留说明,旧数据还在读的写一句「读进来就丢」;只引仓库里有的文档;协议表、路由表留在头注释里,`docs/dev/` 指过去、不抄
 - 老师不派子代理、不互相交活(自己派会烧光自己的预算)
 - 孩子端永远没有错误与评判;页上不画对错;不下发的(听写的字、按钮的讲法)下发前剥掉
 - 一节课的状态是孩子的,存服务端;vault 是家长的,老师(LLM)不直接写,回结构化段由应用落盘
 - 历史不迁移:话题只能在开它的那种运行时下接着聊、记账;换过运行时就当那个话题已经结束——接着说开新话题、不记账(家长端说为什么),记录照样能看,不导入、不转换(`sameRuntime`)。以后换脑、换 SDK 编码同此
 - workspace 解析链 `--workspace` > `COTUTOR_WORKSPACE` > cwd 祖先 > `~/.config/cotutor/config.json` > `~/cotutor/` 唯一目录;init 幂等补缺,已有文件不动
 - 手动试功能用 sandbox(`--sandbox`,`src/app/cli/sandbox.ts`):从真 workspace 分到旁边的 `.sandbox/<目录名>/`,设置照拷、状态不带(`SANDBOX_SKIP`)、外面的 vault 拷一份,标题带「试用」、端口 +1;写数据的代码不认 sandbox,它就是另一个 workspace。新加孩子的状态目录要进 `SANDBOX_SKIP`,不然会被拷进 sandbox
-- 证书是机器级的,`~/.config/cotutor/certs/`。用 https 时同一个端口也认 http(`serve.ts` 的 `httpAndHttps`、`plainHandler`):http 那一面只给根证书 `GET /ca.crt`(平板扫码装证书,`root-ca.ts` 只认 `rootCA.pem`,私钥永远不给)、别的都 301 到 https;改了先过 `tests/https-plain.test.ts`
-- 孩子端的离线页是 Service Worker(`src/ui/kid/offline-sw.ts`,`GET /sw.js`):只接管孩子端那几页的打开,不缓存;只在安全上下文里有。改了就改里面的 VERSION,先过 `tests/offline.test.ts`
-- 一行安装脚本 `install.sh`、`install.ps1` 在仓库根、随 npm 包发(jsDelivr 从包里取):不用 sudo、不改执行策略、Windows 用 `.cmd`;Node 版本跟 engines 走。README 先给 jsDelivr、GitHub raw 是退路(国内连 GitHub raw 常超时、被重置);jsDelivr 取的是 npm 上的 `latest`,改了脚本要发版后才拿得到。改了先过 `tests/install-script.test.ts`,真跑在发版验证里
-- 端口只在 `cotutor init` 选一次写进 cotutor.json,以后不变:443 优先,再 8443、8445…,系统不让用或被占就看下一个,别的孩子的连同 sandbox 都让开;sandbox 恒为 +1。运行时被占只报错说是谁占着,不自动换:平板的主屏幕图标和本地设置都绑在「协议 + 主机 + 端口」上。schema 的 `DEFAULT_PORT`(5180)只给没写端口的旧配置,不跟着改。地址认电脑名(macOS 的本地主机名),IP 变了不用重签;二维码、证书、serve 都从 `computerName` 拿
+- 证书、端口是机器级的事,选一次不再变(平板的主屏幕图标和本地设置都绑在「协议 + 主机 + 端口」上),细节见 `docs/dev/安装与机器.md`
 - 千问 key 是机器级的,只认 `~/.config/cotutor/bailian.json`(百炼按量 + 业务空间 id,家长端写)与 `token-plan.json`(开发机才有);环境变量、qwen、voxtell 的配置都不读(`src/shared/qianwen.ts`)。测试要 key 往临时 HOME 写假文件(`tests/_keys.ts`),要真效果就用真的家
+
+## 删掉的功能与旧数据
+
+删掉的功能整条线删干净,不留休眠的代码;它留下的旧数据读进来就丢或不显示,不报错、不迁移,别为它把代码加回来。现在还认着的旧东西只有这些(细节在对应的 `docs/dev/` 那篇):
+
+- 老师文件 `agents/<老师>.md`:不读,refresh 与 doctor 提一句;不再出厂的技能列在 `RETIRED_SKILLS`,refresh 时删
+- activity 头上的 `board: page`、`cards:`、话题第一条的 `board: 'page'`:读进来就丢
+- 课里的卡(围栏、教具卡、课本卡、小课堂卡):不上页,以前记录里的不再显示
+- 讲稿里的 `[[play]]` `[[echo]]` `[[say]]`:不认,丢掉记一行
+- activity 旧名「批改」:经 `ACTIVITY_RENAMES` 照样认
+- 旧运行时 `{run, resume}`(Qwen Code):读得进来、用不了;那时的 `.log` 是 stream-json,`log.ts` 两种行都读
+- 口语课场景:`talk/` 下以前的口语单照片不再读
+- 没写 `paths.vault` 的 workspace、没写端口的旧配置:照旧读
 
 ## 实时对话的核心约束
 

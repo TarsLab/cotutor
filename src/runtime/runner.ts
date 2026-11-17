@@ -509,7 +509,7 @@ export class Runner {
    * 上一轮以后舞台交过窗里的图(shot)就挪成这一轮的(<date>.<job>.shot.jpg),shot 是它的绝对路径,随这一轮附给老师。
    * told = 这一轮给了哪几页的字(收尾记进板的日志,以后不重给)
    */
-  private async lessonSlate(ws: Workspace, tutor: string, date: string, thread: string, job: string, x: { src: LessonSource; lesson: Lesson; problem?: string; running: string[] }, now: Date, opts: { compact: boolean; fresh: readonly string[]; /** 孩子这一条带来的、页上状态里没有的(小课堂看的情况、画的几处) */ did?: readonly string[] }): Promise<{ slate: NonNullable<ContextPack['slate']>; notes: PageNote[]; told: string[]; shot?: string }> {
+  private async lessonSlate(ws: Workspace, tutor: string, date: string, thread: string, job: string, x: { src: LessonSource; lesson: Lesson; problem?: string; running: string[] }, now: Date, opts: { compact: boolean; fresh: readonly string[]; /** 孩子这一条带来的、页上状态里没有的(小课堂看的情况、画的几处) */ did?: readonly string[]; /** 这节课认不认照片上的字(activity 有「认字收到什么」);false 时不说「还在认」 */ reads?: boolean }): Promise<{ slate: NonNullable<ContextPack['slate']>; notes: PageNote[]; told: string[]; shot?: string }> {
     const events = await readBoard(ws, tutor, date, thread);
     const page = lessonPage(x.lesson);
     const told = new Set(opts.compact ? [] : events.flatMap((e) => (e.k === 'turn' && e.told ? (Array.isArray(e.told) ? e.told : [e.told]) : [])));
@@ -522,8 +522,10 @@ export class Runner {
       if (parts && !told.has(page.id)) notes.push({ id: page.id, name: page.title === BOOK_TOC ? '目录' : `《${page.title}》`, text: clipNote(parts.text) });
     } else if (page?.kind === 'photo') {
       const n = page.photos.length;
-      const wait = page.photos.flatMap((ph, i) => (x.running.includes(ph.src) || !x.src.photos?.[ph.src] ? [i + 1] : []));
-      show = `孩子拍的作业照片 ${n} 张(从上往下连着${n > 1 ? `,第 1–${n} 张` : ''})${wait.length ? `;第 ${wait.join('、')} 张${opts.fresh.length ? '刚拍来、图附在这一轮,字' : '的字'}还在认` : ''}`;
+      const reads = opts.reads !== false;
+      const wait = reads ? page.photos.flatMap((ph, i) => (x.running.includes(ph.src) || !x.src.photos?.[ph.src] ? [i + 1] : [])) : [];
+      const note = wait.length ? `;第 ${wait.join('、')} 张${opts.fresh.length ? '刚拍来、图附在这一轮,字' : '的字'}还在认` : !reads ? `;这节课不认照片上的字${opts.fresh.length ? ',图附在这一轮' : ''}` : '';
+      show = `孩子拍的作业照片 ${n} 张(从上往下连着${n > 1 ? `,第 1–${n} 张` : ''})${note}`;
       page.photos.forEach((ph, i) => {
         const id = `${PHOTO_PAGE}#${ph.src}`;
         const t = x.src.photos?.[ph.src];
@@ -696,7 +698,7 @@ export class Runner {
     const les = pageBase ? await this.lessonOn(ws, tutor, now, date, thread, pageBase, photos, lecture) : null;
     if (les?.problem) activityWarn.push(les.problem);
     if (les && pageBase) active.lesson = { base: pageBase, src: les.src, at: les.lesson };
-    const slate = les ? await this.lessonSlate(ws, tutor, date, thread, job, les, now, { compact, fresh: photos, did: input.lecture ? lectureDid(lecture, input.lecture, marks) : [] }) : null;
+    const slate = les ? await this.lessonSlate(ws, tutor, date, thread, job, les, now, { compact, fresh: photos, did: input.lecture ? lectureDid(lecture, input.lecture, marks) : [], reads: !actDef || actDef.tools.some((t) => t.tool === '认字') }) : null;
     if (slate) {
       pack.slate = slate.slate;
       if (slate.notes.length) pack.pageNotes = slate.notes;

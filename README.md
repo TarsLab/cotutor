@@ -2,7 +2,7 @@
 
 家里的 AI 老师团,和家长一起教。几位可以直接对话的老师(数学、语文、英语),孩子在 iPad 上按住说话就能问,家长在自己的页面上看全部过程、管每位老师的性子和规矩。数据全在自家电脑上。
 
-> 家长端与孩子端都能用:老师的回复是一页板书(卡 + 逐句讲稿),家长在幕后把要画出来讲的题做成小课堂;学完家长打星记账进日记(普通 markdown,想用 Obsidian 看也行),作业照片在学科老师页上拍。
+> 家长端与孩子端都能用:孩子拍的作业、课本或一堂小课堂铺在页上,老师一边一句句地讲,一边在页上圈、盖、写;家长在幕后把要画出来讲的题做成小课堂;学完家长打星记账进日记(普通 markdown,想用 Obsidian 看也行),作业照片在学科老师页上拍。
 
 ## 五分钟用起来
 
@@ -18,7 +18,7 @@
 请阅读 https://cdn.jsdelivr.net/npm/cotutor@latest/INSTALL.md ,一步一步带我在这台电脑上安装 cotutor
 ```
 
-**自己装:** 需要一台电脑(Mac 最省事)、[Node.js](https://nodejs.org) ≥ 22.18(装 LTS 版),和一个百炼账号(北京地域,按量付费)。老师的嘴和脑都走百炼,由应用直接调用,不用另装模型客户端:嘴是 `qwen3.8-omni-flash-realtime`,听孩子说、照着讲稿念;脑是 `qwen3.8-max`,写讲稿和板书。
+**自己装:** 需要一台电脑(Mac 最省事)、[Node.js](https://nodejs.org) ≥ 22.18(装 LTS 版),和一个百炼账号(北京地域,按量付费)。老师的嘴和脑都走百炼,由应用直接调用,不用另装模型客户端:嘴是 `qwen3.8-omni-flash-realtime`,听孩子说、照着讲稿念;脑是 `qwen3.8-max`,写讲稿和页上的动作。
 
 一行装好(会查 Node 的版本、连不上 npm 就用国内镜像;不用 sudo、不改系统设置)。最后那三个是孩子的短名(小写字母,不用真名)、称呼、年级,不写就只装程序:
 
@@ -68,17 +68,17 @@ Mac 和 Windows 上,`service install` 会一起装一个菜单栏(任务栏)图�
 
 装好以后也可以让编程助手帮你管:在孩子的 cotutor 文件夹(`~/cotutor/<孩子>/`)里打开 Claude Code 或 Codex,已带的技能直接能用。`cotutor-home` 排孩子的首页,`cotutor-tune` 调老师的口气和规矩,`cotutor-analyze` 分析某次对话为什么那样答。
 
-`init` 把出厂老师的 activity 拷进 `agents/<老师>/activities/`,把做课包用的四个技能 chalk-* 和五个机器件 cotutor-tutor / cotutor-board / cotutor-analyze / cotutor-tune / cotutor-home 拷进 `.agents/skills/`(Codex、Qwen Code 直接读;Claude Code 读的 `.claude/skills` 是链到它的);
+`init` 把出厂老师的 activity 拷进 `agents/<老师>/activities/`,把做课包用的四个技能 chalk-* 和四个机器件 cotutor-tutor / cotutor-analyze / cotutor-tune / cotutor-home 拷进 `.agents/skills/`(Codex、Qwen Code 直接读;Claude Code 读的 `.claude/skills` 是链到它的);
 做小课堂的课包用 `cotutor chalk`(check / build / bake / snap / dub),烤画面与截图用本机的 Chrome(Windows 上没有 Chrome 就用 Edge)。要在平板上用(按住说话要 HTTPS):`cotutor cert` 签一张
 自签证书(要 mkcert:Mac 上 `brew install mkcert`;Windows 上 `winget install FiloSottile.mkcert`,重开终端;Ubuntu、Debian 上 `sudo apt install mkcert libnss3-tools`。再跑 `cotutor cert`,这台电脑还没信任根证书时它会打印要跑的那一行:Mac 弹框输登录密码、Windows 弹窗点「是」,都不用管理员终端),把根证书装到平板并打开信任,`cotutor service restart`(在终端里跑的就重开 `cotutor serve`),扫码打开。iPad 的步骤见 [iPad 与 iPhone](docs/iPad与iPhone.md)。
 
 然后在浏览器里:
 
-- **家长端 `/parent`**:「首页」设孩子的首页(按钮、这周的词、老师的先后),扫码打开(孩子的平板一张、家长自己的手机一张),给老师换头像和声音;「设置」定孩子的平板上按住说话那一栏放哪边;「记录」按天看孩子和每位老师的板书(答案不剥)、看录像、打星、记账、删话题,看这天写进 vault 的每一行,不要的一行一行撤回。右上角「工作台 ↗」去工作台。
+- **家长端 `/parent`**:「首页」设孩子的首页(按钮、这周的词、老师的先后),扫码打开(孩子的平板一张、家长自己的手机一张),给老师换头像和声音;「设置」定孩子的平板上按住说话那一栏放哪边;「记录」按天看孩子和每位老师的讲稿、看录像、打星、记账、删话题,看这天写进 vault 的每一行,不要的一行一行撤回。右上角「工作台 ↗」去工作台。
 - **工作台 `/dev`**:给有技术背景的家长与开发者。和任何一位老师说话、看一轮的原文;老师团页改人设、政策,activity 页改老师怎么带,加新老师;设置页改路径、端口。头像与声音只在家长端改。
-- **孩子端 `/`**:首页每位老师一张卡,卡上是每天都在的预习、检查作业、复习,和家长排好的按钮(带范围的 activity、先看一堂小课堂);点了进板书页,按住说话或打字。老师的回答是一页板书:卡先铺开(选择题、点读、田字格、单词、图、小课堂、板、拍照),讲稿一句句念、笔跟着声音标注,末句问句停下来等孩子。点一张卡进舞台做题,做完「交给老师」。孩子永远看不到工具、报错、评判。
+- **孩子端 `/`**:首页每位老师一张牌,牌上是每天都在的预习、检查作业、复习,和家长排好的按钮(带范围的 activity、先看一堂小课堂);点了先拍照(或铺课本、铺那堂小课堂),一节课的页铺满屏。老师一句句地讲,讲到哪句就在页上翻、看、圈、盖、写,末句问句停下来等孩子;孩子按住说话(有的课一直听),用 Apple Pencil 在页上写,点一个字看它的笔顺,写完停一会儿老师就看。孩子永远看不到工具、报错、评判。
 
-实时老师的声音由 realtime 模型提供;点读、单词等卡片的配音也走百炼(同一把 key),出厂三位各有一个缺省的。在家长端「首页」点老师的「样子与声音」,再点「换一个」在弹窗里挑(全部音色都在,能搜,能按男女、口音、中英、年纪、场景筛,能试听)。
+实时老师的声音由 realtime 模型提供;听写念词的配音也走百炼(同一把 key),出厂三位各有一个缺省的。在家长端「首页」点老师的「样子与声音」,再点「换一个」在弹窗里挑(全部音色都在,能搜,能按男女、口音、中英、年纪、场景筛,能试听)。
 不花钱先看孩子端长什么样:`cotutor mock` 起一份模拟接口,不经真实老师。
 
 ## 年级教学包
@@ -117,7 +117,7 @@ import { loadWorkspace } from 'cotutor/workspace';                        // 解
 
 ## 配置模型
 
-**缺省:应用直连百炼。** 嘴和脑都用家长端「首页」填的那份百炼按量 API Key 与业务空间 ID,存在本机 `~/.config/cotutor/bailian.json`(几个孩子的 workspace 共用)。老师用哪个模型写在 `cotutor.json` 的 `runtimes` 里:出厂的 `api`(`qwen3.8-max`,三位老师都用它)和 `api-flash`(`qwen3.8-flash`,便宜些;换之前先跑 `cotutor activity eval` 看例子过不过)。卡的配音、听写认字、照片上认字也用这份 key。
+**缺省:应用直连百炼。** 嘴和脑都用家长端「首页」填的那份百炼按量 API Key 与业务空间 ID,存在本机 `~/.config/cotutor/bailian.json`(几个孩子的 workspace 共用)。老师用哪个模型写在 `cotutor.json` 的 `runtimes` 里:出厂的 `api`(`qwen3.8-max`,三位老师都用它)和 `api-flash`(`qwen3.8-flash`,便宜些;换之前先跑 `cotutor activity eval` 看例子过不过)。听写念词的配音、听写认字、照片上认字也用这份 key。
 
 **key 只放 `~/.config/cotutor/`**,所有命令(`serve`、`send`、`replay`、`doctor`……)读同一处,环境变量(`DASHSCOPE_API_KEY` 之类)和别的工具的配置都不看:
 
@@ -222,7 +222,7 @@ pnpm smoke                      # 检查待发布内容
 node bin/cotutor.js mock         # 假模型接口,查看前端
 ```
 
-改卡片文档或技能生成代码后运行 `pnpm gen:skills`。开发约定与分模块验证见 [AGENTS.md](AGENTS.md) 和 [CONTRIBUTING.md](CONTRIBUTING.md)。
+改 `cards/` 下的 md 或技能生成代码后运行 `pnpm gen:skills`。开发约定与分模块验证见 [AGENTS.md](AGENTS.md) 和 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 根目录的 [INSTALL.md](INSTALL.md) 给替家长安装的 AI 助手看。`docs/` 只保留以下六篇,历史讨论查 Git:
 

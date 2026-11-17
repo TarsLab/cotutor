@@ -39,10 +39,10 @@ description: 排 cotutor 孩子端的首页。孩子学完之后,家长在 works
    - 每轮的 kidText 与 section.cards。
    - parentText:老师写给家长的。
    - remembered。
-3. 细看一轮,用 `cotutor show <老师> <job>`。卡的 id(`<job>/<n>`)在「卡」那一行。
-4. 孩子在卡上做的:conversations/<老师>/<日期>.<job>.cards/<n>.json。
+3. 细看一轮,用 `cotutor show <老师> <job>`。
+4. 孩子在页上做的:conversations/<老师>/<日期>.<话题>.board.jsonl(一件一行)。
 
-总结在对话里说,不落文件。每位老师两三行:学了什么、停在哪、哪里卡住。引孩子的原话,或卡上做的。
+总结在对话里说,不落文件。每位老师两三行:学了什么、停在哪、哪里卡住。引孩子的原话,或他在页上做的。
 
 ## 二、记账
 

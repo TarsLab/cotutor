@@ -91,7 +91,7 @@ export const TutorSchema = z.object({
   /** 学科色:头像的环、牌的边、新话题气泡(白字压在上面)、听写页的按钮;不写 = 自动(src/ui/shared/tutor-color.ts) */
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/, '要 #rrggbb').optional().describe('学科色 #rrggbb:头像的环、牌的边、新话题气泡(白字压在上面,要够深,doctor 会查)、听写页的按钮;不写 = 语文粉、数学蓝、英语绿,其余按先后自动分、不撞色'),
   /** 卡的配音音色 id(src/media/tts-voices.ts);没有 = 卡不配音 */
-  voice: z.string().optional().describe('卡的配音用的音色 id(百炼 Qwen-Audio-TTS,如 qwen-audio-3.0-tts-plus-longcanzhuyue;家长端首页「样子与声音」里挑;点读、单词卡、听写念词的声音)。不写 = 语文、数学、英语老师用出厂的那个,别的老师没有配音。老师开口的嘴在 live.voices'),
+  voice: z.string().optional().describe('配音用的音色 id(百炼 Qwen-Audio-TTS,如 qwen-audio-3.0-tts-plus-longcanzhuyue;家长端首页「样子与声音」里挑;听写念词、课包配音的声音)。不写 = 语文、数学、英语老师用出厂的那个,别的老师没有配音。老师开口的嘴在 live.voices'),
   enabled: z.boolean().default(true).describe('开关:false 时两端都不见'),
   /** 孩子端不露(家长端「在孩子的首页上」关掉) */
   hidden: z.boolean().default(false).describe('孩子端不露(家长端「在孩子的首页上」关掉)'),

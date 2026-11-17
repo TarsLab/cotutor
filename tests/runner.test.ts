@@ -602,7 +602,7 @@ try {
   const phM = ((await day('math-tutor', phDate)).json as PhotoDay).index.messages.find((m) => m.job === phJ.job)!;
   const phRun = JSON.parse(readFileSync(join(root, 'conversations', 'math-tutor', `${phDate}.${phJ.job}.run.json`), 'utf8')) as { prompt: string };
   const phReq = teacher.requests.find((b) => b.messages.some((m) => m.role === 'user' && JSON.stringify(m.content).includes(phJ.job) === false && JSON.stringify(m.content).includes('image_url')));
-  check('消息:text「(拍了一张)」、photos 记下;照片铺成页(上下文包 board: 底是作业照片),不进 photos:,这一轮附整张给老师', phM.result === 'ok' && phM.text === '(拍了一张)' && phM.photos?.join() === phOne && !phRun.prompt.includes('  photos:') && !phRun.prompt.includes('photoFiles') && phRun.prompt.includes('作业照片') && phReq !== undefined && phM.kidText?.includes('第一次说') === true, JSON.stringify({ req: phReq !== undefined, lines: phRun.prompt.split('\n').filter((l) => /board|照片|photo|底/.test(l)) }));
+  check('消息:text「(拍了一张)」、photos 记下;照片铺成页(上下文包 board: 底是作业照片;「聊」没有认字,说不认字、不说还在认),不进 photos:,这一轮附整张给老师', phM.result === 'ok' && phM.text === '(拍了一张)' && phM.photos?.join() === phOne && !phRun.prompt.includes('  photos:') && !phRun.prompt.includes('photoFiles') && phRun.prompt.includes('作业照片') && phRun.prompt.includes('这节课不认照片上的字') && !phRun.prompt.includes('还在认') && phReq !== undefined && phM.kidText?.includes('第一次说') === true, JSON.stringify({ req: phReq !== undefined, lines: phRun.prompt.split('\n').filter((l) => /board|照片|photo|底/.test(l)) }));
   {
     // 孩子的话缺省不带工具;带照片的那条要 Read 看图,照旧带白名单,vault 的路径也在
     check('孩子带照片的那条:带只读工具、上下文包有 vault:', toolsOf(phRun.prompt)?.join() === 'read_file,glob,grep_search' && phRun.prompt.includes('\n  vault:'), String(toolsOf(phRun.prompt)));

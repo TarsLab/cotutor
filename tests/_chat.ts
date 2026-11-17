@@ -1,5 +1,5 @@
 /**
- * 测试用的一份通用 activity「聊」:不以板为主、卡都带,「老师怎么带」只有人设、第一句与收。
+ * 测试用的一份通用 activity「聊」:头上没写 base(当 base: photo,没拍照就是白纸),「老师怎么带」只有人设、第一句与收。
  * 2026-11-16 起新话题都从一个 activity 开始(没有自由话题);测试要「随便一轮」时开这个,孩子的话照原样交给老师
  * (孩子端点按钮会把字换成按钮上的,所以经 Runner 直接开:同 cotutor send --activity)。不是出厂件。
  */
@@ -16,7 +16,6 @@ export function chatActivity(display = '老师'): string {
     '---',
     `name: ${CHAT}`,
     'description: 测试用:孩子说什么就聊什么',
-    'cards: text read choice image tianzige word photo code',
     '---',
     '',
     '## 老师怎么带',

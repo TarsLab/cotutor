@@ -17,7 +17,7 @@ description: 在 cotutor workspace 里分析 AI 老师的对话:某一轮传了�
 
 - 一轮 = 一条消息 + 老师的回答。
 - 文件都在 conversations/<老师>/,按 `<日期>.<job>.*` 命名,job 形如 1620-1。
-- 索引 `<日期>.json` 一天一份。每条消息物化了讲稿与卡、读了什么(tools)、用时(timing)、token(tokens)、提醒。
+- 索引 `<日期>.json` 一天一份。每条消息物化了讲稿与动作、读了什么(tools)、用时(timing)、token(tokens)、提醒。
 - 各文件是什么、命令怎么用,见 references/命令与文件.md。
 
 **老师看到的只有三样:**
@@ -41,9 +41,9 @@ description: 在 cotutor workspace 里分析 AI 老师的对话:某一轮传了�
 
 | 想知道 | 跑 | 花钱 |
 |---|---|---|
-| 某一轮的全部:问句、上下文包、当时的 activity 与技能 hash、讲稿、卡、读了什么、token、用时、给家长的尾巴 | `cotutor show <老师> <job> <日期>`(--json 是全量) | 不 |
+| 某一轮的全部:问句、上下文包、当时的 activity 与技能 hash、讲稿与动作、读了什么、token、用时、给家长的尾巴 | `cotutor show <老师> <job> <日期>`(--json 是全量) | 不 |
 | 现在发这句话,老师会看到什么;每段从哪个文件来、那里共几条、截了几条 | `cotutor pack <老师> "<消息>" [--from kid] [--at 时间]` | 不 |
-| 一轮每道工序的时刻:首卡、每句配音、就绪 | `cotutor trace <老师> <job> <日期> [--lane main,tts]` | 不 |
+| 一轮每道工序的时刻:老师起、每句、首句就绪、写完 | `cotutor trace <老师> <job> <日期> [--lane main,tts]` | 不 |
 | 改了 activity、技能、vault 之后,**同一问答案怎么变** | `cotutor replay <老师> <job> <日期>`,跑完并排打印;`cotutor compare <老师> [evalJob] <日期>` 再看或列 | **是**,花一轮老师的钱(按 token 计),**跑前先问** |
 | 回放那轮自己的全部 | `cotutor show <老师> <evalJob> <日期> --evals` | 不 |
 | workspace 哪里坏了:路径、证书、技能、配置缺口 | `cotutor doctor` | 不(--live 花一分钱) |
@@ -85,7 +85,7 @@ description: 在 cotutor workspace 里分析 AI 老师的对话:某一轮传了�
 **我改了 activity,效果怎样**
 
 - 先 show,看原轮的 activity hash。
-- 再 replay 一次(先问),看 notes 里 hash 变没变、讲稿与卡的 diff。
+- 再 replay 一次(先问),看 notes 里 hash 变没变、讲稿与动作的 diff。
 - 同一问什么都不改,回放两次也会不一样(模型抖动)。别把一次的差异当结论,拿不准就再回放一次。
 
 **我改了 vault,效果怎样**
@@ -93,10 +93,10 @@ description: 在 cotutor workspace 里分析 AI 老师的对话:某一轮传了�
 - pack 干跑就够,不花钱:上下文包变了什么,就是效果。
 - 要看老师会不会因此说得不一样,再 replay。
 
-**板上为什么没标重点、底色不对**
+**页上为什么没圈到、没盖上**
 
-- 重点只有老师在讲稿里写的 `[词]`:show 看老师原文里标了没有。
-- 底色、字形按卡的种类定,一行几张按卡的宽度排。老师没写,就是机械规则的样子。
+- 老师对页做的只有讲稿里写的动作(`[[圈 …]]` `[[盖 …]]`):show 看老师原文里写了没有。
+- 写了没落上的,索引的提醒里有一句(照页上认出的字找不到那一处)。
 
 ## 报告怎么写
 

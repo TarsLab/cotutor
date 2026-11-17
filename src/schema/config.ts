@@ -27,8 +27,6 @@ export const PolicySchema = z.object({
    * 孩子最喜欢的是回得快的那位老师。off 时要用的东西由应用放进上下文包
    */
   tools: z.enum(['off', 'on']).describe('孩子说的话,老师带不带工具:off = 不带,只凭上下文包答,开口快(缺省);on = 带只读工具(查教材、读 vault,慢)。带照片的那条、记账,总是带只读工具(read_file / glob / grep_search)'),
-  /** 板书开关:auto = 老师判断要不要出卡(缺省);off = 只说话不出卡 */
-  board: z.enum(['auto', 'off']).describe('板书:auto = 讲题讲概念时老师出卡(缺省);off = 只说话不出卡'),
   /**
    * 断流看门狗(2026-09-21):脑的流多久没有一块到就停,这轮记没成(src/brain/api.ts)。不接着跑:重发会把念过的再念一遍。
    * 9 月 21 日真跑连断两次,「讲个故事」一轮等了 6 分钟,模型真干活不到 10 秒。
@@ -46,7 +44,6 @@ export const PolicyPatchSchema = z.object({
   contextPack: z.object({ recent: z.number().int().nonnegative().optional(), planLines: z.number().int().nonnegative().optional(), entryChars: z.number().int().positive().optional() }).optional(),
   effort: PolicySchema.shape.effort.optional(),
   tools: PolicySchema.shape.tools.optional(),
-  board: PolicySchema.shape.board.optional(),
   stall: z.object({ ms: z.number().int().nonnegative().optional() }).optional(),
 });
 export type PolicyPatch = z.infer<typeof PolicyPatchSchema>;
@@ -57,15 +54,8 @@ export const POLICY_DEFAULTS: Policy = {
   contextPack: { recent: 10, planLines: 10, entryChars: 4000 },
   effort: 'low',
   tools: 'off',
-  board: 'auto',
   stall: { ms: 30000 },
 };
-
-/** 板书能用的卡(注册表顺序;tests/cards.test.ts 断言与 src/board/cards 的 kindsFor('board') 一致,这里不 import 卡,免得契约拖进卡的依赖) */
-export const BOARD_CARD_KINDS = ['text', 'read', 'choice', 'image', 'tianzige', 'word', 'photo', 'code'] as const;
-export type BoardCardKind = (typeof BOARD_CARD_KINDS)[number];
-/** 不再有的卡:旧 cotutor.json 里老师的 cards 写着的读进来就丢掉,不报错(paint、canvas、kit 2026-11-16 删,lecture 2026-11-17 删);写错的名字照样过不了契约 */
-export const RETIRED_CARD_KINDS: readonly string[] = ['paint', 'canvas', 'kit', 'lecture'];
 
 /** agent 名:与 agents/<name>.md 的 frontmatter name 一致,小写字母数字连字符 */
 export const AGENT_NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
@@ -105,8 +95,6 @@ export const TutorSchema = z.object({
   enabled: z.boolean().default(true).describe('开关:false 时两端都不见'),
   /** 孩子端不露(家长端「在孩子的首页上」关掉) */
   hidden: z.boolean().default(false).describe('孩子端不露(家长端「在孩子的首页上」关掉)'),
-  /** 这位老师的板书写法里有哪几种卡(《卡片协议.md》「谁拿到哪些卡」);不写 = 全部。text 总是带着(写坏的卡退成它) */
-  cards: z.preprocess((v) => (Array.isArray(v) ? v.filter((k) => !RETIRED_CARD_KINDS.includes(k)) : v), z.array(z.enum(BOARD_CARD_KINDS))).optional().describe(`这位老师的板书写法里讲哪几种卡(${BOARD_CARD_KINDS.join(' / ')});不写 = 全部,text 总是带着。只裁递给老师的写法,写了清单外的卡照常显示`),
   policy: PolicyPatchSchema.optional().describe('覆盖 policyDefaults 的字段,没写的继承'),
   /** 这位老师用哪个运行时(runtimes 里的键);不配用 runtimes.default。要更大预算与时限的老师配一个自己的 */
   runtime: z.string().optional().describe('这位老师用的运行时(runtimes 里的键;不配用 default)——要换模型的老师配自己的'),
@@ -338,7 +326,6 @@ export function resolvePolicy(config: CotutorConfig, tutor: string): Policy {
     if (p.contextPack?.entryChars !== undefined) out.contextPack.entryChars = p.contextPack.entryChars;
     if (p.effort !== undefined) out.effort = p.effort;
     if (p.tools !== undefined) out.tools = p.tools;
-    if (p.board !== undefined) out.board = p.board;
     if (p.stall?.ms !== undefined) out.stall.ms = p.stall.ms;
   }
   return out;

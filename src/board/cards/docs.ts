@@ -1,16 +1,14 @@
 /**
- * 卡的协议文件:每种能力型卡在包根 cards/<kind>/ 下有 card.md(协议:是什么 / 何时用 / 写法 / 例子 / 反例 /
- * 孩子看到什么 / 你会收回什么 / 状态的形状)与 card.css(这种卡的结构样式,只用主题变量)。
- * md 是可以单独 @ 的文件:init / upgrade 出厂成 workspace 里的**一个技能** .agents/skills/cotutor-board/:SKILL.md = 语法表(frontmatter + 各 md 的「是什么 / 写法 / 例子」拼),references/<kind>.md 逐张协议,
- * references/README.md 索引;老师按需 @ 单张。写盘的在 app/cli/skills.ts `writeBoardSkill`。
- * 例子即测试:tests/cards-doc.test.ts 把每个 card.md 里的围栏喂 parseCard,`<!-- expect {…} -->` 注释是期望。
+ * 卡的协议文件:首页的两种卡(老师牌、听写牌)在包根 cards/<kind>/ 下有 card.md(协议)与 card.css(结构样式,只用主题变量);
+ * 首页技能 cotutor-home 的 references 由它拼(src/app/skills/home-doc.ts)。例子即测试:tests/cards-doc.test.ts 把每个 card.md 里的围栏喂 parseCard。
+ * 还有给老师的一篇:cards/动作怎么写.md(讲稿与动作,铺着页的一节课的写法)进系统提示(actsGuide)。
+ * 2026-11-17 起课里没有卡:板书写法、cotutor-board 技能、课里的那八种卡的协议删了。
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CARD_KINDS, kindsFor, type CardPlace } from './index.ts';
+import { CARD_KINDS } from './index.ts';
 import { stripHumanNotes } from '../../shared/human-notes.ts';
-import { applyCardGuards } from '../card-guards.ts';
 
 /** 本包自带的卡协议目录(仓库检出与 npm 安装都在包根 cards/) */
 export const PACKAGE_CARDS_DIR = fileURLToPath(new URL('../../../cards/', import.meta.url));
@@ -55,84 +53,10 @@ export function readCardDoc(kind: string, dir = PACKAGE_CARDS_DIR): CardDoc {
   return { kind, md, sections, headline };
 }
 
-/** 能用在某处的种类的协议(按注册表的顺序);缺省板书——cotutor-board 技能只列这些;给了 only 就只要这几种(按老师裁,boardGuideFor) */
-export function cardDocs(dir = PACKAGE_CARDS_DIR, place: CardPlace = 'board', only?: readonly string[]): CardDoc[] {
-  return kindsFor(place)
-    .filter((k) => !only || only.includes(k.name))
-    .map((k) => readCardDoc(k.name, dir));
-}
-
-/** 例子里的 `<!-- expect {…} -->` 注释:给老师看的版本要去掉 */
-const EXPECT_RE = /^\s*<!--\s*expect\b.*?-->\s*\n?/gm;
-
-/** 板书写法的手写部分(开头的规矩、一节的例子、作业照片),人改的就是这一篇;`{{卡的种类}}` 那一行由下面拼的各种卡替换 */
-export const BOARD_GUIDE_SOURCE = '板书怎么写.md';
-const KINDS_SLOT = /^\{\{卡的种类\}\}$/m;
-/**
- * 给老师看的语法表(SKILL.md 的正文):cards/板书怎么写.md(剥掉给人看的注释,按卡裁段落)+ 各 card.md 的「是什么 / 写法 / 例子」。
- * kinds 不给 = 板书的全部种类(出厂的 SKILL.md);给了就只拼这几种(按老师裁,boardGuideFor)。
- */
-export function boardSyntaxDoc(dir = PACKAGE_CARDS_DIR, kinds?: readonly string[]): string {
-  const all = kindsFor('board').map((k) => k.name);
-  const want = kinds ? all.filter((k) => kinds.includes(k)) : all;
-  const docs = cardDocs(dir, 'board', want).map(cardGuide).join('\n\n');
-  const guide = applyCardGuards(stripHumanNotes(readFileSync(join(dir, BOARD_GUIDE_SOURCE), 'utf8')), want);
-  if (!KINDS_SLOT.test(guide)) throw new Error(`cards/${BOARD_GUIDE_SOURCE} 里没有「{{卡的种类}}」那一行`);
-  return `${guide.replace(KINDS_SLOT, () => docs)}\n`;
-}
-
-/** 一种卡给老师看的那段:标题 + 是什么 / 写法 / 例子(去掉 expect);板书写法里「卡的种类」一节就是一张张拼的它 */
-function cardGuide(d: CardDoc): string {
-  const parts = [`### ${d.headline}`, d.sections['是什么'], d.sections['写法'], d.sections['例子']?.replace(EXPECT_RE, '')].filter((x) => x && x.trim());
-  return parts.join('\n\n').trim();
-}
-
-/** 板书写法以外多带的几种卡(activity 要用、老师的清单里没有的),同板书写法里那一段的样子;递给老师前剥掉给人看的注释 */
-export function cardGuidesFor(kinds: readonly string[], dir = PACKAGE_CARDS_DIR): string {
-  return stripHumanNotes(cardDocs(dir, 'board', kinds).map(cardGuide).join('\n\n'));
-}
-
-/** 按老师裁的板书写法(递给老师的正文,同 boardGuideBody(SKILL.md) 的形状:没有 frontmatter、没有给人看的注释) */
-export function boardGuideFor(kinds: readonly string[], dir = PACKAGE_CARDS_DIR): string {
-  return stripHumanNotes(boardSyntaxDoc(dir, kinds));
-}
-
-/** 铺着页的一节课里,老师对页做什么写在讲稿的句子后面(src/board/acts.ts):这一篇进系统提示,跟在板书写法后面 */
+/** 讲稿怎么写、老师对页做什么写在讲稿的句子后面(src/board/acts.ts):这一篇进系统提示(2026-11-17 起代替板书写法) */
 export const ACTS_GUIDE_SOURCE = '动作怎么写.md';
 export function actsGuide(dir = PACKAGE_CARDS_DIR): string {
   return stripHumanNotes(readFileSync(join(dir, ACTS_GUIDE_SOURCE), 'utf8')).trim();
-}
-
-/** references/README.md:一行一种——名字、一句是什么、何时用;老师按需 @ 单张 */
-export function cardsIndexDoc(dir = PACKAGE_CARDS_DIR): string {
-  const rows = cardDocs(dir).map((d) => {
-    const what = (d.sections['是什么'] ?? '').split('\n').find((l) => l.trim()) ?? '';
-    const when = (d.sections['什么时候用 / 别用'] ?? '').split('\n').filter((l) => l.startsWith('- 用:')).map((l) => `\n  - 用在:${l.slice(4).trim()}`).join('');
-    return `- **${d.kind}**(${d.kind}.md)—— ${what}${when}`;
-  });
-  return `# 卡的种类(索引)
-
-每种卡一份协议:是什么、什么时候用 / 别用、写法、例子、反例、孩子看到什么、你会收回什么、状态的形状。讲解前只读需要的那一两张;总表在 ../SKILL.md。机器文件,init / refresh 刷新。
-
-${rows.join('\n')}
-`;
-}
-
-/** 技能名;目录 .agents/skills/cotutor-board/ */
-export const BOARD_SKILL = 'cotutor-board';
-
-/** SKILL.md:frontmatter(name / description)+ 语法表;description 列出卡的种类,让模型不读正文也知道有哪几种 */
-export function boardSkillDoc(dir = PACKAGE_CARDS_DIR): string {
-  const kinds = kindsFor('board').map((k) => k.name).join(' / ');
-  const description = `cotutor 的板书怎么写:讲稿一行一句,围栏是卡(种类:${kinds})。应用已经递给老师,老师不用读;家长查阅用。每种卡完整的协议在 references/<种类>.md。机器生成,源在 cotutor 仓的 cards/,别在这里改。`;
-  return `---\nname: ${BOARD_SKILL}\ndescription: ${description}\n---\n\n${boardSyntaxDoc(dir)}`;
-}
-
-/** 技能目录的全部文件(相对技能根):SKILL.md + references/README.md + references/<kind>.md;scripts/gen-skills.ts 写进包根 skills/cotutor-board/,tests/skills.test.ts 断言入库的和它一致 */
-export function boardSkillFiles(dir = PACKAGE_CARDS_DIR): Record<string, string> {
-  const out: Record<string, string> = { 'SKILL.md': boardSkillDoc(dir), 'references/README.md': cardsIndexDoc(dir) };
-  for (const d of cardDocs(dir)) out[`references/${d.kind}.md`] = d.md;
-  return out;
 }
 
 /** 各种卡的结构样式(cards/<kind>/card.css)拼成一段,放在主题 css 前面(主题能盖) */

@@ -15,37 +15,33 @@ import { lectureDid, lecturePage, readLecture, storedMarks, type IncomingMark, t
 import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { buildContextPack } from './context/context-pack.ts';
-import { addMessage, applyRun, changedCards, jobId, sameRuntime, sessionFor } from './journal/conversation.ts';
+import { addMessage, applyRun, jobId, sameRuntime, sessionFor } from './journal/conversation.ts';
 import { localDate, localMinute } from '../shared/time.ts';
-import { cardVoice, cardId, conversationFiles, threads } from '../schema/index.ts';
+import { conversationFiles, threads } from '../schema/index.ts';
 import { bookkeepingPrompt, kidQuestions, textbookHeadings } from '../memory/diary.ts';
-import { cardAssets, cardLabel, describeCard, tutorCardKinds } from '../board/cards/index.ts';
-import { actsGuide, boardGuideFor, cardGuidesFor } from '../board/cards/docs.ts';
-import { activityCards, parseActivity, renderTutorSection } from './activity.ts';
+import { actsGuide } from '../board/cards/docs.ts';
+import { activityBase, parseActivity, renderTutorSection } from './activity.ts';
 import { findActivityFile } from './activities.ts';
 import { readActivity, threadActivity } from './activity-state.ts';
 import { createBrain, getRuntime, type BrainExecutor, type BrainRequest, type RunPlan, type ToolSet } from '../brain/index.ts';
 import { lineFlags, parseBoard } from '../board/parse.ts';
 import { clockLabel, lectureLines } from '../board/lecture.ts';
-import { readyBeats, beatsOf, type BoardSection, type Device } from '../board/presentation.ts';
-import type { BoardCard } from '../schema/index.ts';
+import type { BoardSection, Device } from '../board/presentation.ts';
 import { deriveKidView, truncateReply } from './kid-view.ts';
 import { parseSections } from '../board/sections.ts';
 import { threadDigest } from './context/thread-digest.ts';
-import { beatTimings } from './journal/events.ts';
 import { type RunEvent, type RunEventEnvelope, type RunEventInput } from '../schema/index.ts';
-import { BOARD_CARD_KINDS, LESSON_INK_POINTS, PHOTO_PAGE, type ActivityBase, type Lesson, type LessonEvent, type PagePhoto, canonicalSubject, subjectLang, MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, VAULT_PACK_ROLES, isApiRuntime, resolvePolicy, type ContextPack, type ConversationIndex, type MemoryProposal, type PendingMemory, type ActivityRun, type ConversationMessage, type Focus, type MessageFrom, type MessageVia, type Policy, type Timing } from '../schema/index.ts';
+import { LESSON_INK_POINTS, PHOTO_PAGE, type ActivityBase, type Lesson, type LessonEvent, type PagePhoto, canonicalSubject, subjectLang, MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, VAULT_PACK_ROLES, isApiRuntime, resolvePolicy, type ContextPack, type ConversationIndex, type MemoryProposal, type PendingMemory, type ActivityRun, type ConversationMessage, type MessageFrom, type MessageVia, type Policy, type Timing } from '../schema/index.ts';
 import { UsageError } from '../shared/errors.ts';
 import type { Workspace } from '../schema/index.ts';
-import { readCardStates, readIndex, snapshotSources, writeIndex, writeRunFile } from './journal/store.ts';
+import { readIndex, snapshotSources, writeIndex, writeRunFile } from './journal/store.ts';
 import { readTextbooks, scanVault, writeVaultMemory, type MemoryPlan } from '../memory/vault.ts';
 import { learningContext, type PackReport } from '../memory/context.ts';
 import { childChanges, planDiary, planMemory, recoverPending, writeDiaryBlock } from '../memory/commit.ts';
 import { kidSaid } from '../memory/proposals.ts';
 import type { Retrieved } from '../memory/retrieval.ts';
 import { memoryCount, textHash, tidyMemoryPrompt } from '../memory/vault-notes.ts';
-import { TUTOR_RULES_PATH, tutorRulesBody, BOARD_GUIDE_IN_SYSTEM, BOARD_GUIDE_PATH, boardGuideBody, boardGuideReads } from './context/tutor-rules.ts';
-import { DubQueue } from '../media/tts.ts';
+import { TUTOR_RULES_PATH, tutorRulesBody } from './context/tutor-rules.ts';
 import { kidInput, type KidAccept } from './kid-input.ts';
 import { compatibleLine } from '../shared/qianwen.ts';
 import { lookAt } from '../media/vision.ts';
@@ -54,7 +50,7 @@ import { photoPromptFrom, recognizeWith } from '../scenes/photo-words/recognize.
 import { readWords, startWords } from '../scenes/photo-words/store.ts';
 import { appendBoard, readBoard } from './journal/board-log.ts';
 import { bookSlateParts, clipNote, lessonSlateBits, slateOf, type PageNote } from './context/board-pack.ts';
-import { bookLesson, fitSection, lessonOpen, pageSection, pageText, sectionActs, whitePage, type LessonBook, type LessonSource } from '../board/lesson-fit.ts';
+import { bookLesson, fitSection, lessonOpen, pageText, sectionActs, whitePage, type LessonBook, type LessonSource } from '../board/lesson-fit.ts';
 import { lessonDone, lessonPage, lessonStep } from '../board/lesson.ts';
 import { readLesson, updateLesson } from './journal/lesson-store.ts';
 import { BOOK_TOC, bookView, photoBookPage, photoText, pickable, type PhotoText } from '../chalk/index.ts';
@@ -70,10 +66,9 @@ export interface SendInput {
   from: MessageFrom;
   /** 从首页的 activity 按钮起的新话题(或 cotutor send --activity):哪个 activity、点的那一刻的参数;记在这条消息上,话题后面每条照它带 */
   activity?: ActivityRun;
-  /** 带 action 时可以是空的:交给老师 → 「(交了答案,没说话)」 */
+  /** 带 action 时可以是空的:给老师看(窗里的图)→ 「(给老师看,没说话)」 */
   text: string;
-  focus?: Focus;
-  /** 孩子端的动作:继续 / 交给老师(把改过的卡交出去) */
+  /** 孩子端的动作:「给老师看」(窗里的图已经交了) */
   action?: 'submit';
   /** 运行时名,缺省 cotutor.json 的 runtimes.default */
   runtime?: string;
@@ -164,10 +159,10 @@ function dueCompact(messages: readonly ConversationMessage[], ths: readonly stri
  * + 参考路径 + 本周计划里本老师的行 + 最近 14 天日记里本学科的「- 观察:」行。
  * 守则与笔记原文总是带上;同一话题里没改过的由 send 换成「未变」。
  */
-export async function gatherContext(ws: Workspace, tutor: string, input: { from: MessageFrom; at: Date; focus?: Focus; agent?: string; kinds?: readonly string[]; query?: string }, report?: PackReport): Promise<ContextPack & { retrieved: Retrieved[] }> {
+export async function gatherContext(ws: Workspace, tutor: string, input: { from: MessageFrom; at: Date; agent?: string; query?: string }, report?: PackReport): Promise<ContextPack & { retrieved: Retrieved[] }> {
   const t = ws.config.tutors[tutor];
   const policy = resolvePolicy(ws.config, tutor);
-  const pack: ContextPack = { at: localMinute(input.at), focus: input.focus, plan: [], recent: [] };
+  const pack: ContextPack = { at: localMinute(input.at), plan: [], recent: [] };
   // vault 那几段(src/memory/context.ts):activity 话题的记忆是它自己的(agent: <老师>/<activity>);档案、入口文件、日记观察照旧共用
   const mem = await learningContext(ws, { at: input.at, agent: input.agent ?? tutor, subject: t?.subject, display: t?.display, teacher: Boolean(t), ...(input.query ? { query: input.query } : {}), limits: { entryChars: policy.contextPack.entryChars, planLines: policy.contextPack.planLines, recent: policy.contextPack.recent } }, report);
   if (mem.slot) pack.slot = mem.slot;
@@ -175,7 +170,7 @@ export async function gatherContext(ws: Workspace, tutor: string, input: { from:
   pack.notes = [];
   // 老师的公共守则:机器技能 cotutor-tutor 的原文,排在家长笔记前面(不截;同一话题没改过由 send 换成「未变」)
   try {
-    pack.notes.push({ role: 'rules', path: TUTOR_RULES_PATH, text: tutorRulesBody(await readFile(join(ws.root, TUTOR_RULES_PATH), 'utf8'), input.kinds ?? tutorCardKinds(ws.config.tutors[tutor]?.cards) ?? undefined) });
+    pack.notes.push({ role: 'rules', path: TUTOR_RULES_PATH, text: tutorRulesBody(await readFile(join(ws.root, TUTOR_RULES_PATH), 'utf8')) });
     pack.rules = TUTOR_RULES_PATH;
   } catch {
     pack.rules = `缺:${TUTOR_RULES_PATH} 不在(cotutor refresh 补)`;
@@ -197,7 +192,7 @@ export async function gatherContext(ws: Workspace, tutor: string, input: { from:
 
 /**
  * activity 的那两段:`activity:`(名字、参数)每条都带;
- * 「老师怎么带」那节(按参数与这个话题的卡裁过、剥了注释)+ 这个 activity 多带的卡的写法,作为一条笔记放进话题第一条(<cotutor-activity>),
+ * 「老师怎么带」那节(按参数裁过、剥了注释)作为一条笔记放进话题第一条(<cotutor-activity>),
  * 续话题没改过写「未变」(同守则)。文件不在、读不了 → activityGuide 写「缺」。返回给这轮的提醒。
  */
 export async function attachActivity(ws: Workspace, tutor: string, pack: ContextPack, run: ActivityRun, inSystem = false): Promise<string[]> {
@@ -214,15 +209,11 @@ export async function attachActivity(ws: Workspace, tutor: string, pack: Context
     pack.activityGuide = ACTIVITY_IN_SYSTEM;
     return [];
   }
-  const mine = tutorCardKinds(ws.config.tutors[tutor]?.cards);
-  const cards = activityCards(a, mine ?? undefined);
-  const body = renderTutorSection(a, { params: run.params, cards });
+  const body = renderTutorSection(a, { params: run.params });
   if (body === null) return [];
-  // 这个 activity 要用、老师的板书写法里没有的卡:写法跟在后面(不动系统提示)
-  const extra = mine ? a.cards.filter((k) => !mine.includes(k)) : [];
   const notes = pack.notes ?? [];
-  const at = Math.max(notes.findIndex((n) => n.role === 'boardGuide'), notes.findIndex((n) => n.role === 'rules'));
-  notes.splice(at + 1, 0, { role: 'activityGuide', path, text: extra.length ? `${body}\n\n## 这个 activity 多用的卡\n\n${cardGuidesFor(extra)}` : body });
+  const at = notes.findIndex((n) => n.role === 'rules');
+  notes.splice(at + 1, 0, { role: 'activityGuide', path, text: body });
   pack.notes = notes;
   pack.activityGuide = path;
   return [];
@@ -233,15 +224,13 @@ export const ACTIVITY_IN_SYSTEM = '已在你的系统提示里(这个话题的 a
 
 /**
  * activity 话题的系统提示(九点五):人设与做法都是 activity 自己的。
- *   body   「老师怎么带」按参数与这个话题的卡裁好、剥了注释
- *   kinds  这个话题的卡:activity 头上的 cards 加 text(不并老师的)
- *   guide  只讲这几种卡的板书写法;铺着页的(base)后面跟动作怎么写(cards/动作怎么写.md)
+ *   body   「老师怎么带」按参数裁好、剥了注释
+ *   guide  讲稿与动作怎么写(cards/动作怎么写.md;2026-11-17 起代替板书写法,课里没有卡)
  *   memory 这个 activity 自己的记忆:agent: <老师>/<activity>,文件名 <老师显示名>·<activity>
  * activity 文件不在、没有「老师怎么带」→ null(系统提示只剩一句「你是这个家的…」)。
  */
 export interface ActivityParts {
   body: string;
-  kinds: string[];
   guide: string;
   memory: { agent: string; display: string };
 }
@@ -249,36 +238,18 @@ export interface ActivityParts {
 export async function activityParts(ws: Workspace, tutor: string, run: ActivityRun): Promise<ActivityParts | null> {
   const a = await readActivity(ws, tutor, run.name);
   if (!a?.tutor) return null;
-  const kinds = [...new Set(['text', ...a.cards.filter((k) => (BOARD_CARD_KINDS as readonly string[]).includes(k))])];
-  const body = renderTutorSection(a, { params: run.params, cards: kinds }) ?? '';
+  const body = renderTutorSection(a, { params: run.params }) ?? '';
   const display = ws.config.tutors[tutor]?.display ?? tutor;
-  // 铺着页的(课本做底):动作怎么写跟在板书写法后面
-  const guide = a.base ? `${boardGuideFor(kinds)}\n\n${actsGuide()}` : boardGuideFor(kinds);
-  return { body, kinds, guide, memory: { agent: `${tutor}/${run.name}`, display: `${display}·${run.name}` } };
-}
-
-/** 这位老师的板书写法:没写 cards → 出厂的 cotutor-board SKILL.md;写了 → 按清单从包里现拼(boardGuideFor)。读不到 SKILL.md → null */
-export async function boardGuideOf(ws: Workspace, tutor: string): Promise<string | null> {
-  const kinds = tutorCardKinds(ws.config.tutors[tutor]?.cards);
-  if (kinds) return boardGuideFor(kinds);
-  try {
-    return boardGuideBody(await readFile(join(ws.root, BOARD_GUIDE_PATH), 'utf8'));
-  } catch {
-    return null;
-  }
+  return { body, guide: actsGuide(), memory: { agent: `${tutor}/${run.name}`, display: `${display}·${run.name}` } };
 }
 
 /**
- * 系统提示:activity 话题 = 它的「老师怎么带」+ 它的卡的写法(板书没关时),上下文包只写一行「已在系统提示里」。
+ * 系统提示:activity 话题 = 它的「老师怎么带」+ 讲稿与动作怎么写,上下文包只写一行「已在系统提示里」。
  * 没有 activity 的(记账、整理记忆这种系统任务,以前不走 activity 的话题接着聊):一句「你是这个家的…」,要做什么写在消息里。
  * 老师文件 2026-11-16 起不读了(一科通用的做法并进了每个 activity)。
  */
-async function systemParts(ws: Workspace, tutor: string, policy: Policy, pack: ContextPack, act: ActivityParts | null = null): Promise<{ systemBody: string; activityInSystem: boolean }> {
-  if (act) {
-    const boardOff = policy.board === 'off';
-    if (!boardOff) pack.boardGuide = BOARD_GUIDE_IN_SYSTEM;
-    return { systemBody: boardOff ? act.body : `${act.body}\n\n${act.guide}`, activityInSystem: true };
-  }
+async function systemParts(ws: Workspace, tutor: string, act: ActivityParts | null = null): Promise<{ systemBody: string; activityInSystem: boolean }> {
+  if (act) return { systemBody: `${act.body}\n\n${act.guide}`, activityInSystem: true };
   return { systemBody: bareSystem(ws, tutor), activityInSystem: false };
 }
 
@@ -317,12 +288,11 @@ export async function packDryRun(ws: Workspace, tutor: string, input: { from: Me
   if (!t) throw new UsageError(`没有叫 ${tutor} 的老师;cotutor.json 的 tutors 里有:${Object.keys(ws.config.tutors).join('、')}`);
   const report = {} as PackReport;
   const act = input.activity ? await activityParts(ws, tutor, input.activity) : null;
-  const pack = await gatherContext(ws, tutor, { from: input.from, at: input.at, ...(input.from === 'kid' ? { query: input.text } : {}), ...(act ? { agent: act.memory.agent, kinds: act.kinds } : {}) }, report);
+  const pack = await gatherContext(ws, tutor, { from: input.from, at: input.at, ...(input.from === 'kid' ? { query: input.text } : {}), ...(act ? { agent: act.memory.agent } : {}) }, report);
   const policy = resolvePolicy(ws.config, tutor);
-  if (policy.board === 'off') pack.board = 'off';
   // 和 send 同一条规矩:孩子的话不带工具时,只有工具才用得上的路径不进包
   if (policy.tools !== 'on' && input.from === 'kid') { delete pack.refs; delete pack.vault; }
-  const parts = await systemParts(ws, tutor, policy, pack, act);
+  const parts = await systemParts(ws, tutor, act);
   if (input.activity) await attachActivity(ws, tutor, pack, input.activity, parts.activityInSystem);
   return { prompt: buildContextPack(pack, input.text, policy.contextPack), pack, report };
 }
@@ -457,12 +427,10 @@ export class Runner {
     return { thread, say: text };
   }
 
-  /** 讲稿里的动作落到页上之前(src/board/lesson-fit.ts):铺着页的一节里卡不上页,动作照这一轮开始时这节课的样子一个一个落;不铺页的原样 */
-  private fitBoard(section: BoardSection, active: Active): { section: BoardSection; dropped: BoardCard[]; why: string[] } {
-    if (!active.lesson) return { section, dropped: [], why: [] };
-    const cards = pageSection(section);
-    const acts = fitSection(cards.section, active.lesson.at, active.lesson.src);
-    return { section: acts.section, dropped: cards.dropped, why: acts.why };
+  /** 讲稿里的动作落到页上(src/board/lesson-fit.ts):照这一轮开始时这节课的样子一个一个落;不铺页的原样 */
+  private fitBoard(section: BoardSection, active: Active): { section: BoardSection; why: string[] } {
+    if (!active.lesson) return { section, why: [] };
+    return fitSection(section, active.lesson.at, active.lesson.src);
   }
 
   /** 这位老师学科、这学期的那一册课本:索引;教材目录下没有、读不了回 problem(给老师的底、家长端) */
@@ -633,7 +601,7 @@ export class Runner {
     // 小课堂画的一处带一张截图:和照片一样进上下文包 photos:(排在孩子拍的后面),这一轮带工具读图;消息的 photos 只记孩子拍的
     const shots = input.lecture?.marks?.flatMap((m) => (m.image ? [m.image] : [])) ?? [];
     const seen = [...photos, ...shots];
-    const text = input.text.trim() || (input.action === 'submit' ? '(交了答案,没说话)' : photos.length ? (photos.length === 1 ? '(拍了一张)' : `(拍了 ${photos.length} 张)`) : '');
+    const text = input.text.trim() || (input.action === 'submit' ? '(给老师看,没说话)' : photos.length ? (photos.length === 1 ? '(拍了一张)' : `(拍了 ${photos.length} 张)`) : '');
     if (!text) throw new UsageError('消息是空的');
     const busy = this.active.get(tutor);
     if (busy) throw new BusyError(tutor, busy.job);
@@ -700,29 +668,19 @@ export class Runner {
     const act = threadRun ? await activityParts(ws, tutor, threadRun) : null;
     // 取材的查询:孩子这句话,加首页按钮的讲法(系统任务不查)
     const query = input.from === 'kid' ? [text, input.home?.brief].filter(Boolean).join('\n') : '';
-    const gathered = await gatherContext(ws, tutor, { from: input.from, at: now, focus: input.focus, ...(query ? { query } : {}), ...(act ? { agent: act.memory.agent, kinds: act.kinds } : {}) });
+    const gathered = await gatherContext(ws, tutor, { from: input.from, at: now, ...(query ? { query } : {}), ...(act ? { agent: act.memory.agent } : {}) });
     const policy = resolvePolicy(ws.config, tutor);
-    const { systemBody, activityInSystem } = await systemParts(ws, tutor, policy, gathered, act);
+    const { systemBody, activityInSystem } = await systemParts(ws, tutor, act);
     const activityRun = input.bookkeep ? null : threadRun;
     const activityWarn = activityRun ? await attachActivity(ws, tutor, gathered, activityRun, activityInSystem) : [];
     // 家长笔记原文:新会话整篇带;续会话时这个话题带过、没改的只写「未变」
     const notes = noteVersions(gathered);
     const pack = session && !compact ? dropSeenNotes(gathered, seenNotes(index.messages, thread)) : gathered;
-    // 入口文件是可选的(2026-10-30,《vault重构方案》§8:ray 的三篇都是空壳,讲法偏好家长写在首页按钮里):缺了不再每轮提醒,doctor 里提示一次
-    if (policy.board === 'off') pack.board = 'off';
-    // 这个话题里上一轮之后孩子在卡上做的事:逐张 describe 进上下文包,也记进这条消息(家长视图「孩子在板书上做的」);新话题不带
-    const changed = fresh || input.bookkeep ? [] : changedCards(index, await readCardStates(ws, tutor, date), thread);
-    const cards: { card: string; text: string }[] = changed.map((c) => {
-      const card = index.messages.find((m) => m.job === c.job)?.section?.cards[c.n];
-      const id = cardId(c.job, c.n);
-      return { card: id, text: card ? describeCard(card, c.file.state) : JSON.stringify(c.file.state) };
-    });
     // 这轮带不带工具(policy.tools,2026-10-04):孩子说的话缺省不带,只凭上下文包答;带照片的(要 Read 看图)、
     // 系统任务带只读的(以前是整份白名单,照片里一句话就能让老师拿 Bash 读写 workspace 外);policy.tools: on 的老师总是整份。
     // 不带的那轮,只有工具才用得上的路径(refs / vault)不进包
     const tools: ToolSet = policy.tools === 'on' ? 'on' : input.from !== 'kid' || seen.length > 0 ? 'read' : 'off';
     if (tools === 'off') { delete pack.refs; delete pack.vault; }
-    if (cards.length) pack.cards = cards.map((c) => `${c.card} ${c.text}`);
     if (seen.length) { pack.photos = seen; pack.photoFiles = seen.map((p) => join(ws.root, p)); }
     if (input.home) pack.home = input.home;
     // 一节课(activity 头上 base:;记在话题第一条):每一轮带页此刻的样子,第一次看到的页带上它印的字
@@ -732,9 +690,9 @@ export class Runner {
     const lecture = input.lecture ? await readLecture(ws, input.lecture.bundle) : null;
     const marks = input.lecture?.marks?.length ? storedMarks(lecture, input.lecture.marks, photos.length) : [];
     const lectureWarn = input.lecture && !lecture ? [`小课堂:${input.lecture.bundle} 读不出来(bundles/ 与 lectures/ 下都没有能放的),老师没拿到课的内容`] : [];
-    // 铺哪种页:activity 头上的 base;从小课堂按钮进来、挂的 activity 没写 base 的,也是一节铺着小课堂的课
-    const freshBase = actDef?.base === 'textbook' || actDef?.base === 'photo' || actDef?.base === 'lecture' ? actDef.base : input.lecture ? 'lecture' : null;
-    const pageBase: ActivityBase | null = input.bookkeep || policy.board === 'off' ? null : fresh ? (activityRun || input.lecture ? freshBase : null) : (first?.base ?? null);
+    // 铺哪种页:activity 头上的 base(没写当 photo);从小课堂按钮进来的,页上还先铺那堂课(lessonOn)。不带 activity 的系统任务、以前不铺页的话题不铺
+    const freshBase: ActivityBase | null = actDef ? activityBase(actDef) : input.lecture ? 'lecture' : null;
+    const pageBase: ActivityBase | null = input.bookkeep ? null : fresh ? (activityRun || input.lecture ? freshBase : null) : (first?.base ?? null);
     const les = pageBase ? await this.lessonOn(ws, tutor, now, date, thread, pageBase, photos, lecture) : null;
     if (les?.problem) activityWarn.push(les.problem);
     if (les && pageBase) active.lesson = { base: pageBase, src: les.src, at: les.lesson };
@@ -758,7 +716,7 @@ export class Runner {
     const plan = this.brain.plan(req);
 
     // 原声:落在这轮旁边(删话题一起删);写不下就当没有,消息照发
-    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards: cards.map(({ card, text }) => ({ card, text })) } : {}), ...(photos.length ? { photos } : {}), ...(input.device ? { device: input.device } : {}), ...(input.deviceId ? { deviceId: input.deviceId } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.tidy ? { tidy: true as const } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(input.eval ? { eval: true as const } : {}), ...(input.live ? { live: true as const } : {}), ...(input.via ? { via: input.via } : {}), ...(input.lecture ? { lecture: { bundle: input.lecture.bundle, title: lecture?.title ?? input.lecture.bundle, watchedMs: input.lecture.watchedMs, finished: input.lecture.finished, pauses: input.lecture.pauses, ...(input.lecture.again ? { again: true as const } : {}), ...(lecture?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}), ...(input.lecture.log?.length ? { log: input.lecture.log } : {}) } } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(fresh && activityRun ? { activity: activityRun } : {}), ...(fresh && pageBase ? { base: pageBase } : {}), ...(fresh && actDef?.listen === 'open' ? { listen: 'open' as const } : {}), ...(compact ? { compacted: true as const } : {}), ...(lectureWarn.length || activityWarn.length ? { warnings: [...lectureWarn, ...activityWarn] } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
+    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, ...(input.action ? { action: input.action } : {}), ...(photos.length ? { photos } : {}), ...(input.device ? { device: input.device } : {}), ...(input.deviceId ? { deviceId: input.deviceId } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.tidy ? { tidy: true as const } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(input.eval ? { eval: true as const } : {}), ...(input.live ? { live: true as const } : {}), ...(input.via ? { via: input.via } : {}), ...(input.lecture ? { lecture: { bundle: input.lecture.bundle, title: lecture?.title ?? input.lecture.bundle, watchedMs: input.lecture.watchedMs, finished: input.lecture.finished, pauses: input.lecture.pauses, ...(input.lecture.again ? { again: true as const } : {}), ...(lecture?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}), ...(input.lecture.log?.length ? { log: input.lecture.log } : {}) } } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(fresh && activityRun ? { activity: activityRun } : {}), ...(fresh && pageBase ? { base: pageBase } : {}), ...(fresh && actDef?.listen === 'open' ? { listen: 'open' as const } : {}), ...(compact ? { compacted: true as const } : {}), ...(lectureWarn.length || activityWarn.length ? { warnings: [...lectureWarn, ...activityWarn] } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
     await writeIndex(ws, started);
     // 板的日志记一笔:这一轮把板交给了老师(下一轮「孩子做的」从这之后算;给了全文的下一轮写「未变」)
     if (slate) await appendBoard(ws, tutor, date, thread, { at: now.toISOString(), k: 'turn', job, ...(slate.told.length ? { told: slate.told } : {}) });
@@ -888,29 +846,12 @@ export class Runner {
         }
       }
     };
-    // 讲稿不配音(嘴照念):拍关就就绪;卡自己的声音(点读段、单词)照配
-    const voice = cardVoice(ws.config.tutors, tutor);
-    const queue = voice ? new DubQueue(voice, files.err(job), { cacheDir: ws.dirs.tts, env: this.opts.env }) : null;
-    if (queue) queue.report = (e) => emit(e.kind === 'queued' ? { lane: 'tts', kind: 'queued', label: e.label } : e.kind === 'done' ? { lane: 'tts', kind: 'done', label: e.label, ms: e.ms, file: e.file ?? '' } : { lane: 'tts', kind: 'failed', label: e.label, ms: e.ms, error: e.error ?? '?' });
-    let cardsSeen = 0;
+    // 讲稿不配音(嘴照念):第一句出来就能开口(记 firstReadyMs、发 ready:speak)
     let linesSeen = 0;
-    // 就绪(流式):重算前几拍就绪(卡等它),涨了发 ready:beat;第一拍就绪记 firstReadyMs、发 ready:speak(嘴能开口了)
-    let readySeen = 0;
     const speak = (): void => {
       if (timing.firstReadyMs !== undefined) return;
       timing.firstReadyMs = since();
       emit({ lane: 'ready', kind: 'speak' });
-    };
-    const settleReady = (): void => {
-      if (!active.partial) return;
-      const n = readyBeats(active.partial, { done: false });
-      if (n <= readySeen) return;
-      const beats = beatsOf(active.partial);
-      for (; readySeen < n; readySeen++) {
-        speak();
-        emit({ lane: 'ready', kind: 'beat', beat: readySeen, card: beats[readySeen]?.card ?? null, first: readySeen === 0 });
-      }
-      active.partial = { ...active.partial, ready: n };
     };
     // 流式:脑的正文变了就(节流 150ms)重解析成 partial 板书
     let dirty = false;
@@ -919,14 +860,12 @@ export class Runner {
       timer = null;
       if (!dirty) return;
       dirty = false;
-      // 先剥「## 记账」再解析,和定稿的 deriveKidView 同一条路;不剥的话固定段写在前面的那轮流式时一张卡都出不来(2026-09-13 控制台里看见的)
+      // 先剥「## 记账」再解析,和定稿的 deriveKidView 同一条路;不剥的话固定段写在前面的那轮流式时什么都出不来(2026-09-13 控制台里看见的)
       const section = this.fitBoard(parseBoard(parseSections(brainRun.text()).body, { partial: true }).section, active).section;
-      const lines = section.lines.map((l) => ({ ...l, text: truncateReply(l.text, replyMaxChars).text, audio: null }));
-      active.partial = section.cards.length || lines.length ? { cards: section.cards, lines, partial: true, ready: readySeen } : null;
-      if (section.cards.length && timing.firstCardMs === undefined) timing.firstCardMs = since();
-      for (; cardsSeen < section.cards.length; cardsSeen++) emit({ lane: 'main', kind: 'card', card: cardsSeen, label: `${section.cards[cardsSeen].kind} ${cardLabel(section.cards[cardsSeen])}`.trim() });
+      const lines = section.lines.map((l) => ({ ...l, text: truncateReply(l.text, replyMaxChars).text }));
+      active.partial = lines.length || section.acts?.length ? { lines, partial: true, ...(section.acts ? { acts: section.acts } : {}) } : null;
+      if (lines.length) speak();
       for (; linesSeen < lines.length; linesSeen++) emit({ lane: 'main', kind: 'line', line: linesSeen, text: lines[linesSeen].text, ...lineFlags(lines[linesSeen]) });
-      settleReady();
     };
     // 请老师(src/brain/):正文、工具随流回报
     const brainRun = this.brain.start(req, plan, { tutor, files: { log: files.log(job), err: files.err(job), history: files.brain(thread) }, stall: policy.stall }, {
@@ -943,7 +882,7 @@ export class Runner {
     });
     const { transcript, tools, warnings } = await brainRun.done;
     emit({ lane: 'main', kind: 'exit', ok: transcript.final.ok, ...(transcript.final.reason ? { reason: transcript.final.reason } : {}), ...(transcript.final.inTokens !== undefined ? { tokens: { in: transcript.final.inTokens, out: transcript.final.outTokens ?? 0 } } : {}), ...(transcript.final.numTurns !== undefined ? { turns: transcript.final.numTurns } : {}) });
-    const kidView = deriveKidView(transcript, { replyMaxChars }, { live: active.live });
+    const kidView = deriveKidView(transcript, { replyMaxChars });
     kidView.warnings.push(...warnings);
     if (kidView.section) {
       // 这一轮写着的时候后台可能刚认完字:定稿前再读一遍
@@ -956,29 +895,18 @@ export class Runner {
         const acts = sectionActs(fit.section);
         await updateLesson(ws, tutor, date, thread, (l) => lessonDone(acts.reduce((s, a) => lessonStep(s, { t: 'act', act: a }), l), job));
       }
-      if (fit.dropped.length) kidView.warnings.push(`铺着页:卡不上页,用讲稿里的动作(撤掉了:${fit.dropped.map((c) => `${c.kind} ${cardLabel(c)}`.trim()).join(';')})`);
     }
-    // 整块出的(没走流式):卡与句这时才第一次见到,也发一遍
+    // 整块出的(没走流式):句子这时才第一次见到,也发一遍
     if (kidView.section) {
-      for (; cardsSeen < kidView.section.cards.length; cardsSeen++) emit({ lane: 'main', kind: 'card', card: cardsSeen, label: `${kidView.section.cards[cardsSeen].kind} ${cardLabel(kidView.section.cards[cardsSeen])}`.trim() });
       for (; linesSeen < kidView.section.lines.length; linesSeen++) emit({ lane: 'main', kind: 'line', line: linesSeen, text: kidView.section.lines[linesSeen].text, ...lineFlags(kidView.section.lines[linesSeen]) });
     }
     if (timing.firstReadyMs === undefined && (kidView.section?.lines.length || kidView.kidText)) timing.firstReadyMs = since();
-    if (kidView.section) emit({ lane: 'ready', kind: 'all', cards: kidView.section.cards.length, lines: kidView.section.lines.length });
-    if (kidView.section) timing.beats = beatTimings(events, beatsOf(kidView.section));
+    if (kidView.section) emit({ lane: 'ready', kind: 'all', lines: kidView.section.lines.length });
     // 重新读索引再并入:跑的这段时间里别的字段(比如家长改了别的)不被旧对象盖掉
     const latest = await readIndex(ws, tutor, date);
-    // 板书写法已经递到手里(系统提示或话题第一条),老师还用工具去读它 → 预载没起作用,家长端这轮上点名(换模型 / 版本后最先坏的地方)
-    const reread = policy.board !== 'off' ? boardGuideReads(tools) : [];
-    if (reread.length) kidView.warnings.push(`板书写法已经递给老师了,这轮它还是用工具去读了一遍(${reread.join(';')}):多一次模型来回`);
-    // 清单外的卡(《卡片协议.md》「谁拿到哪些卡」):照常解析、照常显示,只在这轮记一条,家长据此调清单
-    // activity 话题的卡是 activity 自己的(加 text);别的话题照老师的清单
     const jobAt = latest.messages.findIndex((m) => m.job === job);
     const run = jobAt >= 0 ? threadActivity(latest.messages, threads(latest.messages)[jobAt]) : null;
     const actFile = run ? await readActivity(ws, tutor, run.name) : null;
-    const kinds = actFile ? ['text', ...actFile.cards] : tutorCardKinds(ws.config.tutors[tutor]?.cards);
-    const outside = kinds && kidView.section ? [...new Set(kidView.section.cards.map((c) => c.kind).filter((k) => !kinds.includes(k)))] : [];
-    if (outside.length) kidView.warnings.push(actFile ? `板书里有这个 activity 清单外的卡:${outside.join('、')}(照常显示;要它就加进 agents/${tutor}/activities/${run!.name}.md 头上的 cards)` : `板书里有清单外的卡:${outside.join('、')}(照常显示;要它就加进 cotutor.json tutors.${tutor}.cards)`);
     let next = applyRun(latest, job, { transcript, kidView, runtime: plan.runtime, timing, tools });
     const patch = (f: (m: ConversationMessage) => ConversationMessage): void => { next = { ...next, messages: next.messages.map((m) => (m.job === job ? f(m) : m)) }; };
     const asked = latest.messages.find((m) => m.job === job);
@@ -1025,20 +953,6 @@ export class Runner {
     await writeIndex(ws, next);
     emit({ lane: 'index', kind: 'written', warnings: next.messages.find((m) => m.job === job)?.warnings?.length ?? 0 });
     await eventsChain;
-    // 资产:点读段逐段配音到 .cards/<n>/<k>.mp3,后台跑,不拦着这一轮收尾;孩子端每次拉 today 都会看到新生成好的
-    if (queue && kidView.section) {
-      const jobs: Promise<unknown>[] = [];
-      kidView.section.cards.forEach((card, n) => {
-        const list = cardAssets(card);
-        if (!list.length) return;
-        jobs.push(mkdir(files.cardAssetsDir(job, n), { recursive: true }).then(() => Promise.all(list.map((a) => queue.add(files.cardAsset(job, n, a.file), a.text, `第 ${n + 1} 张卡的 ${a.file} `)))));
-      });
-      if (jobs.length) {
-        const bg = Promise.all(jobs).then(() => undefined, () => undefined);
-        this.background.add(bg);
-        void bg.finally(() => this.background.delete(bg));
-      }
-    }
     return next;
   }
 }

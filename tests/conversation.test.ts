@@ -1,7 +1,7 @@
 /** 对话索引纯函数:命名、并入运行结果、session 只记一次。 */
-import { addMessage, applyRun, changedCards, currentThread, emptyIndex, jobId, lastJobOf, sessionFor } from '../src/runtime/journal/conversation.ts';
+import { addMessage, applyRun, currentThread, emptyIndex, jobId, lastJobOf, sessionFor } from '../src/runtime/journal/conversation.ts';
 import { localDate, localMinute, weekOf } from '../src/shared/time.ts';
-import { cardAssetName, cardId, conversationFiles, threads } from '../src/schema/index.ts';
+import { conversationFiles, threads } from '../src/schema/index.ts';
 import { deriveKidView } from '../src/runtime/kid-view.ts';
 import { sumTokens } from '../src/shared/tokens.ts';
 import { parseTranscript } from '../src/brain/transcript.ts';
@@ -28,19 +28,11 @@ check('session 记下', after.session?.id === 's-9' && after.session.runtime ===
 const t2 = parseTranscript('{"type":"system","subtype":"init","session_id":"s-9"}\n{"type":"result","subtype":"success","result":"再讲。","usage":{"input_tokens":1200,"output_tokens":40}}');
 const again = applyRun(addMessage(after, { job: '1630-2', at: '2026-09-08T16:30', from: 'kid', text: '再', result: 'running', artifacts: [] }), '1630-2', { transcript: t2, kidView: deriveKidView(t2, { replyMaxChars: 60 }), runtime: 'claude' });
 check('一天的 token 合计、旧对象不动;没报 token 的轮不算', JSON.stringify(sumTokens(again.messages)) === '{"in":2200,"out":70}' && sumTokens([{}]) === null && idx.messages[0].result === 'running');
-check('卡的资产目录与文件、孩子端的名字', f.cardAssetsDir('1620-1', 2) === '/ws/conversations/math-tutor/2026-09-08.1620-1.cards/2' && f.cardAsset('1620-1', 2, '3.mp3') === '/ws/conversations/math-tutor/2026-09-08.1620-1.cards/2/3.mp3' && cardAssetName('2026-09-08', '1620-1', 2, '3.mp3') === '2026-09-08.1620-1.cards/2/3.mp3');
-check('卡的状态文件与 id', f.cardsDir('1620-1') === '/ws/conversations/math-tutor/2026-09-08.1620-1.cards' && f.card('1620-1', 2) === '/ws/conversations/math-tutor/2026-09-08.1620-1.cards/2.json' && cardId('1620-1', 2) === '1620-1/2');
 {
-  const idx = { messages: [{ job: '1', from: 'kid' as const }, { job: '2', from: 'kid' as const }, { job: '3', from: 'kid' as const }] };
-  const st = (turn: string) => ({ at: 'x', turn, state: {} });
-  const got = changedCards(idx, { '1': { 1: st('3'), 0: st('2') }, '2': { 0: st('3') }, '9': { 0: st('3') } }, '1');
-  check('上一轮之后改过的卡:turn 等于话题末条 job 的才算,按 job、下标排;不在索引里的 job 不算', got.map((c) => `${c.job}/${c.n}`).join() === '1/1,2/0', JSON.stringify(got));
-  check('空索引没有', changedCards({ messages: [] }, { '1': { 0: st('1') } }, '1').length === 0);
   // 话题:旧索引没有 thread 字段 → 第一条自己、system 开新、其余跟前一条;有字段照字段
   const mixed = [{ job: 'a', from: 'kid' as const }, { job: 'b', from: 'kid' as const }, { job: 'c', from: 'system' as const }, { job: 'd', from: 'kid' as const }, { job: 'e', from: 'kid' as const, thread: 'e' }, { job: 'f', from: 'kid' as const }];
   check('threads:旧索引现算,system 开新话题,带字段的照字段', threads(mixed).join() === 'a,a,c,c,e,e' && currentThread({ messages: mixed }) === 'e' && currentThread({ messages: [] }) === null);
   check('lastJobOf:话题末条;没有 → null', lastJobOf({ messages: mixed }, 'a') === 'b' && lastJobOf({ messages: mixed }, 'c') === 'd' && lastJobOf({ messages: mixed }, 'zz') === null);
-  check('按话题挑卡:别的话题里改过的不算', changedCards({ messages: mixed }, { a: { 0: st('b') }, c: { 0: st('d') } }, 'a').map((c) => c.job).join() === 'a');
   check('sessionFor:话题有会话就是它,没有 → null', sessionFor({ sessions: {} }, 'e') === null && sessionFor({ sessions: { a: { id: 's-a', runtime: 'claude' } } }, 'a')?.id === 's-a');
 }
 {

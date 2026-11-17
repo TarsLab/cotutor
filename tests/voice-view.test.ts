@@ -17,7 +17,7 @@ const V = (p: Partial<VoiceIn>) => voiceView(voiceIn(p));
 check('老师在说(按住说):老师的弧、头像是 talk、底是白的、按住能打断', (() => { const v = V({ status: 'mouth' }); return v.flow === 'out' && v.face === 'talk' && v.tone === 'white' && v.press === 'hold'; })());
 check('孩子按着:蓝底、竖条往里、头像在听', (() => { const v = V({ status: 'holding', holdAudio: true }); return v.tone === 'blue' && v.flow === 'in' && v.face === 'listen' && !v.dots; })());
 check('插话:两样都在', V({ open: true, status: 'mouth', hearing: true }).flow === 'both');
-check('不是老师在线说话不画声音:卡、重放、小课堂', ['card', 'replay', 'lecture'].every((st) => { const v = V({ status: st as VoiceIn['status'] }); return v.flow === 'none' && v.face === 'still' && v.press === 'hold'; }));
+check('不是老师在线说话不画声音:重放、小课堂', ['replay', 'lecture'].every((st) => { const v = V({ status: st as VoiceIn['status'] }); return v.flow === 'none' && v.face === 'still' && v.press === 'hold'; }));
 check('嘴在说时脑还在写:照「老师在说」(嘴的声音优先)', V({ status: 'mouth', pending: true }).key === 'tutor');
 
 // 按着没声音:3 秒前是竖条(页面按音量画小点),3 秒起小字换掉
@@ -37,7 +37,7 @@ check('没提示时不晃', VOICE_SCENES.filter((s) => !s.input.hint).every((s) 
 check('老师在想时按了:提示压过「老师在想」', V({ pending: true, hint: 'busy' }).big === '老师在想,等一下再说');
 
 // 穷举:每种状态 × 开关组合都给得出一种样子,不抛
-const statuses: VoiceIn['status'][] = ['quiet', 'holding', 'mouth', 'card', 'lecture', 'replay'];
+const statuses: VoiceIn['status'][] = ['quiet', 'holding', 'mouth', 'lecture', 'replay'];
 let n = 0, bad = 0;
 for (const status of statuses) for (let bits = 0; bits < 1 << 9; bits++) {
   const b = (k: number) => Boolean(bits & (1 << k));

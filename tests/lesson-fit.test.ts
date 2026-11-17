@@ -1,5 +1,5 @@
 /** 讲稿里的动作落到页上(src/board/lesson-fit.ts):照页的文字层找框、先翻再看、落不了的记一句;铺着页的一节卡都不上页。书是 tests/_math-book.ts 造的,照片认出的字写在这里。 */
-import { bookPageOf, fitActs, fitSection, lessonOpen, pageSection, sectionActs, whitePage } from '../src/board/lesson-fit.ts';
+import { bookPageOf, fitActs, fitSection, lessonOpen, sectionActs, whitePage } from '../src/board/lesson-fit.ts';
 import { lessonInit, lessonPage, lessonStep, lessonStrip } from '../src/board/lesson.ts';
 import { parseBoard } from '../src/board/parse.ts';
 import type { Lesson, LineAct } from '../src/schema/index.ts';
@@ -57,10 +57,8 @@ check('还没有页:先铺目录;有页就不动', opened.at === '数学二年�
   check('没有动作的一节原样', fitSection(parseBoard('你好。\n').section, opened, src).section.lines[0].acts === undefined);
 }
 
-// ——— 铺着页的一节:卡都不上页;数学课本上请点字不开 ———
+// ——— 数学课本上请点字不开 ———
 {
-  const raw = pageSection({ cards: [{ kind: 'image', props: { src: 'a.png' } }], lines: [{ text: '看例 2。', audio: null, marks: [], ask: false, anchor: 0, cues: [] }] });
-  check('卡都撤掉,讲稿的锚跟着没了', raw.dropped.length === 1 && raw.section.cards.length === 0 && raw.section.lines[0].anchor === null);
   const f = fitActs(fitActs(opened, [A('翻', '5的乘法口诀')], src).lesson, [A('请', '点、圈')], src);
   check('数学课本上请点字:点字不开,圈照开,记一句', (f.acts[0].do as { ops: string[] }).ops.join() === '圈' && f.why.some((w) => w.includes('不能点字')), JSON.stringify(f));
 }

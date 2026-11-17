@@ -234,9 +234,9 @@ export interface ActivityCheck {
 
 /**
  * cotutor activity check:workspace 里每个(或某位老师的、某一个)activity 文件解析 + 检查。
- * tutors 是 cotutor.json 的老师表(键 → 这位老师的 cards;没写 cards 是 undefined = 全部);老师不在表里也报一条。
+ * tutors 是 cotutor.json 的老师表(只看有没有这位);老师不在表里也报一条。
  */
-export async function checkActivities(root: string, tutors: Readonly<Record<string, { cards?: readonly string[] }>>, opts: { tutor?: string; name?: string } = {}): Promise<ActivityCheck[]> {
+export async function checkActivities(root: string, tutors: Readonly<Record<string, unknown>>, opts: { tutor?: string; name?: string } = {}): Promise<ActivityCheck[]> {
   const refs = (await listActivities(join(root, 'agents'), opts.tutor)).filter((r) => !opts.name || r.name === opts.name);
   const out: ActivityCheck[] = [];
   for (const r of refs) {
@@ -246,7 +246,7 @@ export async function checkActivities(root: string, tutors: Readonly<Record<stri
       continue;
     }
     const t = tutors[r.tutor];
-    const { activity, issues } = lintActivity(text, { fileName: r.name, tutorCards: t?.cards });
+    const { activity, issues } = lintActivity(text, { fileName: r.name });
     if (!t) issues.unshift({ level: 'fix', text: `cotutor.json 里没有 ${r.tutor} 这位老师,这个 activity 没人带` });
     out.push({ ...r, activity, issues });
   }

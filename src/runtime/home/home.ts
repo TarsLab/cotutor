@@ -5,7 +5,7 @@
 import type { TutorButton } from '../../board/cards/index.ts';
 import { HOME_TILES, type Activity, type ActivityBase, type HomeTileId } from '../../schema/index.ts';
 import { resolveParams } from '../activity.ts';
-import { parseBoard } from '../../board/parse.ts';
+import { parseHomeBody } from '../../board/parse.ts';
 import type { BoardCard } from '../../board/presentation.ts';
 
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -62,7 +62,7 @@ export function parseHome(md: string): HomeDoc {
     }
   }
   const body = all.slice(start);
-  const board = parseBoard(body.join('\n'), { place: 'home' });
+  const board = parseHomeBody(body.join('\n'));
   const at = (bodyLine: number): number => start + bodyLine + 1;
   for (const w of board.warnings) {
     const line = w.line === undefined ? undefined : at(w.line);
@@ -72,13 +72,13 @@ export function parseHome(md: string): HomeDoc {
   // 标签写的种类和解析出来的对不上 = 退了(解析器已经报过 fallback 的,这里只兜不认识的标签)
   board.spans.cards.forEach((s, n) => {
     const tag = (FENCE_TAG.exec(body[s[0]] ?? '')?.[1] ?? '').toLowerCase();
-    if (tag && tag !== board.section.cards[n].kind && !issues.some((x) => x.card === n && x.level === 'fix')) issues.push({ level: 'fix', line: at(s[0]), card: n, text: `这张卡没解析成 ${tag}` });
+    if (tag && tag !== board.cards[n].kind && !issues.some((x) => x.card === n && x.level === 'fix')) issues.push({ level: 'fix', line: at(s[0]), card: n, text: `这张卡没解析成 ${tag}` });
   });
   if (board.spans.lines.length) {
     const lines = board.spans.lines.map((s) => at(s[0]));
     issues.push({ level: 'note', line: lines[0], text: `第 ${lines.join('、')} 行是围栏外的普通行,首页不显示;要给孩子看的写进卡里,给家长的挪到「## 为什么这么排」下面` });
   }
-  return { ...(forDay ? { for: forDay } : {}), cards: board.section.cards, cardLines: board.spans.cards.map((s) => at(s[0])), note: board.tail, issues };
+  return { ...(forDay ? { for: forDay } : {}), cards: board.cards, cardLines: board.spans.cards.map((s) => at(s[0])), note: board.tail, issues };
 }
 
 /** 一位老师在 cotutor.json 里的样子(查老师卡用) */

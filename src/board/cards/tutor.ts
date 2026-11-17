@@ -45,7 +45,6 @@ export type TutorProps = z.infer<typeof TutorPropsSchema>;
 
 export const tutor: CardKind<TutorProps> = {
   name: 'tutor',
-  where: ['home'],
   props: TutorPropsSchema,
   parse(body, mods) {
     const name = mods[0]?.toLowerCase();

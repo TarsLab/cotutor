@@ -67,7 +67,7 @@ try {
   check('不认得的名字 404;拼路径的 404', (await route('GET', '/api/dev/activities/chinese-tutor/' + encodeURIComponent('没有这个'), ctx)).status === 404 && (await route('GET', '/api/dev/activities/chinese-tutor/' + encodeURIComponent('..'), ctx)).status === 404 && (await route('GET', '/api/dev/activities/nobody-tutor/x', ctx)).status === 404);
 
   // ---- 边改边查(不落盘) ----
-  type Chk = { issues: { level: string; line?: number }[]; buttons: { label: string; ok: boolean; detail: string }[]; diff: { at: number; old: string[]; now: string[] }[] | null; preview: { text: string | null; cards: string[] }; summary: { params: { name: string }[] } };
+  type Chk = { issues: { level: string; line?: number }[]; buttons: { label: string; ok: boolean; detail: string }[]; diff: { at: number; old: string[]; now: string[] }[] | null; preview: { text: string | null }; summary: { params: { name: string }[] } };
   const broken = shipped.replace('最多问: 数,可空', '最多问: 整数,可空');
   const c1 = (await route('POST', own0 + '/check', ctx, { text: broken })).json as Chk;
   check('查:要改的带行号', c1.issues.some((i) => i.level === 'fix' && i.line === 13), JSON.stringify(c1.issues));
@@ -78,7 +78,7 @@ try {
   check('查:不落盘', readFileSync(file, 'utf8') === shipped && readFileSync(kfile, 'utf8') === kantu);
   const c2 = (await route('POST', own0 + '/check', ctx, { text: shipped, params: { 词: '播种、羞愧' } })).json as Chk;
   const c3 = (await route('POST', own0 + '/check', ctx, { text: shipped })).json as Chk;
-  check('预览:填了词那段在,没填不在;注释剥了;卡带上 text', (c2.preview.text ?? '').includes('### 用上这周的词') && !(c3.preview.text ?? '').includes('### 用上这周的词') && !(c2.preview.text ?? '').includes('<!--') && c2.preview.cards.join(' ') === 'text read photo', JSON.stringify(c2.preview.cards));
+  check('预览:填了词那段在,没填不在;注释剥了;不再列卡', (c2.preview.text ?? '').includes('### 用上这周的词') && !(c3.preview.text ?? '').includes('### 用上这周的词') && !(c2.preview.text ?? '').includes('<!--') && !('cards' in c2.preview), JSON.stringify(c2.preview));
   check('查:按钮解析好的值(没设最多问就不列)', c3.buttons[1].ok && c3.buttons[1].detail.includes('词') && !c3.buttons[1].detail.includes('最多问'), JSON.stringify(c3.buttons));
 
   // ---- 存 ----
@@ -93,7 +93,7 @@ try {
   // ---- 恢复出厂 ----
   const rs = await route('POST', base + '/restore', ctx, {});
   check('恢复出厂:换回出厂那份,你这份留 .bak,状态回最新', rs.status === 200 && readFileSync(kfile, 'utf8') === kantu && readFileSync(kfile + '.bak', 'utf8') === edited && (rs.json as { bak: string }).bak === 'agents/chinese-tutor/activities/看图说话.md.bak' && ((await route('GET', base, ctx)).json as { state: string }).state === 'latest', JSON.stringify(rs.json));
-  writeFileSync(join(root, 'agents', 'math-tutor', 'activities', '自家的.md'), '---\nname: 自家的\ndescription: 试\ncards: read\n---\n\n## 老师怎么带\n\n你是数学老师。\n');
+  writeFileSync(join(root, 'agents', 'math-tutor', 'activities', '自家的.md'), '---\nname: 自家的\ndescription: 试\nbase: photo\n---\n\n## 老师怎么带\n\n你是数学老师。\n');
   const own = '/api/dev/activities/math-tutor/' + encodeURIComponent('自家的');
   check('自家加的:列得出、没有出厂那份可比、恢复出厂 400', ((await route('GET', own, ctx)).json as { state: string; shipped: boolean }).state === 'untracked' && ((await route('POST', own + '/check', ctx, { text: '---\nname: 自家的\n---\n' })).json as Chk).diff === null && (await route('POST', own + '/restore', ctx, {})).status === 400);
 

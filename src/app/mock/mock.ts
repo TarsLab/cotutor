@@ -17,7 +17,7 @@ import { createServer as createHttps } from 'node:https';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseBoard } from '../../board/parse.ts';
-import { cardAssets, parseCardState, stripSecrets, DictationPropsSchema } from '../../board/cards/index.ts';
+import { DictationPropsSchema, stripCard } from '../../board/cards/index.ts';
 import { fileURLToPath } from 'node:url';
 import { bundleAsset, stageAsset, stageIndex, stageVersion } from '../http/stage.ts';
 import { sendFile } from '../http/send-file.ts';
@@ -57,11 +57,10 @@ export const MOCK_BUNDLES_DIR = fileURLToPath(new URL('../../../tests/fixtures/b
 /** mock 的视频小课堂目录:仓库里的样本(tests/fixtures/lectures/) */
 export const MOCK_LECTURES_DIR = fileURLToPath(new URL('../../../tests/fixtures/lectures/', import.meta.url));
 const MOCK_LECTURE_DIRS = { dirs: { bundles: MOCK_BUNDLES_DIR, lectures: MOCK_LECTURES_DIR } };
-import { lineDurationMs, plainLine, readyBeats, type BoardCard, type BoardSection, type KidLecture, type PenName } from '../../board/presentation.ts';
+import { lineDurationMs, plainLine, type BoardSection, type KidLecture } from '../../board/presentation.ts';
 import { wavOfPcm } from '../../shared/wav.ts';
 import { buildReel, playRecordOk, reelHolds, reelMissRuns, type PlayRecord } from '../../ui/kid/reel.ts';
 import { weekOf } from '../../shared/time.ts';
-import { type CardStates } from '../../schema/index.ts';
 import { lanAddresses, listenInfo, localName, siteUrl } from '../cli/serve.ts';
 import { qrPage, type ListenInfo } from '../../ui/parent/qr-page.ts';
 import { USER_CERT_DIR } from '../workspace.ts';
@@ -85,7 +84,7 @@ export interface MockTutor {
   display: string;
   subject: string;
   avatar: string;
-  /** 每轮一节:老师会写的那种正文(段落 = 讲稿,围栏 = 卡),与真老师的样本同一种写法(tests/fixtures/board/) */
+  /** 每轮一节:老师会写的那种正文(一行一句讲稿,动作写在句子后面) */
   script: string[];
   /** 打开页面时已经讲过的轮数(取脚本前几节) */
   preloaded: number;
@@ -96,28 +95,6 @@ export interface MockTutor {
 /** 脚本 → 板书节:走真解析器(mock 也是解析器的一次演练) */
 export function sectionFromScript(md: string): BoardSection {
   return parseBoard(md).section;
-}
-
-/**
- * 写死的样子:几节预装板书的底色 / emoji 与带笔的标注(真老师是写在围栏行与讲稿的 [词] 里的),直接套到解析出来的节上,
- * 页面走的是同一条渲染路(look 的槽、带 pen 的标注;行由页面按卡的宽度排)。键 = 老师名:脚本序号。
- */
-export const MOCK_LOOKS: Record<string, { marks: { line: number; card: number; phrase: string; pen: PenName }[]; look: Record<string, { tint?: string; look?: string; emoji?: string }> }> = {
-  // 勾股定理:验证是方法卡(moss),封面的「三条边」画圈(讲到第一句时)、16 下划线(老师自己标的 直角边 / 斜边 / 25 保留,不重复)
-  'math-tutor:0': {
-    marks: [{ line: 0, card: 0, phrase: '三条边', pen: 'circle' }, { line: 3, card: 3, phrase: '16', pen: 'underline' }],
-    look: { '3': { tint: 'moss' }, '4': { emoji: '💡' } },
-  },
-  'math-tutor:1': { marks: [], look: { '0': { tint: 'moss' } } },
-  'chinese-tutor:0': { marks: [{ line: 1, card: 1, phrase: '多做一步', pen: 'marker' }], look: { '1': { emoji: '💡' } } },
-};
-
-function withMockLooks(section: BoardSection, tutor: string, i: number): BoardSection {
-  const out = MOCK_LOOKS[`${tutor}:${i}`];
-  if (!out) return section;
-  const cards = section.cards.map((c, n) => (out.look[String(n)] ? { ...c, look: { ...(c.look ?? {}), ...out.look[String(n)] } } : c));
-  const lines = section.lines.map((l, n) => ({ ...l, marks: [...l.marks, ...out.marks.filter((m) => m.line === n).map(({ card, phrase, pen }) => ({ card, phrase, pen }))] }));
-  return { ...section, cards, lines };
 }
 
 /** 假课本页(选课本页拷成照片的那一页,800 × 1000) */
@@ -134,76 +111,24 @@ export const MOCK_TUTORS: MockTutor[] = [
     script: [
       `你有没有过这种事:本来做得好好的,又多加了一点,结果反而糟了?
 
-~~~text
-# 画蛇添足
-一个成语,一杯酒的故事
-~~~
-
-这个成语说的是:[多做一步,反而坏事]。
-
-~~~text
-画蛇添足 = 多做一步,反而坏事
-~~~
+这个成语说的是:多做一步,反而坏事。
 
 它出自《战国策》,原文是这样的。
 
-~~~read
-楚有祠者,赐其舍人卮酒。
-舍人相谓曰:数人饮之不足,一人饮之有余。
-请画地为蛇,先成者饮酒。
-~~~
-
-几个人分一壶酒,酒不够大家喝,一个人喝正好,就比赛画蛇,[先成者饮酒],谁先画完谁喝。
-
-~~~choice
-如果第一个画完蛇的人,不去给蛇添上脚,酒是谁的?
-- [x] 他自己的
-- [ ] 第二个画完的
-- [ ] 大家平分
-~~~
+几个人分一壶酒,酒不够大家喝,一个人喝正好,就比赛画蛇,先成者饮酒,谁先画完谁喝。
 
 我想问你:如果第一个画完蛇的人,不给蛇添脚,酒本来是谁的?`,
       `你是这么想的:酒是他自己的。
 
-~~~text
-先画完的人本来就赢了
-~~~
+他多画了脚,蛇就不是蛇了,第二个画完的说,你画的不是蛇。
 
-他多画了脚,蛇就[不是蛇]了,第二个画完的说,你画的不是蛇。
+古人把这件事记成一句话:为蛇足者,终亡其酒。
 
-~~~text
-为蛇足者,终亡其酒。
-~~~
+你说说:画蛇添足,就是做到了还要怎样?`,
+      `说得好,这就是画蛇添足要提醒我们的:做到了,就停下来。`,
+      `你说的是加油打气的那个鼓励吧,鼓先写,励后写。
 
-古人把这件事记成一句话:[为蛇足者,终亡其酒]。
-
-~~~choice
-画蛇添足,就是做到了还要怎样,反而把事情弄糟?
-- [x] 多做一步
-- [ ] 少做一步
-- [ ] 马上停下
-~~~
-
-你来选一选:画蛇添足,就是做到了还要怎样?`,
-      `~~~text
-做到了,就停下来
-~~~
-
-说得好,这就是画蛇添足要提醒我们的:[做到了,就停下来]。`,
-      `~~~tianzige
-鼓励
-gǔ lì
-~~~
-
-你说的是加油打气的那个鼓励吧,看,鼓先写,励后写。
-
-~~~text
-鼓励:给人加油、打气
-~~~
-
-鼓是敲鼓的鼓,励是[努力]的力多一个厂字头,一个人在厂下面使劲。
-
-你想再看一遍哪个字?点一下它就再写一遍。`,
+鼓是敲鼓的鼓,励是努力的力多一个厂字头,一个人在厂下面使劲。`,
     ],
   },
   {
@@ -214,77 +139,23 @@ gǔ lì
     preloaded: 1,
     firstQuestion: '勾股定理是什么?',
     script: [
-      `~~~text
-# 勾股定理
-直角三角形三条边的关系
-~~~
+      `我们先认一认直角三角形的三条边。
 
-我们先认一认直角三角形的三条边。
+两条短边叫直角边,最长的一条叫斜边。
 
-~~~text
-# 认边
-两条短边叫直角边,最长的一条叫斜边
-~~~
+先记住这个公式:直角边² + 直角边² = 斜边²。
 
-两条短边叫[直角边],最长的一条叫[斜边]。
+拿 3 和 4 试试:9 加 16 等于 25,正好是 5 的平方,所以斜边是 5。
 
-~~~text formula
-直角边² + 直角边² = 斜边²
-~~~
-
-先记住这个公式:[直角边² + 直角边² = 斜边²]。
-
-~~~text
-# 验证
-3 的平方是 9,4 的平方是 16,9 加 16 等于 25
-~~~
-
-拿 3 和 4 试试:9 加 16 等于 [25],正好是 5 的平方,所以斜边是 5。
-
-~~~text
-知道两条直角边,平方相加再开方,就是斜边
-~~~
-
-~~~choice
-一个直角三角形,两条直角边是 6 和 8,斜边是多少?
-- [x] 10
-- [ ] 12
-- [ ] 14
-~~~
-
-你来选一选:两条直角边是 [6 和 8],斜边是多少?`,
+你来算算:两条直角边是 6 和 8,斜边是多少?`,
       `对,6 的平方加 8 的平方是 100,正好是 10 的平方。
 
-~~~text
-# 反过来想
-如果知道斜边和一条直角边,也能求另一条直角边
-~~~
+反过来也行:知道斜边和一条直角边,也能求另一条。
 
-反过来也行:知道[斜边]和一条直角边,也能求另一条。
-
-~~~text formula
-斜边² − 直角边² = 另一条直角边²
-~~~
-
-~~~choice
-一个直角三角形,斜边是 13,一条直角边是 5,另一条直角边是多少?
-- [ ] 8
-- [x] 12
-- [ ] 18
-~~~
-
-你来选一选:斜边是 13,一条直角边是 5,另一条直角边是多少?`,
+你来算算:斜边是 13,一条直角边是 5,另一条直角边是多少?`,
       `对,169 减 25 等于 144,12 的平方正好是 144。
 
-~~~text
-3、4、5 和 5、12、13 都是常见的勾股数组
-~~~
-
 我们换一道找规律的题。
-
-~~~text
-75、70、65,后面三个空填什么?
-~~~
 
 你自己说说,每次少几?`,
     ],
@@ -299,38 +170,12 @@ gǔ lì
     script: [
       `Today we learn three fruits. 今天学三种水果。
 
-~~~text
-# Fruits
-水果
-~~~
+Listen and repeat: apple, banana, orange. 跟着我读。
 
-~~~read
-apple 苹果
-banana 香蕉
-orange 橘子
-~~~
+This is how we spell it: a, p, p, l, e.
 
-Listen and repeat: [apple], [banana], [orange]. 点一下听一下,跟着我读。
-
-~~~image
-captures/2026-09-10/fruits.png
-三种水果,你家有哪种?
-~~~
-
-~~~word
-🍎 apple
-ap-ple
-~~~
-
-This is how we write it: a, p, p, l, e. 看我写一遍。
-
-Which one do you want to try first, [apple], [banana], or [orange]? 你先读哪一个?`,
-      // 拍给我看卡(cards/photo/card.md):末句不是问句,下沿照样是「等你拍…」带拍照、相册
+Which one do you want to try first? 你先读哪一个?`,
       `Good job! 读得真好。
-
-~~~photo
-家里的一种水果
-~~~
 
 Find a fruit at home. 找一个家里的水果,拍下来给我看。`,
     ],
@@ -349,10 +194,6 @@ interface MockMessage {
   section: BoardSection | null;
   /** 孩子端的动作(继续不计次数) */
   action?: 'submit';
-  /** 交答案时交的是哪张卡(<job>/<n>):交过的卡锁住(同真服务 kid-view 的 submittedCards) */
-  submitted?: string;
-  /** 卡下标 → 孩子做的事(PUT 进来的) */
-  states?: Record<number, unknown>;
   /** 孩子这条带的照片(假路径;/api/kid/image 给占位图) */
   photos?: string[];
   /** 看完小课堂后的第一条:看的情况与画的(画带那段话;孩子端下发时摘掉) */
@@ -484,7 +325,7 @@ export function createMock(opts: MockOptions = {}): Mock {
   for (const t of MOCK_TUTORS) {
     const list: MockMessage[] = [];
     for (let i = 0; i < t.preloaded && i < t.script.length; i++) {
-      const section = withMockLooks(sectionFromScript(t.script[i]), t.name, i);
+      const section = sectionFromScript(t.script[i]);
       const job = nextJob();
       list.push({ job, thread: list[0]?.thread ?? job, at: now().toISOString(), question: i === 0 ? t.firstQuestion : '继续', reply: section.lines[section.lines.length - 1]?.text ?? null, pending: false, artifacts: [], section });
     }
@@ -499,17 +340,11 @@ export function createMock(opts: MockOptions = {}): Mock {
   /** 话题打星(家长端清单上):<老师>/<话题> → 1–5;记过账的话题(同样的键) */
   const ratings = new Map<string, number>();
   const booked = new Set<string>();
-  /** 下发孩子端的形状:答案剥掉、状态并到卡上 */
+  /** 下发孩子端的形状(同真服务 kid-view):家长那段话不下发 */
   const kidMessage = async (m: MockMessage): Promise<KidMessage> => {
-    const { states, action: _a, submitted: _s, lectureWatch: _w, lectureLog: _l, ...rest } = m;
+    const { action: _a, lectureWatch: _w, lectureLog: _l, ...rest } = m;
     if (rest.lecture?.marks) rest.lecture = { ...rest.lecture, marks: rest.lecture.marks.map(({ text: _t, ...k }) => k) };
-    const mine = [...messages.values()].find((l) => l.includes(m)) ?? [];
-    const done = new Set(mine.flatMap((x) => (x.submitted ? [x.submitted] : [])));
-    // 卡的配音同真服务挂在 assets 上(<job>.cards/<n>/<段号>.mp3),都是静音(见 /api/audio)
-    const voiced = (c: BoardCard, i: number) => { const a = cardAssets(c); return a.length ? { assets: a.map((x) => `mock.${m.job}.cards/${i}/${x.file}`) } : {}; };
-    const withState = m.section ? { ...m.section, cards: m.section.cards.map((c, i) => ({ ...c, ...voiced(c, i), ...(done.has(`${m.job}/${i}`) ? { submitted: true } : {}), ...(states && i in states ? { state: states[i] } : {}) })) } : null;
-    const section = withState ? stripSecrets(withState) : null;
-    return { ...rest, section };
+    return { ...rest, section: m.section };
   };
   // 学科色同真服务:按老师的先后定(src/ui/shared/tutor-color.ts)
   const colors = tutorColors(Object.fromEntries(MOCK_TUTORS.map((t) => [t.name, { subject: t.subject }])));
@@ -529,7 +364,7 @@ export function createMock(opts: MockOptions = {}): Mock {
     const ownerOf = homeOwners(parsed, names);
     const owners = new Map(parsed.map((c, i) => [c, ownerOf[i]]));
     const cards = arrangeHome(parsed, names).map((c) => {
-      if (c.kind !== 'tutor') return { ...stripSecrets({ cards: [c], lines: [] }).cards[0], owner: owners.get(c) ?? null }; // 同真服务:答案(听写卡的字)不下发;非老师卡带归属
+      if (c.kind !== 'tutor') return { ...stripCard(c), owner: owners.get(c) ?? null }; // 同真服务:答案(听写卡的字)不下发;非老师卡带归属
       const name = String(c.props.tutor);
       // 方砖:照出厂年级包里这位老师家里有没有那个 activity 文件(三门主科有预习、检查作业、复习,英语老师还有口语课;真服务看 workspace 里的)
       const shipped = (activity: string): boolean => existsSync(join(PACKAGE_GRADES_DIR, `grade-${DEFAULT_GRADE}`, 'agents', name, 'activities', `${activity}.md`));
@@ -606,7 +441,7 @@ export function createMock(opts: MockOptions = {}): Mock {
     }
     m.pending = false;
   };
-  /** 流式模拟:想的期间每隔一段露一张卡(讲稿句跟到那张卡为止),整段想完才定稿 */
+  /** 流式模拟:想的期间每隔一段多露一句讲稿,整段想完才定稿 */
   const think = (t: MockTutor, m: MockMessage, cur = cursor): Promise<void> => {
     const i = cur.get(t.name) ?? 0;
     // 看完小课堂的第一问:老师在页上放课里的那一段([[看 0:19–0:30]]);不占脚本的位置
@@ -615,19 +450,15 @@ export function createMock(opts: MockOptions = {}): Mock {
     if (!lectureFirst) cur.set(t.name, i + 1);
     // 看完小课堂的那一问:讲稿里的动作落到页上的小课堂(同 runner 的 fitBoard),孩子端照它在页上放那一段
     const lt = lectureFirst && m.lecture ? mockLecture(m.lecture.bundle) : null;
-    const full = step ? (lt ? fitSection(sectionFromScript(step), lessonStep(lessonInit(), { t: 'act', act: { k: '翻', page: lecturePage(lt) } }), { book: null, lecture: { bundle: lt.id, clock: lt.clock } }).section : withMockLooks(sectionFromScript(step), t.name, i)) : null;
-    const n = full ? full.cards.length : 0;
+    const full = step ? (lt ? fitSection(sectionFromScript(step), lessonStep(lessonInit(), { t: 'act', act: { k: '翻', page: lecturePage(lt) } }), { book: null, lecture: { bundle: lt.id, clock: lt.clock } }).section : sectionFromScript(step)) : null;
+    const n = full ? full.lines.length : 0;
     const tick = delay / (n + 1);
     return new Promise<void>((resolve) => {
       let k = 0;
       const reveal = (): void => {
         k++;
         if (k <= n && full) {
-          // 拍的就绪同真服务一个规则(readyBeats;mock 没配音 = 不等配音):露到第 k 张卡时前 k-1 拍关了 → 页面就绪一拍播一拍;卡前的句(锚 null)也在,和真 runner 一样
-          // 铺到第 k 张时前 k-1 张的样子与行都已定(卡带 look,layout 只到已定的那几张)
-          const part = { cards: full.cards.slice(0, k).map((c, i) => (i < k - 1 ? c : (({ look: _l, ...rest }) => rest)(c))), lines: full.lines.filter((l) => l.anchor === null || l.anchor < k - 1) };
-          const rows = full.layout ? full.layout.rows.map((r) => r.filter((i) => i < k - 1)).filter((r) => r.length) : [];
-          m.section = { ...part, ...(full.layout && rows.length ? { layout: { for: full.layout.for, rows } } : {}), partial: true, ready: readyBeats(part, { done: false }) };
+          m.section = { lines: full.lines.slice(0, k), ...(full.acts ? { acts: full.acts } : {}), partial: true };
           setTimeout(reveal, tick);
         } else {
           answer(m, full);
@@ -680,13 +511,13 @@ export function createMock(opts: MockOptions = {}): Mock {
         for (const m of list) {
           let th = by.get(m.thread);
           if (!th) {
-            th = { thread: m.thread, at: m.at, title: Array.from((m.question ?? '').trim()).slice(0, 20).join(''), from: 'kid', via: null, start: { kind: 'new', label: '新话题' }, said: (m.question ?? '').trim() || null, endAt: null, notes: [], remembered: [], writes: [], sections: 0, cards: 0, stoppedAt: null, rating: ratings.get(`${t.name}/${m.thread}`) ?? null, booked: booked.has(`${t.name}/${m.thread}`) };
+            th = { thread: m.thread, at: m.at, title: Array.from((m.question ?? '').trim()).slice(0, 20).join(''), from: 'kid', via: null, start: { kind: 'new', label: '新话题' }, said: (m.question ?? '').trim() || null, endAt: null, notes: [], remembered: [], writes: [], sections: 0, stoppedAt: null, rating: ratings.get(`${t.name}/${m.thread}`) ?? null, booked: booked.has(`${t.name}/${m.thread}`) };
             by.set(m.thread, th);
           }
           // 给家长的、记住了:同 mock 的板书接口,那天第一条带
           if (m === list[0] && !m.pending) { th.notes.push('第一遍就答上了,后面那句是我故意留的:看他会不会自己往下想。'); th.remembered.push(`${date} 讲故事时爱抢着说结局,可以先让他猜`); }
           if (m.pending) th.stoppedAt = 'writing';
-          else if (m.section && (m.section.cards.length || m.section.lines.length)) { th.sections++; th.cards += m.section.cards.length; th.stoppedAt = m.section.lines[m.section.lines.length - 1]?.ask ? 'ask' : null; }
+          else if (m.section && m.section.lines.length) { th.sections++; th.stoppedAt = m.section.lines[m.section.lines.length - 1]?.ask ? 'ask' : null; }
         }
         // 按住说话连着没发出去:攒着的实录里的 hold;mock 的消息没有真时刻,发成的一句只认打字发出去的
         if (date === today) for (const th of by.values()) {
@@ -710,16 +541,13 @@ export function createMock(opts: MockOptions = {}): Mock {
       if (date > today) return { status: 400, json: { error: 'bad_request' } };
       const list = (date === today ? messages.get(name) : date === yesterday() ? past.get(name) : undefined) ?? [];
       const out = await Promise.all(list.map(async (m, i) => {
-        const { states, ...rest } = m;
-        const withState = (c: BoardSection['cards'][number], k: number) => (states && k in states ? { ...c, state: states[k] } : c);
-        const section = m.section ? { ...m.section, cards: m.section.cards.map(withState) } : null;
-        return { ...rest, from: 'kid' as const, section, ...(i === 0 && !m.pending ? { parentText: '## 家长\n第一遍就答上了,后面那句是我故意留的:看他会不会自己往下想。', remembered: [`${date} 讲故事时爱抢着说结局,可以先让他猜`] } : {}) };
+        return { ...m, from: 'kid' as const, ...(i === 0 && !m.pending ? { parentText: '## 家长\n第一遍就答上了,后面那句是我故意留的:看他会不会自己往下想。', remembered: [`${date} 讲故事时爱抢着说结局,可以先让他猜`] } : {}) };
       }));
       const pending = list.find((m) => m.pending);
       return { status: 200, json: { tutor: name, date, messages: out, pending: pending ? pending.job : null, thread: list.length ? list[list.length - 1].thread : null } };
     }
     // 看录像:mock 的消息没有真时刻(种子全是同一刻),照一个固定节奏排——
-    // 等老师 3 秒(第二轮 14 秒,看「等老师」的压缩)、念完孩子想 8 秒(第一轮 40 秒,看「孩子想了」);卡的状态算在下一轮开口前 5 秒
+    // 等老师 3 秒(第二轮 14 秒,看「等老师」的压缩)、念完孩子想 8 秒(第一轮 40 秒,看「孩子想了」)
     /** 看小课堂的那条:录像要它的看的过程(mock 的家长端条目带着 lecture 与 lectureLog) */
     const lectureOfMock = (m: Record<string, unknown>): { lecture?: NonNullable<ConversationMessage['lecture']> } => {
       const l = m.lecture as KidLecture | undefined;
@@ -743,10 +571,8 @@ export function createMock(opts: MockOptions = {}): Mock {
         t += wait + (m.section?.lines ?? []).reduce((n, l) => n + lineDurationMs(l.text) + 200, 0) + (k === 0 ? 40000 : 8000);
         return { job: m.job, thread, at: startedAt, from: m.from, text: m.question ?? '', result: m.pending ? ('running' as const) : ('ok' as const), artifacts: [], section: m.section, timing: { startedAt, doneMs: wait }, ...(m.action ? { action: m.action } : {}), ...lectureOfMock(m) };
       });
-      const cards: CardStates = {};
-      mine.forEach((m, k) => (m.section?.cards ?? []).forEach((c, n) => { if (c.state !== undefined) (cards[m.job] ??= {})[n] = { at: new Date((starts[k + 1] ?? t) - 5000).toISOString(), turn: m.job, state: c.state }; }));
       const plays = (mockPlays[name] ?? []).filter((x) => x.thread === thread).map((x) => x.rec);
-      const reel = buildReel({ messages: conv, events: {}, cards, now: now().getTime(), plays });
+      const reel = buildReel({ messages: conv, events: {}, now: now().getTime(), plays });
       // mock 的孩子接口只认 today 是今天(写日期的走「以前的」那份)
       const kidDay = await route('GET', `/api/kid/conversations/${name}/${tail === localDate(now()) ? 'today' : tail}`);
       const kid = kidDay.status === 200 ? (kidDay.json as { messages: { thread: string }[] }).messages.filter((m) => m.thread === thread) : [];
@@ -794,11 +620,11 @@ export function createMock(opts: MockOptions = {}): Mock {
       const list = messages.get(name) ?? [];
       const date = localDate(now());
       // 录像的实录:收下就丢(mock 的录像按固定节奏排,不用它);不收的话页面每 10 秒撞一个 404
-      // 实录:不打盘,攒在内存里给录像用(按 sentAt 校钟、形状不对的丢掉、孩子端发的卡改动不收,同真服务)
+      // 实录:不打盘,攒在内存里给录像用(按 sentAt 校钟、形状不对的丢掉,同真服务)
       if (tail === 'play' && method === 'POST') {
         if (!isObj(body) || typeof body.thread !== 'string' || !Array.isArray(body.records)) return { status: 200, json: { kept: 0 } };
         const skew = typeof body.sentAt === 'number' ? now().getTime() - body.sentAt : 0;
-        const kept = (body.records as unknown[]).filter((x): x is PlayRecord => playRecordOk(x) && x.k !== 'card').map((x) => ({ ...x, at: Math.round(x.at + skew) }));
+        const kept = (body.records as unknown[]).filter((x): x is PlayRecord => playRecordOk(x)).map((x) => ({ ...x, at: Math.round(x.at + skew) }));
         (mockPlays[name] ??= []).push(...kept.map((rec) => ({ thread: body.thread as string, rec })));
         return { status: 200, json: { kept: kept.length } };
       }
@@ -863,9 +689,7 @@ export function createMock(opts: MockOptions = {}): Mock {
         }
         if (!said.trim() && !action && !photos.length) return { status: 400, json: { error: 'bad_request' } };
         if (list.some((m) => m.pending)) return { status: 409, json: { error: 'busy' } };
-        const focusCard = isObj(body.focus) && typeof body.focus.card === 'string' ? body.focus.card : null;
-        if (action === 'submit' && focusCard && list.some((x) => x.submitted === focusCard)) return { status: 409, json: { error: 'submitted' } };
-        const text = said.trim() || (action === 'submit' ? '(交了答案,没说话)' : photos.length === 1 ? '(拍了一张)' : photos.length ? `(拍了 ${photos.length} 张)` : '');
+        const text = said.trim() || (action === 'submit' ? '(给老师看,没说话)' : photos.length === 1 ? '(拍了一张)' : photos.length ? `(拍了 ${photos.length} 张)` : '');
         const job = nextJob();
         // 话题:newThread → 自己的 job;指定的要在今天的列表里;缺省接当前(末条)的
         let thread = job;
@@ -877,27 +701,13 @@ export function createMock(opts: MockOptions = {}): Mock {
         }
         const lt = lec ? mockLecture(lec.bundle) : null;
         const marks = lt ? storedMarks(lt, marksIn, photos.length) : [];
-        const m: MockMessage = { job, thread, at: now().toISOString(), question: text, reply: null, pending: true, artifacts: [], section: null, ...(body.live === true ? { live: true as const } : {}), ...(action ? { action } : {}), ...(action === 'submit' && focusCard ? { submitted: focusCard } : {}), ...(photos.length ? { photos } : {}), ...(lec ? { lecture: { bundle: lec.bundle, title: lt?.title ?? lec.bundle, ...(lec.again ? { again: true as const } : {}), ...(lt?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}) }, lectureWatch: { watchedMs: lec.watchedMs, finished: lec.finished, pauses: lec.pauses }, ...(logIn.length ? { lectureLog: logIn } : {}) } : {}) };
+        const m: MockMessage = { job, thread, at: now().toISOString(), question: text, reply: null, pending: true, artifacts: [], section: null, ...(body.live === true ? { live: true as const } : {}), ...(action ? { action } : {}), ...(photos.length ? { photos } : {}), ...(lec ? { lecture: { bundle: lec.bundle, title: lt?.title ?? lec.bundle, ...(lec.again ? { again: true as const } : {}), ...(lt?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}) }, lectureWatch: { watchedMs: lec.watchedMs, finished: lec.finished, pauses: lec.pauses }, ...(logIn.length ? { lectureLog: logIn } : {}) } : {}) };
         list.push(m);
         const done = think(t, m, cursor).then(() => { inflight.delete(m.job); });
         inflight.set(m.job, done);
         return { status: 202, json: { tutor: name, date, job: m.job, thread } };
       }
       return { status: 405, json: { error: 'method_not_allowed' } };
-    }
-    // 卡的状态:孩子的走 /api/kid/…
-    const card = /^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/cards\/([^/]+)\/(\d+)$/.exec(pk);
-    if (card) {
-      const [, name, job, n] = card;
-      const m = (messages.get(name) ?? []).find((x) => x.job === job);
-      const target = m?.section?.cards[Number(n)];
-      if (!target) return { status: 404, json: { error: 'no_such_card' } };
-      if (method !== 'PUT') return { status: 405, json: { error: 'method_not_allowed' } };
-      if ((messages.get(name) ?? []).some((x) => x.submitted === `${job}/${n}`)) return { status: 409, json: { error: 'submitted' } };
-      const r = parseCardState(target, body);
-      if (!r.ok) return { status: 400, json: { error: 'bad_state' } };
-      (m!.states ??= {})[Number(n)] = r.state;
-      return { status: 200, json: { ok: true, card: `${job}/${n}`, state: r.state } };
     }
     const hz = /^\/api\/kid\/tianzige\/([^/]+)$/.exec(p);
     if (hz) {

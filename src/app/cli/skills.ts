@@ -2,21 +2,20 @@
  * 出厂 skill:与 activity 同一套「拷不链」机制——init 拷进 workspace 的 .agents/skills/<name>/,hash 记 .cotutor/shipped.json 的 skills,
  * (2026-10-30 从 .claude/skills/ 挪来:Codex、Qwen Code 认 .agents/skills;Claude Code 只认 .claude/skills,那里是一条指过来的链,见 linkClaudeSkills。)
  * 出厂表 SHIPPED_SKILLS 每项带 machine 标记(2026-09-15,照 hyperframes 的 skills/ 目录),都在本包根 skills/<name>/(进 npm files;
- * cotutor-board 整个、其余几个的 references/ 是 scripts/gen-skills.ts 生成后入库的,tests/skills.test.ts 断言一致):
- * - machine: true 的是机器件(cotutor-tutor / cotutor-board / cotutor-analyze / cotutor-tune / cotutor-home:它们和解析器、契约、CLI 要一起变),init / upgrade 每次按包里的覆盖、家长改了也刷,状态只有 latest / upgradable;
+ * 几个机器件的 references/ 是 scripts/gen-skills.ts 生成后入库的,tests/skills.test.ts 断言一致):
+ * - machine: true 的是机器件(cotutor-tutor / cotutor-analyze / cotutor-tune / cotutor-home:它们和解析器、契约、CLI 要一起变),init / upgrade 每次按包里的覆盖、家长改了也刷,状态只有 latest / upgradable;
  *   其余拷进来就是家长的:upgrade 没改过的换新、改过的报 diff 保留(custom / untracked)。chalk-* 四个是做课包的(2026-10-31 随 drawtell 并进来,原名 drawtell-*)。
  */
 import { createHash } from 'node:crypto';
 import { cp, lstat, mkdir, readFile, readdir, readlink, rm, symlink } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BOARD_SKILL } from '../../board/cards/docs.ts';
 import { ANALYZE_SKILL } from '../skills/analyze-doc.ts';
 import { TUNE_SKILL } from '../skills/tune-doc.ts';
 import { HOME_SKILL } from '../skills/home-doc.ts';
 import { TUTOR_SKILL } from '../../runtime/context/tutor-rules.ts';
 import { SKILLS_DIR } from '../../schema/index.ts';
-export { ANALYZE_SKILL, BOARD_SKILL, HOME_SKILL, TUNE_SKILL, TUTOR_SKILL };
+export { ANALYZE_SKILL, HOME_SKILL, TUNE_SKILL, TUTOR_SKILL };
 import { PACKAGE_VERSION } from './skeleton.ts';
 import { readManifest, writeManifest, type ShippedManifest } from './tutors.ts';
 
@@ -28,7 +27,6 @@ export interface ShippedSkill {
 
 export const SHIPPED_SKILLS: readonly ShippedSkill[] = [
   { name: TUTOR_SKILL, machine: true },
-  { name: BOARD_SKILL, machine: true },
   { name: ANALYZE_SKILL, machine: true },
   { name: TUNE_SKILL, machine: true },
   { name: HOME_SKILL, machine: true },
@@ -42,9 +40,10 @@ export const SHIPPED_SKILLS: readonly ShippedSkill[] = [
  * 不再出厂的技能:upgrade 时 workspace 里还有(出厂记录里有它)就删掉,免得编程助手照旧技能干活。
  * 机器件(machine)向来不认家长的改动,照删;别的家长改过就留着,只是不再记在出厂清单里。
  * cotutor-vault(2026-10-30,机器件):老师从没读过它(孩子的话不带工具,记账那条消息自带写法),要紧的几句并进了守则 cotutor-tutor。
- * drawtell-*(2026-10-31):drawtell 并进本包,改名 chalk-*,命令是 cotutor chalk
+ * drawtell-*(2026-10-31):drawtell 并进本包,改名 chalk-*,命令是 cotutor chalk。
+ * cotutor-board(2026-11-17,机器件):课里没有卡了,板书写法换成了进系统提示的「动作怎么写」(cards/动作怎么写.md)
  */
-export const RETIRED_SKILLS: readonly ShippedSkill[] = [{ name: 'cotutor-vault', machine: true }, { name: 'drawtell-scene' }, { name: 'drawtell-teaching' }, { name: 'drawtell-cli' }, { name: 'drawtell-verify' }];
+export const RETIRED_SKILLS: readonly ShippedSkill[] = [{ name: 'cotutor-vault', machine: true }, { name: 'cotutor-board', machine: true }, { name: 'drawtell-scene' }, { name: 'drawtell-teaching' }, { name: 'drawtell-cli' }, { name: 'drawtell-verify' }];
 
 export type ShippedSkillName = string;
 

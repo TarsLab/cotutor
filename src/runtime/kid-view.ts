@@ -1,14 +1,13 @@
 /**
- * 孩子视图(2026-09-10 改板书):最终文本剥掉「记账」段后,正文就是板书——
- * 普通段落是讲稿(一行一句),围栏是卡(src/board/parse.ts 解析);kidText = 讲稿各句拼起来(家长视图的「孩子看到」摘要),
+ * 孩子视图:最终文本剥掉「记账」段后,正文就是讲稿——
+ * 普通段落一行一句、句子后面的动作(src/board/parse.ts 解析;课里没有卡了,围栏不上页);kidText = 讲稿各句拼起来(家长视图的「孩子看到」摘要),
  * 每句按 replyMaxChars 截;第一个 H2 起是给家长的尾巴(parentText),孩子看不到。出错什么都不出现。机械规则,不靠模型判断。
- * 正文取自 kidSource:带卡 / 带固定段的顶层文本段 + 最后一段(老师板书之后又用了工具也不丢)。
+ * 正文取自 kidSource:带围栏 / 带固定段的顶层文本段 + 最后一段(老师写完之后又用了工具也不丢)。
  */
-import { stripSecrets } from '../board/cards/index.ts';
 import { type ActivityBase, type Bookkeeping, type ConversationMessage, type LessonAct, type LineAct } from '../schema/index.ts';
 import { BOOK_TOC } from '../chalk/index.ts';
 import { parseBoard } from '../board/parse.ts';
-import { threads, type CardAssets, type CardStates } from '../schema/index.ts';
+import { threads } from '../schema/index.ts';
 import type { BoardSection, KidLecture } from '../board/presentation.ts';
 import { parseSections } from '../board/sections.ts';
 import type { Transcript } from '../brain/transcript.ts';
@@ -23,9 +22,9 @@ export interface KidView {
   memory: string[];
   /** 运行是否正常收尾 */
   ok: boolean;
-  /** 板书节(卡 + 讲稿);没有卡也没有讲稿 = null */
+  /** 讲稿一节(句子与动作);没有讲稿也没有动作 = null */
   section: BoardSection | null;
-  /** 解析时的提醒(卡没解析成等),家长视图转录里显示 */
+  /** 解析时的提醒(写错的动作、不上页的围栏等),家长视图转录里显示 */
   warnings: string[];
   /** 第一个 H2 起给家长的尾巴(老师写的任何标题段);没有 = 空串 */
   parentText: string;
@@ -66,14 +65,13 @@ export function kidSource(t: Transcript): string | null {
   return [...kept, last].join('\n\n');
 }
 
-/** opts.live = 实时的一轮:解析器不补提问卡(src/board/parse.ts) */
-export function deriveKidView(t: Transcript, policy: { replyMaxChars: number }, opts: { live?: boolean } = {}): KidView {
+export function deriveKidView(t: Transcript, policy: { replyMaxChars: number }): KidView {
   if (!t.final) return none(false);
   if (!t.final.ok || !t.final.text) return none(t.final.ok);
   const { body, bookkeeping, memory } = parseSections(kidSource(t) ?? t.final.text);
-  const board = parseBoard(body, { live: opts.live });
-  const { cards, lines } = board.section;
-  if (!cards.length && !lines.length) return { ...none(true, bookkeeping), memory, warnings: board.warnings.map((w) => w.text), parentText: board.tail };
+  const board = parseBoard(body);
+  const { lines } = board.section;
+  if (!lines.length && !board.section.acts?.length) return { ...none(true, bookkeeping), memory, warnings: board.warnings.map((w) => w.text), parentText: board.tail };
   let truncated = false;
   const cut = lines.map((l) => {
     const r = truncateReply(l.text, policy.replyMaxChars);
@@ -99,16 +97,16 @@ export interface KidMessage {
   pending: boolean;
   /** 本次运行新增的产物 id */
   artifacts: string[];
-  /** 板书节(卡 + 讲稿;答案等秘密已剥;配音在讲稿句上) */
+  /** 讲稿一节(句子与动作) */
   section?: BoardSection | null;
   /** 孩子这条带的作业照片(相对 workspace 根;页面经 /api/kid/image?p= 取);只在孩子自己的问句上 */
   photos?: string[];
-  /** 这条是看完小课堂后的第一条:哪份课包、课名、画过的几处(节前的小课堂卡与画的卡从这里画);again = 再看一遍又画的那条,节前只画画的卡 */
+  /** 这条是看完小课堂后的第一条:哪份课包、课名、画过的几处(录像照它画);again = 再看一遍又画的那条 */
   lecture?: KidLecture;
-  /** 孩子的话怎么上板:交卡不写;首页按钮发的(正文就是按钮上的字)不写,从按钮进来后孩子自己说的照写 */
+  /** 孩子的话怎么记:「给老师看」不写;首页按钮发的(正文就是按钮上的字)不写,从按钮进来后孩子自己说的照写 */
   action?: 'submit';
   fromHome?: true;
-  /** 这一轮是实时的:讲稿不配音、嘴照念;不出卡的一轮板上留讲稿的字,还在跑时有句就出节 */
+  /** 这一轮是实时的:讲稿不配音、嘴照念 */
   live?: true;
   /** 话题第一条:这一节课铺哪种页(课本、孩子拍的作业;一节课的样子另取,/api/kid/lesson) */
   base?: ActivityBase;
@@ -121,22 +119,13 @@ function lectureView(l: NonNullable<ConversationMessage['lecture']>, parent: boo
   return { bundle: l.bundle, title: l.title, ...(l.again ? { again: true as const } : {}), ...(l.video ? { video: true as const } : {}), ...(l.marks?.length ? { marks: l.marks.map((m) => ({ atMs: m.atMs, svgMs: m.svgMs, strokes: m.strokes, ...(m.image ? { image: m.image } : {}), ...(parent && m.text ? { text: m.text } : {}) })) } : {}) };
 }
 
-/** 孩子做的状态(states)与已生成的资产(assets,都从 .cards/ 读)并到这轮的卡上;都没有就原样 */
-function cardsWithState(m: ConversationMessage, states: CardStates, assets: CardAssets, submitted: ReadonlySet<string> = new Set()): BoardSection | null | undefined {
-  const per = states[m.job];
-  const files = assets[m.job];
-  const done = [...submitted].some((id) => id.startsWith(`${m.job}/`));
-  return m.section && (per || files || done) ? { ...m.section, cards: m.section.cards.map((c, n) => ({ ...c, ...(submitted.has(`${m.job}/${n}`) ? { submitted: true } : {}), ...(per?.[n] ? { state: per[n].state } : {}), ...(files?.[n]?.length ? { assets: files[n] } : {}) })) } : m.section;
-}
-
 /**
  * 对话索引 → 孩子端条目(的机械过滤在服务端做):不带 result / error / 费用 / 家长尾巴;
- * 卡上的答案剥掉,孩子自己做的状态(states)与已生成的资产(assets,都从 .cards/ 读)并到卡上。出错的运行:没有 question 的直接不出现;有 question 的只留问句(老师头像不灰,下一条照常)。
+ * 出错的运行:没有 question 的直接不出现;有 question 的只留问句(老师头像不灰,下一条照常)。
  */
-export function kidConversation(index: { messages: readonly ConversationMessage[] }, states: CardStates = {}, assets: CardAssets = {}): KidMessage[] {
+export function kidConversation(index: { messages: readonly ConversationMessage[] }): KidMessage[] {
   const out: KidMessage[] = [];
   const ths = threads(index.messages);
-  const submitted = submittedCards(index);
   for (const [i, m] of index.messages.entries()) {
     // 记账那轮是家长晚上起的任务,老师回的「记好了」不是给孩子的话
     if (m.bookkeep || m.tidy) continue;
@@ -144,8 +133,7 @@ export function kidConversation(index: { messages: readonly ConversationMessage[
     const reply = m.result === 'ok' ? (m.kidText ?? null) : null;
     const pending = m.result === 'running';
     if (question === null && reply === null && !pending) continue;
-    const withState = cardsWithState(m, states, assets, submitted);
-    const section = m.result === 'ok' && withState ? stripSecrets(withState) : undefined;
+    const section = m.result === 'ok' && m.section ? m.section : undefined;
     out.push({ job: m.job, thread: ths[i], at: m.at, question, reply, pending, artifacts: reply ? [...m.artifacts] : [], ...(section ? { section } : {}), ...(question !== null && m.photos?.length ? { photos: [...m.photos] } : {}), ...(m.lecture ? { lecture: lectureView(m.lecture, false) } : {}), ...(question !== null && m.action ? { action: m.action } : {}), ...(question !== null && m.via && question.trim() === m.via.label.trim() ? { fromHome: true as const } : {}), ...(m.live ? { live: true as const } : {}), ...(m.base ? { base: m.base } : {}), ...(m.listen ? { listen: m.listen } : {}) });
   }
   return out;
@@ -153,14 +141,12 @@ export function kidConversation(index: { messages: readonly ConversationMessage[
 
 /**
  * 家长板书页的一条:形状同 KidMessage,家长多看到的都是可选字段;
- * `section` **不剥答案**;`question` 不管谁发的都给;记账 / 整理记忆那两种轮也在(旁注写「已记进日记」「整理了记忆」)。
+ * `question` 不管谁发的都给;记账 / 整理记忆那两种轮也在(旁注写「已记进日记」「整理了记忆」)。
  */
 export interface ParentMessage extends KidMessage {
   from: ConversationMessage['from'];
   via?: ConversationMessage['via'];
   action?: ConversationMessage['action'];
-  /** 这条带给老师的卡(上一轮之后孩子改过状态的):「孩子在板书上做的」;took = 在弹窗里想了多久(毫秒,没改过 = null)、改过几次(有实录才有,app.ts parentDay 挂上) */
-  cards?: (NonNullable<ConversationMessage['cards']>[number] & { took?: { think: number | null; changes: number } })[];
   parentText?: string;
   remembered?: string[];
   warnings?: string[];
@@ -172,22 +158,20 @@ export interface ParentMessage extends KidMessage {
   lectureWatch?: Pick<NonNullable<ConversationMessage['lecture']>, 'watchedMs' | 'finished' | 'pauses'>;
 }
 
-/** 对话索引 → 家长板书页条目:和 kidConversation 同一个循环,差集恰好是 ParentMessage 里多出的字段与「答案不剥」 */
-export function parentConversation(index: { messages: readonly ConversationMessage[] }, states: CardStates = {}, assets: CardAssets = {}): ParentMessage[] {
+/** 对话索引 → 家长板书页条目:和 kidConversation 同一个循环,差集恰好是 ParentMessage 里多出的字段 */
+export function parentConversation(index: { messages: readonly ConversationMessage[] }): ParentMessage[] {
   const out: ParentMessage[] = [];
   const ths = threads(index.messages);
   for (const [i, m] of index.messages.entries()) {
     const reply = m.result === 'ok' ? (m.kidText ?? null) : null;
     const pending = m.result === 'running';
-    const withState = cardsWithState(m, states, assets);
-    const section = m.result === 'ok' && withState ? withState : undefined;
+    const section = m.result === 'ok' && m.section ? m.section : undefined;
     out.push({
       job: m.job, thread: ths[i], at: m.at, from: m.from, question: m.text, reply, pending, artifacts: reply ? [...m.artifacts] : [],
       ...(section ? { section } : {}),
       ...(m.photos?.length ? { photos: [...m.photos] } : {}),
       ...(m.via ? { via: m.via } : {}),
       ...(m.action ? { action: m.action } : {}),
-      ...(m.cards?.length ? { cards: m.cards } : {}),
       ...(m.parentText ? { parentText: m.parentText } : {}),
       ...(m.remembered?.length ? { remembered: m.remembered } : {}),
       ...(m.warnings?.length ? { warnings: m.warnings } : {}),
@@ -216,7 +200,7 @@ export interface KidTodayThread {
 /** 首页「今天」那一格的字最多几个 */
 const TODAY_LABEL_MAX = 12;
 
-type SectionLike = { cards: readonly { kind: string; props: Record<string, unknown> }[]; acts?: readonly LineAct[]; lines?: readonly { acts?: readonly LineAct[] }[] };
+type SectionLike = { acts?: readonly LineAct[]; lines?: readonly { acts?: readonly LineAct[] }[] };
 /** 一节里落到页上的动作(第一句前面的、每一句的) */
 const doneActs = (s: SectionLike | null | undefined): LessonAct[] => (s ? [...(s.acts ?? []), ...(s.lines ?? []).flatMap((l) => l.acts ?? [])].flatMap((a) => (a.do ? [a.do] : [])) : []);
 /** 一节里最后翻到的那一课(目录不算) */
@@ -227,12 +211,11 @@ const lessonOf = (s: SectionLike | null | undefined): string | null => {
 };
 
 /**
- * 这一轮让话题开了头没有(2026-11-15,Jack):有孩子参与的图出现了——孩子发了照片;老师出了图片;课本翻到了一课(目录不算)、
+ * 这一轮让话题开了头没有(2026-11-15,Jack):有孩子参与的图出现了——孩子发了照片;课本翻到了一课(目录不算)、
  * 白纸条上摆了图形。只说话、只铺了目录的不算开头:孩子端不列(首页「今天」),记录照存,家长照看。
  */
 export function startsThread(m: { from: ConversationMessage['from']; photos?: readonly string[]; section?: SectionLike | null }): boolean {
   if (m.from === 'kid' && m.photos?.length) return true;
-  if (m.section?.cards.some((c) => c.kind === 'image')) return true;
   return Boolean(lessonOf(m.section)) || doneActs(m.section).some((a) => a.k === '摆');
 }
 
@@ -265,12 +248,3 @@ export function startedThreads(messages: readonly ConversationMessage[]): KidTod
   }
   return out.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
 }
-
-/**
- * 今天交给老师过的卡(`<job>/<n>`):交答案那条的 focus.card。交过的卡锁住——不能改、不能再交(2026-10-21,Jack:
- * 孩子改了交过的卡的答案又交一次,老师再答一遍,孩子糊涂)。
- */
-export function submittedCards(index: { messages: readonly ConversationMessage[] }): Set<string> {
-  return new Set(index.messages.flatMap((m) => (m.action === 'submit' && m.focus?.card ? [m.focus.card] : [])));
-}
-

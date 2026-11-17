@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * 排版(2026-10-01 归代码)的验收(在 pnpm test 里:tests/probe.test.ts 起它,要本机 Chrome,没有就跳过;走 mock,不花钱):
- * 起 cotutor mock(老师都走实时),Chrome 开孩子端数学老师。iPad 横屏、竖屏、手机各看一遍预载的那节(勾股定理):
- * 字少的卡半宽、相邻两张半宽并一行、落单的半宽卡占左半、短选项的选择题也能并排、页面不横滚、半宽卡里的字不溢出;
- * 再从输入条发一句,老师一张张出卡时,已经出来的卡不挪(位置、宽度都不变)。每种尺寸截一张。
+ * 孩子端排版与流式的验收(在 pnpm test 里:tests/probe.test.ts 起它,要本机 Chrome,没有就跳过;走 mock,不花钱):
+ * 起 cotutor mock(老师都走实时),iPad 横屏、竖屏、手机各看一遍首页与数学老师页:页面不横滚;
+ * 再从输入条发一句,老师的讲稿一句句出来:板上多一节、字幕跟着走、节只出一次。页面不许抛异常。每种尺寸截一张。
+ * 课里的卡 2026-11-17 删了,以前这里看卡的半宽、并排、流式不挪,一起删了;一节课的页在 scripts/probe-book-page.mjs、probe-photo-page.mjs。
  *
  * 用法:node scripts/probe-layout.mjs [--out <截图目录>] [--keep](留下 mock)
  */
@@ -28,20 +28,11 @@ const tmp = probeDir('cotutor-probe-layout-');
 const shots = outAt > 0 ? process.argv[outAt + 1] : join(tmp, 'shots');
 mkdirSync(shots, { recursive: true });
 
-// 出卡慢一点(整节 4 秒),好看清一张张来时前面的卡动没动
-const mock = spawn(process.execPath, [join(repo, 'bin', 'cotutor.js'), 'mock', '--port', String(port), '--http', '--delay', '4000'], { stdio: 'ignore', detached: keep });
+// 讲稿出慢一点(整节 3 秒),好看清一句句来
+const mock = spawn(process.execPath, [join(repo, 'bin', 'cotutor.js'), 'mock', '--port', String(port), '--http', '--delay', '3000'], { stdio: 'ignore', detached: keep });
 for (let i = 0; i < 40; i++) { try { if ((await fetch(`${base}/api/health`)).ok) break; } catch {} await sleep(250); }
 
-// 一节的行:每行几列、每张卡的种类、左边、宽、溢出没有
-const READ_ROWS = `(() => {
-  const b = document.querySelector('#board'), cs = getComputedStyle(b);
-  const W = b.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
-  const secs = [...b.querySelectorAll(':scope > .sec')].map((sec) => [...sec.querySelectorAll(':scope > .row')].map((row) => ({
-    cols: getComputedStyle(row).gridTemplateColumns.split(' ').length,
-    cards: [...row.querySelectorAll(':scope > [data-card]')].map((c) => { const r = c.getBoundingClientRect(); return { k: +c.dataset.card, kind: [...c.classList].find((x) => x.startsWith('c-')) || c.className, x: Math.round(r.left), w: Math.round(r.width), over: [...c.children].some((x) => !x.classList.contains('again') && (x.scrollWidth > x.clientWidth + 1 || x.getBoundingClientRect().right > r.right + 1)) }; }),
-  })));
-  return { W: Math.round(W), half: Math.floor((W - 12) / 2), secs, pageOver: document.scrollingElement.scrollWidth > innerWidth, boardOver: b.scrollWidth > b.clientWidth };
-})()`;
+const OVER = `(() => ({ pageOver: document.scrollingElement.scrollWidth > innerWidth, boardOver: (() => { const b = document.querySelector('#board'); return Boolean(b && b.scrollWidth > b.clientWidth); })() }))()`;
 
 let browser = null;
 try {
@@ -61,63 +52,38 @@ try {
   const until = async (expr, n = 40) => { for (let i = 0; i < n; i++) { if (await evaluate(expr)) return true; await sleep(250); } return false; };
   await send('Runtime.enable');
   await send('Page.enable');
-  // 流式时记下每张卡第一次出来的位置,之后每次板上有变化都对一遍
-  await send('Page.addScriptToEvaluateOnNewDocument', { source: `window.__track = null; window.__moved = [];
-    new MutationObserver(() => { const t = window.__track; if (!t) return; const sec = document.querySelector('#board > .sec[data-sec="' + t.sec + '"]'); if (!sec) return;
-      for (const c of sec.querySelectorAll('.row > [data-card]')) { const r = c.getBoundingClientRect(); const now = Math.round(r.left) + ',' + Math.round(r.width) + ',' + Math.round(r.top - sec.querySelector(':scope > .row').getBoundingClientRect().top); const k = c.dataset.card;
-        if (!(k in t.first)) t.first[k] = now; else if (t.first[k] !== now && !c.classList.contains('pend')) window.__moved.push(k + ': ' + t.first[k] + ' → ' + now); } }).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ['style', 'class'] });` });
-
-  const near = (a, b) => Math.abs(a - b) <= 2;
-  /** 一种尺寸看预载的那节 */
+  /** 一种尺寸看首页与数学老师页 */
   const look = async (label, w, h, dsf, mobile, file) => {
     await device(w, h, dsf, mobile);
-    await send('Page.navigate', { url: `${base}/?tutor=math-tutor` });
-    await until(`document.querySelectorAll('#board .sec .row').length > 0`, 60);
+    await send('Page.navigate', { url: `${base}/` });
+    await until(`document.querySelectorAll('#deck .c-tutor').length > 0`, 60);
     await sleep(600);
-    const L = await evaluate(READ_ROWS);
-    const rows = L.secs[0];
-    const pairs = rows.filter((r) => r.cards.length === 2);
-    const halves = rows.flatMap((r) => (r.cols === 2 ? r.cards : []));
-    const lone = rows.filter((r) => r.cards.length === 1 && r.cols === 2);
-    const choice = rows.flatMap((r) => r.cards).find((c) => c.kind === 'c-choice');
-    console.log(`  ${label}:板宽 ${L.W},半宽 ${L.half};行 ${rows.map((r) => `[${r.cards.map((c) => c.k).join(',')}]${r.cols === 2 && r.cards.length === 1 ? '½' : ''}`).join(' ')}`);
-    ok(`${label}:半宽的卡都是半宽(两张并一行的、落单占左半的)`, halves.every((c) => near(c.w, L.half)), JSON.stringify(halves));
-    ok(`${label}:选择题半宽或全宽,不溢出`, choice !== undefined && (near(choice.w, L.W) || near(choice.w, L.half)) && !choice.over, JSON.stringify(choice));
-    ok(`${label}:不横滚、半宽卡里不溢出`, !L.pageOver && !L.boardOver && rows.every((r) => r.cards.every((c) => !c.over)), JSON.stringify({ pageOver: L.pageOver, boardOver: L.boardOver }));
+    const home = await evaluate(OVER);
+    ok(`${label}:首页不横滚`, !home.pageOver, JSON.stringify(home));
+    await send('Page.navigate', { url: `${base}/?tutor=math-tutor` });
+    await until(`document.querySelector('#tutor')?.classList.contains('on') && document.querySelectorAll('#board > .sec').length > 0`, 60);
+    await sleep(600);
+    const page = await evaluate(OVER);
+    ok(`${label}:老师页不横滚`, !page.pageOver && !page.boardOver, JSON.stringify(page));
     console.log('  ', await shot(file));
-    return { L, rows, pairs, lone };
   };
+  await look('iPad 横屏', 1180, 820, 1, false, 'layout-ipad.png');
+  await look('iPad 竖屏', 820, 1180, 1, false, 'layout-portrait.png');
+  await look('手机', 390, 844, 2, true, 'layout-phone.png');
 
-  const ipad = await look('iPad 横屏', 1180, 820, 1, false, 'layout-ipad.png');
-  ok('iPad 横屏:有两张并一行的(字少的兄弟卡)', ipad.pairs.length >= 1, JSON.stringify(ipad.pairs.map((r) => r.cards.map((c) => c.k))));
-  // 实时老师页横屏左边有 360 宽的白纸,板窄:三个短选项的选择题放得进半宽就和落单的那张并一行,放不进就占整行(不留半行空着)
-  ok('iPad 横屏:三个短选项的选择题和前面落单的半宽卡并一行,放不进半宽就占整行', ipad.pairs.some((r) => r.cards.some((c) => c.kind === 'c-choice')) || ipad.rows.some((r) => r.cards.length === 1 && r.cards[0].kind === 'c-choice' && r.cards[0].w > 600), JSON.stringify(ipad.rows.map((r) => r.cards.map((c) => [c.k, c.w]))));
-  const portrait = await look('iPad 竖屏', 820, 1180, 1, false, 'layout-portrait.png');
-  ok('iPad 竖屏:有两张并一行的', portrait.pairs.length >= 1);
-  const phone = await look('手机', 390, 844, 2, true, 'layout-phone.png');
-  ok('手机:并排的比横屏少(半宽只放得下标题加一行)', phone.rows.filter((r) => r.cols === 2).length <= ipad.rows.filter((r) => r.cols === 2).length);
-
-  // 流式:老师一张张出卡,已经出来的卡不挪
+  // 流式:发一句,讲稿一句句出来,板上多一节、只多一节
   await device(1180, 820, 1, false);
   await send('Page.navigate', { url: `${base}/?tutor=math-tutor` });
-  await until(`document.querySelectorAll('#board .sec .row').length > 0`, 60);
+  await until(`document.querySelector('#tutor')?.classList.contains('on') && document.querySelectorAll('#board > .sec').length > 0`, 60);
   await sleep(600);
   const n0 = await evaluate(`document.querySelectorAll('#board > .sec').length`);
-  await evaluate(`window.__track = { sec: ${n0}, first: {} }; window.__moved = []; (() => { const t = document.querySelector('#typed'); t.value = '反过来呢?'; document.querySelector('#go').click(); return true; })()`);
-  // 前两张出来就拍一张(第三张是选择题,出来后会自己弹舞台)
-  if (await until(`document.querySelectorAll('#board > .sec[data-sec="${n0}"] .row > [data-card]').length >= 2`, 80)) {
-    await evaluate(`document.querySelector('#board > .sec[data-sec="${n0}"]').scrollIntoView({ block: 'start', behavior: 'instant' })`);
-    console.log('  ', await shot('layout-live.png'));
-  }
-  const got = await until(`document.querySelectorAll('#board > .sec[data-sec="${n0}"] .row > [data-card]').length >= 3`, 80);
-  await sleep(1500);
-  const live = await evaluate(READ_ROWS);
-  const lr = live.secs[n0] || [];
-  console.log(`  流式那节:行 ${lr.map((r) => `[${r.cards.map((c) => c.k).join(',')}]${r.cols === 2 && r.cards.length === 1 ? '½' : ''}`).join(' ')}`);
-  ok('流式:三张卡都出来了', got);
-  const moved = await evaluate(`window.__moved.slice()`);
-  ok('流式:已经出来的卡不挪(位置、宽度)', moved.length === 0, moved.slice(0, 4).join(' | '));
-  ok('流式:前两张字少的并一行', lr.some((r) => r.cards.length === 2), JSON.stringify(lr.map((r) => r.cards.map((c) => c.k))));
+  await evaluate(`(() => { const t = document.querySelector('#typed'); t.value = '反过来呢?'; document.querySelector('#go').click(); return true; })()`);
+  const grew = await until(`document.querySelectorAll('#board > .sec').length === ${n0 + 1}`, 80);
+  ok('流式:板上多了一节', grew, String(await evaluate(`document.querySelectorAll('#board > .sec').length`)));
+  const done = await until(`!document.body.classList.contains('pending') && document.querySelectorAll('#board > .sec').length === ${n0 + 1}`, 80);
+  await sleep(800);
+  ok('流式:写完了还是只多一节(不重铺)', done && (await evaluate(`document.querySelectorAll('#board > .sec').length`)) === n0 + 1);
+  console.log('  ', await shot('layout-live.png'));
 
   ok('页面没抛异常', errors.length === 0, errors.join(' | '));
   console.log(bad ? `${bad} 项没过` : '全过');

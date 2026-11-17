@@ -4,7 +4,7 @@
  */
 import { mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
-import { cardLabel, stripSecrets, type TutorButton } from '../../board/cards/index.ts';
+import { cardLabel, stripCard, type TutorButton } from '../../board/cards/index.ts';
 import { UsageError } from '../../shared/errors.ts';
 import type { Workspace } from '../../schema/index.ts';
 import { localDate } from '../../shared/time.ts';
@@ -60,7 +60,7 @@ async function checkContext(ws: Workspace, doc: Pick<HomeDoc, 'cards'>, now: Dat
   for (const r of homeActivities(doc, (t) => lectureActivities.get(t))) {
     const text = await readFile(findActivityFile(ws.root, r.tutor, r.name), 'utf8').catch(() => null);
     if (text === null) continue;
-    const { activity, issues } = lintActivity(text, { fileName: activityName(ws.root, r.tutor, r.name), tutorCards: ws.config.tutors[r.tutor]?.cards });
+    const { activity, issues } = lintActivity(text, { fileName: activityName(ws.root, r.tutor, r.name) });
     activities.set(`${r.tutor}/${r.name}`, { activity, fixes: issues.filter((i) => i.level === 'fix').length });
   }
   return { tutors: tutorInfos(ws), lectures, lectureProblems, unbaked, today: localDate(now), activities, lectureActivities };
@@ -92,7 +92,7 @@ export async function checkHome(ws: Workspace, md: string, now: Date): Promise<H
 export async function usableActivity(ws: Workspace, tutor: string, name: string): Promise<Activity | null> {
   const text = await readFile(findActivityFile(ws.root, tutor, name), 'utf8').catch(() => null);
   if (text === null) return null;
-  const { activity, issues } = lintActivity(text, { fileName: activityName(ws.root, tutor, name), tutorCards: ws.config.tutors[tutor]?.cards });
+  const { activity, issues } = lintActivity(text, { fileName: activityName(ws.root, tutor, name) });
   return issues.some((i) => i.level === 'fix') ? null : activity;
 }
 
@@ -197,7 +197,7 @@ async function talkedSince(ws: Workspace, tutor: string, since: string, now: Dat
 
 /**
  * 孩子端的首页卡:source = 已发布的(缺省)/ 草稿(家长预览)/ 缺省。
- * 老师卡按 arrangeHome 排、按钮按 kidButtons 算;其余卡过 stripSecrets。
+ * 老师卡按 arrangeHome 排、按钮按 kidButtons 算;听写卡过 stripCard(字不下发)。
  */
 export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'published' | 'draft'; keepBriefs?: boolean } = {}): Promise<KidHomeView> {
   const today = localDate(now);
@@ -236,7 +236,7 @@ export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'pu
   for (const c of arrangeHome(cards, tutors)) {
     // 首页只认老师卡与听写卡(2026-11-16);以前发布的那份里别的卡不下发
     if (c.kind === 'dictation') {
-      out.push({ ...stripSecrets({ cards: [c], lines: [] }).cards[0], owner: owners.get(c) ?? null });
+      out.push({ ...stripCard(c), owner: owners.get(c) ?? null });
       continue;
     }
     if (c.kind !== 'tutor') continue;

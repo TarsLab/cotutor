@@ -14,14 +14,12 @@ const ANALYZE_COMMANDS = ['show', 'pack', 'replay', 'compare', 'trace', 'doctor'
 export function analyzeReferenceDoc(): string {
   const f = conversationFiles('conversations', '<老师>', '<日期>');
   const rows = [
-    [f.index, '一天的索引:每条消息物化了 text / kidText / section(卡与讲稿)/ tools(读了什么)/ timing / tokens(这轮老师用的 token:输入 / 输出)/ warnings / bookkeeping;顶层 sessions(话题)/ ratings / booked(老数据里还有 costUsd,是旧版记的美元,不用管)'],
+    [f.index, '一天的索引:每条消息物化了 text / kidText / section(讲稿与动作)/ tools(读了什么)/ timing / tokens(这轮老师用的 token:输入 / 输出)/ warnings / bookkeeping;顶层 sessions(话题)/ ratings / booked(老数据里还有 costUsd,是旧版记的美元,不用管)'],
     [f.run('<job>'), '这轮发给老师的:prompt(上下文包 + 消息)、resume(是不是接着这个话题的模型历史)、sources(当时的 activity 文件正文与 hash、技能 SKILL.md 的 hash、带了原文的笔记)。argv 是旧版起命令行那时的,现在是空的'],
     [f.log('<job>'), '这轮老师那头的流水,一行一条:文本、每次工具调用的参数与结果、收尾(token、来回几次)。2026-11-02 以前的轮次是 Qwen Code 的 stream-json。最大最全,别整个读,按 job 与关键字 grep'],
     [f.brain('<话题>'), '这个话题的模型历史(<话题> 是索引 sessions 的键):接着聊时拼回去给老师的那些消息。结束的轮瘦身(不带思考、工具往返成一句、照片只附最近那组);上一轮上下文过 32k 就整段换成前情'],
     [f.err('<job>'), 'stderr'],
     [f.events('<job>'), '这轮的事件流,一行一条 {t, lane, kind, …}:main 老师 / tts 配音 / ready 就绪 / index / ledger;cotutor trace 读它'],
-    [f.card('<job>', 9999).replace('9999', '<n>'), '第 n 张卡的状态(孩子在卡上做的):{at, turn, state}'],
-    [f.cardAsset('<job>', 9999, '<k>.mp3').replace('9999', '<n>'), '卡的资产(点读段配音)'],
   ];
   return `# 命令与文件(机器生成,别改)
 

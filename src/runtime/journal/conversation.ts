@@ -1,7 +1,7 @@
 /**
- * 对话索引的纯函数:job 命名、空索引、话题、把一次运行的结果并进索引(不改旧对象)。日期在 shared/time.ts,文件布局与卡 id 在 schema/conversation-files.ts。
+ * 对话索引的纯函数:job 命名、空索引、话题、把一次运行的结果并进索引(不改旧对象)。日期在 shared/time.ts,文件布局在 schema/conversation-files.ts。
  */
-import { ConversationIndexSchema, threads, type CardStateFile, type CardStates, type ConversationIndex, type ConversationMessage, type Session, type Timing } from '../../schema/index.ts';
+import { ConversationIndexSchema, threads, type ConversationIndex, type ConversationMessage, type Session, type Timing } from '../../schema/index.ts';
 import type { KidView } from '../kid-view.ts';
 import type { Transcript } from '../../brain/transcript.ts';
 
@@ -14,20 +14,6 @@ export function jobId(d: Date, seq: number): string {
 
 export function emptyIndex(tutor: string, date: string): ConversationIndex {
   return ConversationIndexSchema.parse({ tutor, date });
-}
-
-/** 一个话题里上一轮之后改过状态的卡(按 job、下标排):发消息时逐张 describe 进上下文包。turn 是存卡时那个话题的末条 job */
-export function changedCards(index: { messages: readonly Pick<ConversationMessage, 'job' | 'from' | 'thread'>[] }, states: CardStates, thread: string): { job: string; n: number; file: CardStateFile }[] {
-  const last = lastJobOf(index, thread);
-  if (!last) return [];
-  const t = threads(index.messages);
-  const out: { job: string; n: number; file: CardStateFile }[] = [];
-  index.messages.forEach((m, i) => {
-    const per = states[m.job];
-    if (!per || t[i] !== thread) return;
-    for (const n of Object.keys(per).map(Number).sort((a, b) => a - b)) if (per[n].turn === last) out.push({ job: m.job, n, file: per[n] });
-  });
-  return out;
 }
 
 /** 当前话题 = 末条消息的;空索引 null */

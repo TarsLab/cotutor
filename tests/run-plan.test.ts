@@ -1,6 +1,6 @@
-/** 运行时:按名字找、不存在的报可用的;旧的命令行运行时读得进来、用不了;换运行时后的会话;回读检查;守则裁剪;ISO 周。 */
+/** 运行时:按名字找、不存在的报可用的;旧的命令行运行时读得进来、用不了;换运行时后的会话;守则正文;ISO 周。 */
 import { getRuntime, runtimeIssue } from '../src/brain/runtime.ts';
-import { boardGuideReads, tutorRulesBody } from '../src/runtime/context/tutor-rules.ts';
+import { tutorRulesBody } from '../src/runtime/context/tutor-rules.ts';
 import { isoWeek } from '../src/memory/plan.ts';
 import { applyRun, emptyIndex, addMessage } from '../src/runtime/journal/conversation.ts';
 import { deriveKidView } from '../src/runtime/kid-view.ts';
@@ -37,11 +37,6 @@ const config = parseConfig({ ...tpl, runtimes: { ...tpl.runtimes, qwen: qwenRt }
   check('出错写 error 原因', bad.messages[0].result === 'error' && bad.messages[0].error === 'error_max_turns');
 }
 {
-  const reads = boardGuideReads([{ name: 'Skill', arg: 'cotutor-board' }, { name: 'Read', arg: '/ws/.agents/skills/cotutor-board/SKILL.md' }, { name: 'Bash', arg: 'cat ../../.agents/skills/cotutor-board/SKILL.md' }, { name: 'Read', arg: '/ws/.agents/skills/cotutor-board/references/choice.md' }, { name: 'Skill', arg: 'cotutor-home' }]);
-  check('回读检查:Skill 点名、Read / cat SKILL.md 都算(旧轮次的工具名);references 与别的技能不算', reads.length === 3 && !reads.join().includes('choice.md') && !reads.join().includes('cotutor-home'), JSON.stringify(reads));
-  check('read_file 读 SKILL.md 算回读;旧轮次按老师裁的那份也算', boardGuideReads([{ name: 'read_file', arg: '.agents/skills/cotutor-board/SKILL.md' }]).length === 1 && boardGuideReads([{ name: 'Read', arg: '/ws/.cotutor/board/math-tutor-1a2b3c4d.md' }]).length === 1);
-  const guarded = '---\nname: x\n---\n\n# 守则\n\n{{有 choice}}\n## 选一选\n- 出一道\n{{/有}}\n\n## 记忆\n';
-  check('守则按老师的卡裁:没给 = 全有;没有 choice 那段去掉;守卫写坏了只去掉守卫行', tutorRulesBody(guarded).includes('## 选一选') && !tutorRulesBody(guarded).includes('{{') && !tutorRulesBody(guarded, ['text']).includes('选一选') && tutorRulesBody(guarded, ['text']).includes('## 记忆') && tutorRulesBody('# 守则\n{{有 choice}}\n- 一条\n', ['text']) === '# 守则\n- 一条');
   const rules = tutorRulesBody('---\nname: x\n---\n\n<!-- 给人看\n谁读:老师\n-->\n\n# 守则\n\n- 一条\n<!-- 为什么:因为 -->\n- 两条 <!-- 行内的留着 -->\n\n<!--\n  多行\n-->\n## 尾\n');
   check('守则正文:剥掉独占行的注释(连同前面的换行),行内的留着;以标题开头', rules === '# 守则\n\n- 一条\n- 两条 <!-- 行内的留着 -->\n\n## 尾', JSON.stringify(rules));
 }

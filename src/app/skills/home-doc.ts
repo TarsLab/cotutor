@@ -4,7 +4,7 @@
  * <kind>.md 是首页专属卡的协议全文,命令.md 从 CLI 用法文本取。SKILL.md 本体(流程、铁律)是手写的。
  */
 import { commandsReference } from '../cli/usage.ts';
-import { BUTTON_LABEL_MAX, TUTOR_BUTTONS_MAX, kindsFor } from '../../board/cards/index.ts';
+import { BUTTON_LABEL_MAX, CARD_KINDS, TUTOR_BUTTONS_MAX } from '../../board/cards/index.ts';
 import { PACKAGE_CARDS_DIR, readCardDoc } from '../../board/cards/docs.ts';
 
 export const HOME_SKILL = 'cotutor-home';
@@ -14,7 +14,7 @@ const HOME_COMMANDS = ['home', 'show', 'rate', 'bookkeep'];
 
 /** 首页能用的种类:老师卡、听写卡(2026-11-16 起只有这两种) */
 function homeOnly(): string[] {
-  return kindsFor('home').map((k) => k.name);
+  return CARD_KINDS.map((k) => k.name);
 }
 
 export function homeSyntaxDoc(dir = PACKAGE_CARDS_DIR): string {
@@ -25,7 +25,7 @@ export function homeSyntaxDoc(dir = PACKAGE_CARDS_DIR): string {
   });
   return `# 首页怎么写(机器生成,别改)
 
-首页文件是 workspace 的 home/draft.md,和板书同一个解析器:
+首页文件是 workspace 的 home/draft.md:
 
 - **frontmatter**(可选):只认 \`for: YYYY-MM-DD\`(这份是给哪天用的)。
 - **围栏 = 卡**:标签第一个词是种类,其余是修饰。卡按文件顺序铺;老师卡永远排在最上面。

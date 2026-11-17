@@ -22,13 +22,11 @@ const layered = CotutorConfigSchema.parse({
   tutors: { ...raw.tutors, 'math-tutor': { ...raw.tutors['math-tutor'], policy: { dailyMessages: 5, board: 'off' } as Record<string, unknown> } },
 });
 const p2 = resolvePolicy(layered, 'math-tutor');
-check('政策逐层覆盖;老 workspace 写着的 dailyMessages 读得进、不起作用', p2.replyMaxChars === 80 && p2.contextPack.recent === 3 && p2.contextPack.planLines === 10 && !('dailyMessages' in p2) && p2.board === 'off');
-check('别的老师不受影响', resolvePolicy(layered, 'chinese-tutor').board === 'auto' && resolvePolicy(layered, 'chinese-tutor').replyMaxChars === 80);
+check('政策逐层覆盖;老 workspace 写着的 dailyMessages、board 读得进、不起作用', p2.replyMaxChars === 80 && p2.contextPack.recent === 3 && p2.contextPack.planLines === 10 && !('dailyMessages' in p2) && !('board' in p2));
+check('别的老师不受影响', resolvePolicy(layered, 'chinese-tutor').replyMaxChars === 80);
 
-check('出厂老师带卡的清单(text 总在)', cfg.tutors['math-tutor'].cards?.join() === 'text,choice,image,code' && Object.values(cfg.tutors).every((t) => t.cards?.includes('text')));
-check('cards 只认板书的种类:写错名字、写首页的老师卡都过不了契约;不写也行', !CotutorConfigSchema.safeParse({ ...raw, tutors: { ...raw.tutors, x: { display: 'x', cards: ['txt'] } } }).success && !CotutorConfigSchema.safeParse({ ...raw, tutors: { ...raw.tutors, x: { display: 'x', cards: ['tutor'] } } }).success && CotutorConfigSchema.safeParse({ ...raw, tutors: { ...raw.tutors, x: { display: 'x' } } }).success);
-const retired = CotutorConfigSchema.safeParse({ ...raw, tutors: { ...raw.tutors, x: { display: 'x', cards: ['text', 'paint', 'canvas', 'kit', 'code'] } } });
-check('cards 里不再有的卡(paint、canvas、kit)读进来就丢掉,不拦整份配置', retired.success && retired.data.tutors.x.cards?.join() === 'text,code', JSON.stringify(retired.error?.issues ?? null));
+const retired = CotutorConfigSchema.safeParse({ ...raw, tutors: { ...raw.tutors, x: { display: 'x', cards: ['text', 'choice'] } } });
+check('老师条目里以前的 cards(课里的卡 2026-11-17 删了)读进来就丢,不拦整份配置;出厂的不写', retired.success && !('cards' in retired.data.tutors.x) && Object.values(cfg.tutors).every((t) => !('cards' in t)), JSON.stringify(retired.error?.issues ?? null));
 const withHelper = CotutorConfigSchema.parse({ ...raw, tutors: { ...raw.tutors, helper: { display: '小帮手', hidden: true }, 'off-tutor': { display: '关着的', enabled: false } } });
 const kidOnly = listTutors(withHelper, { kidOnly: true });
 check('孩子端不见 hidden 与关着的', kidOnly.length === 3 && !kidOnly.some((t) => t.name === 'helper' || t.name === 'off-tutor'));
@@ -56,10 +54,6 @@ check('运行时 default 不存在 → 指南', !bad2.success && explainIssues(b
 check('effort:出厂缺省 low,数学、英语老师 medium;policyDefaults 与老师条目逐层盖', resolvePolicy(cfg, 'chinese-tutor').effort === 'low' && resolvePolicy(cfg, 'math-tutor').effort === 'medium' && resolvePolicy(cfg, 'english-tutor').effort === 'medium' && resolvePolicy(CotutorConfigSchema.parse({ ...raw, policyDefaults: { effort: 'high' } }), 'chinese-tutor').effort === 'high' && resolvePolicy(CotutorConfigSchema.parse({ ...raw, policyDefaults: { effort: 'high' } }), 'math-tutor').effort === 'medium');
 check('effort:不认的档位过不了契约', !CotutorConfigSchema.safeParse({ ...raw, policyDefaults: { effort: 'max' } }).success);
 
-{
-  const { resolvePolicy, POLICY_DEFAULTS } = await import('../src/schema/index.ts');
-  check('board 旋钮缺省 auto,老师条目可覆盖成 off', POLICY_DEFAULTS.board === 'auto' && resolvePolicy({ policyDefaults: {}, tutors: { t: { display: 't', enabled: true, policy: { board: 'off' } } } } as never, 't').board === 'off');
-}
 {
   // 老 workspace 的 cotutor.json 里还写着 policy.scenes(画图老师 2026-10-07 删了):契约不拦,丢掉不认的键
   const old = CotutorConfigSchema.safeParse({ ...raw, policyDefaults: { scenes: { dailyMax: 3 } }, tutors: { ...raw.tutors, 'scene-maker': { display: '画图老师', hidden: true, runtime: 'qwen', policy: { scenes: { dailyMax: 1 } } } } });

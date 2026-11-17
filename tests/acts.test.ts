@@ -75,7 +75,6 @@ check('actText 说回原文', actText({ name: '看', arg: '第 3 题' }) === '[[
   check('写在句子后面:这一句的动作', JSON.stringify(lines[0].acts) === '[{"name":"看","arg":"第 3 题"}]' && lines[0].text === '我们看第 3 题。', JSON.stringify(lines[0]));
   check('一句后面几个:都在这一句上,照写的先后', JSON.stringify(lines[1].acts?.map((a) => a.name)) === '["圈","请"]');
   check('只有动作的一行:跟着上一句', lines.length === 4 && JSON.stringify(lines[2].acts) === '[{"name":"摆","arg":"点阵 6 行 6 个"}]', JSON.stringify(lines.map((l) => [l.text, l.acts])));
-  check('末句问句带了动作:不补提问卡', r.section.cards.length === 0, JSON.stringify(r.section.cards));
   check('没有写错的', r.warnings.length === 0, JSON.stringify(r.warnings));
   check('这一节没有第一句前面的动作', r.section.acts === undefined);
 }
@@ -108,7 +107,7 @@ check('actText 说回原文', actText({ name: '看', arg: '第 3 题' }) === '[[
   const wrong = all.filter((x) => readMark(x).kind !== 'act');
   check('动作怎么写.md:每个 [[ ]] 都是读得成的动作', all.length >= 15 && !wrong.length, wrong.join(' / '));
   const g = actsGuide();
-  check('递给老师的那一页剥掉了给人看的注释', g.startsWith('# 动作怎么写') && !g.includes('给人看'), g.slice(0, 80));
+  check('递给老师的那一页剥掉了给人看的注释', g.startsWith('# 讲稿与动作怎么写') && !g.includes('给人看'), g.slice(0, 80));
   const math = readFileSync(new URL('../grades/grade-2/agents/math-tutor/activities/预习.md', import.meta.url), 'utf8');
   const mwrong = [...math.matchAll(/\[\[([^\[\]]+)\]\]/g)].map((m) => m[1]).filter((x) => readMark(x).kind !== 'act');
   check('数学「预习」里写的动作都读得成', !mwrong.length, mwrong.join(' / '));

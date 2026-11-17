@@ -1,6 +1,6 @@
-/** 模拟接口:不经真实服务把孩子端喂起来——首页、板书节、发消息 → 想 → 追加一节、继续、脚本用完、上限、离线、页面。 */
+/** 模拟接口:不经真实服务把孩子端喂起来——首页、讲稿节、发消息 → 想 → 追加一节、继续、脚本用完、离线、页面。课里的卡 2026-11-17 删了,mock 的老师只写讲稿。 */
 import { createMock } from '../src/app/mock/mock.ts';
-import { tintFor, type BoardSection } from '../src/board/presentation.ts';
+import type { BoardSection } from '../src/board/presentation.ts';
 import { check, done } from './_check.ts';
 
 interface Msg { job: string; question: string | null; reply: string | null; pending: boolean; section: BoardSection | null; action?: string }
@@ -15,8 +15,7 @@ interface Day { messages: Msg[]; pending: string | null }
   check('首页:三位老师;老师卡置顶(语文、数学照原文,英语补一张),再是听写卡;听写卡没有字(中文一张、英文单词一张)', home.title === '小明的老师们' && home.tutors.length === 3 && home.tutors.every((t) => !('available' in t) && !('remaining' in t)) && home.home === '2026-09-09-2130' && tc.map((c) => c.props.tutor).join() === 'chinese-tutor,math-tutor,english-tutor' && home.cards.slice(3).map((c) => c.kind).join() === 'dictation,dictation' && !JSON.stringify(home.cards[3]).includes('鼓励') && (home.cards[4].props as { lang?: string }).lang === 'en' && !JSON.stringify(home.cards[4]).includes('yellow'), JSON.stringify(home.cards.map((c) => c.kind)));
   check('老师卡的按钮:原文的 activity 与小课堂(没有新话题;今天聊过的在首页「今天」);没写的没有按钮;讲法不下发', tc[0].props.buttons?.map((b) => `${b.id}:${b.kind}`).join() === '0:start' && tc[1].props.buttons?.map((b) => b.kind).join() === 'lecture,lecture' && tc[2].props.buttons?.length === 0 && !JSON.stringify(home).includes('第 22 课') && !JSON.stringify(home).includes('brief'), JSON.stringify(tc[0].props.buttons));
   const d0 = (await get('/api/kid/conversations/chinese-tutor/today')).json as Day;
-  check('语文老师已讲过一节:卡 + 讲稿 + 标注 + 末句问句(脚本过真解析器)', d0.messages.length === 1 && d0.messages[0].section !== null && d0.messages[0].section.cards.map((c) => c.kind).join() === 'text,text,read,choice' && d0.messages[0].section.lines.length === 5 && d0.messages[0].section.lines[1].marks[0]?.card === 1 && d0.messages[0].section.lines[4].ask === true, JSON.stringify(d0.messages[0].section?.lines[1]));
-  check('讲稿里念的句子不带方括号', !d0.messages[0].section!.lines.some((l) => l.text.includes('[')));
+  check('语文老师已讲过一节:讲稿 5 句、末句问句(脚本过真解析器),节上没有卡', d0.messages.length === 1 && d0.messages[0].section !== null && d0.messages[0].section.lines.length === 5 && d0.messages[0].section.lines[4].ask === true && !('cards' in d0.messages[0].section), JSON.stringify(d0.messages[0].section));
   check('英语老师还没讲过', ((await get('/api/kid/conversations/english-tutor/today')).json as Day).messages.length === 0);
   const upM = await m.route('POST', '/api/kid/conversations/english-tutor/photos', { image: 'data:image/jpeg;base64,AAAA' });
   const pathM = (upM.json as { path: string }).path;
@@ -32,92 +31,70 @@ interface Day { messages: Msg[]; pending: string | null }
   check('想的时候再发 → 409', (await m.kidSend('chinese-tutor', { text: '再问' })).status === 409);
   await m.settle();
   const d2 = (await get('/api/kid/conversations/chinese-tutor/today')).json as Day;
-  check('想完 → 追加下一节(脚本第二节),孩子的话在 question 里不在卡上', d2.pending === null && d2.messages[1].section?.cards[0].kind === 'text' && d2.messages[1].section?.cards[0].props.text === '先画完的人本来就赢了' && d2.messages[1].section?.cards[2].kind === 'choice' && d2.messages[1].question === '不画脚呢?' && d2.messages[1].reply === '你来选一选:画蛇添足,就是做到了还要怎样?', JSON.stringify(d2.messages[1].section?.cards[0]));
+  check('想完 → 追加下一节(脚本第二节),孩子的话在 question 里', d2.pending === null && d2.messages[1].section?.lines.length === 4 && d2.messages[1].question === '不画脚呢?' && d2.messages[1].reply === '你说说:画蛇添足,就是做到了还要怎样?', JSON.stringify(d2.messages[1]));
   await m.kidSend('chinese-tutor', { text: '继续' });
   await m.settle();
   await m.kidSend('chinese-tutor', { text: '鼓励怎么写' });
   await m.settle();
-  const dh = (await get('/api/kid/conversations/chinese-tutor/today')).json as Day;
-  check('田字格卡:第四节第一张是 tianzige「鼓励」带拼音,没有状态、不剥东西', dh.messages[3].section?.cards[0].kind === 'tianzige' && dh.messages[3].section?.cards[0].props.chars === '鼓励' && JSON.stringify(dh.messages[3].section?.cards[0].props.pinyin) === '["gǔ","lì"]' && dh.messages[3].section?.cards[1].kind === 'text', JSON.stringify(dh.messages[3].section?.cards));
   const hzOk = await get('/api/kid/tianzige/' + encodeURIComponent('鼓'));
   const hzNo = await get('/api/kid/tianzige/' + encodeURIComponent('ab'));
-  check('笔顺数据:鼓 13 笔、每笔轮廓与中线成对;不是汉字 404', hzOk.status === 200 && (hzOk.json as { strokes: string[]; medians: number[][][] }).strokes.length === 13 && (hzOk.json as { medians: number[][][] }).medians.length === 13 && hzNo.status === 404, JSON.stringify(hzNo));
+  check('点字弹的田字格的笔顺数据:鼓 13 笔、每笔轮廓与中线成对;不是汉字 404', hzOk.status === 200 && (hzOk.json as { strokes: string[]; medians: number[][][] }).strokes.length === 13 && (hzOk.json as { medians: number[][][] }).medians.length === 13 && hzNo.status === 404, JSON.stringify(hzNo));
   await m.kidSend('chinese-tutor', { text: '还有吗' });
   await m.settle();
   const d3 = (await get('/api/kid/conversations/chinese-tutor/today')).json as Day;
-  check('脚本用完 → 只有一句收尾话(一节只有讲稿;末句是问句,补了提问卡)', d3.messages.length === 5 && d3.messages[2].section?.cards[0].kind === 'text' && d3.messages[4].section?.cards.length === 1 && d3.messages[4].section?.cards[0].props.ask === true && d3.messages[4].section?.lines.length === 1 && d3.messages[4].reply === '这个我们明天接着说,好不好?');
+  check('脚本用完 → 只有一句收尾话(末句是问句)', d3.messages.length === 5 && d3.messages[4].section?.lines.length === 1 && d3.messages[4].section?.lines[0].ask === true && d3.messages[4].reply === '这个我们明天接着说,好不好?', JSON.stringify(d3.messages[4]));
   check('不限每天几条:今天没有剩几条', !('remaining' in d3));
-  // 卡的状态:数学老师首节有选择题 → PUT 状态假存、today 里并回卡上、答案仍剥;交给老师 → 下一节;「继续」不计次数
+  // 给老师看:空文本 + action 也 202,问句是「(给老师看,没说话)」;「继续」不计次数
   const md = (await get('/api/kid/conversations/math-tutor/today')).json as Day;
-  const mj = md.messages[0].job;
-  const mc = md.messages[0].section!.cards;
-  const ci = mc.findIndex((c) => c.kind === 'choice');
-  check('数学老师首节(勾股定理,原型样张):首张带标题、# 标题的 text 是 sky、公式 paper、选择题在末尾且答案剥掉、没有状态', ci === mc.length - 1 && mc[0].props.title === '勾股定理' && tintFor(mc[0]) === 'sky' && mc[1].props.title === '认边' && tintFor(mc[1]) === 'sky' && tintFor(mc[2]) === 'paper' && tintFor(mc[ci]) === 'plum' && !('answer' in mc[ci].props) && !('state' in mc[ci]), JSON.stringify(mc.map((c) => [c.kind, tintFor(c)])));
-  const lay = md.messages[0].section as BoardSection & { layout?: { for: string; rows: number[][] } };
-  check('写死的样子套上了:不排行(行归页面)、验证成 moss、一句话带 emoji、三条边画圈(带 pen)', lay.layout === undefined && lay.cards[3].look?.tint === 'moss' && lay.cards[4].look?.emoji === '💡' && lay.lines[0].marks.some((mk) => mk.phrase === '三条边' && mk.pen === 'circle') && lay.lines[1].marks.some((mk) => mk.phrase === '斜边' && mk.pen === undefined) && lay.cards[1].look === undefined, JSON.stringify([lay.layout, lay.cards.map((c) => c.look)]));
-  check('末句问句锚到选择题;[25] 落在「验证」卡不落在别处', md.messages[0].section!.lines[md.messages[0].section!.lines.length - 1].anchor === ci && md.messages[0].section!.lines.some((l) => l.marks.some((mk) => mk.phrase === '25' && mc[mk.card].props.title === '验证')));
-  check('PUT 坏状态 400、没这张卡 404、text 卡 400', (await m.route('PUT', `/api/kid/conversations/math-tutor/cards/${mj}/${ci}`, { picked: 'x' })).status === 400 && (await m.route('PUT', `/api/kid/conversations/math-tutor/cards/${mj}/99`, { picked: [0] })).status === 404 && (await m.route('PUT', `/api/kid/conversations/math-tutor/cards/${mj}/1`, { picked: [0] })).status === 400);
-  const put = await m.route('PUT', `/api/kid/conversations/math-tutor/cards/${mj}/${ci}`, { picked: [0] });
-  const md3 = (await get('/api/kid/conversations/math-tutor/today')).json as Day;
-  check('PUT 状态 → today 里卡上有 state,答案还是没有', put.status === 200 && JSON.stringify(md3.messages[0].section!.cards[ci].state) === '{"picked":[0]}' && !('answer' in md3.messages[0].section!.cards[ci].props), JSON.stringify(md3.messages[0].section!.cards[ci]));
-  const sub = await m.kidSend('math-tutor', { text: '', action: 'submit', focus: { card: `${mj}/${ci}` } });
+  check('数学老师首节:讲稿 5 句,末句问句', md.messages[0].section?.lines.length === 5 && md.messages[0].section.lines[4].ask === true, JSON.stringify(md.messages[0].section));
+  const sub = await m.kidSend('math-tutor', { text: '', action: 'submit' });
   await m.settle();
   const md4 = (await get('/api/kid/conversations/math-tutor/today')).json as Day;
-  check('交过的卡锁住(同真服务):再交 409、再改 409、下发带 submitted', (await m.kidSend('math-tutor', { text: '', action: 'submit', focus: { card: `${mj}/${ci}` } })).status === 409 && (await m.route('PUT', `/api/kid/conversations/math-tutor/cards/${mj}/${ci}`, { picked: [1] })).status === 409 && (md4.messages[0].section!.cards[ci] as { submitted?: boolean }).submitted === true);
-  check('交给老师:空文本 + action 也 202,问句是「(交了答案,没说话)」,下一节追加(反过来想 + 选择题)', sub.status === 202 && md4.messages[1].question === '(交了答案,没说话)' && md4.messages[1].reply !== null && !('action' in md4.messages[1]) && md4.messages[1].section?.cards.some((c) => c.kind === 'choice') === true, JSON.stringify(md4.messages[1]));
+  check('给老师看:空文本 + action 也 202,问句是「(给老师看,没说话)」,下一节追加', sub.status === 202 && md4.messages[1].question === '(给老师看,没说话)' && md4.messages[1].reply !== null && !('action' in md4.messages[1]) && (md4.messages[1].section?.lines.length ?? 0) > 0, JSON.stringify(md4.messages[1]));
   await m.kidSend('math-tutor', { text: '继续' });
   await m.settle();
   const md5 = (await get('/api/kid/conversations/math-tutor/today')).json as Day;
-  check('「继续」空文本也行,空文本没 action 400;第三节有卡', md5.messages[2].question === '继续' && (md5.messages[2].section?.cards.length ?? 0) > 0 && (await m.kidSend('math-tutor', { text: '  ' })).status === 400);
+  check('「继续」也行,空文本没 action 400;第三节有讲稿', md5.messages[2].question === '继续' && (md5.messages[2].section?.lines.length ?? 0) > 0 && (await m.kidSend('math-tutor', { text: '  ' })).status === 400);
   await m.kidSend('english-tutor', { text: 'apple' });
   await m.settle();
-  const rd = ((await get('/api/kid/conversations/english-tutor/today')).json as Day).messages[0];
-  check('英语老师:点读卡 + 图片卡 + 末句问句', rd.section?.cards[1].kind === 'read' && rd.section?.cards[2].kind === 'image' && rd.section?.cards[2].props.src === 'captures/2026-09-10/fruits.png' && rd.reply?.includes('apple') === true && rd.section?.lines[1].marks.length === 3, JSON.stringify(rd.section?.lines));
-  const wc = rd.section?.cards[3];
-  check('英语老师:第四张是单词卡 apple(分段、emoji),卡上没有中文', wc?.kind === 'word' && wc.props.word === 'apple' && JSON.stringify(wc.props.chunks) === '["ap","ple"]' && wc.props.emoji === '🍎' && !JSON.stringify(wc.props).includes('苹果'), JSON.stringify(wc));
+  const rd = ((await get('/api/kid/conversations/english-tutor/today')).json as Day).messages[1];
+  check('英语老师:接着照片那条讲下一节(脚本第二节),末句不是问句', rd.question === 'apple' && rd.section?.lines.length === 2 && rd.section.lines[1].ask === false, JSON.stringify(rd));
   const ltOk = await get('/api/kid/letters/' + encodeURIComponent('apple'));
   const ltNo = await get('/api/kid/letters/' + encodeURIComponent('ab1'));
   type Lt = { glyphs: Record<string, { advance: number; strokes: number[][][] }>; gap: number; space: number };
   const lj = ltOk.json as Lt;
-  check('字母笔顺:apple 用到 a p l e 四个字形,a 两笔(圈 + 竖)、点在四线三格里;写不出的词 404', ltOk.status === 200 && Object.keys(lj.glyphs).join() === 'a,p,l,e' && lj.glyphs.a.strokes.length === 2 && lj.glyphs.a.strokes.flat().every(([x, y]) => x >= -0.1 && x <= 1.1 && y >= -2 && y <= 1) && ltNo.status === 404, JSON.stringify(ltNo));
+  check('点字弹的四线三格的字母笔顺:apple 用到 a p l e 四个字形,a 两笔(圈 + 竖)、点在四线三格里;写不出的词 404', ltOk.status === 200 && Object.keys(lj.glyphs).join() === 'a,p,l,e' && lj.glyphs.a.strokes.length === 2 && lj.glyphs.a.strokes.flat().every(([x, y]) => x >= -0.1 && x <= 1.1 && y >= -2 && y <= 1) && ltNo.status === 404, JSON.stringify(ltNo));
   const pg = (await get('/')).html ?? '';
   const adv = /const WORD_ADV = (\{.*?\});/.exec(pg);
   const advJ = adv ? (JSON.parse(adv[1]) as { adv: Record<string, number>; gap: number; space: number }) : null;
-  check('孩子端页面拼进了字母宽表(52 个字母 + 连字符、撇号)、字间距与接口一致:单词卡同步排得出大小', !pg.includes('__WORD_ADV__') && advJ !== null && Object.keys(advJ.adv).length === 54 && advJ.adv.a === lj.glyphs.a.advance && advJ.gap === lj.gap && advJ.space === lj.space, adv?.[1].slice(0, 120));
-  const img = await get('/api/kid/image?p=' + encodeURIComponent('captures/2026-09-10/fruits.png'));
-  check('图片卡的图:mock 给占位 svg', img.status === 200 && img.contentType === 'image/svg+xml' && img.html?.includes('<svg') === true && img.html.includes('fruits.png'));
-  const chJob = d2.messages[1].job;
-  const chi = d2.messages[1].section!.cards.findIndex((c) => c.kind === 'choice');
-  const putCh = await m.route('PUT', `/api/kid/conversations/chinese-tutor/cards/${chJob}/${chi}`, { picked: [0] });
-  const dF = (await get('/api/kid/conversations/chinese-tutor/today')).json as Day;
-  check('选择题状态 PUT 假存、读回,答案仍剥;坏状态 400', putCh.status === 200 && JSON.stringify(dF.messages[1].section!.cards[chi].state) === '{"picked":[0]}' && !('answer' in dF.messages[1].section!.cards[chi].props) && (await m.route('PUT', `/api/kid/conversations/chinese-tutor/cards/${chJob}/${chi}`, { picked: 'x' })).status === 400);
-  check('空消息 400;没这位老师 404;卡的配音一律是静音(不用浏览器合成声)', (await m.kidSend('math-tutor', { text: '  ' })).status === 400 && (await get('/api/kid/conversations/nobody/today')).status === 404 && (await get('/api/audio/math-tutor/x.mp3')).contentType === 'audio/wav');
+  check('孩子端页面拼进了字母宽表(52 个字母 + 连字符、撇号)、字间距与接口一致:四线三格同步排得出大小', !pg.includes('__WORD_ADV__') && advJ !== null && Object.keys(advJ.adv).length === 54 && advJ.adv.a === lj.glyphs.a.advance && advJ.gap === lj.gap && advJ.space === lj.space, adv?.[1].slice(0, 120));
+  check('空消息 400;没这位老师 404;配音一律是静音(不用浏览器合成声)', (await m.kidSend('math-tutor', { text: '  ' })).status === 400 && (await get('/api/kid/conversations/nobody/today')).status === 404 && (await get('/api/audio/math-tutor/x.mp3')).contentType === 'audio/wav');
   const page = await get('/');
-  check('孩子端页面(录像、预览也是它)不念浏览器合成声:卡没配好音就不出声,mock 的段是静音', !/speechSynthesis|SpeechSynthesisUtterance|synth/.test(page.html ?? '') && !/speechSynthesis/.test((await get('/reel')).html ?? ''));
-  check('页面:标题、按住说话、内联了板书逻辑、舞台、没有家长入口、没有「错误」', page.html?.includes('小明的老师们') === true && page.html?.includes('发消息或按住说话') === true && page.html?.includes('function nowCard(') === true && page.html?.includes('id="stage"') === true && page.html?.includes('交给老师') === true && !page.html?.includes('export ') && !page.html?.includes('/parent') && !page.html?.includes('错误'), String(page.html?.length));
-  check('舞台有遮罩:紧跟在舞台后面(靠 #stage.on ~ #st-dim 显示),点它走 closeStage(经 closeByKid:讲稿交给小课堂卡的,关了接着念)', /id="st-act"[^\n]*<\/div><\/div>\s*<div id="st-dim"><\/div>/.test(page.html ?? '') && page.html?.includes("$('#st-dim').addEventListener('click', closeByKid)") === true && /const closeByKid = \(\) => \{[^\n]*closeStage\(\)/.test(page.html ?? ''));
-  check('内联的逻辑没有残留类型标注', !/function anchorMarks\(cards: /.test(page.html ?? ''));
+  check('孩子端页面(录像、预览也是它)不念浏览器合成声', !/speechSynthesis|SpeechSynthesisUtterance|synth/.test(page.html ?? '') && !/speechSynthesis/.test((await get('/reel')).html ?? ''));
+  check('页面:标题、按住说话、内联了板书逻辑、舞台、没有家长入口、没有「错误」', page.html?.includes('小明的老师们') === true && page.html?.includes('发消息或按住说话') === true && page.html?.includes('function sectionsFromMessages(') === true && page.html?.includes('id="stage"') === true && page.html?.includes('给老师看') === true && !page.html?.includes('export ') && !page.html?.includes('/parent') && !page.html?.includes('错误'), String(page.html?.length));
+  check('舞台有遮罩:紧跟在舞台后面(靠 #stage.on ~ #st-dim 显示),点它走 closeStage(经 closeByKid)', /id="st-act"[^\n]*<\/div><\/div>\s*<div id="st-dim"><\/div>/.test(page.html ?? '') && page.html?.includes("$('#st-dim').addEventListener('click', closeByKid)") === true && /const closeByKid = \(\) => \{[^\n]*closeStage\(\)/.test(page.html ?? ''));
+  check('内联的逻辑没有残留类型标注', !/function kidSaid\(messages: /.test(page.html ?? ''));
   const html = page.html ?? '';
   const js = html.slice(html.indexOf('<script>') + 8, html.lastIndexOf('</script>'));
   let parses = true;
   try { new Function(js); } catch (e) { parses = false; console.error(String(e)); }
   check('内联脚本本身能解析(模板里的转义没把 JS 字符串写断)', parses);
   const css = await m.route('GET', '/kid/theme.css');
-  check('mock 也给主题 css(包里的出厂 default)', css.status === 200 && css.html?.includes('.mk-marker') === true && (await m.route('GET', '/kid/theme.json')).status === 200);
+  check('mock 也给主题 css(包里的出厂 default)', css.status === 200 && css.html?.includes('--tint-sky-bg') === true && (await m.route('GET', '/kid/theme.json')).status === 200);
   // 规则按「前一条的 } 之后」切(后行断言,不吃掉 },否则只认得隔一条的规则)
-  // 主题里改定位 / 关触摸的裸类名(.pen { pointer-events:none } 是板书笔迹的)会打到页面任何同名元素上:页面自己挂的状态类不能与它们撞名(发照片屏圈画曾挂 pen,整屏不收触摸)
+  // 主题里改定位 / 关触摸的裸类名会打到页面任何同名元素上:页面自己挂的状态类不能与它们撞名(发照片屏圈画曾挂 pen,撞上当时主题里板书笔迹的 .pen,整屏不收触摸)
   const bare = new Set([...(css.html ?? '').replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/(?:^|(?<=\}))\s*([^{}]+)\{([^}]*)\}/g)].filter((x) => /pointer-events\s*:\s*none|position\s*:\s*(?:absolute|fixed)/.test(x[2])).flatMap((x) => x[1].split(',').map((t) => t.trim())).filter((t) => /^\.[\w-]+$/.test(t)).map((t) => t.slice(1)));
   const toggled = [...js.matchAll(/classList\.(?:add|toggle|remove)\('([\w-]+)'/g)].map((x) => x[1]);
   const clash = [...new Set(toggled.filter((c) => bare.has(c)))];
-  check('页面挂的状态类不与主题的裸类名撞(主题认得 .pen)', bare.has('pen') && toggled.length > 10 && clash.length === 0, clash.join());
+  check('页面挂的状态类不与主题的裸类名撞', toggled.length > 10 && clash.length === 0, clash.join());
   // 课包样本在仓库里(小课堂是一节课里的一页,舞台照课包画);舞台包与课包路由
   check('课包文件能取;没有的 404', (await get('/api/bundles/2026-09-04-guilv5/manifest.json')).status === 200 && (await get('/api/bundles/nope/scene.json')).status === 404);
   const { stageBuilt } = await import('../src/app/http/stage.ts');
   if (stageBuilt()) check('舞台包能取', (await get('/stage/')).status === 200 && (await get('/stage/stage.js')).file !== undefined);
-  check('模板里的正则斜杠没被吃掉(\\/ 变 / 会把整行变成注释)', js.includes('/^https?:\\/\\//') && !js.includes('/^https?:///'), js.slice(js.indexOf('https?:') - 20, js.indexOf('https?:') + 20));
+  check('模板里正则的反斜杠没被吃掉(\\d 变 d,正则照样能解析,只是认不出了)', js.includes('/^(\\d{1,2}):(\\d{2})') && !js.includes('/^(d{1,2})'), js.slice(js.indexOf('{1,2}') - 20, js.indexOf('{1,2}') + 20));
 }
 {
-  // 流式模拟:想的期间 pending 条目带 partial 板书,卡一张张增,答案照剥;想完换成正式的一节
+  // 流式模拟:想的期间 pending 条目带 partial 讲稿,句子一句句增;想完换成正式的一节
   const m = createMock({ delayMs: 600, now: () => new Date('2026-09-10T16:30:00') });
   await m.kidSend('math-tutor', { text: '一样的' });
   const seen: number[] = [];
@@ -126,12 +103,12 @@ interface Day { messages: Msg[]; pending: string | null }
     const d = (await m.route('GET', '/api/kid/conversations/math-tutor/today')).json as Day;
     const p = d.messages[1];
     if (!p.pending) break;
-    if (p.section) { seen.push(p.section.cards.length); if (!p.section.partial || typeof (p.section as { ready?: number }).ready !== 'number' || p.section.cards.some((c) => 'answer' in c.props)) partialOk = false; }
+    if (p.section) { seen.push(p.section.lines.length); if (!p.section.partial) partialOk = false; }
     await new Promise((r) => setTimeout(r, 15));
   }
   await m.settle();
   const fin = ((await m.route('GET', '/api/kid/conversations/math-tutor/today')).json as Day).messages[1];
-  check('想的期间见到过 partial 板书,卡数只增不减;想完 partial 没了、卡齐了', seen.length > 0 && seen.every((n, i) => i === 0 || n >= seen[i - 1]) && seen[0] < 3 && partialOk && !fin.pending && fin.section?.partial === undefined && fin.section?.cards.length === 3, JSON.stringify(seen));
+  check('想的期间见到过 partial 讲稿,句数只增不减;想完 partial 没了、句子齐了', seen.length > 0 && seen.every((n, i) => i === 0 || n >= seen[i - 1]) && seen[0] < 3 && partialOk && !fin.pending && fin.section?.partial === undefined && fin.section?.lines.length === 3, JSON.stringify(seen));
 }
 {
   // 话题:today 带 thread;newThread 开新话题、缺省接当前、指定旧话题;昨天的日期路由只读;坏话题 400
@@ -186,9 +163,7 @@ interface Day { messages: Msg[]; pending: string | null }
   check('家长端 /parent:自己的一页(不是孩子端页面)、自己的 manifest、内联脚本能解析', page.includes('id="ptl"') && !page.includes('const MODE') && page.includes('/parent/manifest.webmanifest') && parses && ((await get('/parent/manifest.webmanifest')).json as { start_url: string }).start_url === '/parent');
   type PMsg = Msg & { from: string; parentText?: string; remembered?: string[] };
   const pb = (await get('/api/conversations/chinese-tutor/today/board')).json as { messages: PMsg[] };
-  const ch = pb.messages[0].section!.cards.find((c) => c.kind === 'choice');
-  check('板书接口:答案不剥、from、第一节带给家长的尾巴与记忆', pb.messages.length === 1 && pb.messages[0].from === 'kid' && Array.isArray(ch?.props.answer) && pb.messages[0].parentText?.startsWith('## 家长') === true && pb.messages[0].remembered?.length === 1, JSON.stringify(pb.messages[0].parentText));
-  check('孩子接口照旧剥答案', !('answer' in ((await get('/api/kid/conversations/chinese-tutor/today')).json as Day).messages[0].section!.cards.find((c) => c.kind === 'choice')!.props));
+  check('板书接口:from、第一节带给家长的尾巴与记忆', pb.messages.length === 1 && pb.messages[0].from === 'kid' && pb.messages[0].parentText?.startsWith('## 家长') === true && pb.messages[0].remembered?.length === 1, JSON.stringify(pb.messages[0].parentText));
   // 看录像:录像的纯函数内联在孩子的屏幕(/reel,孩子端页面)里;家长页只开 iframe、放录像栏;mock 按固定节奏排时刻
   const reelPage = (await get('/reel')).html ?? '';
   check('家长端:底部有录像栏、开 /reel 停在最后一帧,录像引擎(reelFrameAt / reelClock)在孩子的屏幕里不在家长页;没有板书页的「看录像」钮与旁注', reelPage.includes('function reelFrameAt(') && reelPage.includes('function reelClock(') && !page.includes('function reelFrameAt(') && !page.includes('id="reel-btn"') && !page.includes('syncNotes') && page.includes('id="rl-seek"') && page.includes("end: '1'") && !/^import /m.test(js));

@@ -14,7 +14,7 @@ import type { Lesson } from '../../schema/index.ts';
 import { createServer } from 'node:http';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { cardTitle, type BoardCard, type BoardSection } from '../../board/presentation.ts';
+import type { BoardSection } from '../../board/presentation.ts';
 import { readBoard } from '../../runtime/journal/board-log.ts';
 import { readIndex } from '../../runtime/journal/store.ts';
 import { threads, type ConversationMessage } from '../../schema/index.ts';
@@ -49,7 +49,7 @@ export interface ReelLine {
   at: number;
   ms: number;
   round: number;
-  kind: 'kid' | 'teacher' | 'say' | 'wait' | 'error' | 'hold' | 'type' | 'photo' | 'stage' | 'card' | 'board' | 'view' | 'away' | 'lecture' | 'parent';
+  kind: 'kid' | 'teacher' | 'say' | 'wait' | 'error' | 'hold' | 'type' | 'photo' | 'board' | 'view' | 'away' | 'lecture' | 'parent';
   text: string;
   job?: string;
   /** --shots:这一行那一刻的截图 */
@@ -77,18 +77,6 @@ const span = (ms: number): string => { const s = Math.round(ms / 1000); if (s < 
 const clock = (ms: number): string => { const s = Math.max(0, Math.round(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 const quote = (s: string, n = 80): string => { const t = s.replace(/\s+/g, ' ').trim(); return `「${t.length > n ? `${t.slice(0, n)}…` : t}」`; };
 const startOf = (m: ConversationMessage): number => { const t = Date.parse(m.timing?.startedAt ?? ''); return Number.isNaN(t) ? Date.parse(m.at) : t; };
-
-/** 卡的状态说成一句(孩子做了什么);认不出的只说动过 */
-function stateText(state: unknown): string {
-  if (!state || typeof state !== 'object') return '动了';
-  const s = state as Record<string, unknown>;
-  const bits: string[] = [];
-  if (Array.isArray(s.marks)) bits.push(`画了 ${s.marks.length} 笔`);
-  if (Array.isArray(s.picked)) bits.push(`选了第 ${(s.picked as number[]).map((i) => i + 1).join('、')} 项`);
-  if (Array.isArray(s.answers)) bits.push(`填了 ${(s.answers as unknown[]).filter((x) => typeof x === 'string' && x.trim()).length} 空`);
-  if (s.submitted || s.image) bits.push('交了');
-  return bits.join(',') || '动了';
-}
 
 /**
  * 孩子挪课本是一串一串的(停一下报一次,一分钟几十次):中间没别的事的几次并成一行——挪了几次、从几点到几点、
@@ -134,9 +122,8 @@ export async function reelReport(ctx: AppContext, ref: ReelRef): Promise<ReelRep
       const what = [
         m.text ? quote(m.text, 200) : '',
         m.via ? `(点了首页「${m.via.label}」)` : '',
-        m.action === 'submit' ? '交给老师' : '',
+        m.action === 'submit' ? '给老师看' : '',
         m.photos?.length ? `发了 ${m.photos.length} 张照片` : '',
-        m.cards?.length ? `带上卡上做的 ${m.cards.length} 张` : '',
       ].filter(Boolean).join(' ');
       add(at, 'kid', `孩子:${what || '(空)'}`, m.job);
     } else add(at, 'kid', `应用替孩子叫老师:${quote(m.text, 120)}`, m.job);
@@ -146,8 +133,7 @@ export async function reelReport(ctx: AppContext, ref: ReelRef): Promise<ReelRep
     else if (m.result === 'ok') {
       const sec = secOf.get(m.job);
       const tr = R.tracks.find((x) => x.job === m.job);
-      const cards = sec?.cards.map((c: BoardCard) => `${c.kind}${cardTitle(c) ? `「${cardTitle(c)}」` : ''}`) ?? [];
-      add(tr?.at ?? done, 'teacher', sec ? `老师写好这一轮${took}:讲稿 ${sec.lines.length} 句${cards.length ? `;卡 ${cards.join('、')}` : ';没有卡'}` : `老师这一轮什么都没写${took}`, m.job);
+      add(tr?.at ?? done, 'teacher', sec ? `老师写好这一轮${took}:讲稿 ${sec.lines.length} 句` : `老师这一轮什么都没写${took}`, m.job);
     }
     const tail = Number.isFinite(done) ? done : t0;
     if (m.parentText) add(tail, 'parent', `给家长:${quote(m.parentText, 160)}`, m.job);
@@ -171,25 +157,6 @@ export async function reelReport(ctx: AppContext, ref: ReelRef): Promise<ReelRep
   for (const h of R.holds) add(h.from, 'hold', `按住说话 ${secs((h.upAt ?? h.to) - h.from)} → ${h.result ? HOLD_RESULT[h.result] ?? h.result : '没收尾'}`);
   for (const t of R.types) add(t.from, 'type', `打字${t.vals.length ? quote(t.vals[t.vals.length - 1].v) : ''} → ${t.sent ? '发了' : '没发'}`);
   for (const p of R.photoScreens) add(p.from, 'photo', `拍照屏${p.tools.length ? `(用了 ${[...new Set(p.tools.map((x) => x.tool))].join('、')})` : ''} → ${p.sent ? '发了' : '取消了'}`);
-  const cardOf = (job: string, n: number): BoardCard | undefined => secOf.get(job)?.cards[n];
-  // 同一张卡切回来又开一次(从后台回来、重连)不算
-  let lastStage = '';
-  for (const s of R.stages) {
-    const key = `${s.job}/${s.card}`;
-    if (key === lastStage) continue;
-    lastStage = key;
-    const c = cardOf(s.job, s.card);
-    add(s.from, 'stage', `打开卡:${c ? `${c.kind}「${cardTitle(c)}」` : key}`, s.job);
-  }
-  // 卡的状态:说法变了才写(开卡时回一遍原样的、连着几笔的,只写变了的那次);一笔没动的开头不写
-  const said2 = new Map<string, string>();
-  for (const c of R.cards) {
-    const key = `${c.job}/${c.card}`, text = stateText(c.state);
-    if ((said2.get(key) ?? '画了 0 笔') === text) continue;
-    said2.set(key, text);
-    const card = cardOf(c.job, c.card);
-    add(c.at, 'card', `孩子在卡上:${card ? `「${cardTitle(card)}」` : key} ${text}`, c.job);
-  }
   for (const a of R.aways) if (a.to - a.from >= 1000) add(a.from, 'away', `切到别处 ${span(a.to - a.from)}`);
   for (const l of R.lectures ?? []) add(l.from, 'lecture', `看小课堂「${l.title}」`, l.job);
   // 一节课(课本做底):孩子端记的样子变了的那几处——翻到哪一课、老师让看哪里、白纸条上摆了什么
@@ -248,7 +215,7 @@ export function formatReelReport(r: ReelReport): string {
 }
 
 /** 要截图的行:看得见的变化落定以后那一刻;挨得太近的(2.5 秒内)只截一张 */
-const SHOT_AFTER: Partial<Record<ReelLine['kind'], number>> = { kid: 1200, teacher: 2500, stage: 1500, card: 600, board: 1500, error: 500, photo: 800, lecture: 1500 };
+const SHOT_AFTER: Partial<Record<ReelLine['kind'], number>> = { kid: 1200, teacher: 2500, board: 1500, error: 500, photo: 800, lecture: 1500 };
 const SHOT_GAP_MS = 2500;
 const SHOT_MAX = 80;
 /** 跳过去以后等多久再截(课本要 pdf.js 现画) */

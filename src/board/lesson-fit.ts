@@ -10,7 +10,7 @@
  * 一节里的动作照先后一个一个落(先翻再看,看的是新的那一页),落不了的记一句给家长(why),动作本身留在讲稿上、不带 do。
  */
 import { BOOK_MAX_PAGES, BOOK_TOC, bookCut, bookFind, bookSheets, bookTarget, findLesson, lessonBlocks, photoBookPage, type BookBlock, type BookSheet, type PhotoText } from '../chalk/index.ts';
-import { LECTURE_PAGE, PHOTO_PAGE, WHITE_PAGE, type BoardCard, type BoardSection, type BookIndex, type BookPage, type Box, type Lesson, type LessonAct, type LineAct, type PageSource } from '../schema/index.ts';
+import { LECTURE_PAGE, PHOTO_PAGE, WHITE_PAGE, type BoardSection, type BookIndex, type BookPage, type Box, type Lesson, type LessonAct, type LineAct, type PageSource } from '../schema/index.ts';
 import { actParts } from './acts.ts';
 import { clockLabel, lectureRange, parseClock, type LectureClock } from './lecture.ts';
 import { lessonPage, lessonStep } from './lesson.ts';
@@ -174,17 +174,6 @@ export function fitActs(l: Lesson, acts: readonly LineAct[], src: LessonSource):
     return { ...bare, do: r.do };
   });
   return { acts: out, lesson: s, why };
-}
-
-/**
- * 铺着页的一节里卡都不上板(老师用讲稿里的动作):卡都撤掉(dropped,给家长记一行),
- * 讲稿里引用卡的锚、标注、cue 跟着拿掉。
- */
-export function pageSection(section: BoardSection): { section: BoardSection; dropped: BoardCard[] } {
-  if (!section.cards.length) return { section, dropped: [] };
-  const lines = section.lines.map((l) => ({ ...l, anchor: null, marks: [], cues: [] }));
-  const { layout: _layout, ...rest } = section;
-  return { section: { ...rest, cards: [], lines }, dropped: [...section.cards] };
 }
 
 /** 一节里落好的动作,照孩子看到的先后:第一句前面的,再一句一句(定稿时 runner 照它把这一节落进一节课的状态) */

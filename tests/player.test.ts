@@ -1,6 +1,6 @@
 /**
  * 板上的节(board/presentation.ts 的 step):表一格一条 + 随机事件序列跑不变式 + 页面不绕过 step。
- * 孩子端不念讲稿了:讲稿由嘴照念(runtime/delivery/player.ts,tests/live-player.test.ts),这里只剩铺节、画标注、写完、撤掉。
+ * 孩子端不念讲稿了:讲稿由嘴照念(runtime/delivery/player.ts,tests/live-player.test.ts),这里只剩铺节、写完、撤掉。课里的卡 2026-11-17 删了(画标注、就绪一拍一起删了)。
  * 下面的测试列出状态与事件的预期组合;改规则先改这里,再改 step。
  */
 import { readFileSync } from 'node:fs';
@@ -9,7 +9,6 @@ import {
   isQuestion,
   playerAtEnd,
   step,
-  type BoardCard,
   type BoardLine,
   type BoardSection,
   type PlayerEffect,
@@ -19,17 +18,16 @@ import {
 } from '../src/board/presentation.ts';
 import { check, done } from './_check.ts';
 
-const L = (text: string, anchor: number | null): BoardLine => ({ text, audio: null, marks: [], ask: isQuestion(text), anchor, cues: [] });
-const text = (t: string): BoardCard => ({ kind: 'text', props: { text: t } });
+const L = (text: string): BoardLine => ({ text, ask: isQuestion(text) });
 /** 讲完的一节:末句问句 */
-const done0: BoardSection = { cards: [text('a'), text('b')], lines: [L('一', 0), L('二', 0), L('三?', 1)] };
+const done0: BoardSection = { lines: [L('一'), L('二'), L('三?')] };
 /** 讲完的一节:末句不是问句 */
-const said: BoardSection = { cards: [text('c')], lines: [L('四', 0), L('五', 0)] };
+const said: BoardSection = { lines: [L('四'), L('五')] };
 /** 老师还在写 */
-const live: BoardSection = { cards: [text('d'), text('e')], lines: [L('六', 0), L('七', 1)], partial: true, ready: 1 };
+const live: BoardSection = { lines: [L('六'), L('七')], partial: true };
 
 const M = (state: PlayerState): PlayerModel => ({ state });
-const kinds = (fx: PlayerEffect[]) => fx.map((f) => (f.kind === 'paint' ? `paint${f.section}` : f.kind)).join(',');
+const kinds = (fx: PlayerEffect[]) => fx.map((f) => f.kind).join(',');
 const run = (model: PlayerModel, sections: BoardSection[], ev: PlayerEvent) => step(model, ev, { sections });
 
 // ---- 表:正在…… × 来了……(一行一格)----
@@ -37,16 +35,14 @@ interface Row { name: string; model: PlayerModel; sections: BoardSection[]; ev: 
 const THINK1: PlayerState = { section: 1, line: -1, status: 'thinking' };
 const rows: Row[] = [
   { name: '任何 + 换老师 → 回到开头', model: M(THINK1), sections: [done0, live], ev: { type: 'reset' }, want: (m, fx) => m.state.status === 'idle' && m.state.section === -1 && fx === '' },
-  { name: '任何 + 停声音 → 只停卡的声音,位置不动', model: M(THINK1), sections: [done0, live], ev: { type: 'halt' }, want: (m, fx) => m.state === THINK1 && fx === 'stop' },
-  { name: '老师开始写(流式第一拍)→ 画齐、老师在写', model: M({ section: 0, line: 2, status: 'waiting' }), sections: [done0, live], ev: { type: 'liveStart', section: 1 }, want: (m, fx) => m.state.section === 1 && m.state.status === 'thinking' && fx === 'paint1,render' },
-  { name: '老师在写这节 + 又就绪一拍 → 画齐、重画字幕', model: M(THINK1), sections: [done0, live], ev: { type: 'liveBeat', section: 1 }, want: (m, fx) => m.state === THINK1 && fx === 'paint1,render' },
-  { name: '不在写这节 + 就绪一拍 → 不管', model: M({ section: 0, line: 2, status: 'waiting' }), sections: [done0, live], ev: { type: 'liveBeat', section: 1 }, want: (_m, fx) => fx === '' },
-  { name: '老师在写这节 + 写完(末句问句)→ 画齐、等孩子答', model: M(THINK1), sections: [done0, { ...done0 }], ev: { type: 'liveFinal', section: 1 }, want: (m, fx) => m.state.status === 'waiting' && m.state.section === 1 && fx === 'paint1,render' },
-  { name: '老师在写这节 + 写完(末句不是问句)→ 写完', model: M(THINK1), sections: [done0, said], ev: { type: 'liveFinal', section: 1 }, want: (m, fx) => m.state.status === 'done' && fx === 'paint1,render' },
-  { name: '这节不在写了 + 写完 → 画齐', model: M({ section: 1, line: 1, status: 'done' }), sections: [done0, said], ev: { type: 'liveFinal', section: 1 }, want: (m, fx) => m.state.status === 'done' && fx === 'paint1' },
-  { name: '别的节 + 写完 → 只画齐', model: M({ section: 0, line: 2, status: 'waiting' }), sections: [done0, said], ev: { type: 'liveFinal', section: 1 }, want: (m, fx) => m.state.section === 0 && fx === 'paint1' },
+  { name: '任何 + 停声音 → 只停声音,位置不动', model: M(THINK1), sections: [done0, live], ev: { type: 'halt' }, want: (m, fx) => m.state === THINK1 && fx === 'stop' },
+  { name: '老师开始写(流式第一句)→ 老师在写', model: M({ section: 0, line: 2, status: 'waiting' }), sections: [done0, live], ev: { type: 'liveStart', section: 1 }, want: (m, fx) => m.state.section === 1 && m.state.status === 'thinking' && fx === 'render' },
+  { name: '老师在写这节 + 写完(末句问句)→ 等孩子答', model: M(THINK1), sections: [done0, { ...done0 }], ev: { type: 'liveFinal', section: 1 }, want: (m, fx) => m.state.status === 'waiting' && m.state.section === 1 && fx === 'render' },
+  { name: '老师在写这节 + 写完(末句不是问句)→ 写完', model: M(THINK1), sections: [done0, said], ev: { type: 'liveFinal', section: 1 }, want: (m, fx) => m.state.status === 'done' && fx === 'render' },
+  { name: '这节不在写了 + 写完 → 不管', model: M({ section: 1, line: 1, status: 'done' }), sections: [done0, said], ev: { type: 'liveFinal', section: 1 }, want: (m, fx) => m.state.status === 'done' && fx === '' },
+  { name: '别的节 + 写完 → 不管', model: M({ section: 0, line: 2, status: 'waiting' }), sections: [done0, said], ev: { type: 'liveFinal', section: 1 }, want: (m, fx) => m.state.section === 0 && fx === '' },
   { name: '老师出错撤掉 → 停声音、停在末尾', model: M(THINK1), sections: [done0], ev: { type: 'liveDropped' }, want: (m, fx) => m.state.status === 'waiting' && m.state.section === 0 && fx === 'stop,render' },
-  { name: '整节到了(没流过)→ 画齐、停在末尾、滚到最后一节', model: M({ section: -1, line: -1, status: 'idle' }), sections: [done0, said], ev: { type: 'fresh', sections: [0, 1] }, want: (m, fx) => m.state.status === 'done' && m.state.section === 1 && fx === 'paint0,paint1,render,scrollLast' },
+  { name: '整节到了(没流过)→ 停在末尾', model: M({ section: -1, line: -1, status: 'idle' }), sections: [done0, said], ev: { type: 'fresh', sections: [0, 1] }, want: (m, fx) => m.state.status === 'done' && m.state.section === 1 && fx === 'render' },
   { name: '整节到了但是空的 → 不管', model: M(THINK1), sections: [done0], ev: { type: 'fresh', sections: [] }, want: (m, fx) => m.state === THINK1 && fx === '' },
 ];
 for (const r of rows) {
@@ -65,8 +61,7 @@ function fuzz(seed: number): string | null {
   for (let k = 0; k < 80; k++) {
     const y = r();
     let ev: PlayerEvent;
-    if (y < 0.2) { sections = [...sections, { ...live }]; ev = { type: 'liveStart', section: sections.length - 1 }; }
-    else if (y < 0.35 && sections.length) ev = { type: 'liveBeat', section: Math.floor(r() * sections.length) };
+    if (y < 0.3) { sections = [...sections, { ...live }]; ev = { type: 'liveStart', section: sections.length - 1 }; }
     else if (y < 0.55 && sections.length && sections[sections.length - 1].partial) { const i = sections.length - 1; sections = [...sections.slice(0, i), r() < 0.5 ? done0 : said]; ev = { type: 'liveFinal', section: i }; }
     else if (y < 0.65 && sections.length && sections[sections.length - 1].partial) { sections = sections.slice(0, -1); ev = { type: 'liveDropped' }; }
     else if (y < 0.8) { sections = [...sections, r() < 0.5 ? done0 : said]; ev = { type: 'fresh', sections: [sections.length - 1] }; }

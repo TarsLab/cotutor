@@ -16,7 +16,6 @@ export function describeEvent(e: RunEvent): string {
   switch (e.lane) {
     case 'main':
       if (e.kind === 'start') return `起 ${e.cli}(${e.runtime},${e.resume ? 'resume' : '新会话'}${e.warmMs !== undefined ? `,预热 ${(e.warmMs / 1000).toFixed(1)}s 前起好` : ''})`;
-      if (e.kind === 'card') return `卡 ${e.card} ${e.label}`;
       if (e.kind === 'line') return `句 ${e.line}「${e.text}」`;
       if (e.kind === 'tool') return `${e.sub ? '子代理 ' : ''}工具 ${e.name}`;
       if (e.kind === 'stall') return `断流:${secs(e.idleMs)}s 没动静,杀掉${e.retry ? `,resume 接着写(第 ${e.retry} 次${e.kept ? `,已写 ${e.kept} 字` : ''})` : ',接着跑的次数用完了'}`;
@@ -26,16 +25,15 @@ export function describeEvent(e: RunEvent): string {
       if (e.kind === 'done') return `${e.label}✓ ${secs(e.ms)}s`;
       return `${e.label}✗ ${secs(e.ms)}s ${e.error}`;
     case 'ready':
-      if (e.kind === 'speak') return '第一句配好了 ← 首句就绪(能开口)';
-      if (e.kind === 'beat') return `拍 ${e.beat} ✓${e.card === null ? '(没有卡)' : `(卡 ${e.card})`}${e.first ? ' ← 第一拍' : ''}`;
-      return `全部就绪(${e.cards} 张卡 ${e.lines} 句)`;
+      if (e.kind === 'speak') return '第一句出来了 ← 首句就绪(能开口)';
+      return `全部就绪(${e.lines} 句)`;
     case 'index':
       return `写入${e.warnings ? ` · 提醒 ${e.warnings}` : ''}`;
     case 'ledger':
       return `日记 ${e.file} 记了话题 ${e.thread}`;
     case 'mouth':
       if (e.kind === 'hold') return '孩子按下';
-      if (e.kind === 'release') return e.how === 'voice' ? '松手' : e.how === 'vad' ? '说完(一直听)' : `发了(${{ text: '打字', photo: '照片', card: '交卡', ask: '卡上的「?」' }[e.how]})`;
+      if (e.kind === 'release') return e.how === 'voice' ? '松手' : e.how === 'vad' ? '说完(一直听)' : `发了(${{ text: '打字', photo: '照片', card: '给老师看', ask: '卡上的「?」' }[e.how]})`;
       if (e.kind === 'catch') return `嘴接住「${e.text}」(开始放)`;
       if (e.kind === 'read') return `嘴念第 ${e.line + 1} 句(开始放)`;
       if (e.kind === 'fill') return `脑还在想,嘴垫了一句「${e.text}」(开始放)`;
@@ -54,6 +52,9 @@ export function laneFilter(spec: string | undefined): (e: RunEvent) => boolean {
   return set.size ? (e) => set.has(e.lane) : () => true;
 }
 
+/** 课里有卡那时候的事件(卡闭合、一拍就绪,2026-11-17 删了):老的 events.jsonl 里读到就跳过 */
+const RETIRED_KINDS = new Set(['main:card', 'ready:beat']);
+
 /** events.jsonl → 事件(坏行跳过,不抛);按 t 排(嘴这一道是事后补的,t 比文件里前面的还早) */
 export function parseEvents(text: string): RunEvent[] {
   const out: RunEvent[] = [];
@@ -61,40 +62,12 @@ export function parseEvents(text: string): RunEvent[] {
     if (!line.trim()) continue;
     try {
       const v = JSON.parse(line) as RunEvent;
-      if (typeof v?.t === 'number' && (LANES as readonly string[]).includes(v.lane) && typeof v.kind === 'string') out.push(v);
+      if (typeof v?.t === 'number' && (LANES as readonly string[]).includes(v.lane) && typeof v.kind === 'string' && !RETIRED_KINDS.has(`${v.lane}:${v.kind}`)) out.push(v);
     } catch {
       /* 坏行跳过 */
     }
   }
   return out.sort((a, b) => a.t - b.t);
-}
-
-/** 一拍的埋点(从事件推,不另记账):关 = 下一张卡出现(末拍 = 老师退出)、就绪 */
-export interface BeatTiming {
-  card: number | null;
-  closedMs?: number;
-  readyMs?: number;
-}
-export function beatTimings(events: readonly RunEvent[], beats: readonly { card: number | null }[]): BeatTiming[] {
-  const cardAt = new Map<number, number>();
-  const readyAt = new Map<number, number>();
-  let exit: number | undefined;
-  let all: number | undefined;
-  for (const e of events) {
-    if (e.lane === 'main' && e.kind === 'card') cardAt.set(e.card, e.t);
-    else if (e.lane === 'main' && e.kind === 'exit') exit = e.t;
-    else if (e.lane === 'ready' && e.kind === 'beat') readyAt.set(e.beat, e.t);
-    else if (e.lane === 'ready' && e.kind === 'all') all = e.t;
-  }
-  return beats.map((b, k) => {
-    const next = beats[k + 1];
-    const closedMs = next && next.card !== null ? cardAt.get(next.card) : exit;
-    const out: BeatTiming = { card: b.card };
-    if (closedMs !== undefined) out.closedMs = closedMs;
-    const ready = readyAt.get(k) ?? all;
-    if (ready !== undefined) out.readyMs = ready;
-    return out;
-  });
 }
 
 /** 时间线上的一段(甘特):起止、道、一句话、状态;瞬时的事件 to = from */

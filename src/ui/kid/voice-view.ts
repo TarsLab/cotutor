@@ -23,7 +23,7 @@ export type VoiceHint = '' | 'busy' | 'connecting' | 'unclear' | 'tap';
 
 export interface VoiceIn {
   /** liveStep 的状态(src/runtime/delivery/player.ts 的 LiveStatus) */
-  status: 'quiet' | 'holding' | 'mouth' | 'card' | 'lecture' | 'replay';
+  status: 'quiet' | 'holding' | 'mouth' | 'lecture' | 'replay';
   /** 一直听;hearing 服务端说孩子在说;ducked 嘴的声音压低着;muted 关了麦;turn 请他说的那句念完了,等他说([[请 说 …]]) */
   open: boolean;
   hearing: boolean;
@@ -107,7 +107,7 @@ export function voiceView(i: VoiceIn): VoiceView {
   if (i.hint === 'tap') return voiceLook({ key: 'tap', big: '按住不放,说完再松手', shake: true });
   if (i.status === 'mouth') return voiceLook({ key: 'tutor', face: 'talk', flow: 'out', small: '按住说话' });
   // 卡的声音、重放、小课堂:不是老师在线说话,按钮照安静的样子(按住照样打断它们)
-  if (i.status === 'card' || i.status === 'replay' || i.status === 'lecture') return voiceLook({ key: i.status, icon: 'mic', big: '按住说话' });
+  if (i.status === 'replay' || i.status === 'lecture') return voiceLook({ key: i.status, icon: 'mic', big: '按住说话' });
   // 请他说([[请 说 …]])的那句念完了:按住说也提示轮到他(以前只有口语课一直听)
   if (i.turn && !i.pending) return voiceLook({ key: 'turn-hold', icon: 'mic', big: '轮到你说', small: '按住说话', breathe: true });
   if (i.pending) return i.photo

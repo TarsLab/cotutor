@@ -374,7 +374,7 @@ ${pageDomJs(4000)}
     for (const t of H.tutors) for (const th of t.threads) {
       const at = atMs(th.at), end = Date.parse(th.endAt || '');
       const L = th.lecture;
-      const what = [L ? (L.finished ? '看完了' : '看了 ' + lcLen(L.watchedMs)) + (L.marks ? ' · 画了 ' + L.marks + ' 处' : '') : '', th.sections + ' 节 · ' + th.cards + ' 张卡'].filter(Boolean).join(' · ');
+      const what = [L ? (L.finished ? '看完了' : '看了 ' + lcLen(L.watchedMs)) + (L.marks ? ' · 画了 ' + L.marks + ' 处' : '') : '', th.sections + ' 轮'].filter(Boolean).join(' · ');
       const pf = [h('span', {}, what), th.misses ? h('span', { class: 'miss' }, '⚠ 按住说话连着 ' + th.misses + ' 次没发出去') : null,
         th.stoppedAt === 'writing' ? h('span', { class: 'chip live' }, h('i'), '老师在写') : th.stoppedAt === 'ask' ? h('span', { class: 'chip ask' }, '停下等孩子') : null,
         th.booked ? h('span', { class: 'chip' }, '已记账') : th.oldRuntime ? h('span', { class: 'chip', title: '这个话题是在「' + th.oldRuntime + '」下聊的,老师现在换了,接不上那时的对话' }, '换过运行时 · 不记账') : t.booking && th.sections > 0 ? h('span', { class: 'chip' }, '记账中') : null,

@@ -15,9 +15,7 @@ export function renderContextPack(pack: ContextPack): string {
   const p = ContextPackSchema.parse(pack);
   const out: string[] = ['cotutor:', `  at: ${yamlScalar(p.at)}`];
   if (p.slot) out.push(`  slot: ${yamlScalar(p.slot)}`);
-  if (p.focus?.card) out.push('  focus:', `    card: ${yamlScalar(p.focus.card)}`);
   if (p.rules) out.push(`  rules: ${yamlScalar(p.rules)}`);
-  if (p.boardGuide) out.push(`  boardGuide: ${yamlScalar(p.boardGuide)}`);
   if (p.activityGuide) out.push(`  activityGuide: ${yamlScalar(p.activityGuide)}`);
   if (p.semester) out.push(`  semester: ${yamlScalar(p.semester)}`);
   if (p.profile) out.push(`  profile: ${yamlScalar(p.profile)}`);
@@ -42,12 +40,11 @@ export function renderContextPack(pack: ContextPack): string {
     out.push('  lookup:');
     for (const l of p.lookup) out.push(`    - ${yamlScalar(l)}`);
   }
-  // vault 是 workspace 级的,放在每条消息才变的 board / cards / photos 前面
+  // vault 是 workspace 级的,放在每条消息才变的 board / photos 前面
   if (p.vault) {
     out.push('  vault:', `    root: ${yamlScalar(p.vault.root)}`);
     for (const r of VAULT_PACK_ROLES) if (p.vault[r]) out.push(`    ${r}: ${yamlScalar(p.vault[r] as string)}`);
   }
-  if (p.board === 'off') out.push('  board: off');
   if (p.home) {
     out.push('  home:', `    button: ${yamlScalar(p.home.button)}`);
     if (p.home.brief) out.push(`    brief: ${yamlScalar(p.home.brief)}`);
@@ -70,8 +67,8 @@ export function renderContextPack(pack: ContextPack): string {
       }
     }
   }
-  // 一节课:页此刻的样子(键是给老师看的中文;和 board: off 不会同时有)
-  if (p.slate && p.board !== 'off') {
+  // 一节课:页此刻的样子(键是给老师看的中文)
+  if (p.slate) {
     const b = p.slate;
     out.push('  board:', `    底: ${yamlScalar(b.base)}`);
     if (b.pages) out.push(`    页集: ${yamlScalar(b.pages)}`);
@@ -83,10 +80,6 @@ export function renderContextPack(pack: ContextPack): string {
     }
     if (b.recent) out.push(`    最近点的: ${yamlScalar(b.recent)}`);
     if (b.view) out.push(`    孩子在看: ${yamlScalar(b.view)}`);
-  }
-  if (p.cards?.length) {
-    out.push('  cards:');
-    for (const c of p.cards) out.push(`    - ${yamlScalar(c)}`);
   }
   if (p.photos?.length) {
     out.push('  photos:');
@@ -115,8 +108,8 @@ export function renderContextPack(pack: ContextPack): string {
   }
   // 守则是出厂的,不是家长的笔记,换个标签;路径相对 workspace 根(家长笔记的相对 vault 根)
   for (const n of p.notes ?? []) {
-    const shipped = n.role === 'rules' || n.role === 'boardGuide' || n.role === 'activityGuide';
-    const tag = n.role === 'rules' ? 'cotutor-rules' : n.role === 'boardGuide' ? 'cotutor-board' : n.role === 'activityGuide' ? 'cotutor-activity' : 'vault-note';
+    const shipped = n.role === 'rules' || n.role === 'activityGuide';
+    const tag = n.role === 'rules' ? 'cotutor-rules' : n.role === 'activityGuide' ? 'cotutor-activity' : 'vault-note';
     out.push(shipped ? `<${tag} path=${JSON.stringify(n.path)}>` : `<${tag} role="${n.role}" path=${JSON.stringify(n.path)}>`, n.text.replace(/\s+$/, ''), `</${tag}>`);
   }
   // 页上印的字:第一次看到那一页时给一次

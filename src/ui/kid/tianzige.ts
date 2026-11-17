@@ -6,7 +6,7 @@
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
-import { HAN } from '../../board/cards/index.ts';
+import { HAN } from '../../shared/script.ts';
 
 export interface TianzigeData {
   strokes: string[];

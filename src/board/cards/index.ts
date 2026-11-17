@@ -1,71 +1,24 @@
 /**
- * 卡的注册表:加一种卡 = 加一个文件 + 这里一行;解析器、语法表、孩子端剥秘密都从这里走。
- * 页面那一半在 kid-page.ts(渲染)与 board/presentation.ts(标注落点),按 kind 名对上。协议文档与结构样式在包根 cards/<kind>/(src/board/cards/docs.ts)。
+ * 卡的注册表:卡只剩首页的两种——老师牌(tutor)、听写牌(dictation)(2026-11-17《多模态教学harness-开发计划》阶段 5:课里没有卡了,
+ * 老师对页做什么是讲稿里的动作,src/board/acts.ts)。首页文件的解析(src/board/parse.ts 的 parseHomeBody)、语法表、孩子端剥秘密都从这里走。
+ * 页面那一半在 kid-page.ts(首页画牌);协议文档与结构样式在包根 cards/<kind>/(src/board/cards/docs.ts)。
  */
 import { z } from 'zod';
-import type { BoardCard, BoardSection } from '../presentation.ts';
-import { choice } from './choice.ts';
-import { code } from './code.ts';
-import { tianzige } from './tianzige.ts';
-import { word } from './word.ts';
-import { image } from './image.ts';
-import type { CardKind, CardPlace } from './kind.ts';
-import { read } from './read.ts';
-import { photo } from './photo.ts';
-import { text } from './text.ts';
+import type { BoardCard } from '../presentation.ts';
+import type { CardKind } from './kind.ts';
 import { tutor } from './tutor.ts';
 import { dictation } from './dictation.ts';
 
-export { BUNDLE_ID_RE, type CardKind, type CardPlace } from './kind.ts';
-export { text, TEXT_STYLES, type TextProps, type TextStyle } from './text.ts';
-export { read, type ReadProps } from './read.ts';
-export { choice, type ChoiceProps } from './choice.ts';
-export { code, type CodeProps } from './code.ts';
-export { image, IMAGE_EXT, type ImageProps } from './image.ts';
-export { tianzige, HAN, TIANZIGE_MAX, type TianzigeProps } from './tianzige.ts';
-export { word, wordChunks, WORD_MAX, WORD_MAX_WORDS, WORD_RE, type WordProps } from './word.ts';
+export { BUNDLE_ID_RE, type CardKind } from './kind.ts';
 export { tutor, BUTTON_LABEL_MAX, TUTOR_BUTTONS_MAX, TutorButtonSchema, type TutorButton, type TutorProps } from './tutor.ts';
 export { dictation, dictationEmoji, dictationWordLang, DictationPropsSchema, DICTATION_EN_MAX, DICTATION_SAY_MAX, DICTATION_WORD_MAX, DICTATION_WORDS_MAX, EN_WORD_RE, type DictationLang, type DictationProps, type DictationWord } from './dictation.ts';
 
-/** 全部种类:先板书的九种(注册表顺序即技能里的顺序),再首页专属的 */
+/** 全部种类(首页的,注册表顺序即首页语法表里的顺序) */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const CARD_KINDS: readonly CardKind<any>[] = [text, read, choice, image, tianzige, word, photo, code, tutor, dictation];
+export const CARD_KINDS: readonly CardKind<any>[] = [tutor, dictation];
 
 export function cardKind(name: string): CardKind | undefined {
   return CARD_KINDS.find((k) => k.name === name) as CardKind | undefined;
-}
-
-/** 这种卡能不能用在这里(没写 where 的只板书) */
-export function usableIn(kind: Pick<CardKind, 'where'>, place: CardPlace): boolean {
-  return (kind.where ?? ['board']).includes(place);
-}
-
-/** 能用在某处的种类(注册表顺序) */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function kindsFor(place: CardPlace): readonly CardKind<any>[] {
-  return CARD_KINDS.filter((k) => usableIn(k, place));
-}
-
-/**
- * 这位老师的板书写法里讲哪几种卡(cotutor.json tutors.<老师>.cards,《卡片协议.md》「谁拿到哪些卡」):
- * 没写 = null(全部,递出厂的 cotutor-board SKILL.md);写了 = 板书能用的、按注册表顺序,text 总在(写坏的卡退成它)。
- */
-export function tutorCardKinds(cards: readonly string[] | undefined): string[] | null {
-  if (!cards) return null;
-  return kindsFor('board').map((k) => k.name).filter((k) => k === 'text' || cards.includes(k));
-}
-
-/** 正文是「字」的卡:老师把讲稿的 [词] 标注语法写进这些卡时,把括号剥掉(2026-09-11 真跑:孩子看到了「[直角边]」);choice 的 - [ ] / - [x] 不动 */
-const TEXTUAL = new Set(['text', 'read', 'choice', 'image', 'word']);
-const MARK_IN_CARD = /\[([^\[\]\n]+)\]/g;
-function unmark(body: string): { body: string; had: boolean } {
-  let had = false;
-  const out = body.replace(MARK_IN_CARD, (m, inner: string) => {
-    if (/^[ xX]$/.test(inner)) return m;
-    had = true;
-    return inner;
-  });
-  return { body: out, had };
 }
 
 export interface ParsedCard {
@@ -77,76 +30,35 @@ export interface ParsedCard {
 }
 
 /**
- * 围栏 → 卡。标签第一个词是 kind,其余是修饰;不认识的标签:板书里当代码卡原样显示,首页里退文字卡;
- * 认识但正文解析不出、或这种卡不能用在这里(place)→ 文字卡显示原文 + warning。永不抛错。
+ * 首页的围栏 → 卡。标签第一个词是 kind;不认识的标签、正文解析不出 → 文字卡显示原文 + warning(首页检查据此报「要改」)。永不抛错。
  */
-export function parseCard(tag: string, body: string, place: CardPlace = 'board'): ParsedCard {
+export function parseCard(tag: string, body: string): ParsedCard {
   const [name, ...mods] = tag.trim().split(/\s+/).filter(Boolean);
   const asText = (why: string): ParsedCard => ({ card: { kind: 'text', props: { text: body.trim() || name || '…' } }, warning: why, fallback: true });
-  if (!name) return place === 'board' ? { card: { kind: 'code', props: code.parse(body, []) } } : asText('围栏没写种类');
+  if (!name) return asText('围栏没写种类');
   const kind = cardKind(name.toLowerCase());
-  if (!kind) return place === 'board' ? { card: { kind: 'code', props: code.parse(body, [name]) } } : asText(`不认识的卡:${name}`);
-  if (!usableIn(kind, place)) return asText(place === 'board' ? `${name} 是首页的卡,板书里不能用` : `首页只放老师卡(tutor)和听写卡(dictation),${name} 卡放不了`);
-  const um = TEXTUAL.has(kind.name) ? unmark(body) : { body, had: false };
+  if (!kind) return asText(`首页只放老师卡(tutor)和听写卡(dictation),${name} 卡放不了`);
   try {
-    const props = kind.props.parse(kind.parse(um.body, mods)) as Record<string, unknown>;
-    const notes = [um.had ? `卡里的方括号去掉了:${name} — [词] 标注只写在讲稿句里,不写在卡里` : null, kind.note?.(um.body, props) ?? null].filter((x): x is string => Boolean(x));
-    return { card: { kind: kind.name, props }, ...(notes.length ? { warning: notes.join(';') } : {}) };
+    const props = kind.props.parse(kind.parse(body, mods)) as Record<string, unknown>;
+    const note = kind.note?.(body, props) ?? null;
+    return { card: { kind: kind.name, props }, ...(note ? { warning: note } : {}) };
   } catch (err) {
     const why = err instanceof z.ZodError ? err.issues.map((i) => `${i.path.join('.')}:${i.message}`).join(';') : err instanceof Error ? err.message : String(err);
     return asText(`卡片没解析成:${name} — ${why}`);
   }
 }
 
-/** 孩子端的一节:每张卡过本种卡的 strip(答案不下发);不认识的 kind 原样;孩子自己的状态与已生成的资产照给 */
-export function stripSecrets(section: BoardSection): BoardSection {
-  return {
-    ...section,
-    cards: section.cards.map((c) => {
-      // 认不出的种类(删掉的卡:场景 10-07、填空 10-22):老对话里存下的退成一段字,只留它的那句,别的字段(答案、题面)不下发
-      const k = cardKind(c.kind);
-      if (!k) return { ...c, kind: 'text', props: { text: typeof c.props.text === 'string' ? c.props.text : cardLabel(c) } };
-      return k.strip ? { ...c, props: k.strip(c.props) } : c;
-    }),
-  };
+/** 首页的一张卡下发孩子端:过本种卡的 strip(听写卡的字不下发);不认识的 kind 原样 */
+export function stripCard(c: BoardCard): BoardCard {
+  const k = cardKind(c.kind);
+  return k?.strip ? { ...c, props: k.strip(c.props) } : c;
 }
 
-/** 一张卡的标题(舞台顶栏、给老师的描述里用):文字卡的 title / text,选择题的问题,其余第一段有字的,田字格的字,单词卡的词,听写卡的词表,教具卡没写题目就是教具的名字 */
+/** 一张卡的标题(首页检查、首页的一句话里用):听写卡的词表、其余第一段有字的 */
 export function cardLabel(card: BoardCard): string {
   const p = card.props;
   const s = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
   const first = s(p.title) || s(p.question) || s(p.show) || s(p.text) || s(p.caption) || s(p.prompt) || (Array.isArray(p.segments) ? s(p.segments[0]) : '') || s(p.chars) || s(p.word) || (Array.isArray(p.words) ? p.words.map((w) => s((w as { chars?: unknown })?.chars)).filter(Boolean).join('、') : '');
   const cps = Array.from(first.replace(/\s+/g, ' '));
   return cps.length > 40 ? `${cps.slice(0, 40).join('')}…` : cps.join('');
-}
-
-/** 这张卡要后台预生成的配音(文件名相对它的资产目录);没有的种类 → [] */
-export function cardAssets(card: BoardCard): { file: string; text: string }[] {
-  const k = cardKind(card.kind);
-  if (!k?.assets) return [];
-  const r = k.props.safeParse(card.props);
-  return r.success ? k.assets(r.data) : [];
-}
-
-export type CardStateResult = { ok: true; state: unknown } | { ok: false; why: string };
-
-/** 孩子端 PUT 上来的状态过本种卡的契约;这种卡没有状态、或不认识的 kind → 不收 */
-export function parseCardState(card: BoardCard, raw: unknown): CardStateResult {
-  const k = cardKind(card.kind);
-  if (!k?.state) return { ok: false, why: `${card.kind} 卡没有状态` };
-  const r = k.state.safeParse(raw);
-  if (!r.success) return { ok: false, why: r.error.issues.map((i) => `${i.path.join('.')}:${i.message}`).join(';') };
-  return { ok: true, state: r.data };
-}
-
-/**
- * 给老师的一句:「choice「问题」 选了「B …」(答案:「…」)」。props 用索引里的(带答案),状态是孩子的;
- * 没有 describe 的种类把状态原样 JSON。id 由调用方拼在前面(<job>/<n>)。
- */
-export function describeCard(card: BoardCard, state: unknown): string {
-  const k = cardKind(card.kind);
-  const head = `${card.kind}「${cardLabel(card)}」`;
-  if (!k?.describe || !k.state) return `${head} ${JSON.stringify(state)}`;
-  const r = k.state.safeParse(state);
-  return `${head} ${r.success ? k.describe(card.props, r.data) : JSON.stringify(state)}`;
 }

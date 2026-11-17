@@ -1,5 +1,6 @@
 /**
  * 一轮运行的事件(<日期>.<job>.events.jsonl 的一行;控制台与时间线的唯一来源)。格式化与读在 runtime/journal/events.ts。
+ * 2026-11-17 以前的记录里还有卡的事件(main card、ready beat):读进来不认就跳过。
  */
 import type { Tokens } from '../shared/tokens.ts';
 
@@ -9,8 +10,7 @@ export const LANES: readonly Lane[] = ['main', 'tts', 'ready', 'index', 'ledger'
 export type RunEvent = { t: number } & (
   /** warmMs:用的是提前起好的进程(预热),它等了多久 */
   | { lane: 'main'; kind: 'start'; cli: string; runtime: string; resume: boolean; warmMs?: number }
-  | { lane: 'main'; kind: 'card'; card: number; label: string }
-  /** play:这句的 [[play]] 锚着小课堂卡(念完放那一段;实时时服务端等孩子端放完再交后面的句子);echo:请孩子说的 [[请 说 词]](实时时服务端等孩子说) */
+  /** play:这句的 [[看 0:19–0:30]] 落在小课堂上(念完放那一段;实时时服务端等孩子端放完再交后面的句子);echo:请孩子说的 [[请 说 词]](实时时服务端等孩子说) */
   | { lane: 'main'; kind: 'line'; line: number; text: string; play?: true; echo?: { word: string; say?: true } }
   | { lane: 'main'; kind: 'tool'; name: string; sub: boolean }
   | { lane: 'main'; kind: 'exit'; ok: boolean; reason?: string; tokens?: Tokens; turns?: number }
@@ -19,10 +19,9 @@ export type RunEvent = { t: number } & (
   | { lane: 'tts'; kind: 'queued'; label: string }
   | { lane: 'tts'; kind: 'done'; label: string; ms: number; file: string }
   | { lane: 'tts'; kind: 'failed'; label: string; ms: number; error: string }
-  | { lane: 'ready'; kind: 'beat'; beat: number; card: number | null; first: boolean }
-  /** 第一句配好了,能开口了(首句就绪;2026-10-08 起比第一拍早) */
+  /** 第一句出来了,能开口了(首句就绪) */
   | { lane: 'ready'; kind: 'speak' }
-  | { lane: 'ready'; kind: 'all'; cards: number; lines: number }
+  | { lane: 'ready'; kind: 'all'; lines: number }
   | { lane: 'index'; kind: 'written'; warnings: number }
   /** 记账:话题的一段写进了 vault 的日记(file 是日记文件名) */
   | { lane: 'ledger'; kind: 'diary'; thread: string; file: string }

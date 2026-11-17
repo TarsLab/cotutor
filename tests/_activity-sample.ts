@@ -1,13 +1,12 @@
 /**
  * 试解析与流程用的一份小 activity(参数两种、裁段、工具人),不是出厂件:测试里当「家长自己加的」写进 workspace,或直接解析。
- * 语文老师出厂的卡里没有 photo,所以它也是「activity 多带一种卡」的样本。
  */
 export const SAMPLE_NAME = '练词';
 export const SAMPLE_ACTIVITY = [
   '---',
   'name: 练词',
   'description: 试解析用:家长给几个词,老师一节问一个',
-  'cards: read photo',
+  'base: photo',
   '---',
   '',
   '<!-- 给人看 -->',
@@ -25,7 +24,7 @@ export const SAMPLE_ACTIVITY = [
   '',
   '第一句: 请孩子先说一个词。',
   '',
-  '1. 一节问一个,放一张 `read` 卡。',
+  '1. 一节问一个,先看照片上那个词 `[[看 …]]`。',
   '{{有 词}}',
   '### 用上这周的词',
   '第 1 步之后,带上家长给的词。',

@@ -2,9 +2,9 @@
  * activity 文件:孩子从首页一个按钮进去的一种做法。一个 activity 一个文件,归一位老师,
  * 放在老师的家 `agents/<老师>/activities/<名>.md`(仓里在 grades/grade-<n>/ 下同一个相对位置,init 拷进去,hash 记 shipped.json)。
  *
- * 头上平铺 `name` / `description` / `cards`(这个 activity 要用的卡,空格隔开)/ `base`(铺哪种页)/ `listen`(一直听)/ `reply`(谁先答);正文按 `## ` 节分读者,标题就是读者:
+ * 头上平铺 `name` / `description` / `base`(铺哪种页)/ `listen`(一直听)/ `reply`(谁先答);正文按 `## ` 节分读者,标题就是读者:
  *   ## 家长填的       ```参数    一行一个:`名: 类型[,可空][,缺省 X][,A 到 B] —— 说明`
- *   ## 老师怎么带     给有脸的老师;参数不插值,只用 `{{有 名}}` … `{{/有}}` 裁段
+ *   ## 老师怎么带     给老师;参数不插值,只用 `{{有 名}}` … `{{/有}}` 裁段
  *   ## <工具人>收到什么  ```<工具人> 一段模板,`{{插槽}}` 由应用填;```<工具人>不要 可选
  * 别的节只给人看,应用不读。这里是解析出来的形状;解析与检查在 src/runtime/activity.ts。
  */
@@ -106,16 +106,14 @@ export type ActivityTool = z.infer<typeof ActivityToolSchema>;
 export const ActivitySchema = z.object({
   name: z.string(),
   description: z.string(),
-  /** 头上 `cards:` 写的卡(原文,检查时对注册表) */
-  cards: z.array(z.string()),
   params: z.array(ActivityParamSchema),
-  /** 头上的 `base:`:铺哪种页(见 ACTIVITY_BASES);没写 = 不铺页(卡片流) */
+  /** 头上的 `base:`:铺哪种页(见 ACTIVITY_BASES);没写当 photo(src/runtime/activity.ts 的 activityBase) */
   base: z.string().optional(),
   /** 头上的 `listen:`:孩子怎么说话(见 ACTIVITY_LISTENS);没写 = 照老师的 */
   listen: z.string().optional(),
   /** 头上的 `reply:`:孩子作答以后谁先答(见 ACTIVITY_REPLIES);没写 = 脑 */
   reply: z.string().optional(),
-  /** 头上还写着旧的东西(board: page、cards 里的 kit):照新的读了,check 提一句 */
+  /** 头上还写着旧的东西(board: page、cards):照新的读了,check 提一句 */
   old: z.array(z.string()).optional(),
   /** 「老师怎么带」那节的原文(没剥注释、没裁);没有这节就是 null(要改:activity 都起老师。听写 2026-11-17 起不是 activity,读的也是这个形状,只用认字那节) */
   tutor: z.object({ text: z.string(), line: z.number().int() }).nullable(),

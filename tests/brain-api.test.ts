@@ -65,12 +65,12 @@ try {
   let n = fake.requests.length;
   const t1 = await send('math-tutor', { from: 'kid', text: 'ZBOARD ZMEM 三角形' });
   const r1 = since(n);
-  check('API 一轮:成了,两张卡,讲稿在', t1.m.result === 'ok' && t1.m.section?.cards.length === 2 && (t1.m.section?.lines.length ?? 0) >= 2, JSON.stringify({ result: t1.m.result, warnings: t1.m.warnings, section: t1.m.section }));
+  check('API 一轮:成了,讲稿两句、动作在', t1.m.result === 'ok' && t1.m.section?.lines.length === 2 && t1.m.section.lines[0].acts?.[0]?.name === '看', JSON.stringify({ result: t1.m.result, warnings: t1.m.warnings, section: t1.m.section }));
   check('API 一轮:记忆段照样落进 vault', (t1.m.remembered ?? []).some((x) => x.includes('手指比划')), JSON.stringify(t1.m.remembered));
   check('API 一轮:用量记上(假百炼回的 100 / 20)', t1.m.tokens?.in === 100 && t1.m.tokens?.out === 20, JSON.stringify(t1.m.tokens));
   check('API 一轮:命中缓存的与上下文大小记下(只有 API 报)', t1.m.tokens?.cached === 60 && t1.m.tokens?.context === 100, JSON.stringify(t1.m.tokens));
   check('API 一轮:运行时与会话记下', t1.m.runtime === 'api' && t1.index.sessions[t1.started.thread]?.runtime === 'api' && /^api-/.test(t1.index.sessions[t1.started.thread]?.id ?? ''), JSON.stringify(t1.index.sessions));
-  check('API 一轮:一次请求,流式,系统提示是老师正文 + 板书写法', r1.length === 1 && r1[0].stream === true && r1[0].messages[0]?.role === 'system' && textOf(r1[0].messages[0].content).includes('```choice'), JSON.stringify(r1.map((r) => r.messages.map((m) => m.role))));
+  check('API 一轮:一次请求,流式,系统提示是 activity + 讲稿与动作怎么写', r1.length === 1 && r1[0].stream === true && r1[0].messages[0]?.role === 'system' && textOf(r1[0].messages[0].content).includes('# 讲稿与动作怎么写'), JSON.stringify(r1.map((r) => r.messages.map((m) => m.role))));
   check('API 一轮:孩子的话不带工具;数学老师 medium 想一点', r1[0].tools === undefined && r1[0].enable_thinking === true && r1[0].thinking_budget === 1024 && r1[0].preserve_thinking === true, JSON.stringify({ tools: r1[0].tools, enable: r1[0].enable_thinking, budget: r1[0].thinking_budget }));
   const log1 = readFileSync(join(conv('math-tutor'), `${date}.${t1.started.job}.log`), 'utf8');
   check('API 一轮:.log 是一行一条统一事件', log1.split('\n')[0].startsWith('{"kind":"session"') && log1.includes('{"kind":"result"'), log1.slice(0, 200));

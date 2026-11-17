@@ -43,7 +43,7 @@ try {
   check('板书页 link 主题 css,卡的样式不再内联', (await get('/')).html?.includes('href="/kid/theme.css"') === true && (await get('/')).html?.includes('.mk-marker') === false);
   {
     const css = await get('/kid/theme.css');
-    check('/kid/theme.css 是 text/css,含卡与笔的样式', css.status === 200 && css.contentType?.startsWith('text/css') === true && css.html?.includes('.mk-marker') === true && css.html?.includes(':root') === true);
+    check('/kid/theme.css 是 text/css,含底色与首页牌的样式', css.status === 200 && css.contentType?.startsWith('text/css') === true && css.html?.includes('--tint-sky-bg') === true && css.html?.includes('cards/tutor/card.css') === true && css.html?.includes(':root') === true);
     const tj = (await get('/kid/theme.json')).json as { theme: string; source: string; default: string; tints: Record<string, unknown> };
     check('/kid/theme.json 带清单与来源', tj.theme === 'default' && tj.source === 'workspace' && tj.default === 'paper' && 'sky' in tj.tints);
     const cssFile = join(root, 'themes', 'default', 'kid.css');
@@ -125,7 +125,7 @@ try {
     const { writeIndex } = await import('../src/runtime/journal/store.ts');
     const { parseBoard } = await import('../src/board/parse.ts');
     const today = localDate(new Date());
-    const b1 = parseBoard('开场。\n\n```choice\n酒是谁的?\n- [x] 他自己的\n- [ ] 平分\n```\n\n酒是谁的?').section;
+    const b1 = parseBoard('开场。[[看 例 2]]\n\n酒是谁的?').section;
     const b2 = parseBoard('再想想,借一个够不够?').section;
     let idx = emptyIndex('math-tutor', today);
     idx = addMessage(idx, { job: '1620-1', thread: '1620-1', at: `${today}T16:20`, from: 'kid', text: '7 减 9 怎么算', result: 'ok', artifacts: [], kidText: '开场。\n酒是谁的?', section: b1, parentText: '## 家长\n他其实会了。', remembered: [`${today} 减法爱跳步`] });
@@ -133,16 +133,15 @@ try {
     idx = addMessage(idx, { job: '1630-3', thread: '1630-3', at: `${today}T16:30`, from: 'kid', text: '再来', result: 'error', artifacts: [], error: 'timeout' });
     idx = { ...idx, ratings: { '1620-1': 4 } };
     await writeIndex(ctx.ws, idx);
-    type PMsg = { from: string; question: string | null; section?: { cards: { props: Record<string, unknown> }[] }; parentText?: string; remembered?: string[]; error?: string };
+    type PMsg = { from: string; question: string | null; section?: { lines: { acts?: unknown[] }[] }; parentText?: string; remembered?: string[]; error?: string };
     const pb = (await get('/api/conversations/math-tutor/today/board')).json as { messages: PMsg[]; thread: string | null };
-    check('板书接口:三条都在,答案不剥、给家长的尾巴与记忆在、系统的话有 from、出错的轮有 error', pb.messages.length === 3 && JSON.stringify(pb.messages[0].section?.cards[0].props.answer) === '[0]' && pb.messages[0].parentText === '## 家长\n他其实会了。' && pb.messages[0].remembered?.length === 1 && pb.messages[1].from === 'system' && pb.messages[1].question === '换个说法' && pb.messages[2].error === 'timeout' && pb.thread === '1630-3', JSON.stringify(pb));
+    check('板书接口:三条都在,讲稿带动作、给家长的尾巴与记忆在、系统的话有 from、出错的轮有 error', pb.messages.length === 3 && pb.messages[0].section?.lines[0].acts?.length === 1 && pb.messages[0].parentText === '## 家长\n他其实会了。' && pb.messages[0].remembered?.length === 1 && pb.messages[1].from === 'system' && pb.messages[1].question === '换个说法' && pb.messages[2].error === 'timeout' && pb.thread === '1630-3', JSON.stringify(pb));
     const kb = (await get('/api/kid/conversations/math-tutor/today')).json as { messages: PMsg[] };
-    check('护栏:同一份索引,孩子接口答案剥掉、没有家长尾巴与记忆、系统的话没有问句、没有 error', kb.messages.length === 3 && !('answer' in (kb.messages[0].section?.cards[0].props ?? {})) && !('parentText' in kb.messages[0]) && !('remembered' in kb.messages[0]) && kb.messages[1].question === null && !('from' in kb.messages[1]) && !('error' in kb.messages[2]), JSON.stringify(kb));
-    type OvTutor = { name: string; turns: number; threads: { thread: string; title: string; from: string; sections: number; cards: number; stoppedAt: string | null; rating: number | null; booked: boolean }[] };
+    check('护栏:同一份索引,孩子接口没有家长尾巴与记忆、系统的话没有问句、没有 error', kb.messages.length === 3 && !('parentText' in kb.messages[0]) && !('remembered' in kb.messages[0]) && kb.messages[1].question === null && !('from' in kb.messages[1]) && !('error' in kb.messages[2]), JSON.stringify(kb));
+    type OvTutor = { name: string; turns: number; threads: { thread: string; title: string; from: string; sections: number; stoppedAt: string | null; rating: number | null; booked: boolean }[] };
     const ov = (await get('/api/overview/today')).json as { date: string; today: string; tutors: OvTutor[] };
     const mt = ov.tutors.find((t) => t.name === 'math-tutor');
-    // 卡数 2:选择题一张,第二节末句问句没配能答的卡、解析器补的提问卡一张
-    check('清单:三位有脸的老师;数学老师 3 轮、两个话题;第一个话题的题、节数、卡数、停在末句问句、星;出错的话题 0 节', ov.date === today && ov.tutors.length === 3 && mt?.turns === 3 && !('costUsd' in mt) && mt.threads.length === 2 && mt.threads[0].title === '7 减 9 怎么算' && mt.threads[0].sections === 2 && mt.threads[0].cards === 2 && mt.threads[0].stoppedAt === 'ask' && mt.threads[0].rating === 4 && !mt.threads[0].booked && mt.threads[1].sections === 0 && mt.threads[1].stoppedAt === null, JSON.stringify(ov));
+    check('清单:三位有脸的老师;数学老师 3 轮、两个话题;第一个话题的题、节数、停在末句问句、星;出错的话题 0 节', ov.date === today && ov.tutors.length === 3 && mt?.turns === 3 && !('costUsd' in mt) && mt.threads.length === 2 && mt.threads[0].title === '7 减 9 怎么算' && mt.threads[0].sections === 2 && mt.threads[0].stoppedAt === 'ask' && mt.threads[0].rating === 4 && !mt.threads[0].booked && mt.threads[1].sections === 0 && mt.threads[1].stoppedAt === null, JSON.stringify(ov));
     const wk = (ov as unknown as { week: { date: string; tutors: string[] }[] }).week;
     check('清单:七天日期条以今天结尾,今天有话题的是数学老师', wk.length === 7 && wk[6].date === today && JSON.stringify(wk[6].tutors) === '["math-tutor"]' && wk[0].tutors.length === 0, JSON.stringify(wk));
     const t0 = mt?.threads[0] as unknown as { start: { kind: string; label: string }; said: string | null; endAt: string | null; notes: string[]; remembered: string[] };
@@ -165,14 +164,14 @@ try {
     check('家长端 /parent:自己的一页(2026-10-28 起不是孩子端页面的家长模式)、自己的 manifest;manifest 从这页起;工作台在 /dev,/parent/board 没了', page.includes('id="ptl"') && !page.includes('const MODE') && page.includes('href="/parent/manifest.webmanifest"') && page.includes('· 家长</title>') && ((await get('/parent/manifest.webmanifest')).json as { start_url: string; scope: string }).start_url === '/parent' && ((await get('/manifest.webmanifest')).json as { start_url: string }).start_url === '/' && ((await get('/dev')).html ?? '').includes('老师团') && (await get('/parent/board')).status === 404);
     // 看录像:一个话题的轨道 + 这个话题的家长条目;老轮没有 timing 就按 at(分钟)放,事件的 t 从那一刻起算
     const { conversationFiles } = await import('../src/schema/index.ts');
-    writeFileSync(conversationFiles(ctx.ws.dirs.conversations, 'math-tutor', today).events('1620-1'), `${JSON.stringify({ t: 5000, lane: 'ready', kind: 'all', cards: 1, lines: 2 })}\n`);
+    writeFileSync(conversationFiles(ctx.ws.dirs.conversations, 'math-tutor', today).events('1620-1'), `${JSON.stringify({ t: 5000, lane: 'ready', kind: 'all', lines: 2 })}\n`);
     type Rl = { thread: string; reel: { tracks: { job: string; at: number }[]; says: unknown[]; marks: { kind: string; label: string }[] }; messages: PMsg[] };
     const rl = await get('/api/conversations/math-tutor/today/threads/1620-1/reel');
     const rj = rl.json as Rl;
-    check('录像接口:两节(孩子问的、家长补的)、节在 ready all 那一刻整节铺上、不念、两次开口;条目只有这个话题的、答案不剥', rl.status === 200 && rj.thread === '1620-1' && rj.reel.tracks.map((t) => t.job).join() === '1620-1,1625-2' && rj.reel.tracks[0].at - Date.parse(`${today}T16:20`) === 5000 && rj.reel.marks.filter((m) => m.kind === 'said').map((m) => m.label).join() === '7 减 9 怎么算,换个说法' && rj.reel.says.length === 0 && rj.messages.length === 2 && JSON.stringify(rj.messages[0].section?.cards[0].props.answer) === '[0]', JSON.stringify(rj));
+    check('录像接口:两节(孩子问的、家长补的)、节在 ready all 那一刻整节铺上、不念、两次开口;条目只有这个话题的', rl.status === 200 && rj.thread === '1620-1' && rj.reel.tracks.map((t) => t.job).join() === '1620-1,1625-2' && rj.reel.tracks[0].at - Date.parse(`${today}T16:20`) === 5000 && rj.reel.marks.filter((m) => m.kind === 'said').map((m) => m.label).join() === '7 减 9 怎么算,换个说法' && rj.reel.says.length === 0 && rj.messages.length === 2, JSON.stringify(rj));
     // 孩子的屏幕照孩子端条目画:答案剥掉、孩子的话带着;老师的脸;设备没记就是 null
-    const rk = rl.json as Rl & { kid: { job: string; question: string | null; section?: { cards: { props: Record<string, unknown> }[] } }[]; device: string | null; face: { name: string; display: string } };
-    check('录像接口:孩子端条目(答案剥了、只有这个话题的)、老师的脸、设备', rk.kid.length === 2 && rk.kid.map((m) => m.job).join() === '1620-1,1625-2' && rk.kid[0].section?.cards[0].props.answer === undefined && rk.kid[0].question === '7 减 9 怎么算' && rk.face.name === 'math-tutor' && typeof rk.face.display === 'string' && 'device' in rk, JSON.stringify({ kid: rk.kid.map((m) => [m.job, m.question, m.section?.cards[0]?.props]), face: rk.face, device: rk.device }));
+    const rk = rl.json as Rl & { kid: { job: string; question: string | null; section?: { lines: unknown[] } }[]; device: string | null; face: { name: string; display: string } };
+    check('录像接口:孩子端条目(只有这个话题的)、老师的脸、设备', rk.kid.length === 2 && rk.kid.map((m) => m.job).join() === '1620-1,1625-2' && rk.kid[0].section?.lines.length === 2 && rk.kid[0].question === '7 减 9 怎么算' && rk.face.name === 'math-tutor' && typeof rk.face.display === 'string' && 'device' in rk, JSON.stringify({ kid: rk.kid.map((m) => [m.job, m.question, m.section]), face: rk.face, device: rk.device }));
     check('录像接口:今天的话题标 live(录像停在最后时跟着长)', (rl.json as Rl & { live: boolean }).live === true);
     const re = (await get('/api/conversations/math-tutor/today/threads/1630-3/reel')).json as Rl;
     check('录像接口:出错的话题也有录像(开口 + 没成)', re.reel.tracks.length === 0 && re.reel.marks.map((m) => m.kind).join() === 'said,error', JSON.stringify(re));

@@ -16,7 +16,6 @@ import { localDate } from '../../shared/time.ts';
 import { MIN_CONTRAST, contrastWithWhite } from '../../ui/shared/tutor-color.ts';
 import { memoryPath, missingEntry, pickNotes } from '../../memory/vault-notes.ts';
 import { SKILLS_DIR, cardVoice, isApiRuntime, listTutors, mouthVoice, resolvePolicy } from '../../schema/index.ts';
-import { kindsFor, tutorCardKinds } from '../../board/cards/index.ts';
 import { scanVault } from '../../memory/vault.ts';
 import { parseArtifactEvents } from '../../runtime/journal/ledger.ts';
 import { parseTimetable } from '../../memory/timetable.ts';
@@ -239,9 +238,6 @@ export async function doctorWorkspace(
       // 音色:一老师一音色走 API 是正路;没配的孩子端只剩浏览器合成声(只该在测试里);hidden 的老师不对孩子说话,不用音色
       const tc = ws.config.tutors[name];
       if (tc.enabled && !tc.hidden && !cardVoice(ws.config.tutors, name)) push({ name: `tutor.${name}.voice`, ok: false, required: false, detail: `${tc.display} 没配音色(cotutor.json tutors.${name}.voice),卡上的声音(点读卡、单词卡)配不了——只适合测试`, fix: '家长端「首页」点这位老师的「样子与声音」挑一个' });
-      // 卡的清单(《卡片协议.md》「谁拿到哪些卡」):只是报一声讲哪几种
-      const kinds = tutorCardKinds(tc.cards);
-      push({ name: `tutor.${name}.cards`, ok: true, required: false, detail: kinds ? `板书写法讲 ${kinds.join(' ')}` : `没写 cards,板书写法讲全部 ${kindsFor('board').length} 种` });
       // 头像是图片路径时(figshot 写的 avatars/<name>.png)查文件在不在、在不在根以内;emoji 不查
       if (tc.avatar && /\.(png|jpe?g|webp|gif|svg)$/i.test(tc.avatar)) {
         const file = resolve(root, tc.avatar);
@@ -334,7 +330,7 @@ export async function doctorWorkspace(
         const dir = themeDir(root, name);
         try {
           const t = await readTheme(dir);
-          push({ name: 'theme.manifest', ok: true, required: false, detail: `themes/${name}/:${Object.keys(t.manifest.tints).length} 个底色槽、${Object.keys(t.manifest.looks).length} 个字形槽、${Object.keys(t.manifest.pens).length} 支笔,default = ${t.manifest.default}` });
+          push({ name: 'theme.manifest', ok: true, required: false, detail: `themes/${name}/:${Object.keys(t.manifest.tints).length} 个底色槽,default = ${t.manifest.default}` });
         } catch (err) {
           push({ name: 'theme.manifest', ok: false, required: false, detail: `themes/${name}/ 用不了(服务退回出厂 default):${err instanceof Error ? err.message : String(err)}`, fix: name === 'default' ? 'cotutor init 补拷(已有的不动)或 cotutor refresh' : `修 themes/${name}/theme.json 与 kid.css,或把 cotutor.json 的 kid.theme 改回 default`, cmd: name === 'default' ? initCmd() : undefined });
         }

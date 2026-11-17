@@ -35,7 +35,6 @@ export const VOICE_SCENES: VoiceScene[] = [
   { group: '孩子这边', name: '太短 / 没听清', note: '按不到 0.4 秒、麦克风没开上:晃一下,字留 2 秒', input: { hint: 'unclear' }, sound: 'none', tutor: 'chinese', expect: 'unclear' },
   { group: '孩子这边', name: '点一下没按住', note: '不到 150 毫秒就松手', input: { hint: 'tap' }, sound: 'none', tutor: 'chinese', expect: 'tap' },
   { group: '孩子这边', name: '老师在想时按了', note: '不接,晃一下', input: { pending: true, hint: 'busy' }, sound: 'none', tutor: 'chinese', expect: 'busy' },
-  { group: '别的声音', name: '卡在念', note: '点读、单词卡、田字格的声音:不是老师,不画声音', input: { status: 'card' }, sound: 'none', tutor: 'chinese', expect: 'card' },
   { group: '别的声音', name: '再听一遍', note: '放的是刚才录下的老师,不是老师在说', input: { status: 'replay' }, sound: 'none', tutor: 'chinese', expect: 'replay' },
   { group: '别的声音', name: '小课堂在放', note: '课里原来的声音在舞台上放', input: { status: 'lecture' }, sound: 'none', tutor: 'chinese', expect: 'lecture' },
   { group: '别的声音', name: '轮到你说(按住说)', note: '老师请他说的那句([[请 说 …]])念完:按钮慢慢呼吸', input: { turn: true }, sound: 'none', tutor: 'english', expect: 'turn-hold' },
@@ -46,5 +45,5 @@ export const VOICE_SCENES: VoiceScene[] = [
   { group: '一直听', name: '老师在想', note: '脑在写', input: { open: true, pending: true }, sound: 'none', tutor: 'english', expect: 'open-think' },
   { group: '一直听', name: '麦关了', note: '孩子说话不出竖条(没在收)', input: { open: true, muted: true }, sound: 'none', tutor: 'english', expect: 'muted' },
   { group: '一直听', name: '麦关了、老师在说', note: '老师的弧照出', input: { open: true, muted: true, status: 'mouth' }, sound: 'tutor', tutor: 'english', expect: 'muted-tutor' },
-  { group: '一直听', name: '轮到你(跟读)', note: '请他说的那句([[请 说 …]])念完等他说:按钮慢慢呼吸(那句锚着卡时卡也呼吸)', input: { open: true, turn: true }, sound: 'none', tutor: 'english', expect: 'turn' },
+  { group: '一直听', name: '轮到你(跟读)', note: '请他说的那句([[请 说 …]])念完等他说:按钮慢慢呼吸', input: { open: true, turn: true }, sound: 'none', tutor: 'english', expect: 'turn' },
 ];

@@ -3,7 +3,7 @@
  * 索引里的 kidText / artifacts 是孩子视图的物化结果,孩子端不解析日志。跨天自动新开。
  */
 import { z } from 'zod';
-import { FocusSchema, MESSAGE_FROM } from './context-pack.ts';
+import { MESSAGE_FROM } from './context-pack.ts';
 import { BoardSectionSchema, DeviceSchema } from './board.ts';
 import { BookkeepingSchema } from './sections.ts';
 import { MessageViaSchema } from './home.ts';
@@ -19,14 +19,10 @@ export const TimingSchema = z.object({
   startedAt: z.string().min(1),
   /** 这轮用的是提前起好的老师进程(预热,2026-09-29);startedAt 仍是孩子开口那刻 */
   warm: z.literal(true).optional(),
-  /** 流式时第一张卡闭合(孩子端第一次看到东西);整块出的运行时没有 */
-  firstCardMs: z.number().int().nonnegative().optional(),
-  /** 首句就绪:嘴能开口的那一刻(头号埋点),第一拍关了就算(讲稿不配音) */
+  /** 首句就绪:嘴能开口的那一刻(头号埋点),第一句出来了就算(讲稿不配音) */
   firstReadyMs: z.number().int().nonnegative().optional(),
   /** 老师进程退出 */
   doneMs: z.number().int().nonnegative().optional(),
-  /** 每拍(2026-09-13,从事件推):关、就绪 */
-  beats: z.array(z.object({ card: z.number().int().nonnegative().nullable(), closedMs: z.number().int().nonnegative().optional(), readyMs: z.number().int().nonnegative().optional() })).optional(),
 });
 export type Timing = z.infer<typeof TimingSchema>;
 
@@ -43,8 +39,7 @@ const MessageObjectSchema = z.object({
   from: z.enum(MESSAGE_FROM),
   /** 消息原文(不含上下文包) */
   text: z.string(),
-  focus: FocusSchema.optional(),
-  /** 孩子端不打字的动作:交给老师(把卡上的状态交出去) */
+  /** 孩子端不打字的动作:「给老师看」(窗里的图已经交了) */
   action: z.enum(['submit']).optional(),
   /** 这条消息带的作业照片(R5,2026-09-14):相对 workspace 根的路径(captures/<日期>/<HHMM>-<n>.jpg),上下文包 photos: 段原样给老师 Read;日记永不引用它 */
   photos: z.array(z.string().min(1)).optional(),
@@ -82,8 +77,6 @@ const MessageObjectSchema = z.object({
   pending: PendingCommitSchema.optional(),
   /** 这轮上下文包里家长笔记的版本:role(profile / entry)→ `路径@hash`;同一话题下一轮对得上就只写「未变」(2026-09-17) */
   notes: z.record(z.string(), z.string()).optional(),
-  /** 这条消息带给老师的卡(上一轮之后孩子改过状态的):id 与 describe 出的那句;家长视图显示「孩子在板书上做的」 */
-  cards: z.array(z.object({ card: z.string().min(1), text: z.string() })).optional(),
   /** 这轮的用时(埋点,2026-09-11):都是从 startedAt 起的毫秒数;家长视图每轮一行「首卡 10s · 整轮 23s」 */
   timing: TimingSchema.optional(),
   /** 发这条时孩子端是什么端(缺省当平板横屏) */

@@ -1,21 +1,20 @@
 /**
  * 家长端「看原文」的一轮全景(2026-09-11):把一次运行拆成几站,一个接口给全。
- * 调试时要回答的不是「老师写了什么」,而是「这一层是谁吃掉的」——孩子没看见那张卡,可能是老师没写、
- * 可能 kidSource 没挑中那一段、可能 parseBoard 没认出那个标签、也可能 stripSecrets 剥过头。
- * 每站的数据都从盘上现读现算,不进索引:原文在 .log,发出去的在 .run.json,卡的状态与资产在 .cards/。讲稿不配音,「配音」那站跟着删了,卡的资产在「下发给孩子」里。
+ * 调试时要回答的不是「老师写了什么」,而是「这一层是谁吃掉的」——孩子没听到那句、页上没动,可能是老师没写、
+ * 可能 kidSource 没挑中那一段、可能 parseBoard 没认出那个动作。
+ * 每站的数据都从盘上现读现算,不进索引:原文在 .log,发出去的在 .run.json。2026-11-17 起课里没有卡,卡那几站跟着删了。
  * 「重解」= 拿当前解析器再跑一遍原文与索引里存的比 —— 索引是物化的,改完解析器老样本会不会变,只有这样才知道。
  */
 import { readFile } from 'node:fs/promises';
-import { cardLabel, describeCard, stripSecrets } from '../../board/cards/index.ts';
 import { annotateSource, type BoardWarning, type SourceRow } from '../../board/parse.ts';
-import { conversationFiles, type CardStateFile } from '../../schema/index.ts';
+import { conversationFiles } from '../../schema/index.ts';
 import { kidSource, truncateReply } from '../../runtime/kid-view.ts';
-import type { BoardCard, BoardSection } from '../../board/presentation.ts';
+import type { BoardSection } from '../../board/presentation.ts';
 import { foldRuns, toolCalls, type ToolCall, type TranscriptRow } from '../../brain/transcript.ts';
 import { parseLogLine, toolKind, type ToolKind } from '../../brain/index.ts';
 import { resolvePolicy, type ConversationMessage } from '../../schema/index.ts';
 import type { Workspace } from '../../schema/index.ts';
-import { readErrLog, readIndex, readRunFile, readTranscript, scanCards, type RunSources } from '../../runtime/journal/store.ts';
+import { readErrLog, readIndex, readRunFile, readTranscript, type RunSources } from '../../runtime/journal/store.ts';
 import { formatEvent, parseEvents, timelineSpans, type TimelineSpan } from '../../runtime/journal/events.ts';
 import { type RunEvent } from '../../schema/index.ts';
 
@@ -38,18 +37,6 @@ export interface RawKidLine {
   cut: string;
 }
 
-export interface RawCard {
-  n: number;
-  kind: string;
-  label: string;
-  /** 孩子在这张卡上做的(describeCard 出的那句);没动过 = null */
-  state: string | null;
-  /** 已生成的资产(点读段 mp3) */
-  assets: string[];
-  /** 下发给孩子的 props(答案已剥) */
-  props: Record<string, unknown>;
-}
-
 export interface RawView {
   tutor: string;
   date: string;
@@ -68,13 +55,13 @@ export interface RawView {
   pack: { prompt: string; argv: string[]; runtime: string; resume: boolean; session: string | null; agentBody: boolean; sources: RunSources | null } | null;
   /** 老师原文(= 解析器真正吃的那一份)+ 逐行注解 */
   source: { text: string; rows: SourceRow[]; warnings: BoardWarning[] };
-  /** 顶层文本块里没进板书正文的那些(「我先看看账本」之类) */
+  /** 顶层文本块里没进讲稿的那些(「我先看看账本」之类) */
   dropped: string[];
   /** 索引里存着的(当时那版解析器的结果) */
   stored: { section: BoardSection | null; warnings: string[]; kidText: string | null; parentText: string };
   /** 拿当前解析器重解一遍 + 与 stored 的差异 */
   fresh: { section: BoardSection; warnings: BoardWarning[]; diff: DiffRow[]; same: boolean };
-  kid: { lines: RawKidLine[]; cards: RawCard[] };
+  kid: { lines: RawKidLine[] };
   /** 转录(工具行、子代理),与家长视图同一套折叠 */
   trace: TranscriptRow[];
   /** 这轮用了哪些工具、读了什么(索引物化的;老轮次从 .log 现抽);kind 是工具的类别(src/brain/types.ts 的 toolKind,页面按它认「读了几个文件」,不比工具名) */
@@ -90,24 +77,9 @@ export interface RawView {
 }
 
 
-const cardOneLine = (c: BoardCard): string => `${c.kind} ${cardLabel(c)}`.trim();
-
-/** 卡与讲稿逐条比:同序对齐,不同就一减一加。给「改完解析器,老样本会不会变」用 */
+/** 讲稿逐条比:同序对齐,不同就一减一加。给「改完解析器,老样本会不会变」用 */
 export function diffSections(stored: BoardSection | null, fresh: BoardSection): DiffRow[] {
   const rows: DiffRow[] = [];
-  const a = stored?.cards ?? [];
-  const b = fresh.cards;
-  for (let i = 0; i < Math.max(a.length, b.length); i++) {
-    const x = a[i];
-    const y = b[i];
-    const label = (c: BoardCard): string => `卡 ${i + 1}　${cardOneLine(c)}`;
-    if (!x && y) rows.push({ s: '+', text: label(y) });
-    else if (x && !y) rows.push({ s: '-', text: label(x) });
-    else if (x && y && (x.kind !== y.kind || JSON.stringify(x.props) !== JSON.stringify(y.props))) {
-      rows.push({ s: '-', text: label(x) });
-      rows.push({ s: '+', text: label(y) });
-    } else if (x) rows.push({ s: '·', text: label(x) });
-  }
   const la = stored?.lines ?? [];
   const lb = fresh.lines;
   for (let i = 0; i < Math.max(la.length, lb.length); i++) {
@@ -118,7 +90,7 @@ export function diffSections(stored: BoardSection | null, fresh: BoardSection): 
     else if (x && y && x.text !== y.text) {
       rows.push({ s: '-', text: `讲稿 ${i + 1}　${x.text}` });
       rows.push({ s: '+', text: `讲稿 ${i + 1}　${y.text}` });
-    }
+    } else if (x) rows.push({ s: '·', text: `讲稿 ${i + 1}　${x.text}` });
   }
   return rows;
 }
@@ -136,17 +108,14 @@ export async function rawView(ws: Workspace, tutor: string, date: string, job: s
   const blocks = (transcript?.items ?? []).filter((i) => i.kind === 'text' && !i.sub).map((i) => i.text.trim());
   const src = (transcript ? kidSource(transcript) : null) ?? '';
   const dropped = blocks.filter((b) => b && !src.includes(b));
-  const ann = annotateSource(src, { live: m.live });
+  const ann = annotateSource(src);
   const stored = m.section ?? null;
   // 索引里的讲稿已经按 replyMaxChars 截过,重解的还没有——比之前先截,免得每句都报「不同」
   const freshCut: BoardSection = { ...ann.section, lines: ann.section.lines.map((l) => ({ ...l, text: truncateReply(l.text, policy.replyMaxChars).text })) };
   const diff = diffSections(stored, freshCut);
   const same = diff.every((d) => d.s === '·');
 
-  // 下发给孩子那一份:讲稿按 replyMaxChars 截、卡剥完答案是什么样、卡的资产
-  const shown = stripSecrets(ann.section);
-  const { states, assets } = await scanCards(ws, tutor, date);
-  const jobStates: Record<number, CardStateFile> = states[job] ?? {};
+  // 下发给孩子那一份:讲稿按 replyMaxChars 截
   // 发出去的是索引里那一份(这轮真下发的);被 replyMaxChars 截掉的尾巴拿没截过的原句比出来
   const lines: RawKidLine[] = [];
   for (const [i, l] of (stored?.lines ?? freshCut.lines).entries()) {
@@ -154,14 +123,6 @@ export async function rawView(ws: Workspace, tutor: string, date: string, job: s
     const head = l.text.replace(/…$/, '');
     lines.push({ text: l.text, cut: full.length > l.text.length && full.startsWith(head) ? full.slice(head.length) : '' });
   }
-  const cards: RawCard[] = (stored?.cards ?? ann.section.cards).map((c, n) => ({
-    n,
-    kind: c.kind,
-    label: cardLabel(c),
-    state: jobStates[n] ? describeCard(c, jobStates[n].state) : null,
-    assets: assets[job]?.[n] ?? [],
-    props: (shown.cards[n]?.props ?? c.props) as Record<string, unknown>,
-  }));
 
   const err = await readErrLog(ws, tutor, date, job);
   // 读了什么:索引里物化过的优先(和当时一致),没有(老轮次)就从 .log 现抽
@@ -179,8 +140,8 @@ export async function rawView(ws: Workspace, tutor: string, date: string, job: s
     { id: 'pack', title: '上下文包', note: pack ? `${pack.prompt.length} 字 · ${pack.resume ? 'resume' : '新开'}` : '这一轮没落(老 workspace)', state: pack ? 'ok' : 'none' },
     { id: 'timeline', title: '时间线', note: events.length ? `${events.length} 条事件${mouthNote}${m.timing?.firstReadyMs !== undefined ? ` · 首句就绪 ${secs(m.timing.firstReadyMs)}` : ''}${m.timing?.doneMs !== undefined ? ` · 老师写完 ${secs(m.timing.doneMs)}` : ''}` : '这轮没有事件(2026-09-13 之前的轮次)', state: events.length ? (events.some((e) => (e.lane === 'tts' && e.kind === 'failed') || (e.lane === 'main' && e.kind === 'exit' && !e.ok)) ? 'warn' : 'ok') : 'none' },
     { id: 'source', title: '老师原文', note: `${src ? src.split('\n').length : 0} 行 · 顶层 ${blocks.length} 段${dropped.length ? ` · 丢 ${dropped.length} 段` : ''}`, state: src ? 'ok' : 'none' },
-    { id: 'parse', title: '解析结果', note: `${ann.section.cards.length} 卡 · ${ann.section.lines.length} 句${warnCount ? ` · ${warnCount} 提醒` : ''}${same ? '' : ' · 与索引不同'}`, state: warnCount || !same ? 'warn' : 'ok' },
-    { id: 'kid', title: '下发给孩子', note: `${lines.length} 句${lines.some((l) => l.cut) ? ` · 截了 ${lines.filter((l) => l.cut).length} 句` : ''} · ${cards.length} 卡`, state: lines.length || cards.length ? 'ok' : 'none' },
+    { id: 'parse', title: '解析结果', note: `${ann.section.lines.length} 句${warnCount ? ` · ${warnCount} 提醒` : ''}${same ? '' : ' · 与索引不同'}`, state: warnCount || !same ? 'warn' : 'ok' },
+    { id: 'kid', title: '下发给孩子', note: `${lines.length} 句${lines.some((l) => l.cut) ? ` · 截了 ${lines.filter((l) => l.cut).length} 句` : ''}`, state: lines.length ? 'ok' : 'none' },
     { id: 'tools', title: '读了什么', note: tools.length ? `${tools.length} 次工具${toolFiles ? ` · 读了 ${toolFiles} 个文件` : ''}${toolFailed ? ` · ${toolFailed} 次失败` : ''}${tools.some((t) => t.sub) ? ' · 有子代理' : ''}` : '没用工具(只凭上下文包答的)', state: toolFailed ? 'warn' : tools.length ? 'ok' : 'none' },
     { id: 'trace', title: '转录与报错', note: `${transcript?.items.length ?? 0} 条${err ? ' · stderr 有东西' : ''}`, state: m.result === 'error' || err ? 'warn' : 'ok' },
   ];
@@ -205,7 +166,7 @@ export async function rawView(ws: Workspace, tutor: string, date: string, job: s
     dropped,
     stored: { section: stored, warnings: m.warnings ?? [], kidText: m.kidText ?? null, parentText: m.parentText ?? '' },
     fresh: { section: ann.section, warnings: ann.warnings, diff, same },
-    kid: { lines, cards },
+    kid: { lines },
     trace: foldRuns(transcript?.items ?? []),
     tools,
     err: err.slice(-4000),

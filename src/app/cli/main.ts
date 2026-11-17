@@ -734,7 +734,7 @@ export async function main(argv: string[]): Promise<void> {
         out.push(`  recent   ${rel(rp.recent.dir)}/ 最近 ${rp.recent.days} 天 · 有 ${rp.recent.filesFound.length} 天的日记${rp.recent.filesFound.length ? `(${rp.recent.filesFound[0]} … ${rp.recent.filesFound[rp.recent.filesFound.length - 1]})` : ''} · ${rp.recent.subject ? `学科「${rp.recent.subject}」` : '不按学科过滤'}的观察行共 ${rp.recent.total},带了 ${rp.recent.kept}(上限 ${rp.recent.limit},取最新的)`);
         const cut = [v.chars.profile > v.limit ? '档案原文截了' : '', v.chars.entry > v.limit ? '入口文件原文截了' : '', v.chars.memory > v.limit ? '记忆原文截了' : '', rp.plan.total > rp.plan.kept ? `计划截掉 ${rp.plan.total - rp.plan.kept} 行` : '', rp.recent.total > rp.recent.kept ? `观察截掉 ${rp.recent.total - rp.recent.kept} 条` : ''].filter(Boolean);
         out.push(cut.length ? `截掉的:${cut.join(';')}(改 cotutor.json policyDefaults.contextPack 的 entryChars / planLines / recent)` : '没截掉什么。');
-        out.push('这份不进任何文件;老师真跑时还会多 cards:(孩子在卡上做的)与 photos: 两段;同一话题续聊时没改过的笔记只写「未变」。');
+        out.push('这份不进任何文件;老师真跑时还会多 photos:(孩子拍的)与 board:(页此刻的样子)两段;同一话题续聊时没改过的笔记只写「未变」。');
         process.stdout.write(`${out.join('\n')}\n`);
         return;
       }
@@ -758,7 +758,6 @@ export async function main(argv: string[]): Promise<void> {
         if (v.pack) out.push(...v.pack.prompt.split('\n').map((l) => `  │ ${l}`));
         out.push(`读了什么:${v.tools.length ? '' : '没用工具'}`);
         for (const t of v.tools) out.push(`  ${t.ok === false ? '✗' : t.ok === null ? '?' : '·'} ${t.name}${t.sub ? '(子代理)' : ''} ${t.arg}${t.chars ? ` → ${t.chars} 字` : ''}`);
-        out.push(`卡 ${v.kid.cards.length}:${v.kid.cards.map((c) => `${v.job}/${c.n} ${c.kind} ${c.label}`.trim()).join(' | ')}`);
         out.push(`讲稿 ${v.kid.lines.length}:`);
         for (const l of v.kid.lines) out.push(`  ${l.text}${l.cut ? `〔截:${l.cut}〕` : ''}`);
         if (v.stored.parentText) out.push(`给家长的尾巴:\n${v.stored.parentText.split('\n').map((l) => `  ${l}`).join('\n')}`);
@@ -960,7 +959,7 @@ export async function main(argv: string[]): Promise<void> {
         } else {
           process.stdout.write(`孩子看到:${m.kidText ?? '(没有给孩子的话)'}\n`);
           const secs = (ms: number): string => (ms < 120000 ? `${Math.round(ms / 100) / 10}s` : `${Math.round(ms / 6000) / 10}min`);
-          const timing = [m.timing?.firstReadyMs !== undefined ? `首句就绪 ${secs(m.timing.firstReadyMs)}` : null, m.timing?.firstCardMs !== undefined ? `首卡 ${secs(m.timing.firstCardMs)}` : null, m.timing?.doneMs !== undefined ? `整轮 ${secs(m.timing.doneMs)}` : null].filter(Boolean);
+          const timing = [m.timing?.firstReadyMs !== undefined ? `首句就绪 ${secs(m.timing.firstReadyMs)}` : null, m.timing?.doneMs !== undefined ? `整轮 ${secs(m.timing.doneMs)}` : null].filter(Boolean);
           if (m.artifacts.length) process.stdout.write(`课包:${m.artifacts.join(', ')}\n`);
           process.stdout.write(`会话 ${index.session?.id ?? '?'}${timing.length ? ' · ' + timing.join(' · ') : ''}${m.tokens ? ` · 本轮 ${tokenText(m.tokens)}` : ''}${sumTokens(index.messages) ? ` · 今日 ${tokenText(sumTokens(index.messages))}` : ''}\n`);
         }

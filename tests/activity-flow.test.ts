@@ -114,7 +114,7 @@ try {
   check('上下文包:activityGuide 说已在系统提示里', p1.includes('  activityGuide: "已在你的系统提示里'), /activityGuide: .*/.exec(p1)?.[0]);
   check('上下文包:home: 照旧带按钮字与讲法', p1.includes('  home:\n    button: "我来出题"\n    brief: "羞愧要落到一幅上"'));
   check('系统提示里的 activity:填了词,用词那段在;注释与守卫行不在', guide.includes('### 用上这周的词') && guide.includes('第一句:') && !guide.includes('<!--') && !guide.includes('{{'), guide.slice(0, 300));
-  check('系统提示里的板书写法:老师没有的 photo 卡也讲', guide.includes('### photo'));
+  check('系统提示里 activity 后面跟着讲稿与动作怎么写,不讲卡', guide.includes('# 讲稿与动作怎么写') && guide.indexOf('### 用上这周的词') < guide.indexOf('# 讲稿与动作怎么写') && !guide.includes('### photo'));
   check('系统提示里的 activity:不带给人看的节、不带工具人那段', !guide.includes('## 认字收到什么') && !guide.includes('挑出这一页要认的字词') && !guide.includes('## 家长填的'));
   check('守则说以 activity 为准', p1.includes('activity 和这里写的不一样,以 activity 为准'));
 
@@ -286,7 +286,7 @@ try {
     const s1 = await go({ text: '练词', runtime: 'fake' });
     const sys = lastSystem();
     check('系统提示:系统提示是 activity 的人设与做法,不是老师文件', sys.startsWith('你是这个家的语文老师,今天陪孩子练词') && !sys.includes('### 孩子问怎么写'), sys.slice(0, 80));
-    check('系统提示:板书写法只讲 activity 的卡(read、photo、text)', sys.includes('### photo') && sys.includes('### read') && !sys.includes('### choice') && !sys.includes('### tianzige'));
+    check('系统提示:后面跟着讲稿与动作怎么写', sys.includes('# 讲稿与动作怎么写') && !sys.includes('### read'));
     check('系统提示:第一条不再带 <cotutor-activity>,写「已在系统提示里」;activity: 照带', !s1.file.prompt.includes('<cotutor-activity path=') && s1.file.prompt.includes('activityGuide: "已在你的系统提示里') && s1.file.prompt.includes('  activity:\n    name: "练词"'), JSON.stringify({ tag: s1.file.prompt.includes('<cotutor-activity'), g: /activityGuide: .*/.exec(s1.file.prompt)?.[0], a: s1.file.prompt.includes('  activity:') }));
     check('守则按 activity 的卡裁:没有 lecture 卡就没有小课堂那段', !s1.file.prompt.includes('孩子刚看完小课堂'));
     // 记忆:activity 自己一篇

@@ -2,7 +2,7 @@
  * 假百炼的 Chat Completions(流式,不花钱):API 运行时的测试经 COTUTOR_BRAIN_ENDPOINT 指到它。
  * 从 cotutor-api-prototype 的 fake-bailian.ts 来:SSE 帧故意按 17 字节切开写(验跨块拼接,中文的 UTF-8 也会被切开),收尾给 usage。
  * 看最后一条用户消息里的记号定怎么回(记号是大写字母,老师守则与上下文包里不会有):
- *   ZBOARD 两张卡加讲稿;ZMEM 加一段「## 记忆」;ZTOOL <路径> 先调 read_file 读它,拿到结果再回「书上说:…」;
+ *   ZBOARD 两句讲稿带一个动作;ZMEM 加一段「## 记忆」;ZTOOL <路径> 先调 read_file 读它,拿到结果再回「书上说:…」;
  *   ZNOUSAGE 不回 usage(回的时候一次 100 入、其中 60 命中缓存、20 出;孩子这句有 ZBIG 就报 40000 入,下一轮该整段压缩了);ZSTALL 吐一句就不动了(连接不关,等客户端断);ZHTTP401 回 401;
  *   别的回一句「收到:<孩子的话>」,话题里前面有老师的回复就先说「接着刚才的」
  * 给了 reply(假老师 _fake-teacher.ts 用)就先问它:回了 FakeReply 就照它回,回 null 才走上面的记号。
@@ -38,7 +38,7 @@ export interface FakeReply {
   lineMs?: number;
 }
 
-export const BOARD = '```text\n# 三角形\n拼一拼\n```\n\n先看[三角形]。\n\n```choice\n三角形有几个角?\n- [x] 三个\n- [ ] 四个\n```\n\n三角形有几个角?';
+export const BOARD = '先看三角形,两个拼一拼。[[看 例 2]]\n\n三角形有几个角?';
 
 export async function startFakeChat(opts: { reply?: (body: ChatBody) => FakeReply | null } = {}): Promise<{ baseURL: string; requests: ChatBody[]; close(): Promise<void> }> {
   const requests: ChatBody[] = [];

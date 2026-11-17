@@ -9,7 +9,6 @@
  */
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { cardLabel } from '../board/cards/index.ts';
 import { parseLogLine } from '../brain/index.ts';
 import { UsageError } from '../shared/errors.ts';
 import type { Workspace } from '../schema/index.ts';
@@ -53,7 +52,6 @@ export interface ReplayStarted {
 
 /**
  * 起一次回放:原轮的问题(谁问的、文字、照片、动作、端)原样再发,上下文包按现在重拼。
- * 原轮带的「孩子在卡上做的」(cards: 段)回放里没有——那是话题里上一轮的卡,回放是新话题;compare 的 notes 会标出来。
  */
 export async function startReplay(ws: Workspace, tutor: string, date: string, job: string, opts: ReplayOptions = {}): Promise<ReplayStarted> {
   if (!ws.config.tutors[tutor]) throw new UsageError(`没有叫 ${tutor} 的老师;cotutor.json 的 tutors 里有:${Object.keys(ws.config.tutors).join('、')}`);
@@ -70,7 +68,6 @@ export async function startReplay(ws: Workspace, tutor: string, date: string, jo
   const started = await runner.send(tutor, {
     from: m.from,
     text: m.text,
-    focus: m.focus,
     action: m.action,
     photos: m.photos,
     device: m.device,
@@ -98,7 +95,6 @@ export interface RunSide {
   timing: Timing | null;
   kidText: string | null;
   lines: string[];
-  cards: string[];
   tools: ToolCall[];
   parentText: string;
   warnings: string[];
@@ -106,8 +102,6 @@ export interface RunSide {
   prompt: string | null;
   /** 当时系统提示的来源(activity 文件;以前是老师文件)的 hash(run.json sources);没记就 null */
   agentHash: string | null;
-  /** 原轮带给老师的「孩子在卡上做的」几句(回放没有) */
-  cardsContext: string[];
 }
 
 export interface Compare {
@@ -121,9 +115,8 @@ export interface Compare {
   /** 上下文包的 diff(只留变了的行前后两行) */
   pack: DiffRow[];
   lines: DiffRow[];
-  cards: DiffRow[];
   tools: DiffRow[];
-  /** 看的时候要知道的:回放没带 cards: 段、activity 文件变没变之类 */
+  /** 看的时候要知道的:activity 文件变没变之类 */
   notes: string[];
 }
 
@@ -140,20 +133,17 @@ export function sideOf(m: ConversationMessage, run: { prompt: string; sources?: 
     timing: m.timing ?? null,
     kidText: m.kidText ?? null,
     lines: m.section?.lines.map((l) => l.text) ?? [],
-    cards: m.section?.cards.map((c, i) => `卡 ${i + 1}　${c.kind} ${cardLabel(c)}`.trim()) ?? [],
     tools,
     parentText: m.parentText ?? '',
     warnings: m.warnings ?? [],
     prompt: run?.prompt ?? null,
     agentHash: run?.sources?.agent?.hash ?? null,
-    cardsContext: m.cards?.map((c) => `${c.card} ${c.text}`) ?? [],
   };
 }
 
 /** 纯函数:两侧 → 并排 diff */
 export function compareSides(base: { tutor: string; date: string; job: string; evalJob: string }, orig: RunSide, next: RunSide): Compare {
   const notes: string[] = [];
-  if (orig.cardsContext.length) notes.push(`原轮带了孩子在卡上做的 ${orig.cardsContext.length} 条(cards: 段),回放是新话题,没带`);
   if (orig.prompt === null) notes.push('原轮没落 run.json(装新版之前跑的),上下文包比不了');
   if (orig.agentHash && next.agentHash) notes.push(orig.agentHash === next.agentHash ? 'activity 文件没变(hash 一样):差异来自 vault、技能或模型本身' : `activity 文件变了:${orig.agentHash.slice(7)} → ${next.agentHash.slice(7)}`);
   if (orig.runtime && next.runtime && orig.runtime !== next.runtime) notes.push(`运行时不同:原轮 ${orig.runtime},回放 ${next.runtime}`);
@@ -165,7 +155,6 @@ export function compareSides(base: { tutor: string; date: string; job: string; e
     next,
     pack: orig.prompt !== null && next.prompt !== null ? compactDiff(diffLines(promptLines(orig.prompt), promptLines(next.prompt))) : [],
     lines: diffLines(orig.lines, next.lines),
-    cards: diffLines(orig.cards, next.cards),
     tools: diffLines(orig.tools.map(toolLine), next.tools.map(toolLine)),
     notes,
   };
@@ -220,7 +209,6 @@ export function formatCompare(c: Compare): string {
   };
   section('上下文包', c.pack, '没有可比的');
   section('讲稿', c.lines, '两边都没有讲稿');
-  section('卡', c.cards, '两边都没有卡');
   section('读了什么', c.tools, '两边都没用工具');
   if (c.orig.parentText || c.next.parentText) { out.push('\n## 给家长的尾巴'); out.push(`- ${c.orig.parentText || '(无)'}`); out.push(`+ ${c.next.parentText || '(无)'}`); }
   if (c.orig.warnings.length || c.next.warnings.length) out.push(`提醒:原轮 ${c.orig.warnings.join(';') || '无'} / 回放 ${c.next.warnings.join(';') || '无'}`);

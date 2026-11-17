@@ -20,13 +20,13 @@ const { doctorWorkspace } = await import('../src/app/cli/doctor.ts');
 try {
   // ---- 契约 ----
   const ok = ThemeManifestSchema.safeParse({ name: 'x', default: 'a', tints: { a: { use: '甲' }, b: { use: '乙' } } });
-  check('清单:槽任意多,looks / pens 可省', ok.success && Object.keys(ok.data.looks).length === 0 && Object.keys(ok.data.pens).length === 0, JSON.stringify(ok));
+  check('清单:槽任意多;旧主题的 looks / pens 读进来就丢', ok.success && ThemeManifestSchema.safeParse({ name: 'x', default: 'a', tints: { a: { use: '甲' } }, looks: { plain: { use: '素' } }, pens: {} }).success && !('looks' in (ThemeManifestSchema.parse({ name: 'x', default: 'a', tints: { a: { use: '甲' } }, looks: {} }) as object)), JSON.stringify(ok));
   check('清单:default 不在 tints 里 → 不过', !ThemeManifestSchema.safeParse({ name: 'x', default: 'zz', tints: { a: { use: '甲' } } }).success);
   check('清单:没有底色槽 → 不过;槽名只认小写连字符', !ThemeManifestSchema.safeParse({ name: 'x', default: 'a', tints: {} }).success && !ThemeManifestSchema.safeParse({ name: 'x', default: 'a', tints: { 'A B': { use: '甲' } } }).success);
 
   // ---- 出厂主题本身要过契约 ----
   const factory = await packageTheme();
-  check('出厂 default:六个底色槽、四个字形槽、五支笔,css 在', factory.manifest.name === 'default' && Object.keys(factory.manifest.tints).join() === 'paper,sky,moss,sand,plum,night' && Object.keys(factory.manifest.looks).length === 4 && Object.keys(factory.manifest.pens).length === 5 && factory.css.includes(':root'));
+  check('出厂 default:六个底色槽,css 在', factory.manifest.name === 'default' && Object.keys(factory.manifest.tints).join() === 'paper,sky,moss,sand,plum,night' && factory.css.includes(':root'));
 
   // ---- init 拷贝 + hash ----
   const { root, steps } = await initWorkspace({ slug: 'ming' });

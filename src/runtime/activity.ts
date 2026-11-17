@@ -13,15 +13,15 @@ import {
   ACTIVITY_SLOT,
   ACTIVITY_TOOLS,
   ACTIVITY_TOOL_SECTION_RE,
-  BOARD_CARD_KINDS,
   type Activity,
+  type ActivityBase,
   type ActivityParam,
   type ActivityParamType,
   type ActivityTool,
   type ActivityValue,
 } from '../schema/index.ts';
 import { parseFrontmatter } from '../shared/frontmatter.ts';
-import { GUARD_CLOSE, GUARD_OPEN, applyGuards } from '../board/card-guards.ts';
+import { GUARD_CLOSE, GUARD_OPEN, applyGuards } from '../shared/guards.ts';
 import { stripHumanNotes } from '../shared/human-notes.ts';
 
 export type ActivityIssueLevel = 'fix' | 'note';
@@ -56,14 +56,12 @@ const H2 = /^##[ \t]+(.+?)[ \t]*$/;
 /** 名: 说法 —— 说明 */
 const NAMED_LINE = /^([^\s:：]+)[ \t]*[:：][ \t]*(.*)$/;
 const NOTE_SEP = /\s*——\s*/;
-const CARD_MENTION = /`([a-z]+)` 卡/g;
 const FIRST_LINE = /^第一句[ \t]*[:：]/m;
 /** 人设:「老师怎么带」自己写「你是……」(没有别的地方说老师是谁) */
 const PERSONA_LINE = /^你是/m;
 const CLOSE_LINE = /^收[ \t]*[:：]/m;
 
 const isType = (t: string): t is ActivityParamType => (ACTIVITY_PARAM_TYPES as readonly string[]).includes(t);
-const isCardKind = (k: string): boolean => (BOARD_CARD_KINDS as readonly string[]).includes(k);
 
 /** 一节里的围栏(按标签);没收口的报一条 */
 function fencesOf(lines: Line[], issues: ActivityIssue[]): Fence[] {
@@ -141,7 +139,7 @@ export function parseActivity(text: string): ParsedActivity {
       frontmatter = parseFrontmatter(rows.slice(0, end + 1).join('\n')).frontmatter;
       bodyStart = end + 1;
     } else issues.push({ level: 'fix', text: '头上的 --- 没有收口', line: 1 });
-  } else issues.push({ level: 'fix', text: '头上要有 --- 包着的 name / description / cards', line: 1 });
+  } else issues.push({ level: 'fix', text: '头上要有 --- 包着的 name / description / base', line: 1 });
 
   // 按 `## ` 切节;围栏里的 `## ` 不算
   const sections: { title: string; no: number; lines: Line[] }[] = [];
@@ -164,14 +162,12 @@ export function parseActivity(text: string): ParsedActivity {
     sections[sections.length - 1]?.lines.push(l);
   }
 
-  // 旧的头还认一段时间:board: page 没写 base 的当 base: photo,cards 里的 kit 丢掉(ACTIVITY_OLD_BOARD)
-  const cardsWritten = (frontmatter.cards ?? '').split(/[\s,，、]+/).filter(Boolean);
+  // 旧的头还认一段时间:board: page 没写 base 的当 base: photo(ACTIVITY_OLD_BOARD);cards 读进来就丢(课里没有卡了,2026-11-17)
   const oldBoard = frontmatter.board?.trim() === ACTIVITY_OLD_BOARD;
-  const old = [...(frontmatter.board?.trim() ? [`board: ${frontmatter.board.trim()}`] : []), ...(oldBoard && cardsWritten.includes('kit') ? ['cards: kit'] : [])];
+  const old = [...(frontmatter.board?.trim() ? [`board: ${frontmatter.board.trim()}`] : []), ...(frontmatter.cards?.trim() ? [`cards: ${frontmatter.cards.trim()}`] : [])];
   const activity: Activity = {
     name: frontmatter.name ?? '',
     description: frontmatter.description ?? '',
-    cards: cardsWritten.filter((c) => !(oldBoard && c === 'kit')),
     ...(frontmatter.base?.trim() ? { base: frontmatter.base.trim() } : oldBoard ? { base: 'photo' } : {}),
     ...(frontmatter.listen?.trim() ? { listen: frontmatter.listen.trim() } : {}),
     ...(frontmatter.reply?.trim() ? { reply: frontmatter.reply.trim() } : {}),
@@ -226,17 +222,12 @@ export function parseActivity(text: string): ParsedActivity {
 export interface CheckOptions {
   /** 文件名(不带 .md);给了就查 name 和它一样 */
   fileName?: string;
-  /** 这位老师的卡(cotutor.json tutors.<老师>.cards);不给 = 全部 */
-  tutorCards?: readonly string[];
 }
 
-/** 这个 activity 的话题里老师有哪些卡:老师的并上 activity 头上的,text 总在 */
-export function activityCards(a: Activity, tutorCards?: readonly string[]): string[] {
-  const base = tutorCards ?? BOARD_CARD_KINDS;
-  return [...new Set(['text', ...base, ...a.cards.filter(isCardKind)])];
-}
+/** 这一节课铺哪种页:头上的 base;没写当 photo(进来先拍照,不拍就是白纸;2026-11-17 起没有不铺页的课) */
+export const activityBase = (a: Pick<Activity, 'base'>): ActivityBase => (a.base === 'textbook' || a.base === 'lecture' ? a.base : 'photo');
 
-/** 对注册表查:参数、裁段的名字、正文用的卡、插槽、第一句与收 */
+/** 对注册表查:参数、裁段的名字、插槽、第一句与收 */
 export function checkActivity(a: Activity, opts: CheckOptions = {}): ActivityIssue[] {
   const issues: ActivityIssue[] = [];
   const fix = (text: string, line?: number): void => void issues.push({ level: 'fix', text, ...(line ? { line } : {}) });
@@ -244,14 +235,12 @@ export function checkActivity(a: Activity, opts: CheckOptions = {}): ActivityIss
   if (!a.name) fix('头上缺 name');
   else if (opts.fileName !== undefined && a.name !== opts.fileName) fix(`头上的 name 是「${a.name}」,文件名是「${opts.fileName}.md」,两个要一样`);
   if (!a.description) fix('头上缺 description:一句话说这个 activity 做什么,家长在首页挑的时候看它');
-  for (const k of a.cards) if (!isCardKind(k)) fix(`头上 cards 里的「${k}」不是板书的卡:只有 ${BOARD_CARD_KINDS.join(' ')}`);
 
   const names = new Map<string, number>();
   for (const p of a.params) {
     if (names.has(p.name)) fix(`参数「${p.name}」写了两次(第 ${names.get(p.name)} 行已有)`, p.line);
     names.set(p.name, p.line);
     if ((ACTIVITY_RESERVED_PARAMS as readonly string[]).includes(p.name)) fix(`参数不能叫「${p.name}」:首页按钮下面这一行已经有别的意思`, p.line);
-    if (isCardKind(p.name)) fix(`参数不能叫「${p.name}」:和卡的种类同名,{{有 ${p.name}}} 就分不清了`, p.line);
     if (p.min !== undefined && p.type !== '数') fix(`参数「${p.name}」是${p.type},不能写范围`, p.line);
     if (p.min !== undefined && p.max !== undefined && p.min > p.max) fix(`参数「${p.name}」的范围 ${p.min} 到 ${p.max} 反了`, p.line);
     if (p.default !== undefined) {
@@ -264,7 +253,8 @@ export function checkActivity(a: Activity, opts: CheckOptions = {}): ActivityIss
     }
   }
 
-  if (a.old?.length) issues.push({ level: 'note', text: `头上的「${a.old.join('」「')}」不用再写了:铺页的写 base: photo(孩子拍的作业)或 base: textbook(课本),老师在讲稿里写动作(cards/动作怎么写.md)${a.base ? `。现在照 base: ${a.base} 读` : ''}` });
+  if (a.old?.length) issues.push({ level: 'note', text: `头上的「${a.old.join('」「')}」不用再写了:课里没有卡,铺哪种页写 base: photo(孩子拍的作业)、textbook(课本)或 lecture(小课堂),老师在讲稿里写动作(cards/动作怎么写.md)。现在照 base: ${activityBase(a)} 读` });
+  if (a.base === undefined && !a.old?.length) issues.push({ level: 'note', text: '头上没写 base:当 base: photo(进来先拍照,不拍就是白纸)' });
   if (a.base !== undefined && !ACTIVITY_BASES[a.base]) fix(`头上 base 写的「${a.base}」不认得:只有 ${Object.keys(ACTIVITY_BASES).join('、')}`);
   if (a.listen !== undefined && !ACTIVITY_LISTENS[a.listen]) fix(`头上 listen 写的「${a.listen}」不认得:只有 ${Object.keys(ACTIVITY_LISTENS).join('、')}(不写 = 照老师的,缺省按住说)`);
   if (a.reply !== undefined && !ACTIVITY_REPLIES[a.reply]) fix(`头上 reply 写的「${a.reply}」不认得:只有 ${Object.keys(ACTIVITY_REPLIES).join('、')}(不写 = 脑先答)`);
@@ -277,19 +267,12 @@ export function checkActivity(a: Activity, opts: CheckOptions = {}): ActivityIss
       const g = GUARD_OPEN.exec(row);
       if (g) {
         open.push(at(i));
-        for (const n of g[1].trim().split(/\s+/)) if (!names.has(n) && !isCardKind(n)) fix(`{{有 ${n}}}:「${n}」既不是这个 activity 的参数,也不是卡`, at(i));
+        for (const n of g[1].trim().split(/\s+/)) if (!names.has(n)) fix(`{{有 ${n}}}:「${n}」不是这个 activity 的参数`, at(i));
       } else if (GUARD_CLOSE.test(row) && open.pop() === undefined) fix('{{/有}} 多了一个', at(i));
     });
     for (const l of open) fix('{{有 …}} 没有配对的 {{/有}}', l);
 
-    const cards = activityCards(a, opts.tutorCards);
     const body = stripHumanNotes(a.tutor.text);
-    for (const m of body.matchAll(CARD_MENTION)) {
-      const k = m[1];
-      const line = at(rows.findIndex((r) => r.includes(m[0])));
-      if (!isCardKind(k)) fix(`正文用了「${k}」卡,没有这种卡`, line);
-      else if (!cards.includes(k)) fix(`正文用了 \`${k}\` 卡,老师和这个 activity 都没有:在头上 cards 加上`, line);
-    }
     if (!PERSONA_LINE.test(body)) fix('「## 老师怎么带」要有一句人设,以「你是」开头:老师是谁写在这里', a.tutor.line);
     if (!FIRST_LINE.test(body)) fix('「## 老师怎么带」要写一行「第一句: …」:孩子点进来老师先说什么', a.tutor.line);
     if (!CLOSE_LINE.test(body)) fix('「## 老师怎么带」要写一行「收: …」:到哪一步收', a.tutor.line);
@@ -325,13 +308,13 @@ export function isFilled(v: unknown): boolean {
 }
 
 /**
- * 递给老师的那节:剥掉给人看的注释,`{{有 名}}` 按「参数填了」或「这个话题有这种卡」留或去。
+ * 递给老师的那节:剥掉给人看的注释,`{{有 名}}` 按「参数填了」留或去。
  * 没有「老师怎么带」返回 null。守卫不配对会抛(checkActivity 先报)。
  */
-export function renderTutorSection(a: Activity, opts: { params?: Record<string, unknown>; cards: readonly string[] }): string | null {
+export function renderTutorSection(a: Activity, opts: { params?: Record<string, unknown> } = {}): string | null {
   if (!a.tutor) return null;
   const params = opts.params ?? {};
-  return applyGuards(stripHumanNotes(a.tutor.text), (n) => isFilled(params[n]) || opts.cards.includes(n)).trim();
+  return applyGuards(stripHumanNotes(a.tutor.text), (n) => isFilled(params[n])).trim();
 }
 
 /**

@@ -4,7 +4,7 @@
  * 连字符、撇号字形包里没有,这里补两笔。数据是确定性资源,不经模型;词里有写不出的字 → null,页面退成字体的字。
  */
 import { GLYPHS, SPACE_ADVANCE, sampleStroke } from '../../chalk/glyphs/index.ts';
-import { WORD_MAX, WORD_RE } from '../../board/cards/index.ts';
+import { WORD_MAX, WORD_RE } from '../../shared/script.ts';
 
 export interface LetterGlyph {
   advance: number;

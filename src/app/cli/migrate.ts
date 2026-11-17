@@ -19,7 +19,7 @@ import { installTutors, type InstallStep } from './tutors.ts';
 import { CONFIG_FILE, ConfigError, readJson } from '../workspace.ts';
 
 /** section:出厂模板里有的整段(dictation 这种后加的),你这份没有;retired:出厂写进去、应用已经不读的整段,补缺时删掉 */
-export type GapKind = 'tutor' | 'runtime' | 'cards' | 'section' | 'retired';
+export type GapKind = 'tutor' | 'runtime' | 'section' | 'retired';
 
 export interface ConfigGap {
   kind: GapKind;
@@ -64,12 +64,13 @@ export async function configGaps(raw: unknown, agentsDir?: string): Promise<Conf
     const display = isObj(entry) && typeof entry.display === 'string' ? entry.display : name;
     gaps.push({ kind: 'tutor', path: `tutors.${name}`, detail: `出厂老师 ${display}(${name})不在 tutors 里`, value: entry });
   }
-  // 卡的清单(2026-10-07,《卡片协议.md》「谁拿到哪些卡」):出厂老师有、你这份没写 → 补出厂的;不想裁就写全部种类,这条就不再提
-  for (const [name, entry] of Object.entries(factoryTutors)) {
-    const mine = mineTutors[name];
-    if (!isObj(mine) || 'cards' in mine || !isObj(entry) || !Array.isArray(entry.cards)) continue;
-    gaps.push({ kind: 'cards', path: `tutors.${name}.cards`, detail: `${name} 没写卡的清单,板书写法里讲全部卡;出厂清单 ${(entry.cards as string[]).join(' ')}`, value: entry.cards });
+  // 课里的卡 2026-11-17 删了:老师条目里的卡的清单(cards)与板书开关(policy.board)不再读,补缺时删掉
+  for (const [name, mine] of Object.entries(mineTutors)) {
+    if (!isObj(mine)) continue;
+    if ('cards' in mine) gaps.push({ kind: 'retired', path: `tutors.${name}.cards`, detail: `${name} 的 cards(卡的清单)不再用了:课里没有卡,老师在讲稿里写动作,删掉`, value: undefined });
+    if (isObj(mine.policy) && 'board' in mine.policy) gaps.push({ kind: 'retired', path: `tutors.${name}.policy.board`, detail: `${name} 的 policy.board(板书开关)不再用了,删掉`, value: undefined });
   }
+  if (isObj(raw.policyDefaults) && 'board' in raw.policyDefaults) gaps.push({ kind: 'retired', path: 'policyDefaults.board', detail: 'policyDefaults.board(板书开关)不再用了,删掉', value: undefined });
 
   const mineRuntimes = isObj(raw.runtimes) ? raw.runtimes : {};
   const factoryRuntimes = isObj(factory.runtimes) ? factory.runtimes : {};

@@ -57,7 +57,7 @@ need(packs.length === declared.length && packs.length > 0, 'grades/ 有不完整
 for (const pack of packs) {
   for (const ref of await listActivities(pack.agentsDir, undefined, { examples: true })) {
     const text = readFileSync(ref.file, 'utf8');
-    const issues = ref.name.endsWith('.例子') ? parseExamples(text).issues : lintActivity(text, { fileName: ref.name, tutorCards: [] }).issues;
+    const issues = ref.name.endsWith('.例子') ? parseExamples(text).issues : lintActivity(text, { fileName: ref.name }).issues;
     need(issues.length === 0, `${ref.file}: ${issues.map((i) => i.text).join(';')}`);
   }
 }

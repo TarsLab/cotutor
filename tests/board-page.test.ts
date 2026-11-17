@@ -142,12 +142,12 @@ check('照片的宽高只读文件头:jpeg 的 SOF、png 的 IHDR;不是图回 n
     check('越界的路径、不是图、没这位老师:404', bad.every((r) => r.status === 404));
   }
 
-  // 别的话题:没有 base
+  // 头上没写 base 的 activity(2026-11-17 起课里没有卡):当 base: photo,没拍照就是白纸
   const { chatStart, writeChat } = await import('./_chat.ts');
   writeChat(root, [T]);
   const free = await chatStart(ctx, T, { text: '你好' });
   await wait();
-  check('不从铺页的 activity 进来的话题:不记 base、上下文包没有 board:', !index().messages.find((m) => m.job === free.json.job)?.base && !promptOf(String(free.json.job)).includes('\n  board:'));
+  check('头上没写 base 的 activity:记 base: photo,没拍照铺白纸,上下文包有 board:', index().messages.find((m) => m.job === free.json.job)?.base === 'photo' && promptOf(String(free.json.job)).includes('\n  board:') && promptOf(String(free.json.job)).includes('白纸'));
   check('点字只认一节课的话题', (await ctx.runner.boardEvent(T, date, { k: 'pick', thread: String(free.json.thread), text: '变', base: '作业' })) === null);
   await teacher.close();
 }

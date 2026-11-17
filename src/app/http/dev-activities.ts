@@ -12,7 +12,7 @@ import { sha256 } from '../cli/tutors.ts';
 import type { Workspace } from '../../schema/index.ts';
 import { lintActivity, renderTutorSection, resolveParams, type ActivityIssue } from '../../runtime/activity.ts';
 import type { TutorButton } from '../../board/cards/index.ts';
-import { ACTIVITY_SECTIONS, ACTIVITY_TOOLS, ACTIVITY_TOOL_SECTION_RE, BOARD_CARD_KINDS, type Activity } from '../../schema/index.ts';
+import { ACTIVITY_SECTIONS, ACTIVITY_TOOLS, ACTIVITY_TOOL_SECTION_RE, type Activity } from '../../schema/index.ts';
 import { readPublished } from '../../runtime/home/store.ts';
 
 export interface DevActivityRow {
@@ -68,8 +68,6 @@ async function homeButtons(ws: Workspace, tutor: string, name: string): Promise<
   return out;
 }
 
-const tutorCards = (ws: Workspace, tutor: string): readonly string[] | undefined => ws.config.tutors[tutor]?.cards;
-
 /** 按老师(cotutor.json 的顺序)列 workspace 里的 activity */
 export async function listDevActivities(ws: Workspace): Promise<DevActivityRow[]> {
   const order = Object.keys(ws.config.tutors);
@@ -77,7 +75,7 @@ export async function listDevActivities(ws: Workspace): Promise<DevActivityRow[]
   const rows: DevActivityRow[] = [];
   for (const r of refs) {
     const text = await readFile(r.file, 'utf8').catch(() => '');
-    const { activity, issues } = lintActivity(text, { fileName: r.name, tutorCards: tutorCards(ws, r.tutor) });
+    const { activity, issues } = lintActivity(text, { fileName: r.name });
     const st = await activityStatusOf(ws.root, r.tutor, r.name);
     rows.push({
       tutor: r.tutor,
@@ -119,7 +117,7 @@ export async function readDevActivity(ws: Workspace, tutor: string, name: string
 
 /** 一节一个读者(《写提示词.md》):节标题 → 谁读、在第几行 */
 export function activitySections(text: string): { title: string; reader: string; line: number }[] {
-  const out: { title: string; reader: string; line: number }[] = [{ title: '头', reader: 'name · cards', line: 1 }];
+  const out: { title: string; reader: string; line: number }[] = [{ title: '头', reader: 'name · base', line: 1 }];
   let fence = false;
   text.split('\n').forEach((l, i) => {
     if (/^`{3,}/.test(l)) fence = !fence;
@@ -162,20 +160,19 @@ export interface DevActivityCheck {
   issues: ActivityIssue[];
   summary: {
     params: { name: string; type: string; optional: boolean; default?: string; min?: number; max?: number }[];
-    cards: string[];
     tools: { tool: string; slots: readonly string[] }[];
   };
   sections: { title: string; reader: string; line: number }[];
   buttons: DevActivityButton[];
   /** 老师实际收到什么:按 params(首页按钮的或自己填的)裁好的「老师怎么带」;不起老师的是 null */
-  preview: { text: string | null; chars: number; cards: string[]; paramIssues: string[]; values: Record<string, string>; tools: { tool: string; prompt: string; negative?: string }[] };
+  preview: { text: string | null; chars: number; paramIssues: string[]; values: Record<string, string>; tools: { tool: string; prompt: string; negative?: string }[] };
   /** 和出厂那份比;不是出厂的 → null */
   diff: DiffHunk[] | null;
 }
 
 /** 边改边查(不落盘):检查、首页按钮按这份解析、预览、和出厂比 */
 export async function checkDevActivity(ws: Workspace, tutor: string, name: string, text: string, params: Record<string, string> = {}): Promise<DevActivityCheck> {
-  const { activity, issues } = lintActivity(text, { fileName: name, tutorCards: tutorCards(ws, tutor) });
+  const { activity, issues } = lintActivity(text, { fileName: name });
   const resolve = (raw: Record<string, string>): { ok: boolean; detail: string; values: Record<string, unknown> } => {
     const r = resolveParams(activity, raw);
     return r.issues.length ? { ok: false, detail: r.issues.join(';'), values: {} } : { ok: true, detail: Object.entries(r.values).map(([k, v]) => `${k} ${showValue(v)}${raw[k] === undefined ? '(缺省)' : ''}`).join(' · ') || '没有参数', values: r.values };
@@ -185,9 +182,8 @@ export async function checkDevActivity(ws: Workspace, tutor: string, name: strin
     const r = resolve(b.params);
     return { ...b, ok: r.ok && !fixes, detail: fixes ? '写坏了,孩子端不出' : r.ok ? r.detail : `解析不出,孩子端不出:${r.detail}` };
   });
-  const kinds = [...new Set(['text', ...activity.cards.filter((k) => (BOARD_CARD_KINDS as readonly string[]).includes(k))])];
   const p = resolveParams(activity, params);
-  const body = activity.tutor ? renderTutorSection(activity, { params: p.values, cards: kinds }) : null;
+  const body = activity.tutor ? renderTutorSection(activity, { params: p.values }) : null;
   const shipped = await shippedActivityText(tutor, name, ws.root);
   return {
     issues,
@@ -197,7 +193,6 @@ export async function checkDevActivity(ws: Workspace, tutor: string, name: strin
     preview: {
       text: body,
       chars: body ? [...body].length : 0,
-      cards: kinds,
       paramIssues: p.issues,
       values: Object.fromEntries(Object.entries(p.values).map(([k, v]) => [k, showValue(v)])),
       tools: activity.tools.map((t) => ({ tool: t.tool, prompt: t.prompt, ...(t.negative ? { negative: t.negative } : {}) })),
@@ -209,7 +204,6 @@ export async function checkDevActivity(ws: Workspace, tutor: string, name: strin
 function summaryOf(a: Activity): DevActivityCheck['summary'] {
   return {
     params: a.params.map((x) => ({ name: x.name, type: x.type, optional: x.optional, ...(x.default !== undefined ? { default: x.default } : {}), ...(x.min !== undefined ? { min: x.min } : {}), ...(x.max !== undefined ? { max: x.max } : {}) })),
-    cards: a.cards,
     tools: a.tools.map((t) => ({ tool: t.tool, slots: ACTIVITY_TOOLS[t.tool]?.slots ?? [] })),
   };
 }
@@ -230,7 +224,7 @@ export async function saveDevActivity(ws: Workspace, tutor: string, name: string
   await writeFile(`${file}.tmp`, text);
   await rename(`${file}.tmp`, file);
   const st = await activityStatusOf(ws.root, tutor, name);
-  return { hash: sha256(text), state: st.state, fixes: lintActivity(text, { fileName: name, tutorCards: tutorCards(ws, tutor) }).issues.filter((i) => i.level === 'fix').length };
+  return { hash: sha256(text), state: st.state, fixes: lintActivity(text, { fileName: name }).issues.filter((i) => i.level === 'fix').length };
 }
 
 export async function restoreDevActivity(ws: Workspace, tutor: string, name: string): Promise<{ bak: string | null }> {

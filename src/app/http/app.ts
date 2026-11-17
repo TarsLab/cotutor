@@ -15,15 +15,15 @@ import { PHOTO_MAX_SIDE } from '../../ui/kid/photo-edit.ts';
 import { currentThread, lastJobOf, sameRuntime } from '../../runtime/journal/conversation.ts';
 import { localDate, weekOf } from '../../shared/time.ts';
 import { conversationFiles, threads } from '../../schema/index.ts';
-import { kidConversation, startedThreads, submittedCards, parentConversation, type KidMessage, type KidTodayThread, type ParentMessage } from '../../runtime/kid-view.ts';
+import { kidConversation, startedThreads, parentConversation, type KidMessage, type KidTodayThread, type ParentMessage } from '../../runtime/kid-view.ts';
 import { previewOf, writePreview } from '../../runtime/journal/preview.ts';
 import { parseEvents } from '../../runtime/journal/events.ts';
 import { type Lesson, type RunEvent } from '../../schema/index.ts';
 import { NEUTRAL_COLOR, SUBJECT_COLORS, TUTOR_PALETTE, tutorColors } from '../../ui/shared/tutor-color.ts';
 import { boardMarkOf, type BoardMarkId } from '../../ui/kid/board-mark.ts';
-import { buildReel, playRecordOk, reelCardTook, reelHolds, reelMissRuns, type PlayRecord, type Reel, type ReelCall } from '../../ui/kid/reel.ts';
+import { buildReel, playRecordOk, reelHolds, reelMissRuns, type PlayRecord, type Reel, type ReelCall } from '../../ui/kid/reel.ts';
 import type { CallReel } from '../../runtime/journal/recorder.ts';
-import { DATE_RE, FocusSchema, canonicalSubject, MESSAGE_FROM, listTutors, subjectLang, viaSendsLabel, type ConversationIndex, type ConversationMessage, type MemoryLine, type TutorExtra } from '../../schema/index.ts';
+import { DATE_RE, canonicalSubject, MESSAGE_FROM, listTutors, subjectLang, viaSendsLabel, type ConversationIndex, type ConversationMessage, type MemoryLine, type TutorExtra } from '../../schema/index.ts';
 import type { BoardCard, Device } from '../../board/presentation.ts';
 import { ConfigError, patchConfig, reloadIfChanged, workspaceReport } from '../workspace.ts';
 import { UsageError } from '../../shared/errors.ts';
@@ -67,10 +67,9 @@ import { lessonInit } from '../../board/lesson.ts';
 import { readLesson } from '../../runtime/journal/lesson-store.ts';
 import { bookPages } from '../../chalk/index.ts';
 import type { Look } from '../../scenes/look.ts';
-import { IndexError, capturePathOk, deleteThread, listDates, rateThread, readErrLog, readIndex, readTranscript, scanCards, undoVaultWrite, writeCapture, writeCardState, type VaultWrite } from '../../runtime/journal/store.ts';
+import { IndexError, capturePathOk, deleteThread, listDates, rateThread, readErrLog, readIndex, readTranscript, undoVaultWrite, writeCapture, type VaultWrite } from '../../runtime/journal/store.ts';
 import { memoryLineText } from '../../memory/vault-notes.ts';
 import { childItem } from '../../memory/proposals.ts';
-import { IMAGE_EXT, parseCardState, stripSecrets } from '../../board/cards/index.ts';
 import { isAbsolute, resolve, sep } from 'node:path';
 import { bundleAsset, stageAsset, stageIndex, stageVersion } from './stage.ts';
 import { themeFiles } from './theme.ts';
@@ -275,13 +274,12 @@ export interface KidDay {
 export async function kidDay(ctx: AppContext, tutor: string, date: string): Promise<KidDay> {
   const index = await readIndex(ctx.ws, tutor, date);
   const active = ctx.runner.running(tutor);
-  const { states, assets } = await scanCards(ctx.ws, tutor, date);
-  const messages = kidConversation(index, states, assets);
-  // 流式:正在回的那条带上已经出来的板书(partial),卡随围栏闭合逐张出现;答案照样剥
+  const messages = kidConversation(index);
+  // 流式:正在回的那条带上已经出来的讲稿(partial)
   const partial = active && active.date === date ? ctx.runner.partial(tutor) : null;
   if (partial) {
     const m = messages.find((x) => x.job === active!.job);
-    if (m) m.section = stripSecrets(partial);
+    if (m) m.section = partial;
   }
   return { tutor, date, messages, pending: active && active.date === date ? active.job : null, thread: currentThread(index) };
 }
@@ -298,26 +296,11 @@ export interface ParentDay {
 export async function parentDay(ctx: AppContext, tutor: string, date: string): Promise<ParentDay> {
   const index = await readIndex(ctx.ws, tutor, date);
   const active = ctx.runner.running(tutor);
-  const { states, assets } = await scanCards(ctx.ws, tutor, date);
-  const messages = parentConversation(index, states, assets);
+  const messages = parentConversation(index);
   const partial = active && active.date === date ? ctx.runner.partial(tutor) : null;
   if (partial) {
     const m = messages.find((x) => x.job === active!.job);
     if (m) m.section = partial;
-  }
-  // 「做了」旁注带上孩子在弹窗里想了多久、改过几次(有实录才有):这张卡从同一话题上一条消息到这条之间的弹窗
-  const plays = await readPlays(ctx.ws, tutor, date);
-  if (plays.length) {
-    const th = threads(index.messages);
-    const at = (m: ConversationMessage): number => Date.parse(m.timing?.startedAt ?? '') || Date.parse(m.at);
-    for (const pm of messages) {
-      if (!pm.cards?.length) continue;
-      const i = index.messages.findIndex((x) => x.job === pm.job);
-      if (i < 0) continue;
-      const prev = index.messages.slice(0, i).reverse().find((_x, k) => th[i - 1 - k] === th[i]);
-      const [from, to] = [prev ? at(prev) : -Infinity, at(index.messages[i])];
-      pm.cards = pm.cards.map((c) => { const [job, n] = c.card.split('/'); const took = reelCardTook(plays, job, Number(n), from, to); return took ? { ...c, took } : c; });
-    }
   }
   return { tutor, date, messages, pending: active && active.date === date ? active.job : null, thread: currentThread(index) };
 }
@@ -369,12 +352,10 @@ export async function parentReel(ctx: AppContext, tutor: string, date: string, t
     const text = await readFile(files.events(m.job), 'utf8').catch(() => null);
     if (text !== null) events[m.job] = parseEvents(text);
   }
-  const { states } = await scanCards(ctx.ws, tutor, date);
   const jobs = new Set(mine.map((m) => m.job));
-  const cards = Object.fromEntries(Object.entries(states).filter(([job]) => jobs.has(job)));
   const plays = await readPlays(ctx.ws, tutor, date, jobs);
   const calls = mine.some((m) => m.live) ? await liveCalls(ctx, tutor, date, jobs) : [];
-  const reel = buildReel({ messages: mine, events, cards, now: ctx.now().getTime(), plays, calls });
+  const reel = buildReel({ messages: mine, events, now: ctx.now().getTime(), plays, calls });
   if (!reel) return null;
   const day = await parentDay(ctx, tutor, date);
   const kid = await kidDay(ctx, tutor, date);
@@ -435,7 +416,6 @@ export interface OverviewThread {
   /** 这个话题写进 vault 的每一笔(2026-10-30,《vault重构方案》§8):家长过目、单行撤回(job / kind / n 交给撤回接口);quote = 对上了的孩子原话 */
   writes: { job: string; kind: VaultWrite['kind']; n: number; text: string; quote?: string }[];
   sections: number;
-  cards: number;
   /** 老师还在写 / 末句问句停下等孩子 / 没停 */
   stoppedAt: 'writing' | 'ask' | null;
   rating: number | null;
@@ -508,7 +488,7 @@ export async function overview(ctx: AppContext, date: string): Promise<Overview>
         const raw = via ? `首页 · ${via}` : m.from === 'kid' ? m.text : `系统:${m.text}`;
         const b = m.via?.button;
         const kind = m.from === 'system' ? 'system' : m.lecture ? 'lecture' : m.activity ? 'activity' : typeof b === 'number' ? 'start' : 'new';
-        th = { thread: id, at: m.at, title: Array.from(raw.trim()).slice(0, 20).join(''), from: m.from, via, start: { kind, label: kind === 'new' ? '新话题' : (via ?? m.lecture?.title ?? '') }, said: null, endAt: null, notes: [], remembered: [], writes: [], sections: 0, cards: 0, stoppedAt: null, rating: index.ratings[id] ?? null, booked: id in index.booked };
+        th = { thread: id, at: m.at, title: Array.from(raw.trim()).slice(0, 20).join(''), from: m.from, via, start: { kind, label: kind === 'new' ? '新话题' : (via ?? m.lecture?.title ?? '') }, said: null, endAt: null, notes: [], remembered: [], writes: [], sections: 0, stoppedAt: null, rating: index.ratings[id] ?? null, booked: id in index.booked };
         by.set(id, th);
       }
       if (m.lecture && !th.lecture) th.lecture = { bundle: m.lecture.bundle, title: m.lecture.title, ...(m.lecture.video ? { video: true as const } : {}), watchedMs: m.lecture.watchedMs, finished: m.lecture.finished, marks: (m.lecture.marks ?? []).length };
@@ -522,9 +502,8 @@ export async function overview(ctx: AppContext, date: string): Promise<Overview>
       if (m.remembered?.length) th.remembered.push(...m.remembered);
       th.writes.push(...vaultWrites(m));
       if (m.result === 'running') th.stoppedAt = 'writing';
-      else if (m.result === 'ok' && m.section && (m.section.cards.length || m.section.lines.length)) {
+      else if (m.result === 'ok' && m.section && m.section.lines.length) {
         th.sections++;
-        th.cards += m.section.cards.length;
         const last = m.section.lines[m.section.lines.length - 1];
         th.stoppedAt = last?.ask ? 'ask' : null;
       }
@@ -555,35 +534,12 @@ export async function overview(ctx: AppContext, date: string): Promise<Overview>
   return { title: ctx.ws.config.title, date, today, tutors, week, ready: ctx.bailian.status().ready };
 }
 
-/**
- * 卡的状态:孩子在舞台里选了、填了 → 存 <日期>.<job>.cards/<n>.json,不起老师;下一条消息带给老师。
- * 画板、教具:body 里可以带 image(data:image/png;base64,…),存成 .cards/<n>.png,状态里只留路径(相对 workspace 根;画板的老师用 read_file 看,教具的随那一轮直接附给老师)
- */
-async function putCardState(ctx: AppContext, ws: Workspace, tutor: string, job: string, n: number, body: unknown): Promise<RouteResult> {
-  const date = localDate(ctx.now());
-  const index = await readIndex(ws, tutor, date);
-  const msg = index.messages.find((m) => m.job === job);
-  const target = msg?.result === 'ok' ? msg.section?.cards[n] : undefined;
-  if (!target) return { status: 404, json: { error: 'no_such_card' } };
-  // 交过的卡锁住了,不能再改
-  if (submittedCards(index).has(`${job}/${n}`)) return { status: 409, json: { error: 'submitted' } };
-  const r = parseCardState(target, body);
-  if (!r.ok) return { status: 400, json: { error: 'bad_state' } };
-  const last = index.messages[index.messages.length - 1];
-  // turn = 这张卡所在话题的末条 job:下一条发给同一话题时才算「上一轮之后改过的」
-  const mine = threads(index.messages)[index.messages.findIndex((m) => m.job === job)];
-  await writeCardState(ws, tutor, date, job, n, { at: ctx.now().toISOString(), turn: lastJobOf(index, mine) ?? last.job, state: r.state });
-  // 录像的实录:孩子的每一次存都记一条(选了又改、填空的过程、板上一笔一笔)
-  await appendFile(conversationFiles(ws.dirs.conversations, tutor, date).play(job), `${JSON.stringify({ at: ctx.now().getTime(), k: 'card', job, card: n, state: r.state })}\n`).catch(() => {});
-  return { status: 200, json: { ok: true, card: `${job}/${n}`, state: r.state } };
-}
-
-/** 卡的配音:<日期>.<job>.cards/<n>/<k>.mp3(第 n 张卡的第 k 个资产) */
-const AUDIO_FILE_RE = /^\d{4}-\d{2}-\d{2}\.\d{4}-\d+\.cards\/\d+\/\d+\.mp3$/;
 /** 实时老师一次通话的声音(两边混好的,src/runtime/live/call.ts):<日期>.live/<时分秒>.wav;录像里实时的轮从这里放 */
 const LIVE_CALL_RE = /^\d{4}-\d{2}-\d{2}\.live\/\d{6}\.wav$/;
 /** 实时那一轮嘴照念的声音(字幕重放,src/runtime/live/call.ts 落的):<日期>.<job>.mouth.wav */
 const MOUTH_FILE_RE = /^\d{4}-\d{2}-\d{2}\.\d{4}-\d+\.mouth\.wav$/;
+/** 图片文件的扩展名(头像、照片、课本页) */
+const IMAGE_EXT = /\.(png|jpe?g|webp|gif|svg)$/i;
 const IMAGE_TYPES: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', svg: 'image/svg+xml' };
 
 /** 作业照片一张最多这么大(解码后;页面先缩到长边 PHOTO_MAX_SIDE 的 jpeg,通常几百 KB) */
@@ -789,10 +745,9 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         const skew = typeof body.sentAt === 'number' && Math.abs(now - body.sentAt) < 86_400_000 ? now - body.sentAt : 0;
         const rows: string[] = [];
         for (const x of body.records as unknown[]) {
-          if (!playRecordOk(x) || x.k === 'card') continue;
+          if (!playRecordOk(x)) continue;
           const at = Math.round(x.at + skew);
           if (at > now + 60_000 || at < now - 86_400_000) continue;
-          if ((x.k === 'stage' || x.k === 'scroll') && !jobs.has(x.job)) continue;
           rows.push(JSON.stringify({ ...x, at }));
         }
         if (rows.length) await appendFile(conversationFiles(ws.dirs.conversations, tutor, date).play(last), `${rows.join('\n')}\n`).catch(() => {});
@@ -838,15 +793,6 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       if (!idx?.lines?.length) return { status: 404, json: { error: 'not_found' } };
       return { status: 200, json: { audio: `/api/audio/${tutor}/${d}.${job}.mouth.wav`, ms: idx.ms, lines: idx.lines } };
     }
-    // 卡的状态:孩子在舞台里选了、填了 → 存 <日期>.<job>.cards/<n>.json,不起老师;下一条消息带给老师
-    const card = /^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/cards\/(\d{4}-\d+)\/(\d+)$/.exec(p);
-    if (card) {
-      const [, tutor, job, nStr] = card;
-      const t = ws.config.tutors[tutor];
-      if (!t || !t.enabled || t.hidden) return { status: 404, json: { error: 'no_such_tutor' } };
-      if (method !== 'PUT') return { status: 405, json: { error: 'method_not_allowed' } };
-      return putCardState(ctx, ws, tutor, job, Number(nStr), body);
-    }
     // 老师头像(R5b,2026-09-16):cotutor.json 里 avatar 是图片相对路径时(figshot 写的 avatars/<老师>.png)从这里取;
     // 没写(或还是旧的出厂 emoji)的三门主科给包里的出厂头像(avatars.ts);
     // emoji 头像、越界、不是图、不存在都 404(孩子端退回显示 emoji / 首字)。no-cache:figshot 换了脸孩子端要马上见到
@@ -881,7 +827,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       if (lv[2] === 'video.mp4') return { status: 200, file: join(ws.dirs.lectures, lv[1], 'video.mp4'), contentType: 'video/mp4', cacheControl: 'no-cache' };
       return { status: 200, json: { title: l.title, total: l.clock.total, segments: l.clock.segments.map((x) => ({ start: x.start, len: x.len, line: x.line })) } };
     }
-    // 图片卡的图:只认 workspace 根以内的图片文件(产物、照片);越界、不是图、不存在都 404
+    // 图:只认 workspace 根以内的图片文件(作业照片、窗图);越界、不是图、不存在都 404
     if (p === '/api/kid/image' && method === 'GET') {
       const rel = url.searchParams.get('p') ?? '';
       const file = resolve(ws.root, rel);
@@ -945,11 +891,11 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     if (audio && method === 'GET') {
       const [, tutor, name] = audio;
       const call = LIVE_CALL_RE.test(name) || MOUTH_FILE_RE.test(name);
-      if (!ws.config.tutors[tutor] || (!AUDIO_FILE_RE.test(name) && !call)) return { status: 404, json: { error: 'not_found' } };
+      if (!ws.config.tutors[tutor] || !call) return { status: 404, json: { error: 'not_found' } };
       const file = join(ws.dirs.conversations, tutor, name);
       if (!(await stat(file).catch(() => null))?.isFile()) return { status: 404, json: { error: 'not_found' } };
       // 嘴照念的那份一段一段重落(这一轮还在念时就取得到),别让孩子端拿到缓存里的半截
-      return { status: 200, file, contentType: call ? 'audio/wav' : 'audio/mpeg', ...(MOUTH_FILE_RE.test(name) ? { cacheControl: 'no-cache' } : {}) };
+      return { status: 200, file, contentType: 'audio/wav', ...(MOUTH_FILE_RE.test(name) ? { cacheControl: 'no-cache' } : {}) };
     }
 
     // 看原文(2026-09-11):一轮拆成六站,一个接口给全;/fixture 是原文原样一份,开发者放进 tests/fixtures/board/
@@ -1059,12 +1005,10 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       // 工作台传照片:与孩子端同一条路(落 captures/,回 {path})
       if (tail === 'photos') return method === 'POST' ? uploadPhoto(ws, body, ctx.now()) : { status: 405, json: { error: 'method_not_allowed' } };
       if (tail === 'messages' && method === 'POST') {
-        if (!isObj(body) || typeof body.text !== 'string') return { status: 400, json: { error: 'bad_request', message: '要 {text, from?, focus?, runtime?, photos?, thread?, activity?, params?}' } };
+        if (!isObj(body) || typeof body.text !== 'string') return { status: 400, json: { error: 'bad_request', message: '要 {text, from?, runtime?, photos?, thread?, activity?, params?}' } };
         // 工作台 /dev 与 cotutor send 发的都算孩子的话(2026-10-05 起没有 from: parent;旧客户端带 parent 也当 kid)
         const from = body.from === undefined || body.from === 'parent' ? 'kid' : body.from;
         if (!(MESSAGE_FROM as readonly unknown[]).includes(from)) return { status: 400, json: { error: 'bad_request', message: `from 只能是 ${MESSAGE_FROM.join(' / ')}` } };
-        const focus = body.focus === undefined ? undefined : FocusSchema.safeParse(body.focus);
-        if (focus && !focus.success) return { status: 400, json: { error: 'bad_request', message: 'focus 形状不对' } };
         const photos = await photosOf(ws, body.photos);
         if (photos === null) return { status: 400, json: { error: 'bad_request', message: 'photos 要是 captures/ 里在的文件(先 POST …/photos 传图拿 path)' } };
         // 工作台 /dev 不带 device,缺省当平板横屏
@@ -1080,7 +1024,6 @@ export async function route(method: string, path: string, ctx: AppContext, body?
           from: from as (typeof MESSAGE_FROM)[number],
           text,
           action,
-          focus: focus?.data,
           runtime: typeof body.runtime === 'string' ? body.runtime : undefined,
           newThread: Boolean(activity),
           ...(activity ? { activity } : {}),

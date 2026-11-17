@@ -19,7 +19,7 @@ const { initWorkspace } = await import('../src/app/cli/init.ts');
 const { loadWorkspace } = await import('../src/app/workspace.ts');
 const { createContext, route } = await import('../src/app/http/app.ts');
 const { publishHome, checkHome } = await import('../src/runtime/home/store.ts');
-const { parseCard, stripSecrets } = await import('../src/board/cards/index.ts');
+const { parseCard, stripCard } = await import('../src/board/cards/index.ts');
 const { judgeChar, placeNote, strokeFit } = await import('../src/scenes/dictation/match.ts');
 const { LineReader, photoPrompt, recognizePhoto, splitWords } = await import('../src/app/dictation/recognize.ts');
 const { dictationDeps, handleDictation, parseChars, photosIdle } = await import('../src/app/dictation/route.ts');
@@ -77,11 +77,10 @@ const cell = (strokes: InkPoint[][]): { strokes: InkPoint[][]; undos: number } =
 
 // ---- 听写卡 ----
 {
-  const p = parseCard('dictation chinese-tutor', '- 春天\n鼓励 鼓励,老师鼓励我的鼓励\n\n叶 树叶的叶', 'home');
+  const p = parseCard('dictation chinese-tutor', '- 春天\n鼓励 鼓励,老师鼓励我的鼓励\n\n叶 树叶的叶');
   check('听写卡:一行一个词,念法空一格写在后面,列表符号去掉', p.card.kind === 'dictation' && !p.warning && JSON.stringify(p.card.props) === JSON.stringify({ tutor: 'chinese-tutor', words: [{ chars: '春天' }, { chars: '鼓励', say: '鼓励,老师鼓励我的鼓励' }, { chars: '叶', say: '树叶的叶' }] }), JSON.stringify(p));
-  check('听写卡:板书里不能用,退文字卡', parseCard('dictation', '春天', 'board').card.kind === 'text');
-  check('听写卡:夹拼音、超过四个字、空的都解析不成', ['鼓励gǔlì', '画蛇添足画', ''].every((b) => parseCard('dictation', b, 'home').card.kind === 'text'));
-  const kid = stripSecrets({ cards: [p.card], lines: [] }).cards[0];
+  check('听写卡:夹拼音、超过四个字、空的都解析不成', ['鼓励gǔlì', '画蛇添足画', ''].every((b) => parseCard('dictation', b).card.kind === 'text'));
+  const kid = stripCard(p.card);
   check('孩子端:字与念法都剥掉,只剩几个词', JSON.stringify(kid.props) === JSON.stringify({ tutor: 'chinese-tutor', words: [], count: 3 }));
 }
 

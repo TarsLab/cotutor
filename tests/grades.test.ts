@@ -74,8 +74,8 @@ try {
   for (const tutor of ['chinese-tutor', 'math-tutor', 'english-tutor']) {
     for (const name of common) {
       const file = refs.find((r) => r.tutor === tutor && r.name === name)!.file;
-      const parsed = lintActivity(readFileSync(file, 'utf8'), { fileName: name, tutorCards: [] });
-      check(`${tutor}/${name} 独立提示词与卡通过检查`, parsed.issues.length === 0 && !!renderTutorSection(parsed.activity, { cards: parsed.activity.cards })?.includes('二年级'), JSON.stringify(parsed.issues));
+      const parsed = lintActivity(readFileSync(file, 'utf8'), { fileName: name });
+      check(`${tutor}/${name} 独立提示词通过检查`, parsed.issues.length === 0 && !!renderTutorSection(parsed.activity, {})?.includes('二年级'), JSON.stringify(parsed.issues));
       const ex = parseExamples(readFileSync(file.replace(/\.md$/, '.例子.md'), 'utf8'));
       check(`${tutor}/${name} 有可运行的材料与结束例子`, ex.issues.length === 0 && ex.examples.length >= 3 && ex.examples.every((e) => resolveParams(parsed.activity, Object.fromEntries(e.params.split(';').filter(Boolean).map((s) => s.split('=')))).issues.length === 0), JSON.stringify(ex.issues));
     }

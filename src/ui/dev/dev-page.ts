@@ -1,7 +1,7 @@
 /**
  * 工作台 /dev(2026-09-22 之前叫家长端 /parent;现在家长端是 /parent = 记录与首页,给不懂技术的家长日常用,这页给有技术背景的家长与开发者):
  * 六个标签(概览 / 对话 / 老师团 / activity / 音色 / 设置)+「看原文」抽屉,零依赖内联脚本,只走 /api/*。
- * 2026-09-11 重做:一轮 = 一张卡(问句 → 板书 → 埋点 → 孩子看到 → 通知块),板书按 kind 渲染成卡片而不是把围栏原文倒给家长;
+ * 2026-09-11 重做:一轮 = 一张卡(问句 → 讲稿与动作 → 埋点 → 孩子看到 → 通知块);课里的卡 2026-11-17 删了,讲稿一句一行、动作写在句末;
  * 顶栏与输入框各自钉死(grid-rows auto/1fr/auto + min-height:0,不再硬算 100vh - 47px:顶栏一换行就错位,composer 被顶出视口);
  * 老师团一位一行、九项政策折叠、改过的才亮;设置分路径 / 服务 / 配音三块,配音能当场试一句。
  * 看原文 = 把一轮拆成几站(上下文包 / 时间线 / 老师原文 / 解析结果 / 下发给孩子 / 读了什么 / 转录),数据来自 /api/conversations/<老师>/<日期>/raw/<job>。
@@ -720,7 +720,7 @@ ${pageDomJs(4000)}
     const t = tutorOf(state.tutor);
     const v = state.view;
     const done = v.index.messages.filter((m) => m.result !== 'running');
-    const first = median(done.map((m) => m.timing && m.timing.firstCardMs).filter((x) => x !== undefined && x !== null));
+    const first = median(done.map((m) => m.timing && m.timing.firstReadyMs).filter((x) => x !== undefined && x !== null));
     const whole = median(done.map((m) => m.timing && m.timing.doneMs).filter((x) => x !== undefined && x !== null));
     // 这天老师用的 token(输入 / 输出;没报的轮不算,src/shared/tokens.ts)
     const used = v.index.messages.filter((m) => m.tokens);
@@ -732,7 +732,7 @@ ${pageDomJs(4000)}
       h('span', { class: 'today' },
         h('span', {}, (state.date === state.today ? '今日 ' : '这天 '), h('b', {}, String(v.index.messages.length)), ' 轮'),
         used.length ? h('span', { title: '老师用的 token:输入 / 输出' }, 'token ', h('b', {}, kTok(tk.in) + ' / ' + kTok(tk.out))) : null,
-        first !== null ? h('span', {}, '首卡中位 ', h('b', {}, secs(first))) : null,
+        first !== null ? h('span', {}, '首句就绪中位 ', h('b', {}, secs(first))) : null,
         whole !== null ? h('span', {}, '整轮中位 ', h('b', {}, secs(whole))) : null,
         v.index.session ? h('span', {}, '会话 ' + v.index.session.id.slice(0, 8)) : null,
         // 记账(《obsidian仓库设计.md》§4):这天每个还没记过的话题各起一轮,老师回「## 记账」,应用写进 vault 的日记
@@ -777,62 +777,17 @@ ${pageDomJs(4000)}
     if (!state.acts) api('GET', '/api/dev/activities').then((r) => { state.acts = r; renderThreadPick(); }, () => { state.acts = []; });
   };
 
-  // ---- 板书:按 kind 渲染成卡,不把围栏原文倒给家长 ----
-  const marked = (line) => {
-    const el = h('p', {});
-    const phrases = (line.marks || []).map((m) => m.phrase).filter(Boolean);
-    let rest = line.text;
-    if (!phrases.length) { el.textContent = rest; return el; }
-    while (rest) {
-      let at = -1;
-      let word = '';
-      for (const p of phrases) { const i = rest.indexOf(p); if (i >= 0 && (at < 0 || i < at)) { at = i; word = p; } }
-      if (at < 0) { el.append(rest); break; }
-      if (at > 0) el.append(rest.slice(0, at));
-      el.append(h('mark', {}, word));
-      rest = rest.slice(at + word.length);
-    }
-    return el;
-  };
-
-  const KIND_LABEL = { text: '文字', read: '点读', choice: '选择', fill: '填空', image: '图片', tianzige: '田字格', word: '单词', lecture: '小课堂', canvas: '画板', kit: '教具', code: '原样' };
-  const cardEl = (card, n) => {
-    const p = card.props || {};
-    const style = card.kind === 'text' ? (p.style || 'plain') : '';
-    const box = h('div', { class: 'card ' + card.kind + ' ' + style });
-    box.append(h('div', { class: 'kindbar' }, h('i', {}), card.kind + (p.style ? ' · ' + p.style : ''), h('span', { class: 'more' }, '卡 ' + (n + 1) + ' · ' + (p.ask === true ? '提问(应用补的)' : KIND_LABEL[card.kind] || card.kind))));
-    const body = h('div', { class: 'body' });
-    if (card.kind === 'text') body.append(...(p.title ? [h('b', {}, p.title)] : []), h('p', { style: 'margin:0' }, p.text || ''));
-    else if (card.kind === 'read') body.append(...(p.segments || []).map((s) => h('span', { class: 'rseg' }, s)));
-    else if (card.kind === 'choice') {
-      const ans = p.answer || [];
-      body.append(h('div', {}, p.question || ''));
-      (p.options || []).forEach((o, i) => body.append(h('div', { class: 'opt' + (ans.includes(i) ? ' right' : '') },
-        h('span', { class: 'k' }, 'ABCDEFGHIJ'[i] || String(i + 1)), o, ans.includes(i) ? h('span', { class: 'ans' }, '答案') : null)));
-      if (p.multi) body.append(h('div', { class: 'meta2' }, '多选'));
-    } else if (card.kind === 'image') {
-      body.append(h('img', { src: /^https?:/.test(p.src || '') ? p.src : '/api/kid/image?p=' + encodeURIComponent(p.src || ''), alt: p.caption || '' }), p.caption ? h('p', {}, p.caption) : null);
-    } else if (card.kind === 'lecture') {
-      body.append(h('div', {}, h('b', {}, p.title || p.bundle), p.ready === false ? h('span', { class: 'meta2' }, ' · 课读不出来') : null),
-        p.text ? h('p', {}, p.text) : null,
-        h('div', { class: 'meta2' }, '课 ' + p.bundle + (typeof p.from === 'number' ? ' · ' + Math.floor(p.from / 60000) + ':' + String(Math.floor(p.from / 1000) % 60).padStart(2, '0') + (typeof p.to === 'number' ? '–' + Math.floor(p.to / 60000) + ':' + String(Math.floor(p.to / 1000) % 60).padStart(2, '0') : '') : '')));
-    } else body.append(h('pre', {}, p.text || ''));
-    box.append(body);
-    return box;
-  };
-
-  /** 卡与讲稿按原来的顺序摆回去:句子的 anchor = 它前面最后一张卡 */
+  // ---- 讲稿:一句一行,动作写在句末 ----
+  /** 一节讲稿:一句一行,末句问句标出来;句子后面的动作写在句末(落不了的不带 do) */
   const boardEl = (section) => {
     const box = h('div', { class: 'board' });
-    let put = 0;
-    const flush = (upto) => { while (put <= upto && put < section.cards.length) { box.append(cardEl(section.cards[put], put)); put++; } };
+    const acts = (list) => (list || []).map((a) => '[[' + a.name + (a.arg ? ' ' + a.arg : '') + ']]' + (a.do ? '' : '✗')).join(' ');
+    if (section.acts && section.acts.length) box.append(h('div', { class: 'line' }, h('span', { class: 'n' }, '·'), h('p', { class: 'meta2' }, acts(section.acts))));
     section.lines.forEach((l, i) => {
-      flush(l.anchor === null || l.anchor === undefined ? -1 : l.anchor);
-      // 孩子端只在末句问句停下(board/presentation.ts 的 advance);中间的问句念完就接下一句,不缀
+      // 只在末句问句停下;中间的问句念完就接下一句,不缀
       const waits = l.ask && i === section.lines.length - 1;
-      box.append(h('div', { class: 'line' + (waits ? ' ask-line' : '') }, h('span', { class: 'n' }, String(i + 1)), marked(l)));
+      box.append(h('div', { class: 'line' + (waits ? ' ask-line' : '') }, h('span', { class: 'n' }, String(i + 1)), h('p', {}, l.text, l.acts && l.acts.length ? h('span', { class: 'meta2' }, ' ' + acts(l.acts)) : null)));
     });
-    flush(section.cards.length - 1);
     return box;
   };
 
@@ -857,28 +812,25 @@ ${pageDomJs(4000)}
   const FROM = { kid: '孩子', system: '系统' };
   const SLOW_FIRST = 15000;
 
-  /** 一轮一张卡:问句 → 板书 → 埋点 → 孩子看到 → 通知块,五段各有自己的容器与颜色 */
+  /** 一轮一张:问句 → 讲稿 → 埋点 → 孩子看到 → 通知块,五段各有自己的容器与颜色 */
   const turnEl = (m) => {
     const v = state.view;
     const t = tutorOf(state.tutor);
     const el = h('article', { class: 'turn' + (m.result === 'error' ? ' bad' : '') });
     const q = h('div', { class: 'q' }, m.text);
-    if (m.cards && m.cards.length) q.append(h('span', { class: 'did' }, '板书上做的 · ', ...m.cards.map((c) => h('span', {}, c.card + ' ' + c.text + ' '))));
-    if (m.focus && m.focus.card) q.append(h('span', { class: 'did' }, '开着 ' + m.focus.card));
     // 作业照片(R5):缩略图,点开看原图(转录里能看到老师 Read 了哪张)
     if (m.photos && m.photos.length) q.append(h('div', { class: 'photos' }, ...m.photos.map((p) => h('a', { href: '/api/kid/image?p=' + encodeURIComponent(p), target: '_blank', title: p }, h('img', { src: '/api/kid/image?p=' + encodeURIComponent(p), alt: p, loading: 'lazy' })))));
     el.append(h('div', { class: 'ask from-' + m.from },
       h('span', { class: 'tag' }, FROM[m.from] || m.from),
       q,
-      h('span', { class: 'when' }, m.at.slice(11) + ' · ' + m.job + (m.action === 'submit' ? ' · 交答案' : '') + (m.via ? ' · 首页「' + m.via.label + '」' : ''))));
+      h('span', { class: 'when' }, m.at.slice(11) + ' · ' + m.job + (m.action === 'submit' ? ' · 给老师看' : '') + (m.via ? ' · 首页「' + m.via.label + '」' : ''))));
 
-    if (m.section && (m.section.cards.length || m.section.lines.length)) el.append(boardEl(m.section));
+    if (m.section && (m.section.lines.length || (m.section.acts && m.section.acts.length))) el.append(boardEl(m.section));
     else if (m.result === 'ok' && m.kidText) el.append(h('div', { class: 'board' }, h('div', { class: 'line' }, h('span', { class: 'n' }, '1'), h('p', {}, m.kidText))));
 
     const foot = h('div', { class: 'turn-foot' }, h('span', { class: 'chip' }, (isAvatarImage(t.avatar) ? '' : (t.avatar || '') + ' ') + t.display));
     if (m.timing) {
       if (m.timing.firstReadyMs !== undefined) foot.append(h('span', { class: 'chip' + (m.timing.firstReadyMs > SLOW_FIRST ? ' slow' : '') }, '首句就绪 ', h('b', {}, secs(m.timing.firstReadyMs))));
-      if (m.timing.firstCardMs !== undefined) foot.append(h('span', { class: 'chip' + (m.timing.firstCardMs > SLOW_FIRST ? ' slow' : '') }, '首卡 ', h('b', {}, secs(m.timing.firstCardMs))));
       if (m.timing.doneMs !== undefined) foot.append(h('span', { class: 'chip' }, '整轮 ', h('b', {}, secs(m.timing.doneMs))));
     }
     if (m.tokens) foot.append(h('span', { class: 'chip', title: '这一轮老师用的 token(输入 / 输出)' }, h('b', {}, m.tokens.in + ' / ' + m.tokens.out), ' token'));
@@ -900,7 +852,7 @@ ${pageDomJs(4000)}
       const kid = h('p', {});
       if (m.kidText) kid.append(m.kidText.replace(/\\n/g, ' '));
       else kid.append(h('span', {}, '(这轮没有给孩子的话)'));
-      if (m.section) kid.append(h('span', {}, ' · 板书 ' + m.section.cards.length + ' 张卡 ' + m.section.lines.length + ' 句'));
+      if (m.section) kid.append(h('span', {}, ' · 讲稿 ' + m.section.lines.length + ' 句'));
       el.append(h('div', { class: 'kidview' }, h('span', { class: 'lab' }, '孩子看到'), kid));
     }
     if (m.parentText) el.append(h('div', { class: 'kidview parent' }, h('span', { class: 'lab' }, '给家长'), h('p', {}, m.parentText.replace(/^## 家长\\s*/, ''))));
@@ -1035,7 +987,6 @@ ${pageDomJs(4000)}
       }
       g.append(h('div', { class: 'ax' }, h('span', {}, (lo / 1000).toFixed(1) + 's'), h('span', {}, ((lo + total / 2) / 1000).toFixed(1) + 's'), h('span', {}, ((lo + total) / 1000).toFixed(1) + 's')));
       box.append(h('h5', {}, '时间线:每道工序什么时候起、什么时候回(从老师进程起算;实时的嘴这一道从孩子按下起,负的)'), g, detail);
-      if (raw.timing && raw.timing.beats && raw.timing.beats.length) box.append(h('h5', {}, '每拍'), h('pre', {}, raw.timing.beats.map((b, i) => '拍 ' + i + (b.card === null ? '(没有卡)' : '(卡 ' + b.card + ')') + ':关 ' + (b.closedMs !== undefined ? (b.closedMs / 1000).toFixed(2) + 's' : '-') + ' · 就绪 ' + (b.readyMs !== undefined ? (b.readyMs / 1000).toFixed(2) + 's' : '-')).join('\\n')));
       box.append(h('details', {}, h('summary', {}, '全部事件 ' + ev.length + ' 条'), h('pre', {}, raw.timeline.lines.join('\\n'))));
       return box;
     }
@@ -1080,14 +1031,6 @@ ${pageDomJs(4000)}
         h('span', {}, l.text, l.cut ? h('span', { class: 'cut' }, l.cut) : null))));
       if (!raw.kid.lines.length) box.append(h('p', { class: 'hintline' }, '这轮没有讲稿。'));
       if (raw.kid.lines.some((l) => l.cut)) box.append(h('p', { class: 'hintline' }, '删除线是按 replyMaxChars 截掉的部分:孩子看不到,也不念。'));
-      box.append(h('h5', {}, '卡 ' + raw.kid.cards.length + ' 张(答案已剥,孩子拿到的就是这个)'));
-      for (const c of raw.kid.cards) {
-        box.append(h('div', { class: 'kline' },
-          h('span', { class: 'n2' }, String(c.n + 1)),
-          h('span', {}, c.kind + '「' + c.label + '」', c.state ? h('span', { class: 'kidstate' }, ' · 孩子:' + c.state) : null),
-          h('span', { class: 'au' + (c.assets.length ? '' : ' none') }, c.assets.length ? c.assets.length + ' 个资产' : '无资产')));
-        box.append(h('details', {}, h('summary', {}, '下发的 props'), h('pre', {}, JSON.stringify(c.props, null, 2))));
-      }
       return box;
     }
     if (s === 'tools') {
@@ -1803,7 +1746,7 @@ ${pageDomJs(4000)}
     return [
       h('div', { class: 'srow' }, fx.length ? h('span', { class: 'st err' }, fx.length + ' 处要改') : h('span', { class: 'st ok' }, '都对得上'), nt.length ? h('span', { class: 'st warn' }, nt.length + ' 条提醒') : null, h('span', { class: 'note' }, r.issues.length ? '点一条跳到那一行' : '边改边查,不落盘')),
       r.issues.length ? h('div', { class: 'ilist' }, ...r.issues.map((i) => h('button', { type: 'button', class: 'iss' + (i.level === 'fix' ? ' fix' : ''), on: { click: () => { if (i.line) jumpTo(i.line); } } }, h('b', { class: 'num' }, i.line ? '第 ' + i.line + ' 行' : '整份'), h('span', {}, i.text)))) : null,
-      h('div', { class: 'kv2' }, ...kv('家长填的', s.params.map(param).join(' · ')), ...kv('卡', s.cards.join(' ')), ...kv('工具人', s.tools.map((t) => t.tool + (t.slots.length ? '(' + t.slots.join(' ') + ')' : '')).join(' · '))),
+      h('div', { class: 'kv2' }, ...kv('家长填的', s.params.map(param).join(' · ')), ...kv('工具人', s.tools.map((t) => t.tool + (t.slots.length ? '(' + t.slots.join(' ') + ')' : '')).join(' · '))),
       rule(),
       h('h3', {}, '首页上用到它的'),
       ...(r.buttons.length ? r.buttons.map((b) => h('div', { class: 'hb' }, h('span', { class: 'tx' }, h('b', {}, (b.kind === 'lecture' ? '小课堂 · ' : '') + b.label), h('small', {}, b.detail)), h('span', { class: 'st ' + (b.ok ? 'ok' : 'err') }, b.ok ? '对得上' : '孩子端不出'))) : [h('p', { class: 'note' }, '已发布的首页上没有按钮用它。')]),
@@ -1837,11 +1780,11 @@ ${pageDomJs(4000)}
     else {
       out.push(h('div', { class: 'chips' },
         h('span', { class: 'tag' }, '老师那节 ' + pv.chars.toLocaleString() + ' 字'),
-        h('span', { class: 'tag' }, '+ 板书写法 ' + pv.cards.join(' ')),
+        h('span', { class: 'tag' }, '+ 讲稿与动作怎么写'),
         ...Object.entries(pv.values).map(([k, v]) => h('span', { class: 'tag' }, k + ' ' + v)),
         ...pv.paramIssues.map((x) => h('span', { class: 'st err' }, x))));
       out.push(h('pre', { class: 'pv' }, pv.text));
-      out.push(h('div', { class: 'srow' }, h('span', { class: 'note', style: 'flex:1;min-width:160px' }, '这就是这个话题老师的系统提示:注释已剥,后面再接这几种卡的板书写法。'), h('button', { class: 'btn small', type: 'button', on: { click: (e) => copy(pv.text, e.target) } }, '复制全文')));
+      out.push(h('div', { class: 'srow' }, h('span', { class: 'note', style: 'flex:1;min-width:160px' }, '这就是这个话题老师的系统提示:注释已剥,后面再接讲稿与动作怎么写。'), h('button', { class: 'btn small', type: 'button', on: { click: (e) => copy(pv.text, e.target) } }, '复制全文')));
     }
     for (const t of pv.tools) {
       out.push(rule(), h('h3', {}, t.tool + '收到什么'), h('p', { class: 'note' }, '{{插槽}} 由应用在交出去那一刻填。'), h('pre', { class: 'pv tool' }, t.prompt));

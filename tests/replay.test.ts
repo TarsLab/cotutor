@@ -52,12 +52,12 @@ const { CHAT_RUN, writeChat } = await import('./_chat.ts');
 writeChat(root, ['math-tutor']);
 
 try {
-  // 原轮:带板书(假 CLI 见「板书」出卡)、配音
+  // 原轮:带讲稿与动作(假老师见「板书」回两句、一个看)
   const r1 = await runner.send('math-tutor', { from: 'kid', text: '讲讲板书', activity: CHAT_RUN });
   await r1.done;
   await runner.flush();
   const orig = (await readIndex(ws, 'math-tutor', '2026-09-08')).messages[0];
-  check('原轮 ok、有卡;讲稿不配音', orig.result === 'ok' && (orig.section?.cards.length ?? 0) > 0 && orig.section?.lines.every((l) => !l.audio) === true, JSON.stringify({ result: orig.result, cards: orig.section?.cards.length, audio: orig.section?.lines.map((l) => l.audio) }));
+  check('原轮 ok、有讲稿', orig.result === 'ok' && (orig.section?.lines.length ?? 0) > 0, JSON.stringify({ result: orig.result, section: orig.section }));
 
   // 改 vault 与 activity 文件后回放
   writeFileSync(join(root, 'vault', '孩子.md'), '---\ncotutor: profile\nschool_start: 2025-09\n---\n\n数学:人教数学一下 第 5 单元 在学\n还没学、别用:竖式\n');
@@ -71,7 +71,6 @@ try {
   const evalIndex = await readIndex(evalWorkspace(ws), 'math-tutor', '2026-09-08');
   const next = evalIndex.messages.find((m) => m.job === rp.evalJob)!;
   check('回放落 evals/:索引在、消息带 replayOf、新会话、ok', existsSync(join(root, 'evals', 'math-tutor', '2026-09-08.json')) && next?.replayOf === orig.job && next.result === 'ok' && evalIndex.sessions[next.job] !== undefined, JSON.stringify({ replayOf: next?.replayOf, result: next?.result }));
-  check('回放不配音', next.section?.lines.every((l) => !l.audio) === true, JSON.stringify({ audio: next.section?.lines.map((l) => l.audio) }));
   check('回放的 log / run.json 落在 evals/', existsSync(join(root, 'evals', 'math-tutor', `2026-09-08.${next.job}.log`)) && existsSync(join(root, 'evals', 'math-tutor', `2026-09-08.${next.job}.run.json`)));
   const origIndex = await readIndex(ws, 'math-tutor', '2026-09-08');
   check('原索引没动:还是一条', origIndex.messages.length === 1 && origIndex.messages[0].job === orig.job && !existsSync(join(root, 'conversations', 'math-tutor', `2026-09-08.${next.job}.log`)));
@@ -80,7 +79,7 @@ try {
   check('compare:状态 ok、两侧 job 对', c !== null && c.status === 'ok' && c.orig.job === orig.job && c.next.job === rp.evalJob);
   check('compare:上下文包 diff 看得到 vault 的改动(第 4 → 第 5 单元、多一行)', c.pack.some((r) => r.s === '-' && r.text.includes('第 4 单元')) && c.pack.some((r) => r.s === '+' && r.text.includes('第 5 单元')) && c.pack.some((r) => r.s === '+' && r.text.includes('竖式')), JSON.stringify(c.pack));
   check('compare:notes 说 activity 文件变了(hash 不同)', c.notes.some((n) => n.startsWith('activity 文件变了')), JSON.stringify(c.notes));
-  check('compare:讲稿与卡两边都有、读了什么两边一样', c.lines.length > 0 && c.cards.length > 0 && c.tools.every((r) => r.s === '·'), JSON.stringify({ lines: c.lines.length, cards: c.cards.length, tools: c.tools }));
+  check('compare:讲稿两边都有、读了什么两边一样', c.lines.length > 0 && c.tools.every((r) => r.s === '·'), JSON.stringify({ lines: c.lines.length, tools: c.tools }));
   const text = formatCompare(c);
   check('formatCompare:标题、两侧一行、各段标题、show --evals 提示', text.includes(`回放 math-tutor 2026-09-08 ${orig.job}`) && text.includes('- 原轮') && text.includes('+ 回放') && text.includes('## 上下文包') && text.includes('## 讲稿') && text.includes(`cotutor show math-tutor ${rp.evalJob} 2026-09-08 --evals`), text);
   const rows = await listReplays(ws, 'math-tutor', '2026-09-08');

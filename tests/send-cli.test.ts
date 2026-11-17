@@ -17,7 +17,6 @@ const { initWorkspace } = await import('../src/app/cli/init.ts');
 const { loadWorkspace } = await import('../src/app/workspace.ts');
 const { readIndex, readRunFile } = await import('../src/runtime/journal/store.ts');
 const { localDate } = await import('../src/shared/time.ts');
-const { yamlScalar } = await import('../src/runtime/context/context-pack.ts');
 const { main } = await import('../src/app/cli/main.ts');
 const { root } = await initWorkspace({ slug: 'ming', name: '小明' });
 const cfgFile = join(root, 'cotutor.json');
@@ -49,7 +48,8 @@ async function run(argv: string[]): Promise<{ out: string; code: number; err: st
 }
 
 const png = join(home, 'page.png');
-writeFileSync(png, Buffer.from('89504e470d0a1a0a', 'hex'));
+// PNG 头 + IHDR(16 × 32):读得出宽高,照片才铺得成页
+writeFileSync(png, Buffer.from('89504e470d0a1a0a0000000d49484452000000100000002008060000000000000000', 'hex'));
 const date = localDate(new Date());
 
 {
@@ -62,8 +62,7 @@ const date = localDate(new Date());
   const shot = readdirSync(join(root, 'captures', date));
   check('照片原样拷进 captures/<日期>/', shot.length === 1 && readFileSync(join(root, 'captures', date, shot[0])).equals(readFileSync(png)));
   const runFile = m ? await readRunFile(ws, 'chinese-tutor', date, m.job) : null;
-  // photoFiles 是本机写法的绝对路径,包里按 YAML 写(Windows 上带引号、反斜杠转义)
-  check('上下文包带 photos: 与 photoFiles:', (runFile?.prompt ?? '').includes(m?.photos?.[0] ?? '?') && (runFile?.prompt ?? '').includes(yamlScalar(join(root, m?.photos?.[0] ?? '?'))));
+  check('照片铺成页:上下文包 board: 底是作业照片,不进 photos:', (runFile?.prompt ?? '').includes('作业照片') && !(runFile?.prompt ?? '').includes('  photos:'), runFile?.prompt.slice(0, 400));
   // 孩子的话照实时写(同孩子端:上下文包带 live:、不补提问卡、讲稿不截;嘴不在,接住与打断不带)
   check('cotutor send 发的孩子的话照实时写:消息记 live、上下文包带 live: true', m?.live === true && (runFile?.prompt ?? '').includes('\n  live: true\n'), JSON.stringify({ live: m?.live }));
   const sys = await run(['send', 'chinese-tutor', '系统起的一句', '--from', 'system', '--quiet']);

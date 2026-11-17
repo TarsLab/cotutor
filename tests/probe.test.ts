@@ -1,6 +1,6 @@
 /**
  * 两个 CDP 探针进 pnpm test(2026-10-17):页面模板里约 8000 行 JS 以前只有「能 new Function 解析」一条自动化,行为全靠手跑 scripts/probe-*.mjs。
- * 挑了两个走 mock、不花钱、各十几秒的:probe-layout(排版:半宽、并排、不横滚、流式出卡不挪、页面没抛异常)与 probe-play(实录:播放位置、弹窗、家长端不发)。
+ * 挑了两个走 mock、不花钱、各十几秒的:probe-layout(三种尺寸不横滚、流式讲稿只多一节、页面没抛异常)与 probe-play(实录:打字、不记播放位置、家长端不发)。
  * 要本机 Chrome(CHROME 环境变量,或 /Applications/Google Chrome.app);没有就打一行跳过、算过,别的机器与 CI 不会因此红。COTUTOR_SKIP_PROBES=1 也跳过。
  * 探针自己起 mock(端口 8797)与无头 Chrome(CDP 9339),过了打「全过」、exit 0;这里只看退出码与那句话,没过把它的输出整个打出来。
  */

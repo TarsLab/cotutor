@@ -89,7 +89,7 @@ const median = (xs: number[]): number | null => {
   const a = xs.slice().sort((x, y) => x - y);
   return a.length ? a[Math.floor(a.length / 2)] : null;
 };
-const firstOf = (m: ConversationMessage): number | undefined => m.timing?.firstReadyMs ?? m.timing?.firstCardMs;
+const firstOf = (m: ConversationMessage): number | undefined => m.timing?.firstReadyMs;
 const clip = (s: string, n = 40): string => (s.length > n ? s.slice(0, n) + '…' : s);
 const secs = (ms: number): string => (ms < 10_000 ? (ms / 1000).toFixed(1) : String(Math.round(ms / 1000))) + ' s';
 

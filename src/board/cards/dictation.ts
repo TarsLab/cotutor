@@ -6,7 +6,7 @@
  * 词就是答案:strip 只留几个词,孩子端首页 JSON 里没有字;听写页写完交了才拿到(src/app/dictation/route.ts)。
  */
 import { z } from 'zod';
-import { HAN } from './tianzige.ts';
+import { HAN } from '../../shared/script.ts';
 import { bodyLines, type CardKind } from './kind.ts';
 
 /** 一个词最多几个字(一个字一个田字格,同田字格卡) */
@@ -62,7 +62,6 @@ export type DictationProps = z.infer<typeof DictationPropsSchema>;
 
 export const dictation: CardKind<DictationProps> = {
   name: 'dictation',
-  where: ['home'],
   props: DictationPropsSchema,
   parse(body, mods) {
     const who = mods[0];

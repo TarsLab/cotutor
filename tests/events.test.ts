@@ -1,33 +1,31 @@
 /** 事件的纯函数:一句话、一行、道过滤、jsonl 解析(坏行跳过)。发事件的那头在 runner.test.ts。 */
-import { beatTimings, describeEvent, formatEvent, laneFilter, parseEvents, timelineSpans } from '../src/runtime/journal/events.ts';
+import { describeEvent, formatEvent, laneFilter, parseEvents, timelineSpans } from '../src/runtime/journal/events.ts';
 import { type RunEvent } from '../src/schema/index.ts';
 import { check, done } from './_check.ts';
 
 const ev = (e: Omit<RunEvent, 't'> & Record<string, unknown>, t = 1234): RunEvent => ({ t, ...e } as RunEvent);
-check('main:起 / 卡 / 句 / 工具 / 退出', describeEvent(ev({ lane: 'main', kind: 'start', cli: 'claude', runtime: 'claude', resume: true })) === '起 claude(claude,resume)' && describeEvent(ev({ lane: 'main', kind: 'card', card: 0, label: 'text cover「勾股定理」' })) === '卡 0 text cover「勾股定理」' && describeEvent(ev({ lane: 'main', kind: 'line', line: 2, text: '先认边。' })) === '句 2「先认边。」' && describeEvent(ev({ lane: 'main', kind: 'tool', name: 'Read x', sub: true })) === '子代理 工具 Read x' && describeEvent(ev({ lane: 'main', kind: 'exit', ok: true, tokens: { in: 2500, out: 120 }, turns: 3 })) === '退出 ok · 3 turns · 2500 入 / 120 出 token' && describeEvent(ev({ lane: 'main', kind: 'exit', ok: false, reason: 'error_max_turns' })) === '退出 出错(error_max_turns)');
-check('tts / ready / index / ledger', describeEvent(ev({ lane: 'tts', kind: 'done', label: '第 1 句', ms: 1898, file: 'a.mp3' })) === '第 1 句✓ 1.90s' && describeEvent(ev({ lane: 'tts', kind: 'failed', label: '第 2 句', ms: 300, error: '音色不存在' })) === '第 2 句✗ 0.30s 音色不存在' && describeEvent(ev({ lane: 'ready', kind: 'beat', beat: 0, card: 0, first: true })) === '拍 0 ✓(卡 0) ← 第一拍' && describeEvent(ev({ lane: 'ready', kind: 'speak' })) === '第一句配好了 ← 首句就绪(能开口)' && describeEvent(ev({ lane: 'ready', kind: 'all', cards: 4, lines: 6 })) === '全部就绪(4 张卡 6 句)' && describeEvent(ev({ lane: 'index', kind: 'written', warnings: 2 })) === '写入 · 提醒 2' && describeEvent(ev({ lane: 'ledger', kind: 'diary', thread: '1930-1', file: '2026-09-08.md' })) === '日记 2026-09-08.md 记了话题 1930-1');
+check('main:起 / 句 / 工具 / 退出', describeEvent(ev({ lane: 'main', kind: 'start', cli: 'claude', runtime: 'claude', resume: true })) === '起 claude(claude,resume)' && describeEvent(ev({ lane: 'main', kind: 'line', line: 2, text: '先认边。' })) === '句 2「先认边。」' && describeEvent(ev({ lane: 'main', kind: 'tool', name: 'Read x', sub: true })) === '子代理 工具 Read x' && describeEvent(ev({ lane: 'main', kind: 'exit', ok: true, tokens: { in: 2500, out: 120 }, turns: 3 })) === '退出 ok · 3 turns · 2500 入 / 120 出 token' && describeEvent(ev({ lane: 'main', kind: 'exit', ok: false, reason: 'error_max_turns' })) === '退出 出错(error_max_turns)');
+check('tts / ready / index / ledger', describeEvent(ev({ lane: 'tts', kind: 'done', label: '第 1 句', ms: 1898, file: 'a.mp3' })) === '第 1 句✓ 1.90s' && describeEvent(ev({ lane: 'tts', kind: 'failed', label: '第 2 句', ms: 300, error: '音色不存在' })) === '第 2 句✗ 0.30s 音色不存在' && describeEvent(ev({ lane: 'ready', kind: 'speak' })) === '第一句出来了 ← 首句就绪(能开口)' && describeEvent(ev({ lane: 'ready', kind: 'all', lines: 6 })) === '全部就绪(6 句)' && describeEvent(ev({ lane: 'index', kind: 'written', warnings: 2 })) === '写入 · 提醒 2' && describeEvent(ev({ lane: 'ledger', kind: 'diary', thread: '1930-1', file: '2026-09-08.md' })) === '日记 2026-09-08.md 记了话题 1930-1');
 check('一行:相对秒右对齐两位小数、道补齐 7 位', formatEvent(ev({ lane: 'tts', kind: 'queued', label: '第 1 句' }, 6402)) === '  6.40 tts     第 1 句排队');
 const keep = laneFilter('ready, tts,bogus');
 check('道过滤:认识的留下、不认识的忽略;空 = 全部', keep(ev({ lane: 'tts', kind: 'queued', label: 'x' })) && !keep(ev({ lane: 'main', kind: 'start', cli: 'c', runtime: 'r', resume: false })) && laneFilter(undefined)(ev({ lane: 'main', kind: 'start', cli: 'c', runtime: 'r', resume: false })) && laneFilter('bogus')(ev({ lane: 'index', kind: 'written', warnings: 0 })));
 const parsed = parseEvents('{"t":1,"lane":"main","kind":"start","cli":"c","runtime":"r","resume":false}\n坏行\n{"t":2,"lane":"nope","kind":"x"}\n\n{"t":3,"lane":"index","kind":"written","warnings":0}\n');
 check('jsonl 解析:坏行与不认识的道跳过', parsed.length === 2 && parsed[0].kind === 'start' && parsed[1].lane === 'index');
 check('老的 events.jsonl 里后期那道(已删)的行跳过', parseEvents('{"t":1,"lane":"post","kind":"start","beat":0,"card":0,"context":0}\n').length === 0);
+check('老的 events.jsonl 里卡闭合、一拍就绪的行(2026-11-17 删了)跳过', parseEvents('{"t":1,"lane":"main","kind":"card","card":0,"label":"a"}\n{"t":2,"lane":"ready","kind":"beat","beat":0,"card":0,"first":true}\n{"t":3,"lane":"index","kind":"written","warnings":0}\n').length === 1);
 check('老的 events.jsonl 里画图作业那道(scene,2026-10-07 删了)的行跳过', parseEvents('{"t":1,"lane":"scene","kind":"started","bundle":"x-1","job":"1902-4"}\n').length === 0);
-// 每拍的埋点从事件推:关 = 下一张卡出现(末拍 = 退出)、就绪(末拍取 all);老事件里卡的配音那道(tts)不影响
+// 时间线:老事件里的配音那道(tts)照样画
 const run: RunEvent[] = [
   ev({ lane: 'main', kind: 'start', cli: 'c', runtime: 'r', resume: false }, 0),
-  ev({ lane: 'main', kind: 'card', card: 0, label: 'a' }, 500), ev({ lane: 'main', kind: 'line', line: 0, text: 'x' }, 600), ev({ lane: 'tts', kind: 'queued', label: '第 1 句' }, 600),
-  ev({ lane: 'tts', kind: 'done', label: '第 1 句', ms: 100, file: 'f' }, 700), ev({ lane: 'main', kind: 'card', card: 1, label: 'b' }, 900),
-  ev({ lane: 'ready', kind: 'beat', beat: 0, card: 0, first: true }, 1200),
+  ev({ lane: 'main', kind: 'line', line: 0, text: 'x' }, 600), ev({ lane: 'tts', kind: 'queued', label: '第 1 句' }, 600),
+  ev({ lane: 'tts', kind: 'done', label: '第 1 句', ms: 100, file: 'f' }, 700),
   ev({ lane: 'main', kind: 'line', line: 1, text: 'y' }, 1300), ev({ lane: 'tts', kind: 'queued', label: '第 2 句' }, 1300), ev({ lane: 'main', kind: 'exit', ok: true }, 1500), ev({ lane: 'tts', kind: 'failed', label: '第 2 句', ms: 400, error: 'e' }, 1700),
-  ev({ lane: 'ready', kind: 'all', cards: 2, lines: 2 }, 2300), ev({ lane: 'index', kind: 'written', warnings: 0 }, 2310),
+  ev({ lane: 'ready', kind: 'all', lines: 2 }, 2300), ev({ lane: 'index', kind: 'written', warnings: 0 }, 2310),
 ];
-const bt = beatTimings(run, [{ card: 0 }, { card: 1 }]);
-check('每拍埋点:拍 0 关在卡 1 出现、就绪 1200;拍 1 关在退出、就绪取 all', JSON.stringify(bt) === '[{"card":0,"closedMs":900,"readyMs":1200},{"card":1,"closedMs":1500,"readyMs":2300}]', JSON.stringify(bt));
 const sp = timelineSpans(run);
 const of = (lane: string) => sp.filter((x) => x.lane === lane);
 check('时间线的段:老师 0→1500;配音两段(一段 fail);瞬时的 to = from;按起点排序', of('main')[0].from === 0 && of('main')[0].to === 1500 && of('tts').length === 2 && of('tts')[1].state === 'fail' && of('ready').every((x) => x.from === x.to) && sp.every((x, i) => i === 0 || x.from >= sp[i - 1].from), JSON.stringify(sp.map((x) => [x.lane, x.from, x.to, x.state])));
-check('没收尾的段画到最后一条事件并标 warn', timelineSpans(run.slice(0, 4)).some((x) => x.lane === 'tts' && x.state === 'warn' && x.label.includes('没收尾')));
+check('没收尾的段画到最后一条事件并标 warn', timelineSpans(run.slice(0, 3)).some((x) => x.lane === 'tts' && x.state === 'warn' && x.label.includes('没收尾')));
 {
   // 嘴这一道(实时老师,src/runtime/live/call.ts 事后补进来):t 负的排在老师进程起来之前;一句话写清
   const text = [{ t: 0, lane: 'main', kind: 'start', cli: 'qwen', runtime: 'qwen', resume: false }, { t: 3000, lane: 'mouth', kind: 'read', line: 0 }, { t: -1200, lane: 'mouth', kind: 'hold' }, { t: -400, lane: 'mouth', kind: 'release', how: 'voice' }, { t: 200, lane: 'mouth', kind: 'catch', text: '你问三明治' }, { t: 5000, lane: 'mouth', kind: 'cut', line: 1 }].map((e) => JSON.stringify(e)).join('\n');

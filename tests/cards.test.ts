@@ -1,116 +1,25 @@
-/** 卡的注册表:每种卡的解析 / 剥秘密 / 语法表;不认识的标签;解析失败的退路。 */
-import { CARD_KINDS, cardAssets, cardKind, cardLabel, describeCard, kindsFor, parseCard, parseCardState, stripSecrets, tutorCardKinds, wordChunks } from '../src/board/cards/index.ts';
-import { BOARD_CARD_KINDS } from '../src/schema/config.ts';
-import { boardSkillDoc, boardSyntaxDoc } from '../src/board/cards/docs.ts';
+/**
+ * 卡的注册表:卡只剩首页的两种——老师牌(tutor)、听写牌(dictation)。解析、剥秘密、退路、标题。
+ * 课里的卡 2026-11-17 删了(《多模态教学harness-开发计划》阶段 5):首页写了别的种类,退成文字、记一句。
+ */
+import { CARD_KINDS, cardKind, cardLabel, parseCard, stripCard } from '../src/board/cards/index.ts';
 import { check, done } from './_check.ts';
 
+check('注册表:只有老师牌与听写牌', CARD_KINDS.map((k) => k.name).join() === 'tutor,dictation' && cardKind('tutor')?.name === 'tutor' && cardKind('choice') === undefined && cardKind('lecture') === undefined);
 {
-  check('有状态的卡:choice;text / read / image / code 没有', CARD_KINDS.filter((k) => k.state).map((k) => k.name).join() === 'choice');
-  check('十种卡登记在册:板书八种 + 首页的老师卡与听写卡(小课堂卡 2026-11-17 删了)', CARD_KINDS.map((k) => k.name).join() === 'text,read,choice,image,tianzige,word,photo,code,tutor,dictation' && cardKind('choice')?.name === 'choice' && cardKind('lecture') === undefined);
-  check('用在哪:板书八种;首页只有老师卡与听写卡', kindsFor('board').map((k) => k.name).join() === 'text,read,choice,image,tianzige,word,photo,code' && kindsFor('home').map((k) => k.name).join() === 'tutor,dictation');
-  check('契约里的板书种类表与注册表对得上(schema 不 import 卡,靠这条锁住)', BOARD_CARD_KINDS.join() === kindsFor('board').map((k) => k.name).join());
-  check('老师的卡:没写 = null(全部);写了 = 注册表顺序、text 总在、首页的卡不算', tutorCardKinds(undefined) === null && tutorCardKinds(['code', 'read'])?.join() === 'text,read,code' && tutorCardKinds(['choice', 'tutor', 'text'])?.join() === 'text,choice' && tutorCardKinds([])?.join() === 'text');
-  const tut = parseCard('tutor chinese-tutor', '- activity 预习 我要预习小蝌蚪找妈妈\n范围: 第 22 课\n讲法: 先读课文\n讲法: 再认字\n小课堂 2026-09-18-po13-jian-8 13 减 8 怎么拆', 'home');
-  check('老师卡:列表号去掉、参数与讲法挂上一个按钮(讲法多行拼起来)、小课堂带课包', tut.card.kind === 'tutor' && JSON.stringify(tut.card.props) === JSON.stringify({ tutor: 'chinese-tutor', buttons: [{ kind: 'activity', label: '我要预习小蝌蚪找妈妈', activity: '预习', params: { 范围: '第 22 课' }, brief: '先读课文\n再认字' }, { kind: 'lecture', label: '13 减 8 怎么拆', bundle: '2026-09-18-po13-jian-8' }] }) && !tut.warning, JSON.stringify(tut));
-  check('开场按钮、接着按钮、新话题没有了(2026-11-16):写了整张卡退文字卡', ['我要预习', '接着 2026-09-16 1930-1 接着写', '新话题'].every((line) => parseCard('tutor chinese-tutor', line, 'home').fallback === true));
-  check('老师卡剥讲法与参数', JSON.stringify(stripSecrets({ cards: [tut.card], lines: [] }).cards[0].props.buttons) === '[{"kind":"activity","label":"我要预习小蝌蚪找妈妈","activity":"预习","params":{}},{"kind":"lecture","label":"13 减 8 怎么拆","bundle":"2026-09-18-po13-jian-8"}]', JSON.stringify(stripSecrets({ cards: [tut.card], lines: [] }).cards[0].props.buttons));
-  const tooMany = parseCard('tutor math-tutor', 'activity a\nactivity b\nactivity c\nactivity d\nactivity e', 'home');
-  check('老师卡:5 个按钮、没写老师、两位老师、坏老师名 → 文字卡 + fallback', tooMany.fallback === true && tooMany.warning?.includes('最多 4 个') === true && parseCard('tutor', 'activity a', 'home').fallback === true && parseCard('tutor a-tutor b-tutor', 'activity a', 'home').fallback === true && parseCard('tutor 数学', 'activity a', 'home').fallback === true, JSON.stringify(tooMany));
-  check('老师卡写在板书里 → 文字卡 + warning;选择题、一段字写在首页 → 文字卡 + warning;首页里不认识的标签也退文字卡', parseCard('tutor math-tutor', 'a').card.kind === 'text' && parseCard('tutor math-tutor', 'a').warning?.includes('首页的卡') === true && parseCard('choice', '问?\n- [x] a', 'home').warning?.includes('choice 卡放不了') === true && parseCard('text', '今晚先读课文', 'home').fallback === true && parseCard('widget', 'x', 'home').card.kind === 'text' && parseCard('widget', 'x', 'home').fallback === true && parseCard('widget', 'x').card.kind === 'code');
-  check('canvas 卡删了(2026-11-16):写了当不认识的标签,原样显示成代码卡', parseCard('canvas', '画一条蛇').card.kind === 'code');
-  check('kit 卡删了(2026-11-16,课里不写卡,老师写讲稿里的动作):```点阵、```kit 当不认识的标签,原样显示成代码卡', parseCard('点阵', '2 行 9 个').card.kind === 'code' && parseCard('kit', '方向盘').card.kind === 'code' && cardKind('kit') === undefined);
-  // 场景卡 2026-10-07 删了:老师照旧写 ```scene 也不报错,按不认识的标签当代码卡原样显示
-  check('scene 不再是卡:当代码卡原样显示', parseCard('scene', '2026-09-04-guilv5\n我去把这道题画出来。').card.kind === 'code' && cardKind('scene') === undefined);
-  check('老对话里存下的 scene 卡:下发孩子前退成一段字,只留老师那句,题面 / 讲法与课包 id 不下发', JSON.stringify(stripSecrets({ cards: [{ kind: 'scene', props: { bundle: '2026-09-09-guilv', text: '我去画出来。', brief: '题面:x\n讲法:y' } }], lines: [] }).cards) === '[{"kind":"text","props":{"text":"我去画出来。"}}]');
-  const br = parseCard('text', '# 认边\n两条短边叫[直角边],最长的一条叫[斜边]');
-  check('卡里写了讲稿的 [词] 语法:括号剥掉 + warning(孩子端不显示括号)', br.card.props.text === '两条短边叫直角边,最长的一条叫斜边' && br.card.props.title === '认边' && br.warning?.includes('方括号') === true, JSON.stringify(br));
-  const brc = parseCard('choice', '[斜边]是多少?\n- [ ] 6\n- [x] 5');
-  check('choice 的 - [ ] / - [x] 不被当成标注剥掉;问题里的括号剥', brc.card.props.question === '斜边是多少?' && JSON.stringify(brc.card.props.answer) === '[1]' && (brc.card.props.options as string[]).join() === '6,5', JSON.stringify(brc));
-  check('code 的正文不动方括号', parseCard('python', 'a = [1, 2]').card.props.text === 'a = [1, 2]' && parseCard('text', '一段没有括号的话').warning === undefined);
-  check('要预生成资产的:点读、单词卡(这个词)', CARD_KINDS.filter((k) => k.assets).map((k) => k.name).join() === 'read,word');
-  const wd = parseCard('word', '🍎 apple 苹果\nap-ple');
-  check('word:emoji、词、分段;中文悄悄去掉不报;资产一段 1.mp3 念这个词;标题是词', wd.card.kind === 'word' && JSON.stringify(wd.card.props) === '{"word":"apple","chunks":["ap","ple"],"emoji":"🍎"}' && !wd.warning && JSON.stringify(cardAssets(wd.card)) === '[{"file":"1.mp3","text":"apple"}]' && cardLabel(wd.card) === 'apple', JSON.stringify(wd));
-  check('word 分段:空格、连字符跟前一段;拼不回这个词 / 只有一段就不要分段', JSON.stringify(wordChunks('ice cream', 'ice cr-ea-m')) === '["ice ","cr","ea","m"]' && JSON.stringify(wordChunks('T-shirt', 'T-sh-ir-t')) === '["T-","sh","ir","t"]' && wordChunks('apple', 'a-pl') === undefined && wordChunks('apple', 'apple') === undefined && wordChunks('apple', '苹-果') === undefined && !('chunks' in parseCard('word', 'apple\na-pl').card.props));
-  check('word 退文字卡:只有中文、整句、数字、太长', ['苹果', 'I like apples very much', 'room 101', 'supercalifragilistic'].every((b) => parseCard('word', b).card.kind === 'text' && parseCard('word', b).warning?.includes('word') === true) && parseCard('word', "don't").card.props.word === "don't" && parseCard('word', 'apple (苹果)').card.props.word === 'apple');
-  {
-    // 田字格带拼音(2026-10-21):第二行一字一个音节,调号或数字调;对不上卡照常只写字 + warning
-    const tz = (b: string) => parseCard('tianzige', b);
-    check('tianzige:第二行拼音,调号原样、数字调转调号、v 当 ü', JSON.stringify(tz('鼓励\ngǔ lì').card.props) === '{"chars":"鼓励","pinyin":["gǔ","lì"]}' && JSON.stringify(tz('长大\nzhang3 da4').card.props.pinyin) === '["zhǎng","dà"]' && JSON.stringify(tz('绿\nlv4').card.props.pinyin) === '["lǜ"]' && !tz('鼓励\ngǔ lì').warning);
-    check('tianzige:轻声不写数字也认(脑袋 nǎo dai)', JSON.stringify(tz('脑袋\nnǎo dai').card.props.pinyin) === '["nǎo","dai"]');
-    check('tianzige:没有拼音那行照旧合法、没 warning;字分两行照旧连起来', JSON.stringify(tz('鼓励').card.props) === '{"chars":"鼓励"}' && !tz('鼓励').warning && tz('鼓\n励').card.props.chars === '鼓励');
-    const short = tz('鼓励\ngǔlì');
-    const junk = tz('鼓励\ngu3 li9');
-    const mixed = tz('鼓励\ngǔ3 lì');
-    check('tianzige:音节数对不上、不像拼音、调号数字混写 → 卡照常只写字 + warning(不退文字卡)', [short, junk, mixed].every((r) => r.card.kind === 'tianzige' && r.card.props.chars === '鼓励' && !('pinyin' in r.card.props) && r.warning?.includes('拼音') === true && !r.fallback), JSON.stringify([short, junk, mixed]));
-    check('tianzige:拼音和字同一行 → 文字卡(fallback)', tz('鼓励 gǔ lì').card.kind === 'text' && tz('鼓励 gǔ lì').fallback === true);
-  }
-  const rd = parseCard('read', 'apple 苹果\nbanana 香蕉');
-  check('read 资产:一段一个 <k>.mp3', JSON.stringify(cardAssets(rd.card)) === '[{"file":"1.mp3","text":"apple 苹果"},{"file":"2.mp3","text":"banana 香蕉"}]' && cardAssets({ kind: 'text', props: { text: 'x' } }).length === 0 && cardAssets({ kind: 'read', props: {} }).length === 0);
-  const im = parseCard('image', 'captures/2026-09-10/a.jpg\n看第二行\n那里错了');
-  check('image:第一行路径,后面图注', im.card.kind === 'image' && im.card.props.src === 'captures/2026-09-10/a.jpg' && im.card.props.caption === '看第二行\n那里错了' && !im.warning, JSON.stringify(im));
-  check('image:http 地址也行;没图注就没有 caption', parseCard('image', 'https://x.test/a').card.props.src === 'https://x.test/a' && !('caption' in parseCard('image', 'a.png').card.props));
-  check('image:不是图片文件 / 空 → 文字卡 + warning', parseCard('image', 'captures/2026-09-10/笔记.md').card.kind === 'text' && parseCard('image', '').warning?.includes('image') === true);
-  check('image 的标题是图注,没图注是「图」', cardLabel(im.card) === '看第二行 那里错了' && cardLabel(parseCard('image', 'a.png').card) === '');
-  const t = parseCard('text', '就一段话。\n第二行。');
-  check('text:普通一段,保留换行', t.card.kind === 'text' && t.card.props.text === '就一段话。\n第二行。' && t.card.props.style === undefined && !t.warning);
-  const th = parseCard('text', '# 认边\n两条短边叫直角边');
-  check('text:第一行 # 是标题,不用修饰词', th.card.props.title === '认边' && th.card.props.text === '两条短边叫直角边' && th.card.props.style === undefined && th.card.props.heading === undefined && !th.warning, JSON.stringify(th));
-  const hd = parseCard('text', '# 两大类型');
-  check('text:只有一行 # 标题 → 小节标题(heading),不算卡', hd.card.props.heading === true && hd.card.props.title === '两大类型' && hd.card.props.text === '' && !hd.warning, JSON.stringify(hd));
-  const old = parseCard('text cover', '三角形的面积\n两个一样的三角形');
-  check('text:不认识的修饰词(老的 cover / note / quote / step)不认,整段当正文;formula 带 # 也不当标题', old.card.props.style === undefined && old.card.props.title === undefined && old.card.props.text === '三角形的面积\n两个一样的三角形' && parseCard('text formula', '# 记住').card.props.text === '# 记住', JSON.stringify(old));
-  const formula = parseCard('text formula', 'S = a × h ÷ 2');
-  check('text formula', formula.card.props.style === 'formula' && formula.card.props.text === 'S = a × h ÷ 2');
-  const odd = parseCard('text fancy', '一段');
-  check('text 不认识的修饰词当没有', odd.card.props.style === undefined && odd.card.props.text === '一段');
-  const empty = parseCard('text', '  \n ');
-  check('text 空正文 → 退成文字卡(显示标签名)+ warning', empty.card.kind === 'text' && empty.card.props.text === 'text' && empty.warning?.includes('空') === true, JSON.stringify(empty));
+  const tut = parseCard('tutor chinese-tutor', '- activity 预习 我要预习小蝌蚪找妈妈\n范围: 第 22 课\n讲法: 先读课文\n讲法: 再认字\n小课堂 2026-09-18-po13-jian-8 13 减 8 怎么拆');
+  check('老师牌:列表号去掉、参数与讲法挂上一个按钮(讲法多行拼起来)、小课堂带课包', tut.card.kind === 'tutor' && JSON.stringify(tut.card.props) === JSON.stringify({ tutor: 'chinese-tutor', buttons: [{ kind: 'activity', label: '我要预习小蝌蚪找妈妈', activity: '预习', params: { 范围: '第 22 课' }, brief: '先读课文\n再认字' }, { kind: 'lecture', label: '13 减 8 怎么拆', bundle: '2026-09-18-po13-jian-8' }] }) && !tut.warning, JSON.stringify(tut));
+  check('开场按钮、接着按钮、新话题没有了(2026-11-16):写了整张牌退文字', ['我要预习', '接着 2026-09-16 1930-1 接着写', '新话题'].every((line) => parseCard('tutor chinese-tutor', line).fallback === true));
+  check('老师牌下发孩子端:讲法与参数剥掉', JSON.stringify(stripCard(tut.card).props.buttons) === '[{"kind":"activity","label":"我要预习小蝌蚪找妈妈","activity":"预习","params":{}},{"kind":"lecture","label":"13 减 8 怎么拆","bundle":"2026-09-18-po13-jian-8"}]', JSON.stringify(stripCard(tut.card).props.buttons));
+  const tooMany = parseCard('tutor math-tutor', 'activity a\nactivity b\nactivity c\nactivity d\nactivity e');
+  check('老师牌:5 个按钮、没写老师、两位老师、坏老师名 → 文字 + fallback', tooMany.fallback === true && tooMany.warning?.includes('最多 4 个') === true && parseCard('tutor', 'activity a').fallback === true && parseCard('tutor a-tutor b-tutor', 'activity a').fallback === true && parseCard('tutor 数学', 'activity a').fallback === true, JSON.stringify(tooMany));
 }
 {
-  const c = parseCard('choice', '酒是谁的?\n- [ ] 大家平分\n- [x] 他自己的\n* [X] 也算对\n- 没标的\n散话不要');
-  const p = c.card.props as { question: string; options: string[]; answer?: number[]; multi?: boolean };
-  check('choice:问题 + 选项(- / * 都行)+ 答案下标(x / X 都认,可多个)', p.question === '酒是谁的?' && p.options.join('|') === '大家平分|他自己的|也算对|没标的' && JSON.stringify(p.answer) === '[1,2]', JSON.stringify(p));
-  const s = stripSecrets({ cards: [c.card], lines: [] });
-  check('choice 剥秘密:答案不下发', !('answer' in s.cards[0].props) && (s.cards[0].props.options as string[]).length === 4, JSON.stringify(s));
-  const noKey = parseCard('choice', '问?\n- [ ] 甲\n- [ ] 乙');
-  check('choice 没标答案就没有 answer 字段', !('answer' in noKey.card.props));
-  const noOpt = parseCard('choice', '只有问题');
-  check('choice 没选项 → 文字卡 + warning', noOpt.card.kind === 'text' && noOpt.warning?.includes('选项') === true);
-  check('choice 多个 [x] → multi,剥答案后还在;单个没有 multi', p.multi === true && (s.cards[0].props as { multi?: boolean }).multi === true && parseCard('choice', '问?\n- [x] 甲\n- [ ] 乙').card.props.multi === undefined);
-  // 状态:孩子选了哪几项 → 过契约 → 给老师的一句(带答案);紧凑态 / 舞台的画法在页面
-  const ok = parseCardState(c.card, { picked: [1] });
-  check('choice 状态过契约', ok.ok && JSON.stringify(ok.state) === '{"picked":[1]}');
-  check('choice 坏状态不收;text 卡没有状态', !parseCardState(c.card, { picked: ['a'] }).ok && !parseCardState(c.card, 'x').ok && !parseCardState({ kind: 'text', props: { text: 'x' } }, {}).ok && !parseCardState({ kind: 'scene', props: {} }, {}).ok);
-  check('choice describe:选了「B …」(答案:「…」)', describeCard(c.card, { picked: [0] }) === 'choice「酒是谁的?」 选了「A 大家平分」(答案:「B 他自己的」「C 也算对」)', describeCard(c.card, { picked: [0] }));
-  check('choice describe:没标答案就不写答案;没选;越界的下标丢掉', describeCard(noKey.card, { picked: [1] }) === 'choice「问?」 选了「B 乙」' && describeCard(noKey.card, { picked: [] }) === 'choice「问?」 没选' && describeCard(noKey.card, { picked: [9] }) === 'choice「问?」 没选');
-  check('不认识的 kind / 坏状态 → 状态原样 JSON', describeCard({ kind: 'scene', props: { title: '场景' } }, { step: 2 }) === 'scene「场景」 {"step":2}' && describeCard(c.card, 'junk') === 'choice「酒是谁的?」 "junk"');
-  check('卡的标题:title > question > text > 第一段;截 40 字', cardLabel({ kind: 'text', props: { style: 'cover', title: '画蛇添足', text: '副' } }) === '画蛇添足' && cardLabel({ kind: 'read', props: { segments: ['楚有祠者', 'x'] } }) === '楚有祠者' && cardLabel({ kind: 'text', props: { text: '一'.repeat(50) } }).length === 41);
-  const noQ = parseCard('choice', '- [ ] 甲\n- [ ] 乙');
-  check('choice 没问题 → 文字卡 + warning', noQ.card.kind === 'text' && noQ.warning?.includes('问题') === true);
-}
-{
-  // 填空 10-22 删了(《卡片协议.md》):老师再写 ```fill 当不认识的标签;老对话里存下的退成一段字,答案不下发
-  check('fill 不再是卡:当代码卡原样显示', parseCard('fill', '一共 ___ 个\n= 3').card.kind === 'code' && cardKind('fill') === undefined);
-  check('老对话里存下的 fill 卡:下发孩子前退成一段字,只留句子,答案不下发', JSON.stringify(stripSecrets({ cards: [{ kind: 'fill', props: { text: '一共 ___ 个', blanks: 1, answers: ['3'] } }], lines: [] }).cards) === '[{"kind":"text","props":{"text":"一共 ___ 个"}}]');
-  const r = parseCard('read', '\napple 苹果\n\nbanana 香蕉\n');
-  check('read:非空行成段', JSON.stringify(r.card.props.segments) === '["apple 苹果","banana 香蕉"]');
-  check('read 空 → 文字卡', parseCard('read', '\n').card.kind === 'text');
-}
-{
-  const py = parseCard('python', 'print(1)\n');
-  check('不认识的标签 → 代码卡,lang = 标签,尾空白去掉', py.card.kind === 'code' && py.card.props.lang === 'python' && py.card.props.text === 'print(1)');
-  const bare = parseCard('', 'x');
-  check('没标签 → 代码卡 lang null', bare.card.kind === 'code' && bare.card.props.lang === null);
-  const widget = parseCard('widget', '画一个三角形');
-  check('还没做的种类(widget)也只是代码卡,不报错', widget.card.kind === 'code' && widget.card.props.lang === 'widget' && !widget.warning);
-  check('不认识的 kind 下发前退成一段字,别的字段不下发', stripSecrets({ cards: [{ kind: 'widget', props: { a: 1, text: '一句' } }], lines: [] }).cards[0].kind === 'text' && JSON.stringify(stripSecrets({ cards: [{ kind: 'widget', props: { a: 1, text: '一句' } }], lines: [] }).cards[0].props) === '{"text":"一句"}');
-}
-{
-  const doc = boardSyntaxDoc();
-  check('语法表:两种东西 + 每种卡一段(从 cards/<kind>/card.md 拼)+ 板书到第一个 H2 为止;例子的 expect 注释去掉了', doc.includes('普通段落 = 你说的话') && doc.includes('围栏 = 板上的卡') && kindsFor('board').every((k) => doc.includes(`### ${k.name} — `)) && !doc.includes('### tutor — ') && doc.includes('板书到第一个「## 」为止') && !doc.includes('<!-- expect') && doc.includes('references/<种类>.md'), doc.slice(0, 200));
-  check('语法表的手写部分在 cards/板书怎么写.md:给人看的注释剥掉,{{卡的种类}} 换成各种卡', doc.startsWith('# 板书怎么写\n') && !doc.includes('<!--') && !doc.includes('{{') && doc.indexOf('## 作业照片') < doc.indexOf('## 卡的种类') && doc.indexOf('## 卡的种类') < doc.indexOf('### text — '), doc.slice(0, 200));
-  const skill = boardSkillDoc();
-  const descLine = skill.split('\n')[2];
-  check('技能文件:frontmatter 的 name 与 description 各一行,description 列出全部种类、不超 1536 字,正文就是语法表', skill.startsWith('---\nname: cotutor-board\ndescription: ') && descLine.length < 1536 && kindsFor('board').every((k) => descLine.includes(k.name)) && !descLine.includes('/ tutor') && skill.endsWith(doc));
+  const bad = parseCard('choice', '问?\n- [x] a');
+  check('课里的卡写在首页:退成文字显示原文 + fallback,说清首页只放哪两种', bad.card.kind === 'text' && bad.card.props.text === '问?\n- [x] a' && bad.fallback === true && bad.warning?.includes('choice 卡放不了') === true, JSON.stringify(bad));
+  check('没写种类、不认识的标签:同样退文字', parseCard('', 'x').fallback === true && parseCard('widget', 'x').card.kind === 'text');
+  const dic = parseCard('dictation chinese-tutor', '春天\n鼓励 鼓励,老师鼓励我的鼓励\n叶 树叶的叶');
+  check('听写牌:几个词;下发孩子端不带字(只有个数)', dic.card.kind === 'dictation' && !dic.fallback && !JSON.stringify(stripCard(dic.card).props).includes('春天'), JSON.stringify([dic, stripCard(dic.card)]));
+  check('牌的标题:听写牌是词表;文字的是正文;截 40 字', cardLabel(dic.card).startsWith('春天、鼓励') && cardLabel({ kind: 'text', props: { text: '一'.repeat(50) } }).length === 41, cardLabel(dic.card));
 }
 done();

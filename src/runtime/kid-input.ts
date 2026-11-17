@@ -2,10 +2,9 @@
  * 孩子端发一条的验与拼:孩子端只走实时那条连接(src/runtime/live/turns.ts;HTTP 的发 2026-11-04 删了),经 Runner.accept 进来。
  * 验正文、话题、首页按钮、小课堂、activity、照片,拼成 Runner.send 的入参;不对回 reject(状态码 + 错误名),连接上回 {t:'err'}。不起老师。
  */
-import { FocusSchema, HomeViaSchema, DeviceSchema, type ActivityValue } from '../schema/index.ts';
+import { HomeViaSchema, DeviceSchema, type ActivityValue } from '../schema/index.ts';
 import { BUNDLE_ID_RE } from '../board/cards/kind.ts';
 import { threads } from '../schema/index.ts';
-import { submittedCards } from './kid-view.ts';
 import { MARK_MAX, MARK_MAX_POINTS, MARK_MAX_STROKES } from '../board/lecture.ts';
 import type { Workspace } from '../schema/index.ts';
 import { messageVia, resolveVia } from './home/store.ts';
@@ -16,7 +15,7 @@ import { capturePathOk, readIndex } from './journal/store.ts';
 
 export interface KidReject {
   status: 400 | 409;
-  error: 'bad_request' | 'submitted' | 'bad_via' | 'no_thread';
+  error: 'bad_request' | 'bad_via' | 'no_thread';
   /** 给人看的一句(多数没有) */
   message?: string;
 }
@@ -29,8 +28,6 @@ const isObj = (v: unknown): v is Record<string, unknown> => Boolean(v) && typeof
 
 export async function kidInput(ws: Workspace, tutor: string, body: unknown, date: string, deviceId?: string | null): Promise<KidAccept> {
   if (!isObj(body) || typeof body.text !== 'string') return reject(400, 'bad_request');
-  const focus = body.focus === undefined ? undefined : FocusSchema.safeParse(body.focus);
-  if (focus && !focus.success) return reject(400, 'bad_request');
   const action = body.action === undefined ? undefined : body.action === 'submit' ? ('submit' as const) : null;
   if (action === null) return reject(400, 'bad_request');
   const photos = await photosOf(ws, body.photos);
@@ -38,8 +35,6 @@ export async function kidInput(ws: Workspace, tutor: string, body: unknown, date
   const thread = body.thread === undefined ? undefined : typeof body.thread === 'string' && /^\d{4}-\d+$/.test(body.thread) ? body.thread : null;
   if (thread === null) return reject(400, 'bad_request');
   const today = await readIndex(ws, tutor, date);
-  // 交过的卡不能再交(kid-view 的 submittedCards)
-  if (action === 'submit' && focus?.data?.card && submittedCards(today).has(focus.data.card)) return reject(409, 'submitted');
   const device = body.device === undefined ? undefined : DeviceSchema.safeParse(body.device);
   if (device && !device.success) return reject(400, 'bad_request');
   // 首页的按钮:via 只带 id,按钮是什么、讲法是什么都从服务端的发布件查;对不上就 400(孩子端刷新首页)
@@ -90,7 +85,7 @@ export async function kidInput(ws: Workspace, tutor: string, body: unknown, date
     const ths = threads(today.messages);
     if (pick ? !ths.includes(pick) : !ths.length) return reject(400, 'no_thread', '先从首页的按钮开始');
   }
-  return { input: { from: 'kid', text, focus: focus?.data, action, newThread, thread: pick, device: device?.data, ...(validDevice(deviceId) ? { deviceId: deviceId! } : {}), photos, ...(via && button ? { via: messageVia(via.data!, button) } : {}), ...(home ? { home } : {}), ...(activity ? { activity } : {}), ...(lecture ? { lecture } : {}) } };
+  return { input: { from: 'kid', text, action, newThread, thread: pick, device: device?.data, ...(validDevice(deviceId) ? { deviceId: deviceId! } : {}), photos, ...(via && button ? { via: messageVia(via.data!, button) } : {}), ...(home ? { home } : {}), ...(activity ? { activity } : {}), ...(lecture ? { lecture } : {}) } };
 }
 
 /** 消息里的 photos[]:都得是 captures/ 里在的文件(相对 workspace 根);不合法 → null */

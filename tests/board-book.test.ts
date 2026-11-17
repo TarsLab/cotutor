@@ -20,7 +20,7 @@ process.env.HOME = home;
 writeKeys(home, { payg: 'sk-t' });
 delete process.env.COTUTOR_WORKSPACE;
 
-const { bookLesson, pageSection, fitSection, lessonOpen } = await import('../src/board/lesson-fit.ts');
+const { bookLesson, fitSection, lessonOpen } = await import('../src/board/lesson-fit.ts');
 const { bookSlateParts, lessonSlateBits, slateOf } = await import('../src/runtime/context/board-pack.ts');
 const { renderContextPack } = await import('../src/runtime/context/context-pack.ts');
 const { parseActivity, checkActivity } = await import('../src/runtime/activity.ts');
@@ -31,16 +31,13 @@ const { createContext, route } = await import('../src/app/http/app.ts');
 const { lessonInit, lessonPage } = await import('../src/board/lesson.ts');
 type Lesson = import('../src/schema/index.ts').Lesson;
 type BoardSection = import('../src/schema/index.ts').BoardSection;
-type BoardCard = import('../src/schema/index.ts').BoardCard;
 
 const ix = bookIndexOf();
-const sec = (cards: BoardCard[]): BoardSection => ({ heading: null, lines: cards.map((_, i) => ({ text: `第${i}句`, anchor: i, marks: [], cues: [] })), cards } as unknown as BoardSection);
 
-// ---- 铺着页的一节:卡都不上页,讲稿里的动作落到页上(纯函数) ----
+// ---- 铺着页的一节:讲稿里的动作落到页上(纯函数) ----
 {
   const b = { file: '语文一年级下册.pdf', index: ix };
-  const raw = pageSection({ ...sec([{ kind: 'text', props: { text: '一张字卡' } } as BoardCard, { kind: 'image', props: { src: 'captures/a.jpg' } } as BoardCard]), lines: [{ text: '我们来预习。', audio: null, marks: [{ card: 0, phrase: '字卡' }], ask: false, anchor: 0, cues: [], acts: [{ name: '翻', arg: '小鱼吹泡泡' }, { name: '看', arg: '第 1 段' }] }, { text: '再看第二段。', audio: null, marks: [], ask: false, anchor: 1, cues: [], acts: [{ name: '看', arg: '第 2 段' }, { name: '圈', arg: '井沿、没有这个词' }] }] } as BoardSection);
-  check('铺着页的一节:卡都撤掉,讲稿里的锚、标注跟着没了;动作留着', raw.section.cards.length === 0 && raw.dropped.length === 2 && raw.section.lines.every((l) => l.anchor === null && !l.marks.length) && raw.section.lines[1].acts?.length === 2, JSON.stringify(raw.section));
+  const raw = { section: { lines: [{ text: '我们来预习。', ask: false, acts: [{ name: '翻', arg: '小鱼吹泡泡' }, { name: '看', arg: '第 1 段' }] }, { text: '再看第二段。', ask: false, acts: [{ name: '看', arg: '第 2 段' }, { name: '圈', arg: '井沿、没有这个词' }] }] } as BoardSection };
   const fit = fitSection(raw.section, lessonOpen(lessonInit(), b), { book: b });
   check('落到页上:翻到这一课、看换成框;圈找得到的那一处,找不到的记一句', fit.section.lines[0].acts?.[0].do?.k === '翻' && (fit.section.lines[0].acts[1].do as { label: string }).label === '第1段' && (fit.section.lines[1].acts?.[1].do as { spots: unknown[] }).spots.length === 1 && fit.why.length === 1 && fit.why[0].includes('没有这个词'), JSON.stringify([fit.section, fit.why]));
   check('一课、目录铺哪几页', bookLesson(ix, '古诗两首')?.pages.map((p) => p.n).join() === '4,5' && bookLesson(ix, null)?.title === '目录' && bookLesson(ix, '没有') === null);
@@ -73,7 +70,7 @@ const sec = (cards: BoardCard[]): BoardSection => ({ heading: null, lines: cards
   check('base: textbook、base: photo 读得出', parseActivity(file('base: textbook')).activity.base === 'textbook' && parseActivity(file('base: photo')).activity.base === 'photo' && !issues('base: textbook').length && !issues('base: photo').length);
   check('base 写了不认得的:要改', issues('base: 课本').some((t) => t.includes('不认得')));
   const old = parseActivity(file('board: page\ncards: kit')).activity;
-  check('旧的头还认:board: page 没写 base 的当 base: photo,cards 里的 kit 丢掉;check 提一句(不算要改)', old.base === 'photo' && !old.cards.includes('kit') && !issues('board: page\ncards: kit').length && issues('board: page\ncards: kit', 'note').some((t) => t.includes('不用再写了') && t.includes('base: photo')), JSON.stringify(old));
+  check('旧的头还认:board: page 没写 base 的当 base: photo,cards 读进来就丢;check 提一句(不算要改)', old.base === 'photo' && !('cards' in old) && !issues('board: page\ncards: kit').length && issues('board: page\ncards: kit', 'note').some((t) => t.includes('不用再写了') && t.includes('base: photo')), JSON.stringify(old));
   check('旧的 board: page + base: textbook:照 base: textbook', parseActivity(file('board: page\nbase: textbook')).activity.base === 'textbook');
   check('reply: mouth 读得出;写错要改', parseActivity(file('base: photo\nreply: mouth')).activity.reply === 'mouth' && !issues('reply: mouth').length && issues('reply: 嘴').some((t) => t.includes('不认得')));
   check('listen: open 读得出;写错要改', parseActivity(file('base: photo\nlisten: open')).activity.listen === 'open' && !issues('listen: open').length && issues('listen: 一直').some((t) => t.includes('不认得')));
@@ -132,7 +129,7 @@ const sec = (cards: BoardCard[]): BoardSection => ({ heading: null, lines: cards
   const m2 = index().messages.find((m) => m.job === job2);
   const s2 = m2?.section;
   const l2 = ((await route('GET', `/api/kid/lesson?tutor=${T}&date=${date}&thread=${thread}`, ctx)).json as { lesson: Lesson }).lesson;
-  check('老师写的动作落到页上:第一句念完翻、看第 1 段;第二句念完看第 2 段、圈、请圈', s2?.cards.length === 0 && s2.lines[0].acts?.map((a) => a.do?.k).join() === '翻,看' && s2.lines[1].acts?.map((a) => a.do?.k).join() === '看,圈,请', JSON.stringify(s2));
+  check('老师写的动作落到页上:第一句念完翻、看第 1 段;第二句念完看第 2 段、圈、请圈', s2 !== undefined && s2.lines[0].acts?.map((a) => a.do?.k).join() === '翻,看' && s2.lines[1].acts?.map((a) => a.do?.k).join() === '看,圈,请', JSON.stringify(s2));
   check('一节课的状态:这一课、看着第 2 段、圈着井沿', l2.at === '语文一年级下册.pdf#小鱼吹泡泡' && l2.look?.label === '第2段' && lessonPage(l2)!.teacher.marks.map((m) => m.text).join() === '井沿', JSON.stringify(l2));
   check('圈的词课本里没有:家长端记一行', (m2?.warnings ?? []).some((w) => w.includes('没有这个词')), JSON.stringify(m2?.warnings));
   check('翻到这一课以前的那一轮:给了目录的字(记了 told)', (await readBoard(ws, T, date, thread)).some((e) => e.k === 'turn' && [e.told].flat().includes('语文一年级下册.pdf#目录')));
@@ -204,7 +201,7 @@ const sec = (cards: BoardCard[]): BoardSection => ({ heading: null, lines: cards
   await mwait();
   const ms2 = mIndex().messages.find((m) => m.job === mt2.json.job)?.section;
   const ml2 = (await route('GET', `/api/kid/lesson?tutor=${M}&date=${date}&thread=${mth}`, ctx)).json as { lesson: Lesson | null };
-  check('讲稿里的动作落到页上:翻(第一句前面)、看例 2 换成框;卡一张都没有', ms2?.acts?.[0]?.do?.k === '翻' && ms2.lines[0].acts?.[0]?.do?.k === '看' && (ms2.lines[0].acts![0].do as { label: string }).label === '例2' && ms2.cards.length === 0, JSON.stringify(ms2));
+  check('讲稿里的动作落到页上:翻(第一句前面)、看例 2 换成框', ms2?.acts?.[0]?.do?.k === '翻' && ms2.lines[0].acts?.[0]?.do?.k === '看' && (ms2.lines[0].acts![0].do as { label: string }).label === '例2', JSON.stringify(ms2));
   check('一节课的状态:翻到这一课、看着例 2、记下这一节;没请就什么都不开放', ml2.lesson?.at === '数学一年级下册.pdf#5的乘法口诀' && ml2.lesson.look?.label === '例2' && ml2.lesson.jobs.includes(String(mt2.json.job)) && lessonPage(ml2.lesson)!.open.length === 0, JSON.stringify(ml2.lesson));
   const JPG = `data:image/jpeg;base64,${Buffer.from('ffd8ffe000104a46494600010100000100010000ffd9', 'hex').toString('base64')}`;
   const mbase = '数学一年级下册.pdf#5的乘法口诀';

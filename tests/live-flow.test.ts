@@ -160,15 +160,15 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
     check('上滑取消:hush → 声音缓冲清掉、不 commit、嘴不接住、没有新一轮', c.commits === ch && c.clears >= clr + 2 && c.responses.length === rh && !k.msgs.slice(nh).some((m) => m.t === 'turn') && has(k, (m) => m.t === 'state' && m.holding === false), JSON.stringify({ commits: c.commits - ch, clears: c.clears - clr, responses: c.responses.length - rh }));
   }
 
-  // ---- 舞台开着打字(问这张卡 撤了卡上的「?」):一轮普通的(嘴不先说,脑拿到 focus 那张卡) ----
+  // ---- 打字发一句:一轮普通的(嘴不先说,消息正文是孩子端给的;课里的卡 2026-11-17 删了,不再带 focus) ----
   const na = k.msgs.length;
   const ra = c.responses.length;
-  k.ws.send(JSON.stringify({ t: 'send', body: { text: '我想问这张卡', focus: { card: `${turn.job}/0` } } }));
+  k.ws.send(JSON.stringify({ t: 'send', body: { text: '我想问这一题' } }));
   const okAsk = await until(() => k.msgs.slice(na).some((m) => m.t === 'turn'), 10000);
   const turnA = k.msgs.slice(na).find((m) => m.t === 'turn')!;
   await until(() => ctx.runner.running('chinese-tutor') === null, 15000);
   const promptA = (JSON.parse(readFileSync(join(wsRoot, 'conversations', 'chinese-tutor', `${today}.${turnA.job}.run.json`), 'utf8')) as { prompt: string }).prompt;
-  check('舞台开着发的:嘴不先说、脑这一轮的上下文包带 focus 那张卡、消息正文是孩子端给的', okAsk && c.responses.slice(ra).every((r) => String(r?.instructions).startsWith('把这几句话原样说给孩子听')) && promptA.includes(`  focus:\n    card: "${turn.job}/0"`) && promptA.trimEnd().endsWith('我想问这张卡'), promptA.slice(0, 300));
+  check('打字发的:嘴不先说、上下文包没有 focus、消息正文是孩子端给的', okAsk && c.responses.slice(ra).every((r) => String(r?.instructions).startsWith('把这几句话原样说给孩子听')) && !promptA.includes('focus:') && promptA.trimEnd().endsWith('我想问这一题'), promptA.slice(0, 300));
   await sleep(800);
 
   // ---- 按了没说清(转写空的):嘴只说没听清,不交给脑 ----
@@ -220,7 +220,7 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
     await until(() => ctx.runner.running('chinese-tutor') === null, 15000);
     const mp = indexOf(localDate(ctx.now())).messages.find((m) => m.job === turnP?.job);
     const promptP = turnP ? (JSON.parse(readFileSync(join(wsRoot, 'conversations', 'chinese-tutor', `${localDate(ctx.now())}.${turnP.job}.run.json`), 'utf8')) as { prompt: string }).prompt : '';
-    check('拍照:嘴先说「我看一看图片」、上下文包带它(caught)、照片交给脑(消息记 photos、上下文包带 photos:)、嘴的会话里没塞图', up.status === 201 && okPhoto && c.responses[rp]?.instructions === catchCue('photo') && promptP.includes('    caught: ') && mp?.photos?.join() === photo && promptP.includes(`  photos:\n    - ${JSON.stringify(photo)}`) && c.images === 0, JSON.stringify({ status: up.status, catch: c.responses[rp], photos: mp?.photos }));
+    check('拍照:嘴先说「我看一看图片」、上下文包带它(caught)、照片交给脑(消息记 photos;铺着页的一节里照片在页上,不进 photos:)、嘴的会话里没塞图', up.status === 201 && okPhoto && c.responses[rp]?.instructions === catchCue('photo') && promptP.includes('    caught: ') && mp?.photos?.join() === photo && promptP.includes('\n  board:') && !promptP.includes('  photos:') && c.images === 0, JSON.stringify({ status: up.status, catch: c.responses[rp], photos: mp?.photos }));
   }
 
   // ---- 脑这一轮没成、一句没写(2026-11-14 Token Plan 拒了一下午):嘴说一句;要家长动手的叫爸爸妈妈,别的请他再说一遍 ----
@@ -402,13 +402,13 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
 }
 
 {
-  // ---- 交卡:嘴不当场说「对啦」,也不说「我看看」;第一句就是脑的 ----
+  // ---- 给老师看(submit):嘴不当场说「对啦」,也不说「我看看」;第一句就是脑的 ----
   const k = await connect('chinese-tutor');
   await until(() => has(k, (m) => m.t === 'ready'));
   const c = fake.conns.at(-1)!;
   fake.kidText = '老师板书再来一遍';
-  // 接着「聊」那个话题(上一段最后开的是一节铺着小课堂的课,那里卡不上页)
-  const chat = indexOf(localDate(ctx.now())).messages.find((m) => m.activity?.name === '聊' && !m.base)?.thread;
+  // 接着「聊」那个话题(上一段最后开的是一节铺着小课堂的课)
+  const chat = indexOf(localDate(ctx.now())).messages.find((m) => m.activity?.name === '聊')?.thread;
   k.ws.send(JSON.stringify({ t: 'hold' }));
   k.ws.send(loud());
   k.ws.send(JSON.stringify({ t: 'release', body: { thread: chat } }));
@@ -416,13 +416,13 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   const job = k.msgs.find((m) => m.t === 'turn')!.job as string;
   await until(() => ctx.runner.running('chinese-tutor') === null, 15000);
   await sleep(400);
-  const put = await fetch(`http://127.0.0.1:${port}/api/kid/conversations/chinese-tutor/cards/${job}/1`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ picked: [0] }) });
   const r = c.responses.length;
-  k.ws.send(JSON.stringify({ t: 'send', body: { text: '', action: 'submit', focus: { card: `${job}/1` } } }));
+  k.ws.send(JSON.stringify({ t: 'send', body: { text: '', action: 'submit' } }));
+  void job;
   await until(() => c.responses.length > r, 10000);
   await until(() => ctx.runner.running('chinese-tutor') === null, 15000);
   const first = String(c.responses[r]?.instructions);
-  check('交卡:嘴不先说(没有「对啦」「我看看」),第一句就是照念脑的讲稿', put.ok && first.startsWith('把这几句话原样说给孩子听'), first.slice(0, 80));
+  check('给老师看:嘴不先说(没有「对啦」「我看看」),第一句就是照念脑的讲稿', first.startsWith('把这几句话原样说给孩子听'), first.slice(0, 80));
   k.ws.send(JSON.stringify({ t: 'bye' }));
   await until(() => k.closed !== null);
 }

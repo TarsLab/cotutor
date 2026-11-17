@@ -10,7 +10,7 @@ const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-activity-home-')))
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 
-const { activityCards, checkActivity, lintActivity, parseActivity, renderTutorSection, resolveParams } = await import('../src/runtime/activity.ts');
+const { checkActivity, lintActivity, parseActivity, renderTutorSection, resolveParams } = await import('../src/runtime/activity.ts');
 const { fillSlots } = await import('../src/schema/index.ts');
 const { PACKAGE_AGENTS_DIR, configTemplate, shippedAgents } = await import('../src/app/cli/skeleton.ts');
 const { activityFile, checkActivities, installActivities, shippedActivities, upgradeActivities } = await import('../src/app/cli/activities.ts');
@@ -20,7 +20,6 @@ const { installTutors, readManifest, sha256, writeManifest } = await import('../
 const text = SAMPLE_ACTIVITY;
 const lines = text.split('\n');
 const lineOf = (needle: string): number => lines.findIndex((l) => l.includes(needle)) + 1;
-const factoryCards = (JSON.parse(configTemplate({ slug: 'x', tutors: await shippedAgents() })) as { tutors: Record<string, { cards?: string[] }> }).tutors['chinese-tutor'].cards;
 
 /** 改一处再查,返回要改的那几条 */
 function fixesAfter(from: string, to: string, opts: Parameters<typeof lintActivity>[1] = { fileName: '练词' }): { text: string; line?: number }[] {
@@ -40,8 +39,8 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
     check(`出厂的 ${s.tutor}/${s.name} 过检查`, issues.filter((i) => i.level === 'fix').length === 0, JSON.stringify(issues));
   }
   const kantu = readFileSync(join(PACKAGE_AGENTS_DIR, 'chinese-tutor', 'activities', '看图说话.md'), 'utf8');
-  check('出厂的看图说话过检查(老师的卡照出厂 cotutor.json)', lintActivity(kantu, { fileName: '看图说话', tutorCards: factoryCards }).issues.length === 0, JSON.stringify(lintActivity(kantu, { fileName: '看图说话', tutorCards: factoryCards }).issues));
-  check('看图说话:老师收到的那节不说「点一下能听」', !(renderTutorSection(parseActivity(kantu).activity, { cards: ['read', 'image'] }) ?? '点一下能听').includes('点一下能听'));
+  check('出厂的看图说话过检查,连提醒都没有', lintActivity(kantu, { fileName: '看图说话' }).issues.length === 0, JSON.stringify(lintActivity(kantu, { fileName: '看图说话' }).issues));
+  check('看图说话:老师收到的那节不说「点一下能听」', !(renderTutorSection(parseActivity(kantu).activity, {}) ?? '点一下能听').includes('点一下能听'));
   // 一科通用的做法(2026-11-16 从老师文件并进 activity):这位老师每个有「老师怎么带」的 activity 里都有「<科>这一科」一节,一字不差
   for (const [tutor, subject] of [['chinese-tutor', '语文'], ['math-tutor', '数学'], ['english-tutor', '英语']] as const) {
     const dir = join(PACKAGE_AGENTS_DIR, tutor, 'activities');
@@ -55,12 +54,11 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
     const texts = [...new Set(blocks.values())];
     check(`${tutor}:每个 activity 都有「${subject}这一科」,几份一字不差`, blocks.size >= 3 && texts.length === 1 && texts[0].length > 0, JSON.stringify([...blocks].map(([f, t]) => [f, t.length])));
   }
-  for (const cards of [undefined, factoryCards]) {
-    const { issues } = lintActivity(text, { fileName: '练词', tutorCards: cards });
-    check(`样本过检查(老师的卡 ${cards ? '照出厂 cotutor.json' : '全部'})`, issues.length === 0, JSON.stringify(issues));
-  }
+  check('样本过检查', lintActivity(text, { fileName: '练词' }).issues.length === 0, JSON.stringify(lintActivity(text, { fileName: '练词' }).issues));
+  const oldHead = lintActivity(text.replace('base: photo', 'cards: read photo'), { fileName: '练词' }).issues;
+  check('旧的头 cards: 读进来就丢,提一句(不是要改),照 base: photo', oldHead.length === 1 && oldHead[0].level === 'note' && oldHead[0].text.includes('cards: read photo') && parseActivity(text.replace('base: photo', 'cards: read photo')).activity.base === undefined, JSON.stringify(oldHead));
   const { activity: a } = parseActivity(text);
-  check('头:name、description、cards', a.name === '练词' && a.description.length > 0 && a.cards.join(' ') === 'read photo');
+  check('头:name、description、base', a.name === '练词' && a.description.length > 0 && a.base === 'photo');
   const [ci, most] = a.params;
   check('家长填的:词(词表,可空)', a.params.length === 2 && ci.name === '词' && ci.type === '词表' && ci.optional && ci.default === undefined && ci.line === lineOf('词: 词表'));
   check('家长填的:最多问(数,可空,不填不限)', most.name === '最多问' && most.type === '数' && most.optional && most.default === undefined && most.min === undefined && most.max === undefined && Boolean(most.note));
@@ -70,14 +68,11 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   check('别的节(孩子看到什么)应用不读', !a.tutor?.text.includes('只给人看') && !reader?.prompt.includes('只给人看'));
 
   // 递给老师的那节
-  const cards = activityCards(a, factoryCards);
-  const plain = renderTutorSection(a, { params: {}, cards }) ?? '';
-  const quiz = renderTutorSection(a, { params: { 词: ['播种', '羞愧'] }, cards }) ?? '';
+  const plain = renderTutorSection(a, { params: {} }) ?? '';
+  const quiz = renderTutorSection(a, { params: { 词: ['播种', '羞愧'] } }) ?? '';
   check('没填词:那段裁掉,守卫行与注释都不在', !plain.includes('用上这周的词') && !plain.includes('{{') && !plain.includes('<!--') && plain.includes('第一句:') && plain.includes('收:'));
   check('填了词:那段在', quiz.includes('### 用上这周的词') && quiz.includes('第 1 步之后') && !quiz.includes('{{'));
-  check('空列表、空字符串算没填', !(renderTutorSection(a, { params: { 词: [] }, cards }) ?? '').includes('用上这周的词') && !(renderTutorSection(a, { params: { 词: ' ' }, cards }) ?? '').includes('用上这周的词'));
-  check('卡也能当裁段的名字', renderTutorSection({ ...a, tutor: { text: '甲\n{{有 photo}}\n乙\n{{/有}}', line: 1 } }, { cards: ['photo'] }) === '甲\n乙' && renderTutorSection({ ...a, tutor: { text: '甲\n{{有 photo}}\n乙\n{{/有}}', line: 1 } }, { cards: ['text'] }) === '甲');
-  check('activity 的卡并上老师的,text 总在', activityCards(a, ['read']).join(' ') === 'text read photo' && activityCards(a).length >= 8);
+  check('空列表、空字符串算没填', !(renderTutorSection(a, { params: { 词: [] } }) ?? '').includes('用上这周的词') && !(renderTutorSection(a, { params: { 词: ' ' } }) ?? '').includes('用上这周的词'));
 
   // 插槽
   const filled = fillSlots(reader!.prompt, { 格式: '一行一个词。' });
@@ -95,8 +90,7 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   check('范围反了', has(fixesAfter('最多问: 数,可空', '最多问: 数,可空,4 到 1'), '反了'));
   check('参数写了两次', has(fixesAfter('最多问: 数', '词: 数'), '写了两次', lineOf('最多问:')));
   check('参数不能叫讲法', has(fixesAfter('最多问: 数', '讲法: 数'), '不能叫「讲法」'));
-  check('参数不能和卡同名', has(fixesAfter('最多问: 数', 'photo: 数'), '和卡的种类同名'));
-  check('裁段的名字既不是参数也不是卡', has(fixesAfter('{{有 词}}', '{{有 单词}}'), '「单词」既不是', lineOf('{{有 词}}')));
+  check('裁段的名字不是参数', has(fixesAfter('{{有 词}}', '{{有 单词}}'), '「单词」不是这个 activity 的参数', lineOf('{{有 词}}')));
   check('守卫不配对', has(fixesAfter('{{/有}}\n', ''), '没有配对', lineOf('{{有 词}}')));
   check('多一个 {{/有}}', has(fixesAfter('### 怎么收', '{{/有}}\n### 怎么收'), '多了一个'));
   check('工具人少了插槽', has(fixesAfter('{{格式}}', ''), '少了 {{格式}}'));
@@ -104,11 +98,8 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   check('工具人那段不能裁段', has(fixesAfter('{{格式}}\n', '{{有 词}}\n{{格式}}\n{{/有}}\n'), '不能用 {{有'));
   check('没有这个工具人(画家 2026-11-15 删了)', has(fixesAfter('## 认字收到什么', '## 魔法师收到什么'), '没有「魔法师」这个工具人') && has(fixesAfter('## 认字收到什么', '## 画家收到什么'), '没有「画家」这个工具人'));
   check('工具人那节没有围栏', has(fixesAfter('```认字\n', '```text\n'), '要有一个 ```认字 围栏'));
-  check('头上的卡不认得(paint 2026-11-15 删了)', has(fixesAfter('cards: read photo', 'cards: read photoo'), '「photoo」不是板书的卡') && has(fixesAfter('cards: read photo', 'cards: read paint'), '「paint」不是板书的卡'));
-  check('正文用的卡老师和 activity 都没有', has(fixesAfter('cards: read photo', 'cards: photo', { fileName: '练词', tutorCards: ['text'] }), '`read` 卡,老师和这个 activity 都没有'));
   const factoryTutors = (JSON.parse(configTemplate({ slug: 'x', tutors: await shippedAgents() })) as { tutors: Record<string, { runtime?: string }> }).tutors;
   check('出厂三位老师都走 api(应用直连百炼 qwen3.8-max;英语 api-flash 第一轮常只出卡,2026-10-31)', ['chinese-tutor', 'math-tutor', 'english-tutor'].every((t) => factoryTutors[t].runtime === 'api'));
-  check('老师有这种卡就不用 activity 再写', fixesAfter('cards: read photo', 'cards: photo', { fileName: '练词', tutorCards: ['text', 'read'] }).length === 0);
   check('缺第一句', has(fixesAfter('第一句: ', '先说: '), '「第一句: …」'));
   check('缺人设', has(fixesAfter('你是这个家的语文老师,今天陪孩子练词', '今天陪孩子练词'), '以「你是」开头'));
   check('缺收', has(fixesAfter('收: 问完', '最后: 问完'), '「收: …」'));
@@ -147,12 +138,12 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   check('数学小课堂的例子:没有要改的,三个都先看课', mx.activity === '小课堂' && mx.issues.length === 0 && mx.examples.length === 3 && mx.examples.every((e) => e.lecture?.bundle === '2026-09-18-po13-jian-8' && e.kid.length === 1), JSON.stringify(mx.issues));
   const bad = parseExamples('---\nactivity: x\n---\n## 甲\n孩子: 你好\n判:\n- 出彩虹\n## 乙\n乱写一行\n最多轮: 99\n');
   check('例子写坏:判不认得、行认不出、最多轮超了、没孩子没人设、没有判都报', ['判「出彩虹」不认得', '认不出', '最多轮要是', '孩子一句都没有', '没有判'].every((w) => bad.issues.some((i) => i.text.includes(w))), JSON.stringify(bad.issues));
-  const line = (t: string) => ({ text: t, audio: null, marks: [], ask: false, anchor: null });
+  const line = (t: string) => ({ text: t, ask: false });
   // 写在页上的([[写 …]]):看图说话把孩子的话写在图下面
-  const wrote = (text: string, writes: string[]) => ({ text, audio: null, marks: [], ask: /[??]$/.test(text), anchor: null, acts: writes.map((w) => ({ name: '写', arg: w })) });
-  const sec = (lines: string[], cards: { kind: string; props: Record<string, unknown> }[] = []) => ({ lines: lines.map(line), cards }) as never;
+  const wrote = (text: string, writes: string[]) => ({ text, ask: /[??]$/.test(text), acts: writes.map((w) => ({ name: '写', arg: w })) });
+  const sec = (lines: string[]) => ({ lines: lines.map(line) }) as never;
   const story = ['小熊睡大觉。', '小熊浇了水。', '西瓜熟了。'];
-  const said = (lines: string[], writes: string[]) => ({ lines: lines.map((t, i) => (i === 0 ? wrote(t, writes) : line(t))), cards: [] }) as never;
+  const said = (lines: string[], writes: string[]) => ({ lines: lines.map((t, i) => (i === 0 ? wrote(t, writes) : line(t))) }) as never;
   const turns = [
     { kid: '看图说话', section: sec(['图上有谁呀?']) },
     { kid: '小熊', section: said(['小熊在哪里?'], story) },
@@ -161,14 +152,14 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   check('判:每节有讲稿拒绝只出卡、空白和空轮次', gradeRun(['每节有讲稿'], turns)[0].pass && !gradeRun(['每节有讲稿'], [{ kid: 'x', section: said([], story) }])[0].pass && !gradeRun(['每节有讲稿'], [{ kid: 'x', section: sec(['  ']) }])[0].pass && !gradeRun(['每节有讲稿'], [{ kid: 'x', section: null }])[0].pass && !gradeRun(['每节有讲稿'], [])[0].pass);
   {
     // 讲稿里的动作:[[请 …]] 就是开放(没写沿用上一次);[[摆 …]] 算摆了图形;问了带动作就算上页
-    const actSec = (lines: [string, { name: string; arg: string }[]][]): BoardSection => ({ cards: [], lines: lines.map(([text, acts]) => ({ text, audio: null, marks: [], ask: /[??]$/.test(text), anchor: null, cues: [], ...(acts.length ? { acts } : {}) })) } as unknown as BoardSection);
+    const actSec = (lines: [string, { name: string; arg: string }[]][]): BoardSection => ({ lines: lines.map(([text, acts]) => ({ text, ask: /[??]$/.test(text), ...(acts.length ? { acts } : {}) })) } as unknown as BoardSection);
     const ok1 = [{ kid: 'a', section: actSec([['哪个字不认识,就点一点它。', [{ name: '请', arg: '点' }]]]) }, { kid: 'b', section: actSec([['你把傍晚圈出来。', []]]) }];
     const r1 = gradeRun(['请动手就开放'], ok1)[0];
     check('判:请动手就开放——末句请他动手,页上(这一轮的 [[请 …]],没写就沿用上一次)要开放那个操作', !r1.pass && r1.why === '第 2 轮请他圈,页上开放的是点' && gradeRun(['请动手就开放'], [ok1[0], { kid: 'b', section: actSec([['你把傍晚圈出来。', [{ name: '请', arg: '点、圈' }]]]) }])[0].pass && gradeRun(['请动手就开放'], [{ kid: 'c', section: actSec([['你读一读。', []]]) }])[0].pass, JSON.stringify(r1));
     const asked = [{ kid: 'a', section: actSec([['你把 6 个圈成一串。', [{ name: '摆', arg: '点阵 6 行 6 个' }, { name: '请', arg: '圈' }]]]) }];
-    check('判:摆图形(写了名字就要是那一种)、在页上讲、不在页上讲', gradeRun(['请动手就开放'], asked)[0].pass && gradeRun(['摆图形'], asked)[0].pass && gradeRun(['摆图形: 点阵'], asked)[0].pass && !gradeRun(['摆图形: 方向盘'], asked)[0].pass && gradeRun(['在页上讲'], [{ kid: 'a', section: actSec([['看例 4。', [{ name: '看', arg: '例 4' }]]]) }])[0].pass && !gradeRun(['在页上讲'], asked)[0].pass && !gradeRun(['不在页上讲'], asked)[0].pass && gradeRun(['不在页上讲'], [{ kid: 'x', section: sec(['都对了。'], []) }])[0].pass);
-    check('判:问就上页(只用嘴问的那一轮不过;带动作的、请拍照的、没问的都过)', !gradeRun(['问就上页'], [{ kid: 'x', section: sec(['小箭头朝哪个方向?'], []) }])[0].pass && gradeRun(['问就上页'], [{ kid: 'x', section: sec(['拍给我看看,好吗?'], [{ kind: 'photo', props: {} }]) }, { kid: 'y', section: actSec([['东面有哪两间?圈出来。', [{ name: '请', arg: '圈' }]]]) }, { kid: 'z', section: sec(['都对了。'], []) }])[0].pass);
-    check('判:卡上有也看动作的参数([[写 …]])', gradeRun(['卡上有: 17'], [{ kid: 'x', section: actSec([['你看。', [{ name: '写', arg: '17 + 3 = 20' }]]]) }])[0].pass);
+    check('判:摆图形(写了名字就要是那一种)、在页上讲、不在页上讲', gradeRun(['请动手就开放'], asked)[0].pass && gradeRun(['摆图形'], asked)[0].pass && gradeRun(['摆图形: 点阵'], asked)[0].pass && !gradeRun(['摆图形: 方向盘'], asked)[0].pass && gradeRun(['在页上讲'], [{ kid: 'a', section: actSec([['看例 4。', [{ name: '看', arg: '例 4' }]]]) }])[0].pass && !gradeRun(['在页上讲'], asked)[0].pass && !gradeRun(['不在页上讲'], asked)[0].pass && gradeRun(['不在页上讲'], [{ kid: 'x', section: sec(['都对了。']) }])[0].pass);
+    check('判:问就上页(只用嘴问的那一轮不过;带动作的、请拍照的、没问的都过)', !gradeRun(['问就上页'], [{ kid: 'x', section: sec(['小箭头朝哪个方向?']) }])[0].pass && gradeRun(['问就上页'], [{ kid: 'x', section: sec(['拍给我看看,好吗?']) }, { kid: 'y', section: actSec([['东面有哪两间?圈出来。', [{ name: '请', arg: '圈' }]]]) }, { kid: 'z', section: sec(['都对了。']) }])[0].pass);
+    check('判:页上有看动作的参数([[写 …]])', gradeRun(['页上有: 17'], [{ kid: 'x', section: actSec([['你看。', [{ name: '写', arg: '17 + 3 = 20' }]]]) }])[0].pass);
   }
   check('判:放过整段(一轮写过三行)', gradeRun(['放过整段'], [{ kid: 'x', section: said(['好?'], ['一', '二', '三']) }])[0].pass && !gradeRun(['放过整段'], [{ kid: 'x', section: said(['好?'], ['一', '二']) }])[0].pass);
   const g = Object.fromEntries(gradeRun(['每节末句是问句', '不说: 错了', '问到: 在哪里', '并排: 睡大觉 | 浇了水'], turns).map((r) => [r.check, r]));
@@ -176,9 +167,9 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   check('判:收尾不问——只看最后一轮的末句', gradeRun(['收尾不问'], [{ kid: 'x', section: said(['你来数数?'], story) }, { kid: 'y', section: sec(['对,就是 5 个。']) }])[0].pass && !gradeRun(['收尾不问'], [{ kid: 'x', section: sec(['好的。']) }, { kid: 'y', section: sec(['你教教我?']) }])[0].pass);
   check('判:在页上动过的那轮末句不是问句报哪轮;只说话的不查', !gradeRun(['每节末句是问句'], [{ kid: 'x', section: said(['好的。'], story) }])[0].pass && gradeRun(['每节末句是问句'], [{ kid: 'x', section: sec(['好的。']) }])[0].pass);
   check('判:一节一问(在页上动过的那轮最多一个问号;只说话的不查)', gradeRun(['一节一问'], [{ kid: 'x', section: said(['这是你说的话。', '他们在哪里呀?'], story) }])[0].pass && !gradeRun(['一节一问'], [{ kid: 'x', section: said(['在哪里?', '什么时候?'], story) }])[0].pass && gradeRun(['一节一问'], [{ kid: 'x', section: sec(['在哪里?什么时候?']) }])[0].pass);
-  check('判:卡上有', gradeRun(['卡上有: 浇了水、西瓜'], turns)[0].pass && !gradeRun(['卡上有: 先看清'], turns)[0].pass);
+  check('判:页上有', gradeRun(['页上有: 浇了水、西瓜'], turns)[0].pass && !gradeRun(['页上有: 先看清'], turns)[0].pass);
   // 放小课堂一段:「看」落在小课堂上(带 at);没落上的看参数是不是时间
-  const play = (text: string, n: number) => ({ lines: [{ text, audio: null, marks: [], ask: true, anchor: null, acts: Array.from({ length: n }, () => ({ name: '看', arg: '0:19–0:30', do: { k: '看', label: '0:19–0:30', box: [0, 0, 0, 0], at: [19000, 30000] } })) }], cards: [] }) as never;
+  const play = (text: string, n: number) => ({ lines: [{ text, ask: true, acts: Array.from({ length: n }, () => ({ name: '看', arg: '0:19–0:30', do: { k: '看', label: '0:19–0:30', box: [0, 0, 0, 0], at: [19000, 30000] } })) }], cards: [] }) as never;
   check('判:放课里一段、一节最多一段、说到', gradeRun(['放课里一段'], [{ kid: 'x', section: play('你圈的这 3 根?', 1) }])[0].pass && !gradeRun(['放课里一段'], turns)[0].pass && !gradeRun(['一节最多一段'], [{ kid: 'x', section: play('看?', 2) }])[0].pass && gradeRun(['一节最多一段'], [{ kid: 'x', section: play('看?', 1) }])[0].pass && gradeRun(['说到: 圈'], [{ kid: 'x', section: sec(['你圈的这 3 根?']) }])[0].pass);
   const kp = kidPrompt({ story: '小熊种瓜', persona: '问一句答一句' }, turns.slice(0, 2));
   check('模拟孩子的提示词:故事、人设、对话、页上写着的整段', kp.includes('小熊种瓜') && kp.includes('问一句答一句') && kp.includes('孩子:小熊') && kp.includes('页上写着:小熊睡大觉。 / 小熊浇了水。'));
@@ -202,7 +193,7 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
 {
   const dict = '---\nname: 听写\ndescription: 老师念,孩子写\ncards: \n---\n\n## 家长填的\n\n```参数\n词表: 词表 —— 一行一个\n```\n';
   const r = lintActivity(dict, { fileName: '听写' });
-  check('没有老师怎么带:要改', r.issues.length === 1 && r.issues[0].level === 'fix' && r.issues[0].text.includes('老师怎么带') && r.activity.tutor === null && renderTutorSection(r.activity, { cards: [] }) === null, JSON.stringify(r.issues));
+  check('没有老师怎么带:要改', r.issues.filter((i) => i.level === 'fix').length === 1 && r.issues.find((i) => i.level === 'fix')!.level === 'fix' && r.issues.some((i) => i.level === 'fix' && i.text.includes('老师怎么带')) && r.activity.tutor === null && renderTutorSection(r.activity, {}) === null, JSON.stringify(r.issues));
   let threw = false;
   for (const junk of ['', '---', '## 老师怎么带\n{{有', '```\n## 家长填的', '---\nname: a\n---\n## 画家收到什么\n```画家\n{{']) {
     try {
@@ -247,7 +238,7 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
     rmSync(file);
     check('删了:upgrade 补上', (await up()).action === 'installed' && existsSync(file));
 
-    const ok = await checkActivities(root, { 'chinese-tutor': { cards: factoryCards }, 'math-tutor': {}, 'english-tutor': {} });
+    const ok = await checkActivities(root, { 'chinese-tutor': {}, 'math-tutor': {}, 'english-tutor': {} });
     check('activity check:workspace 里出厂的都对得上(例子文件不当 activity)', ok.length === (await shippedActivities()).filter((x) => !x.name.endsWith('.例子') && !x.home).length && ok.every((x) => x.issues.length === 0), JSON.stringify(ok.map((x) => x.issues)));
     const orphan = await checkActivities(root, {});
     check('activity check:老师不在 cotutor.json 里报一条', has(orphan[0].issues, '没有 chinese-tutor 这位老师'));

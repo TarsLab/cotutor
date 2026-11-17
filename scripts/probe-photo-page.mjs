@@ -129,7 +129,8 @@ try {
   const tile = await until(`(() => { const b = document.querySelector('[data-tutor="math-tutor"] .bt-tile[data-tile="check"]'); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
   ok('首页有数学的「检查作业」方砖', Boolean(tile));
   await tapAt(tile.x, tile.y);
-  const start = await until(`(() => { const b = document.querySelector('#board .bp-start'); return b ? [...b.querySelectorAll('.ask-go')].map((x) => x.textContent.trim()) : null; })()`);
+  // 「选课本页」等课本页的清单拉回来才插进去:等它(拉不回来 until 到时候照样往下走,下面那条就红)
+  const start = await until(`(() => { const b = document.querySelector('#board .bp-start'); const t = b ? [...b.querySelectorAll('.ask-go')].map((x) => x.textContent.trim()) : null; return t && t.includes('选课本页') ? t : null; })()`) ?? (await evaluate(`[...document.querySelectorAll('#board .bp-start .ask-go')].map((x) => x.textContent.trim())`));
   ok('点方砖:先到拍照屏(拍照、选课本页、从相册选、不拍用白纸),不发东西', Array.isArray(start) && start.includes('拍照') && start.includes('不拍,用白纸') && start.includes('选课本页') && !((await day()).messages?.length), JSON.stringify(start));
   console.log('  ', await shot('1-拍照屏.png'));
 

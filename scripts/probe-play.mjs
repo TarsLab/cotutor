@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
  * 录像的实录孩子端这一段的验收(在 pnpm test 里:tests/probe.test.ts 起它,要本机 Chrome,没有就跳过;走 mock,不花钱):
- * 孩子端进语文老师 → 点开选择题 → 选一项 → 关弹窗 → 页面退到后台(pagehide)→ 拦下发出去的实录:
- * 话题对、弹窗开关各一条(那张卡)、按顺序、不再记播放位置(讲稿不念了);家长端 /parent 看同一个话题什么都不发。
+ * 孩子端进语文老师 → 点开输入框打一句 → 页面退到后台(pagehide)→ 拦下发出去的实录:
+ * 话题对、打字的开与打的字记了、按顺序、不再记播放位置(讲稿不念了);家长端 /parent 看同一个话题什么都不发。
+ * (2026-11-17 以前点的是选择题卡、看弹窗开关;课里的卡删了。)
  *
  * 用法:node scripts/probe-play.mjs [--keep](留下 mock)
  */
@@ -54,16 +55,15 @@ try {
 
   // ---- 孩子端 ----
   await send('Page.navigate', { url: `${base}/?tutor=chinese-tutor` });
-  await until(`document.querySelector('#tutor')?.classList.contains('on') && document.querySelectorAll('#board .c-choice').length > 0`);
+  await until(`document.querySelector('#tutor')?.classList.contains('on') && document.querySelectorAll('#board > .sec').length > 0`);
   await sleep(1500);
-  const job = await evaluate(`document.querySelector('#board .c-choice').closest('.sec').dataset.job`);
-  const card = await evaluate(`Number(document.querySelector('#board .c-choice').dataset.card)`);
-  await evaluate(`document.querySelector('#board .c-choice').click()`);
-  await until(`document.querySelector('#stage')?.classList.contains('on')`);
-  await evaluate(`document.querySelectorAll('#st-body .so')[1].click()`);
-  await sleep(300);
-  await evaluate(`document.querySelector('#st-x').click()`);
+  // 横屏实时老师页的输入条平时收着:点「打字」出来
+  await evaluate(`document.querySelector('#lv-type').click()`);
   await sleep(200);
+  await evaluate(`(() => { const t = document.querySelector('#typed'); t.value = '画蛇'; t.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
+  await sleep(500);
+  await evaluate(`(() => { const t = document.querySelector('#typed'); t.value = ''; t.dispatchEvent(new Event('input', { bubbles: true })); t.blur(); return true; })()`);
+  await sleep(300);
   await evaluate(`window.dispatchEvent(new Event('pagehide'))`);
   await sleep(500);
   const sent = await evaluate(`window.__play`);
@@ -71,9 +71,10 @@ try {
   const thread = await evaluate(`(async () => (await (await fetch('/api/kid/conversations/chinese-tutor/today')).json()).thread)()`);
   ok('发出去了:话题是当前话题,带 sentAt', sent.length > 0 && sent.every((b) => b.thread === thread && typeof b.sentAt === 'number'), JSON.stringify(sent.map((b) => ({ thread: b.thread, n: b.records.length }))));
   ok('不再记播放位置(讲稿不念了)', !recs.some((r) => r.k === 'play' || r.k === 'autoplay'), JSON.stringify(recs.map((r) => r.k)));
-  const stages = recs.filter((r) => r.k === 'stage');
-  ok('弹窗开、关各一条,是那张选择题,开在关之前', stages.length === 2 && stages[0].open && !stages[1].open && stages.every((r) => r.job === job && r.card === card) && stages[0].at <= stages[1].at, JSON.stringify(stages));
-  ok('孩子端不发卡的改动(服务端存卡时自己记)', !recs.some((r) => r.k === 'card'));
+  const types = recs.filter((r) => r.k === 'type');
+  const es = types.map((r) => r.e);
+  ok('打字:先记开,再记打的字,按顺序', es[0] === 'focus' && types.some((r) => r.e === 'v' && r.v === '画蛇') && types.every((r, i) => i === 0 || types[i - 1].at <= r.at), JSON.stringify(types));
+  ok('没有卡的记录(弹窗、卡的改动)', !recs.some((r) => r.k === 'stage' || r.k === 'card' || r.k === 'scroll'));
 
   // ---- 家长端看同一个话题:不记 ----
   await send('Page.navigate', { url: `${base}/parent` });

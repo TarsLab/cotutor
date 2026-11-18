@@ -3,9 +3,12 @@
  * 照一节课的状态画(src/schema/lesson.ts,页面一句一句落好了发进来):现在这一页、老师的一层(记号、白纸条)、孩子的一层(笔、揭开)、开放的、老师让看的那一处。
  * 一页铺的三种:课本的一课(几页 PDF)、作业照片(几张)、白纸,都从上往下连成一条(场景坐标:一页宽 1000,src/chalk/kit/book.ts 的 bookSheets),屏幕是看它的一扇窗:
  *  - 窗只有两种大小:页宽铺满、两倍,双击切换;不两指缩放、不滚轮缩放。页宽时手指只上下滚,两倍时上下左右都能挪,松手带惯性。
- *  - 老师「看」了一处(look.n 变了):窗滚到那一块(大小不变,近的滑过去,远的直接到),那一块亮一下;没看就不动——他眼前的就是老师要讲的。
+ *  - 老师「看」了一处(look.n 变了):窗滚到那一块(大小不变,近的滑过去,远的直接到),块里的字一行一行刷上荧光黄(读的顺序,像老师拿荧光笔划一遍)、停一会儿淡掉;
+ *    字行是服务端找「看」的那一块时一起给的(look.rows,跨页的段不会把中间的脚注带进来);没给的(照片的第几张、新拍的照片)照框在文字层里挑,
+ *    文字层还没拉下来就等它,白纸、照片没认出字的整块铺一层。没看就不动——他眼前的就是老师要讲的。
  *  - 只读(录像、家长看)照记录的窗摆:以前孩子缩放过的窗照样放得下(camFor)。
  *  - Apple Pencil(pointerType = pen)写画,手指永远不落笔;笔在纸上时别的手指(手掌)不算。
+ *    试用(mousePen,电脑上没有笔):能落笔时鼠标当笔,不能落笔时鼠标还是手指;滚轮照常滚。
  *  - 轻点(手指或笔;手指的等一下看是不是双击)一个字:本地照课本的行和字算出是哪个字(bookPick),告诉页面(pick)弹田字格;点在盖住的拼音上就揭开(reveal)。
  *  - 孩子挪完、切完大小停下来:把窗(场景坐标)告诉页面(view),页面报给服务端说成一句「第 55 页:第 7 段」给老师。
  * 画面:课本 pdf.js(/stage/pdf/,不打进 stage.js)现画,每页先画一张中等清晰度的(移动、缩放时用它),停下来再把窗里那一块照屏幕的像素重画一张盖上去,放大了字也清楚;
@@ -16,7 +19,7 @@
  */
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type * as Pdfjs from 'pdfjs-dist';
-import { BOOK_ASPECT, BOOK_W, KID_INK, KID_INK_WIDTH, bookFrame, bookPick, bookSheets, photoBookPage, turnedSkeletons, type BookSheet, type ChalkSkeleton, type PhotoLine, type PhotoWord } from '../../chalk/index.ts';
+import { BOOK_ASPECT, BOOK_W, KID_INK, KID_INK_WIDTH, bookFrame, bookPick, bookRows, bookSheets, photoBookPage, turnedSkeletons, type BookSheet, type ChalkSkeleton, type PhotoLine, type PhotoWord } from '../../chalk/index.ts';
 import { lessonPage, lessonStrip } from '../../board/lesson.ts';
 import { stripLayout, type StripSlot } from '../../board/strip.ts';
 import { LESSON_INK_POINTS, type BookPage, type Lesson, type LessonPage } from '../../schema/index.ts';
@@ -35,6 +38,8 @@ export interface BookStageProps {
   /** 只看(录像、家长端、以前的) */
   readonly?: boolean;
   hand?: 'left' | 'right';
+  /** 试用(电脑上):能落笔时鼠标当笔,不能落笔时还是当手指(拖着滚、点字) */
+  mousePen?: boolean;
   /** 孩子落了一笔(场景坐标);strip = 落在开着的白纸条上 */
   onStroke(pts: [number, number][], strip?: string): void;
   /** 笔落下了(写着,应用不替他交给老师;抬笔就是 onStroke) */
@@ -84,6 +89,10 @@ const FLING_KEEP = 0.95;
 const STRIP_SHOW = 0.45;
 /** 老师的「看」滚过去时,那一块上面留多少像素(顶栏浮在板上) */
 const LOOK_TOP_PX = 64;
+/** 「看」刷荧光:窗滚过去以后开始(ms);一行刷多久;下一行晚多少;行多了所有行刷完也不超过多久;刷完停多久;淡掉多久;
+ *  字行等多久还没来就整块铺(ms);字行往外宽出多少(场景单位:左右、上下) */
+const LOOK_DELAY_MS = 250, LOOK_SWEEP_MS = 320, LOOK_STEP_MS = 140, LOOK_SPAN_MS = 1200, LOOK_HOLD_MS = 1900, LOOK_FADE_MS = 700, LOOK_WAIT_MS = 2000;
+const LOOK_PAD: [number, number] = [5, 3.5];
 /** 交给老师的那张图的长边 */
 const SHOT_SIDE = 1024;
 /** 窗停下来多久交窗里的图(清楚的那一块多半已经重画好了) */
@@ -139,6 +148,8 @@ interface Geo {
   /** 先画的那张已经画好的页(交窗里的图要等窗里的页都画好) */
   drawn: Set<number>;
   lines: BookPage[];
+  /** 字行拉完了(课本拉到了、照片认完了;白纸本来就没有):这时还找不到字行的「看」整块铺底 */
+  linesDone: boolean;
 }
 
 /** 老师要看的那一块 → 窗里留出来的那一块(四周留边、太小放大;src/chalk/kit/book.ts 的 bookFrame) */
@@ -186,7 +197,7 @@ function skeletonDraw(ctx: CanvasRenderingContext2D, k: ChalkSkeleton): void {
 
 const pathD = (pts: readonly [number, number][]): string => pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ');
 
-export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function BookStage({ id: _id, lesson, readonly, hand, onStroke, onPen, onTurn, onWipe, onSubmit, onPick, onReveal, onView, onShot, onError }, ref) {
+export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function BookStage({ id: _id, lesson, readonly, hand, mousePen, onStroke, onPen, onTurn, onWipe, onSubmit, onPick, onReveal, onView, onShot, onError }, ref) {
   const view = useRef<HTMLDivElement>(null);
   const paper = useRef<HTMLDivElement>(null);
   const svg = useRef<SVGSVGElement>(null);
@@ -213,7 +224,7 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
   /** 笔:正在画的一笔 */
   const pen = useRef<{ id: number; pts: [number, number][]; el: SVGPathElement; x0: number; y0: number } | null>(null);
   /** 孩子手上动着的时候老师的新窗先记着,手停了再去(白纸条开着的另记,照 goStrip 去) */
-  const pendingFrame = useRef<Box | null>(null);
+  const pendingFrame = useRef<{ box: Box; rows?: Box[] } | null>(null);
   const pendingStrip = useRef<Box | null>(null);
   /** 移过窗的那一次「看」(look.n):同一次不再移 */
   const lookedN = useRef(-1);
@@ -282,23 +293,54 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
     const fits = (b[3] - b[1]) * s <= vh - LOOK_TOP_PX * 2;
     return clamp({ s, cx: (b[0] + b[2]) / 2, cy: fits ? (b[1] + b[3]) / 2 : b[1] - LOOK_TOP_PX / s + vh / 2 / s });
   };
-  /** 老师要看的那一块左边亮一道竖条(孩子知道从哪看到哪;不盖字,跨页的块也不把页脚、页缝罩进去) */
-  const flashLook = (b: Box): void => {
+  /** 老师「看」的那一块等着刷荧光:rows = 服务端找好的字行(look.rows);没给就照框(老师给的原框,不是留了边的 frameBox)在文字层里挑,字行还没到就先记着,到了(或等不到)再刷 */
+  const looking = useRef<{ box: Box; rows?: Box[]; timer: number } | null>(null);
+  const lookAnim = useRef(0);
+  const flashLook = (b: Box, given?: Box[]): void => {
     if (readonly) return;
-    const hl = svg.current?.querySelector('.bk-hl');
-    if (!hl) return;
-    const r = el('rect', { x: String(Math.max(4, b[0] - 16)), y: String(b[1]), width: '8', height: String(Math.max(8, b[3] - b[1])), rx: '4', class: 'bk-look' });
-    hl.querySelector('.bk-look')?.remove();
-    hl.append(r);
-    window.setTimeout(() => r.remove(), 2600);
+    if (looking.current) window.clearTimeout(looking.current.timer);
+    looking.current = { box: b, ...(given?.length ? { rows: given } : {}), timer: window.setTimeout(() => paintLook(true), LOOK_WAIT_MS) };
+    paintLook(false);
   };
-  const goLook = (b: Box): void => { moveTo(lookAt(b), true); flashLook(b); };
+  /** 刷荧光:块里的字行一行一行从左往右刷过去(行多了总共也不超过 LOOK_SPAN_MS),停一会儿淡掉;没有字行(白纸、没认出字)整块铺一层淡的。force = 不等字行了 */
+  const paintLook = (force: boolean): void => {
+    const L = looking.current, g = geo.current;
+    const hl = svg.current?.querySelector('.bk-hl');
+    if (!L || !g || !hl) return;
+    const rows = L.rows ?? bookRows(g.lines, g.sheets, L.box);
+    if (!rows.length && !force && !g.linesDone) return;
+    window.clearTimeout(L.timer);
+    looking.current = null;
+    cancelAnimationFrame(lookAnim.current);
+    hl.querySelector('.bk-look')?.remove();
+    const wash = !rows.length;
+    const grp = el('g', { class: wash ? 'bk-look bk-look-wash' : 'bk-look' });
+    const boxes = wash ? [L.box] : rows.map((r): Box => [r[0] - LOOK_PAD[0], r[1] - LOOK_PAD[1], r[2] + LOOK_PAD[0], r[3] + LOOK_PAD[1]]);
+    const rects = boxes.map((r) => { const e = el('rect', { x: String(r[0]), y: String(r[1]), width: '0', height: String(Math.max(4, r[3] - r[1])), rx: '6' }); grp.append(e); return { e, w: Math.max(4, r[2] - r[0]) }; });
+    hl.append(grp);
+    const still = Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+    const sweep = wash || still ? 0 : LOOK_SWEEP_MS;
+    const step = wash || still || rects.length < 2 ? 0 : Math.min(LOOK_STEP_MS, (LOOK_SPAN_MS - LOOK_SWEEP_MS) / (rects.length - 1));
+    const fadeAt = (rects.length - 1) * step + sweep + LOOK_HOLD_MS;
+    const t0 = performance.now() + LOOK_DELAY_MS;
+    const tick = (now: number): void => {
+      if (!grp.isConnected) return;
+      const t = now - t0;
+      rects.forEach(({ e, w }, i) => { const k = sweep ? Math.min(1, Math.max(0, (t - i * step) / sweep)) : t >= 0 ? 1 : 0; e.setAttribute('width', String(w * (1 - (1 - k) ** 3))); });
+      grp.setAttribute('opacity', String(Math.min(1, Math.max(0, 1 - (t - fadeAt) / LOOK_FADE_MS))));
+      if (t < fadeAt + LOOK_FADE_MS) lookAnim.current = requestAnimationFrame(tick);
+      else grp.remove();
+    };
+    lookAnim.current = requestAnimationFrame(tick);
+  };
+  /** 窗去老师看的那一块(frame = 留了边的,窗照它摆)、刷荧光(raw = 老师给的原框) */
+  const goLook = (frame: Box, raw: Box, rows?: Box[]): void => { moveTo(lookAt(frame), true); flashLook(raw, rows); };
   /**
    * 白纸条开着:题目顶着窗口最上面,下面是白纸条;题目太高(带一大幅图),白纸条剩不下窗口的 STRIP_SHOW 就往下挪,
    * 让白纸条从窗口中间偏上开始(题目上面那截滚出去,孩子要看再往回拖)
    */
   const goStrip = (q: Box): void => {
-    if (readonly) { goLook(q); return; }
+    if (readonly) { goLook(q, q); return; }
     const [vw, vh] = vsize();
     const s = (vw / BOOK_W) * zoom.current;
     const top = LOOK_TOP_PX / s, win = vh / s;
@@ -514,7 +556,7 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
         host.prepend(cv);
         base.set(sh.n, cv);
       }
-      geo.current = { key: geoKey, pdf: pdfUrl, sheets, height, aspect, base, drawn: new Set(), lines: [] };
+      geo.current = { key: geoKey, pdf: pdfUrl, sheets, height, aspect, base, drawn: new Set(), lines: [], linesDone: p.kind !== 'book' && p.kind !== 'photo' };
       if (svg.current) { svg.current.setAttribute('viewBox', `0 0 ${BOOK_W} ${height}`); Object.assign(svg.current.style, { width: `${BOOK_W}px`, height: `${height}px` }); }
       if (sharp.current) sharp.current.style.display = 'none';
       // 这一页上孩子画的、老师的记号照状态摆(换页再回来还在)
@@ -529,7 +571,7 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
       const v = readonly ? latest.current.view : null;
       cam.current = v ? camFor(v) : fb ? lookAt(fb) : pageTop();
       apply();
-      if (fb && !v) flashLook(fb);
+      if (L && !v) flashLook(L.box, L.rows);
       setPhase('ready');
       // 每页先画一张(从窗里看得见的那页起)
       const order = [...sheets].sort((a, b) => Math.abs(a.top + a.height / 2 - cam.current.cy) - Math.abs(b.top + b.height / 2 - cam.current.cy));
@@ -563,7 +605,10 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
       if (p.kind === 'book') {
         const r = await fetch(`/api/kid/textbook/lines?b=${encodeURIComponent(p.src)}&p=${p.pages[0]}-${p.pages[p.pages.length - 1]}`, { cache: 'no-store' }).catch(() => null);
         const j = r?.ok ? ((await r.json()) as { pages?: BookPage[] }) : null;
-        if (!cancelled && geo.current?.key === geoKey && Array.isArray(j?.pages)) geo.current.lines = j!.pages!;
+        if (cancelled || geo.current?.key !== geoKey) return;
+        if (Array.isArray(j?.pages)) geo.current.lines = j!.pages!;
+        geo.current.linesDone = true;
+        paintLook(false);
       } else if (p.kind === 'photo') {
         for (let round = 0; round < 40 && !cancelled; round++) {
           const got = await Promise.all(p.photos.map(async (ph, i) => {
@@ -573,7 +618,9 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
           }));
           if (cancelled || geo.current?.key !== geoKey) return;
           geo.current.lines = got.map((x) => x.page);
-          if (got.every((x) => x.done)) break;
+          if (got.every((x) => x.done)) geo.current.linesDone = true;
+          paintLook(false);
+          if (geo.current.linesDone) break;
           await new Promise((r) => window.setTimeout(r, 1500));
         }
       }
@@ -605,7 +652,7 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
       lookedN.current = L.n;
       // 白纸条开着:题目在上、白纸条在下;没开:那一块摆到窗里
       if (strip && strip.key === L.label) { if (touches.current.size || pen.current) pendingStrip.current = strip.box; else goStrip(strip.box); }
-      else { const b = frameBox(L.box, g.sheets); if (touches.current.size || pen.current) pendingFrame.current = b; else goLook(b); }
+      else if (touches.current.size || pen.current) pendingFrame.current = { box: L.box, rows: L.rows }; else goLook(frameBox(L.box, g.sheets), L.box, L.rows);
     } else if (strip && opened && !readonly) {
       if (touches.current.size || pen.current) pendingStrip.current = strip.box; else goStrip(strip.box);
     }
@@ -632,7 +679,7 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
   const settled = (): void => {
     scheduleSharp();
     if (pendingStrip.current) { const b = pendingStrip.current; pendingStrip.current = null; pendingFrame.current = null; goStrip(b); return; }
-    if (pendingFrame.current) { const b = pendingFrame.current; pendingFrame.current = null; goLook(b); return; }
+    if (pendingFrame.current && geo.current) { const f = pendingFrame.current; pendingFrame.current = null; goLook(frameBox(f.box, geo.current.sheets), f.box, f.rows); return; }
     if (!moved.current) return;
     moved.current = false;
     window.clearTimeout(reportTimer.current);
@@ -666,7 +713,8 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
     const hl = svg.current?.querySelector('.bk-hl');
     if (hl) {
       const r = el('rect', { x: String(hit.box[0] - 3), y: String(hit.box[1] - 3), width: String(hit.box[2] - hit.box[0] + 6), height: String(hit.box[3] - hit.box[1] + 6), rx: '5', class: 'bk-hit' });
-      hl.replaceChildren(r);
+      hl.querySelector('.bk-hit')?.remove();
+      hl.append(r);
       window.setTimeout(() => r.remove(), 700);
     }
     onPick?.(hit.c);
@@ -728,7 +776,7 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
   const down = (e: React.PointerEvent): void => {
     if (phase !== 'ready') return;
     cancelAnimationFrame(glide.current);
-    if (e.pointerType === 'pen') {
+    if (e.pointerType === 'pen' || (mousePen && e.pointerType === 'mouse' && canMark && !readonly)) {
       // 笔:写画(开放了圈、画);点一下当轻点
       touches.current.clear(); gesture.current = null;
       try { (e.currentTarget as Element).setPointerCapture(e.pointerId); } catch { /* 合成的指针捕获不了 */ }

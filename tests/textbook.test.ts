@@ -6,7 +6,7 @@
  *   《古诗两首》3–4 页,下面两首各一页;语文园地一 5–7 页,按栏目分(第 7 页空着);识字表在最后。
  * 数学(2026-11-15)用 tests/_math-book.ts 照人教版数学排的那本:目录没有点线、单元下面的小节和课题从页里读、例题、栏目和题。
  */
-import { BOOK_MAX_PAGES, bookCut, bookFind, bookFrame, bookPages, bookPick, bookSheets, bookTarget, bookView, findLesson, lessonBlocks } from '../src/chalk/index.ts';
+import { BOOK_MAX_PAGES, bookCut, bookFind, bookFrame, bookPages, bookPick, bookRows, bookSheets, bookTarget, bookView, findLesson, lessonBlocks } from '../src/chalk/index.ts';
 import { bookLesson, fitActs, lessonOpen } from '../src/board/lesson-fit.ts';
 import { lessonInit } from '../src/board/lesson.ts';
 import { buildBookIndex, decodePinyin, pageLines, printedOf } from '../src/memory/textbook-index.ts';
@@ -64,6 +64,17 @@ check('圈字找到的框,点它中间就是那个字(带拼音)', Boolean(well)
 const twice = bookFind(fish, sheets, '井沿', [0, sheets[1].top + 150, 1000, sheets[1].top + 450]);
 check('同一个词出现两处:先找挨着窗的那一处(认字栏里的)', Boolean(twice && well && twice[1] > well[1] + 100), JSON.stringify({ twice, well }));
 check('点在空白处、点到标点:不算', bookPick(fish, sheets, 5, 5) === null);
+const rows13 = bookRows(fish, sheets, t13!.box);
+check('没带 rows 的「看」照框挑字行:块里一行一段、从上到下,都在块里', rows13.length >= 3 && rows13.every((r, i) => r[1] >= t13!.box[1] - 0.5 && r[3] <= t13!.box[3] + 0.5 && r[0] < r[2] && (i === 0 || r[1] > rows13[i - 1][1])), JSON.stringify({ box: t13!.box, rows13 }));
+const rowWell = well ? bookRows(fish, sheets, well) : [];
+check('看一个词:只刷那几个字,不刷整行', rowWell.length === 1 && Math.abs(rowWell[0][0] - well![0]) < 1 && Math.abs(rowWell[0][2] - well![2]) < 1, JSON.stringify({ rowWell, well }));
+check('没有文字层(白纸、照片没认完):没有字行,舞台整块铺', bookRows([], sheets, t13!.box).length === 0);
+const lines13 = paras.flatMap((b) => b.refs).length;
+check('「看」带上字行(舞台照它刷荧光):几段就是这几段的行,从上到下;跨页的段不把两页中间的东西带进来', t13!.rows.length === lines13 && t13!.rows.every((r, i) => i === 0 || r[1] > t13!.rows[i - 1][1]) && t2!.rows.length === paras[1].refs.length, JSON.stringify({ lines13, rows: t13!.rows.length }));
+const pg2 = bookTarget(fish, sheets, blocks, '第 2 页')!;
+check('看整页:字行不带页眉', pg2.rows.length > 0 && pg2.rows.length < fish[1].lines.length && pg2.rows.every((r) => r[1] > sheets[1].top), JSON.stringify({ rows: pg2.rows.length, lines: fish[1].lines.map((l) => l.text) }));
+const span = bookTarget(fish, sheets, blocks, '泡泡飞呀飞，飞进了')!;
+check('看跨行的一句原话:每行只刷那一截', span.rows.length === 2 && span.rows[0][1] < sheets[1].top && span.rows[1][1] > sheets[1].top && span.rows.every((r) => r[3] - r[1] < 40), JSON.stringify(span.rows));
 check('窗里看得见什么:哪几页、哪几段', bookView(fish, sheets, blocks, [0, 0, 1000, sheets[1].top + 300]) === '第 1–2 页:第 1–3 段' && bookView(fish, sheets, blocks, [0, sheets[1].top + 350, 1000, sheets[1].top + 700]).startsWith('第 2 页:课文后面'), bookView(fish, sheets, blocks, [0, 0, 1000, sheets[1].top + 300]));
 
 // ---- 课本的几何(画法「课本」那张卡 2026-11-16 删了,老师写动作;几何还在) ----
@@ -105,8 +116,8 @@ check('给老师的一课:标题、例题、栏目、第几题', five.show === '
 const mbook = { file: '数学二年级上册.pdf', index: mx };
 const opened = lessonOpen(lessonInit(), mbook);
 const f1 = fitActs(opened, [{ name: '翻', arg: '5的乘法口诀' }, { name: '看', arg: '例 2' }], { book: mbook });
-const look1 = f1.acts[1].do as { k: string; label: string; box: number[] } | undefined;
-check('落到页上:数学课的「看 例 2」照数学的分法换成框', (f1.acts[0].do as { page: { pages: number[] } }).page.pages.join() === '6' && look1?.label === '例2' && look1.box.length === 4, JSON.stringify(f1.acts));
+const look1 = f1.acts[1].do as { k: string; label: string; box: number[]; rows?: number[][] } | undefined;
+check('落到页上:数学课的「看 例 2」照数学的分法换成框', (f1.acts[0].do as { page: { pages: number[] } }).page.pages.join() === '6' && look1?.label === '例2' && look1.box.length === 4 && Boolean(look1.rows?.length) && f1.lesson.look?.rows?.length === look1.rows!.length, JSON.stringify(f1.acts));
 const guide = bookLesson(mx, '校园小导游')!.pages;
 const gs = bookSheets(guide);
 const twelve = bookFind(guide, gs, '12');

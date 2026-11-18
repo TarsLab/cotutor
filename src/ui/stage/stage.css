@@ -20,8 +20,10 @@ html, body, #root { margin: 0; height: 100%; background: #fffdf8; font: 18px/1.5
 .bk-sharp { position: absolute; display: none; pointer-events: none; }
 .bk-svg { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
 .bk-hit { fill: rgba(28, 126, 214, .22); stroke: #1c7ed6; stroke-width: 2; vector-effect: non-scaling-stroke; }
-.bk-look { fill: #f59f00; opacity: 0; animation: bk-look 2.4s ease-out .3s; }
-@keyframes bk-look { 0% { opacity: 0; } 15% { opacity: 1; } 60% { opacity: 1; } 100% { opacity: 0; } }
+/* 老师「看」的那一块:荧光笔的黄,正片叠底(字还是黑的、白纸变淡黄);一行一行刷、淡掉都是 book.tsx 的 paintLook 逐帧改 */
+.bk-look { mix-blend-mode: multiply; }
+.bk-look rect { fill: rgba(255, 212, 59, .62); }
+.bk-look-wash rect { fill: rgba(255, 212, 59, .38); }
 .bk-ring { stroke-dasharray: 1; stroke-dashoffset: 1; animation: bk-draw .7s ease-out forwards; }
 @keyframes bk-draw { to { stroke-dashoffset: 0; } }
 

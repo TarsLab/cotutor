@@ -279,6 +279,14 @@ function refsBox(pages: readonly BookPage[], sheets: readonly BookSheet[], refs:
   }));
 }
 
+/** 那几行在场景里各自的框(照行的先后):老师「看」的那一块,舞台照它一行一行刷 */
+function refsRows(pages: readonly BookPage[], sheets: readonly BookSheet[], refs: readonly { n: number; i: number }[]): Box[] {
+  return refs.flatMap((r) => {
+    const p = pages.find((x) => x.n === r.n), sh = sheetOf(sheets, r.n), l = p?.lines[r.i];
+    return p && sh && l ? [lineBox(sh, l)] : [];
+  });
+}
+
 /** 一块在场景里的框:有自己的框就用它,没有照那几行 */
 function blockBox(pages: readonly BookPage[], sheets: readonly BookSheet[], b: BookBlock): Box | null {
   if (b.area) { const sh = sheetOf(sheets, b.area.n); return sh ? toScene(sh, ...b.area.box) : null; }
@@ -293,7 +301,7 @@ function stream(pages: readonly BookPage[]): { c: string; n: number; i: number; 
 }
 
 /** 一段原文在哪:不管标点、空格、换行;找到第一处(在一行里的优先,给了 within 再先找和它挨着的),回这几个字所在的行与字 */
-function findText(pages: readonly BookPage[], sheets: readonly BookSheet[], text: string, within?: Box | null): { refs: { n: number; i: number }[]; box: Box } | null {
+function findText(pages: readonly BookPage[], sheets: readonly BookSheet[], text: string, within?: Box | null): { refs: { n: number; i: number }[]; box: Box; rows: Box[] } | null {
   const q = Array.from(text).filter((c) => !PUNCT.test(c)).join('');
   if (!q) return null;
   const s = stream(pages);
@@ -301,14 +309,19 @@ function findText(pages: readonly BookPage[], sheets: readonly BookSheet[], text
   const hits: number[] = [];
   for (let at = hay.indexOf(q); at >= 0; at = hay.indexOf(q, at + 1)) hits.push(at);
   if (!hits.length) return null;
-  const boxOf = (at: number): { refs: { n: number; i: number }[]; box: Box } => {
+  const boxOf = (at: number): { refs: { n: number; i: number }[]; box: Box; rows: Box[] } => {
     const xs = s.slice(at, at + q.length);
-    const boxes = xs.flatMap((x) => {
+    // 一行一截(这几个字在这一行的那一段):「看」一句原话时舞台照它刷
+    const perLine = new Map<string, Box[]>();
+    const boxes = xs.map((x) => {
       const p = pages.find((pp) => pp.n === x.n)!, sh = sheetOf(sheets, x.n)!, l = p.lines[x.i], ch = l.chars[x.k];
-      return [toScene(sh, ch.x1, l.y1, ch.x2, l.y2)];
+      const b = toScene(sh, ch.x1, l.y1, ch.x2, l.y2);
+      const key = `${x.n}.${x.i}`;
+      perLine.set(key, [...(perLine.get(key) ?? []), b]);
+      return b;
     });
     const refs = [...new Map(xs.map((x) => [`${x.n}.${x.i}`, { n: x.n, i: x.i }])).values()];
-    return { refs, box: union(boxes)! };
+    return { refs, box: union(boxes)!, rows: [...perLine.values()].map((bs) => union(bs)!) };
   };
   // 在一行里的那几处优先:短的(盖: 12)跨行拼出来的多半是巧合(表头末尾的 1 接下一格的 2);长的原话跨行时还是找得到
   const found = hits.map(boxOf);
@@ -341,38 +354,41 @@ const PROBLEM = /^(做一做|练一练|试一试|整理和复习)?\s*的?\s*第?
  * 老师的「看」→ 那一块(场景坐标)与给人看的名字。认这几种写法:
  *  第 6 段 / 第 6–7 段(一课的自然段)· 第 55 页(印的页码,整页)· 栏目名(日积月累;数学的做一做、练一练连着下面的题)· 标题 / 开头 · 课本上的一句原话(取它所在的几行)
  *  数学:例 2 · 练一练第 3 题(只写「第 3 题」是这一课里第一个第 3 题)。同名的栏目、例题有几处取第一处,要别的那处写原话
+ * rows = 这一块的字行各自的框(一句原话是每行那一截;舞台照它刷荧光,不按框去猜——跨页的框会把中间的脚注罩进去)。
  * 认不出 = null(应用不动窗,给家长端记一行)。
  */
-export function bookTarget(pages: readonly BookPage[], sheets: readonly BookSheet[], blocks: readonly BookBlock[], what: string): { label: string; box: Box } | null {
+export function bookTarget(pages: readonly BookPage[], sheets: readonly BookSheet[], blocks: readonly BookBlock[], what: string): { label: string; box: Box; rows: Box[] } | null {
   const q = what.trim().replace(/[「」『』《》""“”]/g, '');
   const r = RANGE.exec(q);
   if (r) {
     const a = Number(r[1]), b = Number(r[2] ?? r[1]);
     const ps = blocks.filter((x) => x.kind === 'para' && x.no! >= Math.min(a, b) && x.no! <= Math.max(a, b));
-    const box = refsBox(pages, sheets, ps.flatMap((x) => x.refs));
-    return box ? { label: a === b ? `第${a}段` : `第${Math.min(a, b)}–${Math.max(a, b)}段`, box } : null;
+    const refs = ps.flatMap((x) => x.refs);
+    const box = refsBox(pages, sheets, refs);
+    return box ? { label: a === b ? `第${a}段` : `第${Math.min(a, b)}–${Math.max(a, b)}段`, box, rows: refsRows(pages, sheets, refs) } : null;
   }
   const pg = PAGE.exec(q);
   if (pg) {
     const p = pages.find((x) => x.printed === Number(pg[1])), sh = p ? sheetOf(sheets, p.n) : undefined;
-    return sh ? { label: `第${pg[1]}页`, box: [0, r1(sh.top), BOOK_W, r1(sh.top + sh.height)] } : null;
+    return p && sh ? { label: `第${pg[1]}页`, box: [0, r1(sh.top), BOOK_W, r1(sh.top + sh.height)], rows: refsRows(pages, sheets, p.lines.flatMap((l, i) => (chrome(p, l) ? [] : [{ n: p.n, i }]))) } : null;
   }
   const ex = EXAMPLE.exec(q.replace(/\s/g, ''));
   if (ex) {
     const b = blocks.find((x) => x.kind === 'example' && x.no === Number(ex[1]));
     const box = b ? refsBox(pages, sheets, b.refs) : null;
-    return box ? { label: `例${ex[1]}`, box } : null;
+    return box ? { label: `例${ex[1]}`, box, rows: refsRows(pages, sheets, b!.refs) } : null;
   }
   const pr = PROBLEM.exec(q.replace(/\s/g, ''));
   if (pr) {
     const b = blocks.find((x) => x.kind === 'problem' && x.no === Number(pr[2]) && (!pr[1] || x.head === pr[1]));
     const box = b ? blockBox(pages, sheets, b) : null;
-    return box ? { label: `${b!.head ?? ''}第${pr[2]}题`, box } : null;
+    return box ? { label: `${b!.head ?? ''}第${pr[2]}题`, box, rows: refsRows(pages, sheets, b!.refs) } : null;
   }
   if (/^(标题|题目|开头|课题)$/.test(q)) {
     const t = blocks.filter((x) => x.kind === 'title' || (x.kind === 'para' && x.no === 1));
-    const box = refsBox(pages, sheets, t.flatMap((x) => x.refs));
-    return box ? { label: '开头', box } : null;
+    const refs = t.flatMap((x) => x.refs);
+    const box = refsBox(pages, sheets, refs);
+    return box ? { label: '开头', box, rows: refsRows(pages, sheets, refs) } : null;
   }
   const sec = blocks.find((x) => x.kind === 'section' && (x.head === q || x.head!.includes(q) || (q.length >= 2 && q.includes(x.head!))));
   if (sec) {
@@ -380,12 +396,13 @@ export function bookTarget(pages: readonly BookPage[], sheets: readonly BookShee
     const k = blocks.indexOf(sec);
     let end = k + 1;
     while (end < blocks.length && blocks[end].kind === 'problem') end++;
-    const box = refsBox(pages, sheets, blocks.slice(k, end).flatMap((x) => x.refs));
-    return box ? { label: sec.head!, box } : null;
+    const refs = blocks.slice(k, end).flatMap((x) => x.refs);
+    const box = refsBox(pages, sheets, refs);
+    return box ? { label: sec.head!, box, rows: refsRows(pages, sheets, refs) } : null;
   }
   const hit = findText(pages, sheets, q);
   if (!hit) return null;
-  return { label: q.length > 12 ? `${Array.from(q).slice(0, 12).join('')}…` : q, box: refsBox(pages, sheets, hit.refs)! };
+  return { label: q.length > 12 ? `${Array.from(q).slice(0, 12).join('')}…` : q, box: refsBox(pages, sheets, hit.refs)!, rows: hit.rows };
 }
 
 /** 能弹出来的:一到四个汉字(田字格),或一个英文单词(四线三格,最多 20 个字母) */
@@ -425,6 +442,31 @@ export function bookPick(pages: readonly BookPage[], sheets: readonly BookSheet[
     if (best && best.d < (best.box[2] - best.box[0]) * 1.2) { const { d: _d, ...hit } = best; return hit; }
   }
   return null;
+}
+
+/**
+ * 一块(场景坐标,老师「看」的那一块)里的字行:老师的「看」没带 rows(照片的第几张、新拍的照片)时舞台照它刷荧光黄。每行只取中心落在块里的字,从第一个到最后一个连成一段;
+ * 行的上下就是字的上下(拼音挂在字上,不另成行);照读的顺序(从上到下、从左到右)。没有文字层(白纸、照片还没认完)= []
+ */
+export function bookRows(pages: readonly BookPage[], sheets: readonly BookSheet[], box: Box): Box[] {
+  const out: Box[] = [];
+  for (const p of pages) {
+    const sh = sheetOf(sheets, p.n);
+    if (!sh) continue;
+    for (const l of p.lines) {
+      const [, y1, , y2] = lineBox(sh, l);
+      const cy = (y1 + y2) / 2;
+      if (cy < box[1] || cy > box[3]) continue;
+      let a = Infinity, b = -Infinity;
+      for (const ch of l.chars) {
+        const x1 = ch.x1 * sh.s, x2 = ch.x2 * sh.s, cx = (x1 + x2) / 2;
+        if (cx < box[0] || cx > box[2]) continue;
+        a = Math.min(a, x1); b = Math.max(b, x2);
+      }
+      if (a < b) out.push([r1(a), y1, r1(b), y2]);
+    }
+  }
+  return out.sort((p, q) => p[1] - q[1] || p[0] - q[0]);
 }
 
 /** 窗里看得见什么(给老师的一句):哪几页、哪几段 / 哪几个栏目;一行露出一半以上才算 */

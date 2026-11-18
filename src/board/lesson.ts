@@ -77,7 +77,7 @@ function lessonAct(l: Lesson, a: LessonAct): Lesson {
     case '看': {
       const p = lessonPage(l);
       const strip = p?.teacher.strips.some((s) => s.key === a.label) ? a.label : null;
-      return { ...l, look: { label: a.label, box: a.box, n: (l.look?.n ?? 0) + 1, ...(a.at ? { at: a.at } : {}) }, strip };
+      return { ...l, look: { label: a.label, box: a.box, n: (l.look?.n ?? 0) + 1, ...(a.at ? { at: a.at } : {}), ...(a.rows?.length ? { rows: a.rows } : {}) }, strip };
     }
     case '圈':
     case '遮':

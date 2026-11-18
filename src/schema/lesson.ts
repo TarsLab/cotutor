@@ -124,8 +124,9 @@ export interface Lesson {
   pages: LessonPage[];
   /** 现在铺的是哪一页(id);还没有页 = null */
   at: string | null;
-  /** 老师最后让看的那一处;n 每「看」一次加一(同一处再看一遍,窗也再移过去);at = 小课堂上放的那一段(课里的毫秒,起止) */
-  look: { label: string; box: Box; n: number; at?: [number, number] } | null;
+  /** 老师最后让看的那一处;n 每「看」一次加一(同一处再看一遍,窗也再移过去);at = 小课堂上放的那一段(课里的毫秒,起止);
+   *  rows = 这一块的字行各自的框(课本、照片上找到的;舞台照它一行一行刷荧光,没有就照框里的字行) */
+  look: { label: string; box: Box; n: number; at?: [number, number]; rows?: Box[] } | null;
   /** 孩子的窗最后停在哪(场景坐标) */
   view: Box | null;
   /** 开着的白纸条(Strip.key);没开 = null */
@@ -134,12 +135,14 @@ export interface Lesson {
   jobs: string[];
 }
 export const LESSON_JOBS_MAX = 60;
+/** 「看」的那一块最多带几行的框(一整页课本二三十行;再多的不刷,只滚过去) */
+export const LOOK_ROWS_MAX = 60;
 
 /** 动作落到页上以后的样子(src/board/lesson-fit.ts 照课本找到框、填好页):lessonStep 只认它,不再查课本 */
 export type LessonAct =
   | { k: '翻'; page: PageSource }
   /** at:小课堂上放哪一段(课里的毫秒,对齐到句) */
-  | { k: '看'; label: string; box: Box; at?: [number, number] }
+  | { k: '看'; label: string; box: Box; at?: [number, number]; rows?: Box[] }
   | { k: '圈' | '遮' | '盖'; spots: { text: string; box: Box }[] }
   | { k: '写'; text: string; size: Size }
   | { k: '摆'; kit: string; params: Record<string, string>; size: Size }
@@ -207,14 +210,14 @@ export const LessonSchema = z.object({
   v: z.literal(1),
   pages: z.array(LessonPageSchema).max(LESSON_PAGES_MAX),
   at: z.string().nullable(),
-  look: z.object({ label: z.string(), box: BoxSchema, n: z.number().int().nonnegative(), at: RangeSchema.optional() }).nullable(),
+  look: z.object({ label: z.string(), box: BoxSchema, n: z.number().int().nonnegative(), at: RangeSchema.optional(), rows: z.array(BoxSchema).max(LOOK_ROWS_MAX).optional() }).nullable(),
   view: BoxSchema.nullable(),
   strip: z.string().nullable(),
   jobs: z.array(z.string()).max(LESSON_JOBS_MAX).default([]),
 });
 export const LessonActSchema = z.discriminatedUnion('k', [
   z.object({ k: z.literal('翻'), page: PageSourceSchema }),
-  z.object({ k: z.literal('看'), label: z.string(), box: BoxSchema, at: RangeSchema.optional() }),
+  z.object({ k: z.literal('看'), label: z.string(), box: BoxSchema, at: RangeSchema.optional(), rows: z.array(BoxSchema).max(LOOK_ROWS_MAX).optional() }),
   z.object({ k: z.enum(['圈', '遮', '盖']), spots: z.array(z.object({ text: z.string().min(1), box: BoxSchema })) }),
   z.object({ k: z.literal('写'), text: z.string().min(1), size: SizeSchema }),
   z.object({ k: z.literal('摆'), kit: z.string().min(1), params: z.record(z.string(), z.string()), size: SizeSchema }),

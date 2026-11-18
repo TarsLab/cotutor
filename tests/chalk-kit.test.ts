@@ -109,7 +109,8 @@ check('给老师的那一句', gread(G, [vline(GX(3)), vline(GX(6))]) === '画�
   const sheets = bookSheets([page, p2.page]);
   check('两张从上往下连着,中间空一条', sheets[0].top === 0 && sheets[1].top === 780 && sheets[1].height === 1000, JSON.stringify(sheets));
   const all = [...blocks, ...p2.blocks];
-  check('看第 3 题:是题框(比框里的几行大,图也在里面)', JSON.stringify(bookTarget([page, p2.page], sheets, all, '第 3 题')) === '{"label":"第3题","box":[80,135,920,375]}', JSON.stringify(bookTarget([page, p2.page], sheets, all, '第 3 题')));
+  const q3 = bookTarget([page, p2.page], sheets, all, '第 3 题');
+  check('看第 3 题:窗照题框(比框里的几行大,图也在里面),刷荧光照框里的字行', JSON.stringify(q3) === '{"label":"第3题","box":[80,135,920,375],"rows":[[100,150,500,180],[300,225,600,255]]}', JSON.stringify(q3));
   check('圈字:先找挑出的字词(框更紧),再找正文的行', JSON.stringify(bookFind([page], sheets, '开兴')) === '[300,225,380,255]' && JSON.stringify(bookFind([page], sheets, '快乐')) === '[480,225,600,255]', JSON.stringify([bookFind([page], sheets, '开兴'), bookFind([page], sheets, '快乐')]));
   check('点字:汉字是落在的那一格;英文是那个字母所在的词;行外面不算', bookPick([page], sheets, 335, 240)?.c === '开' && bookPick([page], sheets, 470, 465)?.c === 'colour' && bookPick([page], sheets, 50, 465) === null && bookPick([page], sheets, 335, 300) === null, JSON.stringify([bookPick([page], sheets, 335, 240), bookPick([page], sheets, 470, 465)]));
   check('窗里是哪:第几张、露出一半以上的题', bookView([page, p2.page], sheets, all, [0, 100, 1000, 400], '张') === '第 1 张:第 3 题', bookView([page, p2.page], sheets, all, [0, 100, 1000, 400], '张'));

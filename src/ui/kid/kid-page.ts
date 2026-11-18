@@ -10,6 +10,7 @@
  * 试用(sandbox 与 mock,__MODE__ 里 trial = true):家长、开发者在电脑上试,吵的地方打字比说快。老师页上直接敲键盘就开输入条(敲的那个字进框,回车也开),
  * Esc 收起;舞台铺满时(课本页、白纸)右下角露一颗「打字」。打出去的字配成孩子的声音(/api/kid/trial/voice,只有 sandbox 有)当麦克风推给嘴,
  * 走的就是孩子说话那条路(转写、请他说、嘴先答、一直听的 VAD),见「试用:打的字当孩子说的」那段;没有这个口子(mock)照打字发。
+ * 电脑上也没有 Apple Pencil:一节课的页上老师请了写、圈…时鼠标就是笔(发给舞台的 mousePen,book.tsx)。
  * 铁律:界面上永远没有错误与评判——后端不通、老师出错、识别失败,都只是「什么都不出现」或头像灰;
  * 文字尽量少,语音优先。孩子设备上没有通往家长端的入口。
  *
@@ -1176,14 +1177,21 @@ ${HOME_TILES_JS}
     if (LS.on && LS.l) { LS.l = lessonStep(LS.l, ev); lsShow(); return; }
     lsStart(lessonStep(lessonInit(), ev));
   };
-  /** 进一节课:回到的(有话题)照服务端记的;新开的课本铺目录,作业照片等孩子拍(拍照屏) */
+  /** 进一节课:回到的(有话题)照服务端记的;新开的课本铺目录,作业照片等孩子拍(拍照屏)。
+   *  课本、回到的课:舞台先铺上再去要(不先露一下空的老师页;iframe 和这一问一起装),要回来没有课再收起 */
   const bpOpenLesson = () => {
     const name = S.tutor && S.tutor.name;
     if (!name || LS.asking) return;
     LS.asking = true;
     const q = S.thread && S.day && S.day.date ? '/api/kid/lesson?tutor=' + encodeURIComponent(name) + '&date=' + encodeURIComponent(S.day.date) + '&thread=' + encodeURIComponent(S.thread) : null;
-    const open = (l) => { LS.asking = false; if (!S.tutor || S.tutor.name !== name || !BP.on) return; if (l) { lcAdopt(l); lsStart(l); } };
-    const toc = () => (BP.base === 'textbook' ? api('GET', '/api/kid/textbook/base?tutor=' + encodeURIComponent(name)).then((j) => open(j && j.lesson), () => { LS.asking = false; }) : open(null));
+    const early = (q || BP.base === 'textbook') && !S.stage;
+    if (early) lsOpenStage();
+    const open = (l) => {
+      LS.asking = false;
+      if (!S.tutor || S.tutor.name !== name || !BP.on) return;
+      if (l) { lcAdopt(l); lsStart(l); } else if (early && S.stage && S.stage.lesson && !LS.on) closeStage();
+    };
+    const toc = () => (BP.base === 'textbook' ? api('GET', '/api/kid/textbook/base?tutor=' + encodeURIComponent(name)).then((j) => open(j && j.lesson), () => open(null)) : open(null));
     if (q) api('GET', q).then((j) => (j && j.lesson ? open(j.lesson) : toc()), toc); else toc();
   };
   /** 拉了今天的话题以后:这节课一直听(第一条记着 listen,activity 头上写的)而这会儿是按住说,换过去(回到这节课、刷新页面) */
@@ -1264,7 +1272,7 @@ ${HOME_TILES_JS}
     renderGo();
     if (key === LS.key) return;
     LS.key = key;
-    postStage({ type: 'lesson', id: S.stage.id, lesson: LS.l, readonly: S.readonly || REEL, hand: document.body.classList.contains('hand-left') ? 'left' : 'right', ...(p && p.kind === 'lecture' ? { lecture: { url: lcBundleUrl(p.bundle, p.video), marks: S.lecture && S.lecture.bundle === p.bundle ? S.lecture.marks : [], follow: REEL, ...(LS.playN ? { play: LS.playN } : {}) } } : {}) });
+    postStage({ type: 'lesson', id: S.stage.id, lesson: LS.l, readonly: S.readonly || REEL, hand: document.body.classList.contains('hand-left') ? 'left' : 'right', ...(TRIAL ? { mousePen: true } : {}), ...(p && p.kind === 'lecture' ? { lecture: { url: lcBundleUrl(p.bundle, p.video), marks: S.lecture && S.lecture.bundle === p.bundle ? S.lecture.marks : [], follow: REEL, ...(LS.playN ? { play: LS.playN } : {}) } } : {}) });
     if (!REEL && !S.readonly) { clearTimeout(LS.recT); LS.recT = setTimeout(() => { const k = JSON.stringify(LS.l); if (k !== LS.recKey && S.thread) { LS.recKey = k; playRec({ k: 'lesson', l: LS.l }); } }, 1500); }
   };
   /** 页铺满:舞台开一次,之后只换状态 */

@@ -7,8 +7,9 @@
  *    字行是服务端找「看」的那一块时一起给的(look.rows,跨页的段不会把中间的脚注带进来);没给的(照片的第几张、新拍的照片)照框在文字层里挑,
  *    文字层还没拉下来就等它,白纸、照片没认出字的整块铺一层。没看就不动——他眼前的就是老师要讲的。
  *  - 只读(录像、家长看)照记录的窗摆:以前孩子缩放过的窗照样放得下(camFor)。
- *  - Apple Pencil(pointerType = pen)写画,手指永远不落笔;笔在纸上时别的手指(手掌)不算。
- *    试用(mousePen,电脑上没有笔):能落笔时鼠标当笔,不能落笔时鼠标还是手指;滚轮照常滚。
+ *  - Apple Pencil(pointerType = pen)写画,手指永远不落笔;笔在纸上时别的手指(手掌)不算。课本页上随时能画(预习时自己圈生字、标段);
+ *    照片、白纸页上老师请了写、圈…才能画。请没请只管抬笔后替不替他交(服务端照 open 判)。
+ *    试用(mousePen,电脑上没有笔):能落笔时鼠标当笔(课本页上一直是,拖不动页,用滚轮),不能落笔时鼠标还是手指;滚轮照常滚。
  *  - 轻点(手指或笔;手指的等一下看是不是双击)一个字:本地照课本的行和字算出是哪个字(bookPick),告诉页面(pick)弹田字格;点在盖住的拼音上就揭开(reveal)。
  *  - 孩子挪完、切完大小停下来:把窗(场景坐标)告诉页面(view),页面报给服务端说成一句「第 55 页:第 7 段」给老师。
  * 画面:课本 pdf.js(/stage/pdf/,不打进 stage.js)现画,每页先画一张中等清晰度的(移动、缩放时用它),停下来再把窗里那一块照屏幕的像素重画一张盖上去,放大了字也清楚;
@@ -22,7 +23,7 @@ import type * as Pdfjs from 'pdfjs-dist';
 import { BOOK_ASPECT, BOOK_W, KID_INK, KID_INK_WIDTH, bookFrame, bookPick, bookRows, bookSheets, photoBookPage, turnedSkeletons, type BookSheet, type ChalkSkeleton, type PhotoLine, type PhotoWord } from '../../chalk/index.ts';
 import { lessonPage, lessonStrip } from '../../board/lesson.ts';
 import { stripLayout, type StripSlot } from '../../board/strip.ts';
-import { LESSON_INK_POINTS, type BookPage, type Lesson, type LessonPage } from '../../schema/index.ts';
+import { LESSON_INK_POINTS, PEN_ASKS, type BookPage, type Lesson, type LessonPage } from '../../schema/index.ts';
 
 /** 页面经它叫舞台:「给老师看」(先交窗里的图)、导一张小图(话题的预览图) */
 export interface BookStageHandle {
@@ -60,9 +61,6 @@ export interface BookStageProps {
   onShot?(box: [number, number, number, number], image: string): void;
   onError(message: string): void;
 }
-
-/** 孩子能落笔的请:写、圈、涂、切、添(点是点字,转、说不用笔) */
-const PEN_ASKS = ['写', '圈', '涂', '切', '添'];
 
 type Lib = typeof Pdfjs;
 type Box = [number, number, number, number];
@@ -236,7 +234,8 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
   const latest = useRef(lesson);
   latest.current = lesson;
   const open = page?.open ?? [];
-  const canMark = open.some((o) => PEN_ASKS.includes(o));
+  /** 能落笔:课本页上随时;别的页老师请了用笔才能 */
+  const canMark = page?.kind === 'book' || open.some((o) => PEN_ASKS.includes(o));
   const canPick = Boolean(page?.pick) || open.includes('点');
   const revealedKey = (page?.kid.revealed ?? []).join('\n');
   /** 开着的白纸条:排好的样子;孩子在上面画的、转的 */

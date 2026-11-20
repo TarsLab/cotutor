@@ -17,6 +17,8 @@ export type ActName = (typeof ACT_NAMES)[number];
 /** 请孩子做的(开放哪些作答):写、圈、点(点字)、涂、切、转、说、添(点阵上添一个) */
 export const ASK_NAMES = ['写', '圈', '点', '涂', '切', '转', '说', '添'] as const;
 export type AskName = (typeof ASK_NAMES)[number];
+/** 用笔的请(点是点字,转、说不用笔):请着这些时孩子抬笔停一会儿,应用替他交给老师(收笔);课本页上没请也能画,只是不替他交 */
+export const PEN_ASKS: readonly AskName[] = ['写', '圈', '涂', '切', '添'];
 
 /** 白纸条里的东西多大:档,不写坐标(老师看不见图,位置由应用排) */
 export const SIZES = ['大', '中', '小'] as const;
@@ -115,7 +117,7 @@ export type LessonPage = PageSource & {
    * 揭开了哪些、点开看过哪些字词(先后)、白纸条里的图形转到多少度(键:<白纸条>#<第几样>)
    */
   kid: { ink: [number, number][][]; stripInk: Record<string, [number, number][][]>; revealed: string[]; picked: string[]; turns: Record<string, number> };
-  /** 开放的:这一步请孩子做的(老师的「请」);没请就只能看(和点字) */
+  /** 开放的:这一步请孩子做的(老师的「请」);没请就只能看和点字(课本页上也能画,抬笔不替他交) */
   open: AskName[];
 };
 

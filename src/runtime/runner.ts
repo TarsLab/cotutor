@@ -29,7 +29,7 @@ import { deriveKidView, truncateReply } from './kid-view.ts';
 import { parseSections } from '../board/sections.ts';
 import { threadDigest } from './context/thread-digest.ts';
 import { type RunEvent, type RunEventEnvelope, type RunEventInput } from '../schema/index.ts';
-import { LESSON_INK_POINTS, PHOTO_PAGE, type ActivityBase, type Lesson, type LessonEvent, type PagePhoto, canonicalSubject, subjectLang, MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, VAULT_PACK_ROLES, isApiRuntime, resolvePolicy, type ContextPack, type ConversationIndex, type MemoryProposal, type PendingMemory, type ActivityRun, type ConversationMessage, type MessageFrom, type MessageVia, type Policy, type Timing } from '../schema/index.ts';
+import { LESSON_INK_POINTS, PEN_ASKS, PHOTO_PAGE, type ActivityBase, type Lesson, type LessonEvent, type PagePhoto, canonicalSubject, subjectLang, MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, VAULT_PACK_ROLES, isApiRuntime, resolvePolicy, type ContextPack, type ConversationIndex, type MemoryProposal, type PendingMemory, type ActivityRun, type ConversationMessage, type MessageFrom, type MessageVia, type Policy, type Timing } from '../schema/index.ts';
 import { UsageError } from '../shared/errors.ts';
 import type { Workspace } from '../schema/index.ts';
 import { readIndex, snapshotSources, writeIndex, writeRunFile } from './journal/store.ts';
@@ -350,13 +350,13 @@ export class Runner {
   /**
    * 一节课里孩子在页上做了一件事(实时那条连接报来的,src/runtime/live/call.ts 的 {t:'board'}):验过、落进这节课的状态、记进板的日志,不起老师。
    * base 是孩子那头现在铺的那一页(页的 id);和这节课现在的页对不上(他那头还没换过来)就不落。
-   *  - 落一笔 {k:'stroke', pts, strip?}、擦掉 {k:'wipe'}、白纸条里的方向盘转了 {k:'turn', item, deg}:不念、不催
+   *  - 落一笔 {k:'stroke', pts, strip?}、擦掉 {k:'wipe'}、白纸条里的方向盘转了 {k:'turn', item, deg}:不念、不催;落的一笔是老师请着用笔时落的回 asked(收笔照它替他交)
    *  - 窗停下来 {k:'view', box}:照页的文字层说成一句(「第 55 页:第 7 段」「第 1 张:第 3 题」)记下
    *  - 窗里的图 {k:'shot', box, image}(jpeg data URL):只留最新一张,下一轮附给老师;不算孩子动了手
    *  - 点字 {k:'pick', text}:回这个字词的念法(照片上认字时模型写好的「傍,傍晚的傍」,嘴照念;没有就念它自己);揭开 {k:'reveal', text}:嘴不念
    * 话题不是今天的一节课、东西不对:回 null,什么都不记
    */
-  async boardEvent(tutor: string, date: string, body: unknown): Promise<{ thread: string; say: string | null; still?: false; shot?: true } | null> {
+  async boardEvent(tutor: string, date: string, body: unknown): Promise<{ thread: string; say: string | null; still?: false; shot?: true; asked?: true } | null> {
     const ws = this.getWs();
     if (!body || typeof body !== 'object') return null;
     const b = body as Record<string, unknown>;
@@ -366,11 +366,11 @@ export class Runner {
     const ths = threads(index.messages);
     if (!index.messages.find((_, i) => ths[i] === thread)?.base) return null;
     const at = (this.opts.now ?? (() => new Date()))().toISOString();
-    /** 落进这节课的状态;那一页不是现在的就不落(回 false) */
-    const step = async (ev: LessonEvent): Promise<boolean> => {
-      let took = false;
-      await updateLesson(ws, tutor, date, thread, (l) => { if (l.at !== base) return l; took = true; return lessonStep(l, ev); });
-      return took;
+    /** 落进这节课的状态,回落完的样子;那一页不是现在的就不落(回 null) */
+    const step = async (ev: LessonEvent): Promise<Lesson | null> => {
+      let after = null as Lesson | null;
+      await updateLesson(ws, tutor, date, thread, (l) => { if (l.at !== base) return l; after = lessonStep(l, ev); return after; });
+      return after;
     };
     if (b.k === 'turn') {
       if (typeof b.item !== 'string' || b.item.length > 60 || typeof b.deg !== 'number' || !Number.isFinite(b.deg)) return null;
@@ -380,9 +380,12 @@ export class Runner {
       const pts = b.k === 'stroke' && Array.isArray(b.pts) ? b.pts.slice(0, LESSON_INK_POINTS) : [];
       const ok = pts.every((p) => Array.isArray(p) && p.length === 2 && p.every((n) => typeof n === 'number' && Number.isFinite(n) && Math.abs(n) < 100_000));
       if (b.k === 'stroke' && (!pts.length || !ok)) return null;
-      if (!(await step(b.k === 'stroke' ? { t: 'stroke', pts: pts as [number, number][], ...(typeof b.strip === 'string' && b.strip.length <= 60 ? { strip: b.strip } : {}) } : { t: 'wipe' }))) return null;
+      const after = await step(b.k === 'stroke' ? { t: 'stroke', pts: pts as [number, number][], ...(typeof b.strip === 'string' && b.strip.length <= 60 ? { strip: b.strip } : {}) } : { t: 'wipe' });
+      if (!after) return null;
       await appendBoard(ws, tutor, date, thread, { at, k: 'ink', base, ...(b.k === 'wipe' ? { wipe: true as const } : {}) });
-      return { thread, say: null, still: false };
+      // 老师请着用笔(写、圈…)时落的:收笔替他交;没请他自己画的不交,随下一轮走
+      const asked = b.k === 'stroke' && (lessonPage(after)?.open ?? []).some((o) => PEN_ASKS.includes(o));
+      return { thread, say: null, still: false, ...(asked ? { asked: true as const } : {}) };
     }
     if (b.k === 'view' || b.k === 'shot') {
       const box = Array.isArray(b.box) && b.box.length === 4 && b.box.every((n) => typeof n === 'number' && Number.isFinite(n)) ? (b.box as [number, number, number, number]) : null;

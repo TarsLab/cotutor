@@ -154,7 +154,21 @@ await settle();
   check('连着只叫一次:老师接话以后他还是只点不说,就等着', msgs.filter((m) => m.t === 'turn').length === n2);
 }
 
-// ---- 收笔:落笔、抬笔,停一会儿没再写,替他交给老师;嘴先说「我看看你写的」 ----
+// ---- 没请用笔,他自己画的:收下,不替他交 ----
+{
+  await settle();
+  const turns = msgs.filter((m) => m.t === 'turn').length;
+  sock.send(JSON.stringify({ t: 'board', body: { k: 'pen', thread, base: PAGE } }));
+  sock.send(JSON.stringify({ t: 'board', body: { k: 'stroke', thread, base: PAGE, pts: [[100, 100], [140, 120]] } }));
+  await sleep(1500);
+  check('没请用笔时自己画的:过了 blankMs 也不替他交', msgs.filter((m) => m.t === 'turn').length === turns);
+  check('那一笔照样落进日志', (await readBoard(ws0, T, today, thread)).some((e) => e.k === 'ink'));
+  // 老师请他圈
+  sock.send(JSON.stringify({ t: 'send', body: { text: '讲题', thread } }));
+  await until(() => msgs.filter((m) => m.t === 'turn').length > turns, 6000);
+}
+
+// ---- 收笔:请着用笔时落笔、抬笔,停一会儿没再写,替他交给老师;嘴先说「我看看你写的」 ----
 {
   await settle();
   const turns = msgs.filter((m) => m.t === 'turn').length;

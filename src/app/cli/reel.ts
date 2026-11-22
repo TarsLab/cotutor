@@ -173,6 +173,7 @@ export async function reelReport(ctx: AppContext, ref: ReelRef): Promise<ReelRep
     if (e.k === 'pick') add(at, 'board', `孩子点了「${e.text}」`);
     else if (e.k === 'reveal') add(at, 'board', `孩子揭开了「${e.text}」的拼音`);
     else if (e.k === 'view') add(at, 'view', e.text);
+    else if (e.k === 'open') add(at, 'board', e.text === '目录' ? '孩子按「目录」翻回了目录' : `孩子在目录上点了《${e.text}》,翻了过去`);
     else if (e.k === 'still') add(at, 'board', '孩子动了手一直没出声,应用替他叫了一次老师');
   }
 

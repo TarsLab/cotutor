@@ -6,8 +6,8 @@
  *   《古诗两首》3–4 页,下面两首各一页;语文园地一 5–7 页,按栏目分(第 7 页空着);识字表在最后。
  * 数学(2026-11-15)用 tests/_math-book.ts 照人教版数学排的那本:目录没有点线、单元下面的小节和课题从页里读、例题、栏目和题。
  */
-import { BOOK_MAX_PAGES, bookCut, bookFind, bookFrame, bookPages, bookPick, bookRows, bookSheets, bookTarget, bookView, findLesson, lessonBlocks } from '../src/chalk/index.ts';
-import { bookLesson, fitActs, lessonOpen } from '../src/board/lesson-fit.ts';
+import { BOOK_MAX_PAGES, bookCut, bookFind, bookFrame, bookPages, bookPick, bookRows, bookSheets, bookTarget, bookView, findLesson, lessonBlocks, lessonName } from '../src/chalk/index.ts';
+import { bookLesson, fitActs, lessonOpen, tocEntries } from '../src/board/lesson-fit.ts';
 import { lessonInit } from '../src/board/lesson.ts';
 import { buildBookIndex, decodePinyin, pageLines, printedOf } from '../src/memory/textbook-index.ts';
 import { pickBook } from '../src/memory/textbook-pdf.ts';
@@ -36,6 +36,23 @@ check('◎ 开头的是语文园地;不缩进、没编号的是附录', L('语�
 check('读得好的一册没有问题;文件名不带「数学」是课文的分法', ix.problems.length === 0 && ix.layout === 'prose', JSON.stringify(ix.problems));
 const scanned = buildBookIndex([1, 2, 3].map((n) => ({ n, w: W, h: H, items: [] })), { file: 'x.pdf', sha: 'x', title: 'x' });
 check('扫描的 PDF(没有文字层):说清读不出字,也没有页码、目录', scanned.problems.some((p) => p.includes('扫描')) && scanned.problems.some((p) => p.includes('页码')) && scanned.problems.some((p) => p.includes('目录')));
+check('目录的每一项记下印在哪一行:从编号到页码(点线也算);缩进的那首从它自己的课名起', JSON.stringify(L('小鱼吹泡泡')?.toc) === JSON.stringify({ n: 1, box: [56, 213.68, 235.7, 231.68] }) && L('静夜思')?.toc?.box[0] === 106 && ix.lessons.every((l) => l.toc?.n === 1), JSON.stringify(ix.lessons.map((l) => l.toc)));
+{
+  // 别的出版社的目录:没有「目录」两个字、没有点线,课名左对齐、页码在右边空开一大截;正文里一行末尾带个数的不算
+  const it = (s: string, x: number, y: number, z = 14) => ({ s, f: 't', x, y, z, w: Array.from(s).reduce((a, c) => a + (c.charCodeAt(0) < 0x2000 ? 0.55 : 1), 0) * z });
+  const foot = (n: number) => it(String(n), 470, H - 49, 10);
+  const other = buildBookIndex([
+    { n: 1, w: W, h: H, items: [it('Hello 你好', 80, 200), it('2', 440, 200), it('Colours 颜色', 80, 240), it('5', 440, 240), it('Numbers 数字', 80, 280), it('8', 440, 280)] },
+    ...[1, 2, 3, 4, 5, 6, 7, 8].map((n) => ({ n: n + 1, w: W, h: H, items: [it(n === 4 ? '一共有几个苹果?' : '正文', 80, 200), ...(n === 4 ? [it('3', 440, 200), it('还剩几个?', 80, 240), it('2', 440, 240)] : []), foot(n)] })),
+  ], { file: 'x.pdf', sha: 'x', title: '英语一年级上册' });
+  check('没有「目录」两个字、没有点线的目录也认:一行末尾空开一大截是页码;正文里带数的行不当目录', other.toc.join() === '1' && other.lessons.map((l) => `${l.title}@${l.from}:${l.pages.join('-')}`).join() === 'Hello你好@2:3-5,Colours颜色@5:6-8,Numbers数字@8:9-9' && other.lessons.every((l) => l.toc?.n === 1), JSON.stringify(other.lessons));
+}
+{
+  // 统编语文有两个「古诗二首」(第 7 课、第 18 课)
+  const twin = (no: string, from: number) => ({ title: '古诗二首', unit: null, no, kind: 'lesson' as const, from, to: from + 1, pages: [from, from + 1] as [number, number] });
+  const ls = [twin('7', 39), twin('18', 81)];
+  check('一样的课名:写了编号照编号找,没写是第一个;页上的名字带编号', findLesson(ls, '18 古诗二首')?.from === 81 && findLesson(ls, '古诗二首')?.from === 39 && lessonName(ls, ls[1]) === '18 古诗二首' && lessonName(ix.lessons, L('小鱼吹泡泡')!) === '小鱼吹泡泡');
+}
 check('找一课:课名、带编号、带书名号、只写一半', findLesson(ix.lessons, '小鱼吹泡泡')?.title === '小鱼吹泡泡' && findLesson(ix.lessons, '1 小鱼吹泡泡')?.title === '小鱼吹泡泡' && findLesson(ix.lessons, '《静夜思》')?.title === '静夜思' && findLesson(ix.lessons, '园地一')?.title === '语文园地一' && findLesson(ix.lessons, '坐井观天') === null);
 
 // ---- 一课的结构 ----
@@ -92,6 +109,13 @@ const mx = mathIndexOf();
 check('数学:文件名带「数学」照数学分;页脚是页码挨着单元名(拆成几段)的,页码取最靠页边的那个', mx.layout === 'math' && mx.problems.length === 0 && mx.pages.map((p) => p.printed ?? '-').join(' ') === '- 1 2 3 4 5 6 7 8' && printedOf(mathPages[4]) === 4, JSON.stringify(mx.pages.map((p) => p.printed)));
 const ML = (t: string) => mx.lessons.find((l) => l.title === t);
 check('没有点线的目录:序号、单元名、页码各一段也认;没序号的是综合实践', mx.toc.join() === '1' && ML('分类与整理')?.no === '一' && ML('分类与整理')?.pages.join() === '2,3' && ML('1～6的表内乘法')?.no === '二' && ML('1～6的表内乘法')?.pages.join() === '4,7' && ML('校园小导游')?.kind === 'garden' && ML('校园小导游')?.no === null, JSON.stringify(mx.lessons));
+check('没点线的目录:一项的范围从左边的大号序号到页码;页里读出来的小节、课题不在目录上', ML('1～6的表内乘法')?.toc?.box[0] === 79 && (ML('1～6的表内乘法')?.toc?.box[2] ?? 0) > 455 && !ML('5的乘法口诀')?.toc, JSON.stringify(ML('1～6的表内乘法')?.toc));
+{
+  const t = tocEntries({ file: '数学.pdf', index: mx })!;
+  check('目录上能点的几项:场景坐标、点了铺那个单元(铺不下的照最多几页)', t.page.title === '目录' && t.entries.map((e) => `${e.title}:${e.page.pages.join(',')}`).join(' ') === '分类与整理:2,3 1～6的表内乘法:4,5,6,7 校园小导游:8,9' && t.entries.every((e) => e.box[0] > 100 && e.box[2] > e.box[0]), JSON.stringify(t.entries));
+  const back = lessonOpen(lessonInit(), { file: '数学.pdf', index: mx }, '校园小导游');
+  check('上次翻到的那一课:目录一铺开窗就停在它那一行;没记过的从页顶看', JSON.stringify(back.view) === JSON.stringify(t.entries[2].box) && lessonOpen(lessonInit(), { file: '数学.pdf', index: mx }).view === null && lessonOpen(lessonInit(), { file: '数学.pdf', index: mx }, '没有这课').view === null);
+}
 check('单元下面的小节、课题从页里的标题读出来:上一层是 parent;课题止于下一个课题', ML('1.乘法的初步认识')?.parent === '1～6的表内乘法' && ML('1.乘法的初步认识')?.pages.join() === '5,7' && ML('5的乘法口诀')?.parent === '1.乘法的初步认识' && ML('5的乘法口诀')?.pages.join() === '6,6' && ML('6的乘法口诀')?.pages.join() === '7,7' && ML('认识东、南、西、北')?.parent === '校园小导游', JSON.stringify(mx.lessons));
 check('图里的大字(便利店)、栏目名(练一练、你知道吗)、翻页后再印一次的综合实践名不算一课', mx.lessons.length === 7 && !mx.lessons.some((l) => ['便利店', '练一练', '你知道吗？'].includes(l.title)) && mx.lessons.filter((l) => l.title === '校园小导游').length === 1, mx.lessons.map((l) => l.title).join());
 check('找一课:课名里的数不当编号去掉(6的乘法口诀 ≠ 5的乘法口诀);小节的「1.」可写可不写', findLesson(mx.lessons, '6的乘法口诀')?.title === '6的乘法口诀' && findLesson(mx.lessons, '5的乘法口诀')?.title === '5的乘法口诀' && findLesson(mx.lessons, '乘法的初步认识')?.title === '1.乘法的初步认识' && findLesson(mx.lessons, '1.乘法的初步认识')?.title === '1.乘法的初步认识');

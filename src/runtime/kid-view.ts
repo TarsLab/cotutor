@@ -191,7 +191,7 @@ export interface KidTodayThread {
   at: string;
   /** 从哪进来的:方砖、按钮上的字(预习、检查作业);自由话题是孩子的第一句(截 12 字) */
   label: string;
-  /** 课本翻到的那一课(老师最后一次 [[翻 …]] 到的,目录不算) */
+  /** 课本翻到的那一课(老师最后一次 [[翻 …]] 到的、孩子在目录上点的,目录不算) */
   lesson?: string;
   /** 孩子最后发的一张照片(captures/…):还没有预览图时拿它当图 */
   photo?: string;
@@ -211,11 +211,11 @@ const lessonOf = (s: SectionLike | null | undefined): string | null => {
 };
 
 /**
- * 这一轮让话题开了头没有(2026-11-15,Jack):有孩子参与的图出现了——孩子发了照片;课本翻到了一课(目录不算)、
+ * 这一轮让话题开了头没有(2026-11-15,Jack):有孩子参与的图出现了——孩子发了照片;课本翻到了一课(老师翻的、孩子在目录上点的;目录不算)、
  * 白纸条上摆了图形。只说话、只铺了目录的不算开头:孩子端不列(首页「今天」),记录照存,家长照看。
  */
-export function startsThread(m: { from: ConversationMessage['from']; photos?: readonly string[]; section?: SectionLike | null }): boolean {
-  if (m.from === 'kid' && m.photos?.length) return true;
+export function startsThread(m: { from: ConversationMessage['from']; photos?: readonly string[]; open?: string; section?: SectionLike | null }): boolean {
+  if (m.from === 'kid' && (m.photos?.length || m.open)) return true;
   return Boolean(lessonOf(m.section)) || doneActs(m.section).some((a) => a.k === '摆');
 }
 
@@ -237,7 +237,8 @@ export function startedThreads(messages: readonly ConversationMessage[]): KidTod
     if (m.from === 'kid' && m.text.trim()) e.said.push(m.text.replace(/\s+/g, ' ').trim());
     if (m.from === 'kid' && m.photos?.length) e.t.photo = m.photos[m.photos.length - 1];
     if (startsThread(m)) e.started = true;
-    const lesson = lessonOf(m.section);
+    // 孩子在目录上点的在前,这一轮老师又翻的在后
+    const lesson = lessonOf(m.section) ?? (m.from === 'kid' ? m.open : undefined);
     if (lesson) e.t.lesson = lesson;
   });
   const out: KidTodayThread[] = [];

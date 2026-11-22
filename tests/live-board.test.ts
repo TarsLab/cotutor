@@ -2,6 +2,7 @@
  * 一节课(铺着孩子拍的照片)在实时那条线上(假百炼 _fake-realtime.ts + 假老师 + 假看图,不花钱):
  * 孩子端报 {t:'board', body:{k:'pick'…}} → 记进板的日志、不起脑;安静时嘴照念这个字的念法(认字时写好的),孩子按着时不念;
  * 点完了 stillMs 没动静,应用替他叫一次老师(live.app: still,上下文包带上他点了什么);连着只叫一次,孩子开口了才再叫。
+ * 课本的目录上点了一课(boardEvent 回 open):替他起一轮,消息带 open。
  */
 import { mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -194,6 +195,21 @@ await settle();
   await until(() => msgs.filter((m) => m.t === 'turn').length > n2, 6000);
   await sleep(1200);
   check('写完自己说了(开了一轮):不再替他交', msgs.filter((m) => m.t === 'turn').length === n2 + 1);
+}
+
+// ---- 课本的目录上点了一课(boardEvent 翻过去了、回 open):替他起一轮,消息记着点的哪一课(课本那一半在 tests/board-book.test.ts) ----
+{
+  await settle();
+  const turns = msgs.filter((m) => m.t === 'turn').length;
+  const real = ctx.runner.boardEvent.bind(ctx.runner);
+  ctx.runner.boardEvent = (async (tutor: string, date: string, body: unknown) => ((body as Msg).k === 'open' ? { thread, say: null, still: false, open: '坐井观天' } : real(tutor, date, body))) as typeof real;
+  sock.send(JSON.stringify({ t: 'board', body: { k: 'open', thread, base: PAGE, title: '坐井观天' } }));
+  const started = await until(() => msgs.filter((m) => m.t === 'turn').length > turns, 6000);
+  const turn = msgs.filter((m) => m.t === 'turn').slice(-1)[0];
+  await settle();
+  ctx.runner.boardEvent = real;
+  const m = (JSON.parse(readFileSync(join(convDir, `${today}.json`), 'utf8')) as { messages: { job: string; open?: string; text: string }[] }).messages.find((x) => x.job === turn.job);
+  check('目录上点了一课:替他起一轮,接在这个话题;消息记着点的哪一课', started && turn.thread === thread && m?.open === '坐井观天' && m.text === '(在目录上点了《坐井观天》)', JSON.stringify(m));
 }
 
 sock.send(JSON.stringify({ t: 'bye' }));

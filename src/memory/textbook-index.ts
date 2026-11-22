@@ -6,10 +6,11 @@
  *  - 拼音比字小(字号不到字的 0.75),印在字的正上方:配给下面中心对得上的那个汉字。
  *  - 同一基线、同一字号、挨着的字是一行;隔开两个字宽以上的另起一行(两栏、词语表一个词一个)。
  *  - 页码印在页脚(离页底 70pt 以内的 1–3 位数,字号不大)。
- *  - 目录:带点线的行(「11 坐井观天……54」);◎ 开头的是语文园地这类;没编号、比编号缩进的是上一课下面的一首(古诗二首 → 登鹳雀楼)。
+ *  - 目录不认出版社(parseToc):一行末尾是页码、前面是课名,中间有点线或空开一大截的就是一项;每一项记下它印在目录页的哪一行(孩子点它翻过去)。
+ *    统编语文是两栏带点线(「11 坐井观天……54」),◎ 开头的是语文园地这类,没编号、比编号缩进的是上一课下面的一首(古诗二首 → 登鹳雀楼)。
  * 2026-11-15 照人教版数学二年级上册(同一个网站)加的:
  *  - 页脚是页码挨着单元名(「16 1～6的表内乘法」),页码取最靠页边的那个数。
- *  - 目录没有点线:一行是大号的单元序号(一、二……)、单元名、页码三样各自排;没序号的是单元之间的综合实践(校园小导游)。
+ *  - 目录没有点线、课名居中:大号的单元序号(一、二……)印在左边、比课名高半行,页码在最右;没序号的是单元之间的综合实践(校园小导游)。
  *  - 单元下面再分:页里的小节标题(比正文大两成以上、「1.」起头:1.乘法的初步认识)、课题标题(比正文大一成、靠左:6的乘法口诀)。
  *    做一做、练一练这些栏目名也是这个字号,不算课题。
  */
@@ -142,98 +143,165 @@ export function printedOf(page: PdfPage): number | null {
 }
 
 const UNIT = /^第.{1,3}单元/;
-const ENTRY = /^(◎|\d{1,2})?\s*(.+?)\s*[.．·…]{3,}\s*(\d{1,3})$/;
+/** 课名和页码之间的点线 */
+const LEADER = /^[.．·…‥・]$/;
+const DIGIT = /^\d$/;
+/** 大号的单元序号(人教数学的一、二……);一两位数的也算 */
+const BIG_MARK = /^(?:[一二三四五六七八九十]{1,3}|\d{1,2})$/;
+const HEADING = /^(?:目录|contents)$/i;
+const flat = (s: string): string => s.replace(/\s+/g, '');
 
-/** 目录里读出的一项(还没算到哪一页止);depth:0 = 一课、一个单元,往下一层加一(没写:有 parent 是 1) */
-interface TocRow { title: string; unit: string | null; no: string | null; kind: BookLesson['kind']; parent?: string; from: number; depth?: number }
+type TocBox = [number, number, number, number];
 
-/**
- * 目录页的一栏一栏:按页的中线分左右两栏,栏里按基线归行(点线比字偏几个点,容差放宽到半个字号),不按空隙切。
- * 正文分行的规则(pageLines)在这里不合用:点线和课名不在一条基线上,两栏挨得近会并成一行。
- */
-function tocColumns(page: PdfPage): { x1: number; text: string }[][] {
-  const glyphs = page.items.filter((i) => i.s.trim()).flatMap(splitItem);
-  return [0, 1].map((col) => {
-    const gs = glyphs.filter((g) => (g.x1 < page.w / 2 ? 0 : 1) === col).sort((a, b) => a.y - b.y);
-    const rows: { y: number; g: Glyph[] }[] = [];
-    for (const g of gs) {
-      const row = rows.find((r) => Math.abs(r.y - g.y) < 0.5 * g.z);
-      if (row) row.g.push(g); else rows.push({ y: g.y, g: [g] });
-    }
-    return rows.map((r) => { const s = r.g.sort((a, b) => a.x1 - b.x1); return { x1: s[0].x1, text: s.map((g) => g.c).join('') }; });
-  });
+/** 目录里读出的一项(还没算到哪一页止);depth:0 = 一课、一个单元,往下一层加一(没写:有 parent 是 1);at = 印在目录哪一页的哪一行(PDF 的点) */
+interface TocRow { title: string; unit: string | null; no: string | null; kind: BookLesson['kind']; parent?: string; from: number; depth?: number; at?: { n: number; box: TocBox } }
+
+/** 目录页上的一行:同一栏里基线差不到半个字号的字(点线比字偏几个点、页码字号小,都归进来),从左到右 */
+interface TocLine { g: Glyph[]; y: number; text: string }
+
+/** 认成一项的一行:序号(◎、隔开的编号)、课名、页码;tx 是课名从哪起、到哪止 */
+interface TocHit { line: TocLine; mark: string | null; title: string; from: number; tx: number; tx2: number; z: number }
+
+const glyphBox = (g: Glyph): TocBox => [g.x1, g.y - 0.88 * g.z, g.x2, g.y + 0.12 * g.z];
+const boxOf = (gs: readonly Glyph[]): TocBox => { const bs = gs.map(glyphBox); return [r2(Math.min(...bs.map((b) => b[0]))), r2(Math.min(...bs.map((b) => b[1]))), r2(Math.max(...bs.map((b) => b[2]))), r2(Math.max(...bs.map((b) => b[3])))]; };
+
+function tocLines(glyphs: readonly Glyph[]): TocLine[] {
+  const rows: { y: number; z: number; g: Glyph[] }[] = [];
+  for (const g of [...glyphs].sort((a, b) => a.y - b.y)) {
+    const row = rows.find((r) => Math.abs(r.y - g.y) < 0.5 * Math.min(r.z, g.z));
+    if (row) row.g.push(g); else rows.push({ y: g.y, z: g.z, g: [g] });
+  }
+  return rows.map((r) => { const g = r.g.sort((a, b) => a.x1 - b.x1); return { g, y: r.y, text: g.map((x) => x.c).join('') }; });
 }
 
-/** 目录页:有两行以上带点线的页。一栏一栏、从上到下读 */
-export function parseToc(pages: readonly PdfPage[]): { rows: TocRow[]; pages: number[] } {
-  const out: TocRow[] = [];
-  const at: number[] = [];
-  let unit: string | null = null;
-  let prefix: string | null = null;
-  let lastLesson: string | null = null;
-  for (const pg of pages) {
-    const cols = tocColumns(pg);
-    if (cols.flat().filter((l) => ENTRY.test(l.text)).length < 2) continue;
-    at.push(pg.n);
-    for (const col of cols) {
-      const lines = col.filter((l) => l.text !== '目录');
-      if (!lines.length) continue;
-      const base = Math.min(...lines.map((l) => l.x1));
+/**
+ * 一行是不是目录的一项:末尾是 1–3 位的页码,前面是课名(有汉字或字母);课名和页码之间有点线,或者空开一个半字号以上。
+ * 序号:开头的 ◎,或开头隔开的一两位数(「11 坐井观天」;「1～6 的表内乘法」的 1 和后面挨着,是课名的一部分)
+ */
+function tocHit(line: TocLine): TocHit | null {
+  const gs = line.g;
+  let k = gs.length;
+  while (k > 0 && DIGIT.test(gs[k - 1].c)) k--;
+  const digits = gs.length - k;
+  if (!digits || digits > 3) return null;
+  let j = k;
+  while (j > 0 && LEADER.test(gs[j - 1].c)) j--;
+  const body = gs.slice(0, j);
+  if (!body.length) return null;
+  const z = Math.max(...body.map((g) => g.z));
+  if (k - j < 3 && gs[k].x1 - body[body.length - 1].x2 < 1.5 * z) return null;
+  let i = 0;
+  let mark: string | null = null;
+  if (body[0].c === '◎') { mark = '◎'; i = 1; }
+  else {
+    let d = 0;
+    while (d < body.length && d < 2 && DIGIT.test(body[d].c)) d++;
+    if (d && d < body.length && body[d].x1 - body[d - 1].x2 > 0.4 * z) { mark = body.slice(0, d).map((g) => g.c).join(''); i = d; }
+  }
+  const words = body.slice(i);
+  const title = words.map((g) => g.c).join('').replace(/[.．·…]+$/, '');
+  if (!words.length || !(HAN.test(title) || /[A-Za-z]/.test(title))) return null;
+  return { line, mark, title, from: Number(gs.slice(k).map((g) => g.c).join('')), tx: words[0].x1, tx2: words[words.length - 1].x2, z };
+}
+
+/** 一页上可能的分栏:整页一栏;页的中间三分之一里有一道竖着的空(一个半字号宽以上,所有字都不过)就从那里分左右两栏 */
+function tocSplits(page: PdfPage, glyphs: readonly Glyph[]): Glyph[][][] {
+  const one = [[...glyphs]];
+  if (!glyphs.length) return [one];
+  const zs = glyphs.map((g) => g.z).sort((a, b) => a - b);
+  const want = 1.5 * zs[Math.floor(zs.length / 2)];
+  const spans = glyphs.map((g) => [g.x1, g.x2] as [number, number]).sort((a, b) => a[0] - b[0]);
+  let best: [number, number] | null = null;
+  let reach = spans[0][1];
+  for (const [a, b] of spans.slice(1)) {
+    const mid = (reach + a) / 2;
+    if (a - reach >= want && mid > page.w / 3 && mid < (2 * page.w) / 3 && (!best || a - reach > best[1] - best[0])) best = [reach, a];
+    reach = Math.max(reach, b);
+  }
+  if (!best) return [one];
+  const cut = (best[0] + best[1]) / 2;
+  return [one, [glyphs.filter((g) => (g.x1 + g.x2) / 2 < cut), glyphs.filter((g) => (g.x1 + g.x2) / 2 >= cut)]];
+}
+
+/** 读一页目录:一栏一栏、从上到下的项;大号的单元序号单独成行的,配给它右边差不多高的那一项 */
+function tocPage(page: PdfPage): { cols: { lines: TocLine[]; hits: Map<TocLine, TocHit>; marks: Map<TocLine, Glyph[]> }[]; count: number } {
+  const glyphs = page.items.filter((i) => i.s.trim()).flatMap(splitItem);
+  let best: ReturnType<typeof tocPage> = { cols: [], count: 0 };
+  for (const split of tocSplits(page, glyphs)) {
+    const cols = split.map((gs) => {
+      const lines = tocLines(gs).filter((l) => !HEADING.test(flat(l.text)));
+      const hits = new Map<TocLine, TocHit>();
+      for (const l of lines) { const h = tocHit(l); if (h) hits.set(l, h); }
+      const marks = new Map<TocLine, Glyph[]>();
       for (const l of lines) {
-        const t = l.text.trim();
-        if (UNIT.test(t) && !ENTRY.test(t)) { unit = t; lastLesson = null; continue; }
-        const m = ENTRY.exec(t);
-        if (!m) {
-          // ◎ 快乐读书吧(下一行才是带点线的「读读童话故事」)
-          if (t.startsWith('◎')) prefix = t.replace(/^◎\s*/, '');
+        if (hits.has(l) || !BIG_MARK.test(flat(l.text))) continue;
+        const right = l.g[l.g.length - 1].x2;
+        const near = [...hits.values()].filter((h) => h.line.g[0].x1 > right && Math.abs(h.line.y - l.y) < 1.2 * h.z && !marks.has(h.line)).sort((a, b) => Math.abs(a.line.y - l.y) - Math.abs(b.line.y - l.y))[0];
+        if (near) marks.set(near.line, l.g);
+      }
+      return { lines: lines.filter((l) => hits.has(l) || ![...marks.values()].includes(l.g)), hits, marks };
+    });
+    const count = cols.reduce((n, c) => n + c.hits.size, 0);
+    if (count > best.count) best = { cols, count };
+  }
+  return best;
+}
+
+/** 印的页码照读的顺序不往回走(一栏一栏、从上到下) */
+const ordered = (p: ReturnType<typeof tocPage>): number[] => p.cols.flatMap((c) => c.lines.flatMap((l) => (c.hits.has(l) ? [c.hits.get(l)!.from] : [])));
+const rising = (xs: readonly number[]): boolean => xs.every((x, i) => i === 0 || x >= xs[i - 1]);
+
+/**
+ * 目录页:一页上三项以上、页码照读的顺序不往回走的,是目录的第一页;紧跟着的页有两项以上、页码接得上的也是。
+ * 不认出版社:点线可有可无,一栏两栏都行(分不分栏照哪样认出的项多),序号是 ◎、隔开的编号,或单独印在左边的大号一、二。
+ *  - 不带页码的行:「第一单元」这样的是单元;◎ 起头的是下一项的前半(◎ 快乐读书吧 / 读读童话故事……15)
+ *  - 没序号的:课名左对齐的目录里比这一栏缩进的是上一课下面的一首(古诗二首 → 登鹳雀楼),不缩进的是附录(识字表,other);
+ *    课名居中的目录(人教数学)不看缩进,没序号的是单元之间的综合实践(校园小导游,garden)
+ */
+export function parseToc(pages: readonly PdfPage[]): { rows: TocRow[]; pages: number[] } {
+  const read: { n: number; p: ReturnType<typeof tocPage> }[] = [];
+  for (const pg of pages) {
+    const p = tocPage(pg);
+    const nums = ordered(p);
+    const prev = read.length ? ordered(read[read.length - 1].p) : [];
+    if (read.length) {
+      if (pg.n !== read[read.length - 1].n + 1 || p.count < 2 || !rising(nums) || nums[0] < prev[prev.length - 1]) break;
+      read.push({ n: pg.n, p });
+    } else if (p.count >= 3 && rising(nums)) read.push({ n: pg.n, p });
+  }
+  const out: TocRow[] = [];
+  let unit: string | null = null;
+  let prefix: { title: string; g: Glyph[] } | null = null;
+  let lastLesson: string | null = null;
+  for (const { n, p } of read) {
+    for (const col of p.cols) {
+      if (!col.lines.length) continue;
+      const base = Math.min(...col.lines.map((l) => l.g[0].x1));
+      const hs = [...col.hits.values()];
+      const spread = (xs: number[]): number => Math.max(...xs) - Math.min(...xs);
+      const centered = hs.length >= 3 && spread(hs.map((h) => (h.tx + h.tx2) / 2)) < 0.5 * spread(hs.map((h) => h.tx));
+      for (const l of col.lines) {
+        const t = flat(l.text);
+        const h = col.hits.get(l);
+        if (!h) {
+          if (UNIT.test(t)) { unit = t; lastLesson = null; }
+          else if (t.startsWith('◎')) prefix = { title: t.replace(/^◎/, ''), g: l.g };
           continue;
         }
-        const mark = m[1] ?? null;
-        let title = m[2].replace(/\s+/g, '').replace(/[.．·…]+$/, '');
-        const from = Number(m[3]);
-        if (prefix) { title = `${prefix} ${title}`; prefix = null; out.push({ title, unit, no: null, kind: 'garden', from }); lastLesson = null; continue; }
-        if (mark === '◎') { out.push({ title, unit, no: null, kind: 'garden', from }); lastLesson = null; continue; }
-        if (mark) { out.push({ title, unit, no: mark, kind: 'lesson', from }); lastLesson = title; continue; }
-        // 没编号:比这一栏的左边缩进的是上一课下面的一首;不缩进的是附录(识字表)
-        if (lastLesson && l.x1 - base > 12) out.push({ title, unit, no: null, kind: 'lesson', parent: lastLesson, from });
-        else { out.push({ title, unit: null, no: null, kind: 'other', from }); lastLesson = null; }
+        const big = col.marks.get(l);
+        const at = { n, box: boxOf([...l.g, ...(big ?? []), ...(prefix?.g ?? [])]) };
+        const title = h.title;
+        if (prefix) { out.push({ title: `${prefix.title} ${title}`, unit, no: null, kind: 'garden', from: h.from, at }); prefix = null; lastLesson = null; continue; }
+        if (h.mark === '◎') { out.push({ title, unit, no: null, kind: 'garden', from: h.from, at }); lastLesson = null; continue; }
+        const no = big ? flat(big.map((g) => g.c).join('')) : h.mark;
+        if (no) { out.push({ title, unit, no, kind: 'lesson', from: h.from, at }); lastLesson = title; continue; }
+        if (!centered && lastLesson && l.g[0].x1 - base > 0.8 * h.z) { out.push({ title, unit, no: null, kind: 'lesson', parent: lastLesson, from: h.from, at }); continue; }
+        out.push({ title, unit: null, no: null, kind: centered ? 'garden' : 'other', from: h.from, at });
+        lastLesson = null;
       }
     }
   }
-  if (!out.length) return parseNumberedToc(pages);
-  return { rows: out, pages: at };
-}
-
-const NUMERAL = /^[一二三四五六七八九十]{1,3}$/;
-const flat = (s: string): string => s.replace(/\s+/g, '');
-
-/**
- * 没有点线的目录(人教版数学):有「目录」两个字的页上,一行课名(汉字、同一基线连着的几段)右边同一基线上有个页码就是一项;
- * 左边差不多高的地方有大号的一、二……就是第几单元,没有的是单元之间的综合实践。
- */
-function parseNumberedToc(pages: readonly PdfPage[]): { rows: TocRow[]; pages: number[] } {
-  for (const pg of pages) {
-    const its = pg.items.filter((i) => i.s.trim());
-    if (!its.some((i) => flat(i.s) === '目录')) continue;
-    const nums = its.filter((i) => /^\d{1,3}$/.test(i.s.trim()));
-    const marks = its.filter((i) => NUMERAL.test(i.s.trim()));
-    const words = its.filter((i) => HAN.test(i.s) && !NUMERAL.test(i.s.trim()) && flat(i.s) !== '目录').sort((a, b) => a.y - b.y || a.x - b.x);
-    const lines: { text: string; x: number; xr: number; y: number; z: number }[] = [];
-    for (const w of words) {
-      const l = lines.find((x) => Math.abs(x.y - w.y) < 0.35 * x.z && Math.abs(x.z - w.z) < 0.3 * x.z);
-      if (l) { l.text += flat(w.s); l.x = Math.min(l.x, w.x); l.xr = Math.max(l.xr, w.x + w.w); } else lines.push({ text: flat(w.s), x: w.x, xr: w.x + w.w, y: w.y, z: w.z });
-    }
-    const rows: TocRow[] = [];
-    for (const l of lines) {
-      const near = (i: PdfItem): number => Math.abs(i.y - l.y);
-      const num = nums.filter((n) => n.x > l.xr && near(n) < 0.6 * l.z).sort((a, b) => near(a) - near(b))[0];
-      if (!num) continue;
-      const mark = marks.filter((m) => m.x + m.w < l.x && near(m) < 1.2 * l.z).sort((a, b) => near(a) - near(b))[0];
-      rows.push({ title: l.text, unit: null, no: mark ? mark.s.trim() : null, kind: mark ? 'lesson' : 'garden', from: Number(num.s.trim()) });
-    }
-    if (rows.length >= 2) return { rows, pages: [pg.n] };
-  }
-  return { rows: [], pages: [] };
+  return { rows: out, pages: read.map((x) => x.n) };
 }
 
 /**
@@ -286,7 +354,7 @@ function lessonsOf(rows: readonly TocRow[], pages: readonly BookPage[]): BookLes
     const to = Math.max(r.from, next ? next.from - 1 : lastPrinted);
     const a = pdfPageOf(pages, r.from), b = pdfPageOf(pages, to);
     if (a === null || b === null) return;
-    out.push({ title: r.title, unit: r.unit, no: r.no, kind: r.kind, ...(r.parent ? { parent: r.parent } : {}), from: r.from, to, pages: [a, b] });
+    out.push({ title: r.title, unit: r.unit, no: r.no, kind: r.kind, ...(r.parent ? { parent: r.parent } : {}), from: r.from, to, pages: [a, b], ...(r.at ? { toc: r.at } : {}) });
   });
   return out;
 }

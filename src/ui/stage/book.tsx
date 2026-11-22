@@ -12,6 +12,10 @@
  *    试用(mousePen,电脑上没有笔):能落笔时鼠标当笔(课本页上一直是,拖不动页,用滚轮),不能落笔时鼠标还是手指;滚轮照常滚。
  *  - 轻点(手指或笔;手指的等一下看是不是双击)一个字:本地照课本的行和字算出是哪个字(bookPick),告诉页面(pick)弹田字格;点在盖住的拼音上就揭开(reveal)。
  *  - 孩子挪完、切完大小停下来:把窗(场景坐标)告诉页面(view),页面报给服务端说成一句「第 55 页:第 7 段」给老师。
+ *  - 课本的目录(页面给了 toc:能点的那几项):只能上下滚和点一项翻过去,不点字、不落笔、不双击放大(笔、鼠标在这里都当手指)。
+ *    范围是那一行从序号到页码,上下撑到和邻行之间的中线(最多再宽两成行高);平时不画,手指按住一会儿(TOC_PRESS_MS,刚滚起来的不算)、
+ *    鼠标或悬着的笔移到上面才铺一层学科色;松手在范围里就让它停 TOC_HOLD_MS 再告诉页面(open),页面自己先翻过去。
+ *    窗:页面发来的状态带着 view(上次翻到的那一课那一行、在一课里按「目录」回来的那一课)就把它摆在窗中间。
  * 画面:课本 pdf.js(/stage/pdf/,不打进 stage.js)现画,每页先画一张中等清晰度的(移动、缩放时用它),停下来再把窗里那一块照屏幕的像素重画一张盖上去,放大了字也清楚;
  * 照片照原图画进一张画布(孩子端上传前已缩到长边 2000,够清楚);白纸是一张白底。点字照页的文字层:课本是 PDF 的行和字,照片是认字认出的(src/chalk/kit/photo.ts 换成同样的样子)。
  * 老师的记号(圈、盖拼音的块)和孩子的笔画是一层 SVG,和页面在同一个随窗变换的容器里,所以对得齐;孩子的笔画挂在书页上(一节课的状态里),换课再回来还在。
@@ -20,7 +24,7 @@
  */
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type * as Pdfjs from 'pdfjs-dist';
-import { BOOK_ASPECT, BOOK_W, KID_INK, KID_INK_WIDTH, bookFrame, bookPick, bookRows, bookSheets, photoBookPage, turnedSkeletons, type BookSheet, type ChalkSkeleton, type PhotoLine, type PhotoWord } from '../../chalk/index.ts';
+import { BOOK_ASPECT, BOOK_TOC, BOOK_W, KID_INK, KID_INK_WIDTH, bookFrame, bookPick, bookRows, bookSheets, photoBookPage, turnedSkeletons, type BookSheet, type ChalkSkeleton, type PhotoLine, type PhotoWord } from '../../chalk/index.ts';
 import { lessonPage, lessonStrip } from '../../board/lesson.ts';
 import { stripLayout, type StripSlot } from '../../board/strip.ts';
 import { LESSON_INK_POINTS, PEN_ASKS, type BookPage, type Lesson, type LessonPage } from '../../schema/index.ts';
@@ -51,6 +55,10 @@ export interface BookStageProps {
   onWipe(): void;
   /** 「给老师看」:窗里的图先交(onShot),再说交了 */
   onSubmit(): void;
+  /** 课本的目录上能点的那几项(场景坐标)和按下去铺的颜色;不是目录页、只读的不用 */
+  toc?: { color: string; entries: { title: string; box: Box }[] } | null;
+  /** 目录上点中了一项(页面先翻过去,再报给服务端) */
+  onOpen?(title: string): void;
   /** 点中了一个字(页面弹田字格) */
   onPick?(text: string): void;
   /** 点开了一块盖住的(遮、盖) */
@@ -91,6 +99,8 @@ const LOOK_TOP_PX = 64;
  *  字行等多久还没来就整块铺(ms);字行往外宽出多少(场景单位:左右、上下) */
 const LOOK_DELAY_MS = 250, LOOK_SWEEP_MS = 320, LOOK_STEP_MS = 140, LOOK_SPAN_MS = 1200, LOOK_HOLD_MS = 1900, LOOK_FADE_MS = 700, LOOK_WAIT_MS = 2000;
 const LOOK_PAD: [number, number] = [5, 3.5];
+/** 目录:手指按住多久才铺那一行(刚滚起来的不闪);松手后那一行停多久再翻过去;范围上下最多再撑开几成行高 */
+const TOC_PRESS_MS = 80, TOC_HOLD_MS = 250, TOC_GROW = 0.2;
 /** 交给老师的那张图的长边 */
 const SHOT_SIDE = 1024;
 /** 窗停下来多久交窗里的图(清楚的那一块多半已经重画好了) */
@@ -195,7 +205,21 @@ function skeletonDraw(ctx: CanvasRenderingContext2D, k: ChalkSkeleton): void {
 
 const pathD = (pts: readonly [number, number][]): string => pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ');
 
-export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function BookStage({ id: _id, lesson, readonly, hand, mousePen, onStroke, onPen, onTurn, onWipe, onSubmit, onPick, onReveal, onView, onShot, onError }, ref) {
+/** 目录上每一项能点的范围:那一行左右各宽一点,上下撑到和上下邻行(左右叠着的)之间的中线,最多再撑 TOC_GROW 行高 */
+function tocAreas(entries: readonly { title: string; box: Box }[]): { title: string; box: Box; hit: Box }[] {
+  return entries.map((e) => {
+    const [x1, y1, x2, y2] = e.box;
+    const h = y2 - y1, grow = h * TOC_GROW;
+    const side = entries.filter((o) => o !== e && o.box[0] < x2 && o.box[2] > x1);
+    const above = Math.max(-Infinity, ...side.filter((o) => o.box[3] <= y1).map((o) => o.box[3]));
+    const below = Math.min(Infinity, ...side.filter((o) => o.box[1] >= y2).map((o) => o.box[1]));
+    const top = Math.max(y1 - grow, Number.isFinite(above) ? (above + y1) / 2 : -Infinity);
+    const bottom = Math.min(y2 + grow, Number.isFinite(below) ? (y2 + below) / 2 : Infinity);
+    return { title: e.title, box: e.box, hit: [x1 - 12, top, x2 + 12, bottom] as Box };
+  });
+}
+
+export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function BookStage({ id: _id, lesson, readonly, hand, mousePen, toc, onOpen, onStroke, onPen, onTurn, onWipe, onSubmit, onPick, onReveal, onView, onShot, onError }, ref) {
   const view = useRef<HTMLDivElement>(null);
   const paper = useRef<HTMLDivElement>(null);
   const svg = useRef<SVGSVGElement>(null);
@@ -234,9 +258,13 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
   const latest = useRef(lesson);
   latest.current = lesson;
   const open = page?.open ?? [];
-  /** 能落笔:课本页上随时;别的页老师请了用笔才能 */
-  const canMark = page?.kind === 'book' || open.some((o) => PEN_ASKS.includes(o));
-  const canPick = Boolean(page?.pick) || open.includes('点');
+  /** 课本的目录:只能滚和点一项翻过去 */
+  const tocOn = !readonly && page?.kind === 'book' && page.title === BOOK_TOC && Boolean(toc?.entries.length);
+  const tocNow = useRef<{ on: boolean; color: string; areas: ReturnType<typeof tocAreas> }>({ on: false, color: '', areas: [] });
+  tocNow.current = { on: tocOn, color: toc?.color ?? '#1c7ed6', areas: tocOn && toc ? tocAreas(toc.entries) : [] };
+  /** 能落笔:课本页上随时(目录除外);别的页老师请了用笔才能 */
+  const canMark = !tocOn && (page?.kind === 'book' || open.some((o) => PEN_ASKS.includes(o)));
+  const canPick = !tocOn && (Boolean(page?.pick) || open.includes('点'));
   const revealedKey = (page?.kid.revealed ?? []).join('\n');
   /** 开着的白纸条:排好的样子;孩子在上面画的、转的 */
   const strip = lessonStrip(lesson);
@@ -546,8 +574,9 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
       const base = new Map<number, HTMLCanvasElement>();
       const host = paper.current;
       if (!host) return;
-      // 换了一页:旧的页拿掉
+      // 换了一页:旧的页拿掉(目录上按着的那一行也是)
       for (const old of Array.from(host.querySelectorAll('.bk-page'))) old.remove();
+      tocShow(null, 'press');
       for (const sh of sheets) {
         const cv = document.createElement('canvas');
         cv.className = cut > 0 ? 'bk-page bk-joined' : 'bk-page';
@@ -568,7 +597,9 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
       const fb = L ? frameBox(L.box, sheets) : null;
       lookedN.current = L?.n ?? -1;
       const v = readonly ? latest.current.view : null;
-      cam.current = v ? camFor(v) : fb ? lookAt(fb) : pageTop();
+      // 孩子的窗:老师让看的那一块;没有就照状态里记的窗(目录上次翻到的那一课那一行、刷新前停的地方),摆在窗中间
+      const kv = !readonly && !fb ? latest.current.view : null;
+      cam.current = v ? camFor(v) : fb ? lookAt(fb) : kv ? camFor(kv) : pageTop();
       apply();
       if (L && !v) flashLook(L.box, L.rows);
       setPhase('ready');
@@ -686,6 +717,46 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
   };
   const reportTimer = useRef(0);
 
+  // ---- 目录:点一项翻过去 ----
+  /** 铺着的那一行(一次只铺一行):按着的、悬着的 */
+  const tocShown = useRef<{ title: string; mode: 'press' | 'hover' } | null>(null);
+  const tocPressTimer = useRef(0);
+  /** 松手了、那一行停着等翻过去:这时别的手不算 */
+  const tocGoing = useRef(false);
+  /** 屏幕上这一点在目录的哪一项的范围里 */
+  const tocAt = (x: number, y: number): ReturnType<typeof tocAreas>[number] | null => {
+    const T = tocNow.current;
+    if (!T.on || !view.current) return null;
+    const [sx, sy] = toScene(x, y);
+    return T.areas.find((a) => sx >= a.hit[0] && sx <= a.hit[2] && sy >= a.hit[1] && sy <= a.hit[3]) ?? null;
+  };
+  /** 铺那一项的范围(null = 拿掉):按着的深一点,悬着的浅一点 */
+  const tocShow = (a: ReturnType<typeof tocAreas>[number] | null, mode: 'press' | 'hover'): void => {
+    const hl = svg.current?.querySelector('.bk-hl');
+    const old = hl?.querySelector('.bk-toc');
+    if (!a || !hl) { old?.remove(); tocShown.current = null; return; }
+    const c = tocNow.current.color, press = mode === 'press';
+    const [x1, y1, x2, y2] = a.hit;
+    const r = el('rect', { x: String(x1), y: String(y1 + 2), width: String(x2 - x1), height: String(Math.max(4, y2 - y1 - 4)), rx: '10', fill: c, 'fill-opacity': press ? '0.14' : '0.06', stroke: c, 'stroke-opacity': press ? '0.6' : '0.42', 'stroke-width': '2', 'vector-effect': 'non-scaling-stroke', class: 'bk-toc' });
+    old?.remove();
+    hl.append(r);
+    tocShown.current = { title: a.title, mode };
+  };
+  /** 目录上轻点了一下:点在一项的范围里就铺上它、停一会儿告诉页面;点在空处什么都不做 */
+  const tocTap = (x: number, y: number): void => {
+    window.clearTimeout(tocPressTimer.current);
+    const a = tocGoing.current ? null : tocAt(x, y);
+    if (!a) { if (!tocGoing.current) tocShow(null, 'press'); return; }
+    tocShow(a, 'press');
+    tocGoing.current = true;
+    window.setTimeout(() => {
+      tocGoing.current = false;
+      onOpen?.(a.title);
+      // 页面翻过去了这一层跟着换掉;没翻过去(连不上)也别一直铺着
+      window.setTimeout(() => { if (tocShown.current?.title === a.title && tocShown.current.mode === 'press') tocShow(null, 'press'); }, 1500);
+    }, TOC_HOLD_MS);
+  };
+
   /** 轻点:先看是不是盖住的拼音,再看是不是一个字 */
   const tap = (x: number, y: number): void => {
     const [sx, sy] = toScene(x, y);
@@ -775,7 +846,8 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
   const down = (e: React.PointerEvent): void => {
     if (phase !== 'ready') return;
     cancelAnimationFrame(glide.current);
-    if (e.pointerType === 'pen' || (mousePen && e.pointerType === 'mouse' && canMark && !readonly)) {
+    // 目录上笔、鼠标都当手指(只滚和点一项)
+    if (!tocNow.current.on && (e.pointerType === 'pen' || (mousePen && e.pointerType === 'mouse' && canMark && !readonly))) {
       // 笔:写画(开放了圈、画);点一下当轻点
       touches.current.clear(); gesture.current = null;
       try { (e.currentTarget as Element).setPointerCapture(e.pointerId); } catch { /* 合成的指针捕获不了 */ }
@@ -791,7 +863,15 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
     try { (e.currentTarget as Element).setPointerCapture(e.pointerId); } catch { /* 同上 */ }
     touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const pts = [...touches.current.values()];
-    if (pts.length === 1) { gesture.current = { kind: 'tap', x0: e.clientX, y0: e.clientY, cam0: { ...cam.current } }; trail.current = []; }
+    if (pts.length === 1) {
+      gesture.current = { kind: 'tap', x0: e.clientX, y0: e.clientY, cam0: { ...cam.current } };
+      trail.current = [];
+      // 目录:按住一会儿还没滚起来,铺上按着的那一项
+      if (tocNow.current.on && !tocGoing.current) {
+        window.clearTimeout(tocPressTimer.current);
+        tocPressTimer.current = window.setTimeout(() => { const g = gesture.current; const a = g?.kind === 'tap' && touches.current.size === 1 ? tocAt(g.x0, g.y0) : null; if (a) tocShow(a, 'press'); }, TOC_PRESS_MS);
+      }
+    }
     else if (pts.length === 2) {
       const [a, b] = pts;
       gesture.current = { kind: 'pinch', x0: 0, y0: 0, cam0: { ...cam.current }, d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, m0: [(a.x + b.x) / 2, (a.y + b.y) / 2] };
@@ -799,6 +879,14 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
     }
   };
   const move = (e: React.PointerEvent): void => {
+    // 目录:鼠标、悬着的笔(没按下)移到哪一项上就浅浅铺一层
+    if (tocNow.current.on && e.pointerType !== 'touch' && !touches.current.has(e.pointerId) && !pen.current) {
+      if (tocGoing.current) return;
+      const a = e.buttons ? null : tocAt(e.clientX, e.clientY);
+      if (a && (tocShown.current?.title !== a.title || tocShown.current.mode !== 'hover')) tocShow(a, 'hover');
+      else if (!a && tocShown.current?.mode === 'hover') tocShow(null, 'hover');
+      return;
+    }
     const p = pen.current;
     if (p && e.pointerId === p.id) {
       if (!canMark || readonly) return;
@@ -830,6 +918,8 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
     }
     const dx = e.clientX - g.x0, dy = e.clientY - g.y0;
     if (g.kind === 'tap' && Math.hypot(dx, dy) < TAP_PX) return;
+    // 滚起来了:不是点,按着的那一项拿掉
+    if (g.kind === 'tap' && tocNow.current.on) { window.clearTimeout(tocPressTimer.current); if (!tocGoing.current) tocShow(null, 'press'); }
     g.kind = 'pan';
     moved.current = true;
     trail.current = [...trail.current, { t: performance.now(), x: e.clientX, y: e.clientY }].filter((p, _, all) => all[all.length - 1].t - p.t <= 100);
@@ -872,13 +962,18 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
     }
     if (left.length) return;
     gesture.current = null;
-    if (g?.kind === 'tap' && e.type === 'pointerup') fingerTap(e.clientX, e.clientY);
+    // 目录不等双击:点一下就是点一项
+    if (g?.kind === 'tap' && e.type === 'pointerup') { if (tocNow.current.on) tocTap(e.clientX, e.clientY); else fingerTap(e.clientX, e.clientY); }
+    else if (tocNow.current.on && !tocGoing.current) { window.clearTimeout(tocPressTimer.current); tocShow(null, 'press'); }
     if (g?.kind === 'pan' && e.type === 'pointerup' && fling()) return;
     settled();
   };
+  /** 鼠标、笔离开了课本:悬着铺的那一项拿掉 */
+  const leave = (): void => { if (tocShown.current?.mode === 'hover') tocShow(null, 'hover'); };
   /** 电脑上:滚轮上下滚(两倍时也左右);只读的照以前滚轮放大缩小(围着鼠标那一点) */
   const wheel = (e: React.WheelEvent): void => {
     if (phase !== 'ready') return;
+    leave();
     if (!readonly) {
       if (e.ctrlKey) return;
       const c = cam.current;
@@ -972,7 +1067,7 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
   return (
     <div className={`kt-wrap${hand === 'left' ? ' kt-hand-left' : ''}`}>
       <div className="kt-board bk-board" data-phase={phase} data-marks={marks}>
-        <div className="bk-view" ref={view} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onWheel={wheel}>
+        <div className="bk-view" ref={view} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onPointerLeave={leave} onWheel={wheel}>
           <div className="bk-paper" ref={paper}>
             <canvas className="bk-sharp" ref={sharp} />
             <svg className="bk-svg" ref={svg} xmlns={SVG_NS}>

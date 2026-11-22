@@ -58,6 +58,7 @@ export interface BookPage {
  * 目录里的一项:一课、一个语文园地,或一课下面的一首诗(parent 是那一课)。
  * 数学(layout: math):一个单元(no 是「二」)、单元之间没编号的综合实践(校园小导游);单元下面页里的小节(1.乘法的初步认识)、课题(6的乘法口诀),parent 是上一层。
  * from / to 是印刷页码(to = 下一项开始的前一页);pages 是对应的 PDF 页 [头, 尾]。
+ * toc:这一项印在目录页的哪一行(PDF 第几页、PDF 的点 [左, 上, 右, 下],从序号到页码,点线也算);孩子在目录上点它就翻过去。页里读出来的小节、课题没有
  * kind:lesson = 有编号的一课、一个单元和它下面的;garden = ◎ 开头的(语文园地、快乐读书吧)、数学的综合实践;other = 识字表这类附录。
  */
 export interface BookLesson {
@@ -69,10 +70,11 @@ export interface BookLesson {
   from: number;
   to: number;
   pages: [number, number];
+  toc?: { n: number; box: [number, number, number, number] };
 }
 
 /** 索引的版本:取字、分行的规则改了就加一,旧缓存重做 */
-export const BOOK_INDEX_VERSION = 3;
+export const BOOK_INDEX_VERSION = 4;
 
 /**
  * 一册怎么分块(src/chalk/kit/book.ts 的 lessonBlocks):prose = 课文(自然段、语文园地的栏目);

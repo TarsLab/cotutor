@@ -8,6 +8,9 @@
  *  四、手指拖着往下看:报 {k:'view', box};服务端说成一句(「第 55 页:…」)记进板的日志。
  *  五、孩子再说一句:那一轮的上下文包里有这一课分好段的全文、他点了什么、「孩子在看」。
  *  六、笔画一道:「擦掉」贴着屏幕边出现、「给老师看」出现;擦掉了都收起。
+ *  七、顶栏「目录」:翻回目录,窗停在《坐井观天》那一行(中间);报 {k:'open', title:'目录'};目录上点字不弹田字格。
+ *  八、鼠标移到《寒号鸟》那一行:浅浅铺上它的范围;拖着滚不算点。
+ *  九、按下窗里的一项:按着的那一行深一点;松手翻到那一课、报 {k:'open'},老师接着讲一轮(消息带 open)。
  * iPad 横屏各截一张。
  * 用法:node scripts/probe-book-page.mjs --pdf <课本 PDF> [--out <截图目录>]
  */
@@ -208,6 +211,72 @@ try {
   if (after.wipe) await tapAt(after.wipe.x, after.wipe.y);
   await sleep(600);
   ok('擦掉:笔画没了,两颗钮收起', (await bookState()).inks === 0 && (await wipeBox()) === null && (await goShown()) === false);
+
+  // 七、顶栏「目录」
+  const tocBtn = await center('#st-toc');
+  ok('一课里顶栏有「目录」', Boolean(tocBtn));
+  const nToc = frames.length;
+  await tapAt(tocBtn.x, tocBtn.y);
+  const onToc = await until(`(() => { const d = ${STAGE}; return d && d.querySelector('.bk-board')?.dataset.phase === 'ready' && d.querySelectorAll('.bk-page').length === 2 && d.querySelectorAll('.bk-ring').length === 0 && document.querySelector('#st-toc').hidden; })()`, 15000);
+  await sleep(800);
+  const toc = (await (await fetch(`${base}/api/kid/textbook/base?tutor=${T}`)).json()).toc;
+  const box = (t) => toc.entries.find((e) => e.title === t).box;
+  const c2 = await camera();
+  const scr = (b) => ({ x: c2.left + c2.tx + ((b[0] + b[2]) / 2) * c2.s, y: c2.top + c2.ty + ((b[1] + b[3]) / 2) * c2.s });
+  const zj = scr(box('坐井观天'));
+  const backFrame = frames.slice(nToc).find((f) => f.t === 'board' && f.body?.k === 'open');
+  ok('按「目录」:翻回目录,《坐井观天》那一行在窗的中间;报 open 目录', Boolean(onToc) && Math.abs(zj.y - (c2.top + c2.h / 2)) < 40 && backFrame?.body?.title === '目录' && backFrame.body.base === `${name}#坐井观天`, JSON.stringify({ zj, c2, backFrame }));
+  console.log('  ', await shot('6-回到目录.png'));
+  // 目录上点字:不弹田字格(点在一行的字上 = 点这一项;点在空处什么都不做)
+  const nNoPick = frames.length;
+  await tapAt(c2.left + 20, c2.top + c2.h - 30);
+  await sleep(700);
+  ok('目录上点空处:不弹田字格、不翻', !frames.slice(nNoPick).some((f) => f.t === 'board' && (f.body?.k === 'pick' || f.body?.k === 'open')) && (await evaluate(`document.querySelector('#st-pick').hidden`)));
+
+  // 八、鼠标移上去
+  const hh = scr(box('寒号鸟'));
+  await mouse('mouseMoved', hh.x, hh.y);
+  await sleep(200);
+  const hover = await stageEval(`(d) => { const r = d.querySelector('.bk-toc'); return r ? r.getAttribute('fill-opacity') : null; }`);
+  ok('鼠标移到《寒号鸟》那一行:浅浅铺上范围', hover === '0.06', String(hover));
+  console.log('  ', await shot('7-悬停.png'));
+  await mouse('mouseMoved', c2.left + 20, c2.top + 120);
+  await sleep(150);
+  ok('移开:范围拿掉', (await stageEval(`(d) => d.querySelectorAll('.bk-toc').length`)) === 0);
+  // 拖着滚不算点
+  const nDrag = frames.length;
+  const c3 = await camera();
+  await mouse('mouseMoved', hh.x, hh.y);
+  await mouse('mousePressed', hh.x, hh.y);
+  for (let i = 1; i <= 8; i++) { await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: hh.x, y: hh.y - i * 20, button: 'left', buttons: 1 }); await sleep(16); }
+  await mouse('mouseReleased', hh.x, hh.y - 160);
+  await sleep(2500);
+  ok('按着拖:滚了,不翻、按着的那一行拿掉', !frames.slice(nDrag).some((f) => f.t === 'board' && f.body?.k === 'open') && (await stageEval(`(d) => d.querySelectorAll('.bk-toc').length`)) === 0 && (await camera()).ty !== c3.ty);
+
+  // 九、按下《寒号鸟》
+  // 拖完窗滑走了:挑窗中间附近能看见的一项点
+  const c4 = await camera();
+  const onScreen = (b) => ({ x: c4.left + c4.tx + ((b[0] + b[2]) / 2) * c4.s, y: c4.top + c4.ty + ((b[1] + b[3]) / 2) * c4.s });
+  const pickE = toc.entries.filter((e) => e.title !== '坐井观天').map((e) => ({ e, p: onScreen(e.box) })).filter((x) => x.p.y > 150 && x.p.y < c4.h - 150 && x.p.x > 120).sort((a, b) => Math.abs(a.p.y - c4.h / 2) - Math.abs(b.p.y - c4.h / 2))[0];
+  const want = pickE.e.title, hp = pickE.p;
+  for (let i = 0; i < 60 && (await day()).messages.some((m) => m.result === 'running'); i++) await sleep(250);
+  const n0 = (await day()).messages.length;
+  const nOpen = frames.length;
+  await mouse('mouseMoved', hp.x, hp.y);
+  await mouse('mousePressed', hp.x, hp.y);
+  await sleep(200);
+  const press = await stageEval(`(d) => { const r = d.querySelector('.bk-toc'); return r ? r.getAttribute('fill-opacity') : null; }`);
+  console.log('  ', await shot('8-按下.png'));
+  await mouse('mouseReleased', hp.x, hp.y);
+  const turned = await until(`(() => { const d = ${STAGE}; return document.querySelector('#st-ttl').textContent === ${JSON.stringify(want)} && d && d.querySelector('.bk-board')?.dataset.phase === 'ready'; })()`, 15000);
+  const openFrame = frames.slice(nOpen).find((f) => f.t === 'board' && f.body?.k === 'open');
+  ok(`按下《${want}》:那一行铺深一点;松手翻过去,报 open`, press === '0.14' && Boolean(turned) && openFrame?.body?.title === want, JSON.stringify({ press, openFrame }));
+  const indexNow = async () => JSON.parse(readFileSync(join(wsRoot, 'conversations', T, `${(await day()).date}.json`), 'utf8')).messages;
+  let m9 = null;
+  for (let i = 0; i < 60 && !m9; i++) { m9 = (await indexNow()).find((m) => m.open === want) ?? null; if (!m9) await sleep(250); }
+  ok('老师接着讲一轮:消息带 open', Boolean(m9) && (await day()).messages.length > n0, JSON.stringify((await indexNow()).slice(-2).map((m) => ({ t: m.text, open: m.open }))));
+  await sleep(1500);
+  console.log('  ', await shot('9-点过去.png'));
   ok('页面没有脚本报错', errors.length === 0, errors.slice(0, 3).join(' | '));
   console.log(`\n截图在 ${shots}`);
   ws.close();

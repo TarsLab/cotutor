@@ -9,17 +9,17 @@
  * 页的文字层:课本是 PDF 的文字层(src/memory/textbook-index.ts);照片是认字认出的行和题,换成课本的样子(src/chalk/kit/photo.ts);小课堂是每一句的起点与原话;白纸没有。
  * 一节里的动作照先后一个一个落(先翻再看,看的是新的那一页),落不了的记一句给家长(why),动作本身留在讲稿上、不带 do。
  */
-import { BOOK_MAX_PAGES, BOOK_TOC, bookCut, bookFind, bookSheets, bookTarget, findLesson, lessonBlocks, photoBookPage, type BookBlock, type BookSheet, type PhotoText } from '../chalk/index.ts';
+import { BOOK_MAX_PAGES, BOOK_TOC, bookCut, bookFind, bookSheets, bookTarget, findLesson, lessonBlocks, lessonName, photoBookPage, type BookBlock, type BookSheet, type PhotoText } from '../chalk/index.ts';
 import { LECTURE_PAGE, LOOK_ROWS_MAX, PHOTO_PAGE, WHITE_PAGE, type BoardSection, type BookIndex, type BookPage, type Box, type Lesson, type LessonAct, type LineAct, type PageSource } from '../schema/index.ts';
 import { actParts } from './acts.ts';
 import { clockLabel, lectureRange, parseClock, type LectureClock } from './lecture.ts';
 import { lessonPage, lessonStep } from './lesson.ts';
 
-/** 一课(或目录)铺哪几页(最多 BOOK_MAX_PAGES 页,数学一个小节能有十几页);认不出 = null */
+/** 一课(或目录)铺哪几页(最多 BOOK_MAX_PAGES 页,数学一个小节能有十几页);认不出 = null。title 是这一课在页上的名字(同名的带编号,lessonName) */
 export function bookLesson(index: BookIndex, name: string | null): { title: string; pages: BookPage[] } | null {
   if (!name || name === BOOK_TOC) return index.toc.length ? { title: BOOK_TOC, pages: index.pages.filter((p) => index.toc.includes(p.n)) } : null;
   const l = findLesson(index.lessons, name);
-  return l ? { title: l.title, pages: index.pages.filter((p) => p.n >= l.pages[0] && p.n <= l.pages[1]).slice(0, BOOK_MAX_PAGES) } : null;
+  return l ? { title: lessonName(index.lessons, l), pages: index.pages.filter((p) => p.n >= l.pages[0] && p.n <= l.pages[1]).slice(0, BOOK_MAX_PAGES) } : null;
 }
 
 /** 课本做底:这一册的文件名与索引 */
@@ -198,9 +198,33 @@ export function fitSection(section: BoardSection, l: Lesson, src: LessonSource):
   return { section: { ...section, lines, ...(lead ? { acts: lead } : {}) }, why };
 }
 
-/** 还没有页的一节课(课本做底):先铺目录 */
-export function lessonOpen(l: Lesson, book: LessonBook): Lesson {
+/** 目录上能点的一项:课名、印在目录哪一行(场景坐标,目录那几页从上往下连着)、点了铺哪一页 */
+export interface TocEntry { title: string; box: Box; page: Extract<PageSource, { kind: 'book' }> }
+
+/** 目录这一页和它上面能点的那几项(读出了印在哪一行、翻得过去的);没有目录 = null */
+export function tocEntries(book: LessonBook): { page: Extract<PageSource, { kind: 'book' }>; entries: TocEntry[] } | null {
+  const page = bookPageOf(book, null);
+  if (!page) return null;
+  const sheets = bookSheets(book.index.pages.filter((p) => page.pages.includes(p.n)), undefined, page.cut);
+  const entries: TocEntry[] = [];
+  for (const l of book.index.lessons) {
+    const sh = l.toc ? sheets.find((x) => x.n === l.toc!.n) : undefined;
+    const name = lessonName(book.index.lessons, l);
+    const to = sh ? bookPageOf(book, name) : null;
+    if (!sh || !to || to.title !== name) continue;
+    const [x1, y1, x2, y2] = l.toc!.box;
+    entries.push({ title: name, box: [r1(x1 * sh.s), r1(sh.top + y1 * sh.s), r1(x2 * sh.s), r1(sh.top + y2 * sh.s)], page: to });
+  }
+  return { page, entries };
+}
+const r1 = (n: number): number => Math.round(n * 10) / 10;
+
+/** 还没有页的一节课(课本做底):先铺目录;last = 这本书上次翻到的那一课,窗停在目录上它那一行 */
+export function lessonOpen(l: Lesson, book: LessonBook, last?: string | null): Lesson {
   if (l.at) return l;
   const page = bookPageOf(book, null);
-  return page ? lessonStep(l, { t: 'act', act: { k: '翻', page } }) : l;
+  if (!page) return l;
+  const s = lessonStep(l, { t: 'act', act: { k: '翻', page } });
+  const at = last ? tocEntries(book)?.entries.find((e) => e.title === last) : undefined;
+  return at ? lessonStep(s, { t: 'view', box: at.box }) : s;
 }

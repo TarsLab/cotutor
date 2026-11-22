@@ -62,7 +62,8 @@ import { kidWords, readWords } from '../../scenes/photo-words/store.ts';
 import { imageSize } from '../../shared/jpeg.ts';
 import { listTextbookPages, textbookPageFile } from '../../memory/textbook-pages.ts';
 import { bookFile, bookIndex, listBooks, pickBook } from '../../memory/textbook-pdf.ts';
-import { lessonOpen } from '../../board/lesson-fit.ts';
+import { lessonOpen, tocEntries } from '../../board/lesson-fit.ts';
+import { bookLast } from '../../runtime/journal/book-last.ts';
 import { lessonInit } from '../../board/lesson.ts';
 import { readLesson } from '../../runtime/journal/lesson-store.ts';
 import { bookPages } from '../../chalk/index.ts';
@@ -366,12 +367,16 @@ export async function parentReel(ctx: AppContext, tutor: string, date: string, t
   return { tutor, date, thread, reel, messages: day.messages.filter((m) => m.thread === thread), kid: kid.messages.filter((m) => m.thread === thread), device, face, live, realtime: mine.some((m) => m.live) };
 }
 
-/** 课本做底的一节课还没开始时孩子端先铺的(bpOpenBook):这本书的目录当一页;读不出、没有目录 → null */
-async function bookBaseLesson(ws: Workspace, name: string): Promise<Lesson | null> {
+/**
+ * 课本做底:这本书的目录当一页(一节课还没开始时孩子端先铺它,窗停在上次翻到的那一课那一行),和目录上能点的那几项(tocEntries:印在哪一行、点了铺哪一页;
+ * 孩子端点了就自己先翻过去、在一课里按「目录」回来,不等服务端)。读不出、没有目录 → null
+ */
+async function bookBase(ws: Workspace, name: string): Promise<{ lesson: Lesson; toc: ReturnType<typeof tocEntries> } | null> {
   const index = await bookIndex(ws.paths.textbooks, join(ws.root, '.cotutor', 'textbooks'), name).catch(() => null);
   if (!index) return null;
-  const l = lessonOpen(lessonInit(), { file: name, index });
-  return l.at ? l : null;
+  const book = { file: name, index };
+  const l = lessonOpen(lessonInit(), book, await bookLast(ws, name));
+  return l.at ? { lesson: l, toc: tocEntries(book) } : null;
 }
 
 /** 这一天实时老师的通话录像(<日期>.live/<时分秒>.reel.json,src/runtime/live/call.ts 落的)里有这几轮的;声音是同名的 .wav。坏的、没声音的跳过 */
@@ -863,12 +868,13 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       if (!file) return { status: 404, json: { error: 'not_found' } };
       return { status: 200, file, contentType: 'application/pdf' };
     }
-    // 课本做底的一节课刚开:这位老师学科、这学期那一册的目录当一页(孩子端先铺它,老师翻到哪一课再换);没有课本 = lesson: null
+    // 课本做底:这位老师学科、这学期那一册的目录当一页(孩子端新开一节课先铺它,老师翻到哪一课再换)和目录上能点的那几项(回到一节课时也要);没有课本 = lesson: null
     if (p === '/api/kid/textbook/base' && method === 'GET') {
       const t = ws.config.tutors[url.searchParams.get('tutor') ?? ''];
       if (!t) return { status: 404, json: { error: 'not_found' } };
       const name = pickBook(await listBooks(ws.paths.textbooks, canonicalSubject(t.subject) || null), ctx.now());
-      return { status: 200, json: { lesson: name ? await bookBaseLesson(ws, name) : null } };
+      const base = name ? await bookBase(ws, name) : null;
+      return { status: 200, json: { lesson: base?.lesson ?? null, toc: base?.toc ?? null } };
     }
     // 一节课此刻的样子(src/runtime/journal/lesson-store.ts):孩子端回到这节课、刷新页面时照它铺;只读的(以前的、家长看)也照它
     if (p === '/api/kid/lesson' && method === 'GET') {

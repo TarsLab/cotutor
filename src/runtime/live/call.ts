@@ -12,6 +12,7 @@
  *   {t:'send', body} 不是说的(打字、拍照、「给老师看」、首页按钮):body 是那一条(text / thread / via / photos…,runner.accept 验) · {t:'view', w, h} 屏幕多大 · {t:'bye'}
  *   {t:'staged'} 放小课堂一段的那句([[看 0:19–0:30]])那一段放完了(或放不了、被关):后面的讲稿接着交给嘴
  *   {t:'board', body} 一节课里孩子在页上做了一件事(点字 {k:'pick', thread, text, base};课本上挪了窗 {k:'view', thread, base, box}):记进板的日志(Runner.boardEvent),不起脑;
+ *     自己翻页 {k:'open', thread, base, title}:目录上点了一课的起一轮(带 open,消息是「(在目录上点了《坐井观天》)」;老师在说的掐掉),按「目录」回去的不起;
  *     课本的窗停下来以后舞台交的图 {k:'shot', thread, base, box, image} 也走这里:存下来等下一轮附给脑,不算孩子动了手;
  *     课本上落的一笔 {k:'stroke', thread, base, pts}、擦掉 {k:'wipe'} 落进一节课的状态;报来的一件一件排着记,交给脑之前先等记完;
  *   安静时嘴照念这个字词的念法(认字时写好的「傍,傍晚的傍」),老师正在说就不念;再点下一个,上一句掐掉。
@@ -1027,6 +1028,15 @@ export class LiveCall {
     if (b.k === 'pen') { this.lastActive = Date.now(); this.penStep({ e: 'down', at: Date.now() }); return; }
     const r = await ctx.runner.boardEvent(tutor, localDate(ctx.now()), body).catch(() => null);
     if (!r || this.ended || r.shot) return;
+    // 自己在目录上点了一课(页已经翻过去了):老师在说的掐掉,替他起一轮,老师接着讲这一课(嘴不先接,等脑的第一句)
+    if (r.open) {
+      this.lastActive = Date.now();
+      if (this.stillTimer) clearTimeout(this.stillTimer);
+      this.stillTimer = null;
+      this.interrupt();
+      this.turn('text', { text: '', open: r.open, thread: r.thread, ...(this.ctxBody.device ? { device: this.ctxBody.device } : {}) }, '');
+      return;
+    }
     // 抬笔(这一笔收下了):老师请着用笔(asked)时,停一会儿没再落笔就替他交给老师;没请他自己画的不交,随下一轮走
     // 这一笔报来以后孩子已经开口、开了一轮(seq 是报来那一刻的):这一笔随那一轮走了,不再等
     if (b.k === 'stroke' && r.asked && seq === this.turnSeq) { this.penThread = r.thread; this.penStep({ e: 'up', at: Date.now(), strip: typeof b.strip === 'string' }); }

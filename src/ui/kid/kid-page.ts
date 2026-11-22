@@ -323,6 +323,10 @@ ${BACK_TINT_CSS}
   #stage.bp .top .ttl:empty { display:none; }
   #stage.bp .top .ttl:not(:empty) { padding:10px 16px; border-radius:20px; background:#fffffff0; box-shadow:0 2px 10px #00000014; }
   #stage.bp #st-bp { margin-left:auto; }
+  /* 课本的一课里:课名旁边一颗「目录」,点了翻回目录(窗停在这一课那一行);目录页上、照片、白纸上没有 */
+  #st-toc { display:none; }
+  #stage.bp.bk #st-toc:not([hidden]) { display:flex; align-items:center; gap:6px; flex:none; height:40px; padding:0 16px 0 12px; border:0; border-radius:20px; background:#fffffff0; box-shadow:0 2px 10px #00000014; font:inherit; font-size:16px; font-weight:600; color:var(--ink); cursor:pointer; }
+  #st-toc svg { width:20px; height:20px; }
   #stage.bp #st-frame { position:absolute; inset:0; height:100%; }
   /* 「给老师看」:没东西可交就不出现(原来是半透明的一颗,像是坏了);能交了是实心的学科色。旁边那行小字垫白底 */
   #stage.bp #st-act { top:calc(env(safe-area-inset-top) + 10px); right:calc(env(safe-area-inset-right) + 4px); }
@@ -633,7 +637,7 @@ __VOICE_CSS__
     <div id="wrap">
       <div id="bmark" hidden></div>
       <div id="board"></div>
-      <div id="stage"><div class="top"><span class="ttl" id="st-ttl"></span><span id="st-bp"><button type="button" id="st-tb" hidden></button><button type="button" id="st-cam"></button><button type="button" id="st-alb"></button></span><button id="st-x" type="button"></button></div><iframe id="st-frame" hidden title="stage"></iframe><div id="st-pick" hidden></div><div id="st-act" hidden><span class="note" id="st-note"></span><button id="st-go" type="button">给老师看</button></div><button id="cv-hold" class="vb-mini" type="button"></button><button id="cv-type" type="button"><span class="ic"></span>打字</button><div id="cv-cap"></div></div>
+      <div id="stage"><div class="top"><span class="ttl" id="st-ttl"></span><button type="button" id="st-toc" hidden></button><span id="st-bp"><button type="button" id="st-tb" hidden></button><button type="button" id="st-cam"></button><button type="button" id="st-alb"></button></span><button id="st-x" type="button"></button></div><iframe id="st-frame" hidden title="stage"></iframe><div id="st-pick" hidden></div><div id="st-act" hidden><span class="note" id="st-note"></span><button id="st-go" type="button">给老师看</button></div><button id="cv-hold" class="vb-mini" type="button"></button><button id="cv-type" type="button"><span class="ic"></span>打字</button><div id="cv-cap"></div></div>
       <div id="st-dim"></div>
     </div>
     <div id="lv"><div id="lv-av"></div><div id="lv-kid"></div><div id="lv-cap"><div class="lv-prev"></div><div class="lv-cur"></div></div><div id="lv-ask"><b></b><small></small></div><div id="lv-acts"></div><button id="lv-replay" type="button" hidden><span class="ic"></span><span class="tx"></span></button><button id="lv-hold" type="button"></button><div id="lv-tools"><button type="button" id="lv-cam"><span class="ic"></span>拍照</button><button type="button" id="lv-album"><span class="ic"></span>相册</button><button type="button" id="lv-type"><span class="ic"></span>打字</button></div></div>
@@ -716,6 +720,7 @@ ${pageDomJs(4000)}
     keyboard: SVG('<rect x="3" y="6" width="18" height="13" rx="2"></rect><path d="M7 10h1M11 10h1M15 10h1M8 15h8"></path>', 26, 1.8),
     micOff: SVG('<rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3M4 4l16 16"></path>', 22, 2),
     album: __ALBUM_28__,
+    toc: SVG('<path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4.5" cy="6" r="1.2" fill="currentColor"></circle><circle cx="4.5" cy="12" r="1.2" fill="currentColor"></circle><circle cx="4.5" cy="18" r="1.2" fill="currentColor"></circle>', 20, 2.2),
     close: SVG('<path d="M6 6l12 12M18 6L6 18"></path>', 24, 2.2),
     closeSm: SVG('<path d="M7 7l10 10M17 7L7 17"></path>', 14, 2.8),
     check: SVG('<path d="M5 12l5 5 9-10"></path>', 16, 3),
@@ -752,7 +757,7 @@ ${BOARD_MARK_JS}
 
   // ---- 状态 ----
   /** 铺页的话题:on = 这个话题的页面是板;base = 现在的底(照片路径,null 白板,undefined 还没定);label = 方砖上的字(不拍照直接开始时发它) */
-  const BP = { on: false, base: null, label: '', books: [] };
+  const BP = { on: false, base: null, label: '', books: [], toc: null };
   const S = { home: null, tutor: null, day: null, sections: [], played: new Set(), state: { section: -1, line: -1, status: 'idle' }, pending: false, waitSince: null, offline: false, bar: 'idle', pollTimer: null, stage: null, partial: null, thread: null, threadAt: null, hist: null, readonly: false, newThread: false, device: 'phone', via: null, cont: null, ask: null, reel: null, pendSaid: null, homeDraw: true, autoOpened: new Set() };
   // 实时的老师这一次(连、发、收、画在下面「实时的老师」那一块):on = 这位老师这一次走实时(左栏的样子);ready = 嘴连上了;
   // model = liveStep 的状态(只在 liveDispatch 里写);cap = 字幕(上一句、在说的、被打断的那句);heard = 每一轮(job)念到第几句
@@ -1078,7 +1083,7 @@ ${HOME_TILES_JS}
     S.tutor = t; S.sections = []; S.played = new Set(); dispatch({ type: 'reset' }); S.pending = false; S.stage = null; S.partial = null; $('#stage').classList.remove('on', 'cv');
     S.thread = intent.kind === 'thread' ? intent.thread : null; S.threadAt = null; S.hist = null; S.readonly = false; S.newThread = intent.kind === 'new';
     S.via = intent.via || null; S.lecture = intent.lecture ? { ...intent.lecture, watch: null, sent: false, marks: [], done: [], log: [] } : null;
-    BP.on = Boolean(intent.base); BP.base = intent.base || null; BP.label = intent.label || ''; lsReset();
+    BP.on = Boolean(intent.base); BP.base = intent.base || null; BP.label = intent.label || ''; BP.toc = null; lsReset();
     if (BP.base === 'photo') bpBooks();
     // 先定走不走实时,再热麦克风:实时时麦克风的自检要开在实时那个 AudioContext 里(liveOpen)
     if (liveWanted(t)) liveOpen(intent); else liveClose();
@@ -1175,7 +1180,8 @@ ${HOME_TILES_JS}
     lsStart(lessonStep(lessonInit(), ev));
   };
   /** 进一节课:回到的(有话题)照服务端记的;新开的课本铺目录,作业照片等孩子拍(拍照屏)。
-   *  课本、回到的课:舞台先铺上再去要(不先露一下空的老师页;iframe 和这一问一起装),要回来没有课再收起 */
+   *  课本、回到的课:舞台先铺上再去要(不先露一下空的老师页;iframe 和这一问一起装),要回来没有课再收起。
+   *  课本做底的(回到的也是)一起要目录上能点的那几项(BP.toc:点了铺哪一页、印在哪一行),拿到了再铺 */
   const bpOpenLesson = () => {
     const name = S.tutor && S.tutor.name;
     if (!name || LS.asking) return;
@@ -1188,8 +1194,9 @@ ${HOME_TILES_JS}
       if (!S.tutor || S.tutor.name !== name || !BP.on) return;
       if (l) { lcAdopt(l); lsStart(l); } else if (early && S.stage && S.stage.lesson && !LS.on) closeStage();
     };
-    const toc = () => (BP.base === 'textbook' ? api('GET', '/api/kid/textbook/base?tutor=' + encodeURIComponent(name)).then((j) => open(j && j.lesson), () => open(null)) : open(null));
-    if (q) api('GET', q).then((j) => (j && j.lesson ? open(j.lesson) : toc()), toc); else toc();
+    const base = BP.base === 'textbook' ? api('GET', '/api/kid/textbook/base?tutor=' + encodeURIComponent(name)).then((j) => { if (S.tutor && S.tutor.name === name) BP.toc = (j && j.toc) || null; return j; }, () => null) : Promise.resolve(null);
+    const toc = () => base.then((j) => open(j && j.lesson));
+    if (q) api('GET', q).then((j) => (j && j.lesson ? base.then(() => open(j.lesson)) : toc()), toc); else toc();
   };
   /** 拉了今天的话题以后:这节课一直听(第一条记着 listen,activity 头上写的)而这会儿是按住说,换过去(回到这节课、刷新页面) */
   const listenSync = (mine) => {
@@ -1263,13 +1270,17 @@ ${HOME_TILES_JS}
     if (!LS.on || !LS.l || !S.stage || !S.stage.lesson) return;
     const p = lessonPage(LS.l);
     $('#st-ttl').textContent = p && p.kind === 'book' && p.title !== '目录' ? p.title : '';
+    // 课本的目录:能点的那几项交给舞台;一课里顶栏有「目录」回去(这本书读出了目录才有)
+    const tocOf = p && p.kind === 'book' && BP.toc && BP.toc.page && BP.toc.page.src === p.src && !S.readonly && !REEL;
+    const tocOn = tocOf && p.title === '目录';
+    $('#st-toc').hidden = !tocOf || p.title === '目录';
     // 小课堂那一页:播放器有自己的课名、进度条、画一画,页面的「给老师看」不出
     $('#stage').classList.toggle('lcp', Boolean(p && p.kind === 'lecture'));
-    const key = JSON.stringify(LS.l);
+    const key = JSON.stringify(LS.l) + (tocOn ? '|toc' : '');
     renderGo();
     if (key === LS.key) return;
     LS.key = key;
-    postStage({ type: 'lesson', id: S.stage.id, lesson: LS.l, readonly: S.readonly || REEL, hand: document.body.classList.contains('hand-left') ? 'left' : 'right', ...(TRIAL ? { mousePen: true } : {}), ...(p && p.kind === 'lecture' ? { lecture: { url: lcBundleUrl(p.bundle, p.video), marks: S.lecture && S.lecture.bundle === p.bundle ? S.lecture.marks : [], follow: REEL, ...(LS.playN ? { play: LS.playN } : {}) } } : {}) });
+    postStage({ type: 'lesson', id: S.stage.id, lesson: LS.l, readonly: S.readonly || REEL, hand: document.body.classList.contains('hand-left') ? 'left' : 'right', ...(TRIAL ? { mousePen: true } : {}), ...(tocOn ? { toc: { color: tutorColor(), entries: BP.toc.entries.map((e) => ({ title: e.title, box: e.box })) } } : {}), ...(p && p.kind === 'lecture' ? { lecture: { url: lcBundleUrl(p.bundle, p.video), marks: S.lecture && S.lecture.bundle === p.bundle ? S.lecture.marks : [], follow: REEL, ...(LS.playN ? { play: LS.playN } : {}) } } : {}) });
     if (!REEL && !S.readonly) { clearTimeout(LS.recT); LS.recT = setTimeout(() => { const k = JSON.stringify(LS.l); if (k !== LS.recKey && S.thread) { LS.recKey = k; playRec({ k: 'lesson', l: LS.l }); } }, 1500); }
   };
   /** 页铺满:舞台开一次,之后只换状态 */
@@ -1318,6 +1329,8 @@ ${HOME_TILES_JS}
     if (m.type === 'turn' && typeof m.item === 'string' && typeof m.deg === 'number') { lsKid({ t: 'turn', item: m.item, deg: m.deg }, { k: 'turn', item: m.item, deg: m.deg }); previewSoon(PV_HAND_MS); return; }
     if (m.type === 'wipe') { lsKid({ t: 'wipe' }, { k: 'wipe' }); previewSoon(PV_HAND_MS); return; }
     if (m.type === 'pick') { pickShow(m.text); lsKid({ t: 'pick', text: String(m.text || '') }, { k: 'pick', text: m.text }); return; }
+    // 目录上点了一项:自己先翻过去,再报给服务端(它照样翻、替他起一轮让老师接着讲);还没有话题(老师第一句还没开始)的不翻
+    if (m.type === 'open') { const e = BP.toc && S.thread ? BP.toc.entries.find((x) => x.title === m.title) : null; if (e) { pickHide(); lsKid({ t: 'act', act: { k: '翻', page: e.page } }, { k: 'open', title: e.title }); } return; }
     if (m.type === 'reveal') { lsKid({ t: 'reveal', text: String(m.text || '') }, { k: 'reveal', text: m.text }); previewSoon(PV_HAND_MS); return; }
     if (m.type === 'view' && Array.isArray(m.box) && m.box.length === 4) { lsKid({ t: 'view', box: m.box }, { k: 'view', box: m.box }); previewSoon(PV_HAND_MS); return; }
     if (m.type === 'shot' && Array.isArray(m.box) && typeof m.image === 'string' && S.thread && LS.l && LS.l.at && !S.readonly && !REEL) { lvSend({ t: 'board', body: { k: 'shot', thread: S.thread, base: LS.l.at, box: m.box, image: m.image } }); return; }
@@ -1333,6 +1346,19 @@ ${HOME_TILES_JS}
     if (m.type === 'close' || m.type === 'error') { /* 页铺不出来:舞台留着,老师会说 */ }
   };
 
+  /** 课本的一课里按「目录」:翻回目录,窗停在这一课那一行;报给服务端(它照样翻,不叫老师) */
+  $('#st-toc').innerHTML = ICON.toc + '<span>目录</span>';
+  $('#st-toc').addEventListener('click', () => {
+    if (!LS.on || !LS.l || !BP.toc || S.readonly || REEL || !S.thread) return;
+    const p = lessonPage(LS.l), base = LS.l.at;
+    if (!p || p.kind !== 'book' || p.title === '目录' || !base) return;
+    const back = BP.toc.entries.find((x) => x.title === p.title);
+    pickHide();
+    LS.l = lessonStep(LS.l, { t: 'act', act: { k: '翻', page: BP.toc.page } });
+    if (back) LS.l = lessonStep(LS.l, { t: 'view', box: back.box });
+    lsShow();
+    lvSend({ t: 'board', body: { k: 'open', title: '目录', thread: S.thread, base } });
+  });
   /** 板上的拍照、相册:换一页 */
   $('#st-cam').innerHTML = ICON.camera + '<span>拍照</span>';
   $('#st-alb').innerHTML = ICON.album + '<span>相册</span>';
@@ -1357,7 +1383,7 @@ ${HOME_TILES_JS}
   new MutationObserver(openSync).observe($('#board'), { childList: true });
   /** 浏览器的主题色跟着这一页的底色:首页桌面色,老师页纸色 */
   const pageTheme = (home) => { const m = document.querySelector('meta[name="theme-color"]'); if (m) m.content = home ? '#ebe4d4' : '#faf9f4'; };
-  const closeTutor = () => { clearTimeout(PV.timer); liveDispatch({ type: 'reset' }); liveClose(); S.lecture = null; reelStop(); clearTimeout(S.pollTimer); dispatch({ type: 'halt' }); psClose(); S.tutor = null; S.via = null;  S.ask = null; BP.on = false; BP.base = null; lsReset(); $('#tutor').classList.remove('on'); pageTheme(true); document.body.classList.remove('pending', 'speaking'); S.homeDraw = true; loadHome(); };
+  const closeTutor = () => { clearTimeout(PV.timer); liveDispatch({ type: 'reset' }); liveClose(); S.lecture = null; reelStop(); clearTimeout(S.pollTimer); dispatch({ type: 'halt' }); psClose(); S.tutor = null; S.via = null;  S.ask = null; BP.on = false; BP.base = null; BP.toc = null; lsReset(); $('#tutor').classList.remove('on'); pageTheme(true); document.body.classList.remove('pending', 'speaking'); S.homeDraw = true; loadHome(); };
   $('#back').addEventListener('click', closeTutor);
   $('#back-ic').innerHTML = ICON.back;
 

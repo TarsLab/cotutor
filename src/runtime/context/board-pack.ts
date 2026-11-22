@@ -6,7 +6,7 @@
  *     底       现在铺的是哪一页(课本《册》:《课》第几页 / 作业照片几张 / 白纸);这节课铺过几页就列出来(页集)
  *     你画的   看哪里、圈 / 遮 / 盖了什么、白纸条里摆着什么(应用找的框不说)
  *     开放     现在孩子能做的(点字是页自带的,别的是你请的)
- *     孩子做的 从上一轮到现在孩子在页上做的,合并过(点开看了哪几个字、写画了几笔、擦过没有、揭了哪些、白纸条上的图形)
+ *     孩子做的 从上一轮到现在孩子在页上做的,合并过(自己翻到了哪一页、点开看了哪几个字、写画了几笔、擦过没有、揭了哪些、白纸条上的图形)
  *     最近点的 30 秒内点的最后一项(孩子说「这个」时指它)
  *     孩子在看 上一轮以后窗最后停下的地方(他自己挪的,或你让他看的那一块移完);附了那一块的图就注一句
  */
@@ -91,7 +91,9 @@ export function slateOf(x: SlateInput): NonNullable<ContextPack['slate']> {
   x.events.forEach((e, i) => { if (e.k === 'turn') from = i + 1; });
   const since = x.events.slice(from);
   const picked = since.filter(onBase).map((e) => e.text);
-  const did = [...(x.did ?? []), pickLine(picked.filter((t) => !isEnglish(t)), '笔顺'), pickLine(picked.filter(isEnglish), '单词')].filter((s): s is string => Boolean(s));
+  // 他自己翻过去的(目录上点了一课、按「目录」回去):只说最后那次,翻到的就是现在这一页
+  const turned = [...since].reverse().find((e): e is BoardEvent & { k: 'open' } => e.k === 'open' && e.base === base);
+  const did = [...(x.did ?? []), ...(turned ? [turned.text === BOOK_TOC ? '自己按「目录」翻回了目录' : `自己在目录上点了《${turned.text}》,翻到了这一课`] : []), pickLine(picked.filter((t) => !isEnglish(t)), '笔顺'), pickLine(picked.filter(isEnglish), '单词')].filter((s): s is string => Boolean(s));
   // 页上写画的:几笔(笔画本身看图)、擦没擦过
   const inks = since.filter((e): e is BoardEvent & { k: 'ink' } => e.k === 'ink' && e.base === base);
   const wiped = inks.map((e) => Boolean(e.wipe)).lastIndexOf(true);
@@ -138,10 +140,11 @@ export function clipNote(text: readonly string[], max = PAGE_NOTE_MAX): string[]
  * 一课 = 分好的段(「第3段 小鸟回答说……」)、栏目(「【日积月累】……」)、课文后面的认字栏和课后题(带读音的写读音),换页处插一行「—— 第 55 页 ——」;
  * 数学 = 标题(「标题:6的乘法口诀」)、例题(「例4 ……」)、栏目(「【练一练】」)和下面的题(「第3题 ……」);图上的东西读不到,只有字。
  * 目录 = 一单元一行,课名后面是印的页码(老师照孩子说的课写「课: 坐井观天」);数学一个单元一行,后面是它下面的小节、课题(课题前带点)。
+ * last = 这本书上次翻到的那一课(src/runtime/journal/book-last.ts),目录的那一句里说一下。
  */
-export function bookSlateParts(index: BookIndex, at: { title: string; pages: readonly BookPage[] }): { show: string; text: string[] } {
+export function bookSlateParts(index: BookIndex, at: { title: string; pages: readonly BookPage[] }, last?: string | null): { show: string; text: string[] } {
   if (at.title === BOOK_TOC) {
-    const show = `课本《${index.title}》:目录(还没翻到哪一课)`;
+    const show = `课本《${index.title}》:目录(还没翻到哪一课${last ? `;上次翻到《${last}》` : ''})`;
     if (index.layout === 'math') {
       const tops = new Map<string, string[]>();
       const top = new Set(index.lessons.filter((l) => !l.parent).map((l) => l.title));

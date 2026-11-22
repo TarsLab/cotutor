@@ -29,7 +29,7 @@ import { deriveKidView, truncateReply } from './kid-view.ts';
 import { parseSections } from '../board/sections.ts';
 import { threadDigest } from './context/thread-digest.ts';
 import { type RunEvent, type RunEventEnvelope, type RunEventInput } from '../schema/index.ts';
-import { LESSON_INK_POINTS, PEN_ASKS, PHOTO_PAGE, type ActivityBase, type Lesson, type LessonEvent, type PagePhoto, canonicalSubject, subjectLang, MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, VAULT_PACK_ROLES, isApiRuntime, resolvePolicy, type ContextPack, type ConversationIndex, type MemoryProposal, type PendingMemory, type ActivityRun, type ConversationMessage, type MessageFrom, type MessageVia, type Policy, type Timing } from '../schema/index.ts';
+import { LESSON_INK_POINTS, PEN_ASKS, PHOTO_PAGE, type ActivityBase, type Lesson, type LessonAct, type LessonEvent, type PagePhoto, canonicalSubject, subjectLang, MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, VAULT_PACK_ROLES, isApiRuntime, resolvePolicy, type ContextPack, type ConversationIndex, type MemoryProposal, type PendingMemory, type ActivityRun, type ConversationMessage, type MessageFrom, type MessageVia, type Policy, type Timing } from '../schema/index.ts';
 import { UsageError } from '../shared/errors.ts';
 import type { Workspace } from '../schema/index.ts';
 import { readIndex, snapshotSources, writeIndex, writeRunFile } from './journal/store.ts';
@@ -48,7 +48,8 @@ import { photoPromptFrom, recognizeWith } from '../scenes/photo-words/recognize.
 import { readWords, startWords } from '../scenes/photo-words/store.ts';
 import { appendBoard, readBoard } from './journal/board-log.ts';
 import { bookSlateParts, clipNote, lessonSlateBits, slateOf, type PageNote } from './context/board-pack.ts';
-import { bookLesson, fitSection, lessonOpen, pageText, sectionActs, whitePage, type LessonBook, type LessonSource } from '../board/lesson-fit.ts';
+import { bookLesson, bookPageOf, fitSection, lessonOpen, pageText, sectionActs, tocEntries, whitePage, type LessonBook, type LessonSource } from '../board/lesson-fit.ts';
+import { bookLast, rememberBook } from './journal/book-last.ts';
 import { lessonDone, lessonPage, lessonStep } from '../board/lesson.ts';
 import { readLesson, updateLesson } from './journal/lesson-store.ts';
 import { BOOK_TOC, bookView, photoBookPage, photoText, pickable, type PhotoText } from '../chalk/index.ts';
@@ -68,6 +69,8 @@ export interface SendInput {
   text: string;
   /** 孩子端的动作:「给老师看」(窗里的图已经交了) */
   action?: 'submit';
+  /** 孩子在课本的目录上点了这一课(页已经翻过去了,Runner.boardEvent 的 open);text 可以是空的 → 「(在目录上点了《…》)」 */
+  open?: string;
   /** 运行时名,缺省 cotutor.json 的 runtimes.default */
   runtime?: string;
   /** 开新话题:不 resume、不带旧话题卡上的状态;话题 id = 这条的 job */
@@ -354,9 +357,11 @@ export class Runner {
    *  - 窗停下来 {k:'view', box}:照页的文字层说成一句(「第 55 页:第 7 段」「第 1 张:第 3 题」)记下
    *  - 窗里的图 {k:'shot', box, image}(jpeg data URL):只留最新一张,下一轮附给老师;不算孩子动了手
    *  - 点字 {k:'pick', text}:回这个字词的念法(照片上认字时模型写好的「傍,傍晚的傍」,嘴照念;没有就念它自己);揭开 {k:'reveal', text}:嘴不念
+   *  - 自己翻页 {k:'open', title}:目录上点了一课(title 是目录上那一项,tocEntries),或在一课里按「目录」回去(title = 目录,窗停在刚才那一课那一行)。
+   *    照这本书的目录翻过去、记进板的日志;点的是一课就记下这本书翻到哪了(book-last),回 open(通话替他起一轮,老师接着讲这一课)
    * 话题不是今天的一节课、东西不对:回 null,什么都不记
    */
-  async boardEvent(tutor: string, date: string, body: unknown): Promise<{ thread: string; say: string | null; still?: false; shot?: true; asked?: true } | null> {
+  async boardEvent(tutor: string, date: string, body: unknown): Promise<{ thread: string; say: string | null; still?: false; shot?: true; asked?: true; open?: string } | null> {
     const ws = this.getWs();
     if (!body || typeof body !== 'object') return null;
     const b = body as Record<string, unknown>;
@@ -372,6 +377,32 @@ export class Runner {
       await updateLesson(ws, tutor, date, thread, (l) => { if (l.at !== base) return l; after = lessonStep(l, ev); return after; });
       return after;
     };
+    if (b.k === 'open') {
+      if (typeof b.title !== 'string' || !b.title || b.title.length > 80) return null;
+      const cur = lessonPage(await readLesson(ws, tutor, date, thread));
+      if (!cur || cur.id !== base || cur.kind !== 'book') return null;
+      const now = (this.opts.now ?? (() => new Date()))();
+      const { book } = await this.bookOf(ws, tutor, now);
+      const toc = b.title === BOOK_TOC;
+      // 目录上只能点一课,一课里只能回目录
+      if (!book || book.file !== cur.src || toc === (cur.title === BOOK_TOC)) return null;
+      const entries = tocEntries(book)?.entries ?? [];
+      const page = toc ? bookPageOf(book, null) : (entries.find((e) => e.title === b.title)?.page ?? null);
+      if (!page) return null;
+      const back = toc ? entries.find((e) => e.title === cur.title)?.box : undefined;
+      let ok = false;
+      await updateLesson(ws, tutor, date, thread, (l) => {
+        if (l.at !== base) return l;
+        ok = true;
+        const s = lessonStep(l, { t: 'act', act: { k: '翻', page } });
+        return back ? lessonStep(s, { t: 'view', box: back }) : s;
+      });
+      if (!ok) return null;
+      await appendBoard(ws, tutor, date, thread, { at, k: 'open', text: page.title, base: page.id });
+      if (toc) return { thread, say: null, still: false };
+      await rememberBook(ws, book.file, page.title, now);
+      return { thread, say: null, still: false, open: page.title };
+    }
     if (b.k === 'turn') {
       if (typeof b.item !== 'string' || b.item.length > 60 || typeof b.deg !== 'number' || !Number.isFinite(b.deg)) return null;
       return (await step({ t: 'turn', item: b.item, deg: b.deg })) ? { thread, say: null, still: false } : null;
@@ -489,13 +520,14 @@ export class Runner {
    */
   private async lessonOn(ws: Workspace, tutor: string, now: Date, date: string, thread: string, base: ActivityBase, photos: readonly string[], lecture: Lecture | null): Promise<{ src: LessonSource; lesson: Lesson; problem?: string; running: string[] }> {
     const { book, problem } = base === 'textbook' ? await this.bookOf(ws, tutor, now) : { book: null };
+    const last = book ? await bookLast(ws, book.file) : null;
     const sizes = await this.photoSizes(ws, photos);
     // 数学的照片上点的是数和算式,不弹田字格(同数学课本)
     const pick = canonicalSubject(ws.config.tutors[tutor]?.subject) !== '数学';
     const lesson = await updateLesson(ws, tutor, date, thread, (l) => {
       // 小课堂(孩子端点了按钮就铺上、先看完才开口;服务端收到第一条时照同样的规矩铺)
       let s = lecture && !l.pages.some((p) => p.kind === 'lecture') ? lessonStep(l, { t: 'act', act: { k: '翻', page: lecturePage(lecture) } }) : l;
-      s = book ? lessonOpen(s, book) : s;
+      s = book ? lessonOpen(s, book, last) : s;
       if (sizes.length) s = lessonStep(s, { t: 'photo', photos: sizes, pick });
       else if (base === 'photo' && !s.at) s = lessonStep(s, { t: 'act', act: { k: '翻', page: whitePage() } });
       return s;
@@ -517,7 +549,7 @@ export class Runner {
     let show = '还没有页';
     if (page?.kind === 'book') {
       const at = x.src.book && page.src === x.src.book.file ? bookLesson(x.src.book.index, page.title) : null;
-      const parts = at && x.src.book ? bookSlateParts(x.src.book.index, at) : null;
+      const parts = at && x.src.book ? bookSlateParts(x.src.book.index, at, page.title === BOOK_TOC ? await bookLast(ws, x.src.book.file) : null) : null;
       show = parts?.show ?? `课本《${page.src}》读不出来`;
       if (parts && !told.has(page.id)) notes.push({ id: page.id, name: page.title === BOOK_TOC ? '目录' : `《${page.title}》`, text: clipNote(parts.text) });
     } else if (page?.kind === 'photo') {
@@ -603,7 +635,7 @@ export class Runner {
     // 小课堂画的一处带一张截图:和照片一样进上下文包 photos:(排在孩子拍的后面),这一轮带工具读图;消息的 photos 只记孩子拍的
     const shots = input.lecture?.marks?.flatMap((m) => (m.image ? [m.image] : [])) ?? [];
     const seen = [...photos, ...shots];
-    const text = input.text.trim() || (input.action === 'submit' ? '(给老师看,没说话)' : photos.length ? (photos.length === 1 ? '(拍了一张)' : `(拍了 ${photos.length} 张)`) : '');
+    const text = input.text.trim() || (input.open ? `(在目录上点了《${input.open}》)` : input.action === 'submit' ? '(给老师看,没说话)' : photos.length ? (photos.length === 1 ? '(拍了一张)' : `(拍了 ${photos.length} 张)`) : '');
     if (!text) throw new UsageError('消息是空的');
     const busy = this.active.get(tutor);
     if (busy) throw new BusyError(tutor, busy.job);
@@ -718,7 +750,7 @@ export class Runner {
     const plan = this.brain.plan(req);
 
     // 原声:落在这轮旁边(删话题一起删);写不下就当没有,消息照发
-    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, ...(input.action ? { action: input.action } : {}), ...(photos.length ? { photos } : {}), ...(input.device ? { device: input.device } : {}), ...(input.deviceId ? { deviceId: input.deviceId } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.tidy ? { tidy: true as const } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(input.eval ? { eval: true as const } : {}), ...(input.live ? { live: true as const } : {}), ...(input.via ? { via: input.via } : {}), ...(input.lecture ? { lecture: { bundle: input.lecture.bundle, title: lecture?.title ?? input.lecture.bundle, watchedMs: input.lecture.watchedMs, finished: input.lecture.finished, pauses: input.lecture.pauses, ...(input.lecture.again ? { again: true as const } : {}), ...(lecture?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}), ...(input.lecture.log?.length ? { log: input.lecture.log } : {}) } } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(fresh && activityRun ? { activity: activityRun } : {}), ...(fresh && pageBase ? { base: pageBase } : {}), ...(fresh && actDef?.listen === 'open' ? { listen: 'open' as const } : {}), ...(compact ? { compacted: true as const } : {}), ...(lectureWarn.length || activityWarn.length ? { warnings: [...lectureWarn, ...activityWarn] } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
+    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, ...(input.action ? { action: input.action } : {}), ...(input.open ? { open: input.open } : {}), ...(photos.length ? { photos } : {}), ...(input.device ? { device: input.device } : {}), ...(input.deviceId ? { deviceId: input.deviceId } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.tidy ? { tidy: true as const } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(input.eval ? { eval: true as const } : {}), ...(input.live ? { live: true as const } : {}), ...(input.via ? { via: input.via } : {}), ...(input.lecture ? { lecture: { bundle: input.lecture.bundle, title: lecture?.title ?? input.lecture.bundle, watchedMs: input.lecture.watchedMs, finished: input.lecture.finished, pauses: input.lecture.pauses, ...(input.lecture.again ? { again: true as const } : {}), ...(lecture?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}), ...(input.lecture.log?.length ? { log: input.lecture.log } : {}) } } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(fresh && activityRun ? { activity: activityRun } : {}), ...(fresh && pageBase ? { base: pageBase } : {}), ...(fresh && actDef?.listen === 'open' ? { listen: 'open' as const } : {}), ...(compact ? { compacted: true as const } : {}), ...(lectureWarn.length || activityWarn.length ? { warnings: [...lectureWarn, ...activityWarn] } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
     await writeIndex(ws, started);
     // 板的日志记一笔:这一轮把板交给了老师(下一轮「孩子做的」从这之后算;给了全文的下一轮写「未变」)
     if (slate) await appendBoard(ws, tutor, date, thread, { at: now.toISOString(), k: 'turn', job, ...(slate.told.length ? { told: slate.told } : {}) });
@@ -896,6 +928,9 @@ export class Runner {
       if (active.lesson) {
         const acts = sectionActs(fit.section);
         await updateLesson(ws, tutor, date, thread, (l) => lessonDone(acts.reduce((s, a) => lessonStep(s, { t: 'act', act: a }), l), job));
+        // 老师翻到了课本的一课:记下这本书翻到哪了(下次目录停在这一课)
+        const went = [...acts].reverse().find((a): a is Extract<LessonAct, { k: '翻' }> => a.k === '翻');
+        if (went?.page.kind === 'book' && went.page.title !== BOOK_TOC) await rememberBook(ws, went.page.src, went.page.title, (this.opts.now ?? (() => new Date()))());
       }
     }
     // 整块出的(没走流式):句子这时才第一次见到,也发一遍

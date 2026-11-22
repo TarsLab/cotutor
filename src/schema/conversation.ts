@@ -41,6 +41,8 @@ const MessageObjectSchema = z.object({
   text: z.string(),
   /** 孩子端不打字的动作:「给老师看」(窗里的图已经交了) */
   action: z.enum(['submit']).optional(),
+  /** 孩子在课本的目录上点了这一课(页上的名字;应用已经翻过去了,text 是应用写的「(在目录上点了《…》)」) */
+  open: z.string().min(1).max(80).optional(),
   /** 这条消息带的作业照片(R5):相对 workspace 根的路径(captures/<日期>/<HHMM>-<n>.jpg),上下文包 photos: 段原样给老师 Read;日记永不引用它 */
   photos: z.array(z.string().min(1)).optional(),
   result: z.enum(['running', 'ok', 'error']).default('running'),

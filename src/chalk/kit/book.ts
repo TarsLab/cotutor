@@ -78,11 +78,21 @@ export const lineBox = (sh: BookSheet, l: BookLine): Box => toScene(sh, l.x1, l.
 // 课名前的编号要隔开才去掉(「11 坐井观天」「第11课」「1.乘法的初步认识」);「6的乘法口诀」的 6 是课名的一部分
 const bare = (s: string): string => s.trim().replace(/^[《「]?第?\s*\d{1,2}\s*(?:课|[.．、]|\s)\s*/, '').replace(/[《》「」""“”\s·.。,,、::]/g, '');
 
-/** 课名(「坐井观天」「11 坐井观天」「《语文园地八》」)→ 目录里的一项;认不出 = null。先找一模一样的,再找包含的(短的那个在长的里) */
+/**
+ * 课名(「坐井观天」「11 坐井观天」「《语文园地八》」)→ 目录里的一项;认不出 = null。先找一模一样的,再找包含的(短的那个在长的里)。
+ * 一样的课名有几课(统编语文的两个「古诗二首」):写了编号的照编号挑,没写的是第一个
+ */
 export function findLesson(lessons: readonly BookLesson[], name: string): BookLesson | null {
   const q = bare(name);
   if (!q) return null;
-  return lessons.find((l) => bare(l.title) === q) ?? lessons.find((l) => bare(l.title).includes(q) || (q.length >= 2 && q.includes(bare(l.title)) && bare(l.title).length >= 2)) ?? null;
+  const same = lessons.filter((l) => bare(l.title) === q);
+  const no = /^[《「]?第?\s*(\d{1,2})\s*(?:课|[.．、]|\s)/.exec(name.trim())?.[1];
+  return same.find((l) => no !== undefined && l.no === no) ?? same[0] ?? lessons.find((l) => bare(l.title).includes(q) || (q.length >= 2 && q.includes(bare(l.title)) && bare(l.title).length >= 2)) ?? null;
+}
+
+/** 一课在页上、板的日志里叫什么:课名;和别的课同名又有编号的带上编号(「18 古诗二首」),findLesson 照它找回这一课 */
+export function lessonName(lessons: readonly BookLesson[], l: BookLesson): string {
+  return l.no && /^\d+$/.test(l.no) && lessons.some((x) => x !== l && x.title === l.title) ? `${l.no} ${l.title}` : l.title;
 }
 
 // ——— 一课的结构 ———

@@ -222,8 +222,9 @@ function reelParse(at: string | undefined): number {
 }
 
 /** 孩子(或家长)这句在进度条上写成什么:给老师看、首页按钮字、原话 */
-export function reelSaid(m: Pick<ConversationMessage, 'text' | 'via' | 'action'>): string {
+export function reelSaid(m: Pick<ConversationMessage, 'text' | 'via' | 'action' | 'open'>): string {
   if (m.action === 'submit') return '给老师看';
+  if (m.open) return `在目录上点了《${m.open}》`;
   if (m.via) return m.via.label;
   return m.text;
 }

@@ -26,7 +26,8 @@ import { ensureBaked, lectureFrameSvg, lecturePage, parseRing, parseSvgMs, readL
 import { fitSection } from '../../board/lesson-fit.ts';
 import { lessonInit, lessonStep } from '../../board/lesson.ts';
 import { tianzigeData } from '../../ui/kid/tianzige.ts';
-import { handleDictation, type DictationDeps } from '../dictation/route.ts';
+import { handleDictation, type DictationBookTables, type DictationDeps } from '../dictation/route.ts';
+import type { WordRow } from '../../memory/textbook-words.ts';
 import type { PhotoItem, PhotoProgress, Recognize } from '../dictation/recognize.ts';
 import { lettersData } from '../../ui/kid/letters.ts';
 import { mockLiveUpgrade } from './mock-live.ts';
@@ -245,6 +246,31 @@ const MOCK_PHOTO: PhotoItem[] = [
   { text: '塘', kind: 'read', pick: false, box: [80, 320, 150, 390], sure: true, say: `塘,${MOCK_SAY['塘']}` },
 ];
 const MOCK_FULL = ['池塘 里 有 一群 小蝌蚪 , 大大的 脑袋 , 黑灰色 的 身子 。', '小蝌蚪 游 哇 游 , 过了 几天 , 长出 两条 后腿 。', '他们 看见 鲤鱼 妈妈 在 教 小鲤鱼 捕食 。'];
+/** 听写「选一课」的假课本:书后的词语表、写字表各几行(课名和词是编的,排法照人教统编语文) */
+const mockRows = (rows: [string, string, string, string][], each: boolean): WordRow[] => rows.map(([sec, no, lesson, w]) => (sec === '园地'
+  ? { key: lesson, sec: null, no: lesson, lesson, words: each ? Array.from(w) : w.split(' '), garden: true as const }
+  : { key: sec + no, sec, no, lesson, words: each ? Array.from(w) : w.split(' ') }));
+const MOCK_DICTATION_BOOK: DictationBookTables = {
+  title: '语文二年级上册(试用)',
+  last: '阅读2',
+  tables: {
+    ci: { title: '词语表', printed: 116, rows: mockRows([
+      ['阅读', '1', '春天来了', '春天 花朵 小草 柳树 燕子 发芽 田野'],
+      ['阅读', '2', '小河的歌', '小河 唱歌 石头 鱼儿 跳舞 快乐 一起 远方'],
+      ['阅读', '3', '下雪了', '雪花 白云 地上 脚印 小狗 小鸡 鼓励'],
+      ['识字', '1', '树叶', '树叶 枫树 松树 叶子 红色'],
+      ['识字', '2', '拍拍手', '拍手 朋友 你们 我们 大家 回家'],
+    ], false) },
+    zi: { title: '写字表', printed: 113, rows: mockRows([
+      ['阅读', '1', '春天来了', '春花草柳燕芽'],
+      ['阅读', '2', '小河的歌', '河唱石鱼跳乐'],
+      ['阅读', '3', '下雪了', '雪云脚狗鸡'],
+      ['园地', '', '语文园地一', '叶红'],
+      ['识字', '1', '树叶', '树枫松'],
+    ], true) },
+  },
+};
+
 /** 英文单词的假识别(英语老师卡上的拍照听写):一页单词表 */
 const MOCK_PHOTO_EN: PhotoItem[] = ['red', 'yellow', 'green', 'bus'].map((text, i): PhotoItem => ({ text, kind: 'word', pick: true, box: [80 + i * 200, 600, 240 + i * 200, 660], sure: true, say: `${text}, a ${text} ${text === 'bus' ? 'stop' : 'car'}`, ...(text === 'bus' ? { emoji: '🚌' } : {}) }));
 const MOCK_FULL_EN = ['What colour is it', "It's yellow", 'I can see a red bus'];
@@ -418,6 +444,8 @@ export function createMock(opts: MockOptions = {}): Mock {
     voiced: () => true,
     medians: async (ch) => (await tianzigeData(ch))?.medians ?? null,
     recognize: mockRecognize,
+    // 语文老师有一册假课本的词语表、写字表(字是编的),上次翻到第 2 课;别的老师没有课本(听写页直接拍照)
+    book: async (t) => (t === 'chinese-tutor' ? MOCK_DICTATION_BOOK : null),
   });
   /** via → 按钮(真服务在 runtime/home/store.ts resolveVia;mock 从同一份原文取) */
   const mockButton = (name: string, via: unknown): TutorButton | null => {

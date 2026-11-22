@@ -146,8 +146,8 @@ ${EN_BOX_JS}
     var n = s.words.length;
     var firstOk = s.first.filter(function (a) { return a && !wrong(a) && !a.chars.some(function (c) { return c.revealed; }); }).length;
     var revealedN = s.first.filter(function (a) { return a && a.chars.some(function (c) { return c.revealed; }); }).length;
-    var fixed = s.asked.filter(function (i) { var r = s.rewrites.filter(function (x) { return x.word === i; }); return r.length && !wrong(r[r.length - 1].attempt); }).length;
-    var selfs = s.rewrites.filter(function (r) { return r.self; }).map(function (r) { return r.word; }).filter(function (w, k, all) { return all.indexOf(w) === k; });
+    var fixed = s.asked.filter(function (i) { var r = s.rewrites.filter(function (x) { return x.word === i && !x.trace; }); return r.length && !wrong(r[r.length - 1].attempt); }).length;
+    var selfs = s.rewrites.filter(function (r) { return r.self && !r.trace; }).map(function (r) { return r.word; }).filter(function (w, k, all) { return all.indexOf(w) === k; });
     var when = new Date(s.startedAt);
     var head = s.checkedAt && s.lang === 'en'
       ? n + ' 个英文单词' + (revealedN ? ',' + revealedN + ' 个看了答案' : '') + '(不逐字母比,对一对下面的)'
@@ -159,12 +159,13 @@ ${EN_BOX_JS}
       : s.checkedAt
       ? (s.asked.length ? '问了「再写一遍」的 ' + s.asked.length + ' 个,重写后写全的 ' + fixed + ' 个。' : '没有要问「再写一遍」的。') + '孩子自己点重写的 ' + selfs.length + ' 个。' + (s.doneAt ? '' : '还没点「对好了」。')
       : '';
+    if (s.book) body.append(h('div', { 'class': 'src' }, h('span', { text: '课本' + (s.book.table === 'zi' ? '写字表' : '词语表') + (s.book.printed ? '(' + s.book.printed + ' 页)' : '') + ' · ' + (s.book.key.indexOf('语文园地') === 0 ? s.lesson : s.book.no + '《' + s.lesson + '》') })));
     if (s.photo) body.append(h('div', { 'class': 'src' }, h('img', { src: '/api/dictation/photos/' + s.photo + '/image', alt: '拍的照片' }), h('span', { text: '拍照听写' + (s.lesson ? ' · ' + s.lesson : '') })));
     body.append(h('a', { 'class': 'reel', href: '/parent/dictation/reel?id=' + encodeURIComponent(s.id) }, '看录像:这次是怎么写的 ›'));
     body.append(h('div', { 'class': 'sum' }, h('b', { text: head }), h('span', { text: (when.getMonth() + 1) + ' 月 ' + when.getDate() + ' 日 ' + String(when.getHours()).padStart(2, '0') + ':' + String(when.getMinutes()).padStart(2, '0') + ' 开始。' + line })));
 
     var rows = s.words.map(function (w, i) {
-      var a = s.first[i]; var rs = s.rewrites.filter(function (r) { return r.word === i; });
+      var a = s.first[i]; var rs = s.rewrites.filter(function (r) { return r.word === i && !r.trace; });
       var asked = s.asked.indexOf(i) >= 0;
       var orders = s.events.filter(function (e) { return e.kind === 'strokeOrder' && e.word === i; }).length;
       var shown = revealedOf(a, unitsOf(s, w));

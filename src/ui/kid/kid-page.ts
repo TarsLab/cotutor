@@ -818,12 +818,15 @@ ${BOARD_MARK_JS}
   const dictationBtn = (label, sub, n, en, href) => h('a', { class: 'bt bt-extra bt-x-dictation' + (en ? ' en' : ''), href },
     h('span', { class: 'dg', 'aria-hidden': 'true' }, ...Array.from({ length: Math.max(1, Math.min(n, en ? 4 : 6)) }, () => h('i'))),
     h('span', { class: 'dr' }, h('span', { class: 'lb' }, h('span', { class: 'btx' }, label), h('small', { class: 'ln' }, sub)), h('span', { class: 'go' }, '去写')));
-  /** 拍照听写:图标是一小格——语文的田字格写个「字」、英语的四线格写个「Aa」,右下角学科色的相机;孩子看格子就分得出是写汉字还是写英文 */
+  /**
+   * 常驻的听写:图标是一小格——语文的田字格写个「字」、英语的四线格写个「Aa」;孩子看格子就分得出是写汉字还是写英文。
+   * 语文先翻到课本书后的词语表选一课(没有课本才拍照);英语的书读不出字,还是拍照,右下角带学科色的相机
+   */
   const photoBtn = (t) => {
     const en = t.lang === 'en';
     return h('a', { class: 'bt bt-extra bt-x-photo' + (en ? ' en' : ''), href: '/dictation?tutor=' + encodeURIComponent(t.name) + (en ? '&lang=en' : ''), style: '--sc:' + colorOf(t) },
-      h('span', { class: 'pg', 'aria-hidden': 'true' }, h('i', {}, en ? 'Aa' : '字'), h('span', { class: 'cam', html: EXTRA_ICON.photo })),
-      h('span', { class: 'lb' }, h('span', { class: 'btx' }, '拍照听写'), h('small', { class: 'ln' }, en ? '拍英语书上要写的单词' : '拍语文书上要写的词')));
+      h('span', { class: 'pg', 'aria-hidden': 'true' }, h('i', {}, en ? 'Aa' : '字'), en ? h('span', { class: 'cam', html: EXTRA_ICON.photo }) : null),
+      h('span', { class: 'lb' }, h('span', { class: 'btx' }, en ? '拍照听写' : '听写'), h('small', { class: 'ln' }, en ? '拍英语书上要写的单词' : '照课本的词语表')));
   };
   /** 这位老师卡上「每天都在」那栏:归他的听写卡、常驻的拍照听写 */
   const extrasFor = (t, H) => {

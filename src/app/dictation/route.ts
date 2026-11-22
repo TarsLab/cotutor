@@ -3,7 +3,8 @@
  * cotutor 只在 app.ts 的 route() 里接一行、kid-page 画首页那张卡;这里引用 cotutor 的东西,cotutor 别处不引用这里。拆掉 = 删 src/{app,ui,scenes}/dictation/、cards/dictation/ 与那两处。
  * 词是答案:孩子端交卷(check)之前只拿得到几个词、每个词几个字和念的音频;交了才拿到字与「要不要再写一遍」。
  *
- *   GET  /dictation?home=<id>&n=<k>          孩子的听写页(从首页的听写卡点进来);不带 home 是拍照开始(老师卡上常驻的「拍照听写」,?tutor=<老师>)
+ *   GET  /dictation?home=<id>&n=<k>          孩子的听写页(从首页的听写卡点进来);不带 home 是老师卡上常驻的「听写」(?tutor=<老师>):有课本先翻到书后的词语表选一课,没有就拍照
+ *   GET  /api/dictation/book?tutor=<老师>     这位老师学科这学期那册书后的词语表、写字表(一课一行)与上次翻到的那一课那一行;没有课本 {book: null}
  *   GET  /parent/dictation                   家长看结果(家长端)
  *   GET  /parent/dictation/reel?id=<id>      家长看录像(家长端;上半 iframe 开 /dictation?reel=<id>)
  *   POST /api/dictation/photos               {image: data:image/jpeg;base64,…} 拍的照片:存下、后台开始认,回 {id}
@@ -11,13 +12,14 @@
  *   GET  /api/dictation/photos/<id>/image    那张照片
  *   POST /api/dictation                      {home, n, fresh?} 从首页的卡开始;今天这张卡有没写完的就接着(fresh 另开一次)
  *                                            {photo, words: [{chars, say?}], tutor?} 拍照开始:照片上点选的词;tutor = 从哪位老师卡上进来的(用他的声音)
+ *                                            {book: {table: ci|zi, key, skip?: [第几个]}, tutor} 从课本的表里选一课:词照书上的(服务端现读),skip 是划掉不写的
  *   GET  /api/dictation                      全部听写(家长)
  *   GET  /api/dictation/<id>                 一次听写的全部(家长)
  *   GET  /api/dictation/<id>/kid             孩子端的样子(交卷前没有字)
  *   GET  /api/dictation/<id>/say/<i>         第 i 个词念的音频;没有音色 / 合成失败 404(页面直接提示叫家长,不念浏览器合成声),?text=1 给要念的字
  *   PUT  /api/dictation/<id>/first/<i>       {chars: [{strokes, undos, gone?}]} 第一遍写的(交卷前可以改);gone 是擦掉的笔,录像用
  *   POST /api/dictation/<id>/check           交卷:逐字比对,回字与「再写一遍?」
- *   POST /api/dictation/<id>/rewrites/<i>    {chars, self} 再写一遍(交卷后)
+ *   POST /api/dictation/<id>/rewrites/<i>    {chars, self, trace?} 再写一遍(交卷后);trace = 照课本那样描红写的一遍
  *   POST /api/dictation/<id>/reveal/<i>      {char} 不会写,给答案:回这一个字(交卷前);记下这个字看过答案
  *   POST /api/dictation/<id>/events          {kind, word, char?, t?, n?, w?, h?} 孩子做了什么(录像按它排)
  *   POST /api/dictation/<id>/done            对好了
@@ -33,6 +35,11 @@ import { synthesize } from '../../media/tts.ts';
 import { judgeChar, type CharJudge, type InkPoint } from '../../scenes/dictation/match.ts';
 import { photoPromptFrom, recognizePhoto, type Recognize } from './recognize.ts';
 import { readFile } from 'node:fs/promises';
+import { canonicalSubject } from '../../schema/index.ts';
+import { bookIndex, listBooks, pickBook } from '../../memory/textbook-pdf.ts';
+import { bookWordTables, charSay, lessonOfRow, type WordTables } from '../../memory/textbook-words.ts';
+import { findLesson } from '../../chalk/kit/book.ts';
+import { bookLast } from '../../runtime/journal/book-last.ts';
 import { listDictations } from '../../runtime/activities.ts';
 import { parseFrontmatter } from '../../shared/frontmatter.ts';
 import { parseActivity } from '../../runtime/activity.ts';
@@ -63,6 +70,15 @@ export interface DictationDeps {
   medians(ch: string): Promise<number[][][] | null>;
   /** 认一张照片(流式,每认出一项回调一次);lang = en 认英文单词 */
   recognize: Recognize;
+  /** 这位老师学科这学期那册书后的词语表、写字表,和上次翻到的那一课在表里是哪一行(key);没有课本、表读不出 → null */
+  book(tutor: string | null): Promise<DictationBookTables | null>;
+}
+
+export interface DictationBookTables {
+  /** 册名 */
+  title: string;
+  tables: WordTables;
+  last: string | null;
 }
 
 /** 真服务的依赖:首页从 home/published.json 读,音色从 cotutor.json,配音缓存在 .cotutor/tts/(和卡的配音同一份) */
@@ -109,6 +125,22 @@ export function dictationDeps(ctx: AppContext): DictationDeps {
     recognize: async (image, onProgress, lang) => {
       const tpl = await dictationTemplate(ws().root, lang ?? 'zh');
       return recognizePhoto(image, onProgress, { model: ws().config.dictation.model, lang, ...(tpl ? { text: photoPromptFrom(tpl, lang) } : {}) });
+    },
+    async book(tutor) {
+      const t = tutor ? ws().config.tutors[tutor] : undefined;
+      if (!t) return null;
+      const w = ws();
+      const name = pickBook(await listBooks(w.paths.textbooks, canonicalSubject(t.subject) || null), ctx.now());
+      const ix = name ? await bookIndex(w.paths.textbooks, join(w.root, '.cotutor', 'textbooks'), name).catch(() => null) : null;
+      if (!name || !ix) return null;
+      const tables = bookWordTables(ix);
+      if (!tables.ci && !tables.zi) return null;
+      // 上次翻到的那一课(预习时孩子点的、老师翻的)→ 表里那一行
+      const lastName = await bookLast(w, name);
+      const l = lastName ? findLesson(ix.lessons, lastName) : null;
+      const rows = [...(tables.ci?.rows ?? []), ...(tables.zi?.rows ?? [])];
+      const hit = l ? rows.find((r) => (r.garden ? r.key === l.title : lessonOfRow(ix.lessons, r.sec, r.no) === l)) : undefined;
+      return { title: ix.title, tables, last: hit?.key ?? null };
     },
   };
 }
@@ -198,8 +230,14 @@ async function judge(deps: DictationDeps, chars: string, ink: CharInk[], lang?: 
 /** 每个词几个格:汉字一个字一格;英文一个单词一格 */
 const sizes = (s: Session): number[] => s.words.map((w) => (s.lang === 'en' ? 1 : Array.from(w.chars).length));
 const latestOf = (s: Session, i: number): Attempt | null => {
-  const r = s.rewrites.filter((x) => x.word === i);
+  const r = s.rewrites.filter((x) => x.word === i && !x.trace);
   return r.length ? r[r.length - 1].attempt : s.first[i];
+};
+
+/** 描红写的最近一遍 */
+const lastTrace = (s: Session, i: number): InkPoint[][][] | null => {
+  const r = s.rewrites.filter((x) => x.word === i && x.trace);
+  return r.length ? r[r.length - 1].attempt.chars.map((c) => c.strokes) : null;
 };
 
 /** 孩子端看到的:交卷前只有几个词、每个词几个字、写了哪几个;交了才有字、问不问再写一遍、最近写的那遍 */
@@ -212,6 +250,9 @@ export function kidView(s: Session, display: string, voiced: boolean): unknown {
     /** 哪位老师(cotutor.json 的键):左上角胶囊画他的头像 */
     tutorName: s.tutor ?? null,
     ...(s.lang ? { lang: s.lang } : {}),
+    /** 从课本哪张表、哪一课来的(对一对页顶别着课本那一行);拍照的只有课名 */
+    ...(s.book ? { book: s.book } : {}),
+    lesson: s.lesson ?? null,
     sizes: sizes(s),
     startedAt: s.startedAt,
     written: s.first.map((a) => a !== null),
@@ -223,10 +264,14 @@ export function kidView(s: Session, display: string, voiced: boolean): unknown {
       ? s.words.map((w, i) => ({
           chars: w.chars,
           ...(w.emoji ? { emoji: w.emoji } : {}),
-          ask: s.asked.includes(i) && !s.rewrites.some((r) => r.word === i),
+          ask: s.asked.includes(i) && !s.rewrites.some((r) => r.word === i && !r.trace),
           revealed: (s.first[i]?.chars ?? []).some((c) => c.revealed === true),
-          rewrote: s.rewrites.some((r) => r.word === i),
+          rewrote: s.rewrites.some((r) => r.word === i && !r.trace),
           ink: (latestOf(s, i)?.chars ?? []).map((c) => c.strokes),
+          /** 第一遍写的(对一对叠书上的字看它;ink 是最近写的那遍,再写过就是再写的) */
+          first: (s.first[i]?.chars ?? []).map((c) => c.strokes),
+          /** 再写一遍那排:描红那条、自己写那条最近的一遍(没写过 null) */
+          traced: lastTrace(s, i),
         }))
       : null,
   };
@@ -252,10 +297,10 @@ function summary(s: Session): unknown {
   const firstOk = s.first.filter((a) => a && a.judges.every((j) => !j.ask) && a.chars.every((c) => !c.revealed)).length;
   const revealed = s.first.filter((a) => a && a.chars.some((c) => c.revealed)).length;
   const shown = (i: number): boolean => (s.first[i]?.chars ?? []).some((c) => c.revealed === true);
-  const again = (i: number): boolean => s.rewrites.some((r) => r.word === i);
+  const again = (i: number): boolean => s.rewrites.some((r) => r.word === i && !r.trace);
   const ink = s.words.map((_w, i) => { const a = latestOf(s, i); return a ? { d: a.chars.map((c) => inkPath(c.strokes)), shown: shown(i), again: again(i) } : null; });
   const practice = s.words.filter((_w, i) => shown(i) || again(i) || s.asked.includes(i)).map((w) => w.chars);
-  return { id: s.id, startedAt: s.startedAt, doneAt: s.doneAt, tutor: s.tutor ?? null, ...(s.lang ? { lang: s.lang } : {}), words: s.words.map((w) => w.chars), written: s.first.filter((a) => a !== null).length, checked: s.checkedAt !== null, done: s.doneAt !== null, firstOk, asked: s.asked.length, revealed, photo: s.photo ?? null, lesson: s.lesson ?? null, ink, practice };
+  return { id: s.id, startedAt: s.startedAt, doneAt: s.doneAt, tutor: s.tutor ?? null, ...(s.lang ? { lang: s.lang } : {}), words: s.words.map((w) => w.chars), written: s.first.filter((a) => a !== null).length, checked: s.checkedAt !== null, done: s.doneAt !== null, firstOk, asked: s.asked.length, revealed, photo: s.photo ?? null, lesson: s.lesson ?? null, book: s.book ?? null, ink, practice };
 }
 
 const PHOTO_MAX_BYTES = 3_000_000;
@@ -362,6 +407,13 @@ export async function handleDictation(method: string, url: URL, deps: DictationD
     return { status: 200, json: rec };
   }
 
+  if (p === '/api/dictation/book') {
+    if (method !== 'GET') return { status: 405, json: { error: 'method_not_allowed' } };
+    const tutor = deps.reader(url.searchParams.get('tutor') ?? undefined);
+    const b = await deps.book(tutor).catch(() => null);
+    return { status: 200, json: b ? { book: b.title, last: b.last, ci: b.tables.ci, zi: b.tables.zi } : { book: null } };
+  }
+
   if (p === '/api/dictation') {
     if (method === 'GET') return { status: 200, json: { sessions: (await listSessions(root)).map(summary) } };
     if (method !== 'POST') return { status: 405, json: { error: 'method_not_allowed' } };
@@ -374,6 +426,23 @@ export async function handleDictation(method: string, url: URL, deps: DictationD
       // 从哪位老师卡上的「拍照听写」进来就用他的声音
       const tutor = deps.reader(typeof body.tutor === 'string' ? body.tutor : undefined);
       const s = await createSession(root, { home: null, n: -1, tutor, words, photo: rec.id, lesson: rec.lesson, ...(lang === 'en' ? { lang } : {}) }, now);
+      return { status: 201, json: kidView(s, deps.display(tutor), deps.voiced(tutor)) };
+    }
+    if (isObj(body) && isObj(body.book)) {
+      const want = body.book;
+      const tutor = deps.reader(typeof body.tutor === 'string' ? body.tutor : undefined);
+      const b = await deps.book(tutor).catch(() => null);
+      const table = want.table === 'zi' ? b?.tables.zi : want.table === 'ci' ? b?.tables.ci : null;
+      const row = table?.rows.find((r) => r.key === want.key);
+      if (!b || !table || !row) return { status: 404, json: { error: 'no_such_row', message: '课本里没有这一行' } };
+      const skip = Array.isArray(want.skip) ? want.skip.filter((k): k is number => Number.isInteger(k)) : [];
+      const picked = row.words.filter((_w, k) => !skip.includes(k));
+      if (!picked.length || picked.length > DICTATION_WORDS_MAX) return bad(`一次 1 到 ${DICTATION_WORDS_MAX} 个`);
+      const words: DictationWord[] = picked.map((w) => {
+        const say = want.table === 'zi' ? charSay(w, b.tables.ci, row.key) : undefined;
+        return { chars: w, ...(say ? { say } : {}) };
+      });
+      const s = await createSession(root, { home: null, n: -1, tutor, words, lesson: row.lesson, book: { table: want.table === 'zi' ? 'zi' : 'ci', key: row.key, no: row.no, printed: table.printed } }, now);
       return { status: 201, json: kidView(s, deps.display(tutor), deps.voiced(tutor)) };
     }
     if (!isObj(body) || !(body.home === null || (typeof body.home === 'string' && HOME_ID_RE.test(body.home))) || !num(body.n, 0, 99) || !Number.isInteger(body.n)) return bad('要 {home, n}');
@@ -459,7 +528,8 @@ async function handleSession(method: string, url: URL, deps: DictationDeps, body
     const chars = parseChars(body, sizes(s)[i]);
     if (!chars) return bad('要 {chars: [{strokes, undos}]},格数对上');
     const self = isObj(body) && body.self === true;
-    s.rewrites.push({ word: i, self, attempt: { at: now.toISOString(), chars, judges: await judge(deps, s.words[i].chars, chars, s.lang) } });
+    const trace = isObj(body) && body.trace === true;
+    s.rewrites.push({ word: i, self, ...(trace ? { trace: true as const } : {}), attempt: { at: now.toISOString(), chars, judges: await judge(deps, s.words[i].chars, chars, s.lang) } });
     await writeSession(root, s);
     return { status: 200, json: kidView(s, deps.display(s.tutor), deps.voiced(s.tutor)) };
   }

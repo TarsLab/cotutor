@@ -1,10 +1,9 @@
 #!/usr/bin/env node
 /**
- * 听写的手动验收(不进 pnpm test,要本机 Chrome;走 mock,不花钱):
- * 起 cotutor mock,Chrome 开孩子端首页(iPad 横屏 1180×820)→ 点听写卡进 /dictation → 开始 →
- * 照 hanzi-writer-data 的中线用鼠标写:春天写对、鼓励的鼓少写第 7 笔、叶写成页 → 每个词「写好了」→ 对答案:
- * 三张词卡、书上的字叠着、鼓励与叶问「这个再写一遍?」、春天不问;拿开 / 叠上蓝字 → 点鼓逐笔看:一共 13 笔、写到最后 →
- * 我再写一遍:范字、两个空格,写全了交 → 鼓励不再问 → 对好了回首页 → 家长页 /parent/dictation:少了第 7 笔、可能写成了别的字。
+ * 听写的手动验收(不进 pnpm test,要本机 Chrome;走 mock,不花钱;mock 的语文老师有一册假课本的词语表、写字表):
+ * 起 cotutor mock,Chrome 开孩子端首页(iPad 横屏 1180×820)→ 语文老师卡上的「听写」→ 选一课(词语表,识字 1《树叶》,划掉三个)→
+ * 听写本上写:照 hanzi-writer-data 的中线用鼠标在写字卡里写,树叶写对、叶子的叶写成页 → 对一对:课本那一行别在页顶、叶子问「再写一遍?」→
+ * 点一格看笔顺 → 再写一遍:描红那条、空格那条各写一遍 → 对好了回首页 → 首页听写卡那条路 → 手机宽度 → 家长看录像。没抛异常。
  * 手指走 CDP 的 Input.dispatchMouseEvent(经命中判定),不用 dispatchEvent。
  *
  * 用法:node scripts/probe-dictation.mjs [--out <截图目录>] [--keep](留下 mock)
@@ -81,261 +80,131 @@ try {
     return { ...b, held: n };
   };
 
-  // ---- 首页的听写卡 ----
-  ok('首页:听写卡写了念的老师(语文),收在语文老师的卡里,写着「听写」与几个词,没有字', await waitFor(`!!document.querySelector('#deck .pc.front[data-tutor="chinese-tutor"] .bt-x-dictation')`) && (await evaluate(`(() => { const c = document.querySelector('#deck .pc.front .bt-x-dictation'); return c.textContent.includes('3 个词') && !c.textContent.includes('鼓') && c.getAttribute('href').startsWith('/dictation?home='); })()`)));
-  await shot('01-home');
-  await tap('#deck .pc.front .bt-x-dictation');
-  ok('点卡:进 /dictation,开始屏「听写 · 三个词」', await waitFor(`location.pathname === '/dictation' && document.querySelector('#v-start.on') && document.querySelector('#s-big').textContent === '听写 · 三个词'`));
-  await shot('02-start');
-  const dictUrl = await evaluate('location.href');
+  const errors = [];
+  ws.addEventListener('message', (e) => { const m = JSON.parse(e.data); if (m.method === 'Runtime.exceptionThrown') errors.push(m.params.exceptionDetails.exception?.description ?? m.params.exceptionDetails.text); });
+  const inkOf = (sel) => evaluate(`document.querySelector(${JSON.stringify(sel)})?.querySelector('.ink')?.children.length ?? -1`);
+  const CARD = '#n-nb .card .pd .padbox';
+  const next = () => tap('#n-nb .card [data-next]');
 
-  // ---- 听写(左边听写本,右边一次写一个字)----
-  const inkCount = (sel) => evaluate(`document.querySelector(${JSON.stringify(sel)})?.children.length ?? -1`);
-  await tapText('开始');
-  ok('听写中:听写本三行(2、2、1 格)、右边一个大格;气泡里没有字', await waitFor(`document.querySelectorAll('#l-book .brow').length === 3 && document.querySelectorAll('#l-big .padbox').length === 1`) && (await evaluate(`[...document.querySelectorAll('#l-book .brow')].map((r) => r.querySelectorAll('.padbox').length).join() === '2,2,1' && document.querySelector('#l-what').textContent === '第一个词的第一个字' && !document.body.innerText.includes('春')`)));
-  const bigSize = await evaluate(`Math.round(document.querySelector('#l-big .padbox').getBoundingClientRect().width)`);
-  ok('大格放得大(≥ 480)', bigSize >= 480, `${bigSize}px`);
-  // 听写本拼起来、写字格三档
-  const bk = await evaluate(`(() => { const rs = [...document.querySelectorAll('#l-book .brow')].map((r) => r.getBoundingClientRect()); const cs = [...document.querySelectorAll('#l-book .brow')[0].querySelectorAll('.padbox')].map((c) => c.getBoundingClientRect()); return { tops: rs.map((r) => Math.round(r.top)), seam: Math.round(cs[1].left - cs[0].right) }; })()`);
-  ok('听写本:一个词的格子拼在一起,前两个词(各两格)排在同一行', bk.seam === 0 && bk.tops[0] === bk.tops[1] && bk.tops[2] > bk.tops[0], JSON.stringify(bk));
-  ok('写字格档位:右上角三颗,缺省大', (await evaluate(`[...document.querySelectorAll('#l-size button')].map((b) => b.dataset.pad + (b.getAttribute('aria-pressed') === 'true' ? '*' : '')).join()`)) === 's,m,l*');
-  await tap('#l-size [data-pad="s"]');
-  const small = await evaluate(`({ w: Math.round(document.querySelector('#l-big .padbox').getBoundingClientRect().width), c: document.cookie })`);
-  ok('点小:写字格 380,cookie 记下', small.w === 380 && small.c.includes('cotutor_dict_pad=s'), JSON.stringify(small));
-  await tap('#l-size [data-pad="m"]');
-  ok('点中:写字格 500', (await evaluate(`Math.round(document.querySelector('#l-big .padbox').getBoundingClientRect().width)`)) === 500);
-  await tap('#l-size [data-pad="l"]');
-  ok('点大:回到铺满', (await evaluate(`Math.round(document.querySelector('#l-big .padbox').getBoundingClientRect().width)`)) === bigSize && (await evaluate('document.cookie')).includes('cotutor_dict_pad=l'));
-  const btnsZh = await evaluate(`(() => { const bs = [...document.querySelectorAll('.view.on button.tool, .view.on button.main')].filter((b) => b.getClientRects().length); return { bare: bs.filter((b) => !b.querySelector('svg')).map((b) => b.textContent.trim()), labels: bs.map((b) => b.textContent.trim()) }; })()`);
-  ok('写字屏的按钮都带图标,字同英文页:再念 撤销 擦掉 不会写,给答案 写好了', btnsZh.bare.length === 0 && ['再念', '撤销', '擦掉', '不会写,给答案', '写好了'].every((t) => btnsZh.labels.includes(t)), JSON.stringify(btnsZh));
-  await writeChar('#l-big .padbox', '春');
-  ok('写:大格里 9 笔,听写本上当前这格跟着画', (await inkCount('#l-big .ink')) === 9 && (await inkCount('#l-book .here .ink')) === 9);
-  await shot('03-listen');
-  ok('学科色:写好了是语文老师的粉', await waitFor(`getComputedStyle(document.querySelector('#l-next')).backgroundColor === 'rgb(196, 60, 116)'`));
-  ok('出口同老师页:左上角「‹ logo 语」胶囊,填语文老师的粉(不放老师的脸),没有「先停一下」', await waitFor(`(() => { const b = document.querySelector('#back'); if (!b || b.hidden) return false; const r = b.getBoundingClientRect(); return r.left < 30 && r.top < 30 && !!b.querySelector('svg.ct-logo') && !b.querySelector('.tfav') && b.classList.contains('tinted') && b.querySelector('.bk-ini').textContent === '语' && !document.body.innerText.includes('先停一下'); })()`));
-  await tapText('写好了');
-  ok('写好了:同一个词的第二个字', await waitFor(`document.querySelector('#l-what').textContent === '第一个词的第二个字'`) && (await inkCount('#l-big .ink')) === 0);
-  await writeChar('#l-big .padbox', '天');
-  await tapText('写好了');
-  ok('一个词写完:念下一个词,听写本上第一行留着写的字', await waitFor(`document.querySelector('#l-what').textContent === '第二个词的第一个字'`) && (await evaluate(`[...document.querySelectorAll('#l-book .brow')[0].querySelectorAll('.ink')].map((g) => g.children.length).join()`)) === '9,4');
-  await writeChar('#l-big .padbox', '鼓', [6]);
-  await tapText('写好了');
-  await writeChar('#l-big .padbox', '励');
+  // ---- 首页:语文老师卡上常驻的「听写」(没有相机角标;英语的还是拍照) ----
+  ok('首页:语文老师卡上「听写」,照课本的词语表,没有相机角标', await waitFor(`!!document.querySelector('#deck .pc.front[data-tutor="chinese-tutor"] .bt-x-photo')`) && await evaluate(`(() => { const b = document.querySelector('#deck .pc.front .bt-x-photo'); return b.getAttribute('href') === '/dictation?tutor=chinese-tutor' && b.querySelector('.btx').textContent === '听写' && !b.querySelector('.cam'); })()`));
+  await tap('#deck .pc.front .bt-x-photo');
+
+  // ---- 选一课 ----
+  ok('进来是课本的词语表:一课一行,栏名(阅读、识字);没选时底下是老师的字幕', await waitFor(`!!document.querySelector('#v-book.on') && document.querySelectorAll('#b-pg .bk-row').length === 5`) && await evaluate(`[...document.querySelectorAll('#b-pg .bk-sec')].map((x) => x.textContent).join() === '阅读,识字' && !document.querySelector('#b-say').hidden && document.querySelector('#b-go').hidden && document.querySelector('#b-title').textContent === '词语表'`));
+  ok('平时什么都不画(没有选中的、没有按下的)', await evaluate(`!document.querySelector('.bk-row.on, .bk-row.press')`));
+  await shot('01-book');
+  await tap('#b-pg .bk-row[data-key="识字1"]');
+  ok('点一行:那一行铺学科色,底下「1《树叶》· 5 个词」和开始听写', await waitFor(`!!document.querySelector('.bk-row.on[data-key="识字1"]') && document.querySelector('#b-go-t').textContent === '1《树叶》' && document.querySelector('#b-go-s').textContent === '5 个词'`));
+  for (const k of [1, 2, 4]) await tap(`.bk-row.on .w:nth-child(${k + 1})`);
+  ok('行里点词:划掉(这次不写),数跟着变', await waitFor(`document.querySelectorAll('.bk-row.on .w.off').length === 3 && document.querySelector('#b-go-s').textContent === '2 个词'`));
+  await shot('02-book-pick');
+  await tap('#v-book [data-tab="zi"]');
+  ok('切到写字表:一个字一项,园地一行;选的那一课还选着', await waitFor(`document.querySelector('#b-title').textContent === '写字表' && !!document.querySelector('.bk-row.gd') && !!document.querySelector('.bk-row.on[data-key="识字1"]') && document.querySelector('#b-go-s').textContent.includes('个字')`));
+  await shot('03-book-zi');
+  await tap('#v-book [data-tab="ci"]');
+  ok('切回词语表:划掉的还划着', await waitFor(`document.querySelectorAll('.bk-row.on .w.off').length === 3`));
+  await tap('#b-start');
+
+  // ---- 听写本 ----
+  ok('开始:一页听写本,两个词(2、2 格),写字卡贴着第一格;字幕只说第几个词,页上没有字', await waitFor(`!!document.querySelector('#v-page.on') && document.querySelectorAll('#n-nb .wd').length === 2 && !!document.querySelector('${CARD}')`) && await evaluate(`[...document.querySelectorAll('#n-nb .wd')].map((w) => w.querySelectorAll('.padbox').length).join() === '2,2' && document.querySelector('#l-status').textContent.startsWith('第一个词') && !document.body.innerText.includes('叶子')`));
+  const pos = await evaluate(`(() => { const c = document.querySelector('#n-nb .card').getBoundingClientRect(), a = document.querySelector('#n-nb .wd.cur .padbox.here').getBoundingClientRect(); return { below: Math.round(c.top - a.bottom), pad: Math.round(document.querySelector('${CARD}').getBoundingClientRect().width), inView: c.bottom <= innerHeight }; })()`);
+  ok('写字卡在那一格下面、整个看得见、大格够大(≥ 300)', pos.below > 0 && pos.below < 30 && pos.inView && pos.pad >= 300, JSON.stringify(pos));
+  const tools = await evaluate(`[...document.querySelectorAll('#v-page button.tool, #v-page button.main')].filter((b) => b.getClientRects().length).map((b) => b.textContent.trim())`);
+  ok('按钮:再念、撤销、擦掉、不会写,给答案、写好了', ['再念', '撤销', '擦掉', '不会写,给答案', '写好了'].every((t) => tools.includes(t)), tools.join(' '));
+  await writeChar(CARD, '树');
+  ok('写:卡上 9 笔,页上这一格跟着画', (await inkOf(CARD)) === 9 && (await inkOf('#n-nb .wd.cur .padbox.here')) === 9);
+  await shot('04-listen');
+  await next();
+  ok('写好了:卡挪到同一个词的第二格', await waitFor(`document.querySelector('#n-nb .wd.cur .padbox.here') === document.querySelectorAll('#n-nb .wd.cur .padbox')[1]`) && (await inkOf(CARD)) === 0);
+  await writeChar(CARD, '叶');
+  await next();
+  ok('一个词写完:下一个词,页上第一个词留着写的字', await waitFor(`document.querySelector('#l-status').textContent.startsWith('第二个词')`) && await evaluate(`[...document.querySelectorAll('#n-nb .wd')[0].querySelectorAll('.ink')].map((g) => g.children.length).join() === '9,5'`));
+  await writeChar(CARD, '页');
   await tapText('撤销');
-  const afterUndo = await inkCount('#l-big .ink');
-  await tapText('擦掉');
-  const afterClear = await inkCount('#l-big .ink');
-  await writeChar('#l-big .padbox', '励');
-  ok('撤销撤最后一笔、擦掉重写清这个字', afterUndo === 6 && afterClear === 0 && (await inkCount('#l-big .ink')) === 7, `${afterUndo}/${afterClear}`);
-  await tap('#l-book .brow.cur .padbox:nth-child(1)');
-  ok('点听写本上这个词的第一格:回去看「鼓」', await waitFor(`document.querySelector('#l-what').textContent === '第二个词的第一个字'`) && (await inkCount('#l-big .ink')) === 12);
-  await tap('#l-book .brow.cur .padbox:nth-child(2)');
-  await tapText('写好了');
+  const u = await inkOf(CARD);
+  await writeChar(CARD, '页', [0, 1, 2, 3, 4]);
+  await next();
+  await writeChar(CARD, '子');
+  await next();
 
-  // ---- 不会写,给答案:看笔顺,照着描红写一遍 ----
-  ok('第三个词一个格', await waitFor(`document.querySelector('#l-what').textContent === '第三个词 · 一个字'`));
-  await shot('03b-stuck');
+  // ---- 对一对 ----
+  ok('对一对:同一页,课本那一行别在页顶(两个词),叶子问「再写一遍?」,书上的字叠着;对好了在右下', await waitFor(`!!document.querySelector('#v-page.on .nb-book') && !document.querySelector('#c-done').hidden`) && await evaluate(`document.querySelector('.nb-book .ws').textContent === '树叶叶子' && document.querySelectorAll('#n-nb .wd .ask').length === 1 && !!document.querySelectorAll('#n-nb .wd')[1].querySelector('.ask') && document.querySelectorAll('#n-nb .nb-ws .std path').length > 0`), `撤销后 ${u}`);
+  await shot('05-check');
+  await tap('#n-nb .wd:nth-child(1) .padbox:nth-child(1)');
+  ok('点一格:卡上一笔一笔写「树」(一共 9 笔)', await waitFor(`!!document.querySelector('#n-nb .card.order') && document.querySelector('#n-nb .card [data-cnt]').textContent.includes('一共 9 笔')`));
+  await shot('06-order');
+  await tap('#n-nb .card [data-x]');
+  ok('× 收起', await waitFor(`!document.querySelector('#n-nb .card')`));
+  await tap('#n-nb .wd .ask');
+  ok('再写一遍:页底一排——范字、描红、空格;卡在描红那条第一格', await waitFor(`document.querySelectorAll('#n-nb .nb-redo .rr .strip').length === 3 && !!document.querySelector('#n-nb .nb-redo .strip.cur .padbox.here') && document.querySelector('#n-nb .card [data-cnt]').textContent === '照着描一遍'`));
+  await writeChar(CARD, '叶'); await next();
+  await writeChar(CARD, '子'); await next();
+  ok('描红那条交了:卡挪到空格那条', await waitFor(`document.querySelector('#n-nb .card [data-cnt]')?.textContent === '自己写一遍'`));
+  await writeChar(CARD, '叶'); await next();
+  await writeChar(CARD, '子'); await next();
+  ok('空格那条也交了:卡收起,「再写一遍?」没了,那一排三条都留着', await waitFor(`!document.querySelector('#n-nb .card') && !document.querySelector('#n-nb .wd .ask') && document.querySelectorAll('#n-nb .nb-redo .rr .strip').length === 3`));
+  await shot('07-redo');
+  await tap('#c-done');
+  ok('对好了:回首页', await waitFor(`location.pathname === '/'`));
+
+  // ---- 首页的听写卡:开始屏 → 听写本 ----
+  await waitFor(`!!document.querySelector('#deck .pc.front .bt-x-dictation')`);
+  await tap('#deck .pc.front .bt-x-dictation');
+  ok('首页听写卡:开始屏「听写 · 三个词」', await waitFor(`!!document.querySelector('#v-start.on') && document.querySelector('#s-big').textContent === '听写 · 三个词'`));
+  await tapText('开始');
+  ok('开始:听写本三个词(2、2、1 格),页头没有课名', await waitFor(`[...document.querySelectorAll('#n-nb .wd')].map((w) => w.querySelectorAll('.padbox').length).join() === '2,2,1' && document.querySelector('.nb-hd b').textContent === '听写 · 听写本'`));
   await tapText('不会写,给答案');
-  ok('给答案:书上的「叶」在大格里一笔一笔写,气泡里写第几笔、一共 5 笔(没有数字方块)', await waitFor(`!document.querySelector('#l-foot-order').hidden && /一共 5 笔/.test(document.querySelector('#l-status').textContent) && !document.querySelector('.sqs') && document.querySelector('#l-what').textContent === '看「叶」一笔一笔写'`));
-  await sleep(2500);
-  ok('写着写着:前面的笔变蓝,气泡跟着数', (await evaluate(`document.querySelectorAll('#l-big .std path.sd').length`)) >= 1 && !/^第 1 笔/.test(await evaluate(`document.querySelector('#l-status').textContent`)));
-  await shot('03c-answer');
-  // 看笔顺时一落笔就换成照着写,没有「我来写」;紧接着点「写好了」在半秒保护里,不算
-  ok('看笔顺时没有「我来写」', !(await evaluate(`document.body.innerText.includes('我来写')`)));
-  await writeChar('#l-big .padbox', '叶', [1, 2, 3, 4]);
-  { const r = await rect('#l-next'); const x = r.x + r.w / 2, y = r.y + r.h / 2; await send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 }); await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 }); }
-  await sleep(200);
-  const traced = `document.querySelector('#l-big .std').classList.contains('trace') && document.querySelector('#l-big .std').children.length === 5 && !document.querySelector('#l-big .top').children.length && document.querySelector('#l-reveal').hidden && !document.querySelector('#l-reorder').hidden && !document.querySelector('#l-foot-write').hidden && document.querySelector('#l-what').textContent === '照着灰色的「叶」写一遍'`;
-  ok('看笔顺时落笔:动画停下,换成灰色描红,这一笔留着;紧接着点「写好了」不算(半秒保护)', (await evaluate(traced)) && (await inkCount('#l-big .ink')) === 1 && (await evaluate(`!!document.querySelector('#v-listen.on')`)));
-  await sleep(600);
-  await tapText('再看笔顺');
-  ok('再看笔顺:又放一遍', await waitFor(`!document.querySelector('#l-foot-order').hidden && document.querySelector('#l-what').textContent === '看「叶」一笔一笔写'`));
-  ok('放完自己换成照着写,刚才那一笔还在', await waitFor(traced, 15000) && (await inkCount('#l-big .ink')) === 1);
-  await tapText('擦掉');
-  await sleep(600);
-  await tapText('写好了');
-  ok('没照着写就点写好了:不让过,提示照着写', await evaluate(`document.querySelector('#l-status').textContent.includes('照着灰色的写一遍')`) && (await evaluate(`!!document.querySelector('#v-listen.on')`)));
-  await writeChar('#l-big .padbox', '叶');
-  await shot('03d-trace');
-  await tapText('写好了');
+  ok('不会写,给答案:卡上一笔一笔写,放完换成照着写', await waitFor(`document.querySelector('#n-nb .card [data-cnt]').textContent.includes('笔')`) && await waitFor(`document.querySelector('#n-nb .card [data-cnt]').textContent === '照着灰色的写一遍'`, 15000));
+  await shot('08-reveal');
 
-  // ---- 对答案 ----
-  ok('交卷:进对答案,三张词卡', await waitFor(`document.querySelector('#v-check.on') && document.querySelectorAll('.wc').length === 3`));
-  await waitFor(`[...document.querySelectorAll('.wc .std')].every((g) => g.children.length > 0)`);
-  const asks = await evaluate(`[...document.querySelectorAll('.wc')].map((c) => c.querySelector('.ask') ? 'ask' : 'self').join()`);
-  ok('问「这个再写一遍?」的只有鼓励(少一笔);春天不问,叶看过答案照着写了也不问', asks === 'self,ask,self', asks);
-  ok('页面上没有叉、没有分数、没有对错的字', !(await evaluate(`/[✗×]|错|分数|不对/.test(document.querySelector('#v-check').innerText)`)));
-  await shot('04-check');
-  // 2026-11-09 iPad 真机:两排卡时「对好了」被挤出屏幕、「这个再写一遍?」折成三行、返回胶囊压在滚上来的卡上
-  const layout = () => evaluate(`(() => {
-    const r = (el) => el.getBoundingClientRect();
-    const done = r(document.querySelector('#c-done')), cards = r(document.querySelector('#c-cards')), back = r(document.querySelector('#back'));
-    const lines = [...document.querySelectorAll('.wc .ask, .wc .self, .wc .redo')].map((el) => Math.round(r(el).height));
-    return { doneIn: done.top >= 0 && done.bottom <= innerHeight && done.right <= innerWidth, pageScroll: document.scrollingElement.scrollHeight - innerHeight,
-      cardsBelowBack: cards.top >= back.bottom, tallest: Math.max(...lines), pad: getComputedStyle(document.querySelector('#c-list')).getPropertyValue('--pad').trim(),
-      scrolls: document.querySelector('#c-cards').scrollHeight > document.querySelector('#c-cards').clientHeight };
-  })()`);
-  const l1 = await layout();
-  ok('对一对:「对好了」在屏幕里,页面本身不滚;卡区在返回胶囊下面;字下那行一行(不折)', l1.doneIn && l1.pageScroll <= 1 && l1.cardsBelowBack && l1.tallest <= 52, JSON.stringify(l1));
-  // 卡多了(拍照听写一次十几个词):只滚中间,上下两栏不动
-  await evaluate(`(() => { const list = document.querySelector('#c-list'), c = list.firstElementChild; for (let i = 0; i < 12; i++) { const x = c.cloneNode(true); x.dataset.probeClone = '1'; list.append(x); } })()`);
-  const l2 = await layout();
-  ok('十五张卡:中间滚,「对好了」还在屏幕里,页面本身不滚', l2.scrolls && l2.doneIn && l2.pageScroll <= 1, JSON.stringify(l2));
-  await evaluate(`document.querySelector('#c-cards').scrollTop = 1e6`);
-  await shot('04b-check-many');
-  await evaluate(`document.querySelector('#c-cards').scrollTop = 0; document.querySelectorAll('[data-probe-clone]').forEach((x) => x.remove())`);
-  // iPad 竖放:格子按剩的地方放大,底栏照样在
-  await send('Emulation.setDeviceMetricsOverride', { width: 820, height: 1180, deviceScaleFactor: 1, mobile: false });
-  await waitFor(`innerWidth === 820`);
-  await sleep(300);
-  const l3 = await layout();
-  ok('竖放:「对好了」在屏幕里,格子比横放大', l3.doneIn && l3.pageScroll <= 1 && parseInt(l3.pad) > parseInt(l1.pad), JSON.stringify({ landscape: l1.pad, portrait: l3.pad, doneIn: l3.doneIn }));
-  await shot('04c-check-portrait');
-  await send('Emulation.clearDeviceMetricsOverride');
-  await waitFor(`innerWidth !== 820`);
-  await sleep(300);
-  await tap('#c-toggle');
-  ok('拿开蓝字:书上的字藏起来', await evaluate(`getComputedStyle(document.querySelector('.wc .std')).display === 'none'`));
-  await shot('05-check-bare');
-  await tap('#c-toggle');
-
-  // ---- 逐笔看 ----
-  await tap('.wc:nth-child(2) .padbox:nth-child(1)');
-  ok('点鼓:逐笔看,一共 13 笔,一笔一笔往下写', await waitFor(`document.querySelector('#v-order.on') && /一共 13 笔/.test(document.querySelector('#r-count').textContent)`));
-  await sleep(4500);
-  const k = await evaluate(`document.querySelectorAll('#r-pad .std path.sd').length`);
-  ok('写着写着:前面的笔变蓝', k >= 3, `已写 ${k} 笔`);
-  await tap('#r-next');
-  await shot('06-stroke-order');
-  ok('逐笔看是一层:胶囊收起,右上角 ×', await evaluate(`document.querySelector('#back').hidden && !!document.querySelector('#v-order.on #r-back.layer-x')`));
-  await tapText('我再写一遍');
-
-  // ---- 再写一遍 ----
-  ok('再写一遍:范字两个、空格两个', await waitFor(`document.querySelector('#v-rewrite.on') && document.querySelectorAll('#w-models .padbox').length === 2 && document.querySelectorAll('#w-pads .padbox').length === 2`));
-  const rw = await evaluate(`(() => { const ps = [...document.querySelectorAll('#w-pads .padbox')].map((p) => p.getBoundingClientRect()); const foot = document.querySelector('#v-rewrite .foot').getBoundingClientRect(); return { w: Math.round(ps[0].width), right: Math.round(ps[1].right), bottom: Math.round(ps[0].bottom), foot: Math.round(foot.top), vw: innerWidth }; })()`);
-  ok('再写一遍的格子按剩的地方放大:两个字并排 ≥ 400,不出屏、不压按钮', rw.w >= 400 && rw.right <= rw.vw && rw.bottom <= rw.foot, JSON.stringify(rw));
-  const rwMeasure = `(() => { const ps = [...document.querySelectorAll('#w-pads .padbox')].map((p) => p.getBoundingClientRect()); const m = document.querySelector('#w-models .padbox').getBoundingClientRect(); const foot = document.querySelector('#v-rewrite .foot').getBoundingClientRect(); return { w: Math.round(ps[0].width), right: Math.round(ps[1].right), top: Math.round(ps[0].top), mBottom: Math.round(m.bottom), bottom: Math.round(ps[0].bottom), foot: Math.round(foot.top), vw: innerWidth }; })()`;
-  await send('Emulation.setDeviceMetricsOverride', { width: 820, height: 1180, deviceScaleFactor: 1, mobile: false });
-  await sleep(400);
-  const rwp = await evaluate(rwMeasure);
-  ok('竖着:范字一排在上,格子在下面跟着重算,不出屏、不压按钮', rwp.top > rwp.mBottom && rwp.w >= 300 && rwp.right <= rwp.vw && rwp.bottom <= rwp.foot, JSON.stringify(rwp));
-  await send('Emulation.clearDeviceMetricsOverride');
-  await sleep(400);
-  await tap('#w-models .padbox:nth-child(1)');
-  await writeChar('#w-pads .padbox:nth-child(1)', '鼓');
-  await writeChar('#w-pads .padbox:nth-child(2)', '励');
-  await shot('07-rewrite');
-  ok('再写一遍是一层:胶囊收起,右上角 ×,没有「先不写了」', await evaluate(`document.querySelector('#back').hidden && !!document.querySelector('#v-rewrite.on #w-skip.layer-x') && !document.body.innerText.includes('先不写了')`));
-  await tapText('写好了');
-  ok('交了:回对答案,都不问了', await waitFor(`document.querySelector('#v-check.on') && [...document.querySelectorAll('.wc')].map((c) => c.querySelector('.ask') ? 'ask' : 'self').join() === 'self,self,self'`));
-  await shot('08-check-after');
-  await tapText('对好了');
-  ok('对好了:回首页', await waitFor(`location.pathname === '/' && !!document.querySelector('#deck .pc.front .bt-x-dictation')`));
-
-  // ---- 家长 ----
-  await send('Page.navigate', { url: `${base}/parent/dictation` });
-  ok('家长页:鼓少了第 7 笔、问了才改、看了答案:叶、要再练的词里有叶', await waitFor(`document.body.innerText.includes('少了第 7 笔') && document.body.innerText.includes('看了答案:叶') && document.body.innerText.includes('问了才改') && (document.querySelector('textarea')?.value ?? '').includes('叶')`), (await evaluate(`document.body.innerText.slice(0, 400)`)) ?? '');
-  await shot('09-parent');
-  // ---- 录像:上半是听写页本身(iframe,/dictation?reel=),下半是和话题一样的录像栏 ----
-  await tap('a.reel');
-  const K = `document.querySelector('#rl-frame').contentDocument`;
-  const endOk = await waitFor(`Number(document.querySelector('#rl-seek').max) > 1000 && Number(document.querySelector('#rl-seek').value) >= Number(document.querySelector('#rl-seek').max) - 100 && document.querySelector('#rl-play').getAttribute('aria-label') === '播放' && !!document.querySelector('#rl-frame').contentDocument?.querySelector('#v-check.on')`, 10000);
-  ok('一进来停在最后一帧:进度在头、不放、孩子的屏幕是对一对', endOk, await evaluate(`JSON.stringify({ v: document.querySelector('#rl-seek').value, max: document.querySelector('#rl-seek').max, play: document.querySelector('#rl-play').getAttribute('aria-label'), view: document.querySelector('#rl-frame').contentDocument?.querySelector('.view.on')?.id })`));
-  // 上一章 / 下一章落在章尾:从最后一帧(对一对)往前一章是第 3 个词写完、还没交卷;键盘 [ ] 也行,焦点在孩子的屏幕里也认
-  const key = async (k, code) => { for (const type of ['keyDown', 'keyUp']) await send('Input.dispatchKeyEvent', { type, key: k, code, ...(type === 'keyDown' && k.length === 1 ? { text: k } : {}) }); await sleep(300); };
-  const at = `({ chap: document.querySelector('#rl-chap').textContent, v: Number(document.querySelector('#rl-seek').value), max: Number(document.querySelector('#rl-seek').max), play: document.querySelector('#rl-play').getAttribute('aria-label'), check: !!${K}.querySelector('#v-check.on'), prev: document.querySelector('#rl-prev').disabled, next: document.querySelector('#rl-next').disabled })`;
-  const j0 = await evaluate(at);
-  await tap('#rl-prev');
-  const j1 = await evaluate(at);
-  ok('上一章:从最后一帧落到第 3 个词写完(还没交卷、不放);下一章能点了', j0.next && !j0.prev && j1.chap.startsWith('第 3 个词') && !j1.check && j1.v < j1.max && j1.play === '播放' && !j1.next, JSON.stringify({ j0, j1 }));
-  await key('[', 'BracketLeft');
-  const j2 = await evaluate(at);
-  ok('键盘 [:再往前一章,第 2 个词写完', j2.chap.startsWith('第 2 个词') && j2.v < j1.v, JSON.stringify(j2));
-  await tap('#rl-frame');
-  await key(']', 'BracketRight');
-  const j3 = await evaluate(at);
-  ok('焦点在孩子的屏幕里按 ]:照样往后一章,第 3 个词写完', j3.chap.startsWith('第 3 个词') && Math.abs(j3.v - j1.v) < 50, JSON.stringify(j3));
-  await tap('#rl-next');
-  const j4 = await evaluate(at);
-  ok('下一章:最后一章的章尾是末尾,下一章灰了', j4.v >= j4.max - 100 && j4.next, JSON.stringify(j4));
-  await evaluate(`(() => { const r = document.querySelector('#rl-seek'); r.value = '0'; r.dispatchEvent(new Event('input')); r.dispatchEvent(new Event('change')); })()`);
-  ok('录像:外壳里上半是听写页的录像模式、下半录像栏;时间是「放到哪 / 一共多久」;一个词一章(三章 + 对一对)', await waitFor(`location.pathname === '/parent/dictation/reel' && !document.querySelector('#reel').hidden && (document.querySelector('#rl-frame').getAttribute('src') || '').startsWith('/dictation?reel=') && !!${K}?.querySelector('#v-listen.on') && /^\\d+:\\d\\d \\/ \\d+:\\d\\d$/.test(document.querySelector('#rl-clock').textContent) && document.querySelectorAll('#rl-chaps i').length === 3`, 10000), await evaluate(`JSON.stringify({ src: document.querySelector('#rl-frame').getAttribute('src'), clock: document.querySelector('#rl-clock').textContent, chaps: document.querySelectorAll('#rl-chaps i').length, chap: document.querySelector('#rl-chap').textContent })`));
-  ok('孩子的屏幕:听写本三行(2、2、1 格)、右边大格;录像模式(点不动)', await evaluate(`[...${K}.querySelectorAll('#l-book .brow')].map((r) => r.querySelectorAll('.padbox').length).join() === '2,2,1' && ${K}.querySelectorAll('#l-big .padbox').length === 1 && ${K}.body.classList.contains('rlk')`));
-  ok('进度条上的点:给答案一个、撤销与擦掉三个(励撤销、励擦掉、叶擦掉)', await evaluate(`document.querySelectorAll('#rl-marks i.rv').length === 1 && document.querySelectorAll('#rl-marks i.erase').length === 3`), await evaluate(`[...document.querySelectorAll('#rl-marks i')].map((i) => i.className).join()`));
-  await tap('#rl-play');
-  await sleep(2500);
-  ok('播放:进度往前走,第一格里一笔一笔出来', await evaluate(`Number(document.querySelector('#rl-seek').value) > 1000 && ${K}.querySelectorAll('#l-big .ink path').length > 0`), await evaluate(`JSON.stringify({ v: document.querySelector('#rl-seek').value, ink: ${K}.querySelectorAll('#l-big .ink path').length, cap: document.querySelector('#rl-cap').textContent })`));
-  await tap('#rl-play');
-  await tap('#rl-marks i.rv');
-  await sleep(400);
-  ok('点「给答案」的点:孩子的屏幕在看「叶」的笔顺,录像栏写给答案', await waitFor(`${K}.querySelector('#l-what').textContent === '看「叶」一笔一笔写' && !${K}.querySelector('#l-foot-order').hidden && ${K}.querySelectorAll('#l-big .std path').length === 5 && document.querySelector('#rl-cap').textContent.includes('给答案')`), await evaluate(`JSON.stringify({ what: ${K}.querySelector('#l-what').textContent, cap: document.querySelector('#rl-cap').textContent })`));
-  await shot('10-reel');
-  const erase = await evaluate(`[...document.querySelectorAll('#rl-marks i.erase')].map((i) => i.title).join('|')`);
-  await tap('#rl-marks i.erase:nth-of-type(2)');
-  await sleep(400);
-  ok('点「擦掉重写」的点:擦之前的那几笔这一刻没了(励的格是空的)', await evaluate(`${K}.querySelector('#l-what').textContent === '第二个词的第二个字' && ${K}.querySelectorAll('#l-big .ink path').length === 0`), erase);
-  await tap('#rl-more');
-  ok('经过:写、撤销、擦掉、给答案、照着写、交卷、再写一遍', await waitFor(`(() => { const t = document.querySelector('#rl-log').innerText; return ['写', '撤销了一笔', '擦掉', '给答案', '照着写', '「叶」', '交卷', '再写一遍「鼓励」', '对好了'].every((x) => t.includes(x)); })()`), await evaluate(`document.querySelector('#rl-log').innerText.slice(0, 600)`));
-  await evaluate(`[...document.querySelectorAll('#rl-log li')].find((li) => li.textContent.includes('交卷')).setAttribute('data-probe-li', '1')`);
-  await tap('[data-probe-li]');
-  ok('点经过里的「交卷」:孩子的屏幕是对一对,三张词卡', await waitFor(`!!${K}.querySelector('#v-check.on') && ${K}.querySelectorAll('.wc').length === 3`));
-  const m0 = await evaluate(`Number(document.querySelector('#rl-seek').max)`);
-  await tap('.rl-sw');
-  ok('关掉「跳过空白」:开关关上,总长不变短(探针写得快,空白可能一段都没有)', await waitFor(`!document.querySelector('#rl-skip').checked && Number(document.querySelector('#rl-seek').max) >= ${m0}`), `${m0} → ${await evaluate(`document.querySelector('#rl-seek').max`)}`);
-  // ---- 拍照开始(孩子端,语文老师卡里常驻的「拍照听写」)----
-  await send('Emulation.clearDeviceMetricsOverride');
-  await send('Page.navigate', { url: `${base}/` });
-  ok('首页:语文老师卡里有「拍照听写」,带他的名字(用他的声音念)', await waitFor(`!!document.querySelector('#deck .pc.front[data-tutor="chinese-tutor"] .bt-x-photo') && document.querySelector('.bt-x-photo').getAttribute('href') === '/dictation?tutor=chinese-tutor'`));
-  ok('拍照听写的图标是田字格「字」带相机角标', await evaluate(`document.querySelector('#deck .pc.front .bt-x-photo .pg i')?.textContent === '字' && !!document.querySelector('#deck .pc.front .bt-x-photo .pg .cam svg') && !document.querySelector('#deck .pc.front .bt-x-photo').classList.contains('en')`));
-  await shot('11a-home-photo');
-  await tap('.bt-x-photo');
-  ok('点了:拍照屏(拍照 / 相册),中间是语文老师的大头像', await waitFor(`location.pathname === '/dictation' && !!document.querySelector('#v-snap.on')`) && await waitFor(`!!document.querySelector('#snap-av .tfav')`));
-  await shot('11-snap');
-  ok('拍照屏:胶囊在,点了回首页', await evaluate(`!document.querySelector('#back').hidden && !document.body.innerText.includes('回首页')`));
-  const icon = join(home, 'photo.png');
-  writeFileSync(icon, Buffer.from(await (await fetch(`${base}/icon-512.png`)).arrayBuffer()));
-  const doc = await send('DOM.getDocument', {});
-  const input = await send('DOM.querySelector', { nodeId: doc.result.root.nodeId, selector: '#snap-lib' });
-  await send('DOM.setFileInputFiles', { nodeId: input.result.nodeId, files: [icon] });
-  ok('选了照片:进认词屏,框一个一个冒出来(假识别 9 项)', await waitFor(`!!document.querySelector('#v-pick.on') && document.querySelectorAll('#p-shot .bx').length === 9`, 10000));
-  await waitFor(`document.querySelector('#p-status').textContent.startsWith('认好了')`);
-  ok('默认选上照模型的(词语 6、写字 2),识字的「塘」不选;没认准的「宽大」能改字;课名', (await evaluate(`document.querySelectorAll('#p-shot .bx.on').length`)) === 8 && (await evaluate(`document.querySelectorAll('#p-list .wr').length`)) === 8 && (await evaluate(`!!document.querySelector('#p-list input') && document.querySelector('#p-list input').value === '宽大' && document.querySelector('#p-lesson').textContent === '小蝌蚪找妈妈'`)));
-  ok('全文:三行,选上的词标蓝(脑袋)', (await evaluate(`document.querySelectorAll('#p-lines .ln').length`)) === 3 && (await evaluate(`[...document.querySelectorAll('#p-lines .seg.on')].map((x) => x.textContent).join()`)) === '脑袋');
-  await tap('#p-shot .bx[data-k="8"]');
-  ok('点照片上的「塘」:选上,列表多一个', (await evaluate(`document.querySelectorAll('#p-list .wr').length`)) === 9 && (await evaluate(`document.querySelector('#p-shot .bx[data-k="8"]').classList.contains('on')`)));
-  await tap('#p-list .wr:nth-child(6) .x');
-  ok('列表里点 × 去掉「宽大」', (await evaluate(`[...document.querySelectorAll('#p-list .wr')].map((r) => r.textContent).join('|').includes('宽大')`)) === false);
-  const seg = await evaluate(`(() => { const b = [...document.querySelectorAll('#p-lines .seg')].find((x) => x.textContent === '小蝌蚪'); b.setAttribute('data-probe-seg', '1'); return !!b; })()`);
-  await tap('[data-probe-seg]');
-  ok('全文里点「小蝌蚪」:进列表(自己加的),全文里标蓝', seg && (await evaluate(`[...document.querySelectorAll('#p-list .wr.extra b')].map((x) => x.textContent).join()`)) === '小蝌蚪' && (await evaluate(`[...document.querySelectorAll('#p-lines .seg.on')].map((x) => x.textContent).includes('小蝌蚪')`)));
-  await tap('#p-add');
-  await send('Input.insertText', { text: '鲤鱼,捕食 abc 画蛇添足啊' });
-  await tap('#p-add-go');
-  ok('输入框加词:鲤鱼、捕食加进来;超过四个字的留在框里,说要分开写', (await evaluate(`[...document.querySelectorAll('#p-list .wr.extra b')].map((x) => x.textContent).join()`)) === '小蝌蚪,鲤鱼,捕食' && (await evaluate(`document.querySelector('#p-add').value`)) === '画蛇添足啊' && (await evaluate(`document.querySelector('#p-go').textContent`)) === '开始听写 · 11 个');
-  await shot('12-pick');
-  await tap('#p-go');
-  ok('开始听写:进写字屏,听写本十一行,第一个词两格、没有字', await waitFor(`!!document.querySelector('#v-listen.on') && document.querySelectorAll('#l-book .brow').length === 11 && document.querySelectorAll('#l-book .brow')[0].querySelectorAll('.padbox').length === 2 && document.querySelector('#l-what').textContent === '第一个词的第一个字'`));
-  await shot('13-photo-listen');
-  // :点胶囊回首页,再点拍照听写:最上面「接着写」,点了接着这一次
-  await tap('#back');
-  ok('写字屏点胶囊:回首页', await waitFor(`location.pathname === '/'`));
+  // ---- 拍一张 / 翻课本 ----
   await send('Page.navigate', { url: `${base}/dictation?tutor=chinese-tutor` });
-  ok('再进拍照听写:最上面「刚才的还没写完 · 写到第一个了」,拍照让成次要', await waitFor(`!document.querySelector('#snap-resume')?.hidden && document.querySelector('#snap-resume-sub').textContent === '写到第一个了 · 一共十一个' && document.querySelector('#snap-cam-btn').classList.contains('alt')`));
-  await shot('14-resume');
-  await tap('#snap-resume-go');
-  ok('点接着写:回到这一次的写字屏,还是十一个词', await waitFor(`!!document.querySelector('#v-listen.on') && document.querySelectorAll('#l-book .brow').length === 11`));
+  await waitFor(`!!document.querySelector('#v-book.on')`);
+  await tap('#b-snap');
+  ok('拍一张:拍照屏,右上角「翻课本」回来', await waitFor(`!!document.querySelector('#v-snap.on') && !document.querySelector('#snap-book').hidden`));
+  await tap('#snap-book');
+  ok('翻课本:回到表上', await waitFor(`!!document.querySelector('#v-book.on')`));
 
-  // 手机宽度看一眼家长页
-  await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 1400, deviceScaleFactor: 2, mobile: true });
+  // ---- 手机 ----
+  await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
+  await send('Page.navigate', { url: `${base}/dictation?tutor=chinese-tutor` });
+  await waitFor(`!!document.querySelector('#v-book.on')`);
   await sleep(300);
-  await shot('10-parent-phone');
-  // 放在最后:再开一次那张卡会把录像的开头拉长
-  const capZh = await capsuleBeforeHome(dictUrl);
-  ok('胶囊打开就是念的老师:挡住 /api/kid/home 时胶囊已经是语文老师的粉、首字「语」', capZh.held >= 1 && capZh.tinted && capZh.ini === '语' && capZh.bg === 'rgb(196, 60, 116)', JSON.stringify(capZh));
-  const capPub = await capsuleBeforeHome(dictUrl.replace(/([?&]n=)\d+/, '$199'));
-  ok('卡上拿不到念的老师(同首页没写老师的公共听写卡那条路):缺省语文老师,打开就是「语」', capPub.held >= 1 && capPub.tinted && capPub.ini === '语', JSON.stringify(capPub));
-  const capPhoto = await capsuleBeforeHome(`${base}/dictation?tutor=chinese-tutor`);
-  ok('老师牌上「拍照听写」进来(?tutor=):打开就是「语」', capPhoto.held >= 1 && capPhoto.tinted && capPhoto.ini === '语', JSON.stringify(capPhoto));
+  ok('手机:表不横着出屏', await evaluate(`document.documentElement.scrollWidth <= innerWidth && document.querySelector('#b-pg').scrollWidth <= document.querySelector('#b-pg').clientWidth + 1`));
+  await shot('09-phone-book');
+  await tap('#b-pg .bk-row[data-key="阅读1"]');
+  await tap('#b-start');
+  await waitFor(`!!document.querySelector('${CARD}')`);
+  await sleep(300);
+  const ph = await evaluate(`(() => { const c = document.querySelector('#n-nb .card').getBoundingClientRect(), a = document.querySelector('#n-nb .wd.cur .padbox.here').getBoundingClientRect(); return { bottom: Math.round(innerHeight - c.bottom), w: Math.round(c.width), cellAbove: a.bottom <= c.top }; })()`);
+  ok('手机:写字卡是底下一张抽屉,正在写的那格露在它上面', ph.bottom === 0 && ph.w === 390 && ph.cellAbove, JSON.stringify(ph));
+  await shot('10-phone-write');
+  // iPad 竖放
+  await send('Emulation.setDeviceMetricsOverride', { width: 820, height: 1180, deviceScaleFactor: 1, mobile: false });
+  await send('Page.navigate', { url: `${base}/dictation?tutor=chinese-tutor` });
+  await waitFor(`!!document.querySelector('#v-book.on')`);
+  await tap('#b-pg .bk-row[data-key="阅读3"]');
+  await tap('#b-start');
+  await waitFor(`!!document.querySelector('${CARD}')`);
+  await sleep(300);
+  const pt = await evaluate(`(() => { const c = document.querySelector('#n-nb .card').getBoundingClientRect(); return { left: Math.round(c.left), right: Math.round(innerWidth - c.right), bottom: c.bottom <= innerHeight, pad: Math.round(document.querySelector('${CARD}').getBoundingClientRect().width) }; })()`);
+  ok('iPad 竖放:写字卡整个在屏里,大格够大(≥ 300)', pt.left >= 0 && pt.right >= 0 && pt.bottom && pt.pad >= 300, JSON.stringify(pt));
+  await shot('10b-ipad-portrait');
+  await send('Emulation.clearDeviceMetricsOverride');
+
+  // ---- 家长看录像 ----
+  // 树叶那一次(手机上开的那次一笔没写)
+  const reelId = (await (await fetch(`${base}/api/dictation`)).json()).sessions.find((x) => x.words.join() === '树叶,叶子').id;
+  await send('Page.navigate', { url: `${base}/parent/dictation/reel?id=${reelId}` });
+  const K = `document.querySelector('#rl-frame').contentDocument`;
+  ok('录像:孩子的屏幕是听写本那一页,停在最后一帧', await waitFor(`!!${K}?.querySelector('#v-page.on') && ${K}.body.classList.contains('rlk')`, 10000));
+  await evaluate(`(() => { const r = document.querySelector('#rl-seek'); r.value = '0'; r.dispatchEvent(new Event('input')); r.dispatchEvent(new Event('change')); })()`);
+  await tap('#rl-play');
+  await sleep(2500);
+  ok('播放:听写本上写字卡里一笔一笔出来', await evaluate(`${K}.querySelectorAll('#n-nb .card .ink path').length > 0 || ${K}.querySelectorAll('#n-nb .ink path').length > 0`));
+  await shot('11-reel');
+  ok('一路没抛异常', errors.length === 0, errors.slice(0, 3).join(' | '));
   ws.close();
 } finally {
   browser.kill();

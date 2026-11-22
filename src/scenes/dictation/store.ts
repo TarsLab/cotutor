@@ -66,6 +66,8 @@ export interface Session {
   /** 拍照开始的:哪张照片(dictation/photos/<photo>.jpg)、照片上认出的课名 */
   photo?: string;
   lesson?: string | null;
+  /** 从课本书后的表里挑的(听写页的「选一课」):哪张表、哪一行(src/memory/textbook-words.ts 的 key)、印的编号、那张表在第几页 */
+  book?: DictationBook;
   tutor: string | null;
   /** 英文单词听写(一个单词一个四线三格,不逐字母比);汉字的不写 */
   lang?: 'en';
@@ -77,10 +79,17 @@ export interface Session {
   checkedAt: string | null;
   /** 对答案时问了「这个再写一遍?」的词 */
   asked: number[];
-  /** 再写的:一个词可以写几遍 */
-  rewrites: { word: number; self: boolean; attempt: Attempt }[];
+  /** 再写的:一个词可以写几遍;trace = 照着课本「我会写」那样描红写的一遍(不算再写,家长端、对一对看的是没描红的那遍) */
+  rewrites: { word: number; self: boolean; trace?: true; attempt: Attempt }[];
   events: DictationEvent[];
   doneAt: string | null;
+}
+
+export interface DictationBook {
+  table: 'ci' | 'zi';
+  key: string;
+  no: string;
+  printed: number | null;
 }
 
 export const rootOf = (wsRoot: string): string => join(wsRoot, 'dictation');
@@ -135,7 +144,7 @@ export function newId(wsRoot: string, now: Date, taken: (id: string) => boolean 
   return id;
 }
 
-export async function createSession(wsRoot: string, init: { home: string | null; n: number; tutor: string | null; words: DictationWord[]; photo?: string; lesson?: string | null; lang?: 'en' }, now: Date): Promise<Session> {
+export async function createSession(wsRoot: string, init: { home: string | null; n: number; tutor: string | null; words: DictationWord[]; photo?: string; lesson?: string | null; book?: DictationBook; lang?: 'en' }, now: Date): Promise<Session> {
   await ensureRoot(wsRoot);
   const s: Session = { id: newId(wsRoot, now), ...init, startedAt: now.toISOString(), first: init.words.map(() => null), checkedAt: null, asked: [], rewrites: [], events: [], doneAt: null };
   await writeSession(wsRoot, s);

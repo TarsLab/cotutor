@@ -214,8 +214,8 @@ try {
     const pv = (await call('GET', `/api/dictation/${fid}`)).json.events.filter((e: J) => e.kind === 'view');
     check('事件:view 带写字格的档(s),认不得的不记;老的那条没有', pv.length === 3 && pv[0].pad === undefined && pv[1].pad === 's' && pv[2].pad === undefined, JSON.stringify(pv));
     const zh = (await import('../src/ui/dictation/page.ts')).DICTATION_PAGE;
-    check('看笔顺:没有「我来写」;落笔、放完都换成照着写,换字也半秒保护', !zh.includes('<span>我来写</span>') && !zh.includes('l-trace') && zh.includes("pad.onDown = function () { if (S.w && S.w.pad === pad && S.w.mode === 'order') toTrace(); }") && zh.includes("w.mode === 'order') toTrace(); }, 900)") && zh.includes('renderFoot(); renderBook(); guard();'));
-    check('写字屏有三档写字格(小 中 大),cookie 记 cotutor_dict_pad;再写一遍也照档封顶', ['s', 'm', 'l'].every((k) => zh.includes(`data-pad="${k}"`)) && zh.includes('cotutor_dict_pad=') && zh.includes('Math.min(PAD_CAP[S.padl], Math.floor(Math.min((w - (count - 1) * 24)'));
+    check('看笔顺:没有「我来写」;落笔、放完都换成照着写,换字也半秒保护', !zh.includes('<span>我来写</span>') && zh.includes("pad.onDown = function () { if (S.card === card && S.w.mode === 'order') toTrace(); }") && zh.includes("w.mode === 'order') toTrace(); }, 900)") && zh.includes('footFor(); renderPage(); guard();'));
+    check('听写本一页:写字卡贴着那一格(一张,挪着用);字幕不出字;对一对页顶别着课本那一行、页底再写一遍', zh.includes('id="t-card"') && zh.includes("'class': 'nb-book'") && zh.includes("'class': 'nb-redo'") && !zh.includes('cotutor_dict_pad'));
     const reelPage = (await call('GET', '/dictation?reel=' + fid)).html ?? '';
     check('听写页内联了录像(drBuild / drFrameAt / drClock),脚本能解析;录像外壳带录像栏', parses(reelPage) && reelPage.includes('function drBuild(') && reelPage.includes('function drFrameAt(') && reelPage.includes('function drClock(') && !reelPage.includes('/parent') && ((await call('GET', '/parent/dictation/reel')).html ?? '').includes('id="rl-seek"'));
   }
@@ -437,10 +437,11 @@ try {
     const { DICTATION_EN_PAGE } = await import('../src/ui/dictation/en-page.ts');
     const { BTN_CSS, WRITE_TOOLS } = await import('../src/ui/dictation/ui.ts');
     for (const [name, page] of [['语文', DICTATION_PAGE], ['英文', DICTATION_EN_PAGE]] as const) {
-      const bare = [...page.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)].filter((m) => !m[1].includes('<svg')).map((m) => m[0].slice(0, 80));
+      // 选一课那两张表的切换(写字表 / 词语表)是字,不是按钮样式
+      const bare = [...page.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)].filter((m) => !m[1].includes('<svg') && !m[0].includes('data-tab=')).map((m) => m[0].slice(0, 80));
       check(`${name}页:写死的按钮都带图标`, bare.length === 0, bare.join(' | '));
-      // 脚本里现建的:class 是 x(×)、seg(全文的词)、chip(单词)、bx / ebx(照片上的框)的不算按钮样式
-      const made = page.split("h('button'").slice(1).map((x) => x.slice(0, 400)).filter((x) => !/^, \{ 'class': '(x|seg|chip|e?bx)[ '"]/.test(x));
+      // 脚本里现建的:class 是 x(×)、seg(全文的词)、chip(单词)、bx / ebx(照片上的框)、w(课本表上的词)的不算按钮样式
+      const made = page.split("h('button'").slice(1).map((x) => x.slice(0, 400)).filter((x) => !/^, \{ 'class': '(x|seg|chip|e?bx|w)[ '"]/.test(x));
       const noIcon = made.filter((x) => !x.includes('ico('));
       check(`${name}页:脚本里现建的按钮都带图标(ico)`, made.length > 0 && noIcon.length === 0, noIcon.map((x) => x.slice(0, 90)).join(' | '));
       const missing = WRITE_TOOLS.filter((t) => !page.includes(`<span>${t}</span>`));

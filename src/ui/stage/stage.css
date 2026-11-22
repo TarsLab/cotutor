@@ -24,7 +24,7 @@ html, body, #root { margin: 0; height: 100%; background: #fffdf8; font: 18px/1.5
 .bk-look { mix-blend-mode: multiply; }
 .bk-look rect { fill: rgba(255, 212, 59, .62); }
 .bk-look-wash rect { fill: rgba(255, 212, 59, .38); }
-/* 老师的圈、划、加点与孩子的笔:正片叠底,画在字的「后面」(docs/artifact/页上记号/规范.html 的 L2);新的 85%,旧的淡到 30%,收掉的淡出(book.tsx 的 MARK_GONE_MS) */
+/* 老师的圈、划、加点与孩子的笔:正片叠底,画在字的「后面」(记号不盖字,docs/dev/一节课.md);新的 85%,旧的淡到 30%,收掉的淡出(book.tsx 的 MARK_GONE_MS) */
 .bk-teacher .bk-mark, .bk-ink { mix-blend-mode: multiply; }
 .bk-teacher .bk-mark { opacity: .85; transition: opacity .45s ease; }
 .bk-teacher .bk-mark.bk-old { opacity: .3; }

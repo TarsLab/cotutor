@@ -48,7 +48,7 @@ check('同一处再看一遍:n 加一(窗再移一次)', look2.look?.n === 2);
   check('没有可擦的:原样', run(look1, A({ k: '擦', all: false })) === look1);
 }
 
-// ——— 圈、划、加点跟着话走(docs/artifact/页上记号/规范.html 的 C2–C4) ———
+// ——— 圈、划、加点跟着话走(docs/dev/一节课.md) ———
 {
   const ring = (text: string, box: Box = B1): LessonEvent => A({ k: '圈', spots: [{ text, box }] });
   const said: LessonEvent = { t: 'said' };

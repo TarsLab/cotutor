@@ -50,7 +50,7 @@ export const LESSON_CELL_STROKES = 40;
 export const CELL_UNIT = 1000;
 
 /**
- * 指着字的记号(圈、划、加点)跟着话走:属于说它的那一句,话过去了就退下(docs/artifact/页上记号/规范.html 的 C2–C4)。
+ * 指着字的记号(圈、划、加点)跟着话走:属于说它的那一句,话过去了就退下(docs/dev/一节课.md)。
  * 遮、盖是故意挡住的,留到孩子揭开。
  */
 export const LINE_MARKS = ['圈', '划', '加点'] as const;

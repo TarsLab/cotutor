@@ -1,7 +1,7 @@
 /**
  * 课本页上的田字格(src/memory/textbook-cells.ts 认格子,src/memory/textbook-index.ts 的 bookCells 分范字 / 描红 / 空格、记照着写的字,
  * src/chalk/kit/book.ts 的 bookCellsOf 换到场景里)。路径和字是照人教统编语文二上画田字格的样子造的(39pt 见方、两条虚线中线、范字深灰、描红红),
- * 真课本的核实见 docs/artifact/页上记号/规范.html 的 V1(脚本在 docs/artifact/页上记号/核实/)。
+ * 真课本的核实见 docs/dev/课本.md;pdf.js 画图指令那一层在最后一段用手写的一页 PDF 真跑。
  */
 import { findBoxes, findCells, type CellGlyph, type CellPath } from '../src/memory/textbook-cells.ts';
 import { blankCells, bookCells } from '../src/memory/textbook-index.ts';
@@ -73,6 +73,36 @@ check('没有格的页:没有', bookCellsOf([{ ...page, cells: undefined }], she
   check('表格里连着的格、框里有字的、旁边不是算式的:不算', !at(68, 195) && !at(85, 195) && !at(205, 135) && !at(305, 255), JSON.stringify(blanks));
   check('空着的括号:从「(」那段的末尾到「)」那段的开头', at(380, 295) && blanks.every((b) => b.kind === 'blank'), JSON.stringify(blanks));
   check('「(1)」这种编号、括号挨着没空的:不算', !at(70, 335) && !at(169, 375) && blanks.length === 3, JSON.stringify(blanks));
+}
+
+// ——— 走真的 pdf.js:认格子读的是 pdf.js 画图指令的内部格式(constructPath 的参数),换了版本格式一变就一格也认不出、还不报错,这里盯着 ———
+{
+  const { readPdfPages } = await import('../src/memory/textbook-pdf.ts');
+  // 手写一页 PDF,画法照人教统编语文二上:蓝色描边的闭合四点路径(m l l l h S),两条虚线中线;格里的字红的是描红、深灰是范字,第三格空着
+  const cellOps = (x: number, y: number, ch: string | null, rgb: string): string => [
+    '0.15 0.79 0.96 RG 0.71 w [] 0 d',
+    `${x} ${y} m ${x + 39} ${y} l ${x + 39} ${y + 39} l ${x} ${y + 39} l h S`,
+    '[1.72] 0 d 0.34 w',
+    `${x + 19.5} ${y} m ${x + 19.5} ${y + 39} l S`,
+    `${x} ${y + 19.5} m ${x + 39} ${y + 19.5} l S`,
+    ...(ch ? [`${rgb} rg BT /F1 30 Tf ${x + 8} ${y + 6} Td (${ch}) Tj ET`] : []),
+  ].join('\n');
+  const content = [cellOps(40, 100, 'A', '0.17 0.18 0.21'), cellOps(79, 100, 'A', '1 0.51 0.51'), cellOps(118, 100, null, '')].join('\n');
+  const objs = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    `<< /Length ${content.length} >>\nstream\n${content}\nendstream`,
+  ];
+  let pdf = '%PDF-1.4\n';
+  const offsets = objs.map((o, i) => { const at = pdf.length; pdf += `${i + 1} 0 obj\n${o}\nendobj\n`; return at; });
+  const xref = pdf.length;
+  pdf += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n${offsets.map((n) => `${String(n).padStart(10, '0')} 00000 n \n`).join('')}trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  const [page] = await readPdfPages(new TextEncoder().encode(pdf));
+  const got = page?.cells ?? [];
+  check('真的 pdf.js:认出三个田字格(左上角起、y 往下)', got.length === 3 && got.every((c, i) => Math.abs(c.x1 - (40 + i * 39)) < 0.5 && Math.abs(c.y1 - 61) < 0.5 && Math.abs(c.x2 - c.x1 - 39) < 0.5), JSON.stringify(got));
+  check('真的 pdf.js:深灰的字是范字,红的是描红,第三格空着', got[0]?.ch === 'A' && !got[0]?.red && got[1]?.ch === 'A' && got[1]?.red === true && got[2] && !got[2].ch, JSON.stringify(got));
 }
 
 done();

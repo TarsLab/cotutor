@@ -55,6 +55,16 @@ const ix = bookIndexOf();
   const at = (s: number): string => new Date(T - s * 1000).toISOString();
   const key = '语文一年级下册.pdf#小鱼吹泡泡';
   const bits = lessonSlateBits(lessonInit());
+  {
+    // 你画的不说圈、划、加点:页上还有的都是上一轮的,老师这一轮一开口就收;遮、盖留到揭开,照说
+    const { lessonStep } = await import('../src/board/lesson.ts');
+    const { whitePage } = await import('../src/board/lesson-fit.ts');
+    const spot = (text: string) => [{ text, box: [10, 10, 60, 40] as [number, number, number, number] }];
+    let l = lessonStep(lessonInit(), { t: 'act', act: { k: '翻', page: whitePage() } });
+    for (const k of ['圈', '划', '加点', '盖'] as const) l = lessonStep(l, { t: 'act', act: { k, spots: spot(`${k}的字`) } });
+    const drawn = lessonSlateBits(l).drawn ?? '';
+    check('你画的:不说圈、划、加点,盖照说', drawn.includes('盖 盖的字') && !/圈|划|加点/.test(drawn), drawn);
+  }
   const s1 = slateOf({ page: { id: key, show: fish.show }, others: ['作业照片(1 张)'], events: [{ at: at(60), k: 'turn', job: '1000-1' }, { at: at(30), k: 'pick', text: '泡', base: key }, { at: at(20), k: 'view', text: '第 1 页:第 1–2 段', base: key }, { at: at(5), k: 'view', text: '第 2 页:课文后面的部分', base: key }], lesson: bits, now: T });
   check('board::底是这一页;页集说还铺过哪些;孩子在看是上一轮以后最后停下的地方;页上的字不在这里', s1.base === fish.show && s1.pages === '还铺过:作业照片(1 张)(翻回去写 [[翻 …]])' && s1.view === '第 2 页:课文后面的部分' && s1.did.join() === '点开看了笔顺:泡' && !('text' in s1), JSON.stringify(s1));
   const s2 = slateOf({ page: { id: key, show: fish.show }, others: [], events: [{ at: at(60), k: 'turn', job: '1000-1', told: [key] }, { at: at(50), k: 'view', text: '第 1 页', base: key }, { at: at(40), k: 'turn', job: '1000-2' }], lesson: bits, now: T });

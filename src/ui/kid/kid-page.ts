@@ -1227,20 +1227,26 @@ ${HOME_TILES_JS}
   /** 这一节此刻(流式的也算):板上的、还在写的 */
   const lsSection = (job) => (S.partial && S.partial.job === job && S.sections[S.partial.idx] ? S.sections[S.partial.idx] : S.sections.find((x) => x.job === job)) || null;
   const lsActs = (acts) => (acts || []).filter((a) => a && a.do);
-  /** 这一节的动作落到第 upTo 句为止(第一句前面的总是落);upTo = Infinity 全落 */
-  const lsApply = (upTo) => {
+  /**
+   * 这一节的动作落到第 upTo 句为止(第一句前面的总是落);upTo = Infinity 全落。
+   * unsaid:剩下的句子没念到(声音被掐了,孩子打断):圈、划、加点跟着话走,没说的不画;别的照落、句数照记(同服务端的 said)
+   */
+  const lsApply = (upTo, unsaid) => {
     if (!LS.l || !LS.job) return;
     const sec = lsSection(LS.job);
     if (!sec) return;
     const lead = lsActs(sec.acts);
     if (lead.length > LS.lead) { LS.l = lessonActs(LS.l, lead.slice(LS.lead)); LS.lead = lead.length; }
     const to = Math.min(upTo, sec.lines.length);
-    for (; LS.lines < to; LS.lines++) LS.l = lessonStep(lessonActs(LS.l, lsActs(sec.lines[LS.lines].acts)), { t: 'said' });
+    for (; LS.lines < to; LS.lines++) {
+      const acts = lsActs(sec.lines[LS.lines].acts);
+      LS.l = lessonStep(lessonActs(LS.l, unsaid ? acts.filter((a) => !LESSON_CAPS.LINE_MARKS.includes(a.do.k)) : acts), { t: 'said' });
+    }
   };
-  /** 这一节都落完了:记下来,不再看它 */
-  const lsFinish = () => {
+  /** 这一节都落完了:记下来,不再看它;unsaid = true 是声音被掐了,没念到的句子不画圈、划、加点 */
+  const lsFinish = (unsaid) => {
     if (!LS.job) return;
-    lsApply(Infinity);
+    lsApply(Infinity, unsaid === true);
     LS.seen.add(LS.job); LS.l = lessonDone(LS.l, LS.job); LS.job = null; LS.lead = 0; LS.lines = 0;
     clearTimeout(LS.idleT); LS.idleT = 0;
     lsShow();
@@ -2396,7 +2402,7 @@ __REEL_DOCK_JS__
         case 'hush': lvSend({ t: 'hush' }); break;
         case 'send': lvSend({ t: 'send', body: data }); break;
         case 'enqueue': if (LV.audio) LV.audio.play(data); liveDrainWatch(); break;
-        case 'flush': LV.playLine = null; LV.endLine = null; if (LV.audio) LV.audio.flush(); lsFinish(); break;
+        case 'flush': LV.playLine = null; LV.endLine = null; if (LV.audio) LV.audio.flush(); lsFinish(true); break;
         case 'openLecture': liveLecture(); break;
         // 老师放的小课堂那一段停下(孩子打断了):舞台停在那一帧,放完也不再回 phase done
         case 'stopLecture': if (LS.playN) { LS.playN = 0; LS.key = ''; postStage({ type: 'control', action: 'pause' }); lsShow(); } break;

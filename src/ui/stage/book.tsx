@@ -576,6 +576,10 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
     window.clearTimeout(shotTimer.current);
     shotTimer.current = window.setTimeout(shoot, SHOT_MS);
   };
+  /** 田字格里写的字变过几回(窗图要不要重交照它;不拿整份笔画比,格子多了太长) */
+  const cellsRev = useRef(0);
+  /** 窗图的样子:窗、老师那一层、孩子的笔画、格子里写的、白纸条都没变就是同一张 */
+  const shotKeyOf = (g: { key: string }, box: Box): string => `${g.key}|${box.join(',')}|${teacherKey.current}|${ink.current.length}|${cellsRev.current}|${stripKeyRef.current}|${sInk.current.length}`;
   /** 窗里的页都画好了才交;窗、老师的卡、孩子的笔画都没变就不再交 */
   const shoot = (): void => {
     const g = geo.current;
@@ -585,7 +589,7 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
     if (seen.some((sh) => !g.drawn.has(sh.n))) { if (shotTries.current++ < 20) scheduleShot(); return; }
     shotTries.current = 0;
     const box = b.map((v) => Math.round(v)) as Box;
-    const key = `${g.key}|${box.join(',')}|${teacherKey.current}|${ink.current.length}|${stripKeyRef.current}|${sInk.current.length}`;
+    const key = shotKeyOf(g, box);
     if (key === shotKey.current) return;
     const image = snapshot('image/jpeg');
     if (!image) return;
@@ -849,7 +853,7 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
     const g = geo.current;
     if (!g || g.key !== geoKey || phase !== 'ready') return;
     if (teacherKey.current !== teacherNow) { teacherKey.current = teacherNow; paintTeacher(lesson); scheduleShot(); }
-    if (cellsKey.current !== cellsNow) { cellsKey.current = cellsNow; paintCells(); scheduleShot(); }
+    if (cellsKey.current !== cellsNow) { cellsKey.current = cellsNow; cellsRev.current++; paintCells(); scheduleShot(); }
     const want = page?.kid.ink ?? [];
     if (want.length !== ink.current.length || want.some((st, i) => st.length !== ink.current[i]?.length)) { ink.current = want.map((st) => st.slice()); paintInk(); scheduleShot(); }
     // 白纸条:换了一条、东西变了、孩子在上面画的变了就重摆
@@ -1279,7 +1283,7 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
       // 「给老师看」:窗里的图这时就交(不等停下来),老师这一轮看到的是他刚写完的样子
       const g = geo.current;
       const image = g && onShot && !readonly ? snapshot('image/jpeg') : undefined;
-      if (image) { const b = viewBox().map((v) => Math.round(v)) as Box; shotKey.current = `${g!.key}|${b.join(',')}|${teacherKey.current}|${ink.current.length}|${stripKeyRef.current}|${sInk.current.length}`; onShot!(b, image); }
+      if (image) { const b = viewBox().map((v) => Math.round(v)) as Box; shotKey.current = shotKeyOf(g!, b); onShot!(b, image); }
       onSubmit();
     },
     peek() { return Promise.resolve(snapshot('image/jpeg') ?? null); },

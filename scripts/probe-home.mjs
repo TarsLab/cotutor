@@ -2,7 +2,7 @@
 /**
  * 首页的手动验收(不进 pnpm test,要本机 Chrome;老师是假 CLI,不花钱):
  * 临时 workspace + HTTP serve → 写草稿(老师卡上只有 activity 与小课堂按钮)、cotutor home publish →
- * Chrome 开孩子端(牌堆,一位老师一张牌):叠的顺序、最前那张在最上层、方砖、橙点;手机竖着叠、平板横着叠;点后面那张抽出换到最前;手机与平板各截一张 →
+ * Chrome 开孩子端(桌上一本书,老师是钉在屏幕下沿的便利贴小旗):小旗的先后、只摊开最前那位的一章、方砖、橙点在小旗上;小旗一排、写着学科(手机在左下角,横屏在右页),「XX的老师们」是书下面桌上的名牌;点小旗、左右划翻章;手机与平板各截一张 →
  * 点 activity 按钮:老师页打开、按钮上的字发出去、索引里那条带 via 与 activity → 回首页点方砖「检查作业」:照那个 activity 起新话题 →
  *
  * 用法:node scripts/probe-home.mjs [--out <截图目录>] [--keep](留下临时 workspace 与 serve)
@@ -89,10 +89,10 @@ activity 复习 再练两道退位减法
   const shot = async (name) => { const r = await send('Page.captureScreenshot', { format: 'png' }); writeFileSync(join(shots, name), Buffer.from(r.result.data, 'base64')); return join(shots, name); };
   const device = async (w, h, dsf, mobile) => { await send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: dsf, mobile }); await sleep(400); };
   const open = async (url) => { await send('Page.navigate', { url }); for (let i = 0; i < 40; i++) { if (await evaluate(`document.querySelectorAll('#deck .pc.front .bt').length > 0`)) break; await sleep(250); } await sleep(1200); };
-  // 手指点:CDP 鼠标事件走命中判定(后面的牌只露出头那一行 / 左边一格,点到的是谁由页面说了算);点的是牌角的头像
+  // 手指点:CDP 鼠标事件走命中判定(点到的是谁由页面说了算);换老师点他的小旗
   const tapAt = async (x, y) => { for (const type of ['mousePressed', 'mouseReleased']) await send('Input.dispatchMouseEvent', { type, x, y, button: 'left', clickCount: 1 }); };
-  const tapAvatar = async (name) => { const r = await evaluate(`(() => { const b = document.querySelector('#deck .pc[data-tutor="${name}"] .pc-hd .av').getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; })()`); await tapAt(r.x, r.y); };
-  const stack = () => evaluate(`(() => { const els = [...document.querySelectorAll('#deck .pc')].sort((a, b) => a.style.zIndex - b.style.zIndex); const f = document.querySelector('#deck .pc.front'); const r = (e) => e.getBoundingClientRect(); return { order: els.map((e) => e.dataset.tutor), front: els.filter((e) => e.classList.contains('front')).map((e) => e.dataset.tutor), dots: els.filter((e) => e.querySelector('.dot')).map((e) => e.dataset.tutor), card: f.dataset.tutor, name: f.querySelector('.pc-hd .nm').textContent, buttons: [...f.querySelectorAll('.bt:not(.bt-extra):not(.bt-tile)')].map((b) => b.querySelector('.btx').textContent), tiles: [...f.querySelectorAll('.tls .bt-tile')].map((b) => b.dataset.tile + ':' + b.querySelector('.btx').textContent + ':' + Boolean(b.querySelector('.ta svg text, .ta svg path'))), extras: [...f.querySelectorAll('.bt-extra')].map((b) => b.getAttribute('href')), owned: [...f.querySelectorAll('.kcards > *')].map((c) => c.className), shared: [...document.querySelectorAll('#hcards > *')].map((c) => c.className), brief: document.body.innerHTML.includes('重点字'), rects: els.map((e) => [Math.round(r(e).left), Math.round(r(e).top), Math.round(r(e).bottom)]), heights: [...new Set(els.map((e) => e.offsetHeight))] }; })()`);
+  const tapTab = async (name) => { const r = await evaluate(`(() => { const b = document.querySelector('#tabs .tab[data-tutor="${name}"]').getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; })()`); await tapAt(r.x, r.y); };
+  const stack = () => evaluate(`(() => { const tabs = [...document.querySelectorAll('#tabs .tab')]; const f = document.querySelector('#deck .pc.front'); const r = (e) => e.getBoundingClientRect(); return { order: tabs.map((e) => e.dataset.tutor), front: tabs.filter((e) => e.classList.contains('front')).map((e) => e.dataset.tutor), shown: [...document.querySelectorAll('#deck .pc')].filter((e) => e.offsetParent).map((e) => e.dataset.tutor), dots: tabs.filter((e) => e.querySelector('.dot')).map((e) => e.dataset.tutor), card: f.dataset.tutor, buttons: [...f.querySelectorAll('.bt:not(.bt-extra):not(.bt-tile)')].map((b) => b.querySelector('.btx').textContent), tiles: [...f.querySelectorAll('.tls .bt-tile')].map((b) => b.dataset.tile + ':' + b.querySelector('.btx').textContent + ':' + Boolean(b.querySelector('.ta svg text, .ta svg path'))), extras: [...f.querySelectorAll('.bt-extra')].map((b) => b.getAttribute('href')), owned: [...f.querySelectorAll('.kcards > *')].map((c) => c.className), shared: [...document.querySelectorAll('#hcards > *')].map((c) => c.className), brief: document.body.innerHTML.includes('重点字'), rects: tabs.map((e) => [Math.round(r(e).left), Math.round(r(e).bottom)]), vh: innerHeight, fixed: getComputedStyle(document.querySelector('#tabs')).position, subs: tabs.map((e) => e.querySelector('.sub') ? e.querySelector('.sub').textContent : ''), ttl: !document.querySelector('#pages #ttl') && r(document.querySelector('#ttl h1')).top > r(document.querySelector('#pages')).bottom, vw: innerWidth, plate: Math.round((r(document.querySelector('#ttl')).left + r(document.querySelector('#ttl')).right) / 2), plateText: [r(document.querySelector('#ct-mark')).left, r(document.querySelector('#ttl h1')).right].map(Math.round) }; })()`);
   await send('Runtime.enable');
   await send('Page.enable');
 
@@ -100,39 +100,33 @@ activity 复习 再练两道退位减法
   await device(390, 844, 2, true);
   await open(`${base}/`);
   const v0 = await stack();
-  ok('叠的顺序:家长排第一的(语文)在最前(最上层),排第二的(数学)紧挨在后面,补的英语在最底下', v0.order.join() === 'english-tutor,math-tutor,chinese-tutor' && v0.front.join() === 'chinese-tutor' && v0.card === 'chinese-tutor' && v0.name === '语文老师', JSON.stringify(v0));
+  ok('小旗的先后照家长排的:语文、数学、补的英语;语文那章摊开,书里只摆他', v0.order.join() === 'chinese-tutor,math-tutor,english-tutor' && v0.front.join() === 'chinese-tutor' && v0.shown.join() === 'chinese-tutor' && v0.card === 'chinese-tutor', JSON.stringify(v0));
   ok('语文的卡:按钮齐(没有新话题、开场、接着);「每天都在」有拍照听写;讲法不在页面里', v0.buttons.join('|') === '我要预习小蝌蚪找妈妈|我要看图说话' && v0.extras.join() === '/dictation?tutor=chinese-tutor' && !v0.brief, JSON.stringify(v0.buttons));
-  ok('方砖:牌上第一行三块,预习、检查作业、复习,都有图', v0.tiles.join() === 'preview:预习:true,check:检查作业:true,review:复习:true', JSON.stringify(v0.tiles));
-  ok('手机竖着叠:后面的牌在上面、一张比一张高,左边对齐;几张牌一样高', v0.rects[0][1] < v0.rects[1][1] && v0.rects[1][1] < v0.rects[2][1] && v0.heights.length === 1, JSON.stringify([v0.rects, v0.heights]));
-  ok('首页只有老师卡:牌堆上面、牌里都没有别的卡', v0.shared.length === 0 && v0.owned.length === 0, JSON.stringify([v0.shared, v0.owned]));
-  ok('橙点:数学(家长排了按钮、孩子还没找过)亮;最前的语文、什么都没排的英语不亮', v0.dots.join() === 'math-tutor', JSON.stringify(v0.dots));
+  ok('方砖:第一行三张纸,预习、检查作业、复习,都有图', v0.tiles.join() === 'preview:预习:true,check:检查作业:true,review:复习:true', JSON.stringify(v0.tiles));
+  ok('手机:小旗钉在屏幕左下角一排(贴着下沿、一张挨一张往右),写着学科;名牌在书下面的桌上、靠右,不碰小旗', v0.fixed === 'fixed' && v0.rects[0][0] < v0.rects[1][0] && v0.rects[1][0] < v0.rects[2][0] && v0.rects[0][0] < 60 && v0.rects.every((x) => x[1] === v0.vh) && v0.subs.every(Boolean) && v0.ttl && v0.plateText[1] > v0.vw - 30 && v0.plateText[0] > v0.rects[2][0] + 58, JSON.stringify([v0.rects, v0.vh, v0.fixed, v0.subs, v0.ttl, v0.plateText]));
+  ok('首页只有老师卡:书外、牌里都没有别的卡', v0.shared.length === 0 && v0.owned.length === 0, JSON.stringify([v0.shared, v0.owned]));
+  ok('橙点在小旗上:数学(家长排了按钮、孩子还没找过)亮;最前的语文、什么都没排的英语不亮', v0.dots.join() === 'math-tutor', JSON.stringify(v0.dots));
   console.log('  ', await shot('home-phone.png'));
 
-  // ---- 点后面的数学:抽出 → 换到最上层 → 落到最前 ----
-  await tapAvatar('math-tutor');
-  await sleep(400);
-  const mid = await evaluate(`(() => { const m = document.querySelector('#deck .pc[data-tutor="math-tutor"]'); return { z: m.style.zIndex, moving: m.getAnimations().length > 0, front: document.querySelectorAll('#deck .pc.front').length }; })()`);
-  ok('换牌途中(400 ms):数学已换到最上层、还在飘;这时没有哪张是最前(按钮点不到)', mid.z === '50' && mid.moving && mid.front === 0, JSON.stringify(mid));
-  await sleep(250);
-  const bite = await evaluate(`document.querySelector('#deck .pc[data-tutor="math-tutor"] .pc-hd .ring circle').getAnimations().length > 0`);
-  ok('落下时张嘴:新的最前那张开口一张一合', bite);
-  await sleep(700);
+  // ---- 点数学的小旗:翻到数学那章,小旗不挪 ----
+  await tapTab('math-tutor');
+  await sleep(900);
   const v1 = await stack();
-  ok('换位:数学到最前,语文往上让一格,英语不动;橙点灭', v1.order.join() === 'english-tutor,chinese-tutor,math-tutor' && v1.front.join() === 'math-tutor' && v1.card === 'math-tutor' && v1.name === '数学老师' && v1.buttons.join('|') === '再练两道退位减法' && v1.dots.length === 0 && v1.extras.length === 0, JSON.stringify(v1));
-  await tapAvatar('math-tutor');
+  ok('翻章:数学那章摊开、书里只摆他,小旗的先后不变;橙点灭', v1.order.join() === v0.order.join() && v1.front.join() === 'math-tutor' && v1.shown.join() === 'math-tutor' && v1.buttons.join('|') === '再练两道退位减法' && v1.dots.length === 0 && v1.extras.length === 0, JSON.stringify(v1));
+  await tapTab('math-tutor');
   await sleep(400);
-  ok('点最前那张:不换人', (await stack()).order.join() === v1.order.join());
+  ok('点摊开这章的小旗:不翻', (await stack()).card === 'math-tutor');
   await sleep(5600);
   const v2 = await stack();
-  ok('5 秒一轮的刷新:顺序与展开的老师不变', v2.order.join() === v1.order.join() && v2.card === 'math-tutor', JSON.stringify(v2.order));
+  ok('5 秒一轮的刷新:先后与在看的老师不变', v2.order.join() === v1.order.join() && v2.card === 'math-tutor', JSON.stringify(v2.order));
   await device(1180, 820, 1, false);
   await sleep(300);
   const vt = await stack();
-  ok('平板横屏:横着叠,后面的牌在左边、一张比一张靠左,底对齐(往后一张缩一点,是从左下角缩的)', vt.rects[0][0] < vt.rects[1][0] && vt.rects[1][0] < vt.rects[2][0] && Math.abs(vt.rects[2][2] - vt.rects[0][2]) < 2 && vt.card === 'math-tutor', JSON.stringify(vt.rects));
+  ok('平板横屏:小旗在右页(中线往右起排)一排;名牌在桌上正中,不碰小旗', vt.rects[0][0] < vt.rects[1][0] && vt.rects[1][0] < vt.rects[2][0] && vt.rects[0][0] > vt.vw / 2 && vt.rects.every((x) => x[1] === vt.vh) && vt.ttl && Math.abs((vt.plateText[0] + vt.plateText[1]) / 2 - vt.vw / 2) < 20 && vt.plateText[1] < vt.rects[0][0] && vt.card === 'math-tutor', JSON.stringify([vt.rects, vt.vh, vt.ttl, vt.plateText, vt.vw]));
   console.log('  ', await shot('home-tablet.png'));
 
   await device(390, 844, 2, true);
-  await tapAvatar('chinese-tutor');
+  await tapTab('chinese-tutor');
   await sleep(900);
 
   // ---- activity 按钮:老师页打开,按钮上的字发出去 ----

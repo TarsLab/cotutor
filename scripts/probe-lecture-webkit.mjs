@@ -29,7 +29,7 @@ try {
   const page = await browser.newPage({ ignoreHTTPSErrors: true, viewport: { width: 1180, height: 820 } });
   page.on('pageerror', (e) => console.log('ERR', e.message));
   await page.goto(`${base}/`);
-  await page.click('#deck .pc[data-tutor="math-tutor"]', { position: { x: 40, y: 40 } }); // 后面那张只露出左上角(牌角的头像),里面的东西不收触摸
+  await page.click('#tabs .tab[data-tutor="math-tutor"]'); // 换老师点他的签
   await page.waitForTimeout(1200);
   await page.click('.bt-lecture');
   // 舞台发给页面的画的单子(带截图)记下来

@@ -64,7 +64,7 @@ const PAGE = `<!doctype html>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="__SHORT__">
-<meta name="theme-color" content="#faf9f4">
+<meta name="theme-color" content="#ebe4d4">
 <link rel="manifest" href="/manifest.webmanifest">
 ${faviconLinks()}
 <link rel="stylesheet" href="/kid/theme.css">
@@ -107,26 +107,75 @@ ${faviconLinks()}
   #gate small { display:block; font-size:15px; }
   body.gated #gate { display:block; }
   body.gated #rest { display:none; }
-  /* 首页牌堆:一位老师一张牌(老师卡),平着叠,最前那张在最上层。手机竖着叠:后面的牌在上面,每张往上露出头那一行;
-     平板横着叠:后面的牌在左边,每张往左露出一格(左上角的头像)。位置全在 transform 里(JS 按层算,换牌用 Web Animations);--tf 是同一个值,
-     给「减弱动态效果」下的 *:active { transform:none !important } 兜底。牌堆往上伸进上面的空当(换牌时抽出、浮起要地方),空的地方不收触摸 */
-  #deck { position:relative; z-index:1; flex:none; pointer-events:none; margin-top:calc(6px - var(--head, 0px)); }
+  /* 首页是桌上的一本书(#deck,设计稿 https://claude.ai/artifact/KJFiRZD6E45YEKGQBbw98Q),几乎铺满屏:一位老师一章,只摊开最前那位的(.pc.front)。
+     左页(.lp)整页是入口的图画框(一行三格,格宽跟着页宽走,cards/tutor/card.css;.lp 是尺寸容器);
+     右页(.rp)页眉「今天」,下面是今天在这位老师这儿开了头的话题,一样一张别在页上,一开始空着、越学越满;底纹是课本页同一份学科字,在右页右下。两页本来就是两样东西,样子不统一。
+     「XX的老师们」(#ttl)是桌上的名牌:印在书下面那条桌面上,不在书里;平板在屏幕底部正中,手机上小旗占了左半边,靠右。
+     老师是钉在屏幕下沿的便利贴小旗(#tabs .tab,position:fixed、浮在首页最上面,不跟着滚;z 5 在老师页 #tutor 的 z 10 下面,开着老师页就被盖住):头像下面写学科,不画 C 环;摊开这章的那张高一截、颜色足。
+     横屏从书的中线往右 90px 起排、压在右页左下角(让开正中的名牌,左页整页给入口);竖屏和手机在左下角,压在下页。压着的那一页底下留出小旗伸进书里的那截(.rp 的 padding-bottom)。
+     点小旗翻到那一章,左右划翻到相邻的一章。平板横屏左右两页,竖屏和手机上下两页;#home 的 data-dev 是 JS 照 deviceFor 定的(landscape / portrait / phone) */
+  #home { --kai:"Kaiti SC","STKaiti","KaiTi","Songti SC",serif; --sheet:#fffdf8; --desk:#ebe4d4; --rule:#e6dcc6; position:relative; max-width:none; gap:18px; padding:calc(env(safe-area-inset-top) + 20px) calc(env(safe-area-inset-right) + 22px) calc(env(safe-area-inset-bottom) + 50px) calc(env(safe-area-inset-left) + 22px); }
+  /* 桌面色也是页面最底下的底色和浏览器的主题色(theme-color,iPhone Safari 拿它染状态栏、工具栏后面和下拉刷新露出来的那块):首页是桌面色,进老师页换成纸色(pageTheme)。
+     书高按工具栏都露着时的屏高算(100svh;100vh 是工具栏收起来的高,iPhone Safari 上书会比看得到的高、整页能往上滚)。书的投影只有贴着桌面的一小道,大投影会在书下那条桌面上晕出一道深色 */
+  body:has(#home) { background:#ebe4d4; }
+  #home[data-dev="phone"] { padding:calc(env(safe-area-inset-top) + 12px) 8px calc(env(safe-area-inset-bottom) + 38px); }
+  #ttl { position:absolute; left:0; right:0; bottom:calc(env(safe-area-inset-bottom) + 15px); justify-content:center; gap:7px; color:#8f856f; white-space:nowrap; }
+  #ttl h1 { font-family:var(--kai); font-size:17px; font-weight:400; letter-spacing:1px; color:inherit; }
+  #ttl #ct-mark { color:inherit; }
+  #ttl .ct-logo { width:18px; height:18px; }
+  #home[data-dev="phone"] #ttl { justify-content:flex-end; padding-right:18px; bottom:calc(env(safe-area-inset-bottom) + 10px); gap:6px; }
+  #home[data-dev="phone"] #ttl h1 { font-size:14px; }
+  #home[data-dev="phone"] #ttl .ct-logo { width:15px; height:15px; }
+  #deck { position:relative; flex:1 0 auto; display:flex; min-height:calc(100vh - 70px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); min-height:calc(100svh - 70px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
+  #home[data-dev="phone"] #deck { min-height:calc(100vh - 50px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); min-height:calc(100svh - 50px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
   #deck[hidden] { display:none; }
-  #deck .pc { position:absolute; left:0; top:var(--head); width:var(--w); height:var(--h); transform-origin:var(--org); pointer-events:auto; padding:14px 14px 44px; gap:12px; border-width:2px; }
-  #deck .pc:not(.front) { cursor:pointer; }
-  #deck .pc:not(.front) * { pointer-events:none; }
-  #deck .pc .veil { position:absolute; inset:0; border-radius:inherit; background:var(--paper); pointer-events:none; z-index:2; }
-  #deck .pc-hd { position:relative; display:flex; align-items:center; gap:10px; min-width:0; }
-  #deck .pc-hd .av { position:relative; z-index:3; width:var(--av); height:var(--av); font-size:calc(var(--av) * .4); }
-  #deck .pc-hd .nm { font-size:var(--nmz); font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
-  #deck .pc-hd .dot { position:absolute; z-index:4; top:0; left:calc(var(--av) * .12); width:14px; height:14px; border-radius:50%; background:var(--accent); border:3px solid var(--card); }
-  #deck .pc-ix { position:absolute; right:12px; bottom:10px; width:28px; height:28px; transform:rotate(180deg); }
-  #deck .pc-ix .av { width:100%; height:100%; font-size:11px; }
-  #deck .pc .kc { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; align-items:start; }
+  #pages { position:relative; flex:1; min-width:0; display:flex; overflow:hidden; background:var(--sheet); border-radius:6px; box-shadow:0 1px 0 #ddd3bd, 0 3px 0 #f4ecda, 0 4px 0 #ddd3bd, 0 6px 0 #f4ecda, 0 7px 0 #ddd3bd, 0 9px 6px -2px #46371e1f; touch-action:pan-y; }
+  #deck .pc { display:none; flex:1; min-width:0; padding:0; gap:0; border:0; border-radius:0; background:none; -webkit-user-select:none; user-select:none; }
+  #deck .pc.front { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); }
+  #home:not([data-dev="landscape"]) #deck .pc.front { grid-template-columns:minmax(0, 1fr); grid-template-rows:auto 1fr; }
+  #deck .pc > .lp { container-type:inline-size; padding:44px 44px 32px 46px; }
+  #deck .pc > .rp { position:relative; min-height:280px; padding:26px 46px 104px 52px; }
+  #home[data-dev="portrait"] #deck .pc > .lp { padding:40px 40px 40px; }
+  #home[data-dev="portrait"] #deck .pc > .rp { padding:26px 40px 104px; }
+  #home[data-dev="phone"] #deck .pc > .lp { padding:22px 16px 26px; }
+  #home[data-dev="phone"] #deck .pc > .rp { min-height:240px; padding:22px 16px 72px; }
+  /* 书缝:横屏竖着一道在两页中间,上下两页时横着一道 */
+  #deck .pc > .rp::before { content:""; position:absolute; z-index:2; left:-28px; top:0; bottom:0; width:56px; background:linear-gradient(90deg, #785f3700 0%, #785f3712 42%, #785f3729 50%, #785f3712 58%, #785f3700 100%); pointer-events:none; }
+  #home:not([data-dev="landscape"]) #deck .pc > .rp::before { left:0; right:0; top:-15px; bottom:auto; width:auto; height:30px; background:linear-gradient(180deg, #785f3700 0%, #785f3712 42%, #785f3729 50%, #785f3712 58%, #785f3700 100%); }
+  /* 右页的底纹:同一份学科字(markArt),竖在右下、很淡;一边出纸边多少照课本页的 --bm-right。
+     两个方块字比一行字母重得多,同样高时汉字看着大好几倍:按字缩(--bm-k,board-mark.ts 的 home),ENGLISH 是 1 */
+  #deck .rp .hmark { position:absolute; inset:0; overflow:hidden; color:#4a3f2e; pointer-events:none; }
+  #deck .rp .hmark svg { position:absolute; display:block; bottom:30px; height:calc(min(640px, 100% - 96px) * var(--bm-k, 1)); width:auto; aspect-ratio:var(--bm-w) / var(--bm-h); right:calc(330px * var(--bm-right)); opacity:var(--bm-o); }
+  #home[data-dev="portrait"] #deck .rp .hmark svg { height:calc(min(560px, 100% - 96px) * var(--bm-k, 1)); }
+  #home[data-dev="phone"] #deck .rp .hmark svg { bottom:18px; height:calc(min(380px, 100% - 56px) * var(--bm-k, 1)); right:calc(200px * var(--bm-right)); }
+  #deck .rp .rh { position:relative; z-index:1; display:flex; justify-content:flex-end; padding-bottom:9px; border-bottom:1px solid var(--rule); font-family:var(--kai); font-size:17px; color:var(--dim); letter-spacing:2px; }
+  #home[data-dev="phone"] #deck .rp .rh { padding-bottom:7px; font-size:14px; }
+  #deck .rp .tds { position:relative; z-index:1; display:grid; grid-template-columns:repeat(2, 196px); gap:26px 32px; margin-top:40px; }
+  #deck .rp .tds.many { grid-template-columns:repeat(3, 128px); gap:18px 20px; }
+  #home[data-dev="portrait"] #deck .rp .tds { grid-template-columns:repeat(3, 196px); }
+  #home[data-dev="phone"] #deck .rp .tds { grid-template-columns:repeat(3, minmax(0, 100px)); gap:20px 12px; margin-top:22px; }
+  #deck .rp .tds:empty { display:none; }
+  /* 小旗:从屏幕下沿伸上来,底下垫着安全区;横屏从中线往右 90px 起 */
+  #tabs { position:fixed; z-index:5; left:calc(50% + 90px); bottom:0; display:flex; align-items:flex-end; gap:10px; }
+  #tabs[hidden] { display:none; }
+  #tabs .tab { position:relative; flex:none; width:74px; height:calc(98px + env(safe-area-inset-bottom)); border-radius:6px 6px 0 0; background:color-mix(in srgb, var(--sc) 78%, transparent); box-shadow:0 -1px 6px #281e1e24; transition:height .2s; }
+  #tabs .tab.front { height:calc(118px + env(safe-area-inset-bottom)); background:var(--sc); box-shadow:0 -2px 12px #281e1e3d; }
+  #tabs .tab .av { position:absolute; left:11px; top:10px; width:52px; height:52px; font-size:22px; }
+  #tabs .tab .av .ring { display:none; }
+  #tabs .tab .av .face { left:0; top:0; width:100%; height:100%; box-shadow:0 0 0 3px #fff; }
+  #tabs .tab .sub { position:absolute; left:0; right:0; top:72px; text-align:center; color:#fff; font-size:16px; font-weight:700; letter-spacing:3px; text-indent:3px; line-height:1; white-space:nowrap; overflow:hidden; text-shadow:0 1px 1px #0000001f; }
+  #tabs .tab:not(.front) .av, #tabs .tab:not(.front) .sub { opacity:.85; }
+  #tabs .tab .dot { position:absolute; top:-6px; right:-6px; width:16px; height:16px; border-radius:50%; background:var(--accent); border:3px solid var(--desk); }
+  #home:not([data-dev="landscape"]) #tabs { left:calc(env(safe-area-inset-left) + 30px); }
+  #home[data-dev="phone"] #tabs { left:20px; gap:8px; }
+  #home[data-dev="phone"] #tabs .tab { width:58px; height:calc(76px + env(safe-area-inset-bottom)); border-radius:5px 5px 0 0; }
+  #home[data-dev="phone"] #tabs .tab.front { height:calc(90px + env(safe-area-inset-bottom)); }
+  #home[data-dev="phone"] #tabs .tab .av { left:9px; top:8px; width:40px; height:40px; font-size:18px; }
+  #home[data-dev="phone"] #tabs .tab .av .face { box-shadow:0 0 0 2px #fff; }
+  #home[data-dev="phone"] #tabs .tab .sub { top:55px; font-size:13px; letter-spacing:2px; text-indent:2px; }
   /* 家长端预览里正在改的那颗 */
   #deck .pc .bt.pv-sel { outline:4px solid var(--ink); outline-offset:3px; }
-  body.offline #deck .pc, body.gated #deck .pc { pointer-events:none; }
-  @media (prefers-reduced-motion:reduce) { #deck .pc:active { transform:var(--tf) !important; } }
+  body.offline #deck .pc, body.gated #deck .pc, body.offline #tabs, body.gated #tabs { pointer-events:none; }
   /* 给老师换样子(figshot):不是首页发布的卡,是 cotutor.json 配了 figshot 就有的固定入口;figshot 没开着就不出现 */
   .c.c-figshot { flex-direction:row; align-items:center; gap:16px; text-decoration:none; color:var(--ink); background:#fff3e8; border-color:var(--accent); }
   .c-figshot[hidden] { display:none; }
@@ -138,26 +187,26 @@ ${faviconLinks()}
   .c-figshot .tx span { font-size:15px; color:var(--dim); }
   .c-figshot .go { flex:none; height:48px; padding:0 22px; border-radius:24px; background:#c95a22; color:#fff; font-size:17px; font-weight:600; display:flex; align-items:center; }
   body.offline #rest { display:block; }
-  body.offline .c-tutor, body.gated .c-tutor, body.gated .c, body.gated .hcards, body.offline #today, body.gated #today { pointer-events:none; }
-  body.offline #today, body.gated #today { opacity:.45; filter:grayscale(1); }
-  /* 首页「今天」:今天开了头的话题一格一张预览图(板停下来时的样子;还没有就是孩子拍的照片),横着划;点一格回到那个话题接着聊 */
-  #today { display:flex; flex-direction:column; gap:8px; }
-  #today[hidden] { display:none; }
-  #today .td-hd { font-size:15px; font-weight:600; color:var(--dim); padding-left:2px; }
-  #today .td-row { display:flex; gap:14px; overflow-x:auto; overscroll-behavior-x:contain; scroll-snap-type:x proximity; padding:4px 20px 10px; margin:0 -20px; scrollbar-width:none; }
-  #today .td-row::-webkit-scrollbar { display:none; }
-  .td { flex:0 0 auto; width:168px; display:flex; flex-direction:column; gap:6px; text-align:left; scroll-snap-align:start; scroll-margin-left:20px; -webkit-tap-highlight-color:transparent; }
-  .td .pic { position:relative; width:100%; aspect-ratio:4 / 3; border-radius:16px; overflow:hidden; background:color-mix(in srgb, var(--sc) 14%, #fff); border:1px solid var(--line); box-shadow:0 2px 10px #46371e14; }
+  body.offline .c-tutor, body.gated .c-tutor, body.gated .c, body.gated .hcards { pointer-events:none; }
+  /* 右页上的一张:今天开了头的话题,板停下来时的样子(带着孩子的笔;还没有就是孩子拍的照片),回形针别着;点一张回到那个话题接着写 */
+  .td { position:relative; min-width:0; display:flex; flex-direction:column; gap:8px; text-align:left; -webkit-tap-highlight-color:transparent; }
+  .td .pic { position:relative; display:block; width:100%; aspect-ratio:196 / 118; border-radius:3px; overflow:hidden; background:color-mix(in srgb, var(--sc) 12%, #fff); box-shadow:0 1px 0 #e9e1cd, 0 6px 14px #50391a1f; transition:transform .2s ease-out, filter .2s ease-out; }
   .td .pic img { width:100%; height:100%; object-fit:cover; object-position:50% 0; display:block; }
-  .td .pic .av { position:absolute; left:8px; bottom:8px; width:36px; height:36px; }
-  .td .pic.none .av { left:50%; top:50%; bottom:auto; width:56px; height:56px; translate:-50% -50%; }
-  .td .lb { display:flex; align-items:baseline; gap:6px; min-width:0; padding:0 2px; }
-  .td .lb b { font-size:16px; font-weight:600; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+  .td .clip { position:absolute; z-index:1; left:14px; top:-12px; width:15px; height:34px; color:#9c968a; pointer-events:none; }
+  .td .clip svg { display:block; width:100%; height:100%; }
+  .td .lb { display:flex; align-items:baseline; gap:8px; min-width:0; }
+  .td .lb b { font-size:15px; font-weight:600; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
   .td .lb small { flex:none; font-size:13px; color:var(--dim); }
+  #home[data-dev="phone"] .td { gap:6px; }
+  #home[data-dev="phone"] .td .clip { left:9px; top:-9px; width:11px; height:25px; }
+  #home[data-dev="phone"] .td .lb { flex-direction:column; gap:0; }
+  #home[data-dev="phone"] .td .lb b { font-size:12px; }
+  #home[data-dev="phone"] .td .lb small { font-size:11px; }
   .td:active .pic { transform:scale(.97); filter:brightness(.95); transition:transform .06s, filter .06s; }
-  .td .pic { transition:transform .2s ease-out, filter .2s ease-out; }
-  body.offline .c-tutor .av, body.gated .c-tutor .av { filter:grayscale(1); opacity:.4; }
-  body.offline .c-tutor .av .ring circle, body.gated .c-tutor .av .ring circle { transform:rotate(126deg); }
+  body.offline .td, body.gated .td { pointer-events:none; opacity:.45; filter:grayscale(1); }
+  /* 断了、叫爸爸妈妈:小旗上的老师灰着 */
+  body.offline #tabs .tab, body.gated #tabs .tab { filter:grayscale(1); }
+  body.offline #tabs .av, body.gated #tabs .av { filter:grayscale(1); opacity:.4; }
   body.offline #ct-mark, body.gated #ct-mark { filter:grayscale(1); opacity:.4; }
   body.offline #ct-mark .ct-go, body.offline #ct-mark .ct-gi, body.gated #ct-mark .ct-go, body.gated #ct-mark .ct-gi { transform:rotate(90deg); }
   body.offline .c-tutor .nm, body.offline .c-tutor .bt, body.gated .c-tutor .nm, body.gated .c-tutor .bt { color:var(--dim); }
@@ -509,11 +558,7 @@ __VOICE_CSS__
   .sec + .sec.cont { margin-top:0; }
   /* ---- 平板横屏 ---- */
   @media (min-width:900px) and (orientation:landscape) {
-    #home { max-width:1040px; padding:calc(env(safe-area-inset-top) + 40px) 48px 40px; gap:24px; }
-    #home h1 { font-size:22px; }
     #home .hcards { grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); }
-    #today .td-row { padding:4px 48px 10px; margin:0 -48px; }
-    .td { width:216px; scroll-margin-left:48px; }
     .tb.l { left:calc(env(safe-area-inset-left) + 20px); }
     #board { width:100%; max-width:1040px; margin:0 auto; padding:calc(env(safe-area-inset-top) + 68px) 32px 24px; }
     #bar, #reel { width:100%; max-width:1040px; margin:0 auto; padding-left:32px; padding-right:32px; }
@@ -574,9 +619,9 @@ __VOICE_CSS__
 </style>
 <div id="home">
   <div id="ttl"><span id="ct-mark" class="ct-draw">${titleLogo(false)}</span><h1 id="title">__TITLE__</h1></div>
-  <div id="today" hidden><div class="td-hd">今天</div><div class="td-row"></div></div>
   <div class="hcards" id="hcards"></div>
-  <div class="deck" id="deck" hidden></div>
+  <div class="deck" id="deck" hidden><div id="pages"></div></div>
+  <nav id="tabs" aria-label="老师" hidden></nav>
   <p id="rest">老师们休息中</p>
   <p id="gate">老师们还没到<small>叫爸爸妈妈来看一下</small></p>
   <a class="c c-figshot" id="figshot" hidden><span class="avs"></span><span class="tx"><b>给老师们换个样子</b><span>帽子、脸、衣服,都由你来挑</span></span><span class="go">去搭</span></a>
@@ -741,7 +786,6 @@ ${BOARD_MARK_JS}
   const silence = () => { voiceToken++; try { audioEl.pause(); } catch {} };
 
   // ---- 首页:老师卡在上,其余卡照发布的顺序;按钮决定进老师页之后的话题 ----
-  const BUTTON_ICON = { start: 'start', lecture: 'play' };
   const pickButton = (t, b) => {
     const via = { home: S.home.home, button: b.id };
     // activity 头上写了 listen: open:进去就一直听
@@ -780,29 +824,19 @@ ${BOARD_MARK_JS}
     if (extras.includes('dictation')) out.push(photoBtn(t));
     return out;
   };
-  // 牌上的按钮:小课堂是带预览图的海报;activity 是大胶囊。孩子看到的字都在 .btx 里(探针按它读)
+  // 牌上的按钮:小课堂是胶带贴着的截图(占两格);activity 是一张卡,图照它往页上铺什么挑(actArt)。孩子看到的字都在 .btx 里(探针按它读)
   const tutorButton = (t, b) => {
     const on = { click: () => pickButton(t, b) };
     if (b.kind === 'lecture') return h('button', { type: 'button', class: 'bt bt-lecture', 'data-bid': String(b.id), on }, lecturePic(b),
       h('span', { class: 'lm' }, h('small', { class: 'tg' }, '小课堂'), h('span', { class: 'btx' }, b.label), b.ms ? h('small', { class: 'ln' }, lcLen(b.ms)) : null));
-    return h('button', { type: 'button', class: 'bt bt-' + b.kind, 'data-bid': String(b.id), on }, h('span', { class: 'bi', html: ICON[BUTTON_ICON[b.kind]] || ICON.start }), h('span', { class: 'btx' }, b.label));
+    return h('button', { type: 'button', class: 'bt bt-' + b.kind + ' bt-act', 'data-bid': String(b.id), on }, h('span', { class: 'ta', html: actArt(b.base) }), h('span', { class: 'btx' }, b.label));
   };
   // ---- 常驻的三块方砖(预习、检查作业、复习;服务端照老师家里的 activity 文件给,src/ui/kid/home-tiles.ts):牌上第一行;点了和 activity 按钮一样 ----
 ${HOME_TILES_JS}
   const tileButton = (t, x) => h('button', { type: 'button', class: 'bt bt-tile', 'data-tile': x.id, style: '--sc:' + colorOf(t), on: { click: () => pickButton(t, { id: x.id, kind: 'start', label: x.label, base: x.base, listen: x.listen }) } },
     h('span', { class: 'ta', html: tileArt(t.mark, x.id) }), h('span', { class: 'btx' }, x.label));
-  const tilesRow = (t, tiles) => (Array.isArray(tiles) && tiles.length ? h('div', { class: 'tls' }, ...tiles.map((x) => tileButton(t, x))) : null);
-  /** 挨着的几个小课堂收进一格(平板上两张海报并排,手机上一张一行) */
-  const buttonRuns = (t, buttons) => {
-    const out = [];
-    for (const b of buttons) {
-      const el = tutorButton(t, b), last = out[out.length - 1];
-      if (b.kind !== 'lecture') out.push(el);
-      else if (last && last.classList.contains('lcs')) last.append(el);
-      else out.push(h('div', { class: 'lcs' }, el));
-    }
-    return out;
-  };
+  /** 牌上的卡排成一张网格:方砖、家长排的(照他排的先后)、常驻的听写与拍照听写 */
+  const cardGrid = (t, tiles, buttons, extras) => h('div', { class: 'tls' }, ...(Array.isArray(tiles) ? tiles : []).map((x) => tileButton(t, x)), ...buttons.map((b) => tutorButton(t, b)), ...extras);
   /** 小课堂海报的图:课包画最后一帧(frame.svg,没烤好时 404 就只留底色和播放键),视频停在末尾前一点 */
   const lecturePic = (b) => {
     const box = h('span', { class: 'lp' });
@@ -812,17 +846,16 @@ ${HOME_TILES_JS}
     return box;
   };
 
-  // ---- 首页牌堆:一位老师一张牌,平着叠,最前那张在最上层 ----
-  // 手机竖着叠:后面的牌在上面,每张往上露出头那一行(头像 + 名字);平板横着叠:后面的牌在左边,每张往左露出一格(左上角的头像)。
-  // 叠的顺序 K.order:最后一个在最前。进首页时家长排第一的在最前、排第二的紧挨在后面;点过谁谁到最前(最近点过的在前);
-  // 从老师页回来不变,刷新页面回到家长排的。牌一样高(取最高那张)。牌元素常驻,5 秒一轮的刷新只在这张牌的内容变了时重画它、不放动画
-  const K = { order: null, els: new Map(), busy: false, geo: null };
-  // 从牌上去了别的页(听写、拍照听写),回来是整页重开、K.order 没了:走之前记下是哪位的牌,下一次进首页读一次就删(「回来停在刚才那位」;刷新照旧回家长排的)
+  // ---- 首页:桌上一本书(#deck),一位老师一章(#pages 里一位一张 .pc,只有 .front 摊开);老师是屏幕左下角的便利贴小旗(#tabs) ----
+  // 小旗的先后照家长排的,进首页时排第一的那章摊开;点小旗翻到那一章,左右划翻到相邻的一章,小旗不挪;从老师页回来不变,刷新页面回到排第一的。
+  // 牌与小旗的元素常驻,5 秒一轮的刷新只在内容变了时重画、不放动画
+  const K = { front: null, names: [], els: new Map(), tabs: new Map(), busy: false };
+  // 从牌上去了别的页(听写、拍照听写),回来是整页重开、K.front 没了:走之前记下是哪位的牌,下一次进首页读一次就删(「回来停在刚才那位」;刷新照旧回家长排的)
   const FRONT_KEY = 'kid-home-front';
   const stashFront = (el) => { if (PREVIEW) return; const pc = el && el.closest && el.closest('[data-tutor]'); try { if (pc) sessionStorage.setItem(FRONT_KEY, pc.dataset.tutor); } catch {} };
   const takeFront = () => { if (PREVIEW) return null; let f = null; try { f = sessionStorage.getItem(FRONT_KEY); sessionStorage.removeItem(FRONT_KEY); } catch {} return f; };
   const reduced = () => Boolean(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
-  // 橙点「看过了」记在这台设备上(换了一份首页就清):家长排了东西、孩子还没找过这位老师时亮,换到最前就灭
+  // 橙点「看过了」记在这台设备上(换了一份首页就清):家长排了东西、孩子还没翻过这一章时亮在他的小旗上,翻到就灭
   const SEEN_KEY = 'kid-home-seen';
   const seenOf = (home) => { try { const j = JSON.parse(localStorage.getItem(SEEN_KEY) || '{}'); return j.home === home && Array.isArray(j.tutors) ? j.tutors : []; } catch { return []; } };
   const markSeen = (home, name) => { if (PREVIEW) return; try { const t = seenOf(home); if (!t.includes(name)) localStorage.setItem(SEEN_KEY, JSON.stringify({ home, tutors: [...t, name] })); } catch {} };
@@ -830,48 +863,8 @@ ${HOME_TILES_JS}
     const byName = new Map(H.tutors.map((t) => [t.name, t]));
     return (Array.isArray(H.cards) ? H.cards : []).filter((c) => c.kind === 'tutor' && byName.has(c.props.tutor)).map((c) => ({ t: byName.get(c.props.tutor), card: c }));
   };
-  // 平板的牌最宽 640(原型 B):两张小课堂海报并排要这么宽
-  const DECK = { V: { av: 56, nm: 21, pull: 44, head: 48 }, H: { av: 64, nm: 24, pull: 120, head: 40, wMax: 640, wMin: 320, step: 84, stepMin: 48 } };
-  const DECK_SCALE = [1, 0.97, 0.94, 0.91, 0.88], DECK_VEIL = [0, 0.16, 0.26, 0.34, 0.4];
-  // 影子:竖着叠往上投、横着叠往左投,落在后面那张上;第二个是拿起来时的
-  const DECK_SHADOW = { V: ['0 -4px 14px rgba(70,50,30,.14)', '0 24px 34px rgba(70,50,30,.24)'], H: ['-6px 4px 14px rgba(70,50,30,.16)', '-18px 26px 34px rgba(70,50,30,.26)'] };
-  // 换一张的时间表(ms):按下 → 往盖着它的牌的反方向抽出(还在原层)→ 230 换到最上层、浮起 → 飘到最前、略冲过 → 落下回弹、张嘴;
-  // 其余几张 230 起各退一层,挨着缺口的先走
-  const DT = { press: 70, pull: 230, lift: 320, glide: 580, land: 700, shift: [230, 580], stagger: 30, bite: 580, lock: 900 };
-  const deckAxis = () => ((debug.get('device') || deviceFor(innerWidth, innerHeight)) === 'phone' ? 'V' : 'H');
-  const deckBase = (slot, n) => { const g = K.geo, d = Math.min(n - 1 - slot, 4); return { x: g.axis === 'H' ? slot * g.step : 0, y: g.axis === 'V' ? slot * g.strip : 0, r: 0, s: DECK_SCALE[d], v: DECK_VEIL[d] }; };
-  const deckTf = (b) => 'translate(' + b.x.toFixed(1) + 'px,' + b.y.toFixed(1) + 'px) rotate(' + b.r + 'deg) scale(' + b.s + ')';
-  const deckPlace = (el, slot, n) => {
-    const b = deckBase(slot, n), tf = deckTf(b);
-    el.style.transform = tf; el.style.setProperty('--tf', tf); el.style.boxShadow = DECK_SHADOW[K.geo.axis][0]; el.style.zIndex = String(slot + 1);
-    el.querySelector('.veil').style.opacity = String(b.v);
-  };
-  /** 量牌宽、牌高、竖着叠露出的那条,摆好每张;换牌时不动 */
-  const layoutDeck = () => {
-    const box = $('#deck'), n = K.order ? K.order.length : 0;
-    if (K.busy || !n || box.hidden) return;
-    const axis = deckAxis(), d = DECK[axis], home = box.parentElement, cs = getComputedStyle(home);
-    const avail = home.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
-    const g = { axis, ...d, step: d.step || 0 };
-    if (axis === 'V') g.w = avail;
-    else {
-      g.w = Math.min(d.wMax, avail - (n - 1) * d.step);
-      if (g.w < d.wMin) { g.step = Math.max(d.stepMin, (avail - d.wMin) / Math.max(1, n - 1)); g.w = Math.max(240, avail - (n - 1) * g.step); }
-    }
-    box.style.setProperty('--w', g.w + 'px'); box.style.setProperty('--av', d.av + 'px'); box.style.setProperty('--nmz', d.nm + 'px');
-    box.style.setProperty('--org', axis === 'V' ? '50% 0%' : '0% 100%'); box.style.setProperty('--head', d.head + 'px');
-    // 一样高:取最高那张;竖着叠时露出的那条 = 头那一行实际的高度 + 8
-    const cards = [...K.els.values()];
-    let tall = 0, strip = 0;
-    for (const el of cards) { el.style.height = 'auto'; tall = Math.max(tall, el.offsetHeight); const hd = el.querySelector('.pc-hd'); strip = Math.max(strip, hd.offsetTop + hd.offsetHeight + 8); }
-    for (const el of cards) el.style.height = '';
-    g.strip = strip; K.geo = g;
-    box.style.setProperty('--h', tall + 'px');
-    box.style.width = (axis === 'H' ? g.w + (n - 1) * g.step : g.w) + 'px';
-    box.style.height = (d.head + (axis === 'V' ? (n - 1) * strip : 0) + tall + 12) + 'px';
-    box.style.marginLeft = box.style.marginRight = axis === 'H' ? 'auto' : '';
-    K.order.forEach((name, slot) => deckPlace(K.els.get(name), slot, n));
-  };
+  /** 首页怎么摆:横屏左右两页,竖屏和手机上下两页(和老师页同一个 deviceFor) */
+  const homeDev = () => { const d = debug.get('device') || deviceFor(innerWidth, innerHeight); $('#home').dataset.dev = d === 'phone' ? 'phone' : d === 'tablet-portrait' ? 'portrait' : 'landscape'; };
   // ---- 家长端「首页」里的预览:S.pv = {tutor, sel, edit: {k, kind, label, until} | null},家长页塞进来的,只在预览里 ----
   const pvHost = () => { try { return window.parent !== window && typeof window.parent.cotutorPreview === 'function' ? window.parent : null; } catch { return null; } };
   const pvTell = (ev) => { const host = pvHost(); if (host) host.cotutorPreview(ev); };
@@ -889,16 +882,15 @@ ${HOME_TILES_JS}
     window.cotutorPreviewSet = (o) => {
       if (!o) return;
       if ('pv' in o) S.pv = o.pv;
-      const toFront = () => { if (o.front && K.order && !K.busy && K.order.includes(o.front) && K.order[K.order.length - 1] !== o.front) K.order = K.order.filter((x) => x !== o.front).concat([o.front]); };
-      // 发布了(按钮、先后、开关):重读孩子的首页,牌堆照家长新排的先后重叠一遍(孩子端只在老师换了人时才重叠),再把在看的那位抽到最前
-      if (o.reload) { K.order = null; loadHome().then(() => { toFront(); if (S.home && !S.tutor) renderHome(); }); return; }
-      toFront();
+      // 发布了(按钮、先后、开关):重读孩子的首页;在看的那位还在就停在他
+      if (o.reload) { loadHome().then(() => { if (o.front && K.names.includes(o.front)) K.front = o.front; if (S.home && !S.tutor) renderHome(); }); return; }
+      if (o.front && K.names.includes(o.front)) K.front = o.front;
       if (S.home && !S.tutor) renderHome();
     };
-    // 点牌上的按钮不跳走,告诉家长页点了哪颗;后面那张照孩子端换到最前(换完 pickTutor 里告诉家长页);牌外的东西点了什么都不做
+    // 点牌上的按钮不跳走,告诉家长页点了哪颗;小旗照孩子端翻章(翻完 pickTutor 里告诉家长页);别的点了什么都不做
     document.addEventListener('click', (e) => {
+      if (e.target.closest && e.target.closest('#tabs .tab')) return;
       const pc = e.target.closest ? e.target.closest('#deck .pc') : null;
-      if (pc && !pc.classList.contains('front')) return;
       e.preventDefault(); e.stopPropagation();
       const bt = pc ? e.target.closest('.bt') : null;
       if (!bt) return;
@@ -908,115 +900,135 @@ ${HOME_TILES_JS}
       else pvTell({ act: 'extra', tutor: pc.dataset.tutor, kind: 'dictation' });
     }, true);
   }
-  /** 每位老师一张牌:头像 + 名字、按钮、「每天都在」、归他的卡,右下角倒着一个小头像;deal = 打开首页、从老师页回来,发牌 */
-  const renderDeck = (H, list, deal) => {
-    const box = $('#deck');
-    const front = K.order[K.order.length - 1];
+  const TD_CLIP = '<svg viewBox="0 0 20 44" aria-hidden="true"><path d="M6 30 V8 A4 4 0 0 1 14 8 V34 A6 6 0 0 1 2 34 V14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"></path></svg>';
+  /** 右页:今天在这位老师这儿开了头的话题(服务端给的 today,新的在前),一样一张;超过六张换小一号、一行三张。预览里不放(那是孩子的东西) */
+  const todayOf = (H, t) => (PREVIEW || !Array.isArray(H.today) ? [] : H.today.filter((x) => x.tutor === t.name));
+  const todayCard = (t, x) => h('button', { type: 'button', class: 'td', 'data-thread': x.thread, on: { click: () => openTutor(t, { kind: 'thread', thread: x.thread }) } },
+    h('span', { class: 'clip', html: TD_CLIP }),
+    h('span', { class: 'pic' }, x.image ? h('img', { src: x.image, alt: '', loading: 'lazy', decoding: 'async' }) : null),
+    h('span', { class: 'lb' }, h('b', {}, x.lesson ? x.label + ' · ' + x.lesson : x.label), h('small', {}, clock(x.at))));
+  /** 每位老师一章(左页入口的图画框、右页今天的和底纹)、一张小旗(头像和学科) */
+  const renderDeck = (H, list) => {
+    const pages = $('#pages'), tabs = $('#tabs');
+    const front = K.front;
     const seen = seenOf(H.home);
-    for (const [n, el] of K.els) if (!K.order.includes(n)) { el.remove(); K.els.delete(n); }
-    K.order.forEach((n, slot) => {
-      const { t, card } = list.find((x) => x.t.name === n);
+    for (const [n, el] of K.els) if (!K.names.includes(n)) { el.remove(); K.els.delete(n); }
+    for (const [n, el] of K.tabs) if (!K.names.includes(n)) { el.remove(); K.tabs.delete(n); }
+    for (const { t, card } of list) {
+      const n = t.name;
       const buttons = pvButtons(n, Array.isArray(card.props.buttons) ? card.props.buttons : []);
-      const owned = (Array.isArray(H.cards) ? H.cards : []).filter((c) => c.kind !== 'tutor' && c.owner === n);
       const tiles = Array.isArray(card.props.tiles) ? card.props.tiles : [];
-      const sig = JSON.stringify([t.avatar, t.subject, t.display, buttons, tiles, owned, t.extras, H.home]);
+      const owned = (Array.isArray(H.cards) ? H.cards : []).filter((c) => c.kind !== 'tutor' && c.owner === n);
+      const done = todayOf(H, t);
+      const sig = JSON.stringify([t.subject, t.display, t.color, t.mark, buttons, tiles, owned, t.extras, H.home, done.map((x) => [x.thread, x.image, x.label, x.lesson || '', x.at])]);
       let el = K.els.get(n);
       if (!el) {
-        const pc = h('div', { class: 'c c-tutor pc', 'data-tutor': n, on: { click: (e) => { if (e.target.closest && e.target.closest('a[href]')) stashFront(pc); if (!pc.classList.contains('front')) pickTutor(n); } } });
-        box.append(pc); K.els.set(n, pc); el = pc;
+        el = h('div', { class: 'c c-tutor pc', 'data-tutor': n, on: { click: (e) => { if (e.target.closest && e.target.closest('a[href]')) stashFront(el); } } });
+        K.els.set(n, el);
       }
-      if (deal || el.dataset.sig !== sig) {
+      if (el.dataset.sig !== sig) {
         el.dataset.sig = sig;
-        el.style.borderColor = colorOf(t);
-        const extras = extrasFor(t, H);
-        el.replaceChildren(...[
-          h('div', { class: 'pc-hd' }, deal ? avatarEl(t, 'draw', 0.1 + slot * 0.12) : avatarEl(t), h('span', { class: 'nm' }, t.display)),
-          // 方砖一行、家长排的按钮
-          h('div', { class: 'kc' }, h('div', { class: 'bts' }, tilesRow(t, tiles), ...buttonRuns(t, buttons)), extras.length ? h('div', { class: 'bts extras' }, ...extras) : null),
-          h('span', { class: 'pc-ix' }, avatarEl(t)),
-          h('span', { class: 'veil' }),
-        ].filter(Boolean));
-        // 牌里有图(头像):图到了牌可能变高,重量一次
-        for (const img of el.querySelectorAll('img')) if (!img.complete) img.addEventListener('load', layoutDeck, { once: true });
-      } else el.querySelector('.pc-hd .av').classList.remove('draw'); // 之后的刷新摘掉(动画早放完了,摘了也不会重放)
+        el.style.setProperty('--sc', colorOf(t));
+        el.replaceChildren(
+          h('div', { class: 'lp' }, h('div', { class: 'kc' }, cardGrid(t, tiles, buttons, extrasFor(t, H)))),
+          h('div', { class: 'rp' }, h('span', { class: 'hmark', html: markArt(t) }), h('div', { class: 'rh' }, '今天'), h('div', { class: 'tds' + (done.length > 6 ? ' many' : '') }, ...done.map((x) => todayCard(t, x)))),
+        );
+      }
       el.classList.toggle('front', n === front);
       if (PREVIEW) for (const b of el.querySelectorAll('.bt')) b.classList.toggle('pv-sel', Boolean(S.pv && S.pv.tutor === n && S.pv.sel !== null && S.pv.sel !== undefined && String(S.pv.sel) === b.dataset.bid));
-      const dot = Boolean(card.props.news) && n !== front && !seen.includes(n);
-      const hd = el.querySelector('.pc-hd'), had = hd.querySelector('.dot');
-      if (dot && !had) hd.append(h('span', { class: 'dot' })); else if (!dot && had) had.remove();
-    });
-    layoutDeck();
-    // 发牌:从最底下那张起,一张张从下面滑上来,最前那张最后
-    if (deal && !reduced()) K.order.forEach((n, slot) => { const b = deckBase(slot, K.order.length); K.els.get(n).animate([{ transform: deckTf({ ...b, y: b.y + 60 }), opacity: 0 }, { transform: deckTf(b), opacity: 1 }], { duration: 420, delay: slot * 120, easing: 'cubic-bezier(.2,.9,.3,1.15)', fill: 'backwards' }); });
+      // 小旗:头像(不画 C 环),下面写学科
+      let tb = K.tabs.get(n);
+      if (!tb) { tb = h('button', { type: 'button', class: 'tab', 'data-tutor': n, on: { click: () => pickTutor(n) } }); K.tabs.set(n, tb); }
+      const tsig = JSON.stringify([t.avatar, t.subject, t.display, t.color]);
+      if (tb.dataset.sig !== tsig) {
+        tb.dataset.sig = tsig;
+        tb.style.setProperty('--sc', colorOf(t));
+        tb.setAttribute('aria-label', t.display);
+        tb.replaceChildren(avatarEl(t), h('span', { class: 'sub' }, t.subject || t.display));
+      }
+      tb.classList.toggle('front', n === front);
+      const dot = Boolean(card.props.news) && n !== front && !seen.includes(n), had = tb.querySelector('.dot');
+      if (dot && !had) tb.append(h('span', { class: 'dot' })); else if (!dot && had) had.remove();
+    }
+    // 照家长排的先后摆;先后没变就不动:append 已在页上的元素是摘下来再放回去,图和视频会重新加载(5 秒一轮的刷新时一直闪)
+    const place = (parent, els) => { if (parent.children.length !== els.length || els.some((el, i) => parent.children[i] !== el)) parent.append(...els); };
+    place(tabs, K.names.map((n) => K.tabs.get(n)));
+    place(pages, K.names.map((n) => K.els.get(n)));
   };
-  /** 一段动画:跑完把末帧写进 style 再取消,不留 fill */
-  const deckRun = (el, kf, dur, delay, easing) => {
-    const a = el.animate(kf, { duration: dur, delay: delay || 0, easing: easing || 'linear', fill: 'both' });
-    a.finished.then(() => { const last = kf[kf.length - 1]; for (const k in last) if (k !== 'offset' && k !== 'easing') el.style[k] = last[k]; a.cancel(); }, () => {});
-  };
-  /** 点后面那张:先往盖着它的牌的反方向抽出(平板往左、手机往上),230 ms 换到最上层、浮起,再飘到最前(平板往右、手机往下)、落下、张嘴;
-   *  其余几张各退一层。牌太大抽不干净,换层那一下会盖过前面那张,靠它同时放大、影子拉长、前面几张同时变暗读成「拿起来了」。点最前那张不换 */
-  const pickTutor = (n) => {
-    const H = S.home, N = K.order ? K.order.length : 0, i = N ? K.order.indexOf(n) : -1;
-    if (!H || K.busy || !K.geo || i < 0 || i === N - 1) return;
-    const next = K.order.filter((x) => x !== n).concat([n]);
-    const el = K.els.get(n);
-    const done = () => { K.busy = false; K.order = next; markSeen(H.home, n); renderHome(); if (PREVIEW) pvTell({ act: 'front', tutor: n }); };
-    if (reduced()) { done(); el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 120, easing: 'ease-out' }); return; }
+  /** 翻到 n 那一章:这章的书页顺着翻的方向滑走,那一章从另一边进来;dir 不给就照小旗的先后定(往后翻 = 往左滑) */
+  const pickTutor = (n, dir) => {
+    const H = S.home;
+    if (!H || K.busy || n === K.front || !K.names.includes(n)) return;
+    const from = K.els.get(K.front);
+    dir = dir || (K.names.indexOf(n) > K.names.indexOf(K.front) ? 1 : -1);
+    const land = () => {
+      K.front = n; markSeen(H.home, n); renderHome();
+      if (PREVIEW) pvTell({ act: 'front', tutor: n });
+      const to = K.els.get(n);
+      if (to && !reduced()) to.animate([{ translate: dir * 120 + 'px 0', opacity: 0 }, { translate: '0 0', opacity: 1 }], { duration: 200, easing: 'cubic-bezier(.2,.8,.3,1)' });
+    };
+    if (!from || reduced()) { land(); return; }
     K.busy = true;
-    const g = K.geo, b = deckBase(i, N), f = deckBase(N - 1, N), [SH, UP] = DECK_SHADOW[g.axis];
-    let way;
-    if (g.axis === 'H') { const ax = b.x - g.pull, mid = (ax + 10 + f.x + 8) / 2; way = [{ x: ax, y: -14, r: -2, s: b.s }, { x: ax + 10, y: -30, r: -1, s: 1.03 }, { x: mid, y: -34, r: 0, s: 1.03 }, { x: f.x + 8, y: -8, r: 1, s: 1.01 }]; }
-    else { const ay = b.y - g.pull, mid = (ay - 10 + f.y + 8) / 2; way = [{ x: -6, y: ay, r: 0, s: b.s }, { x: -12, y: ay - 10, r: 0, s: 1.03 }, { x: -18, y: mid, r: 0, s: 1.03 }, { x: -4, y: f.y + 8, r: 0, s: 1.01 }]; }
-    const o = (x) => x / DT.land;
-    for (const x of K.els.values()) x.classList.remove('front');
-    deckRun(el, [
-      { offset: 0, transform: deckTf(b), boxShadow: SH, easing: 'ease-out' },
-      { offset: o(DT.press), transform: deckTf({ ...b, s: b.s * 0.97 }), boxShadow: SH, easing: 'cubic-bezier(.3,0,.2,1)' },
-      { offset: o(DT.pull), transform: deckTf(way[0]), boxShadow: SH, easing: 'ease-out' },
-      { offset: o(DT.lift), transform: deckTf(way[1]), boxShadow: UP, easing: 'ease-in' },
-      { offset: o((DT.lift + DT.glide) / 2), transform: deckTf(way[2]), boxShadow: UP, easing: 'ease-out' },
-      { offset: o(DT.glide), transform: deckTf(way[3]), boxShadow: UP, easing: 'cubic-bezier(.3,1.5,.6,1)' },
-      { offset: 1, transform: deckTf(f), boxShadow: SH },
-    ], DT.land);
-    deckRun(el.querySelector('.veil'), [{ opacity: String(b.v) }, { opacity: '0' }], DT.lift - DT.press, DT.press, 'ease-out');
-    setTimeout(() => { el.style.zIndex = '50'; K.order.forEach((x) => { if (x !== n) K.els.get(x).style.zIndex = String(next.indexOf(x) + 1); }); }, DT.pull);
-    K.order.forEach((x, s) => {
-      if (x === n) return;
-      const from = deckBase(s, N), to = deckBase(next.indexOf(x), N), q = K.els.get(x);
-      const delay = DT.shift[0] + (s > i ? (s - i - 1) * DT.stagger : 0);
-      deckRun(q, [{ transform: deckTf(from) }, { transform: deckTf(to) }], DT.shift[1] - DT.shift[0], delay, 'cubic-bezier(.3,1.2,.5,1)');
-      deckRun(q.querySelector('.veil'), [{ opacity: String(from.v) }, { opacity: String(to.v) }], 200, delay, 'ease-out');
-    });
-    // 张嘴:开口一张一合一次(和老师页「说」同一套 dasharray)
-    const ring = el.querySelector('.pc-hd .ring circle');
-    if (ring) ring.animate([{ strokeDasharray: '221.17 55.29', transform: 'rotate(36deg)' }, { offset: 0.45, strokeDasharray: '193.52 82.94', transform: 'rotate(54deg)' }, { strokeDasharray: '221.17 55.29', transform: 'rotate(36deg)' }], { duration: 300, delay: DT.bite, easing: 'ease-in-out' });
-    setTimeout(done, DT.lock);
+    const dx = parseFloat(from.style.translate) || 0;
+    from.animate([{ translate: dx + 'px 0', opacity: Math.max(0.4, 1 - Math.abs(dx) / 900) }, { translate: -dir * 700 + 'px 0', opacity: 0 }], { duration: 180, easing: 'ease-in' }).finished.then(() => { from.style.translate = ''; from.style.opacity = ''; K.busy = false; land(); }, () => { K.busy = false; });
   };
-  let deckResize = 0;
-  window.addEventListener('resize', () => { clearTimeout(deckResize); deckResize = setTimeout(() => { if (!S.tutor && S.home) layoutDeck(); }, 150); });
+  // ---- 左右划翻章:横着走过 8px 且横向多于竖向才算划(竖着的交给滚动);书页跟着手指走,过 60px 松手就翻;到头了只跟三成再弹回。笔不翻(pointerType pen) ----
+  const SW = { p: null };
+  $('#pages').addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'pen' || K.busy || PREVIEW || !K.front || (e.button !== undefined && e.button !== 0)) return;
+    SW.p = { id: e.pointerId, x: e.clientX, y: e.clientY, horiz: null, dx: 0 };
+  });
+  $('#pages').addEventListener('pointermove', (e) => {
+    const p = SW.p;
+    if (!p || p.id !== e.pointerId) return;
+    const dx = e.clientX - p.x, dy = e.clientY - p.y;
+    if (p.horiz === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) { p.horiz = Math.abs(dx) > Math.abs(dy); if (p.horiz) { try { $('#pages').setPointerCapture(e.pointerId); } catch {} } else { SW.p = null; return; } }
+    if (!p.horiz) return;
+    const i = K.names.indexOf(K.front), edge = (dx > 0 && i === 0) || (dx < 0 && i === K.names.length - 1);
+    p.dx = edge ? dx * 0.3 : dx;
+    const el = K.els.get(K.front);
+    if (el) { el.style.translate = p.dx + 'px 0'; el.style.opacity = String(Math.max(0.4, 1 - Math.abs(p.dx) / 900)); }
+  });
+  const swipeEnd = (e) => {
+    const p = SW.p;
+    if (!p || p.id !== e.pointerId) return;
+    SW.p = null;
+    if (!p.horiz) return;
+    // 划过的这一下不算点(手指起落在同一张卡上时浏览器还会发 click)
+    const eat = (ev) => { ev.stopPropagation(); ev.preventDefault(); };
+    document.addEventListener('click', eat, { capture: true, once: true });
+    setTimeout(() => document.removeEventListener('click', eat, { capture: true }), 300);
+    const dir = p.dx < 0 ? 1 : -1, next = K.names[K.names.indexOf(K.front) + dir];
+    if (Math.abs(p.dx) > 60 && next) { pickTutor(next, dir); return; }
+    const el = K.els.get(K.front);
+    if (!el) return;
+    el.animate([{ translate: p.dx + 'px 0', opacity: el.style.opacity || 1 }, { translate: '0 0', opacity: 1 }], { duration: 200, easing: 'cubic-bezier(.2,.8,.3,1)' });
+    el.style.translate = ''; el.style.opacity = '';
+  };
+  $('#pages').addEventListener('pointerup', swipeEnd);
+  $('#pages').addEventListener('pointercancel', swipeEnd);
+  window.addEventListener('resize', () => { clearTimeout(S.homeResize); S.homeResize = setTimeout(homeDev, 150); });
   const renderHome = () => {
     const H = S.home;
     document.title = H.title; $('#title').textContent = H.title;
+    homeDev();
     const cards = Array.isArray(H.cards) ? H.cards : [];
     const list = homeTutorsOf(H);
     const names = list.map((x) => x.t.name);
-    $('#deck').hidden = !names.length;
-    // 换牌的那 900 ms 里不动牌堆(下一轮刷新补上);发牌只在打开首页、从老师页回来时发一次
-    if (names.length && !K.busy) {
+    $('#deck').hidden = !names.length; $('#tabs').hidden = !names.length;
+    if (names.length) {
       const deal = S.homeDraw; S.homeDraw = false;
-      if (deal) ctReplay(ctMark, 'ct-draw'); // 发牌之前先把 logo 画出来
-      // 老师变了(开了、关了、换了一份首页的排法)就按家长排的重来:排第一的在最前
-      if (!K.order || K.order.length !== names.length || names.some((x) => !K.order.includes(x))) {
-        const f = K.order ? null : takeFront();
-        K.order = [...names].reverse();
-        if (f && K.order.includes(f)) K.order = K.order.filter((x) => x !== f).concat([f]);
+      if (deal) ctReplay(ctMark, 'ct-draw'); // 打开首页、从老师页回来:logo 一笔写出来
+      // 老师变了(开了、关了、换了先后)照家长排的重来,排第一的那章摊开;刚从牌上去了别的页回来的停在那位
+      if (names.join() !== K.names.join()) {
+        const f = K.front && names.includes(K.front) ? K.front : takeFront();
+        K.names = names;
+        K.front = f && names.includes(f) ? f : names[0];
       }
-      renderDeck(H, list, deal);
-      if (deal) markSeen(H.home, K.order[K.order.length - 1]);
+      renderDeck(H, list);
+      if (deal) markSeen(H.home, K.front);
     }
-    renderToday(H);
-    // 公共的听写卡(写在第一张老师卡前面、没写念的老师)在牌堆上面;归了老师的在那位老师的牌里(听写按钮)
+    // 公共的听写卡(写在第一张老师卡前面、没写念的老师)在书上面;归了老师的在那位老师的牌里(听写按钮)
     $('#hcards').replaceChildren(...cards.filter((c) => c.kind !== 'tutor' && !c.owner).map(homeCard));
     renderFigshot(H);
   };
@@ -1029,21 +1041,6 @@ ${HOME_TILES_JS}
     el.href = url;
     el.querySelector('.avs').replaceChildren(...H.tutors.slice(0, 3).map((t) => avatarEl(t)));
     fetch(url + 'api/health', { mode: 'no-cors', cache: 'no-store' }).then(() => { el.hidden = false; }, () => { el.hidden = true; });
-  };
-  /** 首页「今天」:服务端给的今天开了头的话题(新的在前);图没变的格子不重画(首页每次刷新都会走这里) */
-  const renderToday = (H) => {
-    const box = $('#today'), row = box.querySelector('.td-row');
-    const list = (Array.isArray(H.today) ? H.today : []).filter((x) => H.tutors.some((t) => t.name === x.tutor));
-    const sig = JSON.stringify(list.map((x) => [x.tutor, x.thread, x.image, x.label, x.lesson || '']));
-    box.hidden = !list.length || PREVIEW;
-    if (row.dataset.sig === sig) return;
-    row.dataset.sig = sig;
-    row.replaceChildren(...list.map((x) => {
-      const t = H.tutors.find((y) => y.name === x.tutor);
-      const pic = h('span', { class: 'pic' + (x.image ? '' : ' none') }, x.image ? h('img', { src: x.image, alt: '', loading: 'lazy', decoding: 'async' }) : null, avatarEl(t));
-      return h('button', { type: 'button', class: 'td', 'data-thread': x.thread, style: '--sc:' + colorOf(t), on: { click: () => openTutor(t, { kind: 'thread', thread: x.thread }) } },
-        pic, h('span', { class: 'lb' }, h('b', {}, x.lesson ? x.label + ' · ' + x.lesson : x.label), h('small', {}, clock(x.at))));
-    }));
   };
   const loadHome = async () => {
     try { S.home = await api('GET', '/api/kid/home'); setOffline(false); document.body.classList.toggle('hand-left', S.home.hand === 'left'); setGated(!REEL && S.home.ready === false); renderHome(); phIdle(); }
@@ -1092,7 +1089,7 @@ ${HOME_TILES_JS}
     if (S.lecture) lsStart(lessonStep(lessonInit(), { t: 'act', act: { k: '翻', page: lcPage(S.lecture) } }));
     else if (BP.base === 'textbook') bpOpenLesson();
     else if (BP.base === 'photo') $('#board').append(bpStartBoard());
-    $('#tutor').classList.add('on');
+    $('#tutor').classList.add('on'); pageTheme(false);
     setBar('idle');
     loadDay(true).then(() => { if (intent.send) send(intent.send); });
     viewKey = ''; viewNote();
@@ -1358,7 +1355,9 @@ ${HOME_TILES_JS}
     $('#lv-acts').replaceChildren(...(o ? o.acts.map(lvGo) : []));
   }
   new MutationObserver(openSync).observe($('#board'), { childList: true });
-  const closeTutor = () => { clearTimeout(PV.timer); liveDispatch({ type: 'reset' }); liveClose(); S.lecture = null; reelStop(); clearTimeout(S.pollTimer); dispatch({ type: 'halt' }); psClose(); S.tutor = null; S.via = null;  S.ask = null; BP.on = false; BP.base = null; lsReset(); $('#tutor').classList.remove('on'); document.body.classList.remove('pending', 'speaking'); S.homeDraw = true; loadHome(); };
+  /** 浏览器的主题色跟着这一页的底色:首页桌面色,老师页纸色 */
+  const pageTheme = (home) => { const m = document.querySelector('meta[name="theme-color"]'); if (m) m.content = home ? '#ebe4d4' : '#faf9f4'; };
+  const closeTutor = () => { clearTimeout(PV.timer); liveDispatch({ type: 'reset' }); liveClose(); S.lecture = null; reelStop(); clearTimeout(S.pollTimer); dispatch({ type: 'halt' }); psClose(); S.tutor = null; S.via = null;  S.ask = null; BP.on = false; BP.base = null; lsReset(); $('#tutor').classList.remove('on'); pageTheme(true); document.body.classList.remove('pending', 'speaking'); S.homeDraw = true; loadHome(); };
   $('#back').addEventListener('click', closeTutor);
   $('#back-ic').innerHTML = ICON.back;
 
@@ -2165,7 +2164,7 @@ __WORD_DRAW_JS__
     S.tutor = d.face; S.thread = d.thread; S.hist = d.date; S.readonly = true;
     // 孩子的屏幕照实时老师页的样子(左栏大头像 + 字幕);有实时轮的话题字幕照这一刻(reelLiveCap),不是实时的轮左栏不写字幕
     liveFace(S.tutor); tintBack(S.tutor); markBoard($('#bmark'), S.tutor);
-    $('#tutor').classList.add('on');
+    $('#tutor').classList.add('on'); pageTheme(false);
     renderBar(); setBar('idle');
     const v0 = d.reel.views[0];
     // 示意的键盘(打字时垫在底下):三排字母一排空格,不画真键盘
@@ -3081,7 +3080,7 @@ __REEL_DOCK_JS__
 
   // ---- 启动与心跳:不通就头像灰,什么都不报 ----
   if (REEL) reelBoot();
-  else if (PREVIEW) loadHome().then(() => { const f = debug.get('front'); if (f) window.cotutorPreviewSet({ front: f }); pvTell({ act: 'ready', order: K.order ? [...K.order] : [] }); });
+  else if (PREVIEW) loadHome().then(() => { const f = debug.get('front'); if (f) window.cotutorPreviewSet({ front: f }); pvTell({ act: 'ready', order: [...K.names] }); });
   else loadHome().then(() => {
     let resume = null; try { resume = sessionStorage.getItem('kid-resume'); sessionStorage.removeItem('kid-resume'); } catch {}
     const open = debug.get('tutor') || resume;

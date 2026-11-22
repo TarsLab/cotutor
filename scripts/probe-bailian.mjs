@@ -69,7 +69,7 @@ try {
   // ---- 孩子端首页:灰着 ----
   await send('Page.navigate', { url: `${base}/` });
   ok('孩子端首页:灰着,写「老师们还没到」', await until(`document.body.classList.contains('gated') && getComputedStyle(document.querySelector('#gate')).display === 'block' && document.querySelector('#gate').textContent.includes('老师们还没到')`));
-  ok('孩子端首页:老师的牌点不进去', await evaluate(`[...document.querySelectorAll('#deck .pc')].every((el) => getComputedStyle(el).pointerEvents === 'none')`));
+  ok('孩子端首页:老师的签和牌点不进去', await evaluate(`[...document.querySelectorAll('#deck .pc, #tabs .tab')].every((el) => getComputedStyle(el).pointerEvents === 'none')`));
   ok('孩子端首页:没有「错误」「key」这类字', await evaluate(`!/错误|key|百炼/.test(document.body.innerText)`));
   console.log('  ', await shot('kid-gated.png'));
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * 老师头像 C 形开口环的手动验收(不进 pnpm test,要本机 Chrome;走 mock,不花钱):
- * 首页老师卡头像是环 + 白底圆、开口朝右、打开时一笔画出来(5 秒一轮的刷新不再画)→ 进数学老师(新话题没有了,用调试入口 ?tutor=):左上的返回胶囊 →
+ * 首页的便利贴小旗上是老师的脸、不画 C 环(和「按住说」的钮分开),叫爸爸妈妈时变灰 → 进数学老师(新话题没有了,用调试入口 ?tutor=):左上的返回胶囊 →
  * 从输入条问一句:等的时候左栏按钮里那张脸「想」(转圈;老师页一律是实时老师页的样子,板中间的大头像与底部字幕行 10-28 起没了);休息(开口朝下、变灰)用类直接看样式。实时老师页的「说」「听」在按钮里,见 /dev/voice 与 probe-live-page。
  * 左上返回胶囊是「‹ logo」不是头像,一页只有一张会动的脸。
  * iPad 横屏,每步截图。
@@ -52,23 +52,15 @@ try {
   await send('Page.enable');
   await send('Emulation.setDeviceMetricsOverride', { width: 1180, height: 820, deviceScaleFactor: 1, mobile: false });
   await send('Page.navigate', { url: `${base}/` });
-  await until(`document.querySelectorAll('#deck .pc-hd .av').length > 0`);
-  const home = await evaluate(`[...document.querySelectorAll('#deck .pc-hd .av')].map(${AV})`);
-  ok('首页(牌堆):牌角每颗头像是环 + 白底圆,没有边框;环是学科色(stroke = color);第一回铺是「画出来」', home.length > 0 && home.every((a) => a.ring && a.face && a.border === '0px' && a.stroke === a.color && a.draw && a.anim === 'av-draw'), JSON.stringify(home[0]));
-  const delays = await evaluate(`[...document.querySelectorAll('#deck .pc')].sort((a, b) => a.style.zIndex - b.style.zIndex).map((el) => getComputedStyle(el.querySelector('.pc-hd .ring circle')).animationDelay)`);
-  ok('发牌时从后往前一张一张画(0.1s、0.22s、0.34s…),最前那张最后', delays.length < 2 || delays[1] === '0.22s', delays.join(' '));
-  await sleep(250); await shot('avatar-home-drawing.png');
+  await until(`document.querySelectorAll('#tabs .tab .av').length > 0`);
+  const flags = await evaluate(`[...document.querySelectorAll('#tabs .tab .av')].map((el) => ({ face: Boolean(el.querySelector('.face')), ring: getComputedStyle(el.querySelector('.ring')).display, border: getComputedStyle(el).borderTopWidth }))`);
+  ok('首页(便利贴小旗):旗头是老师的脸,不画 C 环(不像「按住说」的钮)', flags.length > 0 && flags.every((a) => a.face && a.ring === 'none' && a.border === '0px'), JSON.stringify(flags[0]));
   await sleep(1500);
-  const rest = await evaluate(`(${AV})(document.querySelector('#deck .pc.front .pc-hd .av'))`);
-  ok('画完:描 80% 留 20%,转 36°,开口居中在右', /^221\.17px?,? 55\.29px?$/.test(rest.dash.replace(/,\s*/, ' ')) && /matrix\(0\.809/.test(rest.transform), `${rest.dash} ${rest.transform}`);
   await shot('avatar-home.png');
-  await sleep(5600);
-  const again = await evaluate(`[...document.querySelectorAll('#deck .pc-hd .av')].some((el) => el.classList.contains('draw'))`);
-  ok('5 秒一轮的刷新重铺了也不再画', again === false);
 
-  // 休息:整张卡灰掉时开口朝下(126°);按着卡时扭一下(8°)
-  const off = await evaluate(`(async () => { const c = document.querySelector('#deck .pc.front'); c.classList.add('off'); await new Promise((r) => setTimeout(r, 700)); const t = getComputedStyle(c.querySelector('.av .ring circle')); const r = { transform: t.transform, filter: getComputedStyle(c.querySelector('.av')).filter }; c.classList.remove('off'); return r; })()`);
-  ok('休息:开口朝下、变灰', /matrix\(-0\.58/.test(off.transform) && /grayscale/.test(off.filter), JSON.stringify(off));
+  // 叫爸爸妈妈(gated):小旗上的老师变灰
+  const off = await evaluate(`(async () => { document.body.classList.add('gated'); await new Promise((r) => setTimeout(r, 400)); const a = document.querySelector('#tabs .tab.front .av'); const r = { filter: getComputedStyle(a).filter }; document.body.classList.remove('gated'); return r; })()`);
+  ok('叫爸爸妈妈:小旗上的老师变灰', /grayscale/.test(off.filter), JSON.stringify(off));
 
   // 进数学老师(调试入口 ?tutor=,今天还没有话题,板是空的)
   await send('Page.navigate', { url: `${base}/?tutor=math-tutor` });

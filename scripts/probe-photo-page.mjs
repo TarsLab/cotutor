@@ -121,7 +121,7 @@ try {
 
   // 一、首页点数学的「检查作业」
   await send('Page.navigate', { url: `${base}/` });
-  // 老师牌叠着:先把数学的牌翻到前面(直接点它的元素;叠着的牌坐标会落在别的牌上),再用鼠标点它的方砖
+  // 先点数学的签换到他(第一个 [data-tutor] 是签),再用鼠标点他的方砖
   await until(`Boolean(document.querySelector('[data-tutor="math-tutor"]'))`);
   await evaluate(`document.querySelector('[data-tutor="math-tutor"]').click(), true`);
   await until(`document.querySelector('[data-tutor="math-tutor"]').classList.contains('front')`, 5000);

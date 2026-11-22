@@ -1,11 +1,10 @@
-/* 老师卡(cards/tutor/card.md):首页上一位老师一张,头像 + 名字 + 竖排的按钮 */
+/* 老师卡(cards/tutor/card.md):首页上一位老师一张,名字 + 一张卡的网格;首页是一张课本页,卡都是摊在页上的纸(白纸、一道纸影,不歪) */
 .c.c-tutor { gap:12px; padding:16px; }
 .c-tutor .tt { display:flex; align-items:center; gap:12px; cursor:pointer; }
 .c-tutor .tt .av { width:64px; height:64px; font-size:30px; }
 .c-tutor .tt .nm { font-size:20px; font-weight:700; }
-.c-tutor .bts { display:flex; flex-direction:column; gap:12px; }
-/* 按钮(原型 B,https://claude.ai/artifact/HhpuLJXvNr94E9PqSNv6tj):大胶囊;孩子看到的字在 .btx */
-.c-tutor .bt { display:flex; align-items:center; gap:14px; width:100%; min-height:64px; padding:10px 20px; border-radius:32px; background:#fff; border:1.5px solid var(--line); color:var(--ink); font-size:20px; font-weight:600; text-align:left; line-height:1.3; }
+/* 按钮:页上一张纸(设计稿 https://claude.ai/artifact/KJFiRZD6E45YEKGQBbw98Q);首页上都在下面的卡网格里;孩子看到的字在 .btx */
+.c-tutor .bt { display:flex; align-items:center; gap:14px; width:100%; min-height:72px; padding:10px 22px; border-radius:4px; background:#fff; border:0; box-shadow:0 1px 0 #e9e1cd, 0 10px 22px #50391a1a; color:var(--ink); font-size:20px; font-weight:600; text-align:left; line-height:1.3; }
 .c-tutor .bt:active { transform:scale(.98); }
 .c-tutor .bt .bi { flex:0 0 auto; width:28px; height:28px; display:grid; place-items:center; color:var(--accent); }
 .c-tutor .bt .bi svg { width:26px; height:26px; }
@@ -21,56 +20,56 @@
 .c-tutor .nl > .bt-new { flex:1 1 260px; width:auto; }
 /* 新话题打头的名字首字:平板横着叠时后面的牌露出来的那一格就是它;右边一道竖线隔开「新话题」 */
 .c-tutor .bt-new .fc { flex:none; width:40px; padding-right:14px; border-right:2px solid rgba(255,255,255,.45); font-size:38px; font-weight:800; line-height:44px; text-align:center; box-sizing:content-box; }
-.c-tutor.off { pointer-events:none; }
-.c-tutor.off .av { filter:grayscale(1); opacity:.4; }
-/* 休息:次数用完 / 服务不通,C 的开口朝下(低头);点一下:手指按着时 C 扭一下,松开弹回(弹的那下是 .av 环上的 transition) */
-.c-tutor.off .av .ring circle { transform:rotate(126deg); }
-.c-tutor:active .av .ring circle { transform:rotate(8deg); transition-duration:.08s; }
-.c-tutor.off .nm, .c-tutor.off .bt { color:var(--dim); }
-.c-tutor.off .bt .bi { color:var(--dim); }
-.c-tutor.off .bt-new { background:var(--grey); }
-/* 常驻的方砖(预习、检查作业、复习,英语老师还有口语课;src/ui/kid/home-tiles.ts):牌上一行三块,白底学科色细边,图在上字在下;三科同一个样子,分辨全靠图 */
-.c-tutor .tls { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px; }
-.c-tutor .bt.bt-tile { flex-direction:column; justify-content:center; gap:8px; min-height:132px; padding:14px 8px; border-radius:20px; border-color:color-mix(in srgb, var(--sc) 32%, #fff); text-align:center; }
-.c-tutor .bt-tile .ta { display:grid; place-items:center; color:var(--sc); }
-.c-tutor .bt-tile .ta svg { width:100px; height:68px; display:block; }
-.c-tutor .bt-tile .btx { font-size:20px; font-weight:700; letter-spacing:.5px; line-height:1.2; }
-@media (max-width:560px) {
-  .c-tutor .tls { gap:8px; }
-  .c-tutor .bt.bt-tile { min-height:100px; padding:10px 4px; gap:6px; border-radius:16px; }
-  .c-tutor .bt-tile .ta svg { width:72px; height:49px; }
-  .c-tutor .bt-tile .btx { font-size:17px; }
-}
-.c-tutor.off .bt-tile .ta, body.offline .c-tutor .bt-tile .ta, body.gated .c-tutor .bt-tile .ta { filter:grayscale(1); opacity:.5; }
-/* 小课堂:带预览图的海报,图上一个播放键,下面「小课堂 · 课名 · 课长」;挨着的几张收在 .lcs 里,够宽就并排 */
-.c-tutor .lcs { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; }
-.c-tutor .bt-lecture { flex-direction:column; align-items:stretch; gap:0; min-height:0; padding:0; border-radius:20px; overflow:hidden; }
-.c-tutor .bt-lecture .lp { position:relative; display:block; aspect-ratio:16 / 10; background:#fff3e8; }
+/* 入口:牌上的每一个(方砖、家长排的 activity、拍照听写、听写)都是书的左页上一幅图画框,照课本上的图(设计稿 https://claude.ai/artifact/KJFiRZD6E45YEKGQBbw98Q):
+   学科色的细线框、框里淡淡一层学科色,图直接画在书页上;框下一行是圆圈里的序号(照课本的 ①②,CSS 计数)和题目。没有阴影、折角、胶带。
+   一行三格,格宽跟着页宽走(.tls;容器是首页的左页 .lp:三格平分页宽,间距是页宽的 4.4%(14–28px),格封顶 240px、封顶了就居中);
+   框高是格宽的 3/4,图跟着框缩,框下的字是格宽的 12%(14–19px)。三科同一个样子,分辨全靠图。方砖的图在 src/ui/kid/home-tiles.ts(TILE_ART,按老师的 mark);
+   activity 的图按它往页上铺什么挑(ACT_ART:课本、照片、只说话);小课堂的框里是它的截图,占两格 */
+.c-tutor .tls { counter-reset:hno; display:grid; --g:clamp(14px, 4.4cqw, 28px); --col:min(240px, (100cqw - 2 * var(--g)) / 3); --fh:calc(var(--col) * .75); grid-template-columns:repeat(3, var(--col)); justify-content:center; gap:calc(var(--g) * 1.25) var(--g); }
+.c-tutor .tls > .bt { position:relative; isolation:isolate; display:grid; grid-template-rows:var(--fh) auto; justify-items:start; align-items:center; gap:calc(var(--col) * .07); min-height:0; padding:0; border-radius:0; background:none; box-shadow:none; text-align:left; -webkit-tap-highlight-color:transparent; }
+.c-tutor .tls > .bt:not(.bt-lecture)::before { content:""; position:absolute; z-index:-1; left:0; right:0; top:0; height:var(--fh); box-sizing:border-box; border:1.5px solid color-mix(in srgb, var(--sc) 38%, transparent); border-radius:8px; background:color-mix(in srgb, var(--sc) 4.5%, transparent); }
+.c-tutor .tls > .bt:not(.bt-lecture):active::before { background:color-mix(in srgb, var(--sc) 12%, transparent); }
+.c-tutor .tls > .bt > :first-child { justify-self:stretch; align-self:stretch; }
+.c-tutor .tls .ta { display:grid; place-items:center; color:var(--sc); }
+.c-tutor .tls .ta svg { width:84%; height:74%; display:block; }
+.c-tutor .tls > .bt .btx { position:relative; padding-left:2px; font-size:clamp(14px, calc(var(--col) * .12), 19px); font-weight:700; letter-spacing:.5px; line-height:1.25; color:var(--ink); text-wrap:balance; }
+.c-tutor .tls > .bt .btx::before { counter-increment:hno; content:counter(hno); display:inline-flex; align-items:center; justify-content:center; width:1.7em; height:1.7em; margin-right:.55em; vertical-align:.15em; border-radius:50%; background:var(--sc); color:#fff; font:700 .7em/1 ui-rounded, -apple-system, sans-serif; letter-spacing:0; }
+.c-tutor .bt.bt-tile .btx, .c-tutor .bt.bt-act .btx { max-width:100%; }
+body.offline .c-tutor .tls .ta, body.gated .c-tutor .tls .ta, body.offline .c-tutor .tls .pg, body.gated .c-tutor .tls .pg, body.offline .c-tutor .tls .dg, body.gated .c-tutor .tls .dg, body.offline .c-tutor .tls .lp, body.gated .c-tutor .tls .lp { filter:grayscale(1); opacity:.5; }
+/* 小课堂:框里是课的截图(最后一帧),图上一个播放键,框下「序号 · 课名 · 小课堂 · 课长」;占两格 */
+.c-tutor .tls > .bt-lecture { grid-column:span 2; }
+.c-tutor .bt-lecture .lp { position:relative; display:block; aspect-ratio:16 / 10; overflow:hidden; border-radius:2px; background:#fff3e8; }
+.c-tutor .tls > .bt-lecture .lp { aspect-ratio:auto; box-sizing:border-box; border:1.5px solid color-mix(in srgb, var(--sc) 38%, transparent); border-radius:8px; }
 .c-tutor .bt-lecture .lp img, .c-tutor .bt-lecture .lp video { position:absolute; inset:0; width:100%; height:100%; display:block; object-fit:cover; }
 .c-tutor .bt-lecture .lp.nopic img { display:none; }
-.c-tutor .bt-lecture .pl { position:absolute; left:50%; top:50%; width:64px; height:64px; margin:-32px 0 0 -32px; border-radius:50%; background:rgba(255,255,255,.94); color:var(--accent); display:grid; place-items:center; box-shadow:0 4px 14px rgba(0,0,0,.22); }
-.c-tutor .bt-lecture .pl svg { width:28px; height:28px; margin-left:3px; }
-.c-tutor .bt-lecture .lm { display:flex; align-items:center; gap:8px; min-width:0; padding:12px 14px; }
-.c-tutor .bt-lecture .tg { flex:none; padding:2px 8px; border-radius:8px; background:#fdeee4; color:#b8541c; font-size:13px; font-weight:700; }
-.c-tutor .bt-lecture .btx { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:20px; font-weight:700; }
-.c-tutor .bt-lecture .ln { flex:none; margin-left:auto; font-size:14px; font-weight:400; color:var(--dim); }
-/* 常驻入口:听写、拍照听写、口语课,不经首页发布、一直在这位老师的卡上 */
-.c-tutor .bt-extra { text-decoration:none; color:var(--ink); border-color:var(--tint-sand-line); }
-.c-tutor .bt-extra .lb { display:flex; flex-direction:column; gap:1px; min-width:0; }
-.c-tutor .bt-extra .ln { font-size:14px; font-weight:400; color:var(--dim); }
-.c-tutor .bt-extra .bi { color:#c95a22; }
-/* 拍照听写的图标是一小格:语文田字格「字」、英语四线格「Aa」,右下角学科色的相机 */
-.c-tutor .bt-x-photo .pg { position:relative; flex:none; width:46px; height:46px; margin-right:4px; }
-.c-tutor .bt-x-photo .pg i { position:absolute; inset:0; display:grid; place-items:center; font-style:normal; font-size:28px; line-height:1; color:#c9b48a; border:1.5px solid #c9a660; background:repeating-linear-gradient(to bottom,#e3cc9a 0 3px,transparent 3px 6px) center/1.5px 100% no-repeat,repeating-linear-gradient(to right,#e3cc9a 0 3px,transparent 3px 6px) center/100% 1.5px no-repeat,#fff; }
-.c-tutor .bt-x-photo.en .pg { width:64px; height:40px; }
-.c-tutor .bt-x-photo.en .pg i { font-size:24px; font-family:"Chalkboard SE","Comic Sans MS","Marker Felt",sans-serif; color:#8fa0b2; border-color:#c9d2de; background:linear-gradient(#cdd6e2,#cdd6e2) 0 16%/100% 1.5px no-repeat,linear-gradient(#cdd6e2,#cdd6e2) 0 40%/100% 1.5px no-repeat,linear-gradient(#e39a9a,#e39a9a) 0 66%/100% 2px no-repeat,linear-gradient(#cdd6e2,#cdd6e2) 0 90%/100% 1.5px no-repeat,#fff; }
-.c-tutor .bt-x-photo .cam { position:absolute; right:-9px; bottom:-8px; width:26px; height:26px; border-radius:50%; background:var(--sc); color:#fff; display:grid; place-items:center; box-shadow:0 0 0 2px #fff; }
-.c-tutor .bt-x-photo .cam svg { width:15px; height:15px; }
-/* 听写:一整条,上面一排空格子(几个词几格;英文是四线三格),下面「听写 · 几个词」和「去写」 */
-.c-tutor .bt-x-dictation { flex-direction:column; align-items:stretch; gap:14px; padding:16px; border-radius:20px; background:var(--tint-sand-bg); }
-.c-tutor .bt-x-dictation .dg { display:flex; gap:8px; }
-.c-tutor .bt-x-dictation .dg i { flex:0 1 56px; aspect-ratio:1; border:1.5px solid #d9b97a; background:linear-gradient(var(--tint-sand-line), var(--tint-sand-line)) center / 1px 100% no-repeat, linear-gradient(var(--tint-sand-line), var(--tint-sand-line)) center / 100% 1px no-repeat, #fff; }
-.c-tutor .bt-x-dictation.en .dg i { flex-basis:104px; aspect-ratio:2; background:linear-gradient(to bottom, #fff 32%, var(--tint-sand-line) 32% 34%, #fff 34% 65%, var(--tint-sand-line) 65% 67%, #fff 67%); }
-.c-tutor .bt-x-dictation .dr { display:flex; align-items:center; gap:12px; }
-.c-tutor .bt-x-dictation .btx { font-size:22px; font-weight:700; }
-.c-tutor .bt-x-dictation .go { flex:none; margin-left:auto; height:48px; padding:0 22px; border-radius:24px; background:#c95a22; color:#fff; font-size:18px; font-weight:700; display:grid; place-items:center; }
+.c-tutor .bt-lecture .pl { position:absolute; left:50%; top:50%; width:44px; height:44px; margin:-22px 0 0 -22px; border-radius:50%; background:rgba(255,255,255,.94); color:var(--accent); display:grid; place-items:center; box-shadow:0 4px 14px rgba(0,0,0,.22); }
+.c-tutor .bt-lecture .pl svg { width:20px; height:20px; margin-left:2px; }
+.c-tutor .bt-lecture .lm { display:flex; align-items:center; gap:6px; min-width:0; max-width:100%; }
+.c-tutor .bt-lecture .tg { flex:none; order:1; padding:1px 8px; border-radius:999px; background:#fdeee4; color:#b8541c; font-size:12px; font-weight:700; }
+.c-tutor .tls > .bt-lecture .btx { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.c-tutor .bt-lecture .ln { flex:none; order:2; font-size:13px; font-weight:400; color:var(--dim); }
+/* 常驻入口:听写、拍照听写,不经首页发布、一直在这位老师的牌上;卡小,字下面那行灰的小字不上 */
+.c-tutor .bt-extra { text-decoration:none; color:var(--ink); }
+.c-tutor .bt-extra .lb { display:flex; flex-direction:column; align-items:flex-start; gap:4px; min-width:0; }
+.c-tutor .bt-extra .ln { display:none; }
+/* 拍照听写的图是一格:语文田字格「字」、英语四线格「Aa」,右下角学科色的相机 */
+.c-tutor .tls > .bt-x-photo > .pg { position:relative; justify-self:center; align-self:center; width:calc(var(--fh) * .52); height:calc(var(--fh) * .52); }
+.c-tutor .bt-x-photo .pg i { position:absolute; inset:0; display:grid; place-items:center; font-style:normal; font-size:calc(var(--fh) * .31); line-height:1; color:#c9b48a; border:1.5px solid #c9a660; background:repeating-linear-gradient(to bottom,#e3cc9a 0 3px,transparent 3px 6px) center/1.5px 100% no-repeat,repeating-linear-gradient(to right,#e3cc9a 0 3px,transparent 3px 6px) center/100% 1.5px no-repeat,#fff; }
+.c-tutor .tls > .bt-x-photo.en > .pg { width:calc(var(--fh) * .78); height:calc(var(--fh) * .48); }
+.c-tutor .bt-x-photo.en .pg i { font-size:calc(var(--fh) * .26); font-family:"Chalkboard SE","Comic Sans MS","Marker Felt",sans-serif; color:#8fa0b2; border-color:#c9d2de; background:linear-gradient(#cdd6e2,#cdd6e2) 0 16%/100% 1.5px no-repeat,linear-gradient(#cdd6e2,#cdd6e2) 0 40%/100% 1.5px no-repeat,linear-gradient(#e39a9a,#e39a9a) 0 66%/100% 2px no-repeat,linear-gradient(#cdd6e2,#cdd6e2) 0 90%/100% 1.5px no-repeat,#fff; }
+.c-tutor .bt-x-photo .cam { position:absolute; right:calc(var(--fh) * -.1); bottom:calc(var(--fh) * -.09); width:calc(var(--fh) * .26); height:calc(var(--fh) * .26); border-radius:50%; background:var(--sc); color:#fff; display:grid; place-items:center; box-shadow:0 0 0 3px #fff; }
+.c-tutor .bt-x-photo .cam svg { width:58%; height:58%; }
+/* 听写:上面一排空格子(几个词几格,最多四格;英文是四线三格,最多两格),下面「听写」和「几个词 · 老师念,你来写」 */
+.c-tutor .bt-x-dictation .dg { display:flex; justify-content:center; align-items:center; gap:4px; padding:0 14px; }
+.c-tutor .bt-x-dictation .dg i { flex:0 1 calc(var(--col) * .19); aspect-ratio:1; border:1.5px solid #d9b97a; background:linear-gradient(var(--tint-sand-line), var(--tint-sand-line)) center / 1px 100% no-repeat, linear-gradient(var(--tint-sand-line), var(--tint-sand-line)) center / 100% 1px no-repeat, #fff; }
+.c-tutor .bt-x-dictation .dg i:nth-child(n+5) { display:none; }
+.c-tutor .bt-x-dictation.en .dg i { flex-basis:calc(var(--col) * .38); aspect-ratio:2; background:linear-gradient(to bottom, #fff 32%, var(--tint-sand-line) 32% 34%, #fff 34% 65%, var(--tint-sand-line) 65% 67%, #fff 67%); }
+.c-tutor .bt-x-dictation.en .dg i:nth-child(n+3) { display:none; }
+.c-tutor .bt-x-dictation .dr { display:flex; flex-direction:column; align-items:flex-start; }
+.c-tutor .bt-x-dictation .go { display:none; }
+@media (max-width:560px) {
+  .c-tutor .tls > .bt:not(.bt-lecture)::before, .c-tutor .tls > .bt-lecture .lp { border-radius:6px; }
+  .c-tutor .tls > .bt .btx { letter-spacing:0; }
+  .c-tutor .bt-lecture .tg { font-size:11px; padding:0 6px; }
+  .c-tutor .bt-x-dictation .dg { padding:0 8px; }
+}

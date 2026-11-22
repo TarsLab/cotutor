@@ -80,8 +80,8 @@ try {
   };
   await send('Emulation.setDeviceMetricsOverride', { width: 1180, height: 820, deviceScaleFactor: 1, mobile: false });
   await send('Page.navigate', { url: `${base}/` });
-  await waitFor(`!!document.querySelector('#deck .pc[data-tutor="english-tutor"] .pc-hd .av')`);
-  await tap('#deck .pc[data-tutor="english-tutor"] .pc-hd .av');
+  await waitFor(`!!document.querySelector('#tabs .tab[data-tutor="english-tutor"]')`);
+  await tap('#tabs .tab[data-tutor="english-tutor"]');
   ok('首页:英语老师卡里有「单词听写 · 3 个单词」,看不到字', await waitFor(`!!document.querySelector('#deck .pc.front[data-tutor="english-tutor"] .bt-x-dictation') && document.querySelector('#deck .pc.front .bt-x-dictation').textContent.includes('单词听写') && document.querySelector('#deck .pc.front .bt-x-dictation').textContent.includes('3 个单词') && !document.querySelector('#deck .pc.front').textContent.includes('yellow') && document.querySelector('#deck .pc.front .bt-x-dictation').getAttribute('href').endsWith('&lang=en')`));
   await shot('en-01-home');
   await tap('#deck .pc.front .bt-x-dictation');

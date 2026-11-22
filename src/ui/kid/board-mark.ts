@@ -20,12 +20,13 @@ export function boardMarkOf(subject: string | null | undefined): BoardMarkId | n
 /**
  * 怎么摆:right = 外框右沿离板右沿多远(乘 s;负数出纸边),top = 离板顶多少 px(加安全区),o = 不透明度。
  * top 从两角按钮下面起(实时页回首页胶囊下沿 64、「更多」54,再空出十几 px),那一栏在左边时不让「更多」压着、在右边时不让胶囊压着;
- * 三种字墨量差得多(粗宋最重、ENGLISH 最轻),浓淡分开压到看着一样淡;ENGLISH 是孩子认得的词,字母不切边
+ * 三种字墨量差得多(粗宋最重、ENGLISH 最轻),浓淡分开压到看着一样淡;ENGLISH 是孩子认得的词,字母不切边。
+ * home = 首页右页底纹的高按字再缩多少:两个方块字比一行字母重得多,同样高时汉字看着大好几倍(数学的粗宋最显大),ENGLISH 的大小正好
  */
-export const BOARD_MARK_PLACE: Readonly<Record<BoardMarkId, { right: number; top: number; o: number }>> = {
-  yuwen: { right: -0.07, top: 82, o: 0.065 },
-  shuxue: { right: -0.07, top: 80, o: 0.05 },
-  english: { right: 0.03, top: 86, o: 0.05 },
+export const BOARD_MARK_PLACE: Readonly<Record<BoardMarkId, { right: number; top: number; o: number; home: number }>> = {
+  yuwen: { right: -0.07, top: 82, o: 0.065, home: 0.75 },
+  shuxue: { right: -0.07, top: 80, o: 0.05, home: 0.62 },
+  english: { right: 0.03, top: 86, o: 0.05, home: 1 },
 };
 
 /** 字的下沿离板底至少多少 px:字太高就缩,不出板的底边 */
@@ -50,7 +51,7 @@ const MARKS_JSON = JSON.stringify(
     (Object.keys(BOARD_MARK_ART) as BoardMarkId[]).map((id) => {
       const a = BOARD_MARK_ART[id];
       const p = BOARD_MARK_PLACE[id];
-      return [id, { w: a.w, h: a.h, d: a.d, right: p.right, top: p.top, o: p.o }];
+      return [id, { w: a.w, h: a.h, d: a.d, right: p.right, top: p.top, o: p.o, home: p.home }];
     }),
   ),
 );
@@ -69,5 +70,11 @@ export const BOARD_MARK_JS = `
     var s = el.firstChild.style;
     s.setProperty('--bm-w', m.w); s.setProperty('--bm-h', m.h); s.setProperty('--bm-right', m.right); s.setProperty('--bm-top', m.top); s.setProperty('--bm-o', m.o);
     el.hidden = false;
+  };
+  /* 首页右页垫底的同一个字:整块 svg,高由首页的样式定(--bm-h 给宽高比、--bm-k 按字缩、--bm-right 是出纸边多少、--bm-o 浓淡);没有 mark 的老师给空串 */
+  var markArt = function (t) {
+    var m = t && t.mark ? BOARD_MARKS[t.mark] : null;
+    if (!m) return '';
+    return '<svg viewBox="0 0 ' + Math.round(m.w * 1000) + ' ' + Math.round(m.h * 1000) + '" aria-hidden="true" focusable="false" style="--bm-w:' + m.w + ';--bm-h:' + m.h + ';--bm-k:' + m.home + ';--bm-right:' + m.right + ';--bm-o:' + m.o + '"><path fill="currentColor" d="' + m.d + '"></path></svg>';
   };
 `;

@@ -88,7 +88,7 @@ try {
     await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: g.x + dx, y: g.y, button: 'left', clickCount: 1 });
     await sleep(300);
   };
-  ok('打开:三位老师一排,语文在前;「首页」标签亮着;预览里是孩子端首页本身(牌堆三张,语文在最前)', await until(`document.querySelectorAll('.ord .ch').length === 3 && document.querySelector('.seg .on')?.textContent === '首页' && document.querySelector('.ord .ch.on')?.textContent.includes('语文') && ${pv(`d.querySelectorAll('#deck .pc').length === 3`)} && ${front} === 'chinese-tutor'`, 60));
+  ok('打开:三位老师一排,语文在前;「首页」标签亮着;预览里是孩子端首页本身(三张小旗,语文那章摊开)', await until(`document.querySelectorAll('.ord .ch').length === 3 && document.querySelector('.seg .on')?.textContent === '首页' && document.querySelector('.ord .ch.on')?.textContent.includes('语文') && ${pv(`d.querySelectorAll('#deck .pc').length === 3`)} && ${front} === 'chinese-tutor'`, 60));
   console.log('  ', await shot('parent-home.png'));
 
   // ---- 改英语老师那颗按钮(手机:在预览里点它 → 整屏的表单) ----
@@ -109,7 +109,7 @@ try {
   ok('发布了:孩子端英语老师那颗换了字,讲法不下发;预览里英语那张也换了', enBtns?.join() === '我想说说我的小汽车' && !JSON.stringify(kid1).includes('颜色') && await until(pv(`[...d.querySelectorAll('#deck .pc[data-tutor="english-tutor"] .btx')].some((x) => x.textContent === '我想说说我的小汽车')`)), JSON.stringify(enBtns));
 
   // ---- 语文这周的词:在预览里点语文那张(后面那张,照孩子端换到最前),再改这周的词 ----
-  await tapPv(`d.querySelector('#deck .pc[data-tutor="chinese-tutor"] .pc-hd')`);
+  await tapPv(`d.querySelector('#tabs .tab[data-tutor="chinese-tutor"]')`);
   ok('预览里点后面那张(语文):换到最前,家长页也换到语文', await until(`${front} === 'chinese-tutor' && document.querySelector('.ord .ch.on')?.textContent.includes('语文')`));
   await until(`!!${byTitle('这周的词')}`);
   await tap(byTitle('这周的词'));
@@ -147,7 +147,7 @@ try {
   ok('右栏发布:孩子端那颗换了字,表单还开着', kid4.cards.find((c) => c.kind === 'tutor' && c.props.tutor === 'english-tutor')?.props.buttons.some((b) => b.label === '我想讲讲小汽车') && await until(`document.querySelector('#body #b-label')?.value === '我想讲讲小汽车'`));
   // 切到手机的样子:预览按手机的尺寸开,牌竖着叠
   await tap(`document.querySelector('#pvdev button[data-d="phone"]')`);
-  ok('切到手机:预览按手机的尺寸开,牌竖着叠', await until(`document.querySelector('#pvf').offsetWidth === 390`) && await until(pv(`(() => { const a = [...d.querySelectorAll('#deck .pc')].map((x) => x.getBoundingClientRect()); const mid = (r) => r.left + r.width / 2; return a.length === 3 && Math.abs(mid(a[0]) - mid(a[2])) < 2 && Math.abs(a[0].top - a[2].top) > 20; })()`)));
+  ok('切到手机:预览按手机的尺寸开,小旗在左下角一排', await until(`document.querySelector('#pvf').offsetWidth === 390`) && await until(pv(`(() => { const a = [...d.querySelectorAll('#tabs .tab')].map((x) => x.getBoundingClientRect()); const vh = d.defaultView.innerHeight; return a.length === 3 && a.every((r) => Math.round(r.bottom) === vh) && a[0].left < 60 && a[0].left < a[1].left && a[1].left < a[2].left; })()`)));
   console.log('  ', await shot('parent-home-wide-phone.png'));
   await tap(`document.querySelector('#pvdev button[data-d="tablet"]')`);
   // 拖:按住语文往左拖到第一

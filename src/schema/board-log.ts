@@ -25,6 +25,8 @@ export const BoardEventSchema = z.discriminatedUnion('k', [
   z.object({ at: z.string().min(1), k: z.literal('shot'), text: z.string().min(1).max(80), base: z.string().min(1) }),
   /** 一节课(课本):孩子落了一笔;wipe = 擦掉了自己画的(笔画本身在一节课的状态里,这里只记几时、在哪一页) */
   z.object({ at: z.string().min(1), k: z.literal('ink'), base: z.string().min(1), wipe: z.literal(true).optional() }),
+  /** 课本做底:孩子在一个田字格里写好了(放好);text = 照着写的那个字(格前面没有范字的没有);blank = 写的是填空(算式里的□、括号);clear = 把那一格擦干净了(笔画在一节课的状态里) */
+  z.object({ at: z.string().min(1), k: z.literal('cell'), base: z.string().min(1), text: z.string().min(1).max(4).optional(), blank: z.literal(true).optional(), clear: z.literal(true).optional() }),
   /** 课本做底:孩子自己翻了页——在目录上点了一课,或在一课里按「目录」回去;text 是翻到的那一页(课名或「目录」),base = 翻到的那一页 */
   z.object({ at: z.string().min(1), k: z.literal('open'), text: z.string().min(1).max(80), base: z.string().min(1) }),
   /** 孩子动了手以后一直没出声,应用替他叫了一次老师(下一轮 live.app: still) */

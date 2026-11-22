@@ -24,8 +24,14 @@ html, body, #root { margin: 0; height: 100%; background: #fffdf8; font: 18px/1.5
 .bk-look { mix-blend-mode: multiply; }
 .bk-look rect { fill: rgba(255, 212, 59, .62); }
 .bk-look-wash rect { fill: rgba(255, 212, 59, .38); }
+/* 老师的圈、划、加点与孩子的笔:正片叠底,画在字的「后面」(docs/artifact/页上记号/规范.html 的 L2);新的 85%,旧的淡到 30%,收掉的淡出(book.tsx 的 MARK_GONE_MS) */
+.bk-teacher .bk-mark, .bk-ink { mix-blend-mode: multiply; }
+.bk-teacher .bk-mark { opacity: .85; transition: opacity .45s ease; }
+.bk-teacher .bk-mark.bk-old { opacity: .3; }
+.bk-teacher .bk-mark.bk-gone { opacity: 0; }
 .bk-ring { stroke-dasharray: 1; stroke-dashoffset: 1; animation: bk-draw .7s ease-out forwards; }
 @keyframes bk-draw { to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) { .bk-ring { animation: none; stroke-dashoffset: 0; } .bk-teacher .bk-mark { transition: none; } }
 
 /* ---- 小课堂(一节课里的一页):一条竖栏(课名、画一画 / 擦掉),画面占满中间,下面字幕、一行控制(播放、进度条、时间、提示)。
    回首页的胶囊、老师的牌、老师说的话是页面的(kid-page.ts 的 #stage.bp.lcp),浮在舞台上:竖栏在老师牌的对面(右手的老师牌在左,竖栏在右),顶上让出胶囊 ---- */
@@ -116,3 +122,29 @@ html, body, #root { margin: 0; height: 100%; background: #fffdf8; font: 18px/1.5
   .lc-bar { flex-wrap: wrap; row-gap: 8px; }
   .lc-slot { order: 5; width: 100%; justify-content: center; }
 }
+
+/* ---- 写字格(cell-pad.tsx):点开课本上的空田字格写一个字;fixed 在舞台的屏幕坐标里,book.tsx 的 placePad 贴着那一格摆 ---- */
+.bk-pad { position: fixed; z-index: 6; display: flex; align-items: center; gap: 14px; padding: 52px 16px 16px; background: #ffffff; border-radius: 24px; box-shadow: 0 10px 36px rgba(60, 50, 30, .22), 0 0 0 1px rgba(60, 50, 30, .06); touch-action: none; animation: bk-pad-in .2s cubic-bezier(.2, .8, .2, 1); }
+@keyframes bk-pad-in { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: none; } }
+.bk-pad-x { position: absolute; top: 6px; right: 6px; width: 42px; height: 42px; border-radius: 50%; border: 0; background: #eeece6; color: #2b2b2b; display: grid; place-items: center; cursor: pointer; }
+.bk-pad-model { align-self: flex-start; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 12px; color: #8a857c; }
+.bk-pad-model { cursor: pointer; border-radius: 8px; transition: transform .12s; -webkit-tap-highlight-color: transparent; }
+.bk-pad-model:active { transform: scale(.94); }
+.bk-pad-model svg { width: 64px; height: 64px; }
+/* 点范字:大格里照笔顺写一遍(cell-pad.tsx 的 STROKE_MS);孩子落笔就淡下去留着描 */
+.cp-demo { transition: opacity .3s; }
+.cp-demo.cp-faint { opacity: .22; }
+.cp-ghost { fill: #e9e4da; }
+.cp-run { fill: none; stroke: #2b2b2b; stroke-width: 128; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: cp-run .55s ease-in-out forwards; }
+@keyframes cp-run { to { stroke-dashoffset: 0; } }
+.bk-pad text { font-family: "Kaiti SC", "STKaiti", "KaiTi", "Songti SC", serif; fill: #2b2b2b; }
+.bk-pad .cp-trace { fill: #f6c2c5; }
+.bk-pad-grid { width: 220px; height: 220px; touch-action: none; cursor: crosshair; }
+.cp-grid rect { fill: #ffffff; stroke: #d8c7a0; stroke-width: 8; }
+.cp-grid .mid { fill: none; stroke: #e2d4b4; stroke-width: 5; stroke-dasharray: 30 24; }
+.bk-pad-btns { display: flex; flex-direction: column; gap: 10px; }
+.bk-pad-btns button { min-width: 88px; height: 44px; padding: 0 18px; border-radius: 22px; border: 0; background: #eeece6; color: #2b2b2b; font: inherit; font-size: 16px; font-weight: 700; cursor: pointer; }
+.bk-pad-btns .pri { background: var(--sc, #e8590c); color: #ffffff; }
+.bk-pad-btns button:disabled { opacity: .4; cursor: default; }
+@media (max-width: 600px) { .bk-pad { flex-wrap: wrap; justify-content: center; max-width: calc(100vw - 20px); } .bk-pad-btns { flex-direction: row; width: 100%; justify-content: center; } }
+@media (prefers-reduced-motion: reduce) { .bk-pad { animation: none; } .cp-run { animation-duration: .01s; } }

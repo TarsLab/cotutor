@@ -9,6 +9,7 @@
 - 使用、配置与开发启动见 `README.md`;iPad 真机见 `docs/iPad与iPhone.md`。
 - `docs/` 根下七篇给家长和写提示词的人:设备使用、日常使用、老师与配置、vault、提示词、年级教学包和词表(README 只走家长装起来的主线,细节在这几篇);`docs/dev/` 给开发 agent,一块一篇,写现在是什么样、不写怎么变成这样的。根目录的 `INSTALL.md` 给替家长安装的 agent 看,随 npm 包发,`cotutor guide`(`src/app/cli/guide.ts`)原样打印,README 给家长的那句就是叫助手跑 `npx cotutor@latest guide`(不用输网址、走 npm 能换国内镜像、和装上的版本对得上);`tests/install-doc.test.ts` 盯着里面的命令、旗标和字段。契约以 `src/schema/` 为准,具体行为以实现和测试为准。
 - 改 `grades/`、`skills/`、`cards/` 下的 md 先看 `docs/写提示词.md`;自造的词查 `docs/词表.md`。年级教学包的来源、旧版迁移和贡献要求见 `docs/年级教学包.md`。
+- 协议类的设计稿(页上谁画什么、什么时候收这种没有现成验证规则、要真用才看得出问题的)放 `docs/artifact/<名>/`,一页 HTML 给开发者看、按编号提议,怎么写、定了以后怎么办见 `docs/artifact/README.md`。
 - 草稿与随手记放 `docs/wip/`(gitignore)。已有的 `docs/archive/` 是本机材料;清理正式文档时不删除这些未入库文件。过时的正式文档直接删除,历史由 Git 保存。
 
 ## 目录

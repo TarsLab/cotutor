@@ -150,10 +150,22 @@ const ix = bookIndexOf();
   const v = log.find((e) => e.k === 'view');
   check('挪窗记成一句:哪一页、看得见什么', v?.k === 'view' && v.text === '第 2 页:第 2–3 段', JSON.stringify(v));
 
+  // 课本的田字格里写好了一个字(放好):落进孩子的一层、记进板的日志;不对的不收
+  const cell = await ctx.runner.boardEvent(T, date, { k: 'cell', thread, base, id: '2.0', strokes: [[[100, 120], [880, 900]], [[500, 80], [500, 950]]], text: '泡' });
+  const badCells = await Promise.all([
+    ctx.runner.boardEvent(T, date, { k: 'cell', thread, base, id: '../2', strokes: [] }),
+    ctx.runner.boardEvent(T, date, { k: 'cell', thread, base, id: '2.1', strokes: [[[100, 5000]]] }),
+    ctx.runner.boardEvent(T, date, { k: 'cell', thread, base, id: '2.1', strokes: 'x' }),
+  ]);
+  const lCell = ((await route('GET', `/api/kid/lesson?tutor=${T}&date=${date}&thread=${thread}`, ctx)).json as { lesson: Lesson }).lesson;
+  const cellLog = (await readBoard(ws, T, date, thread)).filter((e) => e.k === 'cell');
+  check('田字格里写好了:状态里这一格两笔,日志记照着哪个字写的;老师请着用笔(上一轮请了圈)就替他交', cell?.say === null && cell.asked === true && lessonPage(lCell)!.kid.cells?.['2.0']?.length === 2 && cellLog.length === 1 && cellLog[0].k === 'cell' && cellLog[0].text === '泡', JSON.stringify([cell, lessonPage(lCell)!.kid.cells, cellLog]));
+  check('田字格:id 不对、坐标出格、笔画不是数组都不收', badCells.every((x) => x === null), JSON.stringify(badCells));
   now = new Date(2026, 10, 14, 10, 6, 20);
   const third = await kidSend(ctx, T, { text: '这个字怎么读', thread });
   await wait();
   const pr3 = promptOf(String(third.json.job));
+  check('下一轮:孩子做的里说他在田字格里写了几个、照着哪个字', pr3.includes('在田字格里写了 1 个字(照着「泡」写的),写成什么样看图'), pr3.slice(pr3.indexOf('board:'), pr3.indexOf('board:') + 500));
   check('下一轮:底是这一课,这一课的字分好段(第一次看到,给一条 <page>);他点了什么、最近点的、他在看哪里', pr3.includes('底: "课本《语文一年级下册》:《小鱼吹泡泡》第 1–2 页"') && pr3.includes('第1段 小鱼在水里吹泡泡。') && pr3.includes('点开看了笔顺:泡') && pr3.includes('孩子在看: "第 2 页:第 2–3 段"'), pr3.slice(pr3.indexOf('board:'), pr3.indexOf('board:') + 400));
   now = new Date(2026, 10, 14, 10, 8);
   const fourth = await kidSend(ctx, T, { text: '不存在的课', thread });

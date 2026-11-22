@@ -11,7 +11,8 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BOOK_INDEX_VERSION, type BookIndex, type PdfItem, type PdfPage } from '../schema/index.ts';
+import { BOOK_INDEX_VERSION, type BookIndex, type PdfCell, type PdfItem, type PdfPage } from '../schema/index.ts';
+import { opsCells } from './textbook-cells.ts';
 import { buildBookIndex } from './textbook-index.ts';
 
 /** 册子的文件名:不带路径分隔、不以点开头、是 .pdf */
@@ -66,7 +67,7 @@ export function loadPdfjs(): Promise<Pdfjs> {
   return pdfjs;
 }
 
-/** 读 PDF 每一页的文字(PdfItem:基线从页顶量) */
+/** 读 PDF 每一页的文字(PdfItem:基线从页顶量)和页上画的田字格(./textbook-cells.ts;画图的指令读不出就当没有) */
 export async function readPdfPages(data: Uint8Array): Promise<PdfPage[]> {
   const lib = await loadPdfjs();
   const task = lib.getDocument({ data, disableFontFace: true, verbosity: 0 });
@@ -85,7 +86,9 @@ export async function readPdfPages(data: Uint8Array): Promise<PdfPage[]> {
         const [x, y] = vp.convertToViewportPoint(e, f);
         items.push({ s: it.str, f: it.fontName, x: Math.round(x * 100) / 100, y: Math.round(y * 100) / 100, z: Math.round(Math.hypot(a, b) * 100) / 100, w: Math.round(it.width * 100) / 100 });
       }
-      out.push({ n, w: vp.width, h: vp.height, items });
+      let got: { cells: PdfCell[]; boxes: [number, number, number, number][] } = { cells: [], boxes: [] };
+      try { got = opsCells(await page.getOperatorList({ annotationMode: 0 }), lib.OPS as unknown as Record<string, number>, vp.transform); } catch { /* 画图的指令读不出:没有格子 */ }
+      out.push({ n, w: vp.width, h: vp.height, items, ...(got.cells.length ? { cells: got.cells } : {}), ...(got.boxes.length ? { boxes: got.boxes } : {}) });
       page.cleanup();
     }
     return out;

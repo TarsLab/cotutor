@@ -1039,7 +1039,7 @@ export class LiveCall {
     }
     // 抬笔(这一笔收下了):老师请着用笔(asked)时,停一会儿没再落笔就替他交给老师;没请他自己画的不交,随下一轮走
     // 这一笔报来以后孩子已经开口、开了一轮(seq 是报来那一刻的):这一笔随那一轮走了,不再等
-    if (b.k === 'stroke' && r.asked && seq === this.turnSeq) { this.penThread = r.thread; this.penStep({ e: 'up', at: Date.now(), strip: typeof b.strip === 'string' }); }
+    if ((b.k === 'stroke' || b.k === 'cell') && r.asked && seq === this.turnSeq) { this.penThread = r.thread; this.penStep({ e: 'up', at: Date.now(), strip: typeof b.strip === 'string' }); }
     this.lastActive = Date.now();
     // 课本上挪窗、放大(view):他在自己读,不替他叫老师,先前点字起的那一下也取消
     if (r.still === false) { if (this.stillTimer) clearTimeout(this.stillTimer); this.stillTimer = null; } else this.stillArm(r.thread);

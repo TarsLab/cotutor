@@ -29,7 +29,7 @@ import { deriveKidView, truncateReply } from './kid-view.ts';
 import { parseSections } from '../board/sections.ts';
 import { threadDigest } from './context/thread-digest.ts';
 import { type RunEvent, type RunEventEnvelope, type RunEventInput } from '../schema/index.ts';
-import { LESSON_INK_POINTS, PEN_ASKS, PHOTO_PAGE, type ActivityBase, type Lesson, type LessonAct, type LessonEvent, type PagePhoto, canonicalSubject, subjectLang, MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, VAULT_PACK_ROLES, isApiRuntime, resolvePolicy, type ContextPack, type ConversationIndex, type MemoryProposal, type PendingMemory, type ActivityRun, type ConversationMessage, type MessageFrom, type MessageVia, type Policy, type Timing } from '../schema/index.ts';
+import { CELL_UNIT, LESSON_CELL_STROKES, LESSON_INK_POINTS, PEN_ASKS, PHOTO_PAGE, type ActivityBase, type Lesson, type LessonAct, type LessonEvent, type PagePhoto, canonicalSubject, subjectLang, MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, VAULT_PACK_ROLES, isApiRuntime, resolvePolicy, type ContextPack, type ConversationIndex, type MemoryProposal, type PendingMemory, type ActivityRun, type ConversationMessage, type MessageFrom, type MessageVia, type Policy, type Timing } from '../schema/index.ts';
 import { UsageError } from '../shared/errors.ts';
 import type { Workspace } from '../schema/index.ts';
 import { readIndex, snapshotSources, writeIndex, writeRunFile } from './journal/store.ts';
@@ -50,7 +50,7 @@ import { appendBoard, readBoard } from './journal/board-log.ts';
 import { bookSlateParts, clipNote, lessonSlateBits, slateOf, type PageNote } from './context/board-pack.ts';
 import { bookLesson, bookPageOf, fitSection, lessonOpen, pageText, sectionActs, tocEntries, whitePage, type LessonBook, type LessonSource } from '../board/lesson-fit.ts';
 import { bookLast, rememberBook } from './journal/book-last.ts';
-import { lessonDone, lessonPage, lessonStep } from '../board/lesson.ts';
+import { lessonDone, lessonPage, lessonSection, lessonStep } from '../board/lesson.ts';
 import { readLesson, updateLesson } from './journal/lesson-store.ts';
 import { BOOK_TOC, bookView, photoBookPage, photoText, pickable, type PhotoText } from '../chalk/index.ts';
 import { bookIndex, listBooks, pickBook } from '../memory/textbook-pdf.ts';
@@ -418,6 +418,18 @@ export class Runner {
       const asked = b.k === 'stroke' && (lessonPage(after)?.open ?? []).some((o) => PEN_ASKS.includes(o));
       return { thread, say: null, still: false, ...(asked ? { asked: true as const } : {}) };
     }
+    // 课本的田字格里写好了一个字(放好):这一格的笔画整个换掉(空的 = 擦干净了);请着用笔时同落笔一样替他交
+    if (b.k === 'cell') {
+      const strokes = Array.isArray(b.strokes) ? b.strokes : null;
+      const pt = (p: unknown): boolean => Array.isArray(p) && p.length === 2 && p.every((n) => typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= CELL_UNIT);
+      if (typeof b.id !== 'string' || !/^\d{1,4}\.\d{1,4}$/.test(b.id) || !strokes || strokes.length > LESSON_CELL_STROKES || !strokes.every((st) => Array.isArray(st) && st.length > 0 && st.length <= LESSON_INK_POINTS && st.every(pt))) return null;
+      const after = await step({ t: 'cell', id: b.id, strokes: strokes as [number, number][][] });
+      if (!after) return null;
+      const model = typeof b.text === 'string' && b.text.length <= 4 && b.text.trim() ? b.text.trim() : undefined;
+      await appendBoard(ws, tutor, date, thread, { at, k: 'cell', base, ...(model ? { text: model } : {}), ...(b.blank === true ? { blank: true as const } : {}), ...(strokes.length ? {} : { clear: true as const }) });
+      const asked = strokes.length > 0 && (lessonPage(after)?.open ?? []).some((o) => PEN_ASKS.includes(o));
+      return { thread, say: null, still: false, ...(asked ? { asked: true as const } : {}) };
+    }
     if (b.k === 'view' || b.k === 'shot') {
       const box = Array.isArray(b.box) && b.box.length === 4 && b.box.every((n) => typeof n === 'number' && Number.isFinite(n)) ? (b.box as [number, number, number, number]) : null;
       const shot = b.k === 'shot' ? jpegBytes(b.image) : null;
@@ -425,8 +437,10 @@ export class Runner {
       const lesson = await readLesson(ws, tutor, date, thread);
       const page = lessonPage(lesson);
       if (!page || page.id !== base) return null;
-      // 窗里的图:语文课本、目录不要(课文就是字,都在页的文字层里,每轮多一张图只多花钱);数学课本、照片、白纸要(数、图、孩子写的在图上)
-      if (shot && page.kind === 'book' && (page.layout !== 'math' || page.title === BOOK_TOC)) return null;
+      // 窗里的图:语文课本、目录不要(课文就是字,都在页的文字层里,每轮多一张图只多花钱);数学课本、照片、白纸要(数、图、孩子写的在图上);
+      // 语文课本上孩子在田字格里写了字也要(写成什么样只有图上有)
+      const wrote = Object.keys(page.kid.cells ?? {}).length > 0;
+      if (shot && page.kind === 'book' && (page.layout !== 'math' || page.title === BOOK_TOC) && !wrote) return null;
       const src = await this.lessonSource(ws, tutor, page.kind === 'book', lesson);
       const t = pageText(page, src);
       const text = (page.kind === 'white' ? '白纸' : bookView(t.pages, t.sheets, t.blocks, box, page.kind === 'photo' ? '张' : '页')).slice(0, 80);
@@ -924,10 +938,10 @@ export class Runner {
       const fit = this.fitBoard(kidView.section, active);
       kidView.section = fit.section;
       kidView.warnings.push(...fit.why);
-      // 这一节落好的动作照先后落进这节课的状态;落的是现在的样子(这一轮写着的时候孩子可能又画了、揭了)
+      // 这一节落好的动作照先后落进这节课的状态(先收上一轮的圈、划、加点,一句一句落、记念完几句,同孩子端);落的是现在的样子(这一轮写着的时候孩子可能又画了、揭了)
       if (active.lesson) {
         const acts = sectionActs(fit.section);
-        await updateLesson(ws, tutor, date, thread, (l) => lessonDone(acts.reduce((s, a) => lessonStep(s, { t: 'act', act: a }), l), job));
+        await updateLesson(ws, tutor, date, thread, (l) => (l.jobs.includes(job) ? l : lessonDone(lessonSection(l, fit.section), job)));
         // 老师翻到了课本的一课:记下这本书翻到哪了(下次目录停在这一课)
         const went = [...acts].reverse().find((a): a is Extract<LessonAct, { k: '翻' }> => a.k === '翻');
         if (went?.page.kind === 'book' && went.page.title !== BOOK_TOC) await rememberBook(ws, went.page.src, went.page.title, (this.opts.now ?? (() => new Date()))());

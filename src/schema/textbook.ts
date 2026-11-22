@@ -15,12 +15,40 @@ export interface PdfItem {
   w: number;
 }
 
-/** 一页的原始文字:n 是 PDF 里的第几页(从 1 起) */
+/** 一页的原始文字:n 是 PDF 里的第几页(从 1 起);cells = 页上画的田字格(src/memory/textbook-cells.ts 从画图的指令里认的) */
 export interface PdfPage {
   n: number;
   w: number;
   h: number;
   items: PdfItem[];
+  cells?: PdfCell[];
+  /** 页上描边的小方框(10–60pt 宽、10–30pt 高,田字格以外的):数学算式里的空(□)从这里挑(textbook-index.ts 的 blankCells) */
+  boxes?: [number, number, number, number][];
+}
+
+/** 页上画的一个田字格(PDF 的点,左上角起):格里印的字(没有 = 空格)、那个字是不是红的(描红) */
+export interface PdfCell {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  ch?: string;
+  red?: boolean;
+}
+
+/**
+ * 一页上孩子能写的一格(docs/artifact/页上记号/规范.html 的 R3、R5):田字格分 model = 印着黑字的范字,trace = 印着红字让孩子描的,empty = 空着让孩子写的;
+ * blank = 填空:算式里的空方框(□)、空着的括号(没有田字格的线,没有范字)。
+ * ch = 格里印的字;m = 这一格照着写的那个字(同一排它左边最近的范字;描红就是它自己的字;前面没有范字的空格没有)。坐标同 BookLine(PDF 的点)
+ */
+export interface BookCell {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  kind: 'model' | 'trace' | 'empty' | 'blank';
+  ch?: string;
+  m?: string;
 }
 
 /** 一个字:左右边(行的上下边就是它的上下边);py = 头上印的拼音(已解码成带调的,如 jǐng) */
@@ -52,6 +80,8 @@ export interface BookPage {
   h: number;
   /** 从上到下、从左到右 */
   lines: BookLine[];
+  /** 页上的田字格(从上到下、从左到右);没有就不写 */
+  cells?: BookCell[];
 }
 
 /**
@@ -74,7 +104,7 @@ export interface BookLesson {
 }
 
 /** 索引的版本:取字、分行的规则改了就加一,旧缓存重做 */
-export const BOOK_INDEX_VERSION = 4;
+export const BOOK_INDEX_VERSION = 5;
 
 /**
  * 一册怎么分块(src/chalk/kit/book.ts 的 lessonBlocks):prose = 课文(自然段、语文园地的栏目);

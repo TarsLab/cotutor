@@ -9,9 +9,9 @@ import type { BookLayout } from './textbook.ts';
 
 /**
  * 讲稿里的动作有哪些(《底层设计》第五节):
- * 看(窗移到哪)· 圈、遮(拼音)、盖(印好的答案)· 写(白纸条里写字)· 擦(自己上一样或整条白纸条)· 摆(白纸条里摆图形:点阵、方向盘)· 请(开放哪些作答)· 翻(换一课、回到照片页、加一张白纸页)
+ * 看(窗移到哪)· 圈、划(横线)、加点(字下一个点)· 遮(拼音)、盖(印好的答案)· 写(白纸条里写字)· 擦(自己上一样或整条白纸条)· 摆(白纸条里摆图形:点阵、方向盘)· 请(开放哪些作答)· 翻(换一课、回到照片页、加一张白纸页)
  */
-export const ACT_NAMES = ['看', '圈', '遮', '盖', '写', '擦', '摆', '请', '翻'] as const;
+export const ACT_NAMES = ['看', '圈', '划', '加点', '遮', '盖', '写', '擦', '摆', '请', '翻'] as const;
 export type ActName = (typeof ACT_NAMES)[number];
 
 /** 请孩子做的(开放哪些作答):写、圈、点(点字)、涂、切、转、说、添(点阵上添一个) */
@@ -44,9 +44,29 @@ export const LESSON_INK_POINTS = 120;
 export const LESSON_PICK_MAX = 30;
 export const LESSON_MARKS_MAX = 24;
 export const STRIP_ITEMS_MAX = 8;
+/** 孩子在课本的田字格里写字:一页最多写多少格、一格最多几笔;笔画的坐标是格里的,0–CELL_UNIT(左上角起) */
+export const LESSON_CELLS_MAX = 120;
+export const LESSON_CELL_STROKES = 40;
+export const CELL_UNIT = 1000;
 
-/** 老师在页上的一个记号:圈(红圈)、遮(盖住字头上的拼音)、盖(整个盖住印好的字);text 是课本上印的字,box 是应用找到的位置 */
-export interface TeacherMark { k: '圈' | '遮' | '盖'; text: string; box: Box }
+/**
+ * 指着字的记号(圈、划、加点)跟着话走:属于说它的那一句,话过去了就退下(docs/artifact/页上记号/规范.html 的 C2–C4)。
+ * 遮、盖是故意挡住的,留到孩子揭开。
+ */
+export const LINE_MARKS = ['圈', '划', '加点'] as const;
+export type LineMarkName = (typeof LINE_MARKS)[number];
+export type MarkName = LineMarkName | '遮' | '盖';
+/** 一句话后面最多几处新的指着字的记号;舞台上同时新的也最多这么多(多的画成旧的) */
+export const MARKS_NEW_MAX = 3;
+/** 指着字的记号念过几句以后变旧(淡):画它的那一句算第 1 句,念完下一句还是新的 */
+export const MARK_FRESH_LINES = 2;
+
+/**
+ * 老师在页上的一个记号:圈(把字和头上的拼音一起圈住)、划(字下一道横线;一句跨行就一行一条)、加点(每个字下一个点)、
+ * 遮(盖住字头上的拼音)、盖(整个盖住印好的字);text 是课本上印的字,box 是应用找到的位置。
+ * at:画它时这节课已经念完几句(Lesson.said);只有圈、划、加点有。舞台照 said − at 画新的、旧的
+ */
+export interface TeacherMark { k: MarkName; text: string; box: Box; at?: number }
 
 /** 白纸条里的一样:写的一行字,或摆的一个图形(src/chalk/kit/ 的画法与参数) */
 export type StripItem =
@@ -114,9 +134,10 @@ export type LessonPage = PageSource & {
   teacher: { marks: TeacherMark[]; strips: Strip[] };
   /**
    * 孩子的那一层:笔画(场景坐标,原样不归整)、写在白纸条上的笔画(键:白纸条;收起来就跟着收,回到那道题还在)、
-   * 揭开了哪些、点开看过哪些字词(先后)、白纸条里的图形转到多少度(键:<白纸条>#<第几样>)
+   * 揭开了哪些、点开看过哪些字词(先后)、白纸条里的图形转到多少度(键:<白纸条>#<第几样>)、
+   * 在课本的田字格里写的字(键:<PDF 第几页>.<这一页第几格>,src/chalk/kit/book.ts 的 bookCellsOf;笔画是格里的坐标 0–CELL_UNIT;以前的状态没有)
    */
-  kid: { ink: [number, number][][]; stripInk: Record<string, [number, number][][]>; revealed: string[]; picked: string[]; turns: Record<string, number> };
+  kid: { ink: [number, number][][]; stripInk: Record<string, [number, number][][]>; revealed: string[]; picked: string[]; turns: Record<string, number>; cells?: Record<string, [number, number][][]> };
   /** 开放的:这一步请孩子做的(老师的「请」);没请就只能看和点字(课本页上也能画,抬笔不替他交) */
   open: AskName[];
 };
@@ -135,6 +156,8 @@ export interface Lesson {
   strip: string | null;
   /** 落进来过的那几轮(老师那一节的 job,最近的 LESSON_JOBS_MAX 个):孩子端回到这节课时照它知道哪几节已经在里面,不再落一遍 */
   jobs: string[];
+  /** 老师念完了几句(带动作的那几轮里的句子;一句念完、它的动作落完加一):指着字的记号照它变旧。没有 = 0 */
+  said?: number;
 }
 export const LESSON_JOBS_MAX = 60;
 /** 「看」的那一块最多带几行的框(一整页课本二三十行;再多的不刷,只滚过去) */
@@ -145,7 +168,7 @@ export type LessonAct =
   | { k: '翻'; page: PageSource }
   /** at:小课堂上放哪一段(课里的毫秒,对齐到句) */
   | { k: '看'; label: string; box: Box; at?: [number, number]; rows?: Box[] }
-  | { k: '圈' | '遮' | '盖'; spots: { text: string; box: Box }[] }
+  | { k: MarkName; spots: { text: string; box: Box }[] }
   | { k: '写'; text: string; size: Size }
   | { k: '摆'; kit: string; params: Record<string, string>; size: Size }
   | { k: '擦'; all: boolean }
@@ -166,8 +189,14 @@ export type LessonEvent =
   | { t: 'view'; box: Box }
   /** 白纸条里的图形转到了多少度 */
   | { t: 'turn'; item: string; deg: number }
+  /** 在课本的一个田字格里写好了(放好):这一格的笔画整个换成这些;空的 = 这一格擦干净了 */
+  | { t: 'cell'; id: string; strokes: [number, number][][] }
   /** 孩子拍来了几张(应用收下就铺,不等老师):接在照片页后面,没有照片页就开一页;pick = 这一页能不能点字 */
-  | { t: 'photo'; photos: PagePhoto[]; pick: boolean };
+  | { t: 'photo'; photos: PagePhoto[]; pick: boolean }
+  /** 老师念完了一句(这一句的动作已经落了):said 加一 */
+  | { t: 'said' }
+  /** 老师开始说新的一轮:上一轮指着字的记号(圈、划、加点)都收 */
+  | { t: 'round' };
 
 const num = z.number().finite();
 export const BoxSchema = z.tuple([num, num, num, num]);
@@ -195,7 +224,7 @@ export const PageSourceSchema = z.discriminatedUnion('kind', [BookSourceSchema, 
 const RangeSchema = z.tuple([z.number().nonnegative(), z.number().nonnegative()]);
 const Layers = {
   teacher: z.object({
-    marks: z.array(z.object({ k: z.enum(['圈', '遮', '盖']), text: z.string().min(1), box: BoxSchema })).max(LESSON_MARKS_MAX),
+    marks: z.array(z.object({ k: z.enum(['圈', '划', '加点', '遮', '盖']), text: z.string().min(1), box: BoxSchema, at: z.number().int().nonnegative().optional() })).max(LESSON_MARKS_MAX),
     strips: z.array(z.object({ key: z.string().min(1), box: BoxSchema, items: z.array(StripItemSchema).max(STRIP_ITEMS_MAX) })),
   }),
   kid: z.object({
@@ -204,6 +233,7 @@ const Layers = {
     revealed: z.array(z.string()),
     picked: z.array(z.string()).max(LESSON_PICK_MAX),
     turns: z.record(z.string(), num),
+    cells: z.record(z.string(), z.array(z.array(z.tuple([num, num])).min(1).max(LESSON_INK_POINTS)).min(1).max(LESSON_CELL_STROKES)).optional(),
   }),
   open: z.array(AskSchema),
 };
@@ -216,11 +246,12 @@ export const LessonSchema = z.object({
   view: BoxSchema.nullable(),
   strip: z.string().nullable(),
   jobs: z.array(z.string()).max(LESSON_JOBS_MAX).default([]),
+  said: z.number().int().nonnegative().optional(),
 });
 export const LessonActSchema = z.discriminatedUnion('k', [
   z.object({ k: z.literal('翻'), page: PageSourceSchema }),
   z.object({ k: z.literal('看'), label: z.string(), box: BoxSchema, at: RangeSchema.optional(), rows: z.array(BoxSchema).max(LOOK_ROWS_MAX).optional() }),
-  z.object({ k: z.enum(['圈', '遮', '盖']), spots: z.array(z.object({ text: z.string().min(1), box: BoxSchema })) }),
+  z.object({ k: z.enum(['圈', '划', '加点', '遮', '盖']), spots: z.array(z.object({ text: z.string().min(1), box: BoxSchema })) }),
   z.object({ k: z.literal('写'), text: z.string().min(1), size: SizeSchema }),
   z.object({ k: z.literal('摆'), kit: z.string().min(1), params: z.record(z.string(), z.string()), size: SizeSchema }),
   z.object({ k: z.literal('擦'), all: z.boolean() }),

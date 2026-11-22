@@ -20,7 +20,8 @@
  * 孩子的话不上板(在左栏);谁出声谁停走 ../../runtime/delivery/player.ts 的 liveStep(同样剥类型内联);连不上、断了回到「正在叫老师」再连。
  * 板上的节只剩骨架(一个话题一节、挂时间),位置的事走 ../../board/presentation.ts 的 step(纯函数,有测试,剥类型内联)。
  * 「给老师看」= 舞台先交窗里的图,再发一条 {text:'', action:'submit'};按住说 = 图和这句话一起给老师。
- * 页上点字:汉字弹田字格、英文单词弹四线三格,写一遍(#st-pick)。
+ * 页上点字:汉字弹田字格、英文单词弹四线三格,写一遍(#st-pick)。卡贴着那个字(放在那一行上面或下面空大的一边、小尖角指着它),页滚了跟着走;
+ * 收卡:×、点页上别处、那个字出了窗、孩子落笔(舞台报 pickAt null)、老师「看」别处或翻页;不按时间收(docs/artifact/页上记号/规范.html 的 F1–F5)。
  * 作业照片:相机 / 相册先进发照片屏(裁剪、圈画、转 90°,坐标在 src/ui/kid/photo-edit.ts),再一条 {text, photos}。
  * 流式:老师还在写时 pending 条目带 partial 讲稿;整轮跑完那节换成正式的,不重播。
  * __TITLE__ / __SHORT__(主屏幕图标下的名字)由路由替换。调试参数(只管这一次打开,见文末启动):`?tutor=` 进哪位老师,
@@ -263,6 +264,11 @@ ${BACK_TINT_CSS}
   #st-pick { position:absolute; z-index:3; top:calc(env(safe-area-inset-top) + 72px); right:calc(env(safe-area-inset-right) + 16px); padding:54px 14px 12px; background:#fff; border-radius:24px; box-shadow:0 10px 36px rgba(60,50,30,.22), 0 0 0 1px rgba(60,50,30,.06); animation:st-pick-in .22s cubic-bezier(.2,.8,.2,1); }
   #st-pick[hidden] { display:none; }
   body.hand-left #st-pick { right:auto; left:calc(env(safe-area-inset-left) + 16px); }
+  /* 贴着字(舞台给了那个字在哪):left / top 由 pickPlace 摆;小尖角指着字,--ax 是它离卡左边多远 */
+  #st-pick.anch, body.hand-left #st-pick.anch { right:auto; }
+  #st-pick.anch::before { content:''; position:absolute; left:calc(var(--ax, 50%) - 12px); width:24px; height:12px; background:#fff; }
+  #st-pick.anch.below::before { top:-11px; clip-path:polygon(50% 0, 100% 100%, 0 100%); }
+  #st-pick.anch.above::before { bottom:-11px; clip-path:polygon(0 0, 100% 0, 50% 100%); }
   /* 点字弹的田字格:每字一个格,一笔一笔写,点格子再写一遍 */
   #st-pick .pk-hz { display:flex; flex-wrap:nowrap; gap:10px; justify-content:center; align-items:flex-start; }
   .hz { position:relative; width:168px; height:168px; cursor:pointer; -webkit-tap-highlight-color:transparent; }
@@ -1214,9 +1220,10 @@ ${HOME_TILES_JS}
   };
   // ---- 一节课(课本、作业照片、白纸都是):服务端记着一节课的状态(<date>.<话题>.lesson.json);这里照 lessonStep(src/board/lesson.ts,内联)把老师念过的那几句的动作落上,
   //      孩子在页上做的事也落上、报给服务端,变了就整份发给舞台画(舞台 book.tsx 只照状态画)。
-  //      老师一节的动作:第一句前面的马上落;每一句的等它念完(下一句开始放、或嘴放完了)才落;孩子打断、老师开了下一轮、不在实时里,没落的一下子都落上。
+  //      老师一节的动作:第一句前面的马上落;每一句的等它念完(下一句开始放、或嘴放完了)才落,落完记一句念完(said,圈、划、加点照它变旧);孩子打断、老师开了下一轮、不在实时里,没落的一下子都落上。
+  //      新的一轮一来先收上一轮的圈、划、加点(round;同服务端定稿时的 lessonSection)。
   //      回到这节课、刷新:照服务端的(lesson.jobs 是已经落进去的那几轮,不再落) ----
-  const LS = { on: false, l: null, seen: new Set(), job: null, lead: 0, lines: 0, key: '', inkAt: 0, recT: 0, recKey: '', idleT: 0, asking: false, playN: 0 };
+  const LS = { on: false, l: null, seen: new Set(), job: null, lead: 0, lines: 0, key: '', inkAt: 0, recT: 0, recKey: '', idleT: 0, asking: false, playN: 0, lookKey: '' };
   /** 这一节此刻(流式的也算):板上的、还在写的 */
   const lsSection = (job) => (S.partial && S.partial.job === job && S.sections[S.partial.idx] ? S.sections[S.partial.idx] : S.sections.find((x) => x.job === job)) || null;
   const lsActs = (acts) => (acts || []).filter((a) => a && a.do);
@@ -1228,7 +1235,7 @@ ${HOME_TILES_JS}
     const lead = lsActs(sec.acts);
     if (lead.length > LS.lead) { LS.l = lessonActs(LS.l, lead.slice(LS.lead)); LS.lead = lead.length; }
     const to = Math.min(upTo, sec.lines.length);
-    for (; LS.lines < to; LS.lines++) LS.l = lessonActs(LS.l, lsActs(sec.lines[LS.lines].acts));
+    for (; LS.lines < to; LS.lines++) LS.l = lessonStep(lessonActs(LS.l, lsActs(sec.lines[LS.lines].acts)), { t: 'said' });
   };
   /** 这一节都落完了:记下来,不再看它 */
   const lsFinish = () => {
@@ -1245,8 +1252,14 @@ ${HOME_TILES_JS}
     if (!LS.on || !LS.l) return;
     for (const sec of S.sections) {
       if (!sec || LS.seen.has(sec.job) || sec.job === LS.job) continue;
-      if (!(sec.acts && sec.acts.length) && !sec.lines.some((x) => x.acts && x.acts.length)) { if (!sec.partial) LS.seen.add(sec.job); continue; }
+      if (!(sec.acts && sec.acts.some((a) => a && a.do)) && !sec.lines.some((x) => x.acts && x.acts.some((a) => a && a.do))) {
+        if (LS.job) lsFinish();
+        LS.l = lessonStep(LS.l, { t: 'round' });
+        if (!sec.partial) LS.seen.add(sec.job);
+        continue;
+      }
       if (LS.job) lsFinish();
+      LS.l = lessonStep(LS.l, { t: 'round' });
       LS.job = sec.job; LS.lead = 0; LS.lines = 0;
     }
     if (LS.job) lsApply(0);
@@ -1269,6 +1282,9 @@ ${HOME_TILES_JS}
   const lsShow = () => {
     if (!LS.on || !LS.l || !S.stage || !S.stage.lesson) return;
     const p = lessonPage(LS.l);
+    // 老师「看」了别处、翻了页:点字的卡收起来
+    const lookKey = (LS.l.look ? LS.l.look.n : 0) + '|' + LS.l.at;
+    if (LS.lookKey !== lookKey) { if (LS.lookKey) pickHide(); LS.lookKey = lookKey; }
     $('#st-ttl').textContent = p && p.kind === 'book' && p.title !== '目录' ? p.title : '';
     // 课本的目录:能点的那几项交给舞台;一课里顶栏有「目录」回去(这本书读出了目录才有)
     const tocOf = p && p.kind === 'book' && BP.toc && BP.toc.page && BP.toc.page.src === p.src && !S.readonly && !REEL;
@@ -1280,7 +1296,7 @@ ${HOME_TILES_JS}
     renderGo();
     if (key === LS.key) return;
     LS.key = key;
-    postStage({ type: 'lesson', id: S.stage.id, lesson: LS.l, readonly: S.readonly || REEL, hand: document.body.classList.contains('hand-left') ? 'left' : 'right', ...(TRIAL ? { mousePen: true } : {}), ...(tocOn ? { toc: { color: tutorColor(), entries: BP.toc.entries.map((e) => ({ title: e.title, box: e.box })) } } : {}), ...(p && p.kind === 'lecture' ? { lecture: { url: lcBundleUrl(p.bundle, p.video), marks: S.lecture && S.lecture.bundle === p.bundle ? S.lecture.marks : [], follow: REEL, ...(LS.playN ? { play: LS.playN } : {}) } } : {}) });
+    postStage({ type: 'lesson', id: S.stage.id, lesson: LS.l, readonly: S.readonly || REEL, hand: document.body.classList.contains('hand-left') ? 'left' : 'right', color: tutorColor(), ...(TRIAL ? { mousePen: true } : {}), ...(tocOn ? { toc: { color: tutorColor(), entries: BP.toc.entries.map((e) => ({ title: e.title, box: e.box })) } } : {}), ...(p && p.kind === 'lecture' ? { lecture: { url: lcBundleUrl(p.bundle, p.video), marks: S.lecture && S.lecture.bundle === p.bundle ? S.lecture.marks : [], follow: REEL, ...(LS.playN ? { play: LS.playN } : {}) } } : {}) });
     if (!REEL && !S.readonly) { clearTimeout(LS.recT); LS.recT = setTimeout(() => { const k = JSON.stringify(LS.l); if (k !== LS.recKey && S.thread) { LS.recKey = k; playRec({ k: 'lesson', l: LS.l }); } }, 1500); }
   };
   /** 页铺满:舞台开一次,之后只换状态 */
@@ -1313,7 +1329,7 @@ ${HOME_TILES_JS}
     if (report && S.thread && base) lvSend({ t: 'board', body: { ...report, thread: S.thread, base } });
   };
   /** 「给老师看」能不能按:这一轮以后落了新的笔(课本上的、白纸条上的) */
-  const lsInk = () => { const p = LS.l && lessonPage(LS.l); return p ? p.kid.ink.length + Object.values(p.kid.stripInk || {}).reduce((n, x) => n + x.length, 0) : 0; };
+  const lsInk = () => { const p = LS.l && lessonPage(LS.l); return p ? p.kid.ink.length + Object.values(p.kid.stripInk || {}).reduce((n, x) => n + x.length, 0) + Object.values(p.kid.cells || {}).reduce((n, x) => n + x.length, 0) : 0; };
   /** 舞台说话(一节课):落笔、擦掉、点字、揭开、挪窗、窗里的图、给老师看 */
   const lsStageMsg = (m) => {
     if (m.type === 'ready') { LS.key = ''; lsShow(); if (REEL && S.reel && S.reel.lcMsg) postStage(S.reel.lcMsg); return; }
@@ -1328,7 +1344,10 @@ ${HOME_TILES_JS}
     if (m.type === 'stroke' && Array.isArray(m.pts)) { const strip = typeof m.strip === 'string' ? m.strip : undefined; lsKid({ t: 'stroke', pts: m.pts, ...(strip ? { strip } : {}) }, { k: 'stroke', pts: m.pts, ...(strip ? { strip } : {}) }); previewSoon(PV_HAND_MS); return; }
     if (m.type === 'turn' && typeof m.item === 'string' && typeof m.deg === 'number') { lsKid({ t: 'turn', item: m.item, deg: m.deg }, { k: 'turn', item: m.item, deg: m.deg }); previewSoon(PV_HAND_MS); return; }
     if (m.type === 'wipe') { lsKid({ t: 'wipe' }, { k: 'wipe' }); previewSoon(PV_HAND_MS); return; }
-    if (m.type === 'pick') { pickShow(m.text); lsKid({ t: 'pick', text: String(m.text || '') }, { k: 'pick', text: m.text }); return; }
+    // 课本的田字格里写好了一个字(放好):落进孩子的一层、报给服务端(请着写的时候它替他交)
+    if (m.type === 'cell' && typeof m.id === 'string' && Array.isArray(m.strokes)) { const model = typeof m.model === 'string' ? m.model : ''; lsKid({ t: 'cell', id: m.id, strokes: m.strokes }, { k: 'cell', id: m.id, strokes: m.strokes, ...(model ? { text: model } : {}), ...(m.blank === true ? { blank: true } : {}) }); previewSoon(PV_HAND_MS); return; }
+    if (m.type === 'pickAt') { if (!$('#st-pick').hidden) { if (Array.isArray(m.at)) pickPlace(m.at); else pickHide(true); } return; }
+    if (m.type === 'pick') { pickShow(m.text, Array.isArray(m.at) ? m.at : null); lsKid({ t: 'pick', text: String(m.text || '') }, { k: 'pick', text: m.text }); return; }
     // 目录上点了一项:自己先翻过去,再报给服务端(它照样翻、替他起一轮让老师接着讲);还没有话题(老师第一句还没开始)的不翻
     if (m.type === 'open') { const e = BP.toc && S.thread ? BP.toc.entries.find((x) => x.title === m.title) : null; if (e) { pickHide(); lsKid({ t: 'act', act: { k: '翻', page: e.page } }, { k: 'open', title: e.title }); } return; }
     if (m.type === 'reveal') { lsKid({ t: 'reveal', text: String(m.text || '') }, { k: 'reveal', text: m.text }); previewSoon(PV_HAND_MS); return; }
@@ -1586,7 +1605,27 @@ __WORD_DRAW_JS__
     $('#st-go').hidden = false; $('#st-note').textContent = ''; $('#st-go').classList.remove('holding');
   };
   /** 页上点字:孩子点中了一个字词 → 田字格浮在页上,一笔一笔写一遍(点格子再写一遍);再点别的字换成那个,× 收起来。老师不开口 */
-  const pickHide = () => { const box = $('#st-pick'); for (const b of box.querySelectorAll('.hz')) tianzigeReset(b); box.replaceChildren(); box.hidden = true; };
+  /** 收卡;fromStage = 舞台叫收的(它已经不标那个字了),页面自己收的要告诉舞台 */
+  const pickHide = (fromStage) => {
+    const box = $('#st-pick');
+    const was = !box.hidden;
+    for (const b of box.querySelectorAll('.hz')) tianzigeReset(b);
+    box.replaceChildren(); box.hidden = true; box.classList.remove('anch', 'above', 'below'); box.style.left = ''; box.style.top = '';
+    if (was && fromStage !== true) postStage({ type: 'control', action: 'unpick' });
+  };
+  /** 卡贴着那个字(at:舞台 iframe 里的屏幕框):放在那一行下面,下面放不下、上面空大就放上面;左右照字居中、不出边 */
+  const pickPlace = (at) => {
+    const box = $('#st-pick'), st = $('#stage').getBoundingClientRect(), fr = frame.getBoundingClientRect();
+    const x1 = at[0] + fr.left - st.left, y1 = at[1] + fr.top - st.top, x2 = at[2] + fr.left - st.left, y2 = at[3] + fr.top - st.top;
+    const w = box.offsetWidth, hgt = box.offsetHeight, gap = 16, edge = 12;
+    const below = st.height - y2 - gap - edge, above = y1 - gap - edge;
+    const down = below >= hgt || below >= above;
+    const left = Math.max(edge, Math.min(st.width - w - edge, (x1 + x2) / 2 - w / 2));
+    const top = down ? Math.min(y2 + gap, st.height - hgt - edge) : Math.max(edge, y1 - gap - hgt);
+    box.classList.add('anch'); box.classList.toggle('below', down); box.classList.toggle('above', !down);
+    box.style.left = left + 'px'; box.style.top = top + 'px';
+    box.style.setProperty('--ax', Math.max(24, Math.min(w - 24, (x1 + x2) / 2 - left)) + 'px');
+  };
   /**
    * 浮层(板的一角,右手在右上):应用自己弹的,不等老师。点的是什么就弹哪种:
    * 汉字 → 田字格(一笔一笔写,点格子再写一遍);英文单词 → 四线三格写一遍。点别的换成那个,× 收起
@@ -1596,17 +1635,19 @@ __WORD_DRAW_JS__
     { kind: 'tianzige', fits: (t) => /^[\u3400-\u9fff]{1,4}$/.test(t), make: (t) => { const el = h('div', { class: 'pk-hz', 'data-ch': t }); for (const ch of Array.from(t)) el.append(tianzigeBox(ch)); return { el, play: () => tianzigePlay(el) }; } },
   ];
   const floatShow = (card) => {
-    pickHide();
+    // 换一张卡:舞台已经在跟着新点的字了,不叫它 unpick
+    pickHide(true);
     $('#st-pick').dataset.kind = card.kind;
     $('#st-pick').append(h('button', { id: 'st-pick-x', type: 'button', 'aria-label': '收起来', html: ICON.close, on: { click: pickHide } }), card.el);
     $('#st-pick').hidden = false;
     card.play();
   };
-  const pickShow = (text) => {
+  const pickShow = (text, at) => {
     const t = String(text || '').trim();
     const f = FLOATS.find((x) => x.fits(t));
     if (!f) return;
     floatShow({ kind: f.kind, ...f.make(t) });
+    if (at) pickPlace(at);
   };
   const STAGE_SOURCE = 'cotutor-stage';
   const frame = $('#st-frame');

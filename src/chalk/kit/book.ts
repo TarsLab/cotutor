@@ -73,6 +73,15 @@ const toScene = (sh: BookSheet, x1: number, y1: number, x2: number, y2: number):
 /** 一行在场景里的框 */
 export const lineBox = (sh: BookSheet, l: BookLine): Box => toScene(sh, l.x1, l.y1, l.x2, l.y2);
 
+/** 一课几页上的田字格(场景坐标):id = <PDF 第几页>.<这一页第几格>(一节课状态里 kid.cells 的键);kind、ch、m 同 BookCell */
+export interface SceneCell { id: string; box: Box; kind: 'model' | 'trace' | 'empty' | 'blank'; ch?: string; m?: string }
+export function bookCellsOf(pages: readonly BookPage[], sheets: readonly BookSheet[]): SceneCell[] {
+  return pages.flatMap((p) => {
+    const sh = sheetOf(sheets, p.n);
+    return sh ? (p.cells ?? []).map((c, i) => ({ id: `${p.n}.${i}`, box: toScene(sh, c.x1, c.y1, c.x2, c.y2), kind: c.kind, ...(c.ch ? { ch: c.ch } : {}), ...(c.m ? { m: c.m } : {}) })) : [];
+  });
+}
+
 // ——— 找一课 ———
 
 // 课名前的编号要隔开才去掉(「11 坐井观天」「第11课」「1.乘法的初步认识」);「6的乘法口诀」的 6 是课名的一部分
@@ -311,7 +320,7 @@ function stream(pages: readonly BookPage[]): { c: string; n: number; i: number; 
 }
 
 /** 一段原文在哪:不管标点、空格、换行;找到第一处(在一行里的优先,给了 within 再先找和它挨着的),回这几个字所在的行与字 */
-function findText(pages: readonly BookPage[], sheets: readonly BookSheet[], text: string, within?: Box | null): { refs: { n: number; i: number }[]; box: Box; rows: Box[] } | null {
+function findText(pages: readonly BookPage[], sheets: readonly BookSheet[], text: string, within?: Box | null): { refs: { n: number; i: number }[]; box: Box; rows: Box[]; py: boolean } | null {
   const q = Array.from(text).filter((c) => !PUNCT.test(c)).join('');
   if (!q) return null;
   const s = stream(pages);
@@ -319,19 +328,21 @@ function findText(pages: readonly BookPage[], sheets: readonly BookSheet[], text
   const hits: number[] = [];
   for (let at = hay.indexOf(q); at >= 0; at = hay.indexOf(q, at + 1)) hits.push(at);
   if (!hits.length) return null;
-  const boxOf = (at: number): { refs: { n: number; i: number }[]; box: Box; rows: Box[] } => {
+  const boxOf = (at: number): { refs: { n: number; i: number }[]; box: Box; rows: Box[]; py: boolean } => {
     const xs = s.slice(at, at + q.length);
+    let py = false;
     // 一行一截(这几个字在这一行的那一段):「看」一句原话时舞台照它刷
     const perLine = new Map<string, Box[]>();
     const boxes = xs.map((x) => {
       const p = pages.find((pp) => pp.n === x.n)!, sh = sheetOf(sheets, x.n)!, l = p.lines[x.i], ch = l.chars[x.k];
       const b = toScene(sh, ch.x1, l.y1, ch.x2, l.y2);
+      if (ch.py) py = true;
       const key = `${x.n}.${x.i}`;
       perLine.set(key, [...(perLine.get(key) ?? []), b]);
       return b;
     });
     const refs = [...new Map(xs.map((x) => [`${x.n}.${x.i}`, { n: x.n, i: x.i }])).values()];
-    return { refs, box: union(boxes)!, rows: [...perLine.values()].map((bs) => union(bs)!) };
+    return { refs, box: union(boxes)!, rows: [...perLine.values()].map((bs) => union(bs)!), py };
   };
   // 在一行里的那几处优先:短的(盖: 12)跨行拼出来的多半是巧合(表头末尾的 1 接下一格的 2);长的原话跨行时还是找得到
   const found = hits.map(boxOf);
@@ -353,6 +364,16 @@ export function bookFind(pages: readonly BookPage[], sheets: readonly BookSheet[
   const sh = sheetOf(sheets, first.n)!;
   const y1 = sh.top + l.y1 * sh.s;
   return [hit.box[0] < l.x2 * sh.s ? hit.box[0] : r1(l.x1 * sh.s), r1(y1), r1(l.x2 * sh.s), r1(sh.top + l.y2 * sh.s)];
+}
+
+/**
+ * 指着字的记号落在哪(圈、划、加点用):box 同 bookFind;rows = 一行一截(划一句跨行时一行一条);
+ * py = 这几个字头上有没有印拼音(圈要把拼音一起圈进去,不切拼音那一行)
+ */
+export function bookSpot(pages: readonly BookPage[], sheets: readonly BookSheet[], text: string, within?: Box | null): { box: Box; rows: Box[]; py: boolean } | null {
+  const hit = findText(pages, sheets, text, within);
+  const box = hit ? bookFind(pages, sheets, text, within) : null;
+  return hit && box ? { box, rows: hit.rows, py: hit.py } : null;
 }
 
 const RANGE = /^第?\s*(\d{1,2})\s*(?:[-–—~～到至]\s*第?\s*(\d{1,2}))?\s*(?:自然)?段$/;

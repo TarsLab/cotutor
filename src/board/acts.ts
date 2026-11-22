@@ -1,10 +1,11 @@
 /**
  * 讲稿里的 `[[名 参数]]` 都在这里读:
- *  - 老师的动作:看、圈、遮、盖、写、擦、摆、请、翻(src/schema/lesson.ts 的 ACT_NAMES),写在句子后面,这句念完才生效;
+ *  - 老师的动作:看、圈、划、加点、遮、盖、写、擦、摆、请、翻(src/schema/lesson.ts 的 ACT_NAMES),写在句子后面,这句念完才生效;
  * 纯函数,永不抛:不认得的、写错的回 bad(解析器丢掉它、给家长记一行)。
  * 每种动作的写法(也是给老师的说明,见 ACT_GUIDE):
  *   看 第 3 题 / 例 2 / 练一练第 3 题 / 第 55 页 / 栏目名 / 课本上的一句原话;小课堂上 0:19–0:30 / 0:19 / 课里一句原话(放那一段)
- *   圈 心理辅导室、井沿(最多 4 处)   遮 傍晚、晒(拼音盖住,最多 8 处)   盖 3×5=15(印好的答案盖住,最多 8 处)
+ *   圈 心理辅导室、井沿 / 划 一句原话 / 加点 迎(一句最多 3 处,多写的只做前 3 处)
+ *   遮 傍晚、晒(拼音盖住,最多 8 处)   盖 3×5=15(印好的答案盖住,最多 8 处)
  *   写 6×4=24(白纸条里写一行字,最多 24 个字;前后可带 大 / 中 / 小)
  *   擦(擦掉自己上一样)/ 擦 全部(整条白纸条)
  *   摆 点阵 6 行 6 个 / 摆 方向盘 上 东(白纸条里摆一个图形;可带 大 / 中 / 小)
@@ -13,7 +14,7 @@
  *   翻 6的乘法口诀 / 翻 目录(换一课)/ 翻 白纸 / 翻 作业 / 翻 小课堂
  */
 import { kitOf, readKitLines } from '../chalk/index.ts';
-import { ACT_NAMES, ASK_NAMES, SIZES, type ActName, type AskName, type LineAct, type Size } from '../schema/index.ts';
+import { ACT_NAMES, ASK_NAMES, MARKS_NEW_MAX, SIZES, type ActName, type AskName, type LineAct, type MarkName, type Size } from '../schema/index.ts';
 
 /** [[...]] 里的一处读成什么 */
 export type Mark =
@@ -24,9 +25,12 @@ export type Mark =
 export const SHAPES = ['点阵', '方向盘'] as const;
 /** 写一行最多几个字(同白板的一行) */
 export const WRITE_CHARS = 24;
-/** 圈、遮、盖一处最多几个字;各最多几处 */
+/** 圈、遮、盖、加点一处最多几个字(划的是一句,长些);各最多几处 */
 export const SPOT_CHARS = 12;
-export const SPOT_MAX: Readonly<Record<'圈' | '遮' | '盖', number>> = { 圈: 4, 遮: 8, 盖: 8 };
+const SPOT_CHARS_OF: Readonly<Record<MarkName, number>> = { 圈: SPOT_CHARS, 划: 40, 加点: SPOT_CHARS, 遮: SPOT_CHARS, 盖: SPOT_CHARS };
+export const SPOT_MAX: Readonly<Record<MarkName, number>> = { 圈: MARKS_NEW_MAX, 划: MARKS_NEW_MAX, 加点: MARKS_NEW_MAX, 遮: 8, 盖: 8 };
+/** 指着字的记号(圈、划、加点)写多了只做前几处,不整个丢 */
+const LINE_MARK_NAMES: readonly string[] = ['圈', '划', '加点'];
 /** 看、翻的参数最多几个字 */
 const TARGET_CHARS = 40;
 /** 请 说 后面要孩子说的一句最多几个字 */
@@ -38,7 +42,8 @@ const ERASE_ALL = ['全部', '全', '整条', '白纸条', '都擦'];
 export type ActParts =
   | { name: '看'; target: string }
   | { name: '翻'; lesson: string }
-  | { name: '圈' | '遮' | '盖'; spots: string[] }
+  /** over = 写多了没做的那几处(圈、划、加点一句最多 3 处) */
+  | { name: MarkName; spots: string[]; over?: string[] }
   | { name: '写'; text: string; size: Size }
   | { name: '擦'; all: boolean }
   | { name: '摆'; kit: string; params: Record<string, string>; size: Size }
@@ -74,12 +79,17 @@ export function actParts(act: LineAct): ActParts {
       return { name: '翻', lesson: t };
     }
     case '圈':
+    case '划':
+    case '加点':
     case '遮':
     case '盖': {
-      const spots = arg.split(SEP).map(unquote).filter(Boolean);
-      const max = SPOT_MAX[act.name];
-      if (!spots.length || spots.length > max || spots.some((s) => chars(s) > SPOT_CHARS)) throw new Error(`${act.name} 后面写课本上的字词(一处 ${SPOT_CHARS} 个字以内),几处用顿号隔开,最多 ${max} 处`);
-      return { name: act.name, spots };
+      const all = arg.split(SEP).map(unquote).filter(Boolean);
+      const max = SPOT_MAX[act.name], most = SPOT_CHARS_OF[act.name];
+      const line = LINE_MARK_NAMES.includes(act.name);
+      const what = act.name === '划' ? '课本上的一句原话' : '课本上的字词';
+      if (!all.length || (!line && all.length > max) || all.some((s) => chars(s) > most)) throw new Error(`${act.name} 后面写${what}(一处 ${most} 个字以内),几处用顿号隔开,最多 ${max} 处`);
+      const spots = all.slice(0, max), over = all.slice(max);
+      return { name: act.name, spots, ...(over.length ? { over } : {}) };
     }
     case '写': {
       const { size, rest } = sizeOf(arg);
@@ -123,11 +133,11 @@ export function actParts(act: LineAct): ActParts {
   }
 }
 
-/** 动作的名字和参数分开:名字都是一个字,后面可以不空格(看第3题) */
+/** 动作的名字和参数分开:名字长的先认(加点),后面可以不空格(看第3题) */
+const NAMES_LONG_FIRST = [...ACT_NAMES].sort((a, b) => b.length - a.length);
 function splitAct(inner: string): { name: ActName; arg: string } | null {
-  const ch = Array.from(inner)[0] ?? '';
-  if (!(ACT_NAMES as readonly string[]).includes(ch)) return null;
-  return { name: ch as ActName, arg: inner.slice(ch.length).trim() };
+  const name = NAMES_LONG_FIRST.find((n) => inner.startsWith(n));
+  return name ? { name, arg: inner.slice(name.length).trim() } : null;
 }
 
 /** [[ ]] 里面的一段读成什么 */

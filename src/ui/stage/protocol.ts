@@ -15,9 +15,11 @@ export type ToStage =
     /** 现在这一页是小课堂:课包 / 视频在哪、孩子手上还没交的画、录像跟着放(follow);play = 页面要放老师那一段了(look 的 n,变了就放) */
     lecture?: { url: string; marks: unknown[]; follow?: boolean; play?: number };
     /** 现在这一页是课本的目录:能点的那几项(课名、印在哪一行,场景坐标)、按下去那一行铺的颜色(老师的学科色);点中了回 open */
-    toc?: { color: string; entries: { title: string; box: [number, number, number, number] }[] } }
-  /** peek = 板此刻的样子导一张小图(话题的预览图,首页「今天」用;回 peek) */
-  | { source: typeof STAGE_SOURCE; type: 'control'; action: 'toggle' | 'next' | 'prev' | 'play' | 'pause' | 'submit' | 'peek' }
+    toc?: { color: string; entries: { title: string; box: [number, number, number, number] }[] };
+    /** 老师的学科色(写字格的「放好」、点开的那一格) */
+    color?: string }
+  /** peek = 板此刻的样子导一张小图(话题的预览图,首页「今天」用;回 peek);unpick = 页面把点字的卡收了(舞台不再跟着那个字、不再标着它) */
+  | { source: typeof STAGE_SOURCE; type: 'control'; action: 'toggle' | 'next' | 'prev' | 'play' | 'pause' | 'submit' | 'peek' | 'unpick' }
   /** 家长看录像时的小课堂(lesson 的 lecture.follow):录像这一刻停在课里的哪儿、在不在放、倍速、到这一刻画过的几处;页面每 100 毫秒发一次 */
   | { source: typeof STAGE_SOURCE; type: 'follow'; ms: number; playing: boolean; rate: number; marks: unknown[] };
 
@@ -26,8 +28,10 @@ export type FromStage =
   | { source: typeof STAGE_SOURCE; type: 'ready' }
   /** 小课堂上老师那一段放完了(停在末帧):页面接着念 */
   | { source: typeof STAGE_SOURCE; type: 'phase'; phase: 'done' }
-  /** 点字:孩子点中了页上一个字(汉字)或一个英文单词,页面在页上面弹它的田字格 / 四线三格 */
-  | { source: typeof STAGE_SOURCE; type: 'pick'; text: string }
+  /** 点字:孩子点中了页上一个字(汉字)或一个英文单词,页面在页上面弹它的田字格 / 四线三格,贴着那个字(at:它在舞台里的屏幕框 [左, 上, 右, 下],CSS 像素) */
+  | { source: typeof STAGE_SOURCE; type: 'pick'; text: string; at?: [number, number, number, number] }
+  /** 点中的那个字挪了(页滚了、换了大小):卡跟着它;null = 卡该收了(字出了窗、点了页上别处、落笔) */
+  | { source: typeof STAGE_SOURCE; type: 'pickAt'; at: [number, number, number, number] | null }
   /** 课本的目录上点了一项(toc 里的课名):页面自己先翻过去,再报给服务端 */
   | { source: typeof STAGE_SOURCE; type: 'open'; title: string }
   /** 点开了一块盖住的(老师写的「遮」「盖」) */
@@ -42,6 +46,8 @@ export type FromStage =
   | { source: typeof STAGE_SOURCE; type: 'pen' }
   /** 一节课:孩子落了一笔(场景坐标)/ 擦掉了自己画的;页面照 lessonStep 改状态、报给服务端 */
   | { source: typeof STAGE_SOURCE; type: 'stroke'; pts: [number, number][]; /** 落在开着的白纸条上 */ strip?: string }
+  /** 一节课:在课本的一个田字格(或填空:blank)里写好了(放好):格的 id(<PDF 第几页>.<第几格>)、笔画(格里的坐标,长边 0–1000)、照着写的字;空的笔画 = 擦干净了 */
+  | { source: typeof STAGE_SOURCE; type: 'cell'; id: string; strokes: [number, number][][]; model: string | null; blank?: boolean }
   /** 一节课:白纸条里的方向盘转到了多少度(item = <白纸条>#<第几样>) */
   | { source: typeof STAGE_SOURCE; type: 'turn'; item: string; deg: number }
   | { source: typeof STAGE_SOURCE; type: 'wipe' }

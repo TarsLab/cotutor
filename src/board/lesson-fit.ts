@@ -3,13 +3,14 @@
  *  - 翻 课名 / 翻 目录:照课本目录找到这一课铺哪几页;翻 白纸:加一张白纸页(有了就回到它);翻 作业:回到孩子拍的照片页;翻 小课堂:回到那堂课
  *  - 看 第 3 题 / 例 2 / 原话…:照这一页分好的块找到那一块的框(src/chalk/kit/book.ts 的 bookTarget);照片页还认「第 2 张」「第 2 张第 3 题」
  *  - 看 0:19–0:30 / 0:19 / 课里的一句原话(小课堂页):放那一段,对齐到句(src/board/lecture.ts 的 lectureRange);只写起点放到那一句的末尾
- *  - 圈、遮、盖 字词:照字找到框;先在「看」着的那一块里找(找不到的那一处不做)
+ *  - 圈、划、加点、遮、盖 字词:照字找到框;先在「看」着的那一块里找(找不到的那一处不做)。
+ *    圈的框连着字头上的拼音(圈住整个字块,不切拼音那一行);划一句跨了行就一行一截;一句里圈、划、加点最多做 3 处,多写的给家长记一句
  *  - 写、摆:落进「看」着的那道题的白纸条;白纸页上整页就是一条;课本、照片上没在看哪一道题就不做
  *  - 擦、请:照写的做
  * 页的文字层:课本是 PDF 的文字层(src/memory/textbook-index.ts);照片是认字认出的行和题,换成课本的样子(src/chalk/kit/photo.ts);小课堂是每一句的起点与原话;白纸没有。
  * 一节里的动作照先后一个一个落(先翻再看,看的是新的那一页),落不了的记一句给家长(why),动作本身留在讲稿上、不带 do。
  */
-import { BOOK_MAX_PAGES, BOOK_TOC, bookCut, bookFind, bookSheets, bookTarget, findLesson, lessonBlocks, lessonName, photoBookPage, type BookBlock, type BookSheet, type PhotoText } from '../chalk/index.ts';
+import { BOOK_MAX_PAGES, BOOK_TOC, bookCut, bookFind, bookSheets, bookSpot, bookTarget, findLesson, lessonBlocks, lessonName, photoBookPage, type BookBlock, type BookSheet, type PhotoText } from '../chalk/index.ts';
 import { LECTURE_PAGE, LOOK_ROWS_MAX, PHOTO_PAGE, WHITE_PAGE, type BoardSection, type BookIndex, type BookPage, type Box, type Lesson, type LessonAct, type LineAct, type PageSource } from '../schema/index.ts';
 import { actParts } from './acts.ts';
 import { clockLabel, lectureRange, parseClock, type LectureClock } from './lecture.ts';
@@ -135,16 +136,30 @@ export function fitAct(l: Lesson, a: LineAct, src: LessonSource): { do: LessonAc
       return hit ? { do: { k: '看', label: hit.label, box: hit.box, ...(hit.rows?.length ? { rows: hit.rows.slice(0, LOOK_ROWS_MAX) } : {}) } } : { why: `「${parts.target}」在《${p.title}》里找不到${p.kind === 'photo' ? '(照片上认出的题没有它,或者还没认完)' : ''}` };
     }
     case '圈':
+    case '划':
+    case '加点':
     case '遮':
     case '盖': {
       if (p.kind === 'lecture') return { why: `小课堂上${parts.name}不了:请孩子停住了自己画` };
       const t = pageText(p, src);
       const within = l.look?.box ?? null;
-      const spots = parts.spots.flatMap((text) => { const box = bookFind(t.pages, t.sheets, text, within); return box ? [{ text, box }] : []; });
+      const name = parts.name;
+      const spots = parts.spots.flatMap((text): { text: string; box: Box }[] => {
+        if (name === '遮' || name === '盖') { const box = bookFind(t.pages, t.sheets, text, within); return box ? [{ text, box }] : []; }
+        const hit = bookSpot(t.pages, t.sheets, text, within);
+        if (!hit) return [];
+        if (name === '划') return hit.rows.map((box) => ({ text, box }));
+        const [x1, y1, x2, y2] = hit.box;
+        // 拼音印在字的正上方,大约一个字高(同舞台的「遮」)
+        return [{ text, box: name === '圈' && hit.py ? [x1, r1(y1 - (y2 - y1) * 0.95), x2, y2] : hit.box }];
+      });
       const lost = parts.spots.filter((text) => !spots.some((s) => s.text === text));
-      const why = `${parts.name}的「${lost.join('」「')}」在《${p.title}》里找不到`;
+      const why = [
+        ...(lost.length ? [`${name}的「${lost.join('」「')}」在《${p.title}》里找不到`] : []),
+        ...(parts.over?.length ? [`一句最多${name} ${parts.spots.length} 处,「${parts.over.join('」「')}」没做`] : []),
+      ].join(';');
       if (!spots.length) return { why };
-      return { do: { k: parts.name, spots }, ...(lost.length ? { why } : {}) };
+      return { do: { k: name, spots }, ...(why ? { why } : {}) };
     }
     case '写':
     case '摆':

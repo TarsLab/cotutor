@@ -50,7 +50,21 @@ check('请 说 太长', Boolean(bad('请 说 ' + 'a'.repeat(61))));
 check('看 没写哪里', Boolean(bad('看')));
 check('翻 没写课', Boolean(bad('翻')));
 check('圈 没写字', Boolean(bad('圈')));
-check('圈 超过 4 处', Boolean(bad('圈 一、二、三、四、五')));
+{
+  const r = readMark('圈 一、二、三、四、五');
+  check('圈 超过 3 处:还是读成圈(只做前 3 处,lesson-fit 记一句)', r.kind === 'act' && r.act.name === '圈');
+  const p = actParts({ name: '圈', arg: '一、二、三、四、五' });
+  check('圈 超过 3 处:前 3 处做,后面的记进 over', p.name === '圈' && p.spots.join() === '一,二,三' && 'over' in p && p.over?.join() === '四,五', JSON.stringify(p));
+  check('遮 超过 8 处:还是写错', Boolean(bad('遮 一、二、三、四、五、六、七、八、九')));
+  const hua = readMark('划 小明一共有多少个?');
+  check('划:读成划,一句原话', hua.kind === 'act' && hua.act.name === '划' && hua.act.arg === '小明一共有多少个?');
+  check('划 一句太长(过 40 个字):写错', Boolean(bad(`划 ${'一'.repeat(41)}`)));
+  const dot = readMark('加点 迎、追');
+  check('加点:两个字的名字也认', dot.kind === 'act' && dot.act.name === '加点' && dot.act.arg === '迎、追', JSON.stringify(dot));
+  const tight = readMark('加点迎');
+  check('加点 后面不空格也认', tight.kind === 'act' && tight.act.name === '加点' && tight.act.arg === '迎');
+  check('加点 没写字', Boolean(bad('加点')));
+}
 check('遮 一处太长', Boolean(bad('遮 一二三四五六七八九十一二三')));
 check('写 没写字', Boolean(bad('写')));
 check('写 太长', Boolean(bad('写 一二三四五六七八九十一二三四五六七八九十一二三四五')));

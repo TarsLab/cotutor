@@ -4,6 +4,7 @@ import { lessonInit, lessonPage, lessonStep, lessonStrip } from '../src/board/le
 import { parseBoard } from '../src/board/parse.ts';
 import type { Lesson, LineAct } from '../src/schema/index.ts';
 import { mathIndexOf } from './_math-book.ts';
+import { bookIndexOf } from './_book.ts';
 import { check, done } from './_check.ts';
 
 const book = { file: '数学二年级上册.pdf', index: mathIndexOf() };
@@ -18,6 +19,21 @@ check('一课:照目录找到铺哪几页', five?.title === '5的乘法口诀' &
 check('没有这一课:null', bookPageOf(book, '没有这一课') === null);
 const opened = lessonOpen(lessonInit(), book);
 check('还没有页:先铺目录;有页就不动', opened.at === '数学二年级上册.pdf#目录' && lessonOpen(opened, book) === opened);
+
+// ——— 圈、划、加点(语文:字头上印着拼音) ———
+{
+  const zh = { file: '语文一年级下册.pdf', index: bookIndexOf() };
+  const at = lessonStep(lessonInit(), { t: 'act', act: { k: '翻', page: bookPageOf(zh, '小鱼吹泡泡')! } });
+  const r = fitActs(at, [A('圈', '小鸟'), A('加点', '小鸟'), A('划', '泡泡圆圆的，像一个个小月亮'), A('圈', '飞呀')], { book: zh });
+  const [ring, dot, hua, plain] = r.acts;
+  const rb = ring.do?.k === '圈' ? ring.do.spots[0].box : null, db = dot.do?.k === '加点' ? dot.do.spots[0].box : null;
+  check('圈:字头上有拼音就连拼音一起圈(框往上撑一个字高),加点只要字', !!rb && !!db && rb[0] === db[0] && rb[3] === db[3] && db[1] - rb[1] > (db[3] - db[1]) * 0.8, JSON.stringify([rb, db]));
+  check('划一句跨了行:一行一截', hua.do?.k === '划' && hua.do.spots.length === 2 && hua.do.spots.every((x) => x.text === '泡泡圆圆的，像一个个小月亮'), JSON.stringify(hua.do));
+  const pb = plain.do?.k === '圈' ? plain.do.spots[0].box : null;
+  check('圈:头上没印拼音的,框就是字', !!pb && !!rb && pb[3] - pb[1] < (rb[3] - rb[1]) * 0.7, JSON.stringify([pb, rb]));
+  const over = fitActs(at, [A('圈', '小鱼、小鸟、泡泡、井沿')], { book: zh });
+  check('一句圈了 4 处:做前 3 处,给家长记一句', over.acts[0].do?.k === '圈' && over.acts[0].do.spots.length === 3 && over.why.length === 1 && over.why[0].includes('井沿') && over.why[0].includes('最多'), JSON.stringify(over.why));
+}
 
 // ——— 动作照先后落 ———
 {

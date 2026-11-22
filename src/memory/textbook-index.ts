@@ -14,7 +14,7 @@
  *  - 单元下面再分:页里的小节标题(比正文大两成以上、「1.」起头:1.乘法的初步认识)、课题标题(比正文大一成、靠左:6的乘法口诀)。
  *    做一做、练一练这些栏目名也是这个字号,不算课题。
  */
-import { BOOK_INDEX_VERSION, bodySize, mathHeading, type BookChar, type BookIndex, type BookLayout, type BookLesson, type BookLine, type BookPage, type PdfItem, type PdfPage } from '../schema/index.ts';
+import { BOOK_INDEX_VERSION, bodySize, mathHeading, type BookCell, type BookChar, type BookIndex, type PdfCell, type BookLayout, type BookLesson, type BookLine, type BookPage, type PdfItem, type PdfPage } from '../schema/index.ts';
 
 /** 自造拼音字体的大写字母 → 带调的韵母 */
 export const PINYIN_TONES: Readonly<Record<string, string>> = {
@@ -359,13 +359,66 @@ function lessonsOf(rows: readonly TocRow[], pages: readonly BookPage[]): BookLes
   return out;
 }
 
-/** 整本:每页分行、读页码,读目录,自检 */
+/**
+ * 页上的田字格分成范字、描红、空格,每格记下照着写的那个字:一排(上沿差 3pt 以内)从左往右,空格照它左边最近的范字;
+ * 描红照它自己的字。同一排隔开的两组(转 转 □ □ 夹 夹 □ □)各照各的
+ */
+export function bookCells(raw: readonly PdfCell[]): BookCell[] {
+  const sorted = [...raw].sort((a, b) => (Math.abs(a.y1 - b.y1) > 3 ? a.y1 - b.y1 : a.x1 - b.x1));
+  const out: BookCell[] = [];
+  let row = -Infinity, model: string | undefined;
+  for (const c of sorted) {
+    if (Math.abs(c.y1 - row) > 3) { row = c.y1; model = undefined; }
+    const kind: BookCell['kind'] = !c.ch ? 'empty' : c.red ? 'trace' : 'model';
+    if (kind === 'model') model = c.ch;
+    const m = kind === 'empty' ? model : c.ch;
+    out.push({ x1: c.x1, y1: c.y1, x2: c.x2, y2: c.y2, kind, ...(c.ch ? { ch: c.ch } : {}), ...(m ? { m } : {}) });
+  }
+  return out;
+}
+
+/**
+ * 页上的填空(docs/artifact/页上记号/规范.html 的 R5a、R5b,2026-11-22 拿人教数学二上核实):
+ *  算式里的空:描边的空方框(框里没字),左边紧挨着以 = × + − ÷ → 收尾的字,或右边紧挨着以 = × + − ÷ 起头的字(7×□=□ 一串都中);
+ *    和别的框共用一条边的是表格的格,不算(口诀表、数轴下面的框分不清,先不做)。
+ *  空着的括号:一段字以「(」收尾、同一条基线上紧接着的下一段以「)」起头,中间空着(至少半个字宽);「(1)」这种编号里面有字(字单独一段也算),不算。
+ */
+export function blankCells(p: Pick<PdfPage, 'items' | 'boxes'>): BookCell[] {
+  const items = p.items, boxes = p.boxes ?? [];
+  const out: BookCell[] = [];
+  const mid = (it: PdfItem): number => it.y - it.z * 0.35;
+  const touch = (a: readonly number[], b: readonly number[]): boolean => ((Math.abs(a[2] - b[0]) < 1.5 || Math.abs(a[0] - b[2]) < 1.5) && Math.abs(a[1] - b[1]) < 1.5) || ((Math.abs(a[3] - b[1]) < 1.5 || Math.abs(a[1] - b[3]) < 1.5) && Math.abs(a[0] - b[0]) < 1.5);
+  for (const b of boxes) {
+    if (items.some((it) => it.x < b[2] - 2 && it.x + it.w > b[0] + 2 && it.y > b[1] + 2 && it.y - it.z * 0.7 < b[3] - 2)) continue;
+    if (boxes.some((o) => o !== b && touch(b, o))) continue;
+    const cy = (b[1] + b[3]) / 2;
+    const row = items.filter((it) => Math.abs(mid(it) - cy) < 8);
+    const left = row.some((it) => it.x + it.w <= b[0] + 3 && it.x + it.w > b[0] - 30 && /[=＝×+\-－÷→]\s*$/.test(it.s));
+    const right = row.some((it) => it.x >= b[2] - 3 && it.x < b[2] + 30 && /^\s*[=＝×+\-－÷]/.test(it.s));
+    if (left || right) out.push({ x1: b[0], y1: b[1], x2: b[2], y2: b[3], kind: 'blank' });
+  }
+  for (const it of items) {
+    if (!/[（(]\s*$/.test(it.s)) continue;
+    const end = it.x + it.w;
+    const close = items.find((o) => o !== it && Math.abs(o.y - it.y) < 1 && o.x >= end - 1 && o.x - end < it.z * 8 && /^\s*[）)]/.test(o.s));
+    if (!close || close.x - end < it.z * 0.5) continue;
+    // 括号中间另有一段字(「(1)」的 1 单独一段):不是空的
+    if (items.some((o) => o !== it && o !== close && Math.abs(o.y - it.y) < it.z * 0.6 && o.x < close.x - 1 && o.x + o.w > end + 1)) continue;
+    out.push({ x1: r2(end), y1: r2(it.y - it.z * 0.9), x2: r2(close.x), y2: r2(it.y + it.z * 0.2), kind: 'blank' });
+  }
+  return out;
+}
+
+/** 整本:每页分行、读页码、认田字格和填空,读目录,自检 */
 /** 一册怎么分块:文件名带「数学」的是 math */
 export const layoutOf = (title: string): BookLayout => (title.includes('数学') ? 'math' : 'prose');
 
 export function buildBookIndex(raw: readonly PdfPage[], meta: { file: string; sha: string; title: string }): BookIndex {
   const bad: string[] = [];
-  const pages: BookPage[] = raw.map((p) => ({ n: p.n, printed: printedOf(p), w: r2(p.w), h: r2(p.h), lines: pageLines(p, bad) }));
+  const pages: BookPage[] = raw.map((p) => {
+    const cells = [...bookCells(p.cells ?? []), ...blankCells(p)].sort((a, b) => (Math.abs(a.y1 - b.y1) > 3 ? a.y1 - b.y1 : a.x1 - b.x1));
+    return { n: p.n, printed: printedOf(p), w: r2(p.w), h: r2(p.h), lines: pageLines(p, bad), ...(cells.length ? { cells } : {}) };
+  });
   const toc = parseToc(raw);
   const layout = layoutOf(meta.title);
   const lessons = lessonsOf(layout === 'math' ? mathRows(toc.rows, pages) : toc.rows, pages);

@@ -1,6 +1,6 @@
 /** 一节课的状态(src/board/lesson.ts 的 lessonStep):老师的动作、孩子的事各自怎么改它。做法同 player.test.ts 对 step。 */
-import { LESSON_CAPS, lessonActs, photoSheetBox, lessonDone, lessonInit, lessonPage, lessonStep, lessonStrip } from '../src/board/lesson.ts';
-import { LESSON_JOBS_MAX, LESSON_INK_MAX, LESSON_INK_POINTS, LESSON_MARKS_MAX, LESSON_PAGES_MAX, LESSON_PICK_MAX, LessonSchema, PAGE_PHOTOS_MAX, PHOTO_PAGE, STRIP_ITEMS_MAX, WHITE_PAGE, type Box, type Lesson, type LessonAct, type LessonEvent, type PageSource } from '../src/schema/index.ts';
+import { LESSON_CAPS, lessonActs, lessonSection, markFresh, photoSheetBox, lessonDone, lessonInit, lessonPage, lessonStep, lessonStrip } from '../src/board/lesson.ts';
+import { LESSON_CELLS_MAX, LESSON_CELL_STROKES, LINE_MARKS, MARKS_NEW_MAX, MARK_FRESH_LINES, LESSON_JOBS_MAX, LESSON_INK_MAX, LESSON_INK_POINTS, LESSON_MARKS_MAX, LESSON_PAGES_MAX, LESSON_PICK_MAX, LessonSchema, PAGE_PHOTOS_MAX, PHOTO_PAGE, STRIP_ITEMS_MAX, WHITE_PAGE, type Box, type Lesson, type LessonAct, type LessonEvent, type PageSource } from '../src/schema/index.ts';
 import { check, done } from './_check.ts';
 
 const page = (title: string, extra: Partial<Extract<PageSource, { kind: 'book' }>> = {}): Extract<PageSource, { kind: 'book' }> => ({ id: `数学.pdf#${title}`, kind: 'book', src: '数学.pdf', title, pages: [50, 51], cut: 40, layout: 'math', pick: false, ...extra });
@@ -10,7 +10,7 @@ const B1: Box = [80, 300, 900, 420];
 const B2: Box = [80, 700, 900, 820];
 const valid = (l: Lesson): boolean => LessonSchema.safeParse(l).success;
 
-check('上限和 schema 一样', LESSON_CAPS.PAGES_MAX === LESSON_PAGES_MAX && LESSON_CAPS.INK_MAX === LESSON_INK_MAX && LESSON_CAPS.INK_POINTS === LESSON_INK_POINTS && LESSON_CAPS.PICK_MAX === LESSON_PICK_MAX && LESSON_CAPS.MARKS_MAX === LESSON_MARKS_MAX && LESSON_CAPS.STRIP_ITEMS_MAX === STRIP_ITEMS_MAX && LESSON_CAPS.JOBS_MAX === LESSON_JOBS_MAX && LESSON_CAPS.PHOTOS_MAX === PAGE_PHOTOS_MAX && LESSON_CAPS.PHOTO_PAGE === PHOTO_PAGE && LESSON_CAPS.WHITE_PAGE === WHITE_PAGE);
+check('上限和 schema 一样', LESSON_CAPS.PAGES_MAX === LESSON_PAGES_MAX && LESSON_CAPS.INK_MAX === LESSON_INK_MAX && LESSON_CAPS.INK_POINTS === LESSON_INK_POINTS && LESSON_CAPS.PICK_MAX === LESSON_PICK_MAX && LESSON_CAPS.MARKS_MAX === LESSON_MARKS_MAX && LESSON_CAPS.STRIP_ITEMS_MAX === STRIP_ITEMS_MAX && LESSON_CAPS.JOBS_MAX === LESSON_JOBS_MAX && LESSON_CAPS.PHOTOS_MAX === PAGE_PHOTOS_MAX && LESSON_CAPS.PHOTO_PAGE === PHOTO_PAGE && LESSON_CAPS.WHITE_PAGE === WHITE_PAGE && LESSON_CAPS.LINE_MARKS.join() === LINE_MARKS.join() && LESSON_CAPS.MARKS_NEW_MAX === MARKS_NEW_MAX && LESSON_CAPS.MARK_FRESH_LINES === MARK_FRESH_LINES && LESSON_CAPS.CELLS_MAX === LESSON_CELLS_MAX && LESSON_CAPS.CELL_STROKES === LESSON_CELL_STROKES);
 
 // ——— 还没有页 ———
 {
@@ -38,14 +38,66 @@ check('同一处再看一遍:n 加一(窗再移一次)', look2.look?.n === 2);
 {
   const l = run(look1, A({ k: '圈', spots: [{ text: '一共有多少', box: B1 }] }), A({ k: '盖', spots: [{ text: '6×4=24', box: B2 }, { text: '4×6=24', box: B1 }] }), A({ k: '圈', spots: [{ text: '一共有多少', box: B1 }] }));
   const m = lessonPage(l)!.teacher.marks;
-  check('圈、盖:记号加在这一页上,同一处不重复', m.length === 3 && m[0].k === '圈' && m[1].k === '盖' && m[2].text === '4×6=24', JSON.stringify(m));
+  check('圈、盖:记号加在这一页上,同一处不重复;再圈一遍挪到最后', m.length === 3 && m[0].k === '盖' && m[1].text === '4×6=24' && m[2].k === '圈' && m[2].at === 0 && m[0].at === undefined, JSON.stringify(m));
   const many = run(look1, ...Array.from({ length: LESSON_MARKS_MAX + 3 }, (_, i) => A({ k: '圈', spots: [{ text: `字${i}`, box: B1 }] })));
   check('记号多了丢最早的', lessonPage(many)!.teacher.marks.length === LESSON_MARKS_MAX && lessonPage(many)!.teacher.marks[0].text === '字3');
   // 擦:没开白纸条擦最后一个记号;擦 全部 都擦
   const e1 = run(l, A({ k: '擦', all: false }));
-  check('擦:没开白纸条,擦老师最后一个记号', lessonPage(e1)!.teacher.marks.length === 2 && lessonPage(e1)!.teacher.marks[1].text === '6×4=24');
+  check('擦:没开白纸条,擦老师最后一个记号', lessonPage(e1)!.teacher.marks.length === 2 && lessonPage(e1)!.teacher.marks.every((x) => x.k === '盖'));
   check('擦 全部:没开白纸条,记号都擦', lessonPage(run(l, A({ k: '擦', all: true })))!.teacher.marks.length === 0);
   check('没有可擦的:原样', run(look1, A({ k: '擦', all: false })) === look1);
+}
+
+// ——— 圈、划、加点跟着话走(docs/artifact/页上记号/规范.html 的 C2–C4) ———
+{
+  const ring = (text: string, box: Box = B1): LessonEvent => A({ k: '圈', spots: [{ text, box }] });
+  const said: LessonEvent = { t: 'said' };
+  const fr = (l: Lesson): string => lessonPage(l)!.teacher.marks.map((m, i) => `${m.text}:${markFresh(l, lessonPage(l)!)[i] ? '新' : '旧'}`).join(' ');
+  // 第 1 句圈甲,第 2 句圈乙,第 3 句圈丙、丁
+  const s1 = run(look1, ring('甲'), said);
+  const s2 = run(s1, ring('乙'), said);
+  const s3 = run(s2, ring('丙'), ring('丁'), said);
+  check('记下画它时念完几句(at),念完一句 said 加一', lessonPage(s1)!.teacher.marks[0].at === 0 && s1.said === 1 && s3.said === 3 && valid(s3));
+  check('画它那一句和下一句是新的', fr(s2) === '甲:新 乙:新');
+  check('再往后是旧的', fr(s3) === '甲:旧 乙:新 丙:新 丁:新', fr(s3));
+  const s4 = run(s3, ring('戊'));
+  check('新的最多 3 处:多的最早那几处算旧的', fr(s4) === '甲:旧 乙:旧 丙:新 丁:新 戊:新', fr(s4));
+  const hua = run(look1, A({ k: '划', spots: [{ text: '长句', box: B1 }, { text: '长句', box: B2 }] }), ring('一'), ring('二'));
+  check('划一句跨行的几截算一处', fr(hua) === '长句:新 长句:新 一:新 二:新', fr(hua));
+  const again = run(s3, said, said, ring('甲'));
+  check('再圈一遍:挪到最后、算新的', fr(again).endsWith('甲:新'), fr(again));
+  const cov = run(s3, A({ k: '盖', spots: [{ text: '答案', box: B2 }] }), said, said, said);
+  const round = run(cov, { t: 'round' });
+  check('新的一轮:上一轮的圈、划、加点都收,遮、盖留着', lessonPage(round)!.teacher.marks.map((m) => m.k).join() === '盖' && markFresh(round, lessonPage(round)!)[0]);
+  check('没有圈的时候新的一轮:原样', run(lesson, { t: 'round' }) === lesson);
+  const away = run(cov, A({ k: '看', label: '练一练第1题', box: B2 }));
+  check('看别处:这一页上老师的圈、划、加点收掉,遮、盖留着', lessonPage(away)!.teacher.marks.map((m) => m.k).join() === '盖');
+  check('看同一处:不收', lessonPage(run(cov, A({ k: '看', label: '例4', box: B1 })))!.teacher.marks.length === 5);
+  const turned = run(cov, A({ k: '翻', page: page('5的乘法口诀') }));
+  const back = run(turned, A({ k: '翻', page: page('6的乘法口诀') }));
+  check('翻走:离开的那一页上的圈收掉,翻回来不重画', lessonPage(back)!.teacher.marks.map((m) => m.k).join() === '盖');
+  // 服务端整节落(lessonSection)和孩子端一句一句落,结果一样
+  const sec = { acts: [{ do: { k: '看', label: '例4', box: B1 } as LessonAct }], lines: [{ acts: [{ do: { k: '圈', spots: [{ text: '甲', box: B1 }] } as LessonAct }] }, {}, { acts: [{ do: { k: '划', spots: [{ text: '乙', box: B2 }] } as LessonAct }] }] };
+  const whole = lessonSection(s3, sec);
+  const byLine = run(lessonActs(run(s3, { t: 'round' }), sec.acts), ...sec.lines.flatMap((x) => [...(x.acts ?? []).map((a) => A(a.do)), said]));
+  check('整节落和一句一句落一样', JSON.stringify(whole) === JSON.stringify(byLine) && whole.said === 6 && fr(whole) === '甲:旧 乙:新', fr(whole));
+  check('没带动作的一节:只收上一轮的', JSON.stringify(lessonSection(s3, { lines: [{}, {}] })) === JSON.stringify(run(s3, { t: 'round' })));
+}
+
+// ——— 田字格里写的字(孩子的一层;「擦掉」不擦它) ———
+{
+  const st: [number, number][][] = [[[100, 100], [900, 900]]];
+  const c1 = run(look1, { t: 'cell', id: '50.2', strokes: st }, { t: 'cell', id: '50.3', strokes: [...st, ...st] });
+  check('写好一格:这一格的笔画记下', lessonPage(c1)!.kid.cells?.['50.2']?.length === 1 && lessonPage(c1)!.kid.cells?.['50.3']?.length === 2 && valid(c1));
+  const c2 = run(c1, { t: 'cell', id: '50.2', strokes: [...st, ...st, ...st] });
+  check('同一格再放好:整个换掉', lessonPage(c2)!.kid.cells?.['50.2']?.length === 3);
+  const c3 = run(c2, { t: 'cell', id: '50.3', strokes: [] });
+  check('放好空的:这一格擦干净(键拿掉)', !('50.3' in (lessonPage(c3)!.kid.cells ?? {})) && valid(c3));
+  check('「擦掉」不擦田字格里的字', lessonPage(run(c3, { t: 'stroke', pts: [[1, 1], [2, 2]] }, { t: 'wipe' }))!.kid.cells?.['50.2']?.length === 3);
+  check('没写过的格放好空的:原样', run(look1, { t: 'cell', id: '9.9', strokes: [] }) === look1);
+  const many = run(look1, ...Array.from({ length: LESSON_CAPS.CELLS_MAX + 2 }, (_, i): LessonEvent => ({ t: 'cell', id: `1.${i}`, strokes: st })));
+  check('写满了丢最早写的那一格', Object.keys(lessonPage(many)!.kid.cells ?? {}).length === LESSON_CAPS.CELLS_MAX && !('1.0' in (lessonPage(many)!.kid.cells ?? {})));
+  check('一格最多几笔', lessonPage(run(look1, { t: 'cell', id: '1.1', strokes: Array.from({ length: LESSON_CELL_STROKES + 5 }, () => st[0]) }))!.kid.cells?.['1.1']?.length === LESSON_CELL_STROKES);
 }
 
 // ——— 白纸条:写、摆、擦,一道题一条 ———

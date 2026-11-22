@@ -4,16 +4,16 @@
  *   页的文字层  这一页(课本的一课、照片的一张)印的字:第一次看到那一页时当一条笔记给(<page>),之后不重给;压缩以后重给现在这一页
  *   board:      每轮会变的——
  *     底       现在铺的是哪一页(课本《册》:《课》第几页 / 作业照片几张 / 白纸);这节课铺过几页就列出来(页集)
- *     你画的   看哪里、圈 / 遮 / 盖了什么、白纸条里摆着什么(应用找的框不说)
+ *     你画的   看哪里、圈 / 划 / 加点 / 遮 / 盖了什么、白纸条里摆着什么(应用找的框不说;圈、划、加点上一轮的已经收了)
  *     开放     现在孩子能做的(点字是页自带的,别的是你请的)
- *     孩子做的 从上一轮到现在孩子在页上做的,合并过(自己翻到了哪一页、点开看了哪几个字、写画了几笔、擦过没有、揭了哪些、白纸条上的图形)
+ *     孩子做的 从上一轮到现在孩子在页上做的,合并过(自己翻到了哪一页、点开看了哪几个字、写画了几笔、擦过没有、在田字格里写了几个字、揭了哪些、白纸条上的图形)
  *     最近点的 30 秒内点的最后一项(孩子说「这个」时指它)
  *     孩子在看 上一轮以后窗最后停下的地方(他自己挪的,或你让他看的那一块移完);附了那一块的图就注一句
  */
 import { BOOK_TOC, lessonBlocks } from '../../chalk/index.ts';
 import { lessonPage, lessonStrip } from '../../board/lesson.ts';
 import { stripRead } from '../../board/strip.ts';
-import type { BoardEvent, BookIndex, BookPage, ContextPack, Lesson, StripItem } from '../../schema/index.ts';
+import type { BoardEvent, BookIndex, BookPage, ContextPack, Lesson, MarkName, StripItem } from '../../schema/index.ts';
 
 /** 「最近点的」多久以内算(孩子说「这个」指它);起点,试用后调 */
 export const RECENT_PICK_MS = 30_000;
@@ -64,17 +64,17 @@ export function stripItemLine(it: StripItem): string {
 }
 
 /**
- * 一节课现在这一页上:你画的(看哪里、圈 / 遮 / 盖了什么、白纸条里摆着什么,应用找的框不说)、开放的(点字是页自带的,别的是你请的)。
+ * 一节课现在这一页上:你画的(看哪里、圈 / 划 / 加点 / 遮 / 盖了什么、白纸条里摆着什么,应用找的框不说)、开放的(点字是页自带的,别的是你请的)。
  * 白纸条收着的(讲别的题时)不说,回到那道题才说
  */
 export function lessonSlateBits(l: Lesson): LessonBits {
   const p = lessonPage(l);
   if (!p) return { ops: [], covers: { 遮: [], 盖: [] }, revealed: [] };
-  const of = (k: '圈' | '遮' | '盖'): string[] => p.teacher.marks.filter((m) => m.k === k).map((m) => m.text);
+  const of = (k: MarkName): string[] => [...new Set(p.teacher.marks.filter((m) => m.k === k).map((m) => m.text))];
   const strip = lessonStrip(l);
   const parts = [
     ...(l.look ? [`看 ${l.look.label}`] : []),
-    ...(['圈', '遮', '盖'] as const).flatMap((k) => (of(k).length ? [`${k} ${of(k).join('、')}`] : [])),
+    ...(['圈', '划', '加点', '遮', '盖'] as const).flatMap((k) => (of(k).length ? [`${k} ${of(k).join('、')}`] : [])),
     ...(strip?.items.length ? [`${p.kind === 'white' ? '白纸上' : '白纸条'}:${strip.items.map(stripItemLine).join('、')}`] : []),
   ];
   const asked = p.open.map((o) => (o === '点' ? '点字' : o));
@@ -100,6 +100,13 @@ export function slateOf(x: SlateInput): NonNullable<ContextPack['slate']> {
   const strokes = inks.slice(wiped + 1).length;
   if (wiped >= 0) did.push('擦掉了自己画的');
   if (strokes) did.push(`在页上写画了 ${strokes} 笔(写了什么看图)`);
+  // 课本的田字格里写的字(放好的):几格、照着哪几个字写的;写成什么样看图
+  const cells = since.filter((e): e is BoardEvent & { k: 'cell' } => e.k === 'cell' && e.base === base);
+  const wrote = cells.filter((e) => !e.clear && !e.blank), models = [...new Set(wrote.flatMap((e) => (e.text ? [e.text] : [])))];
+  if (wrote.length) did.push(`在田字格里写了 ${wrote.length} 个字${models.length ? `(照着「${models.join('」「')}」写的)` : ''},写成什么样看图`);
+  const filled = cells.filter((e) => !e.clear && e.blank).length;
+  if (filled) did.push(`在页上的空(方框、括号)里填了 ${filled} 处,填的什么看图`);
+  if (cells.some((e) => e.clear)) did.push('擦掉了格子里写的');
   // 白纸条上的图形:画法照几何算的大概(状态,不是这一轮才做的;以图为准)
   if (x.lesson.strip) did.push(...x.lesson.strip);
   // 遮了拼音的、盖住印好的字的:揭了哪些、没揭哪些(这一页上揭过的都算)

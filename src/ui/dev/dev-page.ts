@@ -1220,7 +1220,7 @@ ${pageDomJs(4000)}
   };
 
   // ---- 设置:路径 / 服务 / 配音;文件仍是真相 ----
-  const PATH_ROLES = [['vault', 'vault 根', 'Obsidian 仓库;空 = workspace 根'], ['profile', '新建档案的位置', '相对 vault;老师按 cotutor: profile 属性找档案'], ['timetable', '课程表', '相对 vault'], ['plans', '计划目录', ''], ['diary', '日记目录', '记账写这里'], ['textbooks', '教材目录', '记账列可选的册#节;上下文包按 cotutor: textbook 属性找'], ['reference', '参考目录', '你自己的笔记'], ['captures', '作业照片', '相对 workspace 根(不进 vault)']];
+  const PATH_ROLES = [['vault', 'vault 根', 'Obsidian 仓库;空 = workspace 根'], ['profile', '新建档案的位置', '相对 vault;老师按 cotutor: profile 属性找档案'], ['timetable', '课程表', '相对 vault'], ['plans', '计划目录', ''], ['diary', '日记目录', '记账写这里'], ['textbooks', '教材目录', '记账列可选的册#节;上下文包按 cotutor: textbook 属性找'], ['workbooks', '练习册目录', '一册一个文件夹(workbook.json 和每页的图);首页按钮挂「做练习册」'], ['reference', '参考目录', '你自己的笔记'], ['captures', '作业照片', '相对 workspace 根(不进 vault)']];
 
   const migratePanel = () => {
     const gaps = (state.config && state.config.migrate) || [];

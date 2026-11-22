@@ -11,7 +11,8 @@
 import { z } from 'zod';
 
 /** 家长填的参数能是哪几种 */
-export const ACTIVITY_PARAM_TYPES = ['字', '词表', '数', '日期', '课包'] as const;
+/** 练习册 = vault 练习册/ 下的一册(目录名;src/schema/workbook.ts),base: workbook 的 activity 用它说做哪一册 */
+export const ACTIVITY_PARAM_TYPES = ['字', '词表', '数', '日期', '课包', '练习册'] as const;
 export type ActivityParamType = (typeof ACTIVITY_PARAM_TYPES)[number];
 
 /** 工具人模板里的插槽 `{{名}}` */
@@ -37,14 +38,17 @@ export const ACTIVITY_TOOLS: Readonly<Record<string, { slots: readonly string[] 
  * photo = 孩子拍的作业:进来先拍照(或不拍,用白纸),照片一发就铺;老师照认出的题看、圈、在题下面的白纸条上摆、写。
  * lecture = 小课堂:从首页的小课堂按钮进来,页上铺那堂课,孩子先看完再问;老师 [[看 0:19–0:30]] 放课里那一段。
  *   小课堂按钮没写 `activity:` 时,看完照这位老师 base: lecture 的那个 activity 聊;按钮挂了别的 activity(如看图说话),页上也先铺这堂课。
+ * workbook = vault 练习册/ 下的一册(参数「练习册」说哪一册;首页按钮挂上):进来就铺那一册,每页一张图,孩子用笔直接在页上做;
+ *   题框、能写的格子、给老师的答案都在那一册的 workbook.json 里,不认字。
  * 哪种页上老师都能 [[翻 白纸]] 加一张白纸页。
  */
 export const ACTIVITY_BASES: Readonly<Record<string, string>> = {
   textbook: '课本:vault 的教材/ 下这一科的 PDF,不拍照',
   photo: '孩子拍的作业:进来先拍照,不拍就是白纸',
   lecture: '小课堂:首页小课堂按钮给的那堂课(课包或视频),先看完再问',
+  workbook: '练习册:vault 的练习册/ 下的一册(参数「练习册」),孩子用笔在页上做',
 };
-export type ActivityBase = 'textbook' | 'photo' | 'lecture';
+export type ActivityBase = 'textbook' | 'photo' | 'lecture' | 'workbook';
 
 /**
  * 头上的 `listen:`:孩子怎么说话。open = 一直听:不用按,孩子开口就听(一问一答多的、请他说的多的);

@@ -62,11 +62,12 @@ import { kidWords, readWords } from '../../scenes/photo-words/store.ts';
 import { imageSize } from '../../shared/jpeg.ts';
 import { listTextbookPages, textbookPageFile } from '../../memory/textbook-pages.ts';
 import { bookFile, bookIndex, listBooks, pickBook } from '../../memory/textbook-pdf.ts';
+import { readWorkbook, workbookImageFile } from '../../memory/workbook.ts';
 import { lessonOpen, tocEntries } from '../../board/lesson-fit.ts';
 import { bookLast } from '../../runtime/journal/book-last.ts';
-import { lessonInit } from '../../board/lesson.ts';
+import { lessonInit, lessonStep } from '../../board/lesson.ts';
 import { readLesson } from '../../runtime/journal/lesson-store.ts';
-import { bookPages } from '../../chalk/index.ts';
+import { bookPages, workbookBookPage, workbookPage } from '../../chalk/index.ts';
 import type { Look } from '../../scenes/look.ts';
 import { IndexError, capturePathOk, deleteThread, listDates, rateThread, readErrLog, readIndex, readTranscript, undoVaultWrite, writeCapture, type VaultWrite } from '../../runtime/journal/store.ts';
 import { memoryLineText } from '../../memory/vault-notes.ts';
@@ -875,6 +876,24 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       const name = pickBook(await listBooks(ws.paths.textbooks, canonicalSubject(t.subject) || null), ctx.now());
       const base = name ? await bookBase(ws, name) : null;
       return { status: 200, json: { lesson: base?.lesson ?? null, toc: base?.toc ?? null } };
+    }
+    // 练习册(base: workbook;w = 练习册/ 下那一册的文件夹名):铺成一节课的开头(孩子端点了按钮就先铺,不等老师)、第 n 页的图、几页的行和能写的格子。
+    // 只给孩子端看得到的:作答区、物件、给老师的答案都不下发(src/schema/workbook.ts)
+    if (p.startsWith('/api/kid/workbook/') && method === 'GET') {
+      const name = url.searchParams.get('w') ?? '';
+      const got = await readWorkbook(ws.paths.workbooks, name);
+      if (!('wb' in got)) return { status: 404, json: { error: 'not_found' } };
+      if (p === '/api/kid/workbook/base') {
+        const t = ws.config.tutors[url.searchParams.get('tutor') ?? ''];
+        const pick = canonicalSubject(t?.subject) !== '数学';
+        return { status: 200, json: { lesson: lessonStep(lessonInit(), { t: 'act', act: { k: '翻', page: workbookPage(name, got.wb, pick) } }) } };
+      }
+      if (p === '/api/kid/workbook/image') {
+        const file = await workbookImageFile(ws.paths.workbooks, name, got.wb, Number(url.searchParams.get('p')));
+        return file ? { status: 200, file, contentType: 'image/png' } : { status: 404, json: { error: 'not_found' } };
+      }
+      if (p === '/api/kid/workbook/lines') return { status: 200, json: { pages: got.wb.pages.map((pg, i) => workbookBookPage(i + 1, pg).page) } };
+      return { status: 404, json: { error: 'not_found' } };
     }
     // 一节课此刻的样子(src/runtime/journal/lesson-store.ts):孩子端回到这节课、刷新页面时照它铺;只读的(以前的、家长看)也照它
     if (p === '/api/kid/lesson' && method === 'GET') {

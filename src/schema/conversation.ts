@@ -132,7 +132,7 @@ const MessageObjectSchema = z.object({
    * 话题第一条:这一节课铺哪种页(activity 头上的 base:);这节课的样子在 <date>.<话题>.lesson.json,板的日志在 <date>.<话题>.board.jsonl。
    * 以前的记录里还有 board: 'page'(以板为主、照片板):读进来就丢,那些话题不再当一节课
    */
-  base: z.enum(['textbook', 'photo', 'lecture']).optional(),
+  base: z.enum(['textbook', 'photo', 'lecture', 'workbook']).optional(),
   /** 话题第一条:这节课一直听(activity 头上 listen: open);孩子端回到这节课照它换 */
   listen: z.literal('open').optional(),
 });

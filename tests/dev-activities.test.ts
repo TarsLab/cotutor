@@ -53,7 +53,7 @@ try {
   type Row = { tutor: string; name: string; state: string; fixes: number; buttons: number; examples: number };
   const list = (await route('GET', '/api/dev/activities', ctx)).json as Row[];
   const row = (t: string, n: string) => list.find((r) => r.tutor === t && r.name === n);
-  check('列:出厂十四个加家长自己加的一份,例子文件不算 activity', list.length === 15 && !list.some((r) => r.name.endsWith('.例子')), JSON.stringify(list.map((r) => r.tutor + '/' + r.name)));
+  check('列:出厂十五个加家长自己加的一份,例子文件不算 activity', list.length === 16 && !list.some((r) => r.name.endsWith('.例子')), JSON.stringify(list.map((r) => r.tutor + '/' + r.name)));
   check('列:练词 没有出厂记录、首页 2 个按钮、没有例子;看图说话 出厂最新、4 个例子', row('chinese-tutor', '看图说话')?.state === 'latest' && row('chinese-tutor', '看图说话')?.examples === 4 && row('chinese-tutor', '练词')?.state === 'untracked' && row('chinese-tutor', '练词')?.buttons === 2 && row('chinese-tutor', '练词')?.examples === 0, JSON.stringify(row('chinese-tutor', '练词')));
   check('列:听写不是 activity,不列', !row('chinese-tutor', '听写') && !row('english-tutor', '听写'));
 

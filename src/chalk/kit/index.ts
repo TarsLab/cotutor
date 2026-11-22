@@ -1,7 +1,7 @@
 /**
  * 图形的入口(纯函数,浏览器外可用):有哪几种、[[摆 …]] 的参数怎么读。白纸条上的图形(src/board/strip.ts)从这里拿。
  * 画面与读数由各图形自己定(dots.ts 点阵、compass.ts 方向盘);一笔指着什么、转到哪了在 marks.ts。
- * 课本与照片页的几何在 book.ts,照片认出的字换成课本的样子在 photo.ts。
+ * 课本与照片页的几何在 book.ts,照片认出的字换成课本的样子在 photo.ts,练习册的一页换成课本的样子在 workbook.ts。
  * 加一种图形 = 加一个文件 + KITS 里一行 + src/board/acts.ts 的 SHAPES,再在 cards/动作怎么写.md 里写它的写法。
  */
 
@@ -11,6 +11,7 @@ import type { Kit } from './types.ts';
 
 export { BOOK_ASPECT, BOOK_GAP, BOOK_MAX_PAGES, BOOK_TOC, BOOK_W, PICK_CHARS, SECTION_NAMES, bookCut, bookCellsOf, bookFind, bookSpot, bookFrame, bookHeight, bookPages, bookPick, bookRows, bookSheets, bookTarget, bookView, findLesson, lessonBlocks, lessonName, lineBox, pickEnglish, pickable, type BookBlock, type BookSheet, type SceneCell } from './book.ts';
 export { PHOTO_ITEM, photoBookPage, photoText, type PhotoLine, type PhotoQuestion, type PhotoText, type PhotoWord } from './photo.ts';
+export { workbookBookPage, workbookInk, workbookPage, workbookPageId, workbookText, workbookWriteRegions } from './workbook.ts';
 export type { Kit, KitParam, KitScene, KitState, KitTurn } from './types.ts';
 export { kitMarks, markPhrases, turnOf, turnPoint, turnedSkeletons, type KitMark } from './marks.ts';
 

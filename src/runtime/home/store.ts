@@ -11,11 +11,12 @@ import { localDate } from '../../shared/time.ts';
 import { threads } from '../../schema/index.ts';
 import { activityName, findActivityFile, lectureActivity } from '../activities.ts';
 import { lintActivity, parseActivity, resolveParams } from '../activity.ts';
-import { activityLook, arrangeHome, dropFixes, homeActivities, homeOwners, faceTutor, homeId, homeIssues, homeLectures, homeTutors, kidButtons, kidTiles, parseHome, type ActivityLook, type HomeCheckContext, type HomeDoc, type HomeIssue, type HomeTutorInfo, type KidHomeButton } from './home.ts';
+import { activityLook, arrangeHome, buttonWorkbook, dropFixes, homeActivities, homeOwners, faceTutor, homeId, homeIssues, homeLectures, homeTutors, kidButtons, kidTiles, parseHome, type ActivityLook, type HomeCheckContext, type HomeDoc, type HomeIssue, type HomeTutorInfo, type KidHomeButton } from './home.ts';
 import type { BoardCard } from '../../board/presentation.ts';
 import { HOME_ID_RE, HOME_TILES, PublishedHomeSchema, tutorTiles, type Activity, type ActivityRun, type ActivityValue, type HomeTileId, type HomeVia, type MessageVia, type PublishedHome } from '../../schema/index.ts';
 import { listDates, readIndex } from '../journal/store.ts';
 import { bakeSoon, inspectLecture, readLecture, type Lecture } from '../lecture.ts';
+import { readWorkbook } from '../../memory/workbook.ts';
 
 export function homeFiles(ws: Pick<Workspace, 'dirs'>): { dir: string; draft: string; published: string; history: string } {
   const dir = ws.dirs.home;
@@ -47,6 +48,19 @@ function tutorInfos(ws: Workspace): Record<string, HomeTutorInfo> {
   return Object.fromEntries(Object.entries(ws.config.tutors).map(([k, t]) => [k, { display: t.display, enabled: t.enabled, hidden: t.hidden, ...(t.subject ? { subject: t.subject } : {}) }]));
 }
 
+/** activity 按钮挂的练习册都读一遍:名字 → 读不出来的原因(null = 读得出来)。actOf 给按钮上那个 activity(读不出来的不管) */
+async function buttonWorkbooks(ws: Workspace, cards: readonly Pick<BoardCard, 'kind' | 'props'>[], actOf: (tutor: string, name: string) => Activity | undefined): Promise<Map<string, string | null>> {
+  const out = new Map<string, string | null>();
+  for (const c of cards) if (c.kind === 'tutor') for (const b of (c.props.buttons ?? []) as TutorButton[]) {
+    const act = b.kind === 'activity' ? actOf(String(c.props.tutor), b.activity) : undefined;
+    const name = act && b.kind === 'activity' ? buttonWorkbook(act, b.params) : null;
+    if (!name || out.has(name)) continue;
+    const r = await readWorkbook(ws.paths.workbooks, name);
+    out.set(name, 'why' in r ? r.why : null);
+  }
+  return out;
+}
+
 async function checkContext(ws: Workspace, doc: Pick<HomeDoc, 'cards'>, now: Date): Promise<HomeCheckContext> {
   const lectures = new Map<string, string | null>();
   const lectureProblems = new Map<string, string[]>();
@@ -63,7 +77,8 @@ async function checkContext(ws: Workspace, doc: Pick<HomeDoc, 'cards'>, now: Dat
     const { activity, issues } = lintActivity(text, { fileName: activityName(ws.root, r.tutor, r.name) });
     activities.set(`${r.tutor}/${r.name}`, { activity, fixes: issues.filter((i) => i.level === 'fix').length });
   }
-  return { tutors: tutorInfos(ws), lectures, lectureProblems, unbaked, today: localDate(now), activities, lectureActivities };
+  const workbooks = await buttonWorkbooks(ws, doc.cards, (t, n) => activities.get(`${t}/${n}`)?.activity);
+  return { tutors: tutorInfos(ws), lectures, lectureProblems, unbaked, today: localDate(now), activities, lectureActivities, workbooks };
 }
 
 /** 每位老师家里铺小课堂的那个 activity(头上 base: lecture);没有的老师不在表里 */
@@ -230,6 +245,8 @@ export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'pu
     const act = await usableActivity(ws, a.tutor, a.name);
     if (act) usable.set(`${a.tutor}/${a.name}`, act);
   }
+  // 按钮挂的练习册:读不出来的,按钮不出
+  const workbooks = await buttonWorkbooks(ws, cards, (t, n) => usable.get(`${t}/${n}`));
   const ownerOf = homeOwners(cards, tutors);
   const owners = new Map(cards.map((c, i) => [c, ownerOf[i]]));
   const out: KidHomeCard[] = [];
@@ -243,7 +260,8 @@ export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'pu
     const name = String(c.props.tutor);
     const buttons = kidButtons((c.props.buttons ?? []) as TutorButton[], {
       lecture: (bundle) => Boolean(lectures.get(bundle)),
-      activity: (a, params) => { const act = usable.get(`${name}/${a}`); return Boolean(act) && resolveParams(act!, params).issues.length === 0; },
+      activity: (a, params) => { const act = usable.get(`${name}/${a}`); const wb = act ? buttonWorkbook(act, params) : null; return Boolean(act) && resolveParams(act!, params).issues.length === 0 && (!wb || workbooks.get(wb) === null); },
+      workbook: (a, params) => { const act = usable.get(`${name}/${a}`); return act ? buttonWorkbook(act, params) : null; },
       look: (a) => activityLook(usable.get(`${name}/${a}`)),
       lectureActivity: lectureActs.get(name) ?? null,
       keepBriefs: opts.keepBriefs,

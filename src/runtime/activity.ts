@@ -225,7 +225,7 @@ export interface CheckOptions {
 }
 
 /** 这一节课铺哪种页:头上的 base;没写当 photo(进来先拍照,不拍就是白纸;没有不铺页的课) */
-export const activityBase = (a: Pick<Activity, 'base'>): ActivityBase => (a.base === 'textbook' || a.base === 'lecture' ? a.base : 'photo');
+export const activityBase = (a: Pick<Activity, 'base'>): ActivityBase => (a.base === 'textbook' || a.base === 'lecture' || a.base === 'workbook' ? a.base : 'photo');
 
 /** 对注册表查:参数、裁段的名字、插槽、第一句与收 */
 export function checkActivity(a: Activity, opts: CheckOptions = {}): ActivityIssue[] {
@@ -256,6 +256,7 @@ export function checkActivity(a: Activity, opts: CheckOptions = {}): ActivityIss
   if (a.old?.length) issues.push({ level: 'note', text: `头上的「${a.old.join('」「')}」不用再写了:课里没有卡,铺哪种页写 base: photo(孩子拍的作业)、textbook(课本)或 lecture(小课堂),老师在讲稿里写动作(cards/动作怎么写.md)。现在照 base: ${activityBase(a)} 读` });
   if (a.base === undefined && !a.old?.length) issues.push({ level: 'note', text: '头上没写 base:当 base: photo(进来先拍照,不拍就是白纸)' });
   if (a.base !== undefined && !ACTIVITY_BASES[a.base]) fix(`头上 base 写的「${a.base}」不认得:只有 ${Object.keys(ACTIVITY_BASES).join('、')}`);
+  if (a.base === 'workbook' && !a.params.some((x) => x.type === '练习册')) fix('头上写了 base: workbook,「家长填的」里要有一个类型是「练习册」的参数(做哪一册)');
   if (a.listen !== undefined && !ACTIVITY_LISTENS[a.listen]) fix(`头上 listen 写的「${a.listen}」不认得:只有 ${Object.keys(ACTIVITY_LISTENS).join('、')}(不写 = 照老师的,缺省按住说)`);
   if (a.reply !== undefined && !ACTIVITY_REPLIES[a.reply]) fix(`头上 reply 写的「${a.reply}」不认得:只有 ${Object.keys(ACTIVITY_REPLIES).join('、')}(不写 = 脑先答)`);
   if (!a.tutor) fix('没有「## 老师怎么带」:这一节是老师的系统提示,activity 都要有');

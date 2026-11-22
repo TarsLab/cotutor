@@ -6,7 +6,10 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join } from 'node:path';
 import { chatUrl, qianwenKeys, qianwenLine } from '../shared/qianwen.ts';
-import { ACTIVITIES_DIR, activityRunFor } from '../runtime/activities.ts';
+import { ACTIVITIES_DIR, activityRunFor, findActivityFile } from '../runtime/activities.ts';
+import { parseActivity } from '../runtime/activity.ts';
+import { buttonWorkbook } from '../runtime/home/home.ts';
+import { readWorkbook } from '../memory/workbook.ts';
 import { workspaceGradePack } from './cli/grades.ts';
 import { UsageError } from '../shared/errors.ts';
 import type { Workspace } from '../schema/index.ts';
@@ -110,6 +113,14 @@ export async function evalActivity(ws: Workspace, tutor: string, name: string, o
   }
   // 先看小课堂的例子:课要在 workspace 里(bundles/ 或 lectures/);读不出来一轮都不跑
   for (const e of examples) if (e.lecture && !(await readLecture(ws, e.lecture.bundle))) throw new UsageError(`例子「${e.name}」的课 ${e.lecture.bundle} 不在 bundles/ 或 lectures/ 里:拷一份进来,或把「课:」换成你自己的课`);
+  // 练习册的例子:挂的那一册要在 vault 的练习册/ 里;读不出来一轮都不跑
+  const defn = parseActivity(await readFile(findActivityFile(ws.root, tutor, name), 'utf8')).activity;
+  for (const e of examples) {
+    const raw = Object.fromEntries(Object.entries(runsOf.get(e)!.params).map(([k, v]) => [k, String(v)]));
+    const wb = buttonWorkbook(defn, raw);
+    const got = wb ? await readWorkbook(ws.paths.workbooks, wb) : null;
+    if (got && 'why' in got) throw new UsageError(`例子「${e.name}」:${got.why}。把那一册放进 vault 的练习册/,或把「参数:」里的练习册换成你自己的`);
+  }
   const kid = opts.kid ?? makeKidModel({ env: opts.env });
   const evalWs = evalWorkspace(ws);
   const runner = new Runner(() => evalWs, { env: opts.env });

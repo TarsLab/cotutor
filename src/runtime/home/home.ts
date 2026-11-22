@@ -106,6 +106,14 @@ export interface HomeCheckContext {
   activities?: ReadonlyMap<string, { activity: Activity; fixes: number }>;
   /** 每位老师家里铺小课堂的那个 activity(头上 base: lecture;src/runtime/activities.ts 的 lectureActivity):小课堂按钮没写 activity: 时看完照它聊;不在表里 = 没有 */
   lectureActivities?: ReadonlyMap<string, string>;
+  /** activity 按钮挂的练习册(buttonWorkbook):名字 → 读不出来的原因(null = 读得出来);不在表里 = 没查 */
+  workbooks?: ReadonlyMap<string, string | null>;
+}
+
+/** activity 按钮挂的练习册:这个 activity 里类型是「练习册」的那个参数(按钮上填的,没填用缺省);不铺练习册的 activity = null */
+export function buttonWorkbook(act: Pick<Activity, 'params'>, params: Readonly<Record<string, string>>): string | null {
+  const p = act.params.find((x) => x.type === '练习册');
+  return p ? params[p.name]?.trim() || p.default || null : null;
 }
 
 /** 老师卡能不能上首页:开着、孩子端露 */
@@ -164,6 +172,9 @@ export function homeIssues(doc: HomeDoc, ctx: HomeCheckContext): HomeIssue[] {
         else {
           if (got.fixes) out.push({ level: 'fix', line, card: n, button: k, text: `${t.display}的「${b.label}」:activity 文件 ${act.name}.md 有 ${got.fixes} 处要改(cotutor activity check ${name} ${act.name})` });
           for (const text of resolveParams(got.activity, act.params).issues) out.push({ level: 'fix', line, card: n, button: k, text: `${t.display}的「${b.label}」:${text}` });
+          const wb = buttonWorkbook(got.activity, act.params);
+          const why = wb ? ctx.workbooks?.get(wb) : null;
+          if (why) out.push({ level: 'fix', line, card: n, button: k, text: `${t.display}的「${b.label}」:${why}` });
         }
       }
       if (b.kind === 'activity') return;
@@ -244,7 +255,8 @@ export function homeOwners(cards: readonly BoardCard[], tutors: readonly string[
  * start = activity 按钮(孩子那边点了发出按钮上的字;是哪个 activity、参数是什么,服务端照 via 从发布件查)
  */
 export type KidHomeButton =
-  | ({ id: number; kind: 'start'; label: string; brief?: string } & ActivityLook)
+  /** workbook = 挂的练习册(base: workbook 的 activity;孩子端点了就先铺那一册) */
+  | ({ id: number; kind: 'start'; label: string; brief?: string; workbook?: string } & ActivityLook)
   /** 小课堂:title / ms(课名、课长)由服务端读课包后补;base、listen 是看完照着聊的那个 activity 的(base 没写 = lecture) */
   | ({ id: number; kind: 'lecture'; label: string; bundle: string; brief?: string; title?: string; ms?: number; video?: true } & ActivityLook);
 
@@ -263,7 +275,7 @@ export interface KidHomeTile {
 /** activity 头上孩子端进去前就要知道的:铺哪种页、一直听不听(方砖、activity 按钮、小课堂按钮都带) */
 export interface ActivityLook { base?: ActivityBase; listen?: 'open' }
 /** activity 文件头 → 孩子端要的那两样 */
-export const activityLook = (a: { base?: string; listen?: string } | null | undefined): ActivityLook => ({ ...(a?.base === 'textbook' || a?.base === 'photo' || a?.base === 'lecture' ? { base: a.base } : {}), ...(a?.listen === 'open' ? { listen: 'open' as const } : {}) });
+export const activityLook = (a: { base?: string; listen?: string } | null | undefined): ActivityLook => ({ ...(a?.base === 'textbook' || a?.base === 'photo' || a?.base === 'lecture' || a?.base === 'workbook' ? { base: a.base } : {}), ...(a?.listen === 'open' ? { listen: 'open' as const } : {}) });
 
 /** 这位老师牌上的方砖:开着的(on,牌上的先后)里,家里那个 activity 用得了的才出 */
 export function kidTiles(on: readonly HomeTileId[], opts: { usable: (activity: string) => boolean; looks?: ReadonlyMap<string, ActivityLook> }): KidHomeTile[] {
@@ -273,7 +285,7 @@ export function kidTiles(on: readonly HomeTileId[], opts: { usable: (activity: s
 /**
  * 一张老师牌的按钮:文件里的 activity、小课堂。以前发布的那份里的开场、接着按钮不出。keepBriefs = 家长预览(讲法留着)。
  */
-export function kidButtons(buttons: readonly TutorButton[], opts: { lecture?: (bundle: string) => boolean; activity?: (name: string, params: Readonly<Record<string, string>>) => boolean; look?: (name: string) => ActivityLook; keepBriefs?: boolean; today?: string; /** 这位老师铺小课堂的 activity(base: lecture);没有就不出没写 activity: 的小课堂按钮 */ lectureActivity?: string | null }): KidHomeButton[] {
+export function kidButtons(buttons: readonly TutorButton[], opts: { lecture?: (bundle: string) => boolean; activity?: (name: string, params: Readonly<Record<string, string>>) => boolean; look?: (name: string) => ActivityLook; keepBriefs?: boolean; today?: string; /** 这位老师铺小课堂的 activity(base: lecture);没有就不出没写 activity: 的小课堂按钮 */ lectureActivity?: string | null; /** activity 按钮挂的练习册(读得出来的);不铺练习册的 = null */ workbook?: (name: string, params: Readonly<Record<string, string>>) => string | null }): KidHomeButton[] {
   const out: KidHomeButton[] = [];
   buttons.forEach((b, k) => {
     // 留到那天为止(家长端表单的「只今天 / 到周日」);过了就不出现,id 还是文件里的下标
@@ -283,7 +295,10 @@ export function kidButtons(buttons: readonly TutorButton[], opts: { lecture?: (b
     // activity 用不了(文件不在、写坏了、这个按钮的参数按现在的文件解析不出),按钮不出:不让孩子点进一个没人带或带不了的话题;小课堂看完照它聊,同样
     const hasActivity = (name: string, params: Readonly<Record<string, string>> = {}): boolean => opts.activity?.(name, params) ?? true;
     // 铺哪种页、一直听不听同方砖(activity 按钮也带)
-    if (b.kind === 'activity') { if (hasActivity(b.activity, b.params)) out.push({ id: k, kind: 'start', label: b.label, ...opts.look?.(b.activity), ...brief }); }
+    if (b.kind === 'activity') {
+      const wb = opts.workbook?.(b.activity, b.params) ?? null;
+      if (hasActivity(b.activity, b.params)) out.push({ id: k, kind: 'start', label: b.label, ...opts.look?.(b.activity), ...(wb ? { workbook: wb } : {}), ...brief });
+    }
     else if (b.kind === 'lecture') {
       const name = b.activity ?? opts.lectureActivity ?? null;
       // 看完照着聊的 activity 没有(没写 activity:、家里也没有 base: lecture 的):不查 activity 的场合(没给 opts.activity)照出,别的不出

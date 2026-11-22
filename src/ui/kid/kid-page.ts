@@ -762,8 +762,8 @@ ${BOARD_MARK_JS}
   const debug = new URLSearchParams(location.search);
 
   // ---- 状态 ----
-  /** 铺页的话题:on = 这个话题的页面是板;base = 现在的底(照片路径,null 白板,undefined 还没定);label = 方砖上的字(不拍照直接开始时发它) */
-  const BP = { on: false, base: null, label: '', books: [], toc: null };
+  /** 铺页的话题:on = 这个话题的页面是板;base = 现在的底(照片路径,null 白板,undefined 还没定);label = 方砖上的字(不拍照直接开始时发它);workbook = 首页按钮挂的那一册练习册 */
+  const BP = { on: false, base: null, label: '', books: [], toc: null, workbook: null };
   const S = { home: null, tutor: null, day: null, sections: [], played: new Set(), state: { section: -1, line: -1, status: 'idle' }, pending: false, waitSince: null, offline: false, bar: 'idle', pollTimer: null, stage: null, partial: null, thread: null, threadAt: null, hist: null, readonly: false, newThread: false, device: 'phone', via: null, cont: null, ask: null, reel: null, pendSaid: null, homeDraw: true, autoOpened: new Set() };
   // 实时的老师这一次(连、发、收、画在下面「实时的老师」那一块):on = 这位老师这一次走实时(左栏的样子);ready = 嘴连上了;
   // model = liveStep 的状态(只在 liveDispatch 里写);cap = 字幕(上一句、在说的、被打断的那句);heard = 每一轮(job)念到第几句
@@ -802,8 +802,8 @@ ${BOARD_MARK_JS}
     // activity 头上写了 listen: open:进去就一直听
     const look = b.listen === 'open' ? { listen: 'open' } : {};
     // 每个按钮进去都是新话题;今天聊过的在首页「今天」那一行接。按钮只有 activity(含方砖,start)和小课堂
-    // 铺课本的 activity(预习):不拍照,直接开话题、铺课本的目录
-    if (b.kind === 'start' && b.base === 'textbook') openTutor(t, { kind: 'new', via, base: 'textbook', label: b.label, send: b.label, ...look });
+    // 铺课本的 activity(预习):不拍照,直接开话题、铺课本的目录;铺练习册的(做练习册):同样不拍照,先铺按钮挂的那一册
+    if (b.kind === 'start' && (b.base === 'textbook' || b.base === 'workbook')) openTutor(t, { kind: 'new', via, base: b.base, label: b.label, send: b.label, ...(b.workbook ? { workbook: b.workbook } : {}), ...look });
     // 铺作业照片的 activity(检查作业、复习):先到拍照屏,带着照片(或白纸)开话题
     else if (b.kind === 'start' && b.base === 'photo') openTutor(t, { kind: 'new', via, base: 'photo', label: b.label, ...look });
     else if (b.kind === 'start') openTutor(t, { kind: 'new', via, send: b.label, ...look });
@@ -1092,7 +1092,7 @@ ${HOME_TILES_JS}
     S.tutor = t; S.sections = []; S.played = new Set(); dispatch({ type: 'reset' }); S.pending = false; S.stage = null; S.partial = null; $('#stage').classList.remove('on', 'cv');
     S.thread = intent.kind === 'thread' ? intent.thread : null; S.threadAt = null; S.hist = null; S.readonly = false; S.newThread = intent.kind === 'new';
     S.via = intent.via || null; S.lecture = intent.lecture ? { ...intent.lecture, watch: null, sent: false, marks: [], done: [], log: [] } : null;
-    BP.on = Boolean(intent.base); BP.base = intent.base || null; BP.label = intent.label || ''; BP.toc = null; lsReset();
+    BP.on = Boolean(intent.base); BP.base = intent.base || null; BP.label = intent.label || ''; BP.toc = null; BP.workbook = intent.workbook || null; lsReset();
     if (BP.base === 'photo') bpBooks();
     // 先定走不走实时,再热麦克风:实时时麦克风的自检要开在实时那个 AudioContext 里(liveOpen)
     if (liveWanted(t)) liveOpen(intent); else liveClose();
@@ -1101,7 +1101,7 @@ ${HOME_TILES_JS}
     $('#board').replaceChildren();
     // 小课堂:页上先铺那堂课(服务端收到第一条时照同样的规矩铺)
     if (S.lecture) lsStart(lessonStep(lessonInit(), { t: 'act', act: { k: '翻', page: lcPage(S.lecture) } }));
-    else if (BP.base === 'textbook') bpOpenLesson();
+    else if (BP.base === 'textbook' || BP.base === 'workbook') bpOpenLesson();
     else if (BP.base === 'photo') $('#board').append(bpStartBoard());
     $('#tutor').classList.add('on'); pageTheme(false);
     setBar('idle');
@@ -1190,20 +1190,23 @@ ${HOME_TILES_JS}
   };
   /** 进一节课:回到的(有话题)照服务端记的;新开的课本铺目录,作业照片等孩子拍(拍照屏)。
    *  课本、回到的课:舞台先铺上再去要(不先露一下空的老师页;iframe 和这一问一起装),要回来没有课再收起。
-   *  课本做底的(回到的也是)一起要目录上能点的那几项(BP.toc:点了铺哪一页、印在哪一行),拿到了再铺 */
+   *  课本做底的(回到的也是)一起要目录上能点的那几项(BP.toc:点了铺哪一页、印在哪一行),拿到了再铺;
+   *  练习册:新开的照按钮挂的那一册(BP.workbook)先铺上,不等老师 */
   const bpOpenLesson = () => {
     const name = S.tutor && S.tutor.name;
     if (!name || LS.asking) return;
     LS.asking = true;
     const q = S.thread && S.day && S.day.date ? '/api/kid/lesson?tutor=' + encodeURIComponent(name) + '&date=' + encodeURIComponent(S.day.date) + '&thread=' + encodeURIComponent(S.thread) : null;
-    const early = (q || BP.base === 'textbook') && !S.stage;
+    const early = (q || BP.base === 'textbook' || (BP.base === 'workbook' && BP.workbook)) && !S.stage;
     if (early) lsOpenStage();
     const open = (l) => {
       LS.asking = false;
       if (!S.tutor || S.tutor.name !== name || !BP.on) return;
       if (l) { lcAdopt(l); lsStart(l); } else if (early && S.stage && S.stage.lesson && !LS.on) closeStage();
     };
-    const base = BP.base === 'textbook' ? api('GET', '/api/kid/textbook/base?tutor=' + encodeURIComponent(name)).then((j) => { if (S.tutor && S.tutor.name === name) BP.toc = (j && j.toc) || null; return j; }, () => null) : Promise.resolve(null);
+    const base = BP.base === 'textbook' ? api('GET', '/api/kid/textbook/base?tutor=' + encodeURIComponent(name)).then((j) => { if (S.tutor && S.tutor.name === name) BP.toc = (j && j.toc) || null; return j; }, () => null)
+      : BP.base === 'workbook' && BP.workbook ? api('GET', '/api/kid/workbook/base?tutor=' + encodeURIComponent(name) + '&w=' + encodeURIComponent(BP.workbook)).catch(() => null)
+      : Promise.resolve(null);
     const toc = () => base.then((j) => open(j && j.lesson));
     if (q) api('GET', q).then((j) => (j && j.lesson ? base.then(() => open(j.lesson)) : toc()), toc); else toc();
   };

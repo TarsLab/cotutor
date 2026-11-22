@@ -29,7 +29,7 @@ import { deriveKidView, truncateReply } from './kid-view.ts';
 import { parseSections } from '../board/sections.ts';
 import { threadDigest } from './context/thread-digest.ts';
 import { type RunEvent, type RunEventEnvelope, type RunEventInput } from '../schema/index.ts';
-import { CELL_UNIT, LESSON_CELL_STROKES, LESSON_INK_POINTS, PEN_ASKS, PHOTO_PAGE, type ActivityBase, type Lesson, type LessonAct, type LessonEvent, type PagePhoto, canonicalSubject, subjectLang, MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, VAULT_PACK_ROLES, isApiRuntime, resolvePolicy, type ContextPack, type ConversationIndex, type MemoryProposal, type PendingMemory, type ActivityRun, type ConversationMessage, type MessageFrom, type MessageVia, type Policy, type Timing } from '../schema/index.ts';
+import { CELL_UNIT, LESSON_CELL_STROKES, LESSON_INK_POINTS, PEN_ASKS, PHOTO_PAGE, type ActivityBase, type Lesson, type LessonAct, type LessonEvent, type PagePhoto, canonicalSubject, subjectLang, MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, VAULT_PACK_ROLES, isApiRuntime, resolvePolicy, type ContextPack, type ConversationIndex, type MemoryProposal, type PendingMemory, type ActivityRun, type ConversationMessage, type MessageFrom, type MessageVia, type Policy, type Timing, type Workbook } from '../schema/index.ts';
 import { UsageError } from '../shared/errors.ts';
 import type { Workspace } from '../schema/index.ts';
 import { readIndex, snapshotSources, writeIndex, writeRunFile } from './journal/store.ts';
@@ -49,10 +49,11 @@ import { readWords, startWords } from '../scenes/photo-words/store.ts';
 import { appendBoard, readBoard } from './journal/board-log.ts';
 import { bookSlateParts, clipNote, lessonSlateBits, slateOf, type PageNote } from './context/board-pack.ts';
 import { bookLesson, bookPageOf, fitSection, lessonOpen, pageText, sectionActs, tocEntries, whitePage, type LessonBook, type LessonSource } from '../board/lesson-fit.ts';
+import { readWorkbook } from '../memory/workbook.ts';
 import { bookLast, rememberBook } from './journal/book-last.ts';
 import { lessonDone, lessonPage, lessonSection, lessonStep } from '../board/lesson.ts';
 import { readLesson, updateLesson } from './journal/lesson-store.ts';
-import { BOOK_TOC, bookView, photoBookPage, photoText, pickable, type PhotoText } from '../chalk/index.ts';
+import { BOOK_TOC, bookView, photoBookPage, photoText, pickable, workbookInk, workbookPage, workbookText, type PhotoText } from '../chalk/index.ts';
 import { bookIndex, listBooks, pickBook } from '../memory/textbook-pdf.ts';
 
 export class BusyError extends Error {
@@ -504,10 +505,21 @@ export class Runner {
     return { photos, running };
   }
 
-  /** 页的文字层从哪来(找框、说窗里是哪):课本(要的话)、照片认出的字、小课堂的每一句 */
+  /** 页的文字层从哪来(找框、说窗里是哪):课本(要的话)、照片认出的字、小课堂的每一句、铺过的练习册 */
   private async lessonSource(ws: Workspace, tutor: string, withBook: boolean, l: Lesson): Promise<LessonSource> {
     const book = withBook ? (await this.bookOf(ws, tutor, (this.opts.now ?? (() => new Date()))())).book : null;
-    return { book, photos: (await this.photoTexts(ws, l)).photos, lecture: await this.lectureOf(ws, l) };
+    return { book, photos: (await this.photoTexts(ws, l)).photos, lecture: await this.lectureOf(ws, l), workbooks: await this.workbooksOf(ws, l) };
+  }
+
+  /** 这节课铺过的练习册(现读 vault 的练习册/;读不出来的不在里面) */
+  private async workbooksOf(ws: Workspace, l: Lesson): Promise<Record<string, Workbook>> {
+    const out: Record<string, Workbook> = {};
+    for (const p of l.pages) {
+      if (p.kind !== 'workbook' || out[p.src]) continue;
+      const r = await readWorkbook(ws.paths.workbooks, p.src);
+      if ('wb' in r) out[p.src] = r.wb;
+    }
+    return out;
   }
 
   /** 这节课铺着的小课堂(页集里那一页的课包或视频);没有、读不出来 → null */
@@ -528,12 +540,17 @@ export class Runner {
   }
 
   /**
-   * 一节课(activity 头上 base:)这一轮开始时的样子:从小课堂按钮进来的先铺那堂课;课本做底的先铺目录;这一条带的照片接在照片页后面(没有就开一页);
+   * 一节课(activity 头上 base:)这一轮开始时的样子:从小课堂按钮进来的先铺那堂课;课本做底的先铺目录;练习册铺参数说的那一册(读不出来铺白纸,给家长记一句);
+   * 这一条带的照片接在照片页后面(没有就开一页);
    * 孩子拍的作业但还没有页(不拍,用白纸)就铺一张白纸页。落盘,回页的文字层从哪来、这节课现在的样子。
    * 孩子端照同样的规矩先落在自己那一份上(拍的照片发出去就铺、不等老师)
    */
-  private async lessonOn(ws: Workspace, tutor: string, now: Date, date: string, thread: string, base: ActivityBase, photos: readonly string[], lecture: Lecture | null): Promise<{ src: LessonSource; lesson: Lesson; problem?: string; running: string[] }> {
-    const { book, problem } = base === 'textbook' ? await this.bookOf(ws, tutor, now) : { book: null };
+  private async lessonOn(ws: Workspace, tutor: string, now: Date, date: string, thread: string, base: ActivityBase, photos: readonly string[], lecture: Lecture | null, workbook: string | null): Promise<{ src: LessonSource; lesson: Lesson; problem?: string; running: string[] }> {
+    const got = base === 'textbook' ? await this.bookOf(ws, tutor, now) : { book: null };
+    const { book } = got;
+    let problem = 'problem' in got ? got.problem : undefined;
+    const wbRead = base === 'workbook' ? (workbook ? await readWorkbook(ws.paths.workbooks, workbook) : { why: '这个 activity 没给练习册参数' }) : null;
+    if (wbRead && 'why' in wbRead) problem = `练习册:${wbRead.why}`;
     const last = book ? await bookLast(ws, book.file) : null;
     const sizes = await this.photoSizes(ws, photos);
     // 数学的照片上点的是数和算式,不弹田字格(同数学课本)
@@ -542,12 +559,14 @@ export class Runner {
       // 小课堂(孩子端点了按钮就铺上、先看完才开口;服务端收到第一条时照同样的规矩铺)
       let s = lecture && !l.pages.some((p) => p.kind === 'lecture') ? lessonStep(l, { t: 'act', act: { k: '翻', page: lecturePage(lecture) } }) : l;
       s = book ? lessonOpen(s, book, last) : s;
+      // 练习册:这一册还没铺过才铺(铺过的翻回来原样在)
+      if (workbook && wbRead && 'wb' in wbRead && !s.pages.some((p) => p.kind === 'workbook' && p.src === workbook)) s = lessonStep(s, { t: 'act', act: { k: '翻', page: workbookPage(workbook, wbRead.wb, pick) } });
       if (sizes.length) s = lessonStep(s, { t: 'photo', photos: sizes, pick });
-      else if (base === 'photo' && !s.at) s = lessonStep(s, { t: 'act', act: { k: '翻', page: whitePage() } });
+      else if ((base === 'photo' || base === 'workbook') && !s.at) s = lessonStep(s, { t: 'act', act: { k: '翻', page: whitePage() } });
       return s;
     });
     const texts = await this.photoTexts(ws, lesson);
-    return { src: { book, photos: texts.photos, lecture: await this.lectureOf(ws, lesson) }, lesson, running: texts.running, ...(problem ? { problem } : {}) };
+    return { src: { book, photos: texts.photos, lecture: await this.lectureOf(ws, lesson), workbooks: await this.workbooksOf(ws, lesson) }, lesson, running: texts.running, ...(problem ? { problem } : {}) };
   }
 
   /**
@@ -560,6 +579,8 @@ export class Runner {
     const page = lessonPage(x.lesson);
     const told = new Set(opts.compact ? [] : events.flatMap((e) => (e.k === 'turn' && e.told ? (Array.isArray(e.told) ? e.told : [e.told]) : [])));
     const notes: PageNote[] = [];
+    /** 练习册上孩子用笔圈、画的,照作答区说成几句(上一轮以后落过笔才说) */
+    let inked: string[] = [];
     let show = '还没有页';
     if (page?.kind === 'book') {
       const at = x.src.book && page.src === x.src.book.file ? bookLesson(x.src.book.index, page.title) : null;
@@ -579,6 +600,17 @@ export class Runner {
         const layer = photoBookPage(i + 1, ph, t);
         notes.push({ id, name: `第${i + 1}张`, text: clipNote(photoText(layer.page, layer.blocks)) });
       });
+    } else if (page?.kind === 'workbook') {
+      const wb = x.src.workbooks?.[page.src];
+      const n = page.sheets.length;
+      show = wb ? `练习册《${page.title}》${n} 页(从上往下连着;看一道写 [[看 第 3 题]],题号一册里贯穿)` : `练习册《${page.title}》读不出来了`;
+      wb?.pages.forEach((pg, i) => {
+        const id = `${page.id}#${i + 1}`;
+        if (!told.has(id)) notes.push({ id, name: `《${page.title}》第${i + 1}页`, text: clipNote(workbookText(pg)) });
+      });
+      let last = 0;
+      events.forEach((e, i) => { if (e.k === 'turn') last = i + 1; });
+      if (wb && events.slice(last).some((e) => e.k === 'ink' && e.base === page.id)) inked = workbookInk(wb, page.sheets, page.kid.ink);
     } else if (page?.kind === 'white') show = '白纸(老师摆、写的都在上面)';
     else if (page?.kind === 'lecture') {
       const c = x.src.lecture && x.src.lecture.bundle === page.bundle ? x.src.lecture.clock : null;
@@ -586,13 +618,14 @@ export class Runner {
       if (c && !told.has(page.id)) notes.push({ id: page.id, name: `小课堂《${page.title}》`, text: clipNote(lectureLines(c)) });
     }
     if (!page && x.problem) show = `课本:${x.problem}(请家长放进 vault 的教材文件夹)`;
-    const others = x.lesson.pages.filter((p) => p !== page).map((p) => (p.kind === 'book' ? `《${p.title}》` : p.kind === 'photo' ? `作业照片(${p.photos.length} 张)` : p.kind === 'lecture' ? `小课堂《${p.title}》` : '白纸'));
+    const others = x.lesson.pages.filter((p) => p !== page).map((p) => (p.kind === 'book' ? `《${p.title}》` : p.kind === 'photo' ? `作业照片(${p.photos.length} 张)` : p.kind === 'lecture' ? `小课堂《${p.title}》` : p.kind === 'workbook' ? `练习册《${p.title}》` : '白纸'));
     let from = 0;
     events.forEach((e, i) => { if (e.k === 'turn') from = i + 1; });
     const files = conversationFiles(ws.dirs.conversations, tutor, date);
     const fresh = page ? events.slice(from).some((e) => e.k === 'shot' && e.base === page.id) : false;
     const shot = fresh ? await rename(files.shot(thread), files.shot(job)).then(() => files.shot(job), () => undefined) : undefined;
-    const slate = slateOf({ page: { id: page?.id ?? '#', show }, others, events, lesson: lessonSlateBits(x.lesson), now: now.getTime(), ...(shot ? { shot: true } : {}), ...(opts.did?.length ? { did: opts.did } : {}) });
+    const did = [...(opts.did ?? []), ...inked];
+    const slate = slateOf({ page: { id: page?.id ?? '#', show }, others, events, lesson: lessonSlateBits(x.lesson), now: now.getTime(), ...(shot ? { shot: true } : {}), ...(did.length ? { did } : {}) });
     return { slate, notes, told: notes.map((n) => n.id), ...(shot ? { shot } : {}) };
   }
 
@@ -741,7 +774,10 @@ export class Runner {
     // 铺哪种页:activity 头上的 base(没写当 photo);从小课堂按钮进来的,页上还先铺那堂课(lessonOn)。不带 activity 的系统任务、以前不铺页的话题不铺
     const freshBase: ActivityBase | null = actDef ? activityBase(actDef) : input.lecture ? 'lecture' : null;
     const pageBase: ActivityBase | null = input.bookkeep ? null : fresh ? (activityRun || input.lecture ? freshBase : null) : (first?.base ?? null);
-    const les = pageBase ? await this.lessonOn(ws, tutor, now, date, thread, pageBase, photos, lecture) : null;
+    // 练习册:这个 activity 里类型是「练习册」的那个参数(家长在首页按钮上填的,话题第一条记着)
+    const wbParam = actDef?.params.find((p) => p.type === '练习册');
+    const wbName = wbParam ? String(threadRun?.params?.[wbParam.name] ?? wbParam.default ?? '').trim() || null : null;
+    const les = pageBase ? await this.lessonOn(ws, tutor, now, date, thread, pageBase, photos, lecture, wbName) : null;
     if (les?.problem) activityWarn.push(les.problem);
     if (les && pageBase) active.lesson = { base: pageBase, src: les.src, at: les.lesson };
     const slate = les ? await this.lessonSlate(ws, tutor, date, thread, job, les, now, { compact, fresh: photos, did: input.lecture ? lectureDid(lecture, input.lecture, marks) : [], reads: !actDef || actDef.tools.some((t) => t.tool === '认字') }) : null;

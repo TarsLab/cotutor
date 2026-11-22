@@ -30,7 +30,7 @@ export interface SandboxOptions extends ResolveOptions {
 }
 
 /** vault 侧指在外面也不怕的角色:只读的材料,老师不往里写 */
-const READ_ONLY_ROLES: readonly string[] = ['textbooks', 'reference'];
+const READ_ONLY_ROLES: readonly string[] = ['textbooks', 'workbooks', 'reference'];
 
 /** ~/cotutor/ray → ~/cotutor/.sandbox/ray */
 export const sandboxRootOf = (real: string): string => join(dirname(real), SANDBOX_DIR, basename(real));

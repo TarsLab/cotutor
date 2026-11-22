@@ -87,6 +87,8 @@ export const PAGE_PHOTOS_MAX = 6;
 export const PHOTO_PAGE = '作业';
 export const WHITE_PAGE = '白纸';
 export const LECTURE_PAGE = '小课堂';
+/** 一册练习册最多铺几页(几页从上往下连着,同课本一课最多铺的页数) */
+export const BOOK_MAX_SHEETS = 12;
 
 /**
  * 一页铺的是什么:
@@ -113,6 +115,18 @@ export type PageSource =
     pick: boolean;
   }
   | { id: string; kind: 'photo'; title: string; photos: PagePhoto[]; pick: boolean }
+  | {
+    /** 练习册#<目录名> */
+    id: string;
+    kind: 'workbook';
+    /** 练习册的目录名(vault 练习册/ 下;src/schema/workbook.ts) */
+    src: string;
+    /** 册名(workbook.json 的 title) */
+    title: string;
+    /** 每页的宽高:宽 1000、高照页图的宽高比;题框、文字层、能写的格子都在这套坐标里(src/chalk/kit/workbook.ts) */
+    sheets: { w: number; h: number }[];
+    pick: boolean;
+  }
   | { id: string; kind: 'white'; title: string; pick: boolean }
   | {
     id: string;
@@ -218,9 +232,10 @@ const BookSourceSchema = z.object({
   pick: z.boolean(),
 });
 const PhotoSourceSchema = z.object({ id: z.string().min(1), kind: z.literal('photo'), title: z.string().min(1), photos: z.array(PhotoSchema).min(1).max(PAGE_PHOTOS_MAX), pick: z.boolean() });
+const WorkbookSourceSchema = z.object({ id: z.string().min(1), kind: z.literal('workbook'), src: z.string().min(1), title: z.string().min(1), sheets: z.array(z.object({ w: z.number().positive(), h: z.number().positive() })).min(1).max(BOOK_MAX_SHEETS), pick: z.boolean() });
 const WhiteSourceSchema = z.object({ id: z.string().min(1), kind: z.literal('white'), title: z.string().min(1), pick: z.boolean() });
 const LectureSourceSchema = z.object({ id: z.string().min(1), kind: z.literal('lecture'), title: z.string().min(1), bundle: z.string().min(1), video: z.boolean(), ms: z.number().nonnegative(), pick: z.boolean() });
-export const PageSourceSchema = z.discriminatedUnion('kind', [BookSourceSchema, PhotoSourceSchema, WhiteSourceSchema, LectureSourceSchema]);
+export const PageSourceSchema = z.discriminatedUnion('kind', [BookSourceSchema, PhotoSourceSchema, WorkbookSourceSchema, WhiteSourceSchema, LectureSourceSchema]);
 const RangeSchema = z.tuple([z.number().nonnegative(), z.number().nonnegative()]);
 const Layers = {
   teacher: z.object({
@@ -237,7 +252,7 @@ const Layers = {
   }),
   open: z.array(AskSchema),
 };
-export const LessonPageSchema = z.discriminatedUnion('kind', [BookSourceSchema.extend(Layers), PhotoSourceSchema.extend(Layers), WhiteSourceSchema.extend(Layers), LectureSourceSchema.extend(Layers)]);
+export const LessonPageSchema = z.discriminatedUnion('kind', [BookSourceSchema.extend(Layers), PhotoSourceSchema.extend(Layers), WorkbookSourceSchema.extend(Layers), WhiteSourceSchema.extend(Layers), LectureSourceSchema.extend(Layers)]);
 export const LessonSchema = z.object({
   v: z.literal(1),
   pages: z.array(LessonPageSchema).max(LESSON_PAGES_MAX),

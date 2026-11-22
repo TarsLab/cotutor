@@ -9,7 +9,8 @@
  * 含「最后请说」在回显后面加一句末尾请说的(他说了交给老师);含「家长段」加「## 家长」;含「记住它」「改记忆」回「## 记忆」(加三条 / 改一条删一条),
  * 「带证据」回两条带证据的(一条抄孩子的话、一条抄老师自己的),「记孩子」回一条 孩子: 开头的和一条普通的;记忆整理任务改一条删两条加一条;
  * 记账任务回固定形状的「## 记账」(「记账坏」或 FAKE_BOOKKEEP_BAD=1 少写 name;FAKE_BOOKKEEP_ASKED 里 | 分开的几句当 asked);
- * 上下文包有 photos 段就「看图」:请求带了工具先 read_file 那张照片,再回一句看到了;铺着照片页的一节课(board: 底是作业照片)里含「讲题」回讲稿里的动作(看第 3 题、圈、请圈)。
+ * 上下文包有 photos 段就「看图」:请求带了工具先 read_file 那张照片,再回一句看到了;铺着照片页的一节课(board: 底是作业照片)里含「讲题」回讲稿里的动作(看第 3 题、圈、请圈);
+ * 铺着练习册的一节课(board: 底是练习册)里含「做题」回看第 2 题、圈「一盘」、请写。
  */
 import { startFakeChat, type ChatBody, type FakeReply } from './_fake-bailian-chat.ts';
 
@@ -62,6 +63,7 @@ export function teacherReply(body: ChatBody): FakeReply {
     parts.push(`看到照片:${ps.join(' | ')},是第 12 页第 3 题。\n\n哪道算错了?`);
   }
   // 一节课的照片页(tests/board-page.test.ts):讲稿里写动作——看第 3 题、圈一个字、请他圈
+  if (prompt.includes('底: "练习册《') && msg.includes('做题')) parts.push('我们做第 2 题。[[看 第 2 题]] [[圈 一盘]]\n你先写第一格。[[请 写]]');
   if (prompt.includes('底: "孩子拍的作业照片') && msg.includes('讲题')) parts.push('我们看第 3 题。[[看 第 3 题]] [[圈 心理辅导室]]\n你把东面的两间圈出来。[[请 圈]]');
   parts.push(`${resumed ? '接着说:' : '第一次说:'}${lastLine}`);
   // 请他说的那句是这一轮最后一句(回显那句后面):他说了交给老师

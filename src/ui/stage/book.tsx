@@ -1,13 +1,13 @@
 /**
- * 一节课的舞台(课本、孩子拍的作业照片、白纸都铺在这里):
+ * 一节课的舞台(课本、孩子拍的作业照片、练习册、白纸都铺在这里):
  * 照一节课的状态画(src/schema/lesson.ts,页面一句一句落好了发进来):现在这一页、老师的一层(记号、白纸条)、孩子的一层(笔、揭开)、开放的、老师让看的那一处。
- * 一页铺的三种:课本的一课(几页 PDF)、作业照片(几张)、白纸,都从上往下连成一条(场景坐标:一页宽 1000,src/chalk/kit/book.ts 的 bookSheets),屏幕是看它的一扇窗:
+ * 一页铺的四种:课本的一课(几页 PDF)、作业照片(几张)、练习册(几页图,文字层和能写的格子是排版时记下的,/api/kid/workbook/)、白纸,都从上往下连成一条(场景坐标:一页宽 1000,src/chalk/kit/book.ts 的 bookSheets),屏幕是看它的一扇窗:
  *  - 窗只有两种大小:页宽铺满、两倍,双击切换;不两指缩放、不滚轮缩放。页宽时手指只上下滚,两倍时上下左右都能挪,松手带惯性。
  *  - 老师「看」了一处(look.n 变了):窗滚到那一块(大小不变,近的滑过去,远的直接到),块里的字一行一行刷上荧光黄(读的顺序,像老师拿荧光笔划一遍)、停一会儿淡掉;
  *    字行是服务端找「看」的那一块时一起给的(look.rows,跨页的段不会把中间的脚注带进来);没给的(照片的第几张、新拍的照片)照框在文字层里挑,
  *    文字层还没拉下来就等它,白纸、照片没认出字的整块铺一层。没看就不动——他眼前的就是老师要讲的。
  *  - 只读(录像、家长看)照记录的窗摆:以前孩子缩放过的窗照样放得下(camFor)。
- *  - Apple Pencil(pointerType = pen)写画,手指永远不落笔;笔在纸上时别的手指(手掌)不算。课本页上随时能画(预习时自己圈生字、标段);
+ *  - Apple Pencil(pointerType = pen)写画,手指永远不落笔;笔在纸上时别的手指(手掌)不算。课本页、练习册上随时能画(预习时自己圈生字、标段,练习册就是拿笔做的);
  *    照片、白纸页上老师请了写、圈…才能画。请没请只管抬笔后替不替他交(服务端照 open 判)。
  *    试用(mousePen,电脑上没有笔):能落笔时鼠标当笔(课本页上一直是,拖不动页,用滚轮),不能落笔时鼠标还是手指;滚轮照常滚。
  *  - 轻点(手指或笔;手指的等一下看是不是双击)一个字:本地照课本的行和字算出是哪个字(bookPick),告诉页面(pick,带它在屏幕上的框)弹田字格,那个字一直标着;
@@ -191,6 +191,7 @@ function sourceKey(p: LessonPage | null, whiteH: number): string {
   if (!p) return '';
   if (p.kind === 'book') return `book|${p.src}|${p.pages.join(',')}|${p.cut}`;
   if (p.kind === 'photo') return `photo|${p.photos.map((x) => x.src).join(',')}`;
+  if (p.kind === 'workbook') return `workbook|${p.src}|${p.sheets.length}`;
   return `white|${Math.ceil(whiteH / 400)}`;
 }
 const loadImage = (url: string): Promise<HTMLImageElement> => new Promise((ok, no) => { const img = new Image(); img.onload = () => ok(img); img.onerror = () => no(new Error(`照片打不开:${url}`)); img.src = url; });
@@ -308,7 +309,7 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
   const tocNow = useRef<{ on: boolean; color: string; areas: ReturnType<typeof tocAreas> }>({ on: false, color: '', areas: [] });
   tocNow.current = { on: tocOn, color: toc?.color ?? '#1c7ed6', areas: tocOn && toc ? tocAreas(toc.entries) : [] };
   /** 能落笔:课本页上随时(目录除外);别的页老师请了用笔才能 */
-  const canMark = !tocOn && (page?.kind === 'book' || open.some((o) => PEN_ASKS.includes(o)));
+  const canMark = !tocOn && (page?.kind === 'book' || page?.kind === 'workbook' || open.some((o) => PEN_ASKS.includes(o)));
   const canPick = !tocOn && (Boolean(page?.pick) || open.includes('点'));
   const revealedKey = (page?.kid.revealed ?? []).join('\n');
   /** 开着的白纸条:排好的样子;孩子在上面画的、转的 */
@@ -388,7 +389,7 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
   /** 这一课几页上的田字格(场景坐标);文字层还没拉下来是空的 */
   const cellsHere = (): SceneCell[] => {
     const g = geo.current, p = lessonPage(latest.current);
-    return g && p?.kind === 'book' ? bookCellsOf(g.lines, g.sheets) : [];
+    return g && (p?.kind === 'book' || p?.kind === 'workbook') ? bookCellsOf(g.lines, g.sheets) : [];
   };
   /** 孩子在格里写的字:格里的坐标(长边 = CELL_UNIT)照格的框缩放 */
   const cellPaths = (c: SceneCell, strokes: [number, number][][]): [number, number][][] => {
@@ -746,6 +747,7 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
       const dims: { n: number; w: number; h: number }[] = [];
       if (p.kind === 'book' && doc) for (const n of p.pages) { const pg = await doc.getPage(n); const vp = pg.getViewport({ scale: 1 }); dims.push({ n, w: vp.width, h: vp.height }); }
       else if (p.kind === 'photo') p.photos.forEach((ph, i) => dims.push({ n: i + 1, w: ph.w, h: ph.h }));
+      else if (p.kind === 'workbook') p.sheets.forEach((sh, i) => dims.push({ n: i + 1, w: sh.w, h: sh.h }));
       else dims.push({ n: 1, w: BOOK_W, h: whiteH });
       if (cancelled) return;
       // 每页底下不铺的那一条(课本;应用照这一册算好的,bookCut):有它页和页就直接连着
@@ -768,7 +770,7 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
         host.prepend(cv);
         base.set(sh.n, cv);
       }
-      geo.current = { key: geoKey, pdf: pdfUrl, sheets, height, aspect, base, drawn: new Set(), lines: [], linesDone: p.kind !== 'book' && p.kind !== 'photo' };
+      geo.current = { key: geoKey, pdf: pdfUrl, sheets, height, aspect, base, drawn: new Set(), lines: [], linesDone: p.kind !== 'book' && p.kind !== 'photo' && p.kind !== 'workbook' };
       if (svg.current) { svg.current.setAttribute('viewBox', `0 0 ${BOOK_W} ${height}`); Object.assign(svg.current.style, { width: `${BOOK_W}px`, height: `${height}px` }); }
       if (sharp.current) sharp.current.style.display = 'none';
       // 这一页上孩子画的、老师的记号照状态摆(换页再回来还在)
@@ -799,8 +801,9 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
           // 画布只有铺出来的那么高(页底裁掉的那一条不画);批注不画:平台盖在页顶的社标是一条水印批注
           cv.width = Math.round(vp.width); cv.height = Math.round(sh.height / sh.s * k);
           await pg.render({ canvas: cv, viewport: vp, annotationMode: 0 }).promise.catch(() => {});
-        } else if (p.kind === 'photo') {
-          const img = await loadImage(`/api/kid/image?p=${encodeURIComponent(p.photos[sh.n - 1].src)}`).catch(() => null);
+        } else if (p.kind === 'photo' || p.kind === 'workbook') {
+          const url = p.kind === 'photo' ? `/api/kid/image?p=${encodeURIComponent(p.photos[sh.n - 1].src)}` : `/api/kid/workbook/image?w=${encodeURIComponent(p.src)}&p=${sh.n}`;
+          const img = await loadImage(url).catch(() => null);
           if (cancelled) return;
           if (img) {
             const k = Math.min(1, PHOTO_PX / img.naturalWidth);
@@ -818,6 +821,15 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
       // 点字要的行和字:课本照 PDF 的文字层,照片照认出来的(认完以前一直是空的,等一会儿再拉)
       if (p.kind === 'book') {
         const r = await fetch(`/api/kid/textbook/lines?b=${encodeURIComponent(p.src)}&p=${p.pages[0]}-${p.pages[p.pages.length - 1]}`, { cache: 'no-store' }).catch(() => null);
+        const j = r?.ok ? ((await r.json()) as { pages?: BookPage[] }) : null;
+        if (cancelled || geo.current?.key !== geoKey) return;
+        if (Array.isArray(j?.pages)) geo.current.lines = j!.pages!;
+        geo.current.linesDone = true;
+        paintCells();
+        paintLook(false);
+      } else if (p.kind === 'workbook') {
+        // 练习册:行、题框、能写的格子都是排版时记下的,拉一次就全了
+        const r = await fetch(`/api/kid/workbook/lines?w=${encodeURIComponent(p.src)}`, { cache: 'no-store' }).catch(() => null);
         const j = r?.ok ? ((await r.json()) as { pages?: BookPage[] }) : null;
         if (cancelled || geo.current?.key !== geoKey) return;
         if (Array.isArray(j?.pages)) geo.current.lines = j!.pages!;

@@ -1,17 +1,18 @@
 /**
  * 讲稿里的动作落到页上(纯函数,runner 在流式与定稿时都过一遍):老师写的是页上印的字,应用照页的文字层找到它在哪。
- *  - 翻 课名 / 翻 目录:照课本目录找到这一课铺哪几页;翻 白纸:加一张白纸页(有了就回到它);翻 作业:回到孩子拍的照片页;翻 小课堂:回到那堂课
- *  - 看 第 3 题 / 例 2 / 原话…:照这一页分好的块找到那一块的框(src/chalk/kit/book.ts 的 bookTarget);照片页还认「第 2 张」「第 2 张第 3 题」
+ *  - 翻 课名 / 翻 目录:照课本目录找到这一课铺哪几页;翻 白纸:加一张白纸页(有了就回到它);翻 作业:回到孩子拍的照片页;翻 小课堂:回到那堂课;翻 练习册(或册名):回到铺过的那一册
+ *  - 看 第 3 题 / 例 2 / 原话…:照这一页分好的块找到那一块的框(src/chalk/kit/book.ts 的 bookTarget);照片页还认「第 2 张」「第 2 张第 3 题」,练习册「第 2 页」「第 2 页第 3 题」
  *  - 看 0:19–0:30 / 0:19 / 课里的一句原话(小课堂页):放那一段,对齐到句(src/board/lecture.ts 的 lectureRange);只写起点放到那一句的末尾
  *  - 圈、划、加点、遮、盖 字词:照字找到框;先在「看」着的那一块里找(找不到的那一处不做)。
  *    圈的框连着字头上的拼音(圈住整个字块,不切拼音那一行);划一句跨了行就一行一截;一句里圈、划、加点最多做 3 处,多写的给家长记一句
  *  - 写、摆:落进「看」着的那道题的白纸条;白纸页上整页就是一条;课本、照片上没在看哪一道题就不做
  *  - 擦、请:照写的做
- * 页的文字层:课本是 PDF 的文字层(src/memory/textbook-index.ts);照片是认字认出的行和题,换成课本的样子(src/chalk/kit/photo.ts);小课堂是每一句的起点与原话;白纸没有。
+ * 页的文字层:课本是 PDF 的文字层(src/memory/textbook-index.ts);照片是认字认出的行和题,换成课本的样子(src/chalk/kit/photo.ts);
+ * 练习册是 workbook.json 里排版时记下的行和题(src/chalk/kit/workbook.ts);小课堂是每一句的起点与原话;白纸没有。
  * 一节里的动作照先后一个一个落(先翻再看,看的是新的那一页),落不了的记一句给家长(why),动作本身留在讲稿上、不带 do。
  */
-import { BOOK_MAX_PAGES, BOOK_TOC, bookCut, bookFind, bookSheets, bookSpot, bookTarget, findLesson, lessonBlocks, lessonName, photoBookPage, type BookBlock, type BookSheet, type PhotoText } from '../chalk/index.ts';
-import { LECTURE_PAGE, LOOK_ROWS_MAX, PHOTO_PAGE, WHITE_PAGE, type BoardSection, type BookIndex, type BookPage, type Box, type Lesson, type LessonAct, type LineAct, type PageSource } from '../schema/index.ts';
+import { BOOK_MAX_PAGES, BOOK_TOC, bookCut, bookFind, bookSheets, bookSpot, bookTarget, findLesson, lessonBlocks, lessonName, photoBookPage, workbookBookPage, type BookBlock, type BookSheet, type PhotoText } from '../chalk/index.ts';
+import { LECTURE_PAGE, LOOK_ROWS_MAX, PHOTO_PAGE, WHITE_PAGE, type BoardSection, type BookIndex, type BookPage, type Box, type Lesson, type LessonAct, type LineAct, type PageSource, type Workbook } from '../schema/index.ts';
 import { actParts } from './acts.ts';
 import { clockLabel, lectureRange, parseClock, type LectureClock } from './lecture.ts';
 import { lessonPage, lessonStep } from './lesson.ts';
@@ -32,6 +33,8 @@ export interface LessonSource {
   photos?: Readonly<Record<string, PhotoText>>;
   /** 小课堂页的那堂课(src/runtime/lecture.ts 读的):每一句的起点、段长、原话;读不出来、没有小课堂是 null */
   lecture?: { bundle: string; clock: Pick<LectureClock, 'segments' | 'total'> } | null;
+  /** 这节课铺过的练习册(名字 → 读出来的那一册;src/memory/workbook.ts);读不出来的没有 */
+  workbooks?: Readonly<Record<string, Workbook>>;
 }
 
 /** 「看」小课堂:「0:19–0:30」「0:19」(放到那一句的末尾),或课里一句原话的一截(放那一句);对齐到句 */
@@ -75,21 +78,28 @@ export function pageText(p: PageSource, src: LessonSource): { pages: BookPage[];
     const pages = layers.map((x) => x.page);
     return { pages, sheets: bookSheets(pages), blocks: layers.flatMap((x) => x.blocks) };
   }
+  if (p.kind === 'workbook') {
+    const wb = src.workbooks?.[p.src];
+    if (!wb) return { pages: [], sheets: [], blocks: [] };
+    const layers = wb.pages.map((pg, i) => workbookBookPage(i + 1, pg));
+    const pages = layers.map((x) => x.page);
+    return { pages, sheets: bookSheets(pages), blocks: layers.flatMap((x) => x.blocks) };
+  }
   return { pages: [], sheets: [], blocks: [] };
 }
 
-/** 照片页上的「第 2 张」「第 2 张第 3 题」 */
-const SHEET = /^第?\s*(\d{1,2})\s*张(?:\s*的?\s*第?\s*(\d{1,2})\s*题)?$/;
+/** 照片页上的「第 2 张」「第 2 张第 3 题」,练习册上的「第 2 页」「第 2 页第 3 题」 */
+const SHEET = { 张: /^第?\s*(\d{1,2})\s*张(?:\s*的?\s*第?\s*(\d{1,2})\s*题)?$/, 页: /^第?\s*(\d{1,2})\s*页(?:\s*的?\s*第?\s*(\d{1,2})\s*题)?$/ } as const;
 
-/** 「看」照片页:第几张、第几张的第几题;别的同课本 */
-function photoTarget(t: ReturnType<typeof pageText>, what: string): { label: string; box: Box; rows?: Box[] } | null {
-  const m = SHEET.exec(what.replace(/\s/g, ''));
+/** 「看」照片页、练习册:第几张(页)、第几张(页)的第几题;别的同课本 */
+function photoTarget(t: ReturnType<typeof pageText>, what: string, unit: keyof typeof SHEET = '张'): { label: string; box: Box; rows?: Box[] } | null {
+  const m = SHEET[unit].exec(what.replace(/\s/g, ''));
   if (!m) return bookTarget(t.pages, t.sheets, t.blocks, what);
   const n = Number(m[1]), sh = t.sheets.find((x) => x.n === n);
   if (!sh) return null;
-  if (!m[2]) return { label: `第${n}张`, box: [0, sh.top, 1000, sh.top + sh.height] };
+  if (!m[2]) return { label: `第${n}${unit}`, box: [0, sh.top, 1000, sh.top + sh.height] };
   const hit = bookTarget(t.pages, t.sheets, t.blocks.filter((b) => b.area?.n === n), `第${m[2]}题`);
-  return hit ? { label: `第${n}张${hit.label}`, box: hit.box, rows: hit.rows } : null;
+  return hit ? { label: `第${n}${unit}${hit.label}`, box: hit.box, rows: hit.rows } : null;
 }
 
 /** 翻到哪:白纸、照片页(作业、照片)、课本的一课或目录 */
@@ -107,7 +117,12 @@ function turnTo(l: Lesson, name: string, src: LessonSource): { page: PageSource 
     const { teacher: _t, kid: _k, open: _o, ...page } = p;
     return { page };
   }
-  if (!src.book) return { why: `这节课没有课本,翻不了「${name}」(能翻的:白纸、作业)` };
+  const wb = l.pages.find((x) => x.kind === 'workbook' && (name === '练习册' || name === x.title || name === x.src));
+  if (wb) {
+    const { teacher: _t, kid: _k, open: _o, ...page } = wb;
+    return { page };
+  }
+  if (!src.book) return { why: `这节课没有课本,翻不了「${name}」(能翻的:白纸、作业${l.pages.some((x) => x.kind === 'workbook') ? '、练习册' : ''})` };
   const page = bookPageOf(src.book, name === BOOK_TOC ? null : name);
   return page ? { page } : { why: `课本里没有「${name}」这一课` };
 }
@@ -132,7 +147,7 @@ export function fitAct(l: Lesson, a: LineAct, src: LessonSource): { do: LessonAc
         return hit ? { do: { k: '看', label: hit.label, box: [0, 0, 0, 0], at: hit.at } } : { why: `「${parts.target}」在小课堂《${p.title}》里找不到(写 0:19–0:30,或课里一句原话)` };
       }
       const t = pageText(p, src);
-      const hit = p.kind === 'photo' ? photoTarget(t, parts.target) : bookTarget(t.pages, t.sheets, t.blocks, parts.target);
+      const hit = p.kind === 'photo' ? photoTarget(t, parts.target) : p.kind === 'workbook' ? photoTarget(t, parts.target, '页') : bookTarget(t.pages, t.sheets, t.blocks, parts.target);
       return hit ? { do: { k: '看', label: hit.label, box: hit.box, ...(hit.rows?.length ? { rows: hit.rows.slice(0, LOOK_ROWS_MAX) } : {}) } } : { why: `「${parts.target}」在《${p.title}》里找不到${p.kind === 'photo' ? '(照片上认出的题没有它,或者还没认完)' : ''}` };
     }
     case '圈':

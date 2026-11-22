@@ -14,6 +14,7 @@
  *  board-log     一节课里板的日志(一件事一行)
  *  textbook      课本:vault 里教材 PDF 的索引(字、行、拼音、目录、页码)
  *  lesson        一节课:讲稿里的动作、一节课的状态
+ *  workbook      练习册:每页的图、文字层、作答区与物件、给老师的答案
  * 运行时校验用 zod,失败信息经 explainIssues 变成修复指南。
  */
 export * from './issues.ts';
@@ -36,3 +37,4 @@ export * from './activity.ts';
 export * from './board-log.ts';
 export * from './textbook.ts';
 export * from './lesson.ts';
+export * from './workbook.ts';

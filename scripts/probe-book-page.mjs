@@ -140,6 +140,13 @@ try {
   ok('板的顶栏没有拍照、相册', top.bk && top.cam === 'none', JSON.stringify(top));
   await sleep(1500);
   console.log('  ', await shot('1-目录.png'));
+  // 首页课本那张卡的封面:进来时还没有,舞台画了第 1 页交上来,首页那张就带上它(长边 480 的 jpeg)
+  let cover = null;
+  for (let t = 0; t < 15000 && !cover; t += 300) { const h = await (await fetch(`${base}/api/kid/home`)).json(); cover = h.cards.find((c) => c.kind === 'tutor' && c.props.tutor === T)?.props.tiles?.find((x) => x.id === 'textbook')?.cover?.image ?? null; if (!cover) await sleep(300); }
+  const coverImg = cover ? await fetch(`${base}${cover}`) : null;
+  const coverBuf = coverImg?.ok ? Buffer.from(await coverImg.arrayBuffer()) : null;
+  ok('进了课本:舞台画了第 1 页交上来,首页课本那张带封面(jpeg)', Boolean(coverBuf && coverBuf[0] === 0xff && coverBuf[1] === 0xd8 && coverBuf.length > 5000), JSON.stringify({ cover, size: coverBuf?.length }));
+  if (coverBuf) writeFileSync(join(shots, '0-封面.jpg'), coverBuf);
 
   // 二、孩子说要预习坐井观天(另起一条实时连接发进同一个话题;页面轮询拿到老师的卡)
   const day = async () => (await (await fetch(`${base}/api/kid/conversations/${T}/today`)).json());

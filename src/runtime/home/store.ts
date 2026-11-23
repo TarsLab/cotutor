@@ -11,13 +11,16 @@ import { localDate } from '../../shared/time.ts';
 import { threads } from '../../schema/index.ts';
 import { activityName, findActivityFile, lectureActivity } from '../activities.ts';
 import { lintActivity, parseActivity, resolveParams } from '../activity.ts';
-import { activityLook, arrangeHome, buttonWorkbook, dropFixes, homeActivities, homeOwners, faceTutor, homeId, homeIssues, homeLectures, homeTutors, kidButtons, kidTiles, parseHome, type ActivityLook, type HomeCheckContext, type HomeDoc, type HomeIssue, type HomeTutorInfo, type KidHomeButton } from './home.ts';
+import { activityLook, arrangeHome, buttonWorkbook, dropFixes, homeActivities, homeOwners, faceTutor, homeId, homeIssues, homeLectures, homeTutors, kidButtons, kidTiles, parseHome, type ActivityLook, type KidCover, type HomeCheckContext, type HomeDoc, type HomeIssue, type HomeTutorInfo, type KidHomeButton } from './home.ts';
 import type { BoardCard } from '../../board/presentation.ts';
 import { HOME_ID_RE, HOME_TILES, PublishedHomeSchema, tutorTiles, type Activity, type ActivityRun, type ActivityValue, type HomeTileId, type HomeVia, type MessageVia, type PublishedHome } from '../../schema/index.ts';
 import { listDates, readIndex } from '../journal/store.ts';
 import { bakeSoon, inspectLecture, readLecture, type Lecture } from '../lecture.ts';
 import { readWorkbook } from '../../memory/workbook.ts';
 import { listBooks, pickBook } from '../../memory/textbook-pdf.ts';
+import { coverText, readCover } from '../../memory/textbook-cover.ts';
+import { latestHomework } from '../../memory/homework.ts';
+import { homeworkSubject } from '../homework.ts';
 import { canonicalSubject } from '../../schema/index.ts';
 
 export function homeFiles(ws: Pick<Workspace, 'dirs'>): { dir: string; draft: string; published: string; history: string } {
@@ -120,6 +123,22 @@ export async function usableActivity(ws: Workspace, tutor: string, name: string)
 export async function bookReady(ws: Workspace, tutor: string, now: Date): Promise<boolean> {
   const subject = canonicalSubject(ws.config.tutors[tutor]?.subject);
   return pickBook(await listBooks(ws.paths.textbooks, subject || null), now) !== null;
+}
+
+/** 课本那张卡的封面:这学期那一册,画好的封面(没有 image = 孩子端画占位、进了课本叫舞台补画);没有课本 = null */
+async function bookCover(ws: Workspace, tutor: string, now: Date): Promise<KidCover | null> {
+  const subject = canonicalSubject(ws.config.tutors[tutor]?.subject);
+  const book = pickBook(await listBooks(ws.paths.textbooks, subject || null), now);
+  if (!book) return null;
+  const got = await readCover(ws.paths.textbooks, join(ws.root, '.cotutor', 'covers'), book);
+  return { kind: 'book', book, ...coverText(book, subject ?? null), ...(got ? { image: `/api/kid/textbook/cover?b=${encodeURIComponent(book)}&v=${got.key}` } : {}) };
+}
+
+/** 作业本那张卡的封面:最近的一张照片和那天(一张都没有就只有字) */
+async function homeworkCover(ws: Workspace, tutor: string): Promise<KidCover> {
+  const subject = homeworkSubject(ws, tutor);
+  const last = await latestHomework(ws.paths.homework, subject);
+  return { kind: 'homework', subject, ...(last ? { image: `/api/kid/homework/photo?tutor=${encodeURIComponent(tutor)}&day=${last.day}&f=${encodeURIComponent(last.name)}`, day: last.day } : {}) };
 }
 
 /** 还没有课本时给家长的一句(家长端首页、doctor):去哪下载、放哪、文件名要带什么 */
@@ -289,20 +308,29 @@ export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'pu
       lectureActivity: lectureActs.get(name) ?? null,
       keepBriefs: opts.keepBriefs,
       today,
-    }).map((b) => { const l = b.kind === 'lecture' ? lectures.get(b.bundle) : null; return l ? { ...b, title: l.title, ms: l.clock.total, ...(l.video ? { video: true as const } : {}) } : b; });
+    }).map((b): KidHomeButton => {
+      // 练习册的按钮:封面是那一册的第一页
+      if (b.kind === 'start' && b.workbook) return { ...b, cover: { kind: 'workbook', image: `/api/kid/workbook/image?w=${encodeURIComponent(b.workbook)}&p=1` } };
+      const l = b.kind === 'lecture' ? lectures.get(b.bundle) : null;
+      return b.kind === 'lecture' && l ? { ...b, title: l.title, ms: l.clock.total, ...(l.video ? { video: true as const } : {}) } : b;
+    });
     // 橙点:这份首页给他排了按钮或卡,而发布以来孩子还没找过他
     const arranged = buttons.some((b) => typeof b.id === 'number') || cards.some((x) => x.kind === 'dictation' && owners.get(x) === name);
     const news = Boolean(publishedAt && arranged && !(await talkedSince(ws, name, publishedAt, now)));
     // 常驻的方砖(课本、预习、检查作业、复习、口语课):不经发布,家里有那个 activity、没关掉就在;课本还要有课本
     const tiles: HomeTileId[] = [];
     const looks = new Map<string, ActivityLook>();
+    // 册的方砖(铺课本、作业本的)带封面
+    const covers = new Map<string, KidCover>();
     for (const t of HOME_TILES) {
       const act = tutorTiles(ws.config.tutors[name] ?? {}).includes(t.id) ? await openableActivity(ws, name, t.activity, now) : null;
       if (!act) continue;
       tiles.push(t.id);
       looks.set(t.activity, activityLook(act));
+      const cover = act.base === 'textbook' ? await bookCover(ws, name, now) : act.base === 'homework' ? await homeworkCover(ws, name) : null;
+      if (cover) covers.set(t.activity, cover);
     }
-    out.push({ kind: 'tutor', props: { tutor: name, buttons, tiles: kidTiles(tiles, { usable: () => true, looks }), ...(news ? { news: true } : {}) } });
+    out.push({ kind: 'tutor', props: { tutor: name, buttons, tiles: kidTiles(tiles, { usable: () => true, looks, covers }), ...(news ? { news: true } : {}) } });
   }
   return { home: id, cards: out };
 }

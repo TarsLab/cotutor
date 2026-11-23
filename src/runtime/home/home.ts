@@ -256,14 +256,26 @@ export function homeOwners(cards: readonly BoardCard[], tutors: readonly string[
  */
 export type KidHomeButton =
   /** workbook = 挂的练习册(base: workbook 的 activity;孩子端点了就先铺那一册) */
-  | ({ id: number; kind: 'start'; label: string; brief?: string; workbook?: string } & ActivityLook)
+  | ({ id: number; kind: 'start'; label: string; brief?: string; workbook?: string; cover?: KidCover } & ActivityLook)
   /** 小课堂:title / ms(课名、课长)由服务端读课包后补;base、listen 是看完照着聊的那个 activity 的(base 没写 = lecture) */
   | ({ id: number; kind: 'lecture'; label: string; bundle: string; brief?: string; title?: string; ms?: number; video?: true } & ActivityLook);
+
+/**
+ * 册的卡上的封面(首页的卡是竖版的,册铺封面;设计稿 https://claude.ai/artifact/KJFiRZD6E45YEKGQBbw98Q):
+ * book = 课本,PDF 第 1 页(舞台画了交上来的,src/memory/textbook-cover.ts;还没有 image 就画学科色 + title、sub 的占位,孩子端进了课本叫舞台补画 book 那一册);
+ * homework = 作业本,生成的(学科色 +「作业本」+ 最近一张照片和那天,一张都没有就只有字);workbook = 练习册,第一页的图
+ */
+export type KidCover =
+  | { kind: 'book'; book: string; title: string; sub: string; image?: string }
+  | { kind: 'homework'; subject: string; image?: string; day?: string }
+  | { kind: 'workbook'; image: string };
 
 /** 孩子端老师卡上常驻的一块方砖(HOME_TILES):label = activity 的名字 */
 export interface KidHomeTile {
   id: HomeTileId;
   label: string;
+  /** 铺课本、作业本的方砖的封面 */
+  cover?: KidCover;
   /**
    * 这一节课铺哪种页(头上的 base:):photo = 孩子端点了先到拍照屏,带着照片(或白纸)开话题;textbook = 不到拍照屏,直接开话题、铺课本的目录
    */
@@ -279,8 +291,8 @@ export interface ActivityLook { base?: ActivityBase; listen?: 'open'; start?: 't
 export const activityLook = (a: { base?: string; listen?: string; start?: string } | null | undefined): ActivityLook => ({ ...(a?.base === 'textbook' || a?.base === 'photo' || a?.base === 'lecture' || a?.base === 'workbook' || a?.base === 'homework' ? { base: a.base } : {}), ...(a?.listen === 'open' ? { listen: 'open' as const } : {}), ...(a?.start === 'tutor' ? { start: 'tutor' as const } : {}) });
 
 /** 这位老师牌上的方砖:开着的(on,牌上的先后)里,家里那个 activity 用得了的才出 */
-export function kidTiles(on: readonly HomeTileId[], opts: { usable: (activity: string) => boolean; looks?: ReadonlyMap<string, ActivityLook> }): KidHomeTile[] {
-  return HOME_TILES.filter((t) => on.includes(t.id) && opts.usable(t.activity)).map((t) => ({ id: t.id, label: t.activity, ...opts.looks?.get(t.activity) }));
+export function kidTiles(on: readonly HomeTileId[], opts: { usable: (activity: string) => boolean; looks?: ReadonlyMap<string, ActivityLook>; covers?: ReadonlyMap<string, KidCover> }): KidHomeTile[] {
+  return HOME_TILES.filter((t) => on.includes(t.id) && opts.usable(t.activity)).map((t) => { const cover = opts.covers?.get(t.activity); return { id: t.id, label: t.activity, ...opts.looks?.get(t.activity), ...(cover ? { cover } : {}) }; });
 }
 
 /**

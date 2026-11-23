@@ -64,6 +64,8 @@ import { imageSize } from '../../shared/jpeg.ts';
 import { listTextbookPages, textbookPageFile } from '../../memory/textbook-pages.ts';
 import { bookFile, bookIndex, listBooks, pickBook } from '../../memory/textbook-pdf.ts';
 import { readWorkbook, workbookImageFile } from '../../memory/workbook.ts';
+import { readCover, saveCover } from '../../memory/textbook-cover.ts';
+import { homeworkFile } from '../../memory/homework.ts';
 import { lessonOpen, tocEntries } from '../../board/lesson-fit.ts';
 import { lastSpot } from '../../runtime/journal/book-last.ts';
 import { lessonInit, lessonPage, lessonStep } from '../../board/lesson.ts';
@@ -879,6 +881,16 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       if (!file) return { status: 404, json: { error: 'not_found' } };
       return { status: 200, file, contentType: 'application/pdf' };
     }
+    // 课本的封面(首页课本那张卡;src/memory/textbook-cover.ts):GET ?b= 取画好的;PUT {book, image} 孩子端进了课本、舞台画了第 1 页交上来
+    if (p === '/api/kid/textbook/cover' && (method === 'GET' || method === 'PUT')) {
+      const covers = join(ws.root, '.cotutor', 'covers');
+      if (method === 'PUT') {
+        const ok = isObj(body) && typeof body.book === 'string' && (await saveCover(ws.paths.textbooks, covers, body.book, body.image));
+        return ok ? { status: 200, json: { ok: true } } : { status: 400, json: { error: 'bad_request' } };
+      }
+      const got = await readCover(ws.paths.textbooks, covers, url.searchParams.get('b') ?? '');
+      return got ? { status: 200, file: got.file, contentType: 'image/jpeg' } : { status: 404, json: { error: 'not_found' } };
+    }
     // 课本做底:这位老师学科、这学期那一册的目录当一页(孩子端新开一节课先铺它,老师翻到哪一课再换)和目录上能点的那几项(回到一节课时也要);没有课本 = lesson: null
     if (p === '/api/kid/textbook/base' && method === 'GET') {
       const t = ws.config.tutors[url.searchParams.get('tutor') ?? ''];
@@ -920,6 +932,11 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         const day = q.get('day') ?? '';
         const page = DATE_RE.test(day) ? await homeworkPage(ws, tutor, day, today, pick) : null;
         return page ? { status: 200, json: { page } } : { status: 404, json: { error: 'not_found' } };
+      }
+      // 作业本里的一张(vault 里的;首页作业本封面上最近那张)
+      if (p === '/api/kid/homework/photo') {
+        const file = await homeworkFile(ws.paths.homework, homeworkSubject(ws, tutor), q.get('day') ?? '', q.get('f') ?? '');
+        return file ? { status: 200, file, contentType: IMAGE_TYPES[extname(file).slice(1).toLowerCase()] } : { status: 404, json: { error: 'not_found' } };
       }
       if (p === '/api/kid/homework/past') {
         const src = q.get('p') ?? '', date = q.get('date') ?? '', thread = q.get('thread') ?? '';

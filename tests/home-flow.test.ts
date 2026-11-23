@@ -224,7 +224,21 @@ activity 看图说话 我要看图说话
   check('关掉的方砖点了 400(孩子端刷新首页)', (await kidSend('english-tutor', { text: '', via: { home: h1.home, button: 'check' } })).status === 400);
   withTutor('english-tutor', { tiles: undefined });
   const themeCss = await route('GET', '/kid/theme.css', ctx);
-  check('孩子端页面带方砖的图,theme.css 带样式', ((await route('GET', '/', ctx)).html ?? '').includes('TILE_ART') && JSON.stringify(themeCss).includes('.bt.bt-tile'), JSON.stringify(themeCss).slice(0, 200));
+  check('孩子端页面带方砖的图,theme.css 带竖版卡与封面的样式', ((await route('GET', '/', ctx)).html ?? '').includes('TILE_ART') && JSON.stringify(themeCss).includes('.bt-cover') && JSON.stringify(themeCss).includes('.cv-book'), JSON.stringify(themeCss).slice(0, 200));
+
+  // ---- 册的方砖带封面:课本先是占位(学科 + 几年级几册),舞台画了第 1 页交上来以后换成它;作业本还没拍过只有标签 ----
+  type Cover = { kind: string; book?: string; title?: string; sub?: string; image?: string; subject?: string };
+  const coverOf = (h: KidHome, tutor: string, id: string): Cover | undefined => (tilesOf(h, tutor).find((x) => x.id === id) as { cover?: Cover } | undefined)?.cover;
+  const cv0 = coverOf(await kidHome(), 'chinese-tutor', 'textbook');
+  check('课本的封面:还没画是占位,字从文件名认', cv0?.kind === 'book' && cv0.book === '语文二年级上册.pdf' && cv0.title === '语文' && cv0.sub === '二年级 上册' && !cv0.image, JSON.stringify(cv0));
+  const hw0 = coverOf(await kidHome(), 'english-tutor', 'check');
+  check('作业本的封面:还没拍过只有学科,没有图', hw0?.kind === 'homework' && hw0.subject === '英语' && !hw0.image, JSON.stringify(hw0));
+  const JPG = `data:image/jpeg;base64,${Buffer.from('ffd8ffe000104a46494600010100000100010000ffd9', 'hex').toString('base64')}`;
+  check('交封面:不是这里的课本、不是 jpeg 400', (await route('PUT', '/api/kid/textbook/cover', ctx, { book: '数学二年级上册.pdf', image: JPG })).status === 400 && (await route('PUT', '/api/kid/textbook/cover', ctx, { book: '语文二年级上册.pdf', image: 'data:image/png;base64,AAAA' })).status === 400);
+  check('交封面:存下', (await route('PUT', '/api/kid/textbook/cover', ctx, { book: '语文二年级上册.pdf', image: JPG })).status === 200);
+  const cv1 = coverOf(await kidHome(), 'chinese-tutor', 'textbook');
+  const got = cv1?.image ? await route('GET', cv1.image, ctx) : null;
+  check('交了以后首页课本那张带图(带指纹破缓存),取得到', Boolean(cv1?.image?.includes('&v=')) && got?.status === 200 && got.contentType === 'image/jpeg', JSON.stringify([cv1, got?.status]));
 
   // ---- 点击统计 ----
   const st = await homeStats(ctx.ws, now);

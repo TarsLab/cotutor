@@ -170,9 +170,13 @@ try {
   writeFileSync(join(root, 'home', 'draft.md'), HOME('activity 做练习册 做乘法练习\n练习册: 表内乘法\nactivity 做练习册 做坏的\n练习册: 没有这一册'));
   const pub = await publishHome(ws, { now, force: true });
   check('发布了(带一颗挂了读不出来的)', pub.ok, JSON.stringify(pub.check.issues));
-  const kid = (await route('GET', '/api/kid/home', ctx)).json as { home: string; cards: { props: { tutor?: string; buttons?: { id: number; kind: string; label: string; base?: string; workbook?: string }[] } }[] };
+  const kid = (await route('GET', '/api/kid/home', ctx)).json as { home: string; cards: { props: { tutor?: string; buttons?: { id: number; kind: string; label: string; base?: string; workbook?: string; cover?: { kind: string; image: string } }[] } }[] };
   const btns = kid.cards.find((c) => c.props.tutor === M)?.props.buttons ?? [];
   check('孩子端:挂着读得出来的那一册的按钮带上册名与 base;读不出来的那颗不出', btns.length === 1 && btns[0]!.label === '做乘法练习' && btns[0]!.base === 'workbook' && btns[0]!.workbook === '表内乘法', JSON.stringify(btns));
+
+  const cv = btns[0]?.cover;
+  const cvImg = cv ? await route('GET', cv.image, ctx) : null;
+  check('首页那颗是竖版卡,封面是这一册的第一页', cv?.kind === 'workbook' && cvImg?.status === 200 && String(cvImg.file).endsWith('01.png'), JSON.stringify({ cv, s: cvImg?.status, f: cvImg?.file }));
 
   // 孩子端的接口
   const base = (await route('GET', `/api/kid/workbook/base?tutor=${M}&w=${encodeURIComponent('表内乘法')}`, ctx)).json as { lesson: Lesson };

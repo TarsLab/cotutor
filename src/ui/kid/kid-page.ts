@@ -141,6 +141,10 @@ ${faviconLinks()}
   #home[data-dev="portrait"] #deck .pc > .rp { padding:26px 40px 104px; }
   #home[data-dev="phone"] #deck .pc > .lp { padding:22px 16px 26px; }
   #home[data-dev="phone"] #deck .pc > .rp { min-height:240px; padding:22px 16px 72px; }
+  /* 左页的竖版卡一行几张(cards/tutor/card.css 的 .tls:横屏三张,多过六张四张):竖屏四张(多过八张五张);手机总是三张,多了往下排 */
+  #home[data-dev="portrait"] #deck .tls { --n:4; --cap:190px; }
+  #home[data-dev="portrait"] #deck .tls:has(> :nth-child(9)) { --n:5; }
+  #home[data-dev="phone"] #deck .tls { --n:3; }
   /* 书缝:横屏竖着一道在两页中间,上下两页时横着一道 */
   #deck .pc > .rp::before { content:""; position:absolute; z-index:2; left:-28px; top:0; bottom:0; width:56px; background:linear-gradient(90deg, #785f3700 0%, #785f3712 42%, #785f3729 50%, #785f3712 58%, #785f3700 100%); pointer-events:none; }
   #home:not([data-dev="landscape"]) #deck .pc > .rp::before { left:0; right:0; top:-15px; bottom:auto; width:auto; height:30px; background:linear-gradient(180deg, #785f3700 0%, #785f3712 42%, #785f3729 50%, #785f3712 58%, #785f3700 100%); }
@@ -790,7 +794,7 @@ ${BOARD_MARK_JS}
 
   // ---- 状态 ----
   /** 铺页的话题:on = 这个话题的页面是板;base = 现在的底(照片路径,null 白板,undefined 还没定);label = 方砖上的字(不拍照直接开始时发它);workbook = 首页按钮挂的那一册练习册 */
-  const BP = { on: false, base: null, label: '', books: [], toc: null, workbook: null, start: null, nb: null, hw: null, past: {}, day: null };
+  const BP = { on: false, base: null, label: '', books: [], toc: null, workbook: null, start: null, nb: null, hw: null, past: {}, day: null, cover: null };
   const S = { home: null, tutor: null, day: null, sections: [], played: new Set(), state: { section: -1, line: -1, status: 'idle' }, pending: false, waitSince: null, offline: false, bar: 'idle', pollTimer: null, stage: null, partial: null, thread: null, threadAt: null, hist: null, readonly: false, newThread: false, device: 'phone', via: null, door: null, cont: null, ask: null, reel: null, pendSaid: null, homeDraw: true, autoOpened: new Set() };
   // 实时的老师这一次(连、发、收、画在下面「实时的老师」那一块):on = 这位老师这一次走实时(左栏的样子);ready = 嘴连上了;
   // model = liveStep 的状态(只在 liveDispatch 里写);cap = 字幕(上一句、在说的、被打断的那句);heard = 每一轮(job)念到第几句
@@ -832,7 +836,9 @@ ${BOARD_MARK_JS}
     // 孩子先说:进门(enter)只铺页、不叫老师,孩子开口才是第一轮;activity 头上写了 start: tutor 的老师先说,照旧把按钮上的字发出去
     const first = b.start === 'tutor' ? { send: b.label } : { enter: true };
     // 铺课本的 activity:不拍照,进门铺课本(范围那一课、上次翻到的那一课或目录);铺练习册的:同样不拍照,先铺按钮挂的那一册
-    if (b.kind === 'start' && (b.base === 'textbook' || b.base === 'workbook')) openTutor(t, { kind: 'new', via, base: b.base, label: b.label, ...first, ...(b.workbook ? { workbook: b.workbook } : {}), ...look });
+    // 首页这一册课本还没有封面:进去以后叫舞台画第 1 页交上来(BP.cover)
+    const coverBook = b.cover && b.cover.kind === 'book' && !b.cover.image ? { coverBook: b.cover.book } : {};
+    if (b.kind === 'start' && (b.base === 'textbook' || b.base === 'workbook')) openTutor(t, { kind: 'new', via, base: b.base, label: b.label, ...first, ...(b.workbook ? { workbook: b.workbook } : {}), ...coverBook, ...look });
     // 铺作业照片的 activity(英语的预习复习、看图说话):先到拍照屏,带着照片开话题(拍照交上来就是开口);用白纸也是进门。
     // 作业本(检查作业,base: homework):今天拍过的直接进门铺今天这一章,没拍过同照片先到拍照屏(hwStart)
     else if (b.kind === 'start' && (b.base === 'photo' || b.base === 'homework')) openTutor(t, { kind: 'new', via, base: b.base, label: b.label, ...(b.start === 'tutor' ? { start: 'tutor' } : {}), ...look });
@@ -843,19 +849,18 @@ ${BOARD_MARK_JS}
   /** 小课堂的课长:「1 分 40 秒」 */
   const lcLen = (ms) => { const s = Math.floor(ms / 1000); return s >= 60 ? Math.floor(s / 60) + ' 分' + (s % 60 ? ' ' + (s % 60) + ' 秒' : '') : s + ' 秒'; };
   // ---- 常驻入口:听写、拍照听写一直在那位老师的卡上,不经首页发布(口语课是方砖) ----
-  const EXTRA_ICON = { dictation: SVG('<path d="M4 20l4-1 11-11-3-3L5 16z"></path><path d="M14 7l3 3"></path>', 20), photo: __CAMERA_20__ };
   /** 听写:一整条,上面一排空格子,几个词几格(最多 6,英文是四线三格),下面「听写 · 几个词」和「去写」 */
   const dictationBtn = (label, sub, n, en, href) => h('a', { class: 'bt bt-extra bt-x-dictation' + (en ? ' en' : ''), href },
     h('span', { class: 'dg', 'aria-hidden': 'true' }, ...Array.from({ length: Math.max(1, Math.min(n, en ? 4 : 6)) }, () => h('i'))),
     h('span', { class: 'dr' }, h('span', { class: 'lb' }, h('span', { class: 'btx' }, label), h('small', { class: 'ln' }, sub)), h('span', { class: 'go' }, '去写')));
   /**
-   * 常驻的听写:图标是一小格——语文的田字格写个「字」、英语的四线格写个「Aa」;孩子看格子就分得出是写汉字还是写英文。
+   * 常驻的听写:图是格子——语文两列三行空的田字格和一支笔、英语三条四线格写着「Aa」(home-tiles.ts 的 EXTRA_ART);孩子看格子就分得出是写汉字还是写英文。
    * 语文先翻到课本书后的词语表选一课(没有课本才拍照);英语的书读不出字,还是拍照,右下角带学科色的相机
    */
   const photoBtn = (t) => {
     const en = t.lang === 'en';
     return h('a', { class: 'bt bt-extra bt-x-photo' + (en ? ' en' : ''), href: '/dictation?tutor=' + encodeURIComponent(t.name) + (en ? '&lang=en' : ''), style: '--sc:' + colorOf(t) },
-      h('span', { class: 'pg', 'aria-hidden': 'true' }, h('i', {}, en ? 'Aa' : '字'), en ? h('span', { class: 'cam', html: EXTRA_ICON.photo }) : null),
+      h('span', { class: 'ta', html: extraArt(en ? 'snap' : 'dict') }),
       h('span', { class: 'lb' }, h('span', { class: 'btx' }, en ? '拍照听写' : '听写'), h('small', { class: 'ln' }, en ? '拍英语书上要写的单词' : '照课本的词语表')));
   };
   /** 这位老师卡上「每天都在」那栏:归他的听写卡、常驻的拍照听写 */
@@ -871,14 +876,32 @@ ${BOARD_MARK_JS}
   // 牌上的按钮:小课堂是胶带贴着的截图(占两格);activity 是一张卡,图照它往页上铺什么挑(actArt)。孩子看到的字都在 .btx 里(探针按它读)
   const tutorButton = (t, b) => {
     const on = { click: () => pickButton(t, b) };
-    if (b.kind === 'lecture') return h('button', { type: 'button', class: 'bt bt-lecture', 'data-bid': String(b.id), on }, lecturePic(b),
-      h('span', { class: 'lm' }, h('small', { class: 'tg' }, '小课堂'), h('span', { class: 'btx' }, b.label), b.ms ? h('small', { class: 'ln' }, lcLen(b.ms)) : null));
+    // 小课堂:竖框里摆课的截图(横的)和播放键,截图下「小课堂」与课长;框下序号和课名
+    if (b.kind === 'lecture') return h('button', { type: 'button', class: 'bt bt-lecture', 'data-bid': String(b.id), on },
+      h('span', { class: 'lf' }, lecturePic(b), h('span', { class: 'lm' }, h('small', { class: 'tg' }, '小课堂'), b.ms ? h('small', { class: 'ln' }, lcLen(b.ms)) : null)), h('span', { class: 'btx' }, b.label));
+    if (b.cover) return h('button', { type: 'button', class: 'bt bt-' + b.kind + ' bt-act bt-cover', 'data-bid': String(b.id), on }, coverArt(t, b.cover), h('span', { class: 'btx' }, b.label));
     return h('button', { type: 'button', class: 'bt bt-' + b.kind + ' bt-act', 'data-bid': String(b.id), on }, h('span', { class: 'ta', html: actArt(b.base) }), h('span', { class: 'btx' }, b.label));
   };
   // ---- 常驻的方砖(课本、预习、检查作业、复习、口语课;服务端照老师家里的 activity 文件给,src/ui/kid/home-tiles.ts):牌上第一行;点了和 activity 按钮一样 ----
 ${HOME_TILES_JS}
-  const tileButton = (t, x) => h('button', { type: 'button', class: 'bt bt-tile', 'data-tile': x.id, style: '--sc:' + colorOf(t), on: { click: () => pickButton(t, { id: x.id, kind: 'start', label: x.label, base: x.base, listen: x.listen, start: x.start }) } },
-    h('span', { class: 'ta', html: tileArt(t.mark, x.id) }), h('span', { class: 'btx' }, x.label));
+  const tileButton = (t, x) => h('button', { type: 'button', class: 'bt bt-tile' + (x.cover ? ' bt-cover' : ''), 'data-tile': x.id, style: '--sc:' + colorOf(t), on: { click: () => pickButton(t, { id: x.id, kind: 'start', label: x.label, base: x.base, listen: x.listen, start: x.start, cover: x.cover }) } },
+    x.cover ? coverArt(t, x.cover) : h('span', { class: 'ta', html: tileArt(t.mark, x.id) }), h('span', { class: 'btx' }, x.label));
+  /**
+   * 册的卡铺封面(服务端给的 cover,src/runtime/home/home.ts 的 KidCover;样式 .cv 在 cards/tutor/card.css):
+   * 课本 = 画好的第 1 页,还没有(或取不到)就是底下那层学科色 + 书名的占位;作业本 = 学科色 +「作业本」+ 最近一张和那天;练习册 = 第一页
+   */
+  const coverArt = (t, c) => {
+    const img = (src, box) => h('img', { src, alt: '', loading: 'lazy', decoding: 'async', on: { error: () => box.classList.add('nopic') } });
+    if (c.kind === 'book') { const box = h('span', { class: 'cv cv-book' }, h('b', {}, c.title), c.sub ? h('small', {}, c.sub) : null); if (c.image) box.append(img(c.image, box)); return box; }
+    if (c.kind === 'homework') {
+      const box = h('span', { class: 'cv cv-hw' + (c.image ? '' : ' nopic') }, h('span', { class: 'hl' }, h('b', {}, '作业本'), h('small', {}, c.subject)));
+      if (c.image) box.append(h('span', { class: 'hp' }, img(c.image, box)), c.day ? h('small', { class: 'hd' }, Number(c.day.slice(5, 7)) + '月' + Number(c.day.slice(8, 10)) + '日') : null);
+      return box;
+    }
+    const box = h('span', { class: 'cv cv-wb' });
+    box.append(img(c.image, box));
+    return box;
+  };
   /** 牌上的卡排成一张网格:方砖、家长排的(照他排的先后)、常驻的听写与拍照听写 */
   const cardGrid = (t, tiles, buttons, extras) => h('div', { class: 'tls' }, ...(Array.isArray(tiles) ? tiles : []).map((x) => tileButton(t, x)), ...buttons.map((b) => tutorButton(t, b)), ...extras);
   /** 小课堂海报的图:课包画最后一帧(frame.svg,没烤好时 404 就只留底色和播放键),视频停在末尾前一点 */
@@ -1122,7 +1145,7 @@ ${HOME_TILES_JS}
     S.tutor = t; S.sections = []; S.played = new Set(); dispatch({ type: 'reset' }); S.pending = false; S.stage = null; S.partial = null; $('#stage').classList.remove('on', 'cv');
     S.thread = intent.kind === 'thread' ? intent.thread : null; S.threadAt = null; S.hist = null; S.readonly = false; S.newThread = intent.kind === 'new';
     S.via = intent.via || null; S.lecture = intent.lecture ? { ...intent.lecture, watch: null, sent: false, marks: [], done: [], log: [] } : null;
-    BP.on = Boolean(intent.base); BP.base = intent.base || null; BP.label = intent.label || ''; BP.toc = null; BP.workbook = intent.workbook || null; BP.start = intent.start || null; BP.hw = null; BP.past = {}; BP.day = null; S.door = null; lsReset();
+    BP.on = Boolean(intent.base); BP.base = intent.base || null; BP.label = intent.label || ''; BP.toc = null; BP.workbook = intent.workbook || null; BP.cover = intent.coverBook || null; BP.start = intent.start || null; BP.hw = null; BP.past = {}; BP.day = null; S.door = null; lsReset();
     if (BP.base === 'photo' || BP.base === 'homework') bpBooks();
     const hwReady = BP.base === 'homework' ? hwLoad() : null;
     // 先定走不走实时,再热麦克风:实时时麦克风的自检要开在实时那个 AudioContext 里(liveOpen)
@@ -1496,7 +1519,9 @@ ${HOME_TILES_JS}
   const lsInk = () => { const p = LS.l && lessonPage(LS.l); return p ? p.kid.ink.length + Object.values(p.kid.stripInk || {}).reduce((n, x) => n + x.length, 0) + Object.values(p.kid.cells || {}).reduce((n, x) => n + x.length, 0) : 0; };
   /** 舞台说话(一节课):落笔、擦掉、点字、揭开、挪窗、窗里的图、给老师看 */
   const lsStageMsg = (m) => {
-    if (m.type === 'ready') { LS.key = ''; lsShow(); if (REEL && S.reel && S.reel.lcMsg) postStage(S.reel.lcMsg); return; }
+    if (m.type === 'ready') { LS.key = ''; lsShow(); if (REEL && S.reel && S.reel.lcMsg) postStage(S.reel.lcMsg); if (BP.cover && !REEL && !PREVIEW && !S.readonly) postStage({ type: 'cover', book: BP.cover }); return; }
+    // 课本封面画好了:交给服务端(首页课本那张卡换上它);只交一次
+    if (m.type === 'cover') { if (BP.cover && m.book === BP.cover && m.image) { BP.cover = null; api('PUT', '/api/kid/textbook/cover', { book: m.book, image: m.image }).catch(() => {}); } return; }
     // 小课堂那一页:画了 / 擦了(整张单子)、看的过程、放完了、老师放的那一段放完了
     if (m.type === 'marks') { if (S.lecture && !S.readonly && !REEL && Array.isArray(m.marks)) { S.lecture.marks = m.marks; previewSoon(PV_HAND_MS); } return; }
     if (m.type === 'watch') { if (S.lecture && !S.readonly && !REEL && S.lecture.log.length < 500) S.lecture.log.push({ at: m.at, pos: m.pos, play: m.play }); return; }
@@ -3484,7 +3509,7 @@ __REEL_DOCK_JS__
 `;
 
 const KID_PAGE_SRC = PAGE.replace('__BOARD_JS__', () => libSource('kid-board')).replace('__LESSON_JS__', () => libSource('lesson')).replace('__WORD_DRAW_JS__', () => wordDrawJs()).replace('__PHOTO_JS__', () => libSource('photo-edit')).replace('__REEL_JS__', () => libSource('reel')).replace('__LIVE_JS__', () => libSource('live-board')).replace('__AUDIO_JS__', () => AUDIO_CLIENT_JS).replace('__VOICE_VIEW_JS__', () => libSource('voice-view')).replace('__VOICE_JS__', () => VOICE_JS).replace('__VOICE_CSS__', () => VOICE_CSS).replace('__REEL_DOCK_CSS__', () => REEL_DOCK_CSS).replace('__REEL_DOCK_HTML__', () => REEL_DOCK_HTML).replace('__REEL_DOCK_JS__', () => REEL_DOCK_JS).replace('__NEUTRAL_COLOR__', () => JSON.stringify(NEUTRAL_COLOR)).replace('__BRAND_CSS__', () => BRAND_CSS).replace('__BACK_LOGO__', () => BACK_LOGO).replace('__BRAND_JS__', () => BRAND_JS)
-  .replace('__CAMERA_22__', () => JSON.stringify(cameraSvg(22))).replace('__CAMERA_28__', () => JSON.stringify(cameraSvg(28))).replace('__CAMERA_20__', () => JSON.stringify(cameraSvg(20))).replace('__ALBUM_28__', () => JSON.stringify(albumSvg(28)));
+  .replace('__CAMERA_22__', () => JSON.stringify(cameraSvg(22))).replace('__CAMERA_28__', () => JSON.stringify(cameraSvg(28))).replace('__ALBUM_28__', () => JSON.stringify(albumSvg(28)));
 export const KID_PAGE = KID_PAGE_SRC.replace('__PAGE_V__', createHash('sha1').update(KID_PAGE_SRC).digest('hex').slice(0, 8));
 
 export interface KidPageMode {

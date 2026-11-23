@@ -1,87 +1,99 @@
 /**
- * 首页老师牌上常驻的方砖(课本、预习、检查作业、复习、口语课;出厂语文、数学有课本,英语有预习、复习、口语课):
- * 和别的入口一样是书页上的一幅图画框(框在 cards/tutor/card.css),图在框里、字在框下;三科同一个位置、同一个样子,分辨全靠图——
- * 课本、预习 = 翻开的书 + 一颗小星星(同一张,一位老师家里不会两样都有),检查作业 = 作业本 + 放大镜,复习 = 学过的一摞,口语课 = 拍来的一页 + 说话的气泡。学科特色只在图里(颜色只用学科色,currentColor)。
- * 图按老师的 mark(板的底纹那个:三门主科各一套)挑,别的老师用不带学科内容的一套。数学三张都有阿拉伯数字。
- * 书那张把要学的用学科色的笔圈一圈。方砖下面不写小字(家长填的范围不上孩子的牌)。点了和 activity 按钮一样(铺页的只进门,见 kid-page 的 openTutor)。
+ * 首页左页那些卡上的图(设计稿 https://claude.ai/artifact/KJFiRZD6E45YEKGQBbw98Q):卡是竖版的,照课本 185×260(5:7),框在 cards/tutor/card.css。
+ * 册(课本、作业本、练习册)铺封面,不用这里的图(kid-page 的 coverArt);这里是别的卡竖着画的图,和封面一样大、并排不跳:
+ * - 方砖(TILE_ART,按老师的 mark 挑,三门主科各一套,别的老师用不带学科内容的一套):预习 = 一页课本圈住要学的 + 一颗小星星,
+ *   检查作业 = 作业本 + 放大镜(检查作业铺作业本时是封面,这张只给没铺作业本的),复习 = 学过的一摞,口语课 = 说话的气泡 + 孩子;
+ *   课本那块有课本才出、总是封面,图只是兜底。
+ * - 家长排的 activity(ACT_ART):按它往页上铺什么挑——课本(一页夹一根书签)、照片(一幅竖的图 + 说话的气泡)、都不铺的(气泡 + 孩子)。
+ * - 常驻的听写(EXTRA_ART):语文两列三行空的田字格 + 一支笔,英语拍照听写三条四线格 + 相机。
+ * 都是 viewBox 0 0 150 210,铺满框;currentColor = 学科色(卡上的 --sc),浅色线是固定的米色 / 灰蓝。学科特色只在图里,点了和 activity 按钮一样(见 kid-page 的 pickButton)。
  */
 import type { HomeTileId } from '../../schema/index.ts';
 import type { BoardMarkId } from './board-mark.ts';
 
 type TileArt = Record<HomeTileId, string>;
 
-// 都是 viewBox 0 0 88 60;currentColor = 学科色(方砖上的 --sc),浅色线是固定的米色 / 灰蓝
-const STAR = '<path d="M44 1 L45.6 5.4 L50 7 L45.6 8.6 L44 13 L42.4 8.6 L38 7 L42.4 5.4 Z" fill="#f2b84b"></path>';
-const BOOK = '<path d="M44 15 C34 9 21 9 9 13 V53 C21 49 34 49 44 55 Z" fill="#fff" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></path><path d="M44 15 C54 9 67 9 79 13 V53 C67 49 54 49 44 55 Z" fill="#fff" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></path>';
-const NOTEBOOK = '<rect x="8" y="6" width="58" height="48" rx="4" fill="#fff" stroke="#d9b97a" stroke-width="1.5"></rect><path d="M18 7 V2 M30 7 V2 M42 7 V2 M54 7 V2" stroke="#b9a988" stroke-width="2" stroke-linecap="round"></path>';
-const LENS = '<circle cx="66" cy="40" r="11" fill="#ffffffd9" stroke="currentColor" stroke-width="3"></circle><path d="M74 48 L82 56" stroke="currentColor" stroke-width="4.5" stroke-linecap="round"></path>';
 const SONG = 'font-family="Songti SC, STSong, serif"';
 const ROUND = 'font-family="ui-rounded, -apple-system, sans-serif"';
 const HAND = 'font-family="Chalkboard SE, Comic Sans MS, Marker Felt, sans-serif"';
 const MONO = 'font-family="Menlo, monospace"';
-/** 预习圈住的那个:学科色的笔一圈,收笔处多画一截 */
-const loop = (d: string): string => `<path d="${d}" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"></path>`;
-/** 一摞里后面那张(淡的;不歪) */
-const back = (x: number, y: number, w: number, h: number, text: string, size: number, font: string, rx = 3): string =>
-  `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}" fill="#fff" stroke="#e2d6bd" stroke-width="1.5"></rect>${text ? `<text x="${x + w / 2}" y="${y + h / 2 + size * 0.36}" font-size="${size}" text-anchor="middle" fill="#b9a988" ${font}>${text}</text>` : ''}`;
-/** 口语课:一页拍来的课本 + 一个说话的气泡(气泡里的字按学科) */
-const TALK_PAGE = '<rect x="6" y="12" width="40" height="42" rx="4" fill="#fff" stroke="#d9b97a" stroke-width="1.5"></rect><path d="M13 23 H39 M13 31 H39 M13 39 H32" stroke="#d9b97a" stroke-width="2" stroke-linecap="round"></path>';
-const bubble = (text: string, size: number, font: string): string =>
-  `${TALK_PAGE}<path d="M44 5 H79 A5 5 0 0 1 84 10 V30 A5 5 0 0 1 79 35 H59 L50 44 L52 35 H44 A5 5 0 0 1 39 30 V10 A5 5 0 0 1 44 5 Z" fill="#fff" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></path>${text ? `<text x="61.5" y="${20 + size * 0.36}" font-size="${size}" font-weight="700" text-anchor="middle" fill="currentColor" ${font}>${text}</text>` : '<circle cx="52" cy="20" r="2.4" fill="currentColor"></circle><circle cx="61.5" cy="20" r="2.4" fill="currentColor"></circle><circle cx="71" cy="20" r="2.4" fill="currentColor"></circle>'}`;
-/** 田字格一格 */
-const grid = (x: number, y: number, s: number, ch: string, size: number, color = '#8f836c'): string =>
-  `<rect x="${x}" y="${y}" width="${s}" height="${s}" fill="none" stroke="#e2d6bd"></rect>${ch ? `<text x="${x + s / 2}" y="${y + s / 2 + size * 0.38}" font-size="${size}" text-anchor="middle" fill="${color}" ${SONG}>${ch}</text>` : ''}`;
+const STAR = '<path d="M116 16 L118 22 L124 24 L118 26 L116 32 L114 26 L108 24 L114 22 Z" fill="#f2b84b"></path>';
+const text = (x: number, y: number, s: string, size: number, font: string, fill: string, more = ''): string =>
+  `<text x="${x}" y="${y}" font-size="${size}" text-anchor="middle" fill="${fill}" ${font}${more}>${s}</text>`;
 
-/** 课本那块用预习那张书 */
-const withBook = (set: Omit<TileArt, 'textbook'>): TileArt => ({ textbook: set.preview, ...set });
+/** 预习:竖的一页课本,要学的那个用学科色的笔圈一圈,右上角一颗小星星;txt 空 = 圈住一行字 */
+const preview = (txt: string, size: number, font: string): string =>
+  `<rect x="30" y="30" width="90" height="130" rx="3" fill="#fffdf6" stroke="#d9b97a" stroke-width="1.5"></rect>` +
+  `<path d="M42 50 H108 M42 62 H108 M42 128 H108 M42 140 H96" stroke="#e7dcc2" stroke-width="4" stroke-linecap="round"></path>` +
+  (txt ? text(76, 95 + size * 0.36, txt, size, font, '#3a352c', ' font-weight="700"') : '<path d="M48 88 H102 M48 102 H94" stroke="#d9b97a" stroke-width="4" stroke-linecap="round"></path>') +
+  `<path d="M52 82 C70 72 104 78 102 96 C100 116 58 118 50 102 C45 90 56 80 80 78" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"></path>${STAR}`;
+
+/** 检查作业:竖的作业本(上沿几个环)写着两行,右下角学科色的放大镜;a、b 空 = 只有横线 */
+const check = (a: string, b: string, size: number, font: string): string =>
+  `<rect x="26" y="24" width="98" height="140" rx="5" fill="#fff" stroke="#d9b97a" stroke-width="1.5"></rect>` +
+  `<path d="M44 25 V17 M62 25 V17 M80 25 V17 M98 25 V17" stroke="#b9a988" stroke-width="2.5" stroke-linecap="round"></path>` +
+  `<path d="M36 62 H114 M36 94 H114 M36 126 H114" stroke="#ecdcb8" stroke-width="1.2"></path>` +
+  (a ? `<text x="38" y="57" font-size="${size}" fill="#8f836c" ${font}>${a}</text>` : '<path d="M40 52 H96" stroke="#cdbf9f" stroke-width="3" stroke-linecap="round"></path>') +
+  (b ? `<text x="38" y="89" font-size="${size}" fill="#8f836c" ${font}>${b}</text>` : '<path d="M40 84 H84" stroke="#cdbf9f" stroke-width="3" stroke-linecap="round"></path>') +
+  '<circle cx="102" cy="150" r="20" fill="#ffffffd9" stroke="currentColor" stroke-width="4"></circle><path d="M116 164 L130 178" stroke="currentColor" stroke-width="6" stroke-linecap="round"></path>';
+
+/** 复习:学过的一摞,后面两张淡的,最上面那张学科色;字空 = 横线 */
+const review = (a: string, b: string, c: string, font: string, big: number, small: number): string => {
+  const back = (y: number, s: string): string =>
+    `<rect x="38" y="${y}" width="74" height="44" rx="5" fill="#fffdf6" stroke="#d8ccb0" stroke-width="1.5"></rect>` +
+    (s ? text(75, y + 22 + small * 0.36, s, small, font, '#b9a988') : `<path d="M54 ${y + 22} H96" stroke="#e2d6bd" stroke-width="3" stroke-linecap="round"></path>`);
+  return back(30, c) + back(80, b) +
+    '<rect x="30" y="130" width="90" height="54" rx="6" fill="#fff" stroke="currentColor" stroke-width="2.2"></rect>' +
+    (a ? text(75, 157 + big * 0.36, a, big, font, 'currentColor', ' font-weight="700"') : '<path d="M46 150 H104 M46 164 H90" stroke="currentColor" stroke-opacity=".5" stroke-width="3" stroke-linecap="round"></path>');
+};
+
+/** 口语课:上面一个说话的气泡(字按学科;空 = 三个点),下面一个孩子 */
+const talk = (txt: string, size: number, font: string): string =>
+  '<path d="M40 30 H110 A10 10 0 0 1 120 40 V82 A10 10 0 0 1 110 92 H78 L62 108 L66 92 H40 A10 10 0 0 1 30 82 V40 A10 10 0 0 1 40 30 Z" fill="#fff" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"></path>' +
+  (txt ? text(75, 61 + size * 0.36, txt, size, font, 'currentColor', ' font-weight="700"') : '<circle cx="60" cy="61" r="4" fill="currentColor"></circle><circle cx="75" cy="61" r="4" fill="currentColor"></circle><circle cx="90" cy="61" r="4" fill="currentColor"></circle>') +
+  '<circle cx="66" cy="142" r="24" fill="#fbe3c8"></circle><path d="M38 190 C40 168 92 168 94 190 Z" fill="currentColor" opacity=".55"></path>' +
+  '<circle cx="58" cy="139" r="2.4" fill="#5a4a3a"></circle><circle cx="74" cy="139" r="2.4" fill="#5a4a3a"></circle><path d="M60 150 Q66 155 72 150" fill="none" stroke="#5a4a3a" stroke-width="2" stroke-linecap="round"></path>';
+
+/** 课本:竖的一页,夹一根学科色的书签(家长排的铺课本的 activity;课本方砖没有封面时兜底) */
+const BOOK_PAGE = '<rect x="30" y="26" width="90" height="140" rx="3" fill="#fff" stroke="currentColor" stroke-width="2"></rect><path d="M44 52 H106 M44 68 H106 M44 84 H100 M44 100 H106 M44 116 H92 M44 132 H106" stroke="#d9b97a" stroke-width="3" stroke-linecap="round"></path><path d="M96 22 V60 L103 53 L110 60 V22" fill="currentColor"></path>';
+
+const set = (p: string, c: string, r: string, t: string): TileArt => ({ textbook: BOOK_PAGE, preview: p, check: c, review: r, talk: t });
 
 export const TILE_ART: Readonly<Record<BoardMarkId | 'plain', TileArt>> = {
-  yuwen: withBook({
-    preview: `${STAR}${BOOK}<path d="M15 24 H37 M15 32 H37 M15 40 H31" stroke="#d9b97a" stroke-width="2" stroke-linecap="round"></path><rect x="52" y="21" width="21" height="21" fill="#fff" stroke="currentColor" stroke-width="1.5"></rect><path d="M62.5 21 V42 M52 31.5 H73" stroke="currentColor" stroke-opacity=".35" stroke-width="1" stroke-dasharray="2 2"></path><text x="62.5" y="37.5" font-size="16" font-weight="700" text-anchor="middle" fill="currentColor" ${SONG}>春</text>${loop('M54 19 C66 12 82 18 80 32 C78 47 56 49 49 38 C44 29 51 19 66 17')}`,
-    check: `${NOTEBOOK}${grid(14, 14, 14, '天', 11)}${grid(30, 14, 14, '地', 11)}${grid(46, 14, 14, '人', 11)}${grid(14, 32, 14, '日', 11)}${grid(30, 32, 14, '月', 11)}${LENS}`,
-    talk: bubble('你好', 13, SONG),
-    review: `${back(4, 24, 24, 24, '水', 14, SONG)}${back(60, 24, 24, 24, '火', 14, SONG)}<rect x="28" y="14" width="32" height="32" rx="3" fill="#fff" stroke="currentColor" stroke-width="2"></rect><path d="M44 14 V46 M28 30 H60" stroke="currentColor" stroke-opacity=".3" stroke-width="1" stroke-dasharray="2 2"></path><text x="44" y="37" font-size="20" font-weight="700" text-anchor="middle" fill="currentColor" ${SONG}>山</text>`,
-  }),
-  shuxue: withBook({
-    preview: `${STAR}${BOOK}<path d="M17 21 V35 M22 21 V35 M27 21 V35" stroke="#e3a64a" stroke-width="2.6" stroke-linecap="round"></path><text x="22" y="47" font-size="11" font-weight="700" text-anchor="middle" fill="#8f836c" ${ROUND}>3</text><text x="61.5" y="31" font-size="13" font-weight="800" text-anchor="middle" fill="currentColor" ${ROUND}>3+4</text><text x="61.5" y="46" font-size="13" font-weight="800" text-anchor="middle" fill="currentColor" ${ROUND}>=?</text>${loop('M50 17 C66 10 84 18 81 33 C78 50 52 52 45 40 C40 30 48 18 64 15')}`,
-    check: `${NOTEBOOK}<text x="44" y="21" font-size="11" text-anchor="end" fill="#8f836c" ${MONO}>27</text><text x="44" y="33" font-size="11" text-anchor="end" fill="#8f836c" ${MONO}>+15</text><path d="M20 37 H46" stroke="#8f836c" stroke-width="1.2"></path><text x="44" y="48" font-size="11" text-anchor="end" fill="#8f836c" ${MONO}>42</text>${LENS}`,
-    talk: bubble('3+4', 13, ROUND),
-    review: `${back(4, 6, 36, 22, '6+9', 11, ROUND, 5)}${back(48, 6, 36, 22, '15−7', 11, ROUND, 5)}<rect x="19" y="25" width="50" height="32" rx="5" fill="#fff" stroke="currentColor" stroke-width="2"></rect><text x="44" y="47" font-size="17" font-weight="800" text-anchor="middle" fill="currentColor" ${ROUND}>8×7</text>`,
-  }),
-  english: withBook({
-    preview: `${STAR}${BOOK}<path d="M14 23 H38 M14 29 H38 M14 41 H38" stroke="#cdd6e2" stroke-width="1.2"></path><path d="M14 35 H38" stroke="#e39a9a" stroke-width="1.2"></path><text x="62" y="39" font-size="18" font-weight="700" text-anchor="middle" fill="currentColor" ${HAND}>Aa</text>${loop('M52 22 C64 16 80 22 77 32 C74 44 54 45 48 37 C44 30 50 22 63 20')}`,
-    check: `${NOTEBOOK}<path d="M14 14 H58 M14 19 H58 M14 29 H58 M14 34 H58 M14 39 H58 M14 49 H58" stroke="#cdd6e2" stroke-width="1"></path><path d="M14 24 H58 M14 44 H58" stroke="#e39a9a" stroke-width="1"></path><text x="16" y="24" font-size="11" fill="#8f836c" ${HAND}>apple</text><text x="16" y="44" font-size="11" fill="#8f836c" ${HAND}>pen</text>${LENS}`,
-    talk: bubble('Hi!', 16, HAND),
-    review: `${back(6, 3, 44, 24, 'dog', 13, HAND, 5)}<rect x="30" y="25" width="50" height="30" rx="5" fill="#fff" stroke="currentColor" stroke-width="2"></rect><text x="55" y="46" font-size="16" font-weight="700" text-anchor="middle" fill="currentColor" ${HAND}>cat</text>`,
-  }),
-  // 别的老师:同样的书、本子、一摞,不带学科内容
-  plain: withBook({
-    preview: `${STAR}${BOOK}<path d="M15 24 H37 M15 32 H37 M15 40 H31 M51 24 H73 M51 32 H73 M51 40 H67" stroke="#d9b97a" stroke-width="2" stroke-linecap="round"></path>`,
-    check: `${NOTEBOOK}<path d="M15 18 H58 M15 28 H52 M15 38 H46" stroke="#cdbf9f" stroke-width="2" stroke-linecap="round"></path>${LENS}`,
-    talk: bubble('', 0, ROUND),
-    review: `${back(4, 6, 36, 22, '', 12, ROUND, 5)}${back(48, 6, 36, 22, '', 12, ROUND, 5)}<rect x="19" y="25" width="50" height="32" rx="5" fill="#fff" stroke="currentColor" stroke-width="2"></rect><path d="M28 36 H60 M28 45 H52" stroke="currentColor" stroke-opacity=".5" stroke-width="2" stroke-linecap="round"></path>`,
-  }),
+  yuwen: set(preview('春', 30, SONG), check('天 地 人', '日 月 水', 14, SONG), review('山', '水', '火', SONG, 24, 16), talk('你好', 20, SONG)),
+  shuxue: set(preview('3+4', 22, ROUND), check('27+15', '= 42', 14, MONO), review('8×7', '6+9', '15−7', ROUND, 22, 15), talk('3+4', 20, ROUND)),
+  english: set(preview('Aa', 28, HAND), check('apple', 'pen', 14, HAND), review('cat', 'dog', 'sun', HAND, 22, 16), talk('Hi!', 22, HAND)),
+  // 别的老师:同样的一页、本子、一摞、气泡,不带学科内容
+  plain: set(preview('', 0, ROUND), check('', '', 0, ROUND), review('', '', '', ROUND, 0, 0), talk('', 0, ROUND)),
 };
 
-/**
- * 家长排的 activity 卡上的图:按这个 activity 往页上铺什么挑(按钮带的 base)——课本(翻开的书夹一根书签)、照片(一幅风景)、
- * 都不铺的(说话的气泡)。和方砖同一个 viewBox,currentColor = 学科色
- */
-export const ACT_ART: Readonly<Record<'textbook' | 'photo' | 'talk', string>> = {
-  textbook: `${BOOK}<path d="M15 24 H37 M15 32 H37 M15 40 H31 M51 24 H73 M51 32 H73 M51 40 H67" stroke="#d9b97a" stroke-width="2" stroke-linecap="round"></path><path d="M62 9 V27 L66 23 L70 27 V9" fill="currentColor"></path>`,
-  photo: '<rect x="12" y="6" width="64" height="48" rx="2" fill="#e3eff6"></rect><circle cx="60" cy="17" r="5" fill="#f6c453"></circle><path d="M12 54 L33 30 L46 43 L56 35 L76 54 Z" fill="#a9cf9b"></path><circle cx="27" cy="46" r="3" fill="#e8a0a0"></circle>',
-  talk: '<path d="M16 6 H72 A6 6 0 0 1 78 12 V38 A6 6 0 0 1 72 44 H40 L27 55 L29 44 H16 A6 6 0 0 1 10 38 V12 A6 6 0 0 1 16 6 Z" fill="#fff" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></path><circle cx="31" cy="25" r="3" fill="currentColor"></circle><circle cx="44" cy="25" r="3" fill="currentColor"></circle><circle cx="57" cy="25" r="3" fill="currentColor"></circle>',
+/** 家长排的 activity 卡上的图:按这个 activity 往页上铺什么挑(按钮带的 base);练习册的按钮铺封面,这张只兜底 */
+export const ACT_ART: Readonly<Record<'textbook' | 'photo' | 'talk' | 'workbook' | 'homework', string>> = {
+  textbook: BOOK_PAGE,
+  photo: '<rect x="27" y="30" width="96" height="120" rx="3" fill="#e3eff6"></rect><circle cx="98" cy="58" r="10" fill="#f6c453"></circle><path d="M27 150 L62 98 L86 126 L102 110 L123 138 V150 Z" fill="#a9cf9b"></path><circle cx="48" cy="134" r="6" fill="#e8a0a0"></circle><path d="M48 140 V150" stroke="#7a9c66" stroke-width="2"></path>' +
+    '<path d="M58 160 H112 A6 6 0 0 1 118 166 V180 A6 6 0 0 1 112 186 H76 L66 194 L68 186 H58 A6 6 0 0 1 52 180 V166 A6 6 0 0 1 58 160 Z" fill="#fff" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"></path><circle cx="74" cy="173" r="2.2" fill="currentColor"></circle><circle cx="85" cy="173" r="2.2" fill="currentColor"></circle><circle cx="96" cy="173" r="2.2" fill="currentColor"></circle>',
+  talk: talk('', 0, ROUND),
+  workbook: '<rect x="30" y="26" width="90" height="140" rx="3" fill="#fff" stroke="currentColor" stroke-width="2"></rect><path d="M42 50 H86 M42 76 H72 M42 102 H72 M42 128 H72" stroke="#d9b97a" stroke-width="3" stroke-linecap="round"></path><g fill="none" stroke="#b9a988"><rect x="82" y="68" width="22" height="16"></rect><rect x="82" y="94" width="22" height="16"></rect><rect x="82" y="120" width="22" height="16"></rect></g>',
+  homework: check('', '', 0, ROUND),
 };
 
-/** 内联进孩子端页面:tileArt(mark, id)、actArt(base) → 整个 <svg>(aria-hidden,字在旁边的 .btx 里) */
+/** 常驻的听写:dict = 语文(照课本词语表选一课),两列三行空的田字格 + 一支学科色的笔;snap = 英语拍照听写,三条四线格(第一条写着 Aa)+ 右下角相机 */
+export const EXTRA_ART: Readonly<Record<'dict' | 'snap', string>> = {
+  dict: '<g fill="#fff" stroke="#d9b97a" stroke-width="1.5"><rect x="34" y="34" width="38" height="38"></rect><rect x="78" y="34" width="38" height="38"></rect><rect x="34" y="78" width="38" height="38"></rect><rect x="78" y="78" width="38" height="38"></rect><rect x="34" y="122" width="38" height="38"></rect><rect x="78" y="122" width="38" height="38"></rect></g>' +
+    '<path d="M53 34 V72 M34 53 H72 M97 34 V72 M78 53 H116 M53 78 V116 M34 97 H72 M97 78 V116 M78 97 H116 M53 122 V160 M34 141 H72 M97 122 V160 M78 141 H116" stroke="#ecdcb8" stroke-width="1" stroke-dasharray="3 3"></path>' +
+    '<path d="M98 184 L130 152 L138 160 L106 192 L96 194 Z" fill="#fff" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></path><path d="M124 158 L132 166" stroke="currentColor" stroke-width="2"></path>',
+  snap: '<rect x="22" y="36" width="106" height="132" fill="#fff"></rect><path d="M22 40 H128 M22 50 H128 M22 70 H128 M22 84 H128 M22 94 H128 M22 114 H128 M22 128 H128 M22 138 H128 M22 158 H128" stroke="#cdd6e2" stroke-width="1"></path><path d="M22 60 H128 M22 104 H128 M22 148 H128" stroke="#e39a9a" stroke-width="1.2"></path>' +
+    `<text x="34" y="60" font-size="22" fill="#8fa0b2" ${HAND}>Aa</text>` +
+    '<circle class="cam" cx="118" cy="168" r="18" fill="currentColor" stroke="#fffdf8" stroke-width="3"></circle><path d="M109 164 H112 L113.5 160 H122.5 L124 164 H127 V175 H109 Z" fill="none" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"></path>',
+};
+
+/** 内联进孩子端页面:tileArt(mark, id)、actArt(base)、extraArt(k) → 整个 <svg>(aria-hidden,字在框下的 .btx 里) */
 export const HOME_TILES_JS = `
+  var ART_SVG = function (body) { return '<svg viewBox="0 0 150 210" aria-hidden="true" focusable="false">' + body + '</svg>'; };
   var TILE_ART = ${JSON.stringify(TILE_ART)};
-  var tileArt = function (mark, id) {
-    var set = TILE_ART[mark] || TILE_ART.plain;
-    return '<svg viewBox="0 0 88 60" aria-hidden="true" focusable="false">' + (set[id] || '') + '</svg>';
-  };
+  var tileArt = function (mark, id) { var set = TILE_ART[mark] || TILE_ART.plain; return ART_SVG(set[id] || ''); };
   var ACT_ART = ${JSON.stringify(ACT_ART)};
-  var actArt = function (base) {
-    return '<svg viewBox="0 0 88 60" aria-hidden="true" focusable="false">' + (ACT_ART[base] || ACT_ART.talk) + '</svg>';
-  };
+  var actArt = function (base) { return ART_SVG(ACT_ART[base] || ACT_ART.talk); };
+  var EXTRA_ART = ${JSON.stringify(EXTRA_ART)};
+  var extraArt = function (k) { return ART_SVG(EXTRA_ART[k]); };
 `;

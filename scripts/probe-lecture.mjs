@@ -69,7 +69,7 @@ try {
   const D = `${F}.contentDocument`;
 
   const btn = await evaluate(`document.querySelector('.bt-lecture').textContent`);
-  ok('首页:数学老师卡上的小课堂海报,带预览图与课长', /^小课堂13 减 8 怎么拆46 秒$/.test(btn) && await evaluate(`Boolean(document.querySelector('.bt-lecture .lp img'))`), btn);
+  ok('首页:数学老师卡上的小课堂海报,框里预览图、「小课堂」与课长,框下课名', /^小课堂46 秒13 减 8 怎么拆$/.test(btn) && await evaluate(`Boolean(document.querySelector('.bt-lecture .lp img'))`), btn);
   await shot('lecture-home.png');
 
   await evaluate(`document.querySelector('.bt-lecture').click()`);

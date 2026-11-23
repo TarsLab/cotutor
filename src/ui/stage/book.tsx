@@ -167,6 +167,23 @@ function openDoc(url: string): Promise<Pdfjs.PDFDocumentProxy> {
   return d;
 }
 
+/** 首页课本那张卡的封面:这一册 PDF 的第 1 页,长边 side 的 jpeg(白底);画不出 = null。孩子端进了课本、首页那一册还没有封面时叫(control cover) */
+export async function bookCover(book: string, side: number): Promise<string | null> {
+  try {
+    const doc = await openDoc(`/api/kid/textbook/pdf?b=${encodeURIComponent(book)}`);
+    const page = await doc.getPage(1);
+    const vp0 = page.getViewport({ scale: 1 });
+    const vp = page.getViewport({ scale: side / Math.max(vp0.width, vp0.height) });
+    const cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.round(vp.width));
+    cv.height = Math.max(1, Math.round(vp.height));
+    await page.render({ canvas: cv, viewport: vp, background: '#ffffff', annotationMode: 0 }).promise;
+    return cv.toDataURL('image/jpeg', 0.82);
+  } catch {
+    return null;
+  }
+}
+
 const el = <K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, string>): SVGElementTagNameMap[K] => {
   const e = document.createElementNS(SVG_NS, tag);
   for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);

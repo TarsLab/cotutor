@@ -68,7 +68,7 @@ import { faviconResponse } from '../../ui/shared/favicon.ts';
 import { kidPage } from '../../ui/kid/kid-page.ts';
 import { KID_SW_JS } from '../../ui/kid/offline-sw.ts';
 import { parentPage } from '../../ui/parent/parent-page.ts';
-import { arrangeHome, homeOwners, kidButtons, kidTiles, parseHome } from '../../runtime/home/home.ts';
+import { arrangeHome, homeOwners, kidButtons, kidTiles, parseHome, type KidCover } from '../../runtime/home/home.ts';
 import type { TutorButton } from '../../board/cards/index.ts';
 import { packageTheme } from '../cli/themes.ts';
 import { DEFAULT_GRADE, PACKAGE_GRADES_DIR } from '../cli/grades.ts';
@@ -391,7 +391,10 @@ export function createMock(opts: MockOptions = {}): Mock {
       const name = String(c.props.tutor);
       // 方砖:照出厂年级包里这位老师家里有没有那个 activity 文件(语文、数学有课本、检查作业,英语有预习、检查作业、复习、口语课;真服务看 workspace 里的,课本还要有课本 PDF)
       const shipped = (activity: string): boolean => existsSync(join(PACKAGE_GRADES_DIR, `grade-${DEFAULT_GRADE}`, 'agents', name, 'activities', `${activity}.md`));
-      return { kind: 'tutor', props: { tutor: name, tiles: kidTiles(HOME_TILE_IDS, { usable: shipped }), buttons: kidButtons((c.props.buttons ?? []) as TutorButton[], { lecture: (id) => Boolean(mockLecture(id)), today: localDate(d) }).map((b) => { const l = b.kind === 'lecture' ? mockLecture(b.bundle) : null; return l ? { ...b, title: l.title, ms: l.ms, ...(l.video ? { video: true as const } : {}) } : b; }) } };
+      // 册的方砖带封面:mock 没有课本 PDF、作业本,课本是学科色 + 书名的占位,作业本只有标签
+      const subject = MOCK_TUTORS.find((t) => t.name === name)?.subject ?? name;
+      const covers = new Map<string, KidCover>([['课本', { kind: 'book', book: `${subject}二年级上册.pdf`, title: subject, sub: '二年级 上册' }], ['检查作业', { kind: 'homework', subject }]]);
+      return { kind: 'tutor', props: { tutor: name, tiles: kidTiles(HOME_TILE_IDS, { usable: shipped, covers }), buttons: kidButtons((c.props.buttons ?? []) as TutorButton[], { lecture: (id) => Boolean(mockLecture(id)), today: localDate(d) }).map((b) => { const l = b.kind === 'lecture' ? mockLecture(b.bundle) : null; return l ? { ...b, title: l.title, ms: l.ms, ...(l.video ? { video: true as const } : {}) } : b; }) } };
     });
     // figshot:和配了 figshot 的 workspace 一样给端口;这台电脑上 figshot 没开着,页面照样藏着这张卡
     return { title, date: localDate(d), tutors: tutorsJson(), home: mockHomeId(), cards, figshot: { port: 8477 }, hand: 'right', ready: scenario !== 'nokey', today: mockToday() };

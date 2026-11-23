@@ -119,6 +119,10 @@ try {
   await evaluate(`document.querySelector('#tabs .tab[data-tutor="math-tutor"]').click(), true`);
   await until(`document.querySelector('.pc[data-tutor="math-tutor"]').classList.contains('front')`, 5000);
   await sleep(800);
+  // 首页「检查作业」那张是作业本的封面:学科色 +「作业本」+ 最近那一张(20 日拍的)和那天
+  const hwCover = await until(`(() => { const c = document.querySelector('[data-tutor="math-tutor"] .bt-tile[data-tile="check"] .cv-hw'); const img = c && c.querySelector('.hp img'); return img && img.complete && img.naturalWidth ? { day: c.querySelector('.hd')?.textContent, label: c.querySelector('.hl b')?.textContent } : null; })()`);
+  ok('首页「检查作业」是作业本的封面,带最近那一张和那天', hwCover?.label === '作业本' && hwCover?.day === '11月20日', JSON.stringify(hwCover));
+  console.log('  ', await shot('0-首页.png'));
   const tile = await until(`(() => { const b = document.querySelector('[data-tutor="math-tutor"] .bt-tile[data-tile="check"]'); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
   await tapAt(tile.x, tile.y);
   const start = await until(`(() => { const t = [...document.querySelectorAll('#lv-acts .lv-go, #board .ask-go')].map((x) => x.textContent.trim()); return t.some((x) => x.includes('翻作业本')) ? t : null; })()`);

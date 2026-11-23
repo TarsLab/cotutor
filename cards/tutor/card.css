@@ -20,56 +20,75 @@
 .c-tutor .nl > .bt-new { flex:1 1 260px; width:auto; }
 /* 新话题打头的名字首字:平板横着叠时后面的牌露出来的那一格就是它;右边一道竖线隔开「新话题」 */
 .c-tutor .bt-new .fc { flex:none; width:40px; padding-right:14px; border-right:2px solid rgba(255,255,255,.45); font-size:38px; font-weight:800; line-height:44px; text-align:center; box-sizing:content-box; }
-/* 入口:牌上的每一个(方砖、家长排的 activity、拍照听写、听写)都是书的左页上一幅图画框,照课本上的图(设计稿 https://claude.ai/artifact/KJFiRZD6E45YEKGQBbw98Q):
-   学科色的细线框、框里淡淡一层学科色,图直接画在书页上;框下一行是圆圈里的序号(照课本的 ①②,CSS 计数)和题目。没有阴影、折角、胶带。
-   一行三格,格宽跟着页宽走(.tls;容器是首页的左页 .lp:三格平分页宽,间距是页宽的 4.4%(14–28px),格封顶 240px、封顶了就居中);
-   框高是格宽的 3/4,图跟着框缩,框下的字是格宽的 12%(14–19px)。三科同一个样子,分辨全靠图。方砖的图在 src/ui/kid/home-tiles.ts(TILE_ART,按老师的 mark);
-   activity 的图按它往页上铺什么挑(ACT_ART:课本、照片、只说话);小课堂的框里是它的截图,占两格 */
-.c-tutor .tls { counter-reset:hno; display:grid; --g:clamp(14px, 4.4cqw, 28px); --col:min(240px, (100cqw - 2 * var(--g)) / 3); --fh:calc(var(--col) * .75); grid-template-columns:repeat(3, var(--col)); justify-content:center; gap:calc(var(--g) * 1.25) var(--g); }
-.c-tutor .tls > .bt { position:relative; isolation:isolate; display:grid; grid-template-rows:var(--fh) auto; justify-items:start; align-items:center; gap:calc(var(--col) * .07); min-height:0; padding:0; border-radius:0; background:none; box-shadow:none; text-align:left; -webkit-tap-highlight-color:transparent; }
-.c-tutor .tls > .bt:not(.bt-lecture)::before { content:""; position:absolute; z-index:-1; left:0; right:0; top:0; height:var(--fh); box-sizing:border-box; border:1.5px solid color-mix(in srgb, var(--sc) 38%, transparent); border-radius:8px; background:color-mix(in srgb, var(--sc) 4.5%, transparent); }
-.c-tutor .tls > .bt:not(.bt-lecture):active::before { background:color-mix(in srgb, var(--sc) 12%, transparent); }
+/* 入口:牌上的每一个(方砖、家长排的 activity、小课堂、听写)都是书的左页上一张竖版卡,照课本的 185×260(5:7;设计稿 https://claude.ai/artifact/KJFiRZD6E45YEKGQBbw98Q):
+   册(课本、作业本、练习册,.bt-cover)是封面铺满框,平的(没有书脊、阴影);别的是学科色的细线框、框里淡淡一层学科色,图竖着画在里面(src/ui/kid/home-tiles.ts)。
+   两样外框一样大,并排不跳;框下一行是圆圈里的序号(照课本的 ①②,CSS 计数)和名字。
+   一行 --n 张,格宽跟着页宽走(容器是首页的左页 .lp):间距页宽的 4%(12–26px),格封顶 --cap 后居中;框高是格宽的 1.4 倍,图和字跟着缩。
+   平板横屏一行三张(多过六张一行四张),竖屏和手机的张数在 kid-page 的首页样式里 */
+.c-tutor .tls { counter-reset:hno; display:grid; --n:3; --g:clamp(12px, 4cqw, 26px); --col:min(var(--cap, 200px), (100cqw - (var(--n) - 1) * var(--g)) / var(--n)); --fh:calc(var(--col) * 1.4); grid-template-columns:repeat(var(--n), var(--col)); justify-content:center; gap:calc(var(--g) * 1.1) var(--g); }
+.c-tutor .tls:has(> :nth-child(7)) { --n:4; }
+.c-tutor .tls > .bt { position:relative; isolation:isolate; display:grid; grid-template-rows:var(--fh) auto; justify-items:start; align-items:center; gap:calc(var(--col) * .06); min-height:0; padding:0; border-radius:0; background:none; box-shadow:none; text-align:left; -webkit-tap-highlight-color:transparent; }
+.c-tutor .tls > .bt:not(.bt-cover)::before { content:""; position:absolute; z-index:-1; left:0; right:0; top:0; height:var(--fh); box-sizing:border-box; border:1.5px solid color-mix(in srgb, var(--sc) 38%, transparent); border-radius:6px; background:color-mix(in srgb, var(--sc) 4.5%, transparent); }
+.c-tutor .tls > .bt:not(.bt-cover):active::before { background:color-mix(in srgb, var(--sc) 12%, transparent); }
 .c-tutor .tls > .bt > :first-child { justify-self:stretch; align-self:stretch; }
-.c-tutor .tls .ta { display:grid; place-items:center; color:var(--sc); }
-.c-tutor .tls .ta svg { width:84%; height:74%; display:block; }
-.c-tutor .tls > .bt .btx { position:relative; padding-left:2px; font-size:clamp(14px, calc(var(--col) * .12), 19px); font-weight:700; letter-spacing:.5px; line-height:1.25; color:var(--ink); text-wrap:balance; }
+.c-tutor .tls .ta { display:block; color:var(--sc); }
+.c-tutor .tls .ta svg { width:100%; height:100%; display:block; }
+.c-tutor .tls > .bt .btx { position:relative; padding-left:2px; font-size:clamp(14px, calc(var(--col) * .12), 19px); font-weight:700; letter-spacing:.5px; line-height:1.25; color:var(--ink); max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .c-tutor .tls > .bt .btx::before { counter-increment:hno; content:counter(hno); display:inline-flex; align-items:center; justify-content:center; width:1.7em; height:1.7em; margin-right:.55em; vertical-align:.15em; border-radius:50%; background:var(--sc); color:#fff; font:700 .7em/1 ui-rounded, -apple-system, sans-serif; letter-spacing:0; }
-.c-tutor .bt.bt-tile .btx, .c-tutor .bt.bt-act .btx { max-width:100%; }
-body.offline .c-tutor .tls .ta, body.gated .c-tutor .tls .ta, body.offline .c-tutor .tls .pg, body.gated .c-tutor .tls .pg, body.offline .c-tutor .tls .dg, body.gated .c-tutor .tls .dg, body.offline .c-tutor .tls .lp, body.gated .c-tutor .tls .lp { filter:grayscale(1); opacity:.5; }
-/* 小课堂:框里是课的截图(最后一帧),图上一个播放键,框下「序号 · 课名 · 小课堂 · 课长」;占两格 */
-.c-tutor .tls > .bt-lecture { grid-column:span 2; }
-.c-tutor .bt-lecture .lp { position:relative; display:block; aspect-ratio:16 / 10; overflow:hidden; border-radius:2px; background:#fff3e8; }
-.c-tutor .tls > .bt-lecture .lp { aspect-ratio:auto; box-sizing:border-box; border:1.5px solid color-mix(in srgb, var(--sc) 38%, transparent); border-radius:8px; }
+body.offline .c-tutor .tls .ta, body.gated .c-tutor .tls .ta, body.offline .c-tutor .tls .cv, body.gated .c-tutor .tls .cv, body.offline .c-tutor .tls .dg, body.gated .c-tutor .tls .dg, body.offline .c-tutor .tls .lf, body.gated .c-tutor .tls .lf { filter:grayscale(1); opacity:.5; }
+/* 封面(kid-page 的 coverArt):铺满框,一道很淡的边让白的那页(练习册)从书页上分出来;按下去整张暗一点 */
+.c-tutor .tls .cv { position:relative; display:block; overflow:hidden; box-sizing:border-box; border:1px solid #46371e29; border-radius:6px; background:#fff; }
+.c-tutor .tls > .bt-cover:active .cv { filter:brightness(.94); }
+.c-tutor .tls .cv img { position:absolute; inset:0; width:100%; height:100%; display:block; object-fit:cover; object-position:top; }
+.c-tutor .tls .cv.nopic img { display:none; }
+/* 课本:底下一层是学科色 + 书名的占位(还没画好封面、取不到时露出来),画好的第 1 页盖在上面 */
+.c-tutor .tls .cv-book { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:calc(var(--col) * .05); background:var(--sc); color:#fff; text-align:center; }
+.c-tutor .tls .cv-book::before { content:""; position:absolute; inset:calc(var(--col) * .1); border:1.5px solid #ffffff73; border-radius:3px; }
+.c-tutor .tls .cv-book b { font-size:calc(var(--col) * .2); font-weight:800; line-height:1.1; letter-spacing:1px; }
+.c-tutor .tls .cv-book small { font-size:calc(var(--col) * .075); opacity:.85; letter-spacing:2px; }
+/* 作业本:学科色的本子,上面白标签「作业本」+ 学科,中间最近那一张(照片照比例收在白底里),下面那天;还没拍过只有标签 */
+.c-tutor .tls .cv-hw { display:flex; flex-direction:column; align-items:center; gap:calc(var(--col) * .08); padding:calc(var(--col) * .13) calc(var(--col) * .15); background:var(--sc); }
+.c-tutor .tls .cv-hw.nopic { justify-content:center; }
+.c-tutor .tls .cv-hw .hl { display:flex; flex-direction:column; align-items:center; align-self:stretch; padding:calc(var(--col) * .06) 0; border-radius:4px; background:#fff; color:#3a352c; line-height:1.15; }
+.c-tutor .tls .cv-hw .hl b { font-size:calc(var(--col) * .115); font-weight:700; }
+.c-tutor .tls .cv-hw .hl small { font-size:calc(var(--col) * .064); color:#8a8170; letter-spacing:2px; }
+.c-tutor .tls .cv-hw .hp { position:relative; flex:1 1 auto; align-self:stretch; min-height:0; border-radius:2px; background:#fff; }
+.c-tutor .tls .cv-hw .hp img { inset:4%; width:92%; height:92%; object-fit:contain; object-position:center; }
+.c-tutor .tls .cv-hw .hd { font-size:calc(var(--col) * .064); color:#ffffffe6; }
+.c-tutor .tls .cv-wb { background:#fff; }
+/* 小课堂:竖框里摆课的截图(最后一帧,横的)和播放键,截图下「小课堂」与课长;框下序号和课名 */
+.c-tutor .tls > .bt-lecture .lf { display:flex; flex-direction:column; justify-content:center; gap:calc(var(--col) * .08); padding:0 calc(var(--col) * .08); }
+.c-tutor .bt-lecture .lp { position:relative; display:block; aspect-ratio:16 / 10; overflow:hidden; border-radius:3px; background:#fff3e8; }
 .c-tutor .bt-lecture .lp img, .c-tutor .bt-lecture .lp video { position:absolute; inset:0; width:100%; height:100%; display:block; object-fit:cover; }
 .c-tutor .bt-lecture .lp.nopic img { display:none; }
-.c-tutor .bt-lecture .pl { position:absolute; left:50%; top:50%; width:44px; height:44px; margin:-22px 0 0 -22px; border-radius:50%; background:rgba(255,255,255,.94); color:var(--accent); display:grid; place-items:center; box-shadow:0 4px 14px rgba(0,0,0,.22); }
-.c-tutor .bt-lecture .pl svg { width:20px; height:20px; margin-left:2px; }
-.c-tutor .bt-lecture .lm { display:flex; align-items:center; gap:6px; min-width:0; max-width:100%; }
-.c-tutor .bt-lecture .tg { flex:none; order:1; padding:1px 8px; border-radius:999px; background:#fdeee4; color:#b8541c; font-size:12px; font-weight:700; }
-.c-tutor .tls > .bt-lecture .btx { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.c-tutor .bt-lecture .ln { flex:none; order:2; font-size:13px; font-weight:400; color:var(--dim); }
-/* 常驻入口:听写、拍照听写,不经首页发布、一直在这位老师的牌上;卡小,字下面那行灰的小字不上 */
+.c-tutor .bt-lecture .pl { position:absolute; left:50%; top:50%; width:40px; height:40px; margin:-20px 0 0 -20px; border-radius:50%; background:rgba(255,255,255,.94); color:var(--accent); display:grid; place-items:center; box-shadow:0 4px 14px rgba(0,0,0,.22); }
+.c-tutor .bt-lecture .pl svg { width:18px; height:18px; margin-left:2px; }
+.c-tutor .bt-lecture .lm { display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:4px 6px; min-width:0; }
+.c-tutor .bt-lecture .tg { flex:none; padding:1px 8px; border-radius:999px; background:#fdeee4; color:#b8541c; font-size:12px; font-weight:700; }
+.c-tutor .bt-lecture .ln { flex:none; font-size:12px; font-weight:400; color:var(--dim); }
+/* 常驻入口:听写、拍照听写,不经首页发布、一直在这位老师的牌上;字下面那行灰的小字不上 */
 .c-tutor .bt-extra { text-decoration:none; color:var(--ink); }
 .c-tutor .bt-extra .lb { display:flex; flex-direction:column; align-items:flex-start; gap:4px; min-width:0; }
 .c-tutor .bt-extra .ln { display:none; }
-/* 拍照听写的图是一格:语文田字格「字」、英语四线格「Aa」,右下角学科色的相机 */
-.c-tutor .tls > .bt-x-photo > .pg { position:relative; justify-self:center; align-self:center; width:calc(var(--fh) * .52); height:calc(var(--fh) * .52); }
-.c-tutor .bt-x-photo .pg i { position:absolute; inset:0; display:grid; place-items:center; font-style:normal; font-size:calc(var(--fh) * .31); line-height:1; color:#c9b48a; border:1.5px solid #c9a660; background:repeating-linear-gradient(to bottom,#e3cc9a 0 3px,transparent 3px 6px) center/1.5px 100% no-repeat,repeating-linear-gradient(to right,#e3cc9a 0 3px,transparent 3px 6px) center/100% 1.5px no-repeat,#fff; }
-.c-tutor .tls > .bt-x-photo.en > .pg { width:calc(var(--fh) * .78); height:calc(var(--fh) * .48); }
-.c-tutor .bt-x-photo.en .pg i { font-size:calc(var(--fh) * .26); font-family:"Chalkboard SE","Comic Sans MS","Marker Felt",sans-serif; color:#8fa0b2; border-color:#c9d2de; background:linear-gradient(#cdd6e2,#cdd6e2) 0 16%/100% 1.5px no-repeat,linear-gradient(#cdd6e2,#cdd6e2) 0 40%/100% 1.5px no-repeat,linear-gradient(#e39a9a,#e39a9a) 0 66%/100% 2px no-repeat,linear-gradient(#cdd6e2,#cdd6e2) 0 90%/100% 1.5px no-repeat,#fff; }
-.c-tutor .bt-x-photo .cam { position:absolute; right:calc(var(--fh) * -.1); bottom:calc(var(--fh) * -.09); width:calc(var(--fh) * .26); height:calc(var(--fh) * .26); border-radius:50%; background:var(--sc); color:#fff; display:grid; place-items:center; box-shadow:0 0 0 3px #fff; }
-.c-tutor .bt-x-photo .cam svg { width:58%; height:58%; }
-/* 听写:上面一排空格子(几个词几格,最多四格;英文是四线三格,最多两格),下面「听写」和「几个词 · 老师念,你来写」 */
+/* 家长排的听写:一排空格子,几个词几格(最多四格;英文是四线三格,最多两格;家长端时间线上那颗就是这样,一字一格)。
+   首页的竖框里排成两列田字格(最多六格),英文一条一行(最多三条) */
 .c-tutor .bt-x-dictation .dg { display:flex; justify-content:center; align-items:center; gap:4px; padding:0 14px; }
 .c-tutor .bt-x-dictation .dg i { flex:0 1 calc(var(--col) * .19); aspect-ratio:1; border:1.5px solid #d9b97a; background:linear-gradient(var(--tint-sand-line), var(--tint-sand-line)) center / 1px 100% no-repeat, linear-gradient(var(--tint-sand-line), var(--tint-sand-line)) center / 100% 1px no-repeat, #fff; }
 .c-tutor .bt-x-dictation .dg i:nth-child(n+5) { display:none; }
 .c-tutor .bt-x-dictation.en .dg i { flex-basis:calc(var(--col) * .38); aspect-ratio:2; background:linear-gradient(to bottom, #fff 32%, var(--tint-sand-line) 32% 34%, #fff 34% 65%, var(--tint-sand-line) 65% 67%, #fff 67%); }
 .c-tutor .bt-x-dictation.en .dg i:nth-child(n+3) { display:none; }
+.c-tutor .tls > .bt-x-dictation .dg { display:grid; grid-template-columns:repeat(2, 30%); justify-content:center; align-content:center; gap:calc(var(--col) * .05); padding:0; }
+.c-tutor .tls > .bt-x-dictation .dg i:nth-child(-n+6) { display:block; }
+.c-tutor .tls > .bt-x-dictation.en .dg { grid-template-columns:72%; }
+.c-tutor .tls > .bt-x-dictation.en .dg i { aspect-ratio:3.2; }
+.c-tutor .tls > .bt-x-dictation.en .dg i:nth-child(n+4) { display:none; }
 .c-tutor .bt-x-dictation .dr { display:flex; flex-direction:column; align-items:flex-start; }
 .c-tutor .bt-x-dictation .go { display:none; }
 @media (max-width:560px) {
-  .c-tutor .tls > .bt:not(.bt-lecture)::before, .c-tutor .tls > .bt-lecture .lp { border-radius:6px; }
+  .c-tutor .tls > .bt:not(.bt-cover)::before, .c-tutor .tls .cv { border-radius:5px; }
   .c-tutor .tls > .bt .btx { letter-spacing:0; }
-  .c-tutor .bt-lecture .tg { font-size:11px; padding:0 6px; }
-  .c-tutor .bt-x-dictation .dg { padding:0 8px; }
+  .c-tutor .bt-lecture .tg { font-size:10px; padding:0 5px; }
+  .c-tutor .bt-lecture .ln { font-size:10px; }
+  .c-tutor .bt-lecture .pl { width:30px; height:30px; margin:-15px 0 0 -15px; }
+  .c-tutor .bt-lecture .pl svg { width:14px; height:14px; }
 }

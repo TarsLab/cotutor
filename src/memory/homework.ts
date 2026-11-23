@@ -35,6 +35,17 @@ export async function homeworkDays(dir: string, subject: string): Promise<{ day:
   return out;
 }
 
+/** 最近的一张(最晚有照片的那天的最后一张;首页作业本的封面用):一张都没有 = null。从最晚那天往前找,不把每天都列一遍 */
+export async function latestHomework(dir: string, subject: string): Promise<{ day: string; name: string } | null> {
+  if (!SUBJECT_RE.test(subject)) return null;
+  const days = (await readdir(join(dir, subject)).catch(() => [] as string[])).filter((d) => DATE_RE.test(d)).sort().reverse();
+  for (const day of days) {
+    const names = await homeworkPhotos(dir, subject, day);
+    if (names.length) return { day, name: names[names.length - 1] };
+  }
+  return null;
+}
+
 /** 一张的路径;名字不对、不在 = null */
 export async function homeworkFile(dir: string, subject: string, day: string, name: string): Promise<string | null> {
   if (!SUBJECT_RE.test(subject) || !DATE_RE.test(day) || !PHOTO_RE.test(name)) return null;

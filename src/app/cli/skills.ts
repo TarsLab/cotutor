@@ -2,7 +2,7 @@
  * 出厂 skill:与 activity 同一套「拷不链」机制——init 拷进 workspace 的 .agents/skills/<name>/,hash 记 .cotutor/shipped.json 的 skills,
  * 出厂表 SHIPPED_SKILLS 每项带 machine 标记,都在本包根 skills/<name>/(进 npm files;
  * 几个机器件的 references/ 是 scripts/gen-skills.ts 生成后入库的,tests/skills.test.ts 断言一致):
- * - machine: true 的是机器件(cotutor-tutor / cotutor-analyze / cotutor-tune / cotutor-home:它们和解析器、契约、CLI 要一起变),init / refresh 每次按包里的覆盖、家长改了也刷,状态只有 latest / upgradable;
+ * - machine: true 的是机器件(cotutor-tutor / cotutor-analyze / cotutor-tune / cotutor-home / cotutor-workbook:它们和解析器、契约、CLI 要一起变),init / refresh 每次按包里的覆盖、家长改了也刷,状态只有 latest / upgradable;
  *   其余拷进来就是家长的:refresh 没改过的换新、改过的报 diff 保留(custom / untracked)。chalk-* 四个是做课包的。Codex、Qwen Code 认 .agents/skills;Claude Code 只认 .claude/skills,那里是一条指过来的链(linkClaudeSkills)。
  */
 import { createHash } from 'node:crypto';
@@ -12,9 +12,10 @@ import { fileURLToPath } from 'node:url';
 import { ANALYZE_SKILL } from '../skills/analyze-doc.ts';
 import { TUNE_SKILL } from '../skills/tune-doc.ts';
 import { HOME_SKILL } from '../skills/home-doc.ts';
+import { WORKBOOK_SKILL } from '../skills/workbook-doc.ts';
 import { TUTOR_SKILL } from '../../runtime/context/tutor-rules.ts';
 import { SKILLS_DIR } from '../../schema/index.ts';
-export { ANALYZE_SKILL, HOME_SKILL, TUNE_SKILL, TUTOR_SKILL };
+export { ANALYZE_SKILL, HOME_SKILL, TUNE_SKILL, TUTOR_SKILL, WORKBOOK_SKILL };
 import { PACKAGE_VERSION } from './skeleton.ts';
 import { readManifest, writeManifest, type ShippedManifest } from './tutors.ts';
 
@@ -29,6 +30,7 @@ export const SHIPPED_SKILLS: readonly ShippedSkill[] = [
   { name: ANALYZE_SKILL, machine: true },
   { name: TUNE_SKILL, machine: true },
   { name: HOME_SKILL, machine: true },
+  { name: WORKBOOK_SKILL, machine: true },
   { name: 'chalk-scene' },
   { name: 'chalk-teaching' },
   { name: 'chalk-cli' },

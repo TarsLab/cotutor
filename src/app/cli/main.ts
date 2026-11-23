@@ -669,6 +669,33 @@ export async function main(argv: string[]): Promise<void> {
         if (fixes) process.exitCode = 1;
         return;
       }
+      case 'workbook': {
+        const [sub, arg] = positionals;
+        const { checkWorkbooks, glyphData } = await import('./workbook.ts');
+        if (sub === 'glyph') {
+          if (!arg) throw new ArgError('workbook glyph 要字母,如 cotutor workbook glyph Aa');
+          const g = glyphData(arg);
+          if (g.unknown.length) process.stderr.write(`不认:${g.unknown.join(' ')}(只有 a–z、A–Z)\n`);
+          process.stdout.write(`${JSON.stringify({ guides: g.guides, glyphs: g.glyphs })}\n`);
+          if (g.unknown.length) process.exitCode = 1;
+          return;
+        }
+        const ws = loadWorkspace(workspace);
+        const results = await checkWorkbooks(ws.paths.workbooks, arg);
+        if (!results.length) throw new UsageError(`${redactHome(ws.paths.workbooks)} 下还没有练习册(一册一个文件夹,里面有 workbook.json)`);
+        const fixes = results.reduce((n, r) => n + r.problems.length, 0);
+        if (json) process.stdout.write(`${JSON.stringify(redactDeep({ ok: fixes === 0, dir: ws.paths.workbooks, workbooks: results }), null, 2)}\n`);
+        else {
+          for (const r of results) {
+            process.stdout.write(`${r.problems.length ? '✗' : '✓'} ${r.name}${r.title ? `  ${r.title}(${r.subject},${r.pages} 页 ${r.questions} 题)` : ''}\n`);
+            for (const p of r.problems) process.stdout.write(`    要改:${p}\n`);
+            for (const p of r.notes) process.stdout.write(`    提醒:${p}\n`);
+          }
+          process.stdout.write(fixes ? `有 ${fixes} 条要改\n` : '都对得上\n');
+        }
+        if (fixes) process.exitCode = 1;
+        return;
+      }
       case 'pin': {
         // cotutor pin [off | status] [--pin <数字>]:家长端与工作台的锁(src/app/http/access.ts)。机器级,不要 workspace;没设就全开
         const arg = positionals[0];

@@ -1,5 +1,16 @@
-/** 练习册(src/schema/workbook.ts):一份小册子过形状与检查;各种写错报到页和题;下发给孩子端的一页不带作答区和答案。 */
+/**
+ * 练习册(src/schema/workbook.ts):一份小册子过形状与检查;各种写错报到页和题;下发给孩子端的一页不带作答区和答案。
+ * 出练习册的技能(skills/cotutor-workbook/references/格式.md):里面那份例子能用,schema 的每个字段都讲到;
+ * cotutor workbook check 一次列全(形状、检查、页图的宽高与 sha256),glyph 给字母的笔顺。
+ */
+import { createHash } from 'node:crypto';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { z } from 'zod';
 import { WorkbookSchema, workbookKidPage, workbookProblems, type Workbook } from '../src/schema/index.ts';
+import { PACKAGE_SKILLS_DIR } from '../src/app/cli/skills.ts';
+import { checkWorkbook, checkWorkbooks, glyphData } from '../src/app/cli/workbook.ts';
 import { check, done } from './_check.ts';
 
 const sample = (): Workbook => ({
@@ -79,4 +90,82 @@ check('links 挂在非连线区上', has(after((wb) => { linked(wb); q(wb).teach
 const kid = workbookKidPage(good.pages[0]!);
 check('孩子端的一页:只有图和文字层', Object.keys(kid).sort().join() === 'image,lines,terms' && !JSON.stringify(kid).includes('3×4'), JSON.stringify(kid));
 
+// ——— 出练习册的技能:格式.md ———
+const formatDoc = readFileSync(join(PACKAGE_SKILLS_DIR, 'cotutor-workbook', 'references', '格式.md'), 'utf8');
+const example = JSON.parse(/```json\n([\s\S]*?)\n```/.exec(formatDoc)?.[1] ?? 'null') as unknown;
+const exParsed = WorkbookSchema.safeParse(example);
+check('格式.md 的例子过形状', exParsed.success, JSON.stringify(exParsed.error?.issues));
+check('格式.md 的例子过检查', exParsed.success && workbookProblems(exParsed.data).length === 0, exParsed.success ? workbookProblems(exParsed.data).join('\n') : '');
+check('格式.md 的例子每种作答区之外也有物件、连线、田字格、说着答', /"kind": "circle"/.test(formatDoc) && /"side": "left"/.test(formatDoc) && /"tian": true/.test(formatDoc) && /"say": true/.test(formatDoc));
+/** schema 里出现的每个字段名(对象一层层往下走) */
+const fieldNames = (s: z.ZodType, out = new Set<string>()): Set<string> => {
+  if (s instanceof z.ZodObject) for (const [k, v] of Object.entries(s.shape as Record<string, z.ZodType>)) { out.add(k); fieldNames(v, out); }
+  else if (s instanceof z.ZodOptional || s instanceof z.ZodNullable) fieldNames(s.unwrap() as z.ZodType, out);
+  else if (s instanceof z.ZodArray) fieldNames(s.element as z.ZodType, out);
+  else if (s instanceof z.ZodTuple) for (const x of s.def.items) fieldNames(x as z.ZodType, out);
+  return out;
+};
+const fields = [...fieldNames(WorkbookSchema)];
+const unexplained = fields.filter((k) => !formatDoc.includes(`\`${k}\``));
+check('格式.md 讲到 schema 的每个字段(加了字段忘了写,这里红)', fields.length > 30 && unexplained.length === 0, JSON.stringify(unexplained));
+
+// ——— cotutor workbook check ———
+/** 只有文件头的 PNG(IHDR 带宽高),够 check 读宽高、算 sha256 */
+const png = (w: number, h: number): Buffer => {
+  const b = Buffer.from('89504e470d0a1a0a0000000d49484452000000000000000008060000000000', 'hex');
+  b.writeUInt32BE(w, 16);
+  b.writeUInt32BE(h, 20);
+  return b;
+};
+const sha = (b: Buffer): string => createHash('sha256').update(b).digest('hex');
+const books = mkdtempSync(join(tmpdir(), 'cotutor-workbook-check-'));
+const put = (name: string, wb: unknown, images: Record<string, Buffer>): void => {
+  mkdirSync(join(books, name), { recursive: true });
+  writeFileSync(join(books, name, 'workbook.json'), JSON.stringify(wb));
+  for (const [f, b] of Object.entries(images)) writeFileSync(join(books, name, f), b);
+};
+{
+  const img = png(2600, 3678);
+  const ok = structuredClone(example) as Workbook;
+  ok.pages[0]!.image.sha256 = sha(img);
+  put('好的', ok, { '01.png': img });
+  const r = await checkWorkbook(books, '好的');
+  check('check:例子配上对的图,没有要改的;打印版不在只提醒', r.problems.length === 0 && r.title === ok.title && r.pages === 1 && r.questions === 4 && r.notes.some((n) => n.includes('打印版')), JSON.stringify(r));
+
+  put('图不对', ok, { '01.png': png(2000, 3678) });
+  const bad = await checkWorkbook(books, '图不对');
+  check('check:图的宽高、sha256 和 json 对不上都报,带第几页', bad.problems.some((p) => p.startsWith('第 1 页') && p.includes('2000×3678')) && bad.problems.some((p) => p.includes('sha256')), JSON.stringify(bad.problems));
+
+  put('没有图', ok, {});
+  check('check:图不在', (await checkWorkbook(books, '没有图')).problems.some((p) => p.includes('01.png 不在')));
+
+  const shape = structuredClone(ok);
+  shape.pages[0]!.questions[0]!.box[2] = 1200;
+  shape.pages[0]!.questions[1]!.no = '二';
+  put('形状', shape, { '01.png': img });
+  const sp = (await checkWorkbook(books, '形状')).problems;
+  check('check:形状不对的一次列全(不只第一条),页从 1 数', sp.length === 2 && sp.every((p) => p.startsWith('第 1 页 questions.')), JSON.stringify(sp));
+
+  const logic = structuredClone(ok);
+  logic.pages[0]!.questions[0]!.regions[1]!.id = 'q1-1';
+  logic.pages[0]!.questions[2]!.teacher.answers[0]!.at = ['q3-没有'];
+  put('检查', logic, { '01.png': img });
+  const lp = (await checkWorkbook(books, '检查')).problems;
+  check('check:workbookProblems 的也一次列全', lp.some((p) => p.includes('重复')) && lp.some((p) => p.includes('q3-没有')), JSON.stringify(lp));
+
+  mkdirSync(join(books, '坏的'));
+  writeFileSync(join(books, '坏的', 'workbook.json'), '{');
+  check('check:不是 JSON', (await checkWorkbook(books, '坏的')).problems[0]?.includes('不是 JSON') === true);
+  const all = await checkWorkbooks(books);
+  check('check 不给名字:练习册/ 下每一册(有 workbook.json 的文件夹)都查', all.map((x) => x.name).join() === '图不对,坏的,好的,形状,检查,没有图'.split(',').sort().join(), all.map((x) => x.name).join());
+}
+
+// ——— cotutor workbook glyph ———
+{
+  const g = glyphData('Aa1');
+  const A = g.glyphs.A;
+  check('glyph:认的字母给字宽和一笔一串点,四线是 -2 -1 0 1;不认的另说', A?.advance === 1.5 && A.strokes.length === 3 && A.strokes[0]![0]!.join() === '0.75,-2' && Boolean(g.glyphs.a) && g.unknown.join() === '1' && Object.values(g.guides).join() === '-2,-1,0,1', JSON.stringify({ A: A?.strokes[0]?.slice(0, 2), u: g.unknown }));
+}
+
 done();
+

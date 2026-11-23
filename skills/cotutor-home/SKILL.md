@@ -82,6 +82,7 @@ description: 排 cotutor 孩子端的首页。孩子学完之后,家长在 works
 - 看图说话是语文老师的 activity:`activity 看图说话`。
 - 小课堂看完要接着照某个 activity 聊(如看图说话的课),在小课堂按钮下面挂一行 `activity: 看图说话`。
 - activity 按钮写 `activity <名> [孩子看到的字]`,下面一行一个参数(`范围: 第 22 课`),照那个文件「## 家长填的」填;同一个 activity 填不同的参数可以是两个按钮。
+- 做练习册的按钮填 `练习册: <名>`(vault 练习册/ 下那一册的文件夹名,`cotutor workbook check` 列出有哪几册)。家长要出一册新的,用 cotutor-workbook。
 - 家长想改 activity 本身怎么带,不在这里改,用 cotutor-tune。
 
 ### 老师想要的小课堂

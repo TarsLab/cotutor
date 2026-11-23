@@ -74,7 +74,7 @@ Windows 的 PowerShell 缺省禁止运行脚本,报这个错时把 `npm`、`cotu
 - **家长端 `/parent`**:「首页」排孩子的首页、扫码、给老师换头像和声音;「记录」按天看讲稿和录像、打星、记账,写进笔记的每一行都能撤回;「设置」里有诊断信息。
 - **工作台 `/dev`**:给有技术背景的家长与开发者。和任何一位老师说话、看一轮的原文,改老师怎么带,加新老师。
 
-也可以让编程助手帮你管:在孩子的 cotutor 文件夹(`~/cotutor/<孩子>/`)里打开 Claude Code 或 Codex,带的技能直接能用。`cotutor-home` 排孩子的首页,`cotutor-tune` 调老师的口气和规矩,`cotutor-analyze` 分析某次对话为什么那样答。
+也可以让编程助手帮你管:在孩子的 cotutor 文件夹(`~/cotutor/<孩子>/`)里打开 Claude Code 或 Codex,带的技能直接能用。`cotutor-home` 排孩子的首页,`cotutor-tune` 调老师的口气和规矩,`cotutor-analyze` 分析某次对话为什么那样答,`cotutor-workbook` 照教材出一册练习册。
 
 ## 遇到问题
 

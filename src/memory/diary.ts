@@ -28,12 +28,12 @@ export interface DiaryTopic {
 }
 
 /** 孩子在这个话题里说的话:from: kid、不是「继续」/ 交答案这种动作、非空;多行并成一行 */
-export function kidQuestions(messages: readonly Pick<ConversationMessage, 'job' | 'from' | 'thread' | 'text' | 'action' | 'via'>[], thread: string): string[] {
+export function kidQuestions(messages: readonly Pick<ConversationMessage, 'job' | 'from' | 'thread' | 'text' | 'action' | 'via' | 'enter'>[], thread: string): string[] {
   const ths = threads(messages);
   const out: string[] = [];
   messages.forEach((m, i) => {
-    // 首页的按钮、方砖发的是按钮上的字,不是孩子说的
-    if (ths[i] !== thread || m.from !== 'kid' || m.action || (m.via && viaSendsLabel(m.via))) return;
+    // 首页的按钮、方砖发的是按钮上的字,不是孩子说的;进门那条也是
+    if (ths[i] !== thread || m.from !== 'kid' || m.action || m.enter || (m.via && viaSendsLabel(m.via))) return;
     const text = m.text.replace(/\s+/g, ' ').trim();
     if (text && text !== '继续') out.push(text);
   });

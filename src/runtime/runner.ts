@@ -4,7 +4,8 @@
  * 流式:脑的正文随流回报,这里拼当前回复正文 → parseBoard(partial) → 内存里的 partial section(孩子端 pending 条目带着它);讲稿不配音,交给实时的嘴照念。
  * 一老师同时只跑一条(老师还在回上一条就 409),跨天自动新开(索引按本地日期分文件,新文件没有会话就新开)。
  * 话题:一天可多个,每个话题自己的会话(index.sessions[thread]);newThread / 系统消息 / 今天第一条开新话题(不接会话),
- * 指定 thread 接着今天的旧话题(接它的会话),缺省接当前话题。
+ * 指定 thread 接着今天的旧话题(接它的会话),缺省接当前话题。孩子先说的 activity 点进来先「进门」(enter):话题有了、页铺好了、不请脑,
+ * 孩子开口那条才是第一轮;没开口就走了的话题不存(leave 删、下次进门扫掉)。
  * 埋点:每轮记 timing(这一轮起的时刻、第一句出来、脑回完,毫秒),家长视图每轮一行。
  * 代码里还叫「进程」的地方指的就是脑这一轮。
  */
@@ -15,7 +16,7 @@ import { dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { buildContextPack } from './context/context-pack.ts';
 import { addMessage, applyRun, jobId, sameRuntime, sessionFor } from './journal/conversation.ts';
 import { localDate, localMinute } from '../shared/time.ts';
-import { conversationFiles, threads } from '../schema/index.ts';
+import { conversationFiles, spokeIn, threads } from '../schema/index.ts';
 import { bookkeepingPrompt, kidQuestions, textbookHeadings } from '../memory/diary.ts';
 import { actsGuide } from '../board/cards/docs.ts';
 import { activityBase, parseActivity, renderTutorSection } from './activity.ts';
@@ -32,7 +33,7 @@ import { type RunEvent, type RunEventEnvelope, type RunEventInput } from '../sch
 import { CELL_UNIT, LESSON_CELL_STROKES, LESSON_INK_POINTS, PEN_ASKS, PHOTO_PAGE, type ActivityBase, type Lesson, type LessonAct, type LessonEvent, type PagePhoto, canonicalSubject, subjectLang, MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, VAULT_PACK_ROLES, isApiRuntime, resolvePolicy, type ContextPack, type ConversationIndex, type MemoryProposal, type PendingMemory, type ActivityRun, type ConversationMessage, type MessageFrom, type MessageVia, type Policy, type Timing, type Workbook } from '../schema/index.ts';
 import { UsageError } from '../shared/errors.ts';
 import type { Workspace } from '../schema/index.ts';
-import { readIndex, snapshotSources, writeIndex, writeRunFile } from './journal/store.ts';
+import { deleteThread, readIndex, snapshotSources, writeIndex, writeRunFile } from './journal/store.ts';
 import { readTextbooks, scanVault, writeVaultMemory, type MemoryPlan } from '../memory/vault.ts';
 import { learningContext, type PackReport } from '../memory/context.ts';
 import { childChanges, planDiary, planMemory, recoverPending, writeDiaryBlock } from '../memory/commit.ts';
@@ -56,6 +57,12 @@ import { readLesson, updateLesson } from './journal/lesson-store.ts';
 import { BOOK_TOC, bookView, photoBookPage, photoText, pickable, workbookInk, workbookPage, workbookText, type PhotoText } from '../chalk/index.ts';
 import { bookIndex, listBooks, pickBook } from '../memory/textbook-pdf.ts';
 
+/** 课本做底的 activity:家长在按钮上填的这个参数说的是哪一课,进门直接铺它(出厂的预习、复习都叫「范围」) */
+const ENTER_RANGE = '范围';
+
+/** 今天只进了门、没开口的话题(不存:进门时、点回首页时删) */
+const quietThreads = (index: { messages: readonly ConversationMessage[] }): string[] => [...new Set(threads(index.messages))].filter((th) => !spokeIn(index.messages, th));
+
 export class BusyError extends Error {
   constructor(tutor: string, job: string) {
     super(`${tutor} 还在回上一条(${job}),等它说完再发`);
@@ -70,8 +77,6 @@ export interface SendInput {
   text: string;
   /** 孩子端的动作:「给老师看」(窗里的图已经交了) */
   action?: 'submit';
-  /** 孩子在课本的目录上点了这一课(页已经翻过去了,Runner.boardEvent 的 open);text 可以是空的 → 「(在目录上点了《…》)」 */
-  open?: string;
   /** 运行时名,缺省 cotutor.json 的 runtimes.default */
   runtime?: string;
   /** 开新话题:不 resume、不带旧话题卡上的状态;话题 id = 这条的 job */
@@ -103,6 +108,9 @@ export interface SendInput {
   /** 这一轮走实时:讲稿不配音(拍关就就绪)、交给嘴照念;消息记 live,上下文包带 live:(嘴接住时说的、上一轮念到第几句被打断;请他说的那几拍、应用起的这一轮) */
   live?: NonNullable<ContextPack['live']>;
 }
+
+/** 页上一件事记下以后回通话的:say = 嘴照念的(点字的念法);still: false = 不替他叫老师;shot = 窗图;asked = 老师请着用笔时落的(收笔替他交) */
+export type BoardDone = { thread: string; say: string | null; still?: false; shot?: true; asked?: true };
 
 export interface SendStarted {
   tutor: string;
@@ -359,19 +367,26 @@ export class Runner {
    *  - 窗里的图 {k:'shot', box, image}(jpeg data URL):只留最新一张,下一轮附给老师;不算孩子动了手
    *  - 点字 {k:'pick', text}:回这个字词的念法(照片上认字时模型写好的「傍,傍晚的傍」,嘴照念;没有就念它自己);揭开 {k:'reveal', text}:嘴不念
    *  - 自己翻页 {k:'open', title}:目录上点了一课(title 是目录上那一项,tocEntries),或在一课里按「目录」回去(title = 目录,窗停在刚才那一课那一行)。
-   *    照这本书的目录翻过去、记进板的日志;点的是一课就记下这本书翻到哪了(book-last),回 open(通话替他起一轮,老师接着讲这一课)
+   *    照这本书的目录翻过去、记进板的日志;点的是一课就记下这本书翻到哪了(book-last)。不叫老师:下一轮「孩子做的」说他自己翻到了哪
    *  - 点读了一回 {k:'read', from, to, done?}(课本上点了标题或段首,孩子端放的配音;读到停下才报):记一笔,不叫老师
    * 话题不是今天的一节课、东西不对:回 null,什么都不记
    */
-  async boardEvent(tutor: string, date: string, body: unknown): Promise<{ thread: string; say: string | null; still?: false; shot?: true; asked?: true; open?: string } | null> {
+  async boardEvent(tutor: string, date: string, body: unknown): Promise<BoardDone | null> {
     const ws = this.getWs();
     if (!body || typeof body !== 'object') return null;
     const b = body as Record<string, unknown>;
     if (typeof b.thread !== 'string' || typeof b.base !== 'string') return null;
-    const thread = b.thread, base = b.base;
+    const thread = b.thread;
     const index = await readIndex(ws, tutor, date);
     const ths = threads(index.messages);
     if (!index.messages.find((_, i) => ths[i] === thread)?.base) return null;
+    const r = await this.boardStep(ws, tutor, date, thread, b.base, b);
+    // 孩子还没开口(只进了门):点字、挪窗都只记下,通话不替他叫老师(still: false),等他先说
+    return r && !r.shot && !spokeIn(index.messages, thread) ? { ...r, still: false } : r;
+  }
+
+  /** boardEvent 的后半:话题与页已经验过 */
+  private async boardStep(ws: Workspace, tutor: string, date: string, thread: string, base: string, b: Record<string, unknown>): Promise<BoardDone | null> {
     const at = (this.opts.now ?? (() => new Date()))().toISOString();
     /** 落进这节课的状态,回落完的样子;那一页不是现在的就不落(回 null) */
     const step = async (ev: LessonEvent): Promise<Lesson | null> => {
@@ -401,9 +416,8 @@ export class Runner {
       });
       if (!ok) return null;
       await appendBoard(ws, tutor, date, thread, { at, k: 'open', text: page.title, base: page.id });
-      if (toc) return { thread, say: null, still: false };
-      await rememberBook(ws, book.file, page.title, now);
-      return { thread, say: null, still: false, open: page.title };
+      if (!toc) await rememberBook(ws, book.file, page.title, now);
+      return { thread, say: null, still: false };
     }
     // 点读了一回:只记一笔(读到哪停的),不念、不叫老师——他在听课文
     if (b.k === 'read') {
@@ -555,7 +569,7 @@ export class Runner {
    * 孩子拍的作业但还没有页(不拍,用白纸)就铺一张白纸页。落盘,回页的文字层从哪来、这节课现在的样子。
    * 孩子端照同样的规矩先落在自己那一份上(拍的照片发出去就铺、不等老师)
    */
-  private async lessonOn(ws: Workspace, tutor: string, now: Date, date: string, thread: string, base: ActivityBase, photos: readonly string[], lecture: Lecture | null, workbook: string | null): Promise<{ src: LessonSource; lesson: Lesson; problem?: string; running: string[] }> {
+  private async lessonOn(ws: Workspace, tutor: string, now: Date, date: string, thread: string, base: ActivityBase, photos: readonly string[], lecture: Lecture | null, workbook: string | null, want: string | null = null): Promise<{ src: LessonSource; lesson: Lesson; problem?: string; running: string[] }> {
     const got = base === 'textbook' ? await this.bookOf(ws, tutor, now) : { book: null };
     const { book } = got;
     let problem = 'problem' in got ? got.problem : undefined;
@@ -568,7 +582,7 @@ export class Runner {
     const lesson = await updateLesson(ws, tutor, date, thread, (l) => {
       // 小课堂(孩子端点了按钮就铺上、先看完才开口;服务端收到第一条时照同样的规矩铺)
       let s = lecture && !l.pages.some((p) => p.kind === 'lecture') ? lessonStep(l, { t: 'act', act: { k: '翻', page: lecturePage(lecture) } }) : l;
-      s = book ? lessonOpen(s, book, last) : s;
+      s = book ? lessonOpen(s, book, last, want) : s;
       // 练习册:这一册还没铺过才铺(铺过的翻回来原样在)
       if (workbook && wbRead && 'wb' in wbRead && !s.pages.some((p) => p.kind === 'workbook' && p.src === workbook)) s = lessonStep(s, { t: 'act', act: { k: '翻', page: workbookPage(workbook, wbRead.wb, pick) } });
       if (sizes.length) s = lessonStep(s, { t: 'photo', photos: sizes, pick });
@@ -639,6 +653,47 @@ export class Runner {
     return { slate, notes, told: notes.map((n) => n.id), ...(shot ? { shot } : {}) };
   }
 
+  /**
+   * 进门(孩子先说的 activity):孩子点了首页的砖(activity eval 也先进门)。不请脑:记一条「进门」(话题第一条,带 via、activity、base、listen;text 是按钮上的字),
+   * 把页铺好(课本:家长填的「范围」那一课 → 上次翻到的那一课 → 目录;练习册:按钮挂的那一册;照片页:白纸)就回。
+   * 孩子开口那条接着这个话题(kidInput 照进门那条补上按钮的讲法)。今天这位老师只进了门的旧话题(没开口就走了、页面没来得及说)先扫掉。
+   * 老师正在回上一条 → BusyError(收尾时要整份重写索引,这时插一条会被盖掉;孩子端过一会儿再进)
+   */
+  async enter(tutor: string, input: SendInput): Promise<{ tutor: string; date: string; thread: string }> {
+    const ws = this.getWs();
+    const t = ws.config.tutors[tutor];
+    if (!t) throw new UsageError(`没有叫 ${tutor} 的老师`);
+    if (!t.enabled) throw new UsageError(`${t.display} 已关闭`);
+    if (!input.activity) throw new UsageError('进门要从一个 activity 开始');
+    const busy = this.active.get(tutor);
+    if (busy) throw new BusyError(tutor, busy.job);
+    const now = (this.opts.now ?? (() => new Date()))();
+    const date = localDate(now);
+    for (const th of quietThreads(await readIndex(ws, tutor, date))) await deleteThread(ws, tutor, date, th).catch(() => undefined);
+    const index = await readIndex(ws, tutor, date);
+    const job = jobId(now, index.messages.length + 1);
+    const actDef = await readActivity(ws, tutor, input.activity.name);
+    if (!actDef) throw new UsageError(`${t.display} 家里没有「${input.activity.name}」这个 activity`);
+    const base = activityBase(actDef);
+    const wbParam = actDef.params.find((p) => p.type === '练习册');
+    const param = (name: string | undefined): string | null => (name ? String(input.activity?.params?.[name] ?? '').trim() || null : null);
+    const wbName = wbParam ? param(wbParam.name) ?? (wbParam.default !== undefined ? String(wbParam.default) : null) : null;
+    const les = await this.lessonOn(ws, tutor, now, date, job, base, [], null, wbName, base === 'textbook' ? param(ENTER_RANGE) : null);
+    const msg = addMessage(index, { job, thread: job, at: localMinute(now), from: 'kid', text: input.text.trim() || input.activity.name, enter: true, ...(input.via ? { via: input.via } : {}), ...(input.eval ? { eval: true as const } : {}), activity: input.activity, base, ...(actDef.listen === 'open' ? { listen: 'open' as const } : {}), ...(input.device ? { device: input.device } : {}), ...(input.deviceId ? { deviceId: input.deviceId } : {}), ...(les.problem ? { warnings: [les.problem] } : {}), result: 'ok', artifacts: [], kidText: null });
+    await writeIndex(ws, msg);
+    return { tutor, date, thread: job };
+  }
+
+  /** 孩子点回首页:这个话题只进了门、没开口,就删掉(不存);开过口的、老师正在回的不动 */
+  async leave(tutor: string, date: string, thread: string): Promise<boolean> {
+    const ws = this.getWs();
+    if (this.active.has(tutor)) return false;
+    const index = await readIndex(ws, tutor, date);
+    if (!quietThreads(index).includes(thread)) return false;
+    await deleteThread(ws, tutor, date, thread);
+    return true;
+  }
+
   /** 应用替孩子叫了一次老师(他在板上点完了一直没出声):记进板的日志 */
   async boardStill(tutor: string, date: string, thread: string): Promise<void> {
     const now = (this.opts.now ?? (() => new Date()))();
@@ -692,7 +747,7 @@ export class Runner {
     // 小课堂画的一处带一张截图:和照片一样进上下文包 photos:(排在孩子拍的后面),这一轮带工具读图;消息的 photos 只记孩子拍的
     const shots = input.lecture?.marks?.flatMap((m) => (m.image ? [m.image] : [])) ?? [];
     const seen = [...photos, ...shots];
-    const text = input.text.trim() || (input.open ? `(在目录上点了《${input.open}》)` : input.action === 'submit' ? '(给老师看,没说话)' : photos.length ? (photos.length === 1 ? '(拍了一张)' : `(拍了 ${photos.length} 张)`) : '');
+    const text = input.text.trim() || (input.action === 'submit' ? '(给老师看,没说话)' : photos.length ? (photos.length === 1 ? '(拍了一张)' : `(拍了 ${photos.length} 张)`) : '');
     if (!text) throw new UsageError('消息是空的');
     const busy = this.active.get(tutor);
     if (busy) throw new BusyError(tutor, busy.job);
@@ -810,7 +865,7 @@ export class Runner {
     const plan = this.brain.plan(req);
 
     // 原声:落在这轮旁边(删话题一起删);写不下就当没有,消息照发
-    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, ...(input.action ? { action: input.action } : {}), ...(input.open ? { open: input.open } : {}), ...(photos.length ? { photos } : {}), ...(input.device ? { device: input.device } : {}), ...(input.deviceId ? { deviceId: input.deviceId } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.tidy ? { tidy: true as const } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(input.eval ? { eval: true as const } : {}), ...(input.live ? { live: true as const } : {}), ...(input.via ? { via: input.via } : {}), ...(input.lecture ? { lecture: { bundle: input.lecture.bundle, title: lecture?.title ?? input.lecture.bundle, watchedMs: input.lecture.watchedMs, finished: input.lecture.finished, pauses: input.lecture.pauses, ...(input.lecture.again ? { again: true as const } : {}), ...(lecture?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}), ...(input.lecture.log?.length ? { log: input.lecture.log } : {}) } } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(fresh && activityRun ? { activity: activityRun } : {}), ...(fresh && pageBase ? { base: pageBase } : {}), ...(fresh && actDef?.listen === 'open' ? { listen: 'open' as const } : {}), ...(compact ? { compacted: true as const } : {}), ...(lectureWarn.length || activityWarn.length ? { warnings: [...lectureWarn, ...activityWarn] } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
+    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, ...(input.action ? { action: input.action } : {}), ...(photos.length ? { photos } : {}), ...(input.device ? { device: input.device } : {}), ...(input.deviceId ? { deviceId: input.deviceId } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.tidy ? { tidy: true as const } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(input.eval ? { eval: true as const } : {}), ...(input.live ? { live: true as const } : {}), ...(input.via ? { via: input.via } : {}), ...(input.lecture ? { lecture: { bundle: input.lecture.bundle, title: lecture?.title ?? input.lecture.bundle, watchedMs: input.lecture.watchedMs, finished: input.lecture.finished, pauses: input.lecture.pauses, ...(input.lecture.again ? { again: true as const } : {}), ...(lecture?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}), ...(input.lecture.log?.length ? { log: input.lecture.log } : {}) } } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(fresh && activityRun ? { activity: activityRun } : {}), ...(fresh && pageBase ? { base: pageBase } : {}), ...(fresh && actDef?.listen === 'open' ? { listen: 'open' as const } : {}), ...(compact ? { compacted: true as const } : {}), ...(lectureWarn.length || activityWarn.length ? { warnings: [...lectureWarn, ...activityWarn] } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
     await writeIndex(ws, started);
     // 板的日志记一笔:这一轮把板交给了老师(下一轮「孩子做的」从这之后算;给了全文的下一轮写「未变」)
     if (slate) await appendBoard(ws, tutor, date, thread, { at: now.toISOString(), k: 'turn', job, ...(slate.told.length ? { told: slate.told } : {}) });

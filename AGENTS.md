@@ -67,7 +67,7 @@
 - 出厂件(activity、主题、技能)拷贝不链;workspace 里唯一的链是 `.claude/skills → ../.agents/skills`;hash 记 shipped.json,refresh 只换没改过的、改过的报 diff;`machine: true` 的技能每次覆盖
 - 老师按 cotutor.json 里有谁走,没有注册表;里面的都是老师(没有工具人,名字结尾没有含义),孩子端露不露看 `enabled` 与 `hidden`
 - display / description / avatar / voice / enabled / hidden / policy / runtime 在 cotutor.json;怎么教在 activity 里
-- 话题都从一个 activity 开始(孩子端的按钮、方砖、小课堂;`cotutor send --activity`;工作台选 activity)。不带 activity 的只有系统任务(记账、整理),系统提示一句人设。一位老师的记忆:新记的进那个 activity 那篇,这位老师自己那篇(以前普通话题记的)每个 activity 都带、只读
+- 话题都从一个 activity 开始(孩子端的按钮、方砖、小课堂;`cotutor send --activity`;工作台选 activity)。孩子先说:点进来只「进门」(铺页、不请老师),孩子开口才是第一轮,没开口就走的话题不存;activity 头上 `start: tutor` 的老师先说(口语课);细节在 `docs/dev/首页与听写.md`。不带 activity 的只有系统任务(记账、整理),系统提示一句人设。一位老师的记忆:新记的进那个 activity 那篇,这位老师自己那篇(以前普通话题记的)每个 activity 都带、只读
 - 老师的回复就是讲稿:普通行 = 讲稿一句,`[[ ]]` = 对页做的动作,围栏不上页,第一个 H2 起是给家长的尾巴;解析器永不抛
 - 每个代码文件开头一段注释,只写现在的样子:这个文件是什么、谁用、推不出来的原因和实测(实测带日期)。不记改动(「从哪拆出来」「哪天起」),删掉的功能不留说明,旧数据还在读的写一句「读进来就丢」;只引仓库里有的文档;协议表、路由表留在头注释里,`docs/dev/` 指过去、不抄
 - 老师不派子代理、不互相交活(自己派会烧光自己的预算)

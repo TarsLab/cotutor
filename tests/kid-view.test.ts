@@ -85,7 +85,7 @@ const okRun = (result: string): ReturnType<typeof parseTranscript> =>
   check('序列化后搜不到工具 / 错误 / 家长尾巴 / 费用与 token / 答案', !/工具|error|家长的话|costUsd|tokens|result|answer/.test(JSON.stringify(v)), JSON.stringify(v));
 }
 {
-  // 首页「今天」:开了头的话题(有孩子参与的图出现过)才列;只说话的、只铺了目录的、系统起的不列;新的在前
+  // 首页「今天」:开了头的话题才列——孩子开了口(说话、拍照、给老师看;进门那条、按钮发出去的字不算),以前的记录里还有翻到一课、摆了图形;只进了门的、只铺了目录的、系统起的不列;新的在前
   const base = { artifacts: [] as string[], result: 'ok' as const };
   // 课本做底:讲稿里的 [[翻 …]](落到页上的样子)
   const fan = (title: string) => ({ lines: [{ text: '好。', ask: false, acts: [{ name: '翻', arg: title, do: { k: '翻', page: { id: `b#${title}`, kind: 'book', src: 'b', title, pages: [1], cut: 0, layout: 'prose', pick: true } } }] }] });
@@ -103,9 +103,14 @@ const okRun = (result: string): ReturnType<typeof parseTranscript> =>
     { ...base, job: '6', thread: '6', at: '2026-09-09T10:40', from: 'kid' as const, text: '预习', via: { home: 'h', button: 'preview', label: '预习' }, kidText: '看目录', section: { lines: [] } },
     // 7:记账(系统起的)
     { ...base, job: '7', thread: '7', at: '2026-09-09T21:00', from: 'system' as const, text: '记账', kidText: '记好了', photos: ['captures/x.jpg'] },
+    // 8:只进了门(孩子先说,还没开口)
+    { ...base, job: '8', thread: '8', at: '2026-09-09T10:50', from: 'kid' as const, text: '预习', enter: true, via: { home: 'h', button: 'preview', label: '预习' }, kidText: null },
+    // 9:进了门,孩子开口了
+    { ...base, job: '9', thread: '9', at: '2026-09-09T10:51', from: 'kid' as const, text: '预习', enter: true, via: { home: 'h', button: 'preview', label: '预习' }, kidText: null },
+    { ...base, job: '10', thread: '9', at: '2026-09-09T10:52', from: 'kid' as const, text: '观字怎么读', kidText: '这样读', section: { lines: [{ text: '这样读', ask: false }] } },
   ];
   const list = startedThreads(msgs as never);
-  check('只列开了头的:翻到一课的预习、发了照片的检查作业、摆了图形的新话题;新的在前', list.map((t) => t.thread).join() === '5,4,2', JSON.stringify(list));
+  check('只列开了头的:进门后开了口的、摆了图形的、发了照片的检查作业、翻到一课的预习、说了话的;新的在前', list.map((t) => t.thread).join() === '9,5,4,2,1' && list[0].label === '预习', JSON.stringify(list));
   check('名字:方砖的字;新话题用孩子的第一句(截 12 字)', list.find((t) => t.thread === '2')?.label === '预习' && list.find((t) => t.thread === '4')?.label === '检查作业' && list.find((t) => t.thread === '5')?.label === '三乘五等于多少呀老师你帮…', JSON.stringify(list));
   check('课本翻到的那一课、孩子最后发的照片、最后一条的时间', list.find((t) => t.thread === '2')?.lesson === '坐井观天' && list.find((t) => t.thread === '2')?.at === '2026-09-09T10:12' && list.find((t) => t.thread === '4')?.photo === 'captures/2026-09-09/1020-1.jpg', JSON.stringify(list));
 }

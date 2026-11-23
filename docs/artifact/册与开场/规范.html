@@ -1,0 +1,301 @@
+<title>册与开场</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<!-- 协议类设计稿:册(课本、练习册、作业本)与孩子先开口。怎么提议、什么时候搬进 docs/dev/ 见上一层的 README.md -->
+<style>
+/* 版式:工作台「纸面控制台」的色板(src/ui/dev/dev-theme.ts),单栏长页 + 顶上一条目录;同「页上记号」那份 */
+:root {
+  --ground:#F5F3EE; --surface:#FFFFFF; --surface-2:#FAF9F6; --sunk:#EDEAE3;
+  --line:#E5E1D8; --line-soft:#EFECE6;
+  --ink:#2B2B2B; --ink-2:#4A4740; --muted:#6B675F; --faint:#8A8781;
+  --accent:#B4531F; --accent-soft:#F7E8DE;
+  --ok:#1F7A44; --ok-soft:#E5F4EA;
+  --warn:#8A5A12; --warn-soft:#F9F1DE;
+  --info:#2F5E9E; --info-soft:#E9F1FB;
+  --paper:#FFFFFF; --zh:#C43C74; --ma:#2F7FC1; --kid:#2F6FD6;
+  --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif;
+  --mono:"SF Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --kai:"Kaiti SC","STKaiti","KaiTi","BiauKai","Songti SC",serif;
+  --r-card:18px; --r-item:12px; --r-tag:6px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --ground:#1C1B19; --surface:#262522; --surface-2:#2B2A27; --sunk:#33312D; --line:#3D3A35; --line-soft:#34322E;
+  --ink:#ECE8E1; --ink-2:#CFCAC0; --muted:#A39E94; --faint:#8C877D;
+  --accent:#E58A55; --accent-soft:#3A2A20; --ok:#6CC58F; --ok-soft:#1F3328; --warn:#E0B060; --warn-soft:#3A3020; --info:#8AB4EE; --info-soft:#22303F;
+  --paper:#F4F1EA; --zh:#E36A9C; --ma:#6AAAE0; --kid:#6F9BEA; color-scheme:dark; } }
+:root[data-theme="dark"] {
+  --ground:#1C1B19; --surface:#262522; --surface-2:#2B2A27; --sunk:#33312D; --line:#3D3A35; --line-soft:#34322E;
+  --ink:#ECE8E1; --ink-2:#CFCAC0; --muted:#A39E94; --faint:#8C877D;
+  --accent:#E58A55; --accent-soft:#3A2A20; --ok:#6CC58F; --ok-soft:#1F3328; --warn:#E0B060; --warn-soft:#3A3020; --info:#8AB4EE; --info-soft:#22303F;
+  --paper:#F4F1EA; --zh:#E36A9C; --ma:#6AAAE0; --kid:#6F9BEA; color-scheme:dark; }
+* { box-sizing:border-box; }
+html { background:var(--ground); }
+body { margin:0; background:var(--ground); color:var(--ink); font:15px/1.65 var(--sans); }
+.wrap { max-width:1080px; margin:0 auto; padding-block:28px 72px; padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); }
+header.top { display:flex; flex-direction:column; gap:10px; padding-bottom:18px; }
+header.top .crumb { font:500 12px/1 var(--mono); color:var(--faint); letter-spacing:.04em; }
+h1 { margin:0; font-size:30px; font-weight:700; text-wrap:balance; }
+header.top p { margin:0; max-width:68ch; color:var(--ink-2); }
+.legend { display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center; font-size:13px; color:var(--muted); }
+nav.toc { position:sticky; top:env(safe-area-inset-top, 0px); z-index:5; background:var(--ground); border-bottom:1px solid var(--line); margin:0 calc(-1 * max(16px, env(safe-area-inset-left, 0px))); padding:0 max(16px, env(safe-area-inset-left, 0px)); }
+nav.toc .row { display:flex; gap:4px; overflow-x:auto; padding:8px 0; scrollbar-width:none; }
+nav.toc a { flex:none; padding:6px 12px; border-radius:8px; color:var(--ink-2); font-size:13.5px; text-decoration:none; }
+nav.toc a:hover, nav.toc a:focus-visible { background:var(--sunk); color:var(--ink); outline:none; }
+nav.toc a b { font:600 11.5px/1 var(--mono); color:var(--faint); margin-right:5px; }
+body::before { content:""; position:fixed; inset:0 0 auto; height:env(safe-area-inset-top, 0px); z-index:10; background:var(--ground); }
+section { padding-top:44px; scroll-margin-top:56px; }
+section > h2 { margin:0 0 6px; font-size:21px; font-weight:700; display:flex; align-items:baseline; gap:10px; text-wrap:balance; }
+section > h2 .id { font:600 13px/1 var(--mono); color:var(--accent); }
+section > .lead { margin:0 0 18px; max-width:72ch; color:var(--ink-2); }
+h3 { margin:26px 0 10px; font-size:16px; font-weight:650; }
+p { margin:0 0 10px; }
+code { font:500 12.5px/1.4 var(--mono); background:var(--sunk); border-radius:5px; padding:1px 5px; color:var(--ink-2); }
+.st { display:inline-flex; align-items:center; font:600 11.5px/19px var(--sans); border-radius:var(--r-tag); padding:0 7px; white-space:nowrap; vertical-align:1px; }
+.st.now { background:var(--sunk); color:var(--muted); }
+.st.new { background:var(--accent-soft); color:var(--accent); }
+.st.tbd { background:var(--warn-soft); color:var(--warn); }
+.st.ok { background:var(--ok-soft); color:var(--ok); }
+.card { background:var(--surface); border-radius:var(--r-card); box-shadow:0 0 0 1px var(--line); padding:18px; min-width:0; }
+.grid2 { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap:16px; }
+.cap { font-size:13px; color:var(--muted); margin-top:10px; }
+.decided { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap:12px; }
+.decided div { background:var(--surface); border-radius:var(--r-item); box-shadow:0 0 0 1px var(--line); padding:12px 14px; font-size:13.5px; color:var(--ink-2); }
+.decided b { display:block; color:var(--ink); font-size:14.5px; margin-bottom:2px; }
+.tbl { overflow-x:auto; background:var(--surface); border-radius:var(--r-card); box-shadow:0 0 0 1px var(--line); }
+table { border-collapse:collapse; width:100%; font-size:13.5px; min-width:760px; }
+th, td { text-align:left; vertical-align:top; padding:10px 14px; border-bottom:1px solid var(--line-soft); }
+th { font-size:12px; font-weight:600; color:var(--muted); background:var(--surface-2); white-space:nowrap; }
+tr:last-child td { border-bottom:0; }
+td.n { font:600 12px/1.5 var(--mono); color:var(--accent); white-space:nowrap; }
+td .was { display:block; margin-top:4px; font-size:12.5px; color:var(--muted); }
+.flow { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap:16px; }
+.flow ol { margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:8px; }
+.flow li { display:grid; grid-template-columns:64px 1fr; gap:10px; font-size:13.5px; color:var(--ink-2); }
+.flow li .who { font:600 12px/22px var(--mono); color:var(--faint); }
+.flow li.t .who { color:var(--accent); }
+.flow li.k .who { color:var(--kid); }
+.flow li.quiet { color:var(--muted); }
+.flow h4 { margin:0 0 12px; font-size:15px; display:flex; gap:8px; align-items:center; }
+.svgbox { background:var(--sunk); border-radius:var(--r-item); padding:14px; overflow-x:auto; }
+.svgbox svg { display:block; width:100%; min-width:520px; height:auto; }
+.qs { display:flex; flex-direction:column; gap:12px; }
+.q { background:var(--surface); border-radius:var(--r-card); box-shadow:0 0 0 1px var(--line); padding:16px 18px; }
+.q h4 { margin:0 0 6px; font-size:15.5px; }
+.q h4 .rid { font:600 12px/1 var(--mono); color:var(--warn); margin-right:8px; }
+.q ul { margin:6px 0 0; padding-left:20px; font-size:13.5px; color:var(--ink-2); }
+.q li.rec::marker { color:var(--accent); }
+.q li.rec b { color:var(--accent); }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior:auto !important; } }
+</style>
+
+<div class="wrap">
+<header class="top">
+  <span class="crumb">docs/artifact/册与开场 · 2026-11-23 · 提议</span>
+  <h1>册与开场</h1>
+  <p>课本、练习册、作业本都当成一「册」来用:一样的目录、上一章下一章、记住翻到哪。进来以后老师不先开口,等孩子先说。这份写这两件事的规矩,还有「课本」合并、作业本、首页竖版卡要跟着改什么。</p>
+  <div class="legend"><span class="st now">现状</span><span class="st new">提议</span><span class="st tbd">待定</span><span class="st ok">已定</span> 规则编号:O 开场、B 册、C 课本、H 首页、Q 待讨论</div>
+</header>
+
+<nav class="toc"><div class="row">
+  <a href="#decided"><b>0</b>已定的</a>
+  <a href="#open"><b>O</b>孩子先开口</a>
+  <a href="#book"><b>B</b>册</a>
+  <a href="#textbook"><b>C</b>课本</a>
+  <a href="#home"><b>H</b>首页的卡</a>
+  <a href="#q"><b>Q</b>待讨论</a>
+  <a href="#plan"><b>→</b>先后与影响面</a>
+</div></nav>
+
+<section id="decided">
+  <h2><span class="id">0</span>已定的</h2>
+  <p class="lead">2026-11-23 定下的,下面的规则照这些写。</p>
+  <div class="decided">
+    <div><b>叫「册」</b>一册分章,一章若干页。代码沿用 <code>book</code>。孩子端仍说课本、练习册、作业本。</div>
+    <div><b>预习 + 复习 = 课本</b>语文、数学各一个「课本」activity,vault 里要有这一科的课本 PDF。</div>
+    <div><b>英语不做课本</b>外研社的 PDF 没有文字层。英语的预习、复习照旧拍照。</div>
+    <div><b>作业本按天攒</b>检查作业拍的照片攒成一本,一天一章,家长能导出 PDF。</div>
+    <div><b>孩子先开口</b>说话、拍照交上来、按「给老师看」才算开口。翻页、点目录这类不叫老师。</div>
+    <div><b>口语课老师先说</b>activity 头上一个开关,只有口语课打开。</div>
+  </div>
+</section>
+
+<section id="open">
+  <h2><span class="id">O</span>孩子先开口</h2>
+  <p class="lead">点了首页的砖,页铺好,老师在,但不出声。孩子说了话、交了东西,老师才接,接的时候知道他进来以后做过什么。</p>
+
+  <div class="flow">
+    <div class="card">
+      <h4><span class="st now">以前</span>点「预习」</h4>
+      <ol>
+        <li class="k"><span class="who">孩子</span><span>点砖。页面把砖上的字「预习」当第一句发出去(<code>openTutor</code> 的 <code>intent.send</code>)</span></li>
+        <li class="t"><span class="who">老师</span><span>「今天预习哪一课?」页上是目录</span></li>
+        <li class="k"><span class="who">孩子</span><span>在目录上点《雪孩子》,页面替他起一轮(<code>open</code>)</span></li>
+        <li class="t"><span class="who">老师</span><span>翻过去,开始讲</span></li>
+      </ol>
+    </div>
+    <div class="card">
+      <h4><span class="st now">现状</span>点「预习」(合成「课本」以后同样)</h4>
+      <ol>
+        <li class="k"><span class="who">孩子</span><span>点砖。服务端记一条「进门」,把书铺到上次那一页,不调脑</span></li>
+        <li class="quiet"><span class="who">页</span><span>《雪孩子》第 2 页。字幕位空着,嘴不出声</span></li>
+        <li class="k"><span class="who">孩子</span><span>往下翻,点读了第 3 段,点了「融」字(都记进板的日志)</span></li>
+        <li class="k"><span class="who">孩子</span><span>「老师,雪孩子为什么会化掉?」</span></li>
+        <li class="t"><span class="who">老师</span><span>这一轮才起,包里有他的问话、刚才做的几件事、页此刻的样子</span></li>
+      </ol>
+    </div>
+  </div>
+
+  <h3>规则</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>编号</th><th>规则</th><th>状态</th></tr></thead>
+    <tbody>
+      <tr><td class="n">O1</td><td><b>进门不调脑。</b>点砖后服务端记一条「进门」(带 via、activity、家长填的参数、base、listen),铺好页,一节课的状态从这时就有,但不起老师。<span class="was">现状:砖上的字当孩子第一句发出,老师马上答(<code>runner.send</code>)。</span></td><td><span class="st now">现状</span></td></tr>
+      <tr><td class="n">O2</td><td><b>开口只有三种:</b>说话、拍照交上来、按「给老师看」。这三种起一轮。翻页、换章、点目录、点读、点字、写格子、揭开盖住的,都只记进板的日志,下一轮从「孩子做的」带给老师。<span class="was">现状:在目录上点一课会替他起一轮(<code>Runner.boardEvent</code> 的 <code>open</code>)。</span></td><td><span class="st now">现状</span></td></tr>
+      <tr><td class="n">O3</td><td><b>页由应用摆。</b>进门时直接铺到:家长填的「范围」那一课 → 上次的位置(B4)→ 目录。找课用现成的 <code>findLesson</code>,不靠老师 <code>[[翻]]</code>。<span class="was">现状:进来铺目录,老师照范围或孩子的话翻。</span></td><td><span class="st now">现状</span></td></tr>
+      <tr><td class="n">O4</td><td><b>不说话就安静。</b>字幕位空着,不闪、不出「说点什么吧」,老师也不催。孩子知道这一页是给他的,页本身就是提示(同「不加提示」的规矩)。</td><td><span class="st now">现状</span></td></tr>
+      <tr><td class="n">O5</td><td><b>老师第一轮看到的</b>和以后每一轮一样:孩子这句、<code>孩子做的</code>(进门以来)、<code>board:</code> 页此刻的样子、窗图(收图的页)、家长填的参数。上下文包不为第一轮另开一种。</td><td><span class="st now">现状</span></td></tr>
+      <tr><td class="n">O6</td><td><b>老师先说的开关。</b>activity 头上 <code>start: tutor</code>:进门照现在那样起一轮,老师先说。只有口语课写。没写就是孩子先说。名字见 Q1。</td><td><span class="st now">现状</span></td></tr>
+      <tr><td class="n">O7</td><td><b>提示词跟着改。</b>孩子先说的 activity,「老师怎么带」里的 <code>第一句:</code> 改成「孩子先开口」一段:他第一句多半是什么、怎么接。例子(<code>.例子.md</code>)第一句写孩子真会说的话,不再是按钮上的字。activity-eval 跟着改。</td><td><span class="st now">现状</span></td></tr>
+      <tr><td class="n">O8</td><td><b>首页「今天」</b>:进门那条不算开了头,开口(O2 那三种)才算。进来没开口就走了的话题不存(Q2):孩子端、家长端都没有,不记账;他翻到哪照记(B4,那是册的,不是话题的)。<span class="was">现状:翻到一课、在目录上点一课、拍照、老师摆了图形就算(<code>startsThread</code>)。</span></td><td><span class="st now">现状</span></td></tr>
+      <tr><td class="n">O9</td><td><b>不受影响的:</b>小课堂本来就是看完再问。听写、拍照听写不是对话。</td><td><span class="st now">现状</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="book">
+  <h2><span class="id">B</span>册</h2>
+  <p class="lead">页这一层已经统一了:照片页、练习册的页都换成课本的 <code>BookPage</code>(<code>photoBookPage</code>、<code>workbookBookPage</code>)。缺的是册这一层:目录、章、翻到哪。</p>
+
+  <h3>三种册</h3>
+  <div class="tbl"><table>
+    <thead><tr><th></th><th>课本</th><th>练习册</th><th>作业本</th></tr></thead>
+    <tbody>
+      <tr><td class="n">放在哪</td><td>vault <code>教材/</code> 下的 PDF</td><td>vault <code>练习册/&lt;名&gt;/</code>:<code>workbook.json</code> + 每页 PNG</td><td>vault <code>作业本/&lt;学科&gt;/&lt;日期&gt;/</code> 下的照片 <span class="st new">提议</span></td></tr>
+      <tr><td class="n">一章</td><td>一课(目录读出来的)</td><td><code>workbook.json</code> 新加的 <code>chapters</code>;没写就一页一章 <span class="st new">提议</span></td><td>一天</td></tr>
+      <tr><td class="n">目录</td><td>课本自己的目录页(现状)</td><td>生成的一页:章名一行一个</td><td>生成的一页:日期一行一个,带当天几张</td></tr>
+      <tr><td class="n">封面</td><td>PDF 第 1 页(B8)</td><td>第一页 PNG</td><td>生成:学科色 +「作业本」+ 最近一页的缩图</td></tr>
+      <tr><td class="n">给老师的字</td><td>文字层;数学加窗图</td><td>workbook.json 的题面、答案</td><td>照片上认出的字(现状)</td></tr>
+      <tr><td class="n">谁做的</td><td>家长从教育网站下载</td><td>家长让 Codex 照教材出(要补一篇教 agent 出册的文档)</td><td>孩子检查作业时拍的</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>顶栏</h3>
+  <div class="svgbox" role="img" aria-label="三种册共用的顶栏:左边回首页,中间章名点开是目录,右边上一章、下一章">
+    <svg viewBox="0 0 760 170" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,PingFang SC,sans-serif">
+      <rect x="0" y="0" width="760" height="170" rx="12" fill="#FFFFFF" stroke="#E5E1D8"/>
+      <rect x="0" y="0" width="760" height="52" rx="12" fill="#FAF9F6"/>
+      <line x1="0" y1="52" x2="760" y2="52" stroke="#E5E1D8"/>
+      <g fill="#4A4740" font-size="14">
+        <path d="M24 26 l8 -8 M24 26 l8 8" stroke="#4A4740" stroke-width="2" fill="none" stroke-linecap="round"/>
+        <text x="40" y="31">首页</text>
+        <text x="380" y="31" text-anchor="middle" font-weight="600" fill="#2B2B2B">20 雪孩子</text>
+        <path d="M430 22 l5 6 l5 -6" stroke="#8A8781" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+        <rect x="614" y="13" width="56" height="26" rx="13" fill="none" stroke="#C43C74"/>
+        <text x="642" y="31" text-anchor="middle" fill="#C43C74" font-size="13">上一课</text>
+        <rect x="680" y="13" width="56" height="26" rx="13" fill="#C43C74"/>
+        <text x="708" y="31" text-anchor="middle" fill="#FFFFFF" font-size="13">下一课</text>
+      </g>
+      <g font-family="Kaiti SC,STKaiti,KaiTi,serif" fill="#2B2B2B">
+        <text x="380" y="92" text-anchor="middle" font-size="22">雪孩子</text>
+        <rect x="120" y="108" width="520" height="8" rx="4" fill="#EDEAE3"/>
+        <rect x="120" y="126" width="480" height="8" rx="4" fill="#EDEAE3"/>
+        <rect x="120" y="144" width="500" height="8" rx="4" fill="#EDEAE3"/>
+      </g>
+      <g font-size="11.5" fill="#B4531F" font-family="SF Mono,Menlo,monospace">
+        <text x="40" y="66">回首页</text>
+        <text x="448" y="30">点开 = 目录</text>
+      </g>
+    </svg>
+  </div>
+  <p class="cap">按钮上的字跟着册走:课本「上一课 / 下一课」,练习册「上一节 / 下一节」,作业本「前一天 / 后一天」。这里只定有哪几样、在哪;样子在首页和课本页的设计稿上画。</p>
+
+  <h3>规则</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>编号</th><th>规则</th><th>状态</th></tr></thead>
+    <tbody>
+      <tr><td class="n">B1</td><td><b>一章铺一段,章里上下滚,不整册连着滚。</b>老师的「看」、窗图、上下文包里的页都是照「一课几页」做的,整册铺开包会撑爆。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">B2</td><td><b>顶栏三样:</b>回首页、章名(点开目录)、上一章 / 下一章。到头的那颗不显示。目录页上只有回首页和「目录」两个字。<span class="was">现状:课本一课里顶栏有「目录」(<code>#st-toc</code>);练习册、照片页没有。</span></td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">B3</td><td><b>翻章是孩子自己的事:</b>不叫老师(O2),记进板的日志,下一轮「孩子做的」说「自己翻到了《…》」。老师照旧能 <code>[[翻 …]]</code>,能跨章(<code>[[翻 11月20日]]</code> 翻作业本那天)。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">B4</td><td><b>记住位置。</b>每册记 <code>{章, 页, 页里滚到哪(比例), 时间}</code>,孩子翻的、老师翻的都算,目录不算。进门直接铺到那里(O3 的第二档)。第一次进来:课本铺目录,练习册铺第一章,作业本铺今天。<span class="was">现状:<code>.cotutor/book-last.json</code> 只记课本的课名,进来停在目录那一行。</span></td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">B5</td><td><b>位置存在哪。</b>还是 <code>.cotutor/book-last.json</code>,键:课本照文件名(现状),练习册 <code>练习册#&lt;名&gt;</code>,作业本 <code>作业本#&lt;学科&gt;</code>。旧的只有课名的记录读进来当「那一课第 1 页顶上」。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">B6</td><td><b>作业本按天攒。</b>检查作业拍的照片接在今天那章后面,跨话题;存进 vault,不再只在话题旁边。今天的话题铺今天这章,往前翻能看以前几天。一天几张不限(Q4)。以前几天的页上留着那天最后的记号(Q5)。<span class="was">现状:一个话题最多 6 张(<code>PAGE_PHOTOS_MAX</code>),话题结束就散了。</span></td><td><span class="st ok">已定</span></td></tr>
+      <tr><td class="n">B7</td><td><b>导出 PDF。</b>家长端作业本那里选日期,一张照片一页(A4 竖,照片照比例放),先只有原照片。照片本来是 JPEG,直接嵌进 PDF,不加运行时依赖。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">B8</td><td><b>课本封面。</b>服务端只读文字层,画不出图。舞台第一次打开这本书时画 PDF 第 1 页,长边 480 的 jpeg 传回来存 <code>.cotutor/covers/&lt;指纹&gt;.jpg</code>(同首页预览图那条路)。还没有就用学科色加书名的占位。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">B9</td><td><b>Codex 出练习册</b>有一篇文档可照:目录结构、坐标(千分比)、题框、能写的格子、答案、<code>chapters</code>。<span class="was">现状:格式在 <code>src/schema/workbook.ts</code>,只有给开发者的 <code>docs/dev/练习册.md</code>。</span></td><td><span class="st new">提议</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="textbook">
+  <h2><span class="id">C</span>课本 activity</h2>
+  <p class="lead">语文、数学的预习和复习合成一个「课本」。是预习还是复习,孩子先开口时自己就说了。</p>
+  <div class="tbl"><table>
+    <thead><tr><th>编号</th><th>规则</th><th>状态</th></tr></thead>
+    <tbody>
+      <tr><td class="n">C1</td><td><b>语文、数学各一个</b> <code>课本.md</code>(<code>base: textbook</code>),替掉 <code>预习.md</code>、<code>复习.md</code>。英语没有,英语的预习、复习照旧。</td><td><span class="st ok">已定</span></td></tr>
+      <tr><td class="n">C2</td><td><b>没有课本就不出砖。</b>vault 里没有这一科这学期的课本,老师牌上不出「课本」,家长端首页和 doctor 说一句去哪下载、放哪。<span class="was">现状:砖照出,进来没课本就收起舞台。</span></td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">C3</td><td><b>老师怎么分预习、复习:</b>看孩子说的,看这一课在档案、课程表里学没学过,看家长填的「重点」。「老师怎么带」只有一份,里面预习、复习各一段带法。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">C4</td><td><b>方砖表</b> <code>HOME_TILES</code> 加 <code>textbook</code>(课本)。<code>preview</code>、<code>review</code> 留给英语:语文、数学家里没有那两个文件,砖自然不出。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">C5</td><td><b>旧文件。</b>没改过的 <code>预习.md</code>、<code>复习.md</code>(语文、数学)refresh 删掉;改过的留着,报一句「出厂已经合成『课本』」。两个合成一个不是改名,不进 <code>ACTIVITY_RENAMES</code>。以前的话题照看。</td><td><span class="st new">提议</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="home">
+  <h2><span class="id">H</span>首页的卡</h2>
+  <p class="lead">这里只定规矩。样子在首页设计稿上改,看过再写代码。</p>
+  <div class="tbl"><table>
+    <thead><tr><th>编号</th><th>规则</th><th>状态</th></tr></thead>
+    <tbody>
+      <tr><td class="n">H1</td><td><b>左页的卡都改竖版</b>,照课本的比例(185×260 毫米,约 5:7)。<span class="was">现状:框高是格宽的 3/4,横的(<code>cards/tutor/card.css</code>)。</span></td><td><span class="st ok">已定</span></td></tr>
+      <tr><td class="n">H2</td><td><b>册的卡用封面</b>(B1 那张表),卡下面照旧是序号和名字。</td><td><span class="st ok">已定</span></td></tr>
+      <tr><td class="n">H3</td><td><b>不是册的</b>(听写、小课堂、口语课、看图说话)画竖版的图,和封面并排不跳。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">H4</td><td><b>一行几张、几排</b>,设计稿上定。合并以后一位老师大约五六张:课本、作业本、练习册、听写、小课堂(英语加口语课)。</td><td><span class="st tbd">待定</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="q">
+  <h2><span class="id">Q</span>待讨论</h2>
+  <p class="lead">每条写了几个选项,推荐的那个标在前面。</p>
+  <div class="qs">
+    <div class="q"><h4><span class="st ok">已定</span> <span class="rid">Q1</span>老师先说的开关叫什么</h4><ul>
+      <li class="rec"><b>定了</b> <code>start: tutor</code>:说的是谁起头。</li>
+      <li><code>open: tutor</code>:和 <code>listen: open</code>(一直听)撞了词,读的人容易混。</li>
+    </ul></div>
+    <div class="q"><h4><span class="st ok">已定</span> <span class="rid">Q2</span>进来没开口就走了,这个话题怎么办</h4><ul>
+      <li><b>不存。</b>孩子端、家长端都没有这个话题,不记账。翻到哪照记(B4)。</li>
+    </ul></div>
+    <div class="q"><h4><span class="st ok">已定</span> <span class="rid">Q3</span>进门怎么记(Q2 定了不存以后)</h4><ul>
+      <li class="rec"><b>定了</b> 照样记一条「进门」消息,话题一进来就有,翻页、写格子存在服务端,刷新不丢。没开口就走的删掉:点回首页时页面发一次删除;关了标签页、切走 App 的,下次进门或服务起来时把今天只有「进门」的话题扫掉。删之前,不开口的话题在哪儿都当没有(今天、家长端、记账、录像)。</li>
+      <li>推迟到开口才建话题,之前翻的、写的先存在页面里,开口时一起交。天然不存、不用删,但刷新就丢,开口前写的格子、翻页、点读要一次补交给服务端重放,要改的地方更多。</li>
+    </ul></div>
+    <div class="q"><h4><span class="st ok">已定</span> <span class="rid">Q4</span>作业本一天最多几张</h4><ul>
+      <li><b>不限。</b>一个话题最多 6 张(<code>PAGE_PHOTOS_MAX</code>)也去掉。张数多了 iPad 吃力,到时候再改舞台(比如只画窗口附近的几张)。</li>
+    </ul></div>
+    <div class="q"><h4><span class="st ok">已定</span> <span class="rid">Q5</span>翻回以前几天,页上有没有那天老师的圈、孩子的笔</h4><ul>
+      <li><b>有,留着最后的样子。</b>每张照片属于拍它的那个检查作业话题;翻回去,铺那个话题结束时这张照片上的全部记号:老师的圈、划、点、盖,孩子的笔、写进格子的字、白纸条上摆的图形,原样不动。</li>
+      <li>以前的记号只看不改:擦不掉,也不再变旧、不再收。</li>
+      <li>今天在以前的照片上再写、老师今天又圈的,记在今天的话题里,叠在那天的上面;今天的话题结束以后,这张照片「最后的样子」就是今天的。</li>
+    </ul></div>
+    <div class="q"><h4><span class="st ok">已定</span> <span class="rid">Q6</span>章底要不要一条「下一课《…》」</h4><ul>
+      <li class="rec"><b>定了</b> 要,章的最后一页下面一行安静的字,点了同顶栏的下一章。滚到底的孩子手就在那儿。</li>
+      <li>不要,只有顶栏。</li>
+    </ul></div>
+  </div>
+</section>
+
+<section id="plan">
+  <h2><span class="id">→</span>先后与影响面</h2>
+  <p class="lead">一步一提交,每步都能单独用。</p>
+  <div class="tbl"><table>
+    <thead><tr><th>步</th><th>做什么</th><th>主要动的</th><th>先过的测试</th></tr></thead>
+    <tbody>
+      <tr><td class="n">1 ✓</td><td>孩子先开口(O1–O8,2026-11-23 做完,规矩在 <code>docs/dev/首页与听写.md</code>)</td><td>kid-page 的 <code>openTutor</code>、<code>kid-input.ts</code>、<code>runner.send</code> 与 <code>boardEvent</code>、<code>kid-view.ts</code> 的 <code>startsThread</code>、<code>live/call.ts</code> 的 open 那一轮、<code>schema/activity.ts</code> 的 <code>start</code>、全部 activity 与例子、<code>activity-eval</code></td><td>activity、live-board、live-flow、kid-view、mock、probe</td></tr>
+      <tr><td class="n">2</td><td>册与记住位置(B1–B5)</td><td><code>book-last.ts</code>、<code>lesson-fit.ts</code> 的 <code>lessonOpen</code>、kid-page 的 <code>BP</code> 顶栏、<code>book.tsx</code>、<code>schema/workbook.ts</code> 的 <code>chapters</code></td><td>textbook、board-book、workbook-page、probe-book-page</td></tr>
+      <tr><td class="n">3</td><td>课本合并(C1–C5)</td><td><code>grades/grade-2/agents/{chinese,math}-tutor/activities/</code>、<code>HOME_TILES</code>、refresh 退役、方砖的图</td><td>activity、grades、cards</td></tr>
+      <tr><td class="n">4</td><td>作业本与导出(B6、B7)</td><td>照片落 vault、照片页按天成章、家长端导出路由</td><td>photo-words、strip、新加的导出测试</td></tr>
+      <tr><td class="n">5</td><td>首页竖版卡与封面(B8、H1–H4)</td><td>先改首页设计稿;再 <code>cards/tutor/card.css</code>、<code>home-tiles.ts</code>、封面回传</td><td>mock、probe</td></tr>
+    </tbody>
+  </table></div>
+</section>
+</div>

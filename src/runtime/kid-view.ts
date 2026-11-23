@@ -7,7 +7,7 @@
 import { type ActivityBase, type Bookkeeping, type ConversationMessage, type LessonAct, type LineAct } from '../schema/index.ts';
 import { BOOK_TOC } from '../chalk/index.ts';
 import { parseBoard } from '../board/parse.ts';
-import { threads } from '../schema/index.ts';
+import { threads, viaSendsLabel } from '../schema/index.ts';
 import type { BoardSection, KidLecture } from '../board/presentation.ts';
 import { parseSections } from '../board/sections.ts';
 import type { Transcript } from '../brain/transcript.ts';
@@ -211,11 +211,11 @@ const lessonOf = (s: SectionLike | null | undefined): string | null => {
 };
 
 /**
- * 这一轮让话题开了头没有(2026-11-15,Jack):有孩子参与的图出现了——孩子发了照片;课本翻到了一课(老师翻的、孩子在目录上点的;目录不算)、
- * 白纸条上摆了图形。只说话、只铺了目录的不算开头:孩子端不列(首页「今天」),记录照存,家长照看。
+ * 这一条让话题开了头没有:孩子开了口——说了话、拍照交上来、按「给老师看」(进门那条、首页按钮发出去的字都不算;孩子先说,2026-11-23);
+ * 老师先说的(start: tutor)和以前的记录里,还有老师翻到了一课(目录不算)、白纸条上摆了图形。没开头的孩子端不列(首页「今天」)。
  */
-export function startsThread(m: { from: ConversationMessage['from']; photos?: readonly string[]; open?: string; section?: SectionLike | null }): boolean {
-  if (m.from === 'kid' && (m.photos?.length || m.open)) return true;
+export function startsThread(m: { from: ConversationMessage['from']; text: string; photos?: readonly string[]; action?: string; enter?: true; via?: ConversationMessage['via']; section?: SectionLike | null }): boolean {
+  if (m.from === 'kid' && !m.enter && (m.photos?.length || m.action || !(m.via && viaSendsLabel(m.via) && m.text.trim() === m.via.label.trim()))) return true;
   return Boolean(lessonOf(m.section)) || doneActs(m.section).some((a) => a.k === '摆');
 }
 
@@ -234,11 +234,10 @@ export function startedThreads(messages: readonly ConversationMessage[]): KidTod
     }
     if (m.bookkeep || m.tidy) return;
     if (m.at > e.t.at) e.t.at = m.at;
-    if (m.from === 'kid' && m.text.trim()) e.said.push(m.text.replace(/\s+/g, ' ').trim());
+    if (m.from === 'kid' && !m.enter && m.text.trim()) e.said.push(m.text.replace(/\s+/g, ' ').trim());
     if (m.from === 'kid' && m.photos?.length) e.t.photo = m.photos[m.photos.length - 1];
     if (startsThread(m)) e.started = true;
-    // 孩子在目录上点的在前,这一轮老师又翻的在后
-    const lesson = lessonOf(m.section) ?? (m.from === 'kid' ? m.open : undefined);
+    const lesson = lessonOf(m.section);
     if (lesson) e.t.lesson = lesson;
   });
   const out: KidTodayThread[] = [];

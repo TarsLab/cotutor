@@ -115,12 +115,11 @@ export class Turns {
     this.deps.timer(poll);
   }
 
-  /** 脑忙时孩子说的几句:合并成一条(话题等照最后一句的;中间在目录上点过一课的带最后点的那一课),发 */
+  /** 脑忙时孩子说的几句:合并成一条(话题等照最后一句的),发 */
   private flushWaiting(): void {
     if (this.deps.ended() || this.running || !this.waiting.length) return;
     const all = this.waiting.splice(0);
     const last = all[all.length - 1];
-    const open = [...all].reverse().find((b) => typeof b.open === 'string')?.open;
-    void this.dispatch({ ...last, ...(open ? { open } : {}), text: all.map((b) => String(b.text ?? '').trim()).filter(Boolean).join('\n') });
+    void this.dispatch({ ...last, text: all.map((b) => String(b.text ?? '').trim()).filter(Boolean).join('\n') });
   }
 }

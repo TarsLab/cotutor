@@ -764,8 +764,8 @@ ${BOARD_MARK_JS}
 
   // ---- 状态 ----
   /** 铺页的话题:on = 这个话题的页面是板;base = 现在的底(照片路径,null 白板,undefined 还没定);label = 方砖上的字(不拍照直接开始时发它);workbook = 首页按钮挂的那一册练习册 */
-  const BP = { on: false, base: null, label: '', books: [], toc: null, workbook: null };
-  const S = { home: null, tutor: null, day: null, sections: [], played: new Set(), state: { section: -1, line: -1, status: 'idle' }, pending: false, waitSince: null, offline: false, bar: 'idle', pollTimer: null, stage: null, partial: null, thread: null, threadAt: null, hist: null, readonly: false, newThread: false, device: 'phone', via: null, cont: null, ask: null, reel: null, pendSaid: null, homeDraw: true, autoOpened: new Set() };
+  const BP = { on: false, base: null, label: '', books: [], toc: null, workbook: null, start: null };
+  const S = { home: null, tutor: null, day: null, sections: [], played: new Set(), state: { section: -1, line: -1, status: 'idle' }, pending: false, waitSince: null, offline: false, bar: 'idle', pollTimer: null, stage: null, partial: null, thread: null, threadAt: null, hist: null, readonly: false, newThread: false, device: 'phone', via: null, door: null, cont: null, ask: null, reel: null, pendSaid: null, homeDraw: true, autoOpened: new Set() };
   // 实时的老师这一次(连、发、收、画在下面「实时的老师」那一块):on = 这位老师这一次走实时(左栏的样子);ready = 嘴连上了;
   // model = liveStep 的状态(只在 liveDispatch 里写);cap = 字幕(上一句、在说的、被打断的那句);heard = 每一轮(job)念到第几句
   /** 试用:打的字配成声音正推着(feeding:麦克风那路不推);wait = 推的这会儿等服务端的哪条消息(liveMsg 先给它看) */
@@ -803,11 +803,13 @@ ${BOARD_MARK_JS}
     // activity 头上写了 listen: open:进去就一直听
     const look = b.listen === 'open' ? { listen: 'open' } : {};
     // 每个按钮进去都是新话题;今天聊过的在首页「今天」那一行接。按钮只有 activity(含方砖,start)和小课堂
-    // 铺课本的 activity(预习):不拍照,直接开话题、铺课本的目录;铺练习册的(做练习册):同样不拍照,先铺按钮挂的那一册
-    if (b.kind === 'start' && (b.base === 'textbook' || b.base === 'workbook')) openTutor(t, { kind: 'new', via, base: b.base, label: b.label, send: b.label, ...(b.workbook ? { workbook: b.workbook } : {}), ...look });
-    // 铺作业照片的 activity(检查作业、复习):先到拍照屏,带着照片(或白纸)开话题
-    else if (b.kind === 'start' && b.base === 'photo') openTutor(t, { kind: 'new', via, base: 'photo', label: b.label, ...look });
-    else if (b.kind === 'start') openTutor(t, { kind: 'new', via, send: b.label, ...look });
+    // 孩子先说:进门(enter)只铺页、不叫老师,孩子开口才是第一轮;activity 头上写了 start: tutor 的老师先说,照旧把按钮上的字发出去
+    const first = b.start === 'tutor' ? { send: b.label } : { enter: true };
+    // 铺课本的 activity:不拍照,进门铺课本(范围那一课、上次翻到的那一课或目录);铺练习册的:同样不拍照,先铺按钮挂的那一册
+    if (b.kind === 'start' && (b.base === 'textbook' || b.base === 'workbook')) openTutor(t, { kind: 'new', via, base: b.base, label: b.label, ...first, ...(b.workbook ? { workbook: b.workbook } : {}), ...look });
+    // 铺作业照片的 activity(检查作业、复习):先到拍照屏,带着照片开话题(拍照交上来就是开口);用白纸也是进门
+    else if (b.kind === 'start' && b.base === 'photo') openTutor(t, { kind: 'new', via, base: 'photo', label: b.label, ...(b.start === 'tutor' ? { start: 'tutor' } : {}), ...look });
+    else if (b.kind === 'start') openTutor(t, { kind: 'new', via, ...first, ...look });
     // 小课堂:新话题,页上先铺那堂课;看完才能开口,开口那条带上 via 与看的情况。看完照着聊的 activity 是铺作业照片的(看图说话),顶栏有拍照
     else if (b.kind === 'lecture') openTutor(t, { kind: 'new', via, base: b.base || 'lecture', label: b.label, lecture: { bundle: b.bundle, title: b.title || b.label, ms: b.ms || 0, ...(b.video ? { video: true } : {}) }, ...look });
   };
@@ -848,7 +850,7 @@ ${BOARD_MARK_JS}
   };
   // ---- 常驻的三块方砖(预习、检查作业、复习;服务端照老师家里的 activity 文件给,src/ui/kid/home-tiles.ts):牌上第一行;点了和 activity 按钮一样 ----
 ${HOME_TILES_JS}
-  const tileButton = (t, x) => h('button', { type: 'button', class: 'bt bt-tile', 'data-tile': x.id, style: '--sc:' + colorOf(t), on: { click: () => pickButton(t, { id: x.id, kind: 'start', label: x.label, base: x.base, listen: x.listen }) } },
+  const tileButton = (t, x) => h('button', { type: 'button', class: 'bt bt-tile', 'data-tile': x.id, style: '--sc:' + colorOf(t), on: { click: () => pickButton(t, { id: x.id, kind: 'start', label: x.label, base: x.base, listen: x.listen, start: x.start }) } },
     h('span', { class: 'ta', html: tileArt(t.mark, x.id) }), h('span', { class: 'btx' }, x.label));
   /** 牌上的卡排成一张网格:方砖、家长排的(照他排的先后)、常驻的听写与拍照听写 */
   const cardGrid = (t, tiles, buttons, extras) => h('div', { class: 'tls' }, ...(Array.isArray(tiles) ? tiles : []).map((x) => tileButton(t, x)), ...buttons.map((b) => tutorButton(t, b)), ...extras);
@@ -1085,7 +1087,7 @@ ${HOME_TILES_JS}
   // ---- 老师页 ----
   /**
    * intent(首页的按钮定的):new = 按钮开的新话题(activity、方砖、小课堂);thread = 今天的那个话题(首页「今天」);today = 今天的当前话题(调试入口 ?tutor=)。
-   * via = 哪个按钮(下一条消息带上);send = 打开就发出去的字(activity 按钮上的字)
+   * via = 哪个按钮(下一条消息带上);send = 打开就发出去的字(老师先说的 activity:按钮上的字);enter = 孩子先说:进门(服务端记下、铺好页,不叫老师)
    */
   const openTutor = (t, intent) => {
     unlock();
@@ -1093,7 +1095,7 @@ ${HOME_TILES_JS}
     S.tutor = t; S.sections = []; S.played = new Set(); dispatch({ type: 'reset' }); S.pending = false; S.stage = null; S.partial = null; $('#stage').classList.remove('on', 'cv');
     S.thread = intent.kind === 'thread' ? intent.thread : null; S.threadAt = null; S.hist = null; S.readonly = false; S.newThread = intent.kind === 'new';
     S.via = intent.via || null; S.lecture = intent.lecture ? { ...intent.lecture, watch: null, sent: false, marks: [], done: [], log: [] } : null;
-    BP.on = Boolean(intent.base); BP.base = intent.base || null; BP.label = intent.label || ''; BP.toc = null; BP.workbook = intent.workbook || null; lsReset();
+    BP.on = Boolean(intent.base); BP.base = intent.base || null; BP.label = intent.label || ''; BP.toc = null; BP.workbook = intent.workbook || null; BP.start = intent.start || null; S.door = null; lsReset();
     if (BP.base === 'photo') bpBooks();
     // 先定走不走实时,再热麦克风:实时时麦克风的自检要开在实时那个 AudioContext 里(liveOpen)
     if (liveWanted(t)) liveOpen(intent); else liveClose();
@@ -1102,11 +1104,13 @@ ${HOME_TILES_JS}
     $('#board').replaceChildren();
     // 小课堂:页上先铺那堂课(服务端收到第一条时照同样的规矩铺)
     if (S.lecture) lsStart(lessonStep(lessonInit(), { t: 'act', act: { k: '翻', page: lcPage(S.lecture) } }));
+    // 进门:舞台先铺上(不露空的老师页),服务端记下、铺好页再照它铺
+    else if ((BP.base === 'textbook' || BP.base === 'workbook') && intent.enter) lsOpenStage();
     else if (BP.base === 'textbook' || BP.base === 'workbook') bpOpenLesson();
     else if (BP.base === 'photo') $('#board').append(bpStartBoard());
     $('#tutor').classList.add('on'); pageTheme(false);
     setBar('idle');
-    loadDay(true).then(() => { if (intent.send) send(intent.send); });
+    loadDay(true).then(() => { if (intent.send) send(intent.send); else if (intent.enter) bpEnter(0); });
     viewKey = ''; viewNote();
   };
   /** 空板挂上老师要说的(开场那句 big、下面一行 small、选择 acts:{cls, icon, k 上面的小字, s 大字, sub 下面的小字, tm 时刻, id, go}) */
@@ -1162,6 +1166,26 @@ ${HOME_TILES_JS}
   $('#tbk-x').addEventListener('click', () => $('#tbk').classList.remove('on'));
   $('#st-tb').innerHTML = ICON.album + '<span>课本</span>';
   $('#st-tb').addEventListener('click', tbkOpen);
+  /**
+   * 进门(孩子先说):服务端记一条「进门」、铺好页,回话题 id;之后孩子说的、拍的、按「给老师看」都接着这个话题,第一条才叫老师。
+   * 老师还在回上一条(409)隔一会儿再进;进门回来之前孩子已经开口开了话题的,就用那个(进门那个没开口,下次进门扫掉)
+   */
+  const bpEnter = (tries) => {
+    const t = S.tutor;
+    if (!t || !S.newThread || !S.via) return;
+    api('POST', '/api/kid/enter?tutor=' + encodeURIComponent(t.name), { via: S.via, device: S.device }).then((j) => {
+      if (S.tutor !== t || !S.newThread || !j || !j.thread) return;
+      S.thread = j.thread; S.door = j.thread; S.newThread = false; S.via = null;
+      if (BP.on && BP.base !== 'photo') bpOpenLesson(true);
+      loadDay(false);
+    }, (e) => { if (S.tutor === t && e && e.status === 409 && tries < 30) setTimeout(() => bpEnter(tries + 1), 1000); });
+  };
+  /** 点回首页:这次进的门孩子没开口,就不存(服务端只删只进了门的话题) */
+  const bpLeave = () => {
+    const t = S.tutor, th = S.door;
+    S.door = null;
+    if (t && th) api('POST', '/api/kid/leave?tutor=' + encodeURIComponent(t.name), { thread: th }).catch(() => {});
+  };
   /** 拍照 / 相册:一个现做的 file input(和输入条的相机同一套 wireFile),拍完进发照片屏;发出去时铺上照片页(ps-go) */
   const bpPick = (camera) => {
     if (!S.tutor || S.pending || S.readonly) return;
@@ -1172,11 +1196,11 @@ ${HOME_TILES_JS}
     document.body.append(f);
     f.click();
   };
-  /** 不拍:发方砖上的字开话题,铺一张白纸页(服务端收到没带照片的第一条也铺白纸,两边一样) */
+  /** 不拍:铺一张白纸页,进门等孩子先说(服务端进门时也铺白纸,两边一样);老师先说的(start: tutor)照旧发方砖上的字开话题 */
   const bpWhite = () => {
     if (!S.tutor || S.pending || !canSend()) return;
     const b = $('#board .blank'); if (b) b.remove();
-    send(BP.label || '开始');
+    if (BP.start === 'tutor') send(BP.label || '开始'); else bpEnter(0);
     lsStart(lessonStep(lessonInit(), { t: 'act', act: { k: '翻', page: { id: '白纸', kind: 'white', title: '白纸', pick: false } } }));
   };
   /** 孩子拍来了几张(上传时服务端回了宽高):先落在自己这一份上,接在照片页后面——不等老师(服务端收到这一条时照同样的规矩铺) */
@@ -1192,14 +1216,14 @@ ${HOME_TILES_JS}
   /** 进一节课:回到的(有话题)照服务端记的;新开的课本铺目录,作业照片等孩子拍(拍照屏)。
    *  课本、回到的课:舞台先铺上再去要(不先露一下空的老师页;iframe 和这一问一起装),要回来没有课再收起。
    *  课本做底的(回到的也是)一起要目录上能点的那几项(BP.toc:点了铺哪一页、印在哪一行),拿到了再铺;
-   *  练习册:新开的照按钮挂的那一册(BP.workbook)先铺上,不等老师 */
-  const bpOpenLesson = () => {
+   *  练习册:新开的照按钮挂的那一册(BP.workbook)先铺上,不等老师。opened = 舞台是进门时先铺开的(要回来没有课一样收起) */
+  const bpOpenLesson = (opened) => {
     const name = S.tutor && S.tutor.name;
     if (!name || LS.asking) return;
     LS.asking = true;
     const q = S.thread && S.day && S.day.date ? '/api/kid/lesson?tutor=' + encodeURIComponent(name) + '&date=' + encodeURIComponent(S.day.date) + '&thread=' + encodeURIComponent(S.thread) : null;
-    const early = (q || BP.base === 'textbook' || (BP.base === 'workbook' && BP.workbook)) && !S.stage;
-    if (early) lsOpenStage();
+    const early = Boolean(opened) || ((q || BP.base === 'textbook' || (BP.base === 'workbook' && BP.workbook)) && !S.stage);
+    if (early && !S.stage) lsOpenStage();
     const open = (l) => {
       LS.asking = false;
       if (!S.tutor || S.tutor.name !== name || !BP.on) return;
@@ -1364,7 +1388,7 @@ ${HOME_TILES_JS}
     if (m.type === 'cell' && typeof m.id === 'string' && Array.isArray(m.strokes)) { const model = typeof m.model === 'string' ? m.model : ''; lsKid({ t: 'cell', id: m.id, strokes: m.strokes }, { k: 'cell', id: m.id, strokes: m.strokes, ...(model ? { text: model } : {}), ...(m.blank === true ? { blank: true } : {}) }); previewSoon(PV_HAND_MS); return; }
     if (m.type === 'pickAt') { if (!$('#st-pick').hidden) { if (Array.isArray(m.at)) pickPlace(m.at); else pickHide(true); } return; }
     if (m.type === 'pick') { pickShow(m.text, Array.isArray(m.at) ? m.at : null); lsKid({ t: 'pick', text: String(m.text || '') }, { k: 'pick', text: m.text }); return; }
-    // 目录上点了一项:自己先翻过去,再报给服务端(它照样翻、替他起一轮让老师接着讲);还没有话题(老师第一句还没开始)的不翻
+    // 目录上点了一项:自己先翻过去,再报给服务端(它照样翻、记下,不叫老师);还没进门(话题还没有)的不翻
     if (m.type === 'open') { const e = BP.toc && S.thread ? BP.toc.entries.find((x) => x.title === m.title) : null; if (e) { pickHide(); lsKid({ t: 'act', act: { k: '翻', page: e.page } }, { k: 'open', title: e.title }); } return; }
     // 点了标题、段首的钮:点读
     if (m.type === 'read') { pickHide(); readTap(m); return; }
@@ -1420,7 +1444,7 @@ ${HOME_TILES_JS}
   new MutationObserver(openSync).observe($('#board'), { childList: true });
   /** 浏览器的主题色跟着这一页的底色:首页桌面色,老师页纸色 */
   const pageTheme = (home) => { const m = document.querySelector('meta[name="theme-color"]'); if (m) m.content = home ? '#ebe4d4' : '#faf9f4'; };
-  const closeTutor = () => { clearTimeout(PV.timer); liveDispatch({ type: 'reset' }); liveClose(); S.lecture = null; reelStop(); clearTimeout(S.pollTimer); dispatch({ type: 'halt' }); psClose(); S.tutor = null; S.via = null;  S.ask = null; BP.on = false; BP.base = null; BP.toc = null; lsReset(); $('#tutor').classList.remove('on'); pageTheme(true); document.body.classList.remove('pending', 'speaking'); S.homeDraw = true; loadHome(); };
+  const closeTutor = () => { bpLeave(); clearTimeout(PV.timer); liveDispatch({ type: 'reset' }); liveClose(); S.lecture = null; reelStop(); clearTimeout(S.pollTimer); dispatch({ type: 'halt' }); psClose(); S.tutor = null; S.via = null;  S.ask = null; BP.on = false; BP.base = null; BP.toc = null; lsReset(); $('#tutor').classList.remove('on'); pageTheme(true); document.body.classList.remove('pending', 'speaking'); S.homeDraw = true; loadHome(); };
   $('#back').addEventListener('click', closeTutor);
   $('#back-ic').innerHTML = ICON.back;
 

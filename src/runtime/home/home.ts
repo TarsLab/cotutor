@@ -273,9 +273,10 @@ export interface KidHomeTile {
 }
 
 /** activity 头上孩子端进去前就要知道的:铺哪种页、一直听不听(方砖、activity 按钮、小课堂按钮都带) */
-export interface ActivityLook { base?: ActivityBase; listen?: 'open' }
+/** activity 头上孩子端要知道的:铺哪种页、一直听、老师先说(start: tutor;没有 = 孩子先说,进门不叫老师) */
+export interface ActivityLook { base?: ActivityBase; listen?: 'open'; start?: 'tutor' }
 /** activity 文件头 → 孩子端要的那两样 */
-export const activityLook = (a: { base?: string; listen?: string } | null | undefined): ActivityLook => ({ ...(a?.base === 'textbook' || a?.base === 'photo' || a?.base === 'lecture' || a?.base === 'workbook' ? { base: a.base } : {}), ...(a?.listen === 'open' ? { listen: 'open' as const } : {}) });
+export const activityLook = (a: { base?: string; listen?: string; start?: string } | null | undefined): ActivityLook => ({ ...(a?.base === 'textbook' || a?.base === 'photo' || a?.base === 'lecture' || a?.base === 'workbook' ? { base: a.base } : {}), ...(a?.listen === 'open' ? { listen: 'open' as const } : {}), ...(a?.start === 'tutor' ? { start: 'tutor' as const } : {}) });
 
 /** 这位老师牌上的方砖:开着的(on,牌上的先后)里,家里那个 activity 用得了的才出 */
 export function kidTiles(on: readonly HomeTileId[], opts: { usable: (activity: string) => boolean; looks?: ReadonlyMap<string, ActivityLook> }): KidHomeTile[] {

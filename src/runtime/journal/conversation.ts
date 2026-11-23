@@ -7,7 +7,7 @@ import type { Transcript } from '../../brain/transcript.ts';
 
 const pad = (n: number): string => String(n).padStart(2, '0');
 
-/** HHMM-<序号>,同一天内不重复 */
+/** HHMM-<序号>,同一天里和现有的不重复(删掉的话题的号可能再用上:它的文件按 <日期>.<job>.* 一起删了) */
 export function jobId(d: Date, seq: number): string {
   return `${pad(d.getHours())}${pad(d.getMinutes())}-${seq}`;
 }

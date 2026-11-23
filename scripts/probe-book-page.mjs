@@ -2,7 +2,7 @@
 /**
  * 课本做底的孩子端整条线(语文预习,activity 头上 base: textbook)手动验收:不进 pnpm test,要本机 Chrome 和一本课本 PDF;假百炼 + 假老师,不花钱。
  * 本进程起服务(临时 workspace,vault 的 教材/ 里放一条指向给的 PDF 的链接;老师是 tests/_fake-teacher.ts,嘴是 tests/_fake-realtime.ts),无头 Chrome 开孩子端:
- *  一、首页点语文的「预习」方砖:不到拍照屏,直接上板,板上是课本的目录(舞台 book.tsx 铺好两页);板的顶栏没有拍照、相册。
+ *  一、首页点语文的「预习」方砖:不到拍照屏,直接上板,板上是课本的目录(舞台 book.tsx 铺好两页);板的顶栏没有拍照、相册;只进门(记一条进门),老师不开口。
  *  二、孩子说「我要预习坐井观天」:老师的课本卡落下,板换成这一课(两页),窗对着第 6–7 段,「井沿」圈上了。
  *  三、手指点板上的一个字:田字格浮出来;经实时那条连接报 {k:'pick', base:'<册子>#坐井观天'};服务端记进板的日志。
  *  四、手指拖着往下看:报 {k:'view', box};服务端说成一句(「第 55 页:…」)记进板的日志。
@@ -10,7 +10,7 @@
  *  六、笔画一道:「擦掉」贴着屏幕边出现、「给老师看」出现;擦掉了都收起。
  *  七、顶栏「目录」:翻回目录,窗停在《坐井观天》那一行(中间);报 {k:'open', title:'目录'};目录上点字不弹田字格。
  *  八、鼠标移到《寒号鸟》那一行:浅浅铺上它的范围;拖着滚不算点。
- *  九、按下窗里的一项:按着的那一行深一点;松手翻到那一课、报 {k:'open'},老师接着讲一轮(消息带 open)。
+ *  九、按下窗里的一项:按着的那一行深一点;松手翻到那一课、报 {k:'open'},不叫老师(下一轮「孩子做的」带上)。
  * iPad 横屏各截一张。
  * 用法:node scripts/probe-book-page.mjs --pdf <课本 PDF> [--out <截图目录>]
  */
@@ -126,7 +126,10 @@ try {
 
   // 一、首页点语文的「预习」
   await send('Page.navigate', { url: `${base}/` });
-  const tile = await until(`(() => { const b = [...document.querySelectorAll('.bt-tile[data-tile="preview"]')].find((x) => x.closest('[data-tutor], .card, section')?.textContent.includes('语文')) ?? null; if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+  // 首页一位老师一章:先点语文老师的小旗翻到那一章
+  const flag = await until(`(() => { const b = document.querySelector('.tab[data-tutor="${T}"]'); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+  if (flag) { await tapAt(flag.x, flag.y); await sleep(600); }
+  const tile = await until(`(() => { const b = document.querySelector('.pc[data-tutor="${T}"] .bt-tile[data-tile="preview"]'); if (!b) return null; const r = b.getBoundingClientRect(); return r.width ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null; })()`);
   ok('首页有语文的「预习」方砖', Boolean(tile));
   await tapAt(tile.x, tile.y);
   const opened = await until(`(() => { const d = ${STAGE}; return d && d.querySelector('.bk-board')?.dataset.phase === 'ready' && d.querySelectorAll('.bk-page').length >= 1; })()`, 20000);
@@ -138,9 +141,12 @@ try {
 
   // 二、孩子说要预习坐井观天(另起一条实时连接发进同一个话题;页面轮询拿到老师的卡)
   const day = async () => (await (await fetch(`${base}/api/kid/conversations/${T}/today`)).json());
-  const thread = (await day()).messages?.slice(-1)[0]?.thread;
+  let thread = null;
+  for (let i = 0; i < 40 && !thread; i++) { thread = (await day()).messages?.slice(-1)[0]?.thread ?? null; if (!thread) await sleep(250); }
   ok('开了一节铺课本的课', Boolean(thread) && (await day()).messages.some((m) => m.base === 'textbook'), String(thread));
-  await until(`(() => true)()`);
+  await sleep(1500);
+  const door = JSON.parse(readFileSync(join(wsRoot, 'conversations', T, `${(await day()).date}.json`), 'utf8')).messages;
+  ok('孩子先说:只进了门(一条进门),老师没开口', door.length === 1 && door[0].enter === true && !door[0].section, JSON.stringify(door.map((m) => ({ t: m.text, enter: m.enter, r: m.result }))));
   for (let i = 0; i < 40 && (await day()).messages.some((m) => m.result === 'running'); i++) await sleep(250);
   if (process.env.PROBE_DEBUG) console.log('  说之前:', JSON.stringify(await evaluate(`({ voice: document.querySelector('#lv-hold')?.dataset.voice, holdRect: document.querySelector('#lv-hold')?.getBoundingClientRect().toJSON(), top: (() => { const r = document.querySelector('#lv-hold').getBoundingClientRect(); const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return el ? el.id || el.className : null; })() })`)), 'conns', fake.conns.length, Boolean(fake.conns[fake.conns.length - 1]?.session));
   const said = await say('我要预习坐井观天');
@@ -272,9 +278,8 @@ try {
   const openFrame = frames.slice(nOpen).find((f) => f.t === 'board' && f.body?.k === 'open');
   ok(`按下《${want}》:那一行铺深一点;松手翻过去,报 open`, press === '0.14' && Boolean(turned) && openFrame?.body?.title === want, JSON.stringify({ press, openFrame }));
   const indexNow = async () => JSON.parse(readFileSync(join(wsRoot, 'conversations', T, `${(await day()).date}.json`), 'utf8')).messages;
-  let m9 = null;
-  for (let i = 0; i < 60 && !m9; i++) { m9 = (await indexNow()).find((m) => m.open === want) ?? null; if (!m9) await sleep(250); }
-  ok('老师接着讲一轮:消息带 open', Boolean(m9) && (await day()).messages.length > n0, JSON.stringify((await indexNow()).slice(-2).map((m) => ({ t: m.text, open: m.open }))));
+  await sleep(2500);
+  ok('点了一课不叫老师:没有新的一轮', (await day()).messages.length === n0, JSON.stringify((await indexNow()).slice(-2).map((m) => ({ t: m.text, enter: m.enter }))));
   await sleep(1500);
   console.log('  ', await shot('9-点过去.png'));
   ok('页面没有脚本报错', errors.length === 0, errors.slice(0, 3).join(' | '));

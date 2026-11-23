@@ -134,11 +134,19 @@ export async function evalActivity(ws: Workspace, tutor: string, name: string, o
       let date = '';
       const tokens = { in: 0, out: 0 };
       let error: string | undefined;
-      // 第一句是按钮上的字(activity 的名字),和孩子点首页按钮一样;照片随第一句写死的孩子的话发。
+      // 孩子先说(没写 start: tutor):先进门(铺好页、不叫老师),写死的第一句孩子的话是第一轮,照片随它发;没写死的问模拟孩子。
+      // 老师先说的:第一句是按钮上的字(activity 的名字),和孩子点首页按钮一样;照片随第一句写死的孩子的话发。
       // 先看小课堂的:第一句就是孩子看完问的那句(写死的第一句),带着 lecture(看完了、停过几次、画的几处)
-      let scripted = e.lecture ? 1 : 0;
-      let say: string | null = e.lecture ? e.kid[0] : name;
-      let photos: string[] = [];
+      const kidFirst = !e.lecture && defn.start !== 'tutor';
+      let scripted = e.lecture || kidFirst ? 1 : 0;
+      let say: string | null = e.lecture || kidFirst ? (e.kid[0] ?? null) : name;
+      let photos: string[] = kidFirst ? (photosOf.get(e) ?? []) : [];
+      if (kidFirst) {
+        const door = await runner.enter(tutor, { from: 'kid', text: name, activity: run, eval: true });
+        thread = door.thread;
+        date = door.date;
+        if (say === null && (e.persona || e.story)) say = await kid(kidPrompt(e, turns));
+      }
       let lecture = e.lecture ? { bundle: e.lecture.bundle, watchedMs: 0, finished: true, pauses: e.lecture.pauses, marks: e.lecture.marks.map((m) => ({ atMs: m.atMs, strokes: [] as [number, number][][], hit: m.text })) } : undefined;
       while (say !== null && turns.length < e.maxTurns) {
         // 真孩子都是实时的:模拟孩子的每一句也照实时写(上下文包带 live:、讲稿不截);嘴不在,接住与打断不带

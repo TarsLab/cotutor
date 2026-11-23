@@ -2,6 +2,7 @@
  * 一节课(铺着孩子拍的照片)在实时那条线上(假百炼 _fake-realtime.ts + 假老师 + 假看图,不花钱):
  * 孩子端报 {t:'board', body:{k:'pick'…}} → 记进板的日志、不起脑;安静时嘴照念这个字的念法(认字时写好的),孩子按着时不念;
  * 点完了 stillMs 没动静,应用替他叫一次老师(live.app: still,上下文包带上他点了什么);连着只叫一次,孩子开口了才再叫。
+ * 孩子先说:点了砖只进门(/api/kid/enter,不起一轮),没开口就走的删掉,开口那条接在进门的话题上。
  * 课本的目录上点了一课(boardEvent 回 open):替他起一轮,消息带 open。
  */
 import { mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
@@ -197,19 +198,34 @@ await settle();
   check('写完自己说了(开了一轮):不再替他交', msgs.filter((m) => m.t === 'turn').length === n2 + 1);
 }
 
-// ---- 课本的目录上点了一课(boardEvent 翻过去了、回 open):替他起一轮,消息记着点的哪一课(课本那一半在 tests/board-book.test.ts) ----
+// ---- 孩子先说:点了砖只进门(记一条、铺好页、不叫老师);点回首页没开口的删掉;开口那条才是第一轮,接在进门的话题上 ----
 {
   await settle();
+  type Ix = { messages: { job: string; thread?: string; text: string; enter?: true; base?: string }[] };
+  const ix = (): Ix => JSON.parse(readFileSync(join(convDir, `${today}.json`), 'utf8')) as Ix;
   const turns = msgs.filter((m) => m.t === 'turn').length;
-  const real = ctx.runner.boardEvent.bind(ctx.runner);
-  ctx.runner.boardEvent = (async (tutor: string, date: string, body: unknown) => ((body as Msg).k === 'open' ? { thread, say: null, still: false, open: '坐井观天' } : real(tutor, date, body))) as typeof real;
-  sock.send(JSON.stringify({ t: 'board', body: { k: 'open', thread, base: PAGE, title: '坐井观天' } }));
-  const started = await until(() => msgs.filter((m) => m.t === 'turn').length > turns, 6000);
+  const door = await api('POST', `/api/kid/enter?tutor=${T}`, { via: { home: home0.home, button: 'preview' }, device: 'tablet-landscape' });
+  const t2 = String(door.json?.thread ?? '');
+  await sleep(800);
+  const m2 = ix().messages.find((m) => m.job === t2);
+  check('进门:回话题 id,索引里记一条进门(带 base),不起一轮', door.status === 200 && m2?.enter === true && m2.thread === t2 && m2.base === 'photo' && msgs.filter((m) => m.t === 'turn').length === turns, JSON.stringify([door, m2]));
+  const lesson2 = (await api('GET', `/api/kid/lesson?tutor=${T}&date=${today}&thread=${t2}`)).json?.lesson as { at?: string } | null;
+  check('进门就铺好页(照片页的 activity 没拍:白纸)', lesson2?.at === '白纸', JSON.stringify(lesson2));
+  const left = await api('POST', `/api/kid/leave?tutor=${T}`, { thread: t2 });
+  check('没开口就点回首页:这个话题删掉(不存)', left.json?.gone === true && !ix().messages.some((m) => m.thread === t2 || m.job === t2), JSON.stringify(left));
+  const t3 = String((await api('POST', `/api/kid/enter?tutor=${T}`, { via: { home: home0.home, button: 'preview' } })).json?.thread ?? '');
+  sock.send(JSON.stringify({ t: 'send', body: { text: '老师我想复习', thread: t3 } }));
+  const started = await until(() => msgs.filter((m) => m.t === 'turn').length > turns, 8000);
   const turn = msgs.filter((m) => m.t === 'turn').slice(-1)[0];
   await settle();
-  ctx.runner.boardEvent = real;
-  const m = (JSON.parse(readFileSync(join(convDir, `${today}.json`), 'utf8')) as { messages: { job: string; open?: string; text: string }[] }).messages.find((x) => x.job === turn.job);
-  check('目录上点了一课:替他起一轮,接在这个话题;消息记着点的哪一课', started && turn.thread === thread && m?.open === '坐井观天' && m.text === '(在目录上点了《坐井观天》)', JSON.stringify(m));
+  const prompt = (JSON.parse(readFileSync(join(convDir, `${today}.${turn.job}.run.json`), 'utf8')) as { prompt: string }).prompt;
+  check('开口那条是第一轮:接在进门的话题上,上下文包带着首页按钮', started && turn.thread === t3 && turn.job !== t3 && prompt.includes('home:') && prompt.includes('预习'), prompt.slice(0, 300));
+  check('开过口的不删', (await api('POST', `/api/kid/leave?tutor=${T}`, { thread: t3 })).json?.gone === false && ix().messages.some((m) => m.job === t3));
+  const t4 = String((await api('POST', `/api/kid/enter?tutor=${T}`, { via: { home: home0.home, button: 'preview' } })).json?.thread ?? '');
+  const t5 = String((await api('POST', `/api/kid/enter?tutor=${T}`, { via: { home: home0.home, button: 'preview' } })).json?.thread ?? '');
+  const quiet = ix().messages.filter((m) => m.enter && !ix().messages.some((x) => x.thread === m.thread && !x.enter));
+  check('下次进门:上回只进了门、页面没来得及说的扫掉(只剩这一个进门)', Boolean(t4) && quiet.length === 1 && quiet[0].job === t5, JSON.stringify([t4, t5, quiet]));
+  check('进门要从 activity 按钮:没带 via、按钮不对 400', (await api('POST', `/api/kid/enter?tutor=${T}`, {})).status === 400 && (await api('POST', `/api/kid/enter?tutor=${T}`, { via: { home: home0.home, button: 99 } })).status === 400);
 }
 
 sock.send(JSON.stringify({ t: 'bye' }));

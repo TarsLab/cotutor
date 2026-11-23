@@ -41,8 +41,12 @@ const MessageObjectSchema = z.object({
   text: z.string(),
   /** 孩子端不打字的动作:「给老师看」(窗里的图已经交了) */
   action: z.enum(['submit']).optional(),
-  /** 孩子在课本的目录上点了这一课(页上的名字;应用已经翻过去了,text 是应用写的「(在目录上点了《…》)」) */
-  open: z.string().min(1).max(80).optional(),
+  /**
+   * 进门:孩子点了首页的砖、页铺好了,还没开口(activity 没写 start: tutor 的都这样进)。不是一轮:没有转录、没有讲稿,text 是按钮上的字。
+   * 记在话题第一条(via、activity、base、listen 都在它上面);孩子说了话、拍照交上来、按「给老师看」才起第一轮。
+   * 话题里只有它 = 没开口就走了:不存(Runner.leave 删,下次进门扫掉),在哪儿都当没有(spokeIn)
+   */
+  enter: z.literal(true).optional(),
   /** 这条消息带的作业照片(R5):相对 workspace 根的路径(captures/<日期>/<HHMM>-<n>.jpg),上下文包 photos: 段原样给老师 Read;日记永不引用它 */
   photos: z.array(z.string().min(1)).optional(),
   result: z.enum(['running', 'ok', 'error']).default('running'),
@@ -154,6 +158,12 @@ export const ConversationIndexSchema = z.object({
   booked: z.record(z.string(), z.string().min(1)).default({}),
 });
 export type ConversationIndex = z.infer<typeof ConversationIndexSchema>;
+
+/** 这个话题孩子开过口没有:除了进门那条还有别的消息。没开口的话题不存、不列、不记账 */
+export function spokeIn(messages: readonly Pick<ConversationMessage, 'job' | 'from' | 'thread' | 'enter'>[], thread: string): boolean {
+  const ths = threads(messages);
+  return messages.some((m, i) => ths[i] === thread && !m.enter);
+}
 
 /**
  * 每条消息的话题 id(与 messages 对齐)。有 thread 字段照它;没有(旧索引)按规则现算:第一条 = 自己的 job,

@@ -4,7 +4,7 @@
  */
 import { HomeViaSchema, DeviceSchema, type ActivityValue } from '../schema/index.ts';
 import { BUNDLE_ID_RE } from '../board/cards/kind.ts';
-import { threads } from '../schema/index.ts';
+import { spokeIn, threads } from '../schema/index.ts';
 import { MARK_MAX, MARK_MAX_POINTS, MARK_MAX_STROKES } from '../board/lecture.ts';
 import type { Workspace } from '../schema/index.ts';
 import { messageVia, resolveVia } from './home/store.ts';
@@ -30,9 +30,6 @@ export async function kidInput(ws: Workspace, tutor: string, body: unknown, date
   if (!isObj(body) || typeof body.text !== 'string') return reject(400, 'bad_request');
   const action = body.action === undefined ? undefined : body.action === 'submit' ? ('submit' as const) : null;
   if (action === null) return reject(400, 'bad_request');
-  // 目录上点了一课(通话里应用替他起的这一轮带上,src/runtime/live/call.ts)
-  const open = body.open === undefined ? undefined : typeof body.open === 'string' && body.open.trim() && body.open.length <= 80 ? body.open.trim() : null;
-  if (open === null) return reject(400, 'bad_request');
   const photos = await photosOf(ws, body.photos);
   if (photos === null) return reject(400, 'bad_request');
   const thread = body.thread === undefined ? undefined : typeof body.thread === 'string' && /^\d{4}-\d+$/.test(body.thread) ? body.thread : null;
@@ -82,13 +79,21 @@ export async function kidInput(ws: Workspace, tutor: string, body: unknown, date
     pick = undefined;
     activity = { name: button.activity, params: button.params };
   }
-  if (!text.trim() && !action && !open && !photos?.length) return reject(400, 'bad_request');
+  if (!text.trim() && !action && !photos?.length) return reject(400, 'bad_request');
   // 不开新话题的:要接着今天的一个话题(写了 thread 就是它,没写是最后那个);一个也没有 → 400,孩子端回首页从按钮开始
   if (!newThread) {
     const ths = threads(today.messages);
     if (pick ? !ths.includes(pick) : !ths.length) return reject(400, 'no_thread', '先从首页的按钮开始');
+    // 只进了门的话题(孩子先说):这是他开口的第一条,按钮的字和家长备好的讲法照进门那条补上(进上下文包 home:);首页换过、按钮没了就只带字
+    const th = pick ?? ths[ths.length - 1];
+    const door = spokeIn(today.messages, th) ? null : today.messages.find((m, i) => ths[i] === th && m.enter);
+    const dv = door?.via;
+    if (dv && dv.button !== 'new' && dv.button !== 'recent') {
+      const b = await resolveVia(ws, tutor, { home: dv.home, button: dv.button });
+      home = { button: dv.label, ...(b && b.kind !== 'lecture' && b.brief ? { brief: b.brief } : {}) };
+    }
   }
-  return { input: { from: 'kid', text, action, ...(open ? { open } : {}), newThread, thread: pick, device: device?.data, ...(validDevice(deviceId) ? { deviceId: deviceId! } : {}), photos, ...(via && button ? { via: messageVia(via.data!, button) } : {}), ...(home ? { home } : {}), ...(activity ? { activity } : {}), ...(lecture ? { lecture } : {}) } };
+  return { input: { from: 'kid', text, action, newThread, thread: pick, device: device?.data, ...(validDevice(deviceId) ? { deviceId: deviceId! } : {}), photos, ...(via && button ? { via: messageVia(via.data!, button) } : {}), ...(home ? { home } : {}), ...(activity ? { activity } : {}), ...(lecture ? { lecture } : {}) } };
 }
 
 /** 消息里的 photos[]:都得是 captures/ 里在的文件(相对 workspace 根);不合法 → null */

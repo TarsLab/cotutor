@@ -249,9 +249,14 @@ export function tocEntries(book: LessonBook): { page: Extract<PageSource, { kind
 }
 const r1 = (n: number): number => Math.round(n * 10) / 10;
 
-/** 还没有页的一节课(课本做底):先铺目录;last = 这本书上次翻到的那一课,窗停在目录上它那一行 */
-export function lessonOpen(l: Lesson, book: LessonBook, last?: string | null): Lesson {
+/**
+ * 还没有页的一节课(课本做底):want = 家长在按钮上填的范围(找得到这一课就直接铺它),再是 last = 这本书上次翻到的那一课(直接铺它);
+ * 都没有(或找不到)铺目录,窗停在目录上 last 那一行
+ */
+export function lessonOpen(l: Lesson, book: LessonBook, last?: string | null, want?: string | null): Lesson {
   if (l.at) return l;
+  const direct = [want, last].map((n) => (n ? bookPageOf(book, n) : null)).find((p) => p && p.title !== BOOK_TOC);
+  if (direct) return lessonStep(l, { t: 'act', act: { k: '翻', page: direct } });
   const page = bookPageOf(book, null);
   if (!page) return l;
   const s = lessonStep(l, { t: 'act', act: { k: '翻', page } });

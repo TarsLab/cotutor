@@ -404,7 +404,7 @@ export function createMock(opts: MockOptions = {}): Mock {
       const by = new Map<string, MockMessage[]>();
       for (const m of messages.get(name) ?? []) by.set(m.thread, [...(by.get(m.thread) ?? []), m]);
       for (const [thread, ms] of by) {
-        if (!ms.some((m) => startsThread({ from: m.question !== null ? 'kid' : 'system', photos: m.photos, section: m.section }))) continue;
+        if (!ms.some((m) => startsThread({ from: m.question !== null ? 'kid' : 'system', text: m.question ?? '', photos: m.photos, section: m.section }))) continue;
         const said = ms.find((m) => m.question)?.question ?? '';
         const photo = ms.flatMap((m) => m.photos ?? []).pop();
         const pv = previews.get(`${name}|${thread}`);

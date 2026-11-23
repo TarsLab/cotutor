@@ -7,6 +7,7 @@ import {
   ACTIVITY_OLD_BOARD,
   ACTIVITY_LISTENS,
   ACTIVITY_REPLIES,
+  ACTIVITY_STARTS,
   ACTIVITY_PARAM_TYPES,
   ACTIVITY_RESERVED_PARAMS,
   ACTIVITY_SECTIONS,
@@ -171,6 +172,7 @@ export function parseActivity(text: string): ParsedActivity {
     ...(frontmatter.base?.trim() ? { base: frontmatter.base.trim() } : oldBoard ? { base: 'photo' } : {}),
     ...(frontmatter.listen?.trim() ? { listen: frontmatter.listen.trim() } : {}),
     ...(frontmatter.reply?.trim() ? { reply: frontmatter.reply.trim() } : {}),
+    ...(frontmatter.start?.trim() ? { start: frontmatter.start.trim() } : {}),
     ...(old.length ? { old } : {}),
     params: [],
     tutor: null,
@@ -258,6 +260,7 @@ export function checkActivity(a: Activity, opts: CheckOptions = {}): ActivityIss
   if (a.base !== undefined && !ACTIVITY_BASES[a.base]) fix(`头上 base 写的「${a.base}」不认得:只有 ${Object.keys(ACTIVITY_BASES).join('、')}`);
   if (a.base === 'workbook' && !a.params.some((x) => x.type === '练习册')) fix('头上写了 base: workbook,「家长填的」里要有一个类型是「练习册」的参数(做哪一册)');
   if (a.listen !== undefined && !ACTIVITY_LISTENS[a.listen]) fix(`头上 listen 写的「${a.listen}」不认得:只有 ${Object.keys(ACTIVITY_LISTENS).join('、')}(不写 = 照老师的,缺省按住说)`);
+  if (a.start !== undefined && !ACTIVITY_STARTS[a.start]) fix(`头上 start 写的「${a.start}」不认得:只有 ${Object.keys(ACTIVITY_STARTS).join('、')}(不写 = 孩子先说)`);
   if (a.reply !== undefined && !ACTIVITY_REPLIES[a.reply]) fix(`头上 reply 写的「${a.reply}」不认得:只有 ${Object.keys(ACTIVITY_REPLIES).join('、')}(不写 = 脑先答)`);
   if (!a.tutor) fix('没有「## 老师怎么带」:这一节是老师的系统提示,activity 都要有');
   else {

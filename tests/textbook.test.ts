@@ -158,8 +158,10 @@ check('没点线的目录:一项的范围从左边的大号序号到页码;页�
 {
   const t = tocEntries({ file: '数学.pdf', index: mx })!;
   check('目录上能点的几项:场景坐标、点了铺那个单元(铺不下的照最多几页)', t.page.title === '目录' && t.entries.map((e) => `${e.title}:${e.page.pages.join(',')}`).join(' ') === '分类与整理:2,3 1～6的表内乘法:4,5,6,7 校园小导游:8,9' && t.entries.every((e) => e.box[0] > 100 && e.box[2] > e.box[0]), JSON.stringify(t.entries));
-  const back = lessonOpen(lessonInit(), { file: '数学.pdf', index: mx }, '校园小导游');
-  check('上次翻到的那一课:目录一铺开窗就停在它那一行;没记过的从页顶看', JSON.stringify(back.view) === JSON.stringify(t.entries[2].box) && lessonOpen(lessonInit(), { file: '数学.pdf', index: mx }).view === null && lessonOpen(lessonInit(), { file: '数学.pdf', index: mx }, '没有这课').view === null);
+  const mb = { file: '数学.pdf', index: mx };
+  const back = lessonOpen(lessonInit(), mb, '校园小导游');
+  const want = lessonOpen(lessonInit(), mb, '校园小导游', '5的乘法口诀');
+  check('进门铺哪:家长填的范围那一课 → 上次翻到的那一课 → 目录(没记过、找不到的从页顶看)', back.at === '数学.pdf#校园小导游' && want.at === '数学.pdf#5的乘法口诀' && lessonOpen(lessonInit(), mb, '校园小导游', '没有这课').at === '数学.pdf#校园小导游' && lessonOpen(lessonInit(), mb).view === null && lessonOpen(lessonInit(), mb, '没有这课').at === '数学.pdf#目录' && lessonOpen(lessonInit(), mb, '没有这课').view === null, JSON.stringify([back.at, want.at]));
 }
 check('单元下面的小节、课题从页里的标题读出来:上一层是 parent;课题止于下一个课题', ML('1.乘法的初步认识')?.parent === '1～6的表内乘法' && ML('1.乘法的初步认识')?.pages.join() === '5,7' && ML('5的乘法口诀')?.parent === '1.乘法的初步认识' && ML('5的乘法口诀')?.pages.join() === '6,6' && ML('6的乘法口诀')?.pages.join() === '7,7' && ML('认识东、南、西、北')?.parent === '校园小导游', JSON.stringify(mx.lessons));
 check('图里的大字(便利店)、栏目名(练一练、你知道吗)、翻页后再印一次的综合实践名不算一课', mx.lessons.length === 7 && !mx.lessons.some((l) => ['便利店', '练一练', '你知道吗？'].includes(l.title)) && mx.lessons.filter((l) => l.title === '校园小导游').length === 1, mx.lessons.map((l) => l.title).join());

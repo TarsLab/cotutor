@@ -59,6 +59,7 @@ export async function startReplay(ws: Workspace, tutor: string, date: string, jo
   const m = index.messages.find((x) => x.job === job);
   if (!m) throw new UsageError(`${tutor} ${date} 没有 ${job} 这一轮(日期缺省今天;job 与日期对不对?)`);
   if (m.bookkeep) throw new UsageError('记账那轮不回放(它 resume 话题的会话,单独跑没有意义)');
+  if (m.enter) throw new UsageError('进门那条不是一轮(孩子点了按钮、还没开口),没有可回放的;回放他开口的那一轮');
   const evalWs = evalWorkspace(ws);
   const runner = new Runner(() => evalWs, { now: opts.now, env: opts.env });
   // 从首页按钮进来的那轮:讲法从当时发布的那份原文取

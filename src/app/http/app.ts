@@ -23,7 +23,7 @@ import { NEUTRAL_COLOR, SUBJECT_COLORS, TUTOR_PALETTE, tutorColors } from '../..
 import { boardMarkOf, type BoardMarkId } from '../../ui/kid/board-mark.ts';
 import { buildReel, playRecordOk, reelHolds, reelMissRuns, type PlayRecord, type Reel, type ReelCall } from '../../ui/kid/reel.ts';
 import type { CallReel } from '../../runtime/journal/recorder.ts';
-import { DATE_RE, canonicalSubject, MESSAGE_FROM, listTutors, subjectLang, viaSendsLabel, type ConversationIndex, type ConversationMessage, type MemoryLine, type TutorExtra } from '../../schema/index.ts';
+import { DATE_RE, canonicalSubject, MESSAGE_FROM, listTutors, spokeIn, subjectLang, viaSendsLabel, type ConversationIndex, type ConversationMessage, type MemoryLine, type TutorExtra } from '../../schema/index.ts';
 import type { BoardCard, Device } from '../../board/presentation.ts';
 import { ConfigError, patchConfig, reloadIfChanged, workspaceReport } from '../workspace.ts';
 import { UsageError } from '../../shared/errors.ts';
@@ -488,7 +488,8 @@ export async function overview(ctx: AppContext, date: string): Promise<Overview>
     for (const [i, m] of index.messages.entries()) {
       // 记账那轮不算一节,写进日记的那段挂回它记的话题
       if (m.bookkeep && m.diaryBlock) diaries.push({ id: ths[i], m });
-      if (m.bookkeep || m.tidy) continue;
+      // 只进了门、没开口的话题不存(孩子点回首页、下次进门时删):删掉之前也当没有
+      if (m.bookkeep || m.tidy || !spokeIn(index.messages, ths[i])) continue;
       const id = ths[i];
       let th = by.get(id);
       if (!th) {
@@ -896,6 +897,23 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       }
       if (p === '/api/kid/workbook/lines') return { status: 200, json: { pages: got.wb.pages.map((pg, i) => workbookBookPage(i + 1, pg).page) } };
       return { status: 404, json: { error: 'not_found' } };
+    }
+    // 进门(孩子先说):首页 activity 按钮点进来,body 同孩子发的一条少 text({via, device});服务端记一条「进门」、铺好页,不叫老师,回话题 id。
+    // 老师正在回上一条 → 409(孩子端过一会儿再进);离开(点回首页)时没开口的话题删掉({thread})
+    if (p === '/api/kid/enter' && method === 'POST') {
+      const tutor = url.searchParams.get('tutor') ?? '';
+      if (!ws.config.tutors[tutor]) return { status: 404, json: { error: 'not_found' } };
+      const date = localDate(ctx.now());
+      const got = await ctx.runner.accept(tutor, { ...(isObj(body) ? body : {}), text: '' }, date, client.device);
+      if ('reject' in got) return { status: got.reject.status, json: { error: got.reject.error } };
+      if (!got.input.activity || !got.input.via || got.input.lecture) return { status: 400, json: { error: 'bad_request' } };
+      return { status: 200, json: await ctx.runner.enter(tutor, got.input) };
+    }
+    if (p === '/api/kid/leave' && method === 'POST') {
+      const tutor = url.searchParams.get('tutor') ?? '';
+      const thread = isObj(body) && typeof body.thread === 'string' ? body.thread : '';
+      if (!ws.config.tutors[tutor] || !/^\d{4}-\d+$/.test(thread)) return { status: 400, json: { error: 'bad_request' } };
+      return { status: 200, json: { gone: await ctx.runner.leave(tutor, localDate(ctx.now()), thread) } };
     }
     // 一节课此刻的样子(src/runtime/journal/lesson-store.ts):孩子端回到这节课、刷新页面时照它铺;只读的(以前的、家长看)也照它
     if (p === '/api/kid/lesson' && method === 'GET') {

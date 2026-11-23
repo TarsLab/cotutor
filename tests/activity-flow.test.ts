@@ -186,12 +186,12 @@ try {
     const lines: string[] = [];
     const r = await evalActivity(ctx.ws, 'chinese-tutor', '练词', { runs: 2, kid, onTurn: (e) => lines.push(`${e.example}#${e.run}:${e.turn}:${e.kid}`) });
     const [a, b] = r.examples;
-    check('eval:写死的那个,两次都把写死的话说完、都过', a.name === '写死的' && a.pass && a.runs.length === 2 && a.runs.every((x) => x.turns.map((t) => t.kid).join('/') === '练词/整段'), JSON.stringify(a.runs.map((x) => ({ k: x.turns.map((t) => t.kid), g: x.grades, e: x.error }))));
+    check('eval:写死的那个,孩子先说(先进门、不叫老师),两次都把写死的话说完、都过', a.name === '写死的' && a.pass && a.runs.length === 2 && a.runs.every((x) => x.turns.map((t) => t.kid).join('/') === '整段'), JSON.stringify(a.runs.map((x) => ({ k: x.turns.map((t) => t.kid), g: x.grades, e: x.error }))));
     check('eval:模拟的那个,孩子的话来自模拟孩子,走满最多轮;没放课 → 「放课里一段」不过,报出来', b.name === '模拟的' && !b.pass && b.runs[0].turns.length === 3 && !b.runs[0].grades[0].pass && Boolean(b.runs[0].grades[0].why) && said[0].includes('小熊种瓜'), JSON.stringify(b.runs[0]));
     const evalMsgs = (await readIndex({ ...ctx.ws, dirs: { ...ctx.ws.dirs, conversations: join(root, 'evals') } }, 'chinese-tutor', a.runs[0].date)).messages.filter((m) => m.thread === a.runs[0].thread);
-    check('eval:每轮记着 eval,不写记忆', evalMsgs.length === 2 && evalMsgs.every((m) => m.eval === true));
-    check('eval:每轮照实时写(真孩子都是实时的:消息记 live)', evalMsgs.every((m) => m.live === true), JSON.stringify(evalMsgs.map((m) => m.live)));
-    check('eval:每轮回调', lines[0] === '写死的#1:1:练词' && lines.includes('写死的#1:2:整段'), lines.join(' '));
+    check('eval:进门一条 + 一轮,都记着 eval,不写记忆', evalMsgs.length === 2 && evalMsgs[0].enter === true && evalMsgs.every((m) => m.eval === true), JSON.stringify(evalMsgs.map((m) => [m.enter, m.eval])));
+    check('eval:每轮照实时写(真孩子都是实时的:消息记 live)', evalMsgs.filter((m) => !m.enter).every((m) => m.live === true), JSON.stringify(evalMsgs.map((m) => m.live)));
+    check('eval:每轮回调', lines[0] === '写死的#1:1:整段' && !lines.some((l) => l.endsWith(':练词')), lines.join(' '));
     check('eval:落在 evals/,不进孩子的对话;报告写了', readFileSync(join(root, r.file), 'utf8').includes('"activity": "练词"') && !(await readIndex(ctx.ws, 'chinese-tutor', DATE)).messages.some((m) => m.thread === a.runs[0].thread && m.text === '整段' && m.job === a.runs[0].thread));
     writeFileSync(exFile, '---\nactivity: 练词\n---\n\n## 记\n孩子: 记住它\n最多轮: 2\n判:\n- 不在页上讲\n');
     const vaultBefore = JSON.stringify(readdirSync(join(root, 'vault'), { recursive: true }));
@@ -246,7 +246,7 @@ try {
     const run = r.examples[0].runs[0];
     const evalIndex = await readIndex({ ...ctx.ws, dirs: { ...ctx.ws.dirs, conversations: join(root, 'evals') } }, 'chinese-tutor', run.date);
     const second = evalIndex.messages.find((m) => m.thread === run.thread && m.text === '这是我的看图说话');
-    check('eval 带照片:第二轮(第一句写死的话)带着照片,拷进了 captures/', run.turns.length === 2 && second?.photos?.length === 1 && second.photos[0].startsWith('captures/'), JSON.stringify({ turns: run.turns.length, photos: second?.photos, err: run.error }));
+    check('eval 带照片:孩子先说,第一轮(写死的话)带着照片,拷进了 captures/', run.turns.length === 1 && second?.photos?.length === 1 && second.photos[0].startsWith('captures/'), JSON.stringify({ turns: run.turns.length, photos: second?.photos, err: run.error }));
     check('eval 带照片:看图说话的话题挂着 activity', evalIndex.messages.find((m) => m.job === run.thread)?.activity?.name === '看图说话');
     // 出厂例子的图在包里(例子图/),不拷进 workspace:workspace 里没有就找包里的
     writeFileSync(exFile, '---\nactivity: 看图说话\n---\n\n## 包里的图\n照片: 例子图/借伞.jpg\n孩子: 这是我的看图说话\n最多轮: 2\n判:\n- 每节末句是问句\n');

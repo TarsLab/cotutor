@@ -2,7 +2,7 @@
  * activity 文件:孩子从首页一个按钮进去的一种做法。一个 activity 一个文件,归一位老师,
  * 放在老师的家 `agents/<老师>/activities/<名>.md`(仓里在 grades/grade-<n>/ 下同一个相对位置,init 拷进去,hash 记 shipped.json)。
  *
- * 头上平铺 `name` / `description` / `base`(铺哪种页)/ `listen`(一直听)/ `reply`(谁先答);正文按 `## ` 节分读者,标题就是读者:
+ * 头上平铺 `name` / `description` / `base`(铺哪种页)/ `listen`(一直听)/ `reply`(谁先答)/ `start`(谁起头);正文按 `## ` 节分读者,标题就是读者:
  *   ## 家长填的       ```参数    一行一个:`名: 类型[,可空][,缺省 X][,A 到 B] —— 说明`
  *   ## 老师怎么带     给老师;参数不插值,只用 `{{有 名}}` … `{{/有}}` 裁段
  *   ## <工具人>收到什么  ```<工具人> 一段模板,`{{插槽}}` 由应用填;```<工具人>不要 可选
@@ -68,6 +68,14 @@ export const ACTIVITY_REPLIES: Readonly<Record<string, string>> = {
 };
 
 /**
+ * 头上的 `start:`:点进来以后谁起头。tutor = 老师先说:进门(或拍照屏上按「用白纸」)就起一轮,老师照「老师怎么带」开场(口语课);
+ * 没写 = 孩子先说:进门只铺页、不叫老师,孩子说了话、拍照交上来、按「给老师看」才起第一轮(src/runtime/runner.ts 的 enter)
+ */
+export const ACTIVITY_STARTS: Readonly<Record<string, string>> = {
+  tutor: '老师先说:点进来就起一轮,老师开场',
+};
+
+/**
  * 旧的头(以前的出厂件、家长改过的):`board: page` 不再有意义(铺页的都铺页),还认一段时间——没写 base 的当 base: photo;
  * cards 里的 kit(教具卡,删了)读进来就丢。activity check、doctor 提一句;refresh 换掉没改过的。
  */
@@ -117,6 +125,8 @@ export const ActivitySchema = z.object({
   listen: z.string().optional(),
   /** 头上的 `reply:`:孩子作答以后谁先答(见 ACTIVITY_REPLIES);没写 = 脑 */
   reply: z.string().optional(),
+  /** 头上的 `start:`:谁起头(见 ACTIVITY_STARTS);没写 = 孩子先说 */
+  start: z.string().optional(),
   /** 头上还写着旧的东西(board: page、cards):照新的读了,check 提一句 */
   old: z.array(z.string()).optional(),
   /** 「老师怎么带」那节的原文(没剥注释、没裁);没有这节就是 null(要改:activity 都起老师。听写不是 activity,读的也是这个形状,只用认字那节) */

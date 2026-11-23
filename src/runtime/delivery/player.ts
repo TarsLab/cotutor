@@ -6,10 +6,11 @@
  * 一直听(全双工):孩子不用按,服务端的 VAD 判开口 / 说完;推不推孩子的声音是状态的函数(liveGate),一变就告诉服务端 gate。
  * 请孩子说:讲稿的 [[请 说 …]] 那句放完,轮到他说(turn:按钮呼吸)。
  * 字幕重放:字幕下「再听一遍」,孩子端放这一轮嘴照念过的声音(服务端按轮留的那份);只在安静、脑不在写时开始,不告诉服务端任何东西。
+ * 点读:孩子点了课本上标题、段首的钮,孩子端一句一句放这一课的配音(docs/dev/课本.md);是孩子点的,嘴(告诉服务端 hush)、小课堂、重放都让它;孩子开口、交东西、嘴又出声就停。
  */
 
-/** quiet 安静 · holding 孩子按着说话 · mouth 嘴的声音在放(或还在来)· lecture 在放页上小课堂的那一段(讲稿的 [[看 0:19–0:30]])· replay 在重放这一轮嘴说过的 */
-export type LiveStatus = 'quiet' | 'holding' | 'mouth' | 'lecture' | 'replay';
+/** quiet 安静 · holding 孩子按着说话 · mouth 嘴的声音在放(或还在来)· lecture 在放页上小课堂的那一段(讲稿的 [[看 0:19–0:30]])· replay 在重放这一轮嘴说过的 · reading 在点读课文 */
+export type LiveStatus = 'quiet' | 'holding' | 'mouth' | 'lecture' | 'replay' | 'reading';
 
 export interface LiveModel {
   status: LiveStatus;
@@ -30,7 +31,8 @@ export interface LiveModel {
  * echo:刚念完的是请他说的那句 [[请 说 …]])· lectureDone 小课堂那一段放完 / 孩子关了;
  * 服务端的:flush 清播放队列 · drop 连不上 / 断了;页面的:reset 换老师、关老师页;
  * 一直听:listen 进老师页时开或关(activity 头上 listen: open、live.listen) · mute / unmute 点麦克风胶囊 · vad 服务端说孩子开口 / 说完 · duck / unduck 服务端让嘴的声音压低 / 恢复;
- * 重放:replay 点「再听一遍」(pending = 脑在写,不放)· replayStop 点「停」· replayEnded 放完了
+ * 重放:replay 点「再听一遍」(pending = 脑在写,不放)· replayStop 点「停」· replayEnded 放完了;
+ * 点读:read 点了标题、段首的钮(开始读、接着读、换一段读)· readStop 点了正在读的那段的钮(暂停)· readEnded 读到课文最后、或读不下去了(没配声音、合成失败)
  */
 export type LiveEvent =
   | { type: 'press' }
@@ -51,14 +53,17 @@ export type LiveEvent =
   | { type: 'unduck' }
   | { type: 'replay'; pending?: boolean }
   | { type: 'replayStop' }
-  | { type: 'replayEnded' };
+  | { type: 'replayEnded' }
+  | { type: 'read' }
+  | { type: 'readStop' }
+  | { type: 'readEnded' };
 
 /**
  * 要做的事,按顺序执行。hold / release / hush / send = 告诉服务端(send 的 body 页面带上);enqueue = 放刚到的这块嘴的声音(没有就丢掉);
  * flush = 清掉孩子端没放的嘴的声音;openLecture / stopLecture = 铺满放 / 停下小课堂那一段(舞台停在那一帧);
  * staged = 告诉服务端那一段放完了(后面的讲稿接着交给嘴);retry = 连不上、断了:回到「正在叫老师」,过一会儿再连;render = 重画字幕与头像;
  * 一直听:listen = 告诉服务端换了模式;gate = 告诉服务端推 / 不推了(on);duck / unduck = 嘴的声音压到三成 / 恢复;
- * 重放:playReplay / stopReplay = 从这一轮第一句放 / 停(页面取服务端留的那份声音)
+ * 重放:playReplay / stopReplay = 从这一轮第一句放 / 停(页面取服务端留的那份声音);点读:playRead / stopRead = 照页面记着的那一段那一句读 / 停(停在那一秒,再点接着读)
  */
 export type LiveEffect =
   | { kind: 'hold' }
@@ -77,22 +82,25 @@ export type LiveEffect =
   | { kind: 'duck' }
   | { kind: 'unduck' }
   | { kind: 'playReplay' }
-  | { kind: 'stopReplay' };
+  | { kind: 'stopReplay' }
+  | { kind: 'playRead' }
+  | { kind: 'stopRead' };
 
 export function initialLive(): LiveModel {
   return { status: 'quiet', cut: false, open: false, hearing: false, ducked: false, muted: false, turn: false };
 }
 
-/** 一直听时推不推孩子的声音:没关麦,小课堂没在放、没在重放(这些时候进麦的不是对老师说的;重放的是嘴从前说的,服务端比字比不到) */
+/** 一直听时推不推孩子的声音:没关麦,小课堂没在放、没在重放、没在点读(这些时候进麦的不是对老师说的;重放的是嘴从前说的,服务端比字比不到) */
 export function liveGate(m: LiveModel): boolean {
-  return m.open && !m.muted && m.status !== 'lecture' && m.status !== 'replay' && m.status !== 'holding';
+  return m.open && !m.muted && m.status !== 'lecture' && m.status !== 'replay' && m.status !== 'reading' && m.status !== 'holding';
 }
 
-/** 停掉孩子端在出的声音:嘴的清掉、小课堂那一段停下、重放停 */
+/** 停掉孩子端在出的声音:嘴的清掉、小课堂那一段停下、重放停、点读停 */
 function hushLocal(m: LiveModel, fx: LiveEffect[]): void {
   if (m.status === 'mouth') fx.push({ kind: 'flush' });
   if (m.status === 'lecture') fx.push({ kind: 'stopLecture' });
   if (m.status === 'replay') fx.push({ kind: 'stopReplay' });
+  if (m.status === 'reading') fx.push({ kind: 'stopRead' });
 }
 
 export function liveStep(model: LiveModel, ev: LiveEvent): { model: LiveModel; effects: LiveEffect[] } {
@@ -130,6 +138,7 @@ function liveTransition(model: LiveModel, ev: LiveEvent): { model: LiveModel; ef
       if (m.status === 'holding') break;
       if (m.status === 'lecture') fx.push({ kind: 'stopLecture' });
       if (m.status === 'replay') fx.push({ kind: 'stopReplay' });
+      if (m.status === 'reading') fx.push({ kind: 'stopRead' });
       fx.push({ kind: 'enqueue' });
       if (m.status !== 'mouth') { to('mouth', { cut: false, turn: false }); fx.push({ kind: 'render' }); }
       break;
@@ -160,13 +169,13 @@ function liveTransition(model: LiveModel, ev: LiveEvent): { model: LiveModel; ef
       fx.push({ kind: 'render' });
       break;
     case 'drop':
-      fx.push({ kind: 'flush' }, { kind: 'stopLecture' }, { kind: 'stopReplay' }, { kind: 'retry' });
+      fx.push({ kind: 'flush' }, { kind: 'stopLecture' }, { kind: 'stopReplay' }, { kind: 'stopRead' }, { kind: 'retry' });
       if (m.ducked) fx.push({ kind: 'unduck' });
       // 一直听是孩子选的说话方式,不是声音的状态:清了也留着
       m = { ...initialLive(), open: m.open };
       break;
     case 'reset':
-      fx.push({ kind: 'flush' }, { kind: 'stopLecture' }, { kind: 'stopReplay' });
+      fx.push({ kind: 'flush' }, { kind: 'stopLecture' }, { kind: 'stopReplay' }, { kind: 'stopRead' });
       if (m.ducked) fx.push({ kind: 'unduck' });
       m = { ...initialLive(), open: m.open };
       break;
@@ -214,6 +223,27 @@ function liveTransition(model: LiveModel, ev: LiveEvent): { model: LiveModel; ef
       break;
     case 'replayEnded':
       if (m.status !== 'replay') break;
+      to('quiet');
+      fx.push({ kind: 'render' });
+      break;
+    case 'read':
+      // 孩子点的:按着说话时不接;在读就换一段读;嘴在说、在放小课堂就掐掉(告诉服务端停下这一轮,不开新的)
+      if (m.status === 'holding') break;
+      if (m.status === 'reading') { fx.push({ kind: 'playRead' }); break; }
+      hushLocal(m, fx);
+      if (m.status === 'mouth' || m.status === 'lecture') fx.push({ kind: 'hush' });
+      fx.push({ kind: 'playRead' });
+      to('reading', { cut: m.status === 'mouth', turn: false });
+      fx.push({ kind: 'render' });
+      break;
+    case 'readStop':
+      if (m.status !== 'reading') break;
+      fx.push({ kind: 'stopRead' });
+      to('quiet');
+      fx.push({ kind: 'render' });
+      break;
+    case 'readEnded':
+      if (m.status !== 'reading') break;
       to('quiet');
       fx.push({ kind: 'render' });
       break;

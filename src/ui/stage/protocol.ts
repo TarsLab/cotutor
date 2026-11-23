@@ -17,7 +17,9 @@ export type ToStage =
     /** 现在这一页是课本的目录:能点的那几项(课名、印在哪一行,场景坐标)、按下去那一行铺的颜色(老师的学科色);点中了回 open */
     toc?: { color: string; entries: { title: string; box: [number, number, number, number] }[] };
     /** 老师的学科色(写字格的「放好」、点开的那一格) */
-    color?: string }
+    color?: string;
+    /** 点读(语文课本的一课,这位老师有点读的声音):给了舞台才认标题、段首的钮;k = 在读哪一块(-1 没在读),mode = 钮的样子(playing / loading / between / paused) */
+    read?: { k: number; mode: string } }
   /** peek = 板此刻的样子导一张小图(话题的预览图,首页「今天」用;回 peek);unpick = 页面把点字的卡收了(舞台不再跟着那个字、不再标着它) */
   | { source: typeof STAGE_SOURCE; type: 'control'; action: 'toggle' | 'next' | 'prev' | 'play' | 'pause' | 'submit' | 'peek' | 'unpick' }
   /** 家长看录像时的小课堂(lesson 的 lecture.follow):录像这一刻停在课里的哪儿、在不在放、倍速、到这一刻画过的几处;页面每 100 毫秒发一次 */
@@ -34,6 +36,8 @@ export type FromStage =
   | { source: typeof STAGE_SOURCE; type: 'pickAt'; at: [number, number, number, number] | null }
   /** 课本的目录上点了一项(toc 里的课名):页面自己先翻过去,再报给服务端 */
   | { source: typeof STAGE_SOURCE; type: 'open'; title: string }
+  /** 点读:点了第 k 块(标题或一段、诗的一节)的钮;parts = 这一课分好的每块几句,nos = 每块是标题(0)还是第几段(src/chalk/kit/book.ts 的 bookReadParts)。页面读、停、接着读 */
+  | { source: typeof STAGE_SOURCE; type: 'read'; k: number; parts: number[]; nos: number[] }
   /** 点开了一块盖住的(老师写的「遮」「盖」) */
   | { source: typeof STAGE_SOURCE; type: 'reveal'; text: string }
   /** 一节课:孩子自己挪了窗、放大了,停下来的地方(场景坐标 [左, 上, 右, 下]);页面报给服务端说成一句给老师 */

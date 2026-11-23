@@ -32,6 +32,16 @@ html, body, #root { margin: 0; height: 100%; background: #fffdf8; font: 18px/1.5
 .bk-ring { stroke-dasharray: 1; stroke-dashoffset: 1; animation: bk-draw .7s ease-out forwards; }
 @keyframes bk-draw { to { stroke-dashoffset: 0; } }
 @media (prefers-reduced-motion: reduce) { .bk-ring { animation: none; stroke-dashoffset: 0; } .bk-teacher .bk-mark { transition: none; } }
+/* 点读的钮(book.tsx 的 readButton):不叠底(实心的钮要盖住页上的白);进来淡入,收掉淡出;转圈 = 在等合成,转一圈 = 停一下就读下一块(页面的 READ_GAP_MS) */
+.bk-read-btn { opacity: 1; transition: opacity .35s ease; animation: bk-read-in .2s ease-out; }
+.bk-read-btn.bk-gone { opacity: 0; }
+.bk-read-lift { filter: drop-shadow(0 2px 4px rgba(70, 55, 30, .22)); }
+.bk-read-spin { transform-box: fill-box; transform-origin: center; animation: bk-read-spin .8s linear infinite; }
+.bk-read-ring { animation: bk-read-ring 1.2s linear forwards; }
+@keyframes bk-read-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes bk-read-spin { to { transform: rotate(360deg); } }
+@keyframes bk-read-ring { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) { .bk-read-btn, .bk-read-spin, .bk-read-ring { animation: none; transition: none; } .bk-read-ring { stroke-dashoffset: 0; } }
 
 /* ---- 小课堂(一节课里的一页):一条竖栏(课名、画一画 / 擦掉),画面占满中间,下面字幕、一行控制(播放、进度条、时间、提示)。
    回首页的胶囊、老师的牌、老师说的话是页面的(kid-page.ts 的 #stage.bp.lcp),浮在舞台上:竖栏在老师牌的对面(右手的老师牌在左,竖栏在右),顶上让出胶囊 ---- */

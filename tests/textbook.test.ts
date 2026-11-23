@@ -6,7 +6,8 @@
  *   《古诗两首》3–4 页,下面两首各一页;语文园地一 5–7 页,按栏目分(第 7 页空着);识字表在最后。
  * 数学(2026-11-15)用 tests/_math-book.ts 照人教版数学排的那本:目录没有点线、单元下面的小节和课题从页里读、例题、栏目和题。
  */
-import { BOOK_MAX_PAGES, bookCut, bookFind, bookFrame, bookPages, bookPick, bookRows, bookSheets, bookTarget, bookView, findLesson, lessonBlocks, lessonName } from '../src/chalk/index.ts';
+import { BOOK_MAX_PAGES, READ_SAY_MAX, bookCut, bookFind, bookFrame, bookPages, bookPick, bookReadParts, bookReadTexts, bookRows, bookSheets, bookTarget, bookView, findLesson, lessonBlocks, lessonName, readSentences } from '../src/chalk/index.ts';
+import type { BookLine, BookPage } from '../src/schema/index.ts';
 import { bookLesson, fitActs, lessonOpen, tocEntries } from '../src/board/lesson-fit.ts';
 import { lessonInit } from '../src/board/lesson.ts';
 import { buildBookIndex, decodePinyin, pageLines, printedOf } from '../src/memory/textbook-index.ts';
@@ -66,6 +67,50 @@ const poem = lessonBlocks(lp('静夜思'));
 check('诗:一句一段', poem.filter((b) => b.kind === 'para').map((b) => b.text).join('|') === '床前明月光，|疑是地上霜。');
 const garden = lessonBlocks(lp('语文园地一'));
 check('语文园地:按栏目分(跨页的栏目也认)', garden.filter((b) => b.kind === 'section').map((b) => b.head).join() === '识字加油站,字词句运用,日积月累' && garden[0].kind === 'title' && garden.find((b) => b.head === '识字加油站')!.text.includes('小(xiǎo)鱼(yú)'));
+
+// ---- 分段的几种排法(照统编语文二上量的;直接造行,不走 PDF):字体名每页不一样、诗分节、下一页顶上是插图、认字栏那一排同字号 ----
+{
+  const ln = (text: string, x: number, y: number, z: number, f: string, adv = 1): BookLine => {
+    const cs = Array.from(text);
+    return { text, x1: x, x2: x + cs.length * z * adv, y1: y, y2: y + z, z, f, chars: cs.map((c, k) => ({ c, x1: x + k * z * adv, x2: x + k * z * adv + z })) };
+  };
+  const pg = (n: number, lines: BookLine[]): BookPage => ({ n, printed: n, w: 520, h: 736, lines });
+  const head = [ln('树叶信', 220, 70, 27.5, 't'), ln('5', 180, 74, 21, 'n')];
+  // 第一页的正文字体叫 a,后面两页叫 b(字更多):第一页的正文不能当成标题;第二页顶上是插图,正文从页中间起
+  const a = pg(1, [...head, ln('秋天到了，风姑娘给大家送信。', 86, 150, 18, 'a'), ln('她把树叶轻轻地放进小河里。', 42, 190, 18, 'a')]);
+  const b = pg(2, [ln('小河把信送到了小鱼家，小鱼读了读', 86, 390, 18, 'b'), ln('树叶上的字，吐了一串泡泡。', 42, 430, 18, 'b'), ln('小松鼠捡到一片红叶，赶紧去找松果，', 86, 470, 18, 'b')]);
+  const c = pg(3, [ln('把松果藏进了大树洞里。', 42, 60, 18, 'b'), ln('秋汽越温滴奔海洋', 160, 160, 18, 'b', 1.44)]);
+  const bs = lessonBlocks([a, b, c]);
+  const ps = bs.filter((x) => x.kind === 'para');
+  check('分段:一页上没有正文那种字体名,认这一页同字号里字最多的那种(第一页的正文不当标题)', ps[0]?.text.startsWith('秋天到了') && bs[0].kind === 'title' && bs[0].text === '树叶信 5', JSON.stringify(bs.map((x) => [x.kind, x.text])));
+  check('分段:下一页顶上是插图、正文从页中间起,上面没有别的字也算接着', ps.length === 3 && ps[1].text.startsWith('小河') && ps[2].text === '小松鼠捡到一片红叶，赶紧去找松果，把松果藏进了大树洞里。', JSON.stringify(ps.map((x) => x.text)));
+  check('分段:认字栏那一排(没标点、全是汉字、字距宽)同字号也不算正文', !ps.some((x) => x.text.includes('汽越')) && bs.some((x) => x.kind === 'other' && x.text === '秋汽越温滴奔海洋'));
+  // 分节的诗:行距 40、节间 60;第 2 节从第一页底跨到第二页(翻页处正好换节)
+  const verse = (y: number, t: string) => ln(t, 187, y, 18, 'p');
+  const s1 = pg(1, [ln('风娃娃', 220, 60, 27.5, 't'), verse(146, '孩子如果已经长大，'), verse(186, '就得告别妈妈出发。'), verse(246, '蒲公英准备了小伞，'), verse(286, '把它送给自己的那些小娃娃。')]);
+  const s2 = pg(2, [verse(107, '苍耳妈妈有个好办法，'), verse(147, '给孩子穿上小铠甲。'), verse(207, '植物妈妈的办法多，'), verse(247, '不信你就仔细观察。')]);
+  const st = lessonBlocks([s1, s2]).filter((x) => x.kind === 'para');
+  check('分段:诗一节一节空开一点就是一段;翻页处正好换节也分开', st.map((x) => x.text).join('|') === '孩子如果已经长大，就得告别妈妈出发。|蒲公英准备了小伞，把它送给自己的那些小娃娃。|苍耳妈妈有个好办法，给孩子穿上小铠甲。|植物妈妈的办法多，不信你就仔细观察。', JSON.stringify(st.map((x) => x.text)));
+}
+
+// ---- 点读:一课分成标题和一段一段,一段切成句;诗按节;舞台的钮在段首的空白里 ----
+check('点读切句:句号、问号、叹号收一句,紧跟的引号跟着;空白去掉', readSentences('小鱼说：“泡泡圆圆的！”小鸟 听了。真的吗？').join('|') === '小鱼说：“泡泡圆圆的！”|小鸟听了。|真的吗？');
+const longSay = readSentences('一'.repeat(70) + '，' + '二'.repeat(70) + '。');
+check('点读切句:太长的一句在逗号处切开', longSay.length === 2 && longSay.every((x) => Array.from(x).length <= READ_SAY_MAX) && longSay.join('') === '一'.repeat(70) + '，' + '二'.repeat(70) + '。', JSON.stringify(longSay));
+const reads = bookReadTexts(fish, blocks);
+check('点读:标题(只读课名)在前,接着一段一块,句照段切', reads.map((x) => `${x.no}:${x.sents.join('/')}`).join('|') === '0:小鱼吹泡泡|1:小鱼在水里吹泡泡。|2:小鱼说：“泡泡圆圆的，像一个个小月亮，飞到天上去。/泡泡飞呀飞，飞进了井沿边的小花园。”|3:小鸟听了，也来吹泡泡。', JSON.stringify(reads));
+const poemReads = bookReadTexts(lp('静夜思'), poem);
+check('点读:诗一节一块(一行一段的并起来);标题读课名,再读标题下面的诗题', poemReads.map((x) => `${x.no}:${x.sents.join('/')}`).join('|') === '0:古诗两首/静夜思|1:床前明月光，/疑是地上霜。', JSON.stringify(poemReads));
+check('点读:语文园地(按栏目分)不点读', bookReadTexts(lp('语文园地一'), garden).length === 0);
+{
+  const sh = bookSheets(fish, undefined, bookCut(ix.pages));
+  const parts = bookReadParts(fish, sh, blocks);
+  const p1 = parts.find((x) => x.no === 1)!, line1 = fish[0].lines.find((l) => l.text === '小鱼在水里吹泡泡。')!;
+  const x1 = line1.x1 * sh[0].s;
+  check('点读的钮:能点的是段首缩进的那两格(宽两个字,到第一个字为止);钮在正中;高连着头上的拼音', parts.length === 4 && Math.abs(p1.hit[2] - p1.hit[0] - 2 * 18 * sh[0].s) < 2 && Math.abs((p1.hit[0] + p1.hit[2]) / 2 - p1.dot[0]) < 1 && Math.abs(p1.hit[2] - x1) < 3 && p1.dot[0] < x1 && p1.dot[0] > x1 - 40 && p1.hit[1] < line1.y1 * sh[0].s - (line1.y2 - line1.y1) * sh[0].s * 0.9, JSON.stringify(p1));
+  const t = parts.find((x) => x.no === 0)!;
+  check('点读的钮:标题的钮在课名左边', t.dot[0] < fish[0].lines.find((l) => l.text === '小鱼吹泡泡')!.x1 * sh[0].s, JSON.stringify(t));
+}
 
 // ---- 找位置 ----
 const sheets = bookSheets(fish);

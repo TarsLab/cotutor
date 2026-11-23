@@ -77,6 +77,7 @@ function App(): JSX.Element {
   const onPickAt = useCallback((at: [number, number, number, number] | null) => post({ type: 'pickAt', at }), []);
   const onReveal = useCallback((text: string) => post({ type: 'reveal', text }), []);
   const onOpen = useCallback((title: string) => post({ type: 'open', title }), []);
+  const onRead = useCallback((k: number, parts: number[], nos: number[]) => post({ type: 'read', k, parts, nos }), []);
   const onBookView = useCallback((box: [number, number, number, number]) => post({ type: 'view', box }), []);
   const onBookShot = useCallback((box: [number, number, number, number], image: string) => post({ type: 'shot', box, image }), []);
   const onLessonSubmit = useCallback(() => post({ type: 'submit' }), []);
@@ -99,7 +100,7 @@ function App(): JSX.Element {
     const lc = lesson.lecture;
     return <LectureStage ref={lecture} key={`lc:${page.bundle}`} bundleUrl={lc.url} title={page.title} video={page.video} marks={lc.marks as StageMark[]} view={lesson.readonly === true} follow={lc.follow === true} left={lesson.hand === 'left'} look={l.look?.at ?? null} play={lc.play} onRangeDone={onRangeDone} onLog={onWatch} onMarks={onMarks} onFinished={onLectureDone} onError={onError} />;
   }
-  if (lesson) return <BookStage ref={book} key={lesson.id} id={lesson.id} lesson={lesson.lesson as Lesson} readonly={lesson.readonly === true} hand={lesson.hand === 'left' ? 'left' : 'right'} mousePen={lesson.mousePen === true} toc={lesson.toc ?? null} onOpen={onOpen} onStroke={onStroke} onPen={onPen} onTurn={onTurn} onWipe={onWipe} onSubmit={onLessonSubmit} onPick={onPick} onPickAt={onPickAt} onCell={onCell} color={lesson.color} onReveal={onReveal} onView={onBookView} onShot={onBookShot} onError={onError} />;
+  if (lesson) return <BookStage ref={book} key={lesson.id} id={lesson.id} lesson={lesson.lesson as Lesson} readonly={lesson.readonly === true} hand={lesson.hand === 'left' ? 'left' : 'right'} mousePen={lesson.mousePen === true} toc={lesson.toc ?? null} onOpen={onOpen} read={lesson.read ?? null} onRead={onRead} onStroke={onStroke} onPen={onPen} onTurn={onTurn} onWipe={onWipe} onSubmit={onLessonSubmit} onPick={onPick} onPickAt={onPickAt} onCell={onCell} color={lesson.color} onReveal={onReveal} onView={onBookView} onShot={onBookShot} onError={onError} />;
   return <div className="stage-wait" />;
 }
 

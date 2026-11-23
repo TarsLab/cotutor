@@ -8,7 +8,7 @@ import { check, done } from './_check.ts';
 
 const M = (status: LiveStatus, cut = false): LiveModel => ({ ...initialLive(), status, cut });
 const kinds = (fx: LiveEffect[]) => fx.map((f) => (f.kind === 'gate' ? `gate:${f.on ? 'on' : 'off'}` : f.kind)).join(',');
-const ALL: LiveStatus[] = ['quiet', 'holding', 'mouth', 'lecture', 'replay'];
+const ALL: LiveStatus[] = ['quiet', 'holding', 'mouth', 'lecture', 'replay', 'reading'];
 
 // ---- 表:正在…… × 来了……(一行一格)----
 interface Row { name: string; from: LiveStatus | LiveStatus[]; ev: LiveEvent; want: (m: LiveModel, fx: string) => boolean; base?: Partial<LiveModel> }
@@ -47,8 +47,8 @@ const rows: Row[] = [
   { name: '嘴在说 + 打字发出 / 交答案 → 嘴没放完的清掉,send(舞台开着带 focus)', from: 'mouth', ev: { type: 'send' }, want: (m, fx) => m.status === 'quiet' && fx === 'flush,send,render' && m.cut },
   { name: '安静 + 打字发出 / 交答案 / 发照片 → send', from: 'quiet', ev: { type: 'send' }, want: (m, fx) => m.status === 'quiet' && fx === 'send,render' },
   { name: '(两根手指)按着 + 交答案 → 先 hush 那一下,再 send', from: 'holding', ev: { type: 'send' }, want: (m, fx) => m.status === 'quiet' && fx === 'hush,send,render' },
-  { name: '任何 + 连不上 / 断了 → 声音清掉,过一会儿再连(不回板书)', from: ALL, ev: { type: 'drop' }, want: (m, fx) => m.status === 'quiet' && !m.turn && fx === 'flush,stopLecture,stopReplay,retry' },
-  { name: '任何 + 换老师 / 关老师页 → 声音清掉', from: ALL, ev: { type: 'reset' }, want: (m, fx) => m.status === 'quiet' && !m.turn && fx === 'flush,stopLecture,stopReplay' },
+  { name: '任何 + 连不上 / 断了 → 声音清掉,过一会儿再连(不回板书)', from: ALL, ev: { type: 'drop' }, want: (m, fx) => m.status === 'quiet' && !m.turn && fx === 'flush,stopLecture,stopReplay,stopRead,retry' },
+  { name: '任何 + 换老师 / 关老师页 → 声音清掉', from: ALL, ev: { type: 'reset' }, want: (m, fx) => m.status === 'quiet' && !m.turn && fx === 'flush,stopLecture,stopReplay,stopRead' },
   // ---- 一直听 ----
   { name: '按住说 + 点「一直听」→ listen,开始推声音', from: 'quiet', ev: { type: 'listen', open: true }, want: (m, fx) => m.open && fx === 'listen,render,gate:on' },
   { name: '一直听 + 点掉「一直听」→ listen,不推了', from: 'quiet', base: { open: true }, ev: { type: 'listen', open: false }, want: (m, fx) => !m.open && fx === 'listen,render,gate:off' },
@@ -65,6 +65,24 @@ const rows: Row[] = [
   { name: '压低着 + 服务端 flush → 清掉、恢复,安静', from: 'mouth', base: { open: true, ducked: true }, ev: { type: 'flush' }, want: (m, fx) => !m.ducked && m.status === 'quiet' && fx === 'flush,unduck,render' },
   { name: '一直听、嘴在说 + 放完到 [[play]] 的小课堂 → 放那一段、不推了', from: 'mouth', base: { open: true }, ev: { type: 'drained', play: 'open' }, want: (m, fx) => m.status === 'lecture' && fx === 'openLecture,render,gate:off' },
   { name: '一直听、在放小课堂 + 那一段放完 → staged、接着推', from: 'lecture', base: { open: true }, ev: { type: 'lectureDone' }, want: (_m, fx) => fx === 'staged,render,gate:on' },
+  // ---- 点读:孩子点了课本上标题、段首的钮,孩子端放这一课的配音(一句一句);孩子点的,嘴、小课堂、重放都让它 ----
+  { name: '安静 + 点了段首的钮 → 读,在点读', from: 'quiet', ev: { type: 'read' }, want: (m, fx) => m.status === 'reading' && fx === 'playRead,render' },
+  { name: '嘴在说 + 点了段首的钮 → 嘴没放完的清掉、告诉服务端停下(hush),读;那句记成被打断', from: 'mouth', ev: { type: 'read' }, want: (m, fx) => m.status === 'reading' && fx === 'flush,hush,playRead,render' && m.cut },
+  { name: '在放小课堂 + 点了段首的钮 → 那一段停下、告诉服务端停下,读', from: 'lecture', ev: { type: 'read' }, want: (m, fx) => m.status === 'reading' && fx === 'stopLecture,hush,playRead,render' },
+  { name: '在重放 + 点了段首的钮 → 重放停,读', from: 'replay', ev: { type: 'read' }, want: (m, fx) => m.status === 'reading' && fx === 'stopReplay,playRead,render' },
+  { name: '孩子按着 + 点了段首的钮 → 不接', from: 'holding', ev: { type: 'read' }, want: (m, fx) => m.status === 'holding' && fx === '' },
+  { name: '在点读 + 点了另一段的钮 → 从那一段读', from: 'reading', ev: { type: 'read' }, want: (m, fx) => m.status === 'reading' && fx === 'playRead' },
+  { name: '在点读 + 点暂停 → 停,安静', from: 'reading', ev: { type: 'readStop' }, want: (m, fx) => m.status === 'quiet' && fx === 'stopRead,render' },
+  { name: '在点读 + 读完了 → 安静', from: 'reading', ev: { type: 'readEnded' }, want: (m, fx) => m.status === 'quiet' && fx === 'render' },
+  { name: '没在点读 + 点暂停 / 读完了(已经停了)→ 什么都不做', from: ['quiet', 'holding', 'mouth', 'lecture', 'replay'], ev: { type: 'readStop' }, want: (_m, fx) => fx === '' },
+  { name: '在点读 + 按住说话 → 读停下,hold', from: 'reading', ev: { type: 'press' }, want: (m, fx) => m.status === 'holding' && fx === 'stopRead,hold' && !m.cut },
+  { name: '在点读 + 打字发出 / 给老师看 → 读停下,send', from: 'reading', ev: { type: 'send' }, want: (m, fx) => m.status === 'quiet' && fx === 'stopRead,send,render' },
+  { name: '在点读 + 嘴的声音到了 → 读停下,放嘴的', from: 'reading', ev: { type: 'audio' }, want: (m, fx) => m.status === 'mouth' && fx === 'stopRead,enqueue,render' },
+  { name: '在点读 + 服务端 flush(嘴没在放)→ 接着读', from: 'reading', ev: { type: 'flush' }, want: (m, fx) => m.status === 'reading' && fx === 'flush' },
+  { name: '在点读 + 点「再听一遍」→ 不响', from: 'reading', ev: { type: 'replay' }, want: (m, fx) => m.status === 'reading' && fx === '' },
+  { name: '等孩子跟 + 点了段首的钮 → 光收,读', from: 'quiet', base: { turn: true }, ev: { type: 'read' }, want: (m, fx) => m.status === 'reading' && !m.turn && fx === 'playRead,render' },
+  { name: '一直听 + 点了段首的钮 → 不推了(配音别进麦)', from: 'quiet', base: { open: true }, ev: { type: 'read' }, want: (m, fx) => m.status === 'reading' && fx === 'playRead,render,gate:off' },
+  { name: '一直听、在点读 + 读完了 → 接着推', from: 'reading', base: { open: true }, ev: { type: 'readEnded' }, want: (m, fx) => m.status === 'quiet' && fx === 'render,gate:on' },
   // ---- 请孩子说:[[请 说 …]] 那句放完等他说 ----
   { name: '嘴在说 + 放完了、刚念完的那句是请他说的 [[请 说 …]] → 安静,轮到他', from: 'mouth', ev: { type: 'drained', echo: true }, want: (m, fx) => m.status === 'quiet' && m.turn && fx === 'render' },
   { name: '等孩子跟 + 服务端 vad 开 → 光变实(在听你说)', from: 'quiet', base: { open: true, turn: true }, ev: { type: 'vad', on: true }, want: (m, fx) => m.turn && m.hearing && fx === 'render' },
@@ -85,13 +103,13 @@ function rng(seed: number): () => number {
   let a = seed >>> 0;
   return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 }
-const KID = new Set(['press', 'release', 'cancel', 'send', 'listen']);
+const KID = new Set(['press', 'release', 'cancel', 'send', 'listen', 'read']);
 const SERVER_DUCK = new Set(['duck', 'unduck', 'flush', 'listen', 'reset', 'drop']);
 
 function run(seed: number, steps: number): string | null {
   const r = rng(seed);
   // 世界:孩子端两样声音在不在出、服务端以为孩子按没按着、孩子手指在不在按钮上
-  const w = { m: initialLive(), mouth: false, lecture: false, replay: false, serverHold: false, finger: false, gate: false, ducked: false, log: [] as string[] };
+  const w = { m: initialLive(), mouth: false, lecture: false, replay: false, read: false, serverHold: false, finger: false, gate: false, ducked: false, log: [] as string[] };
   const dispatch = (ev: LiveEvent): string | null => {
     const before = w.m;
     const { model, effects } = liveStep(before, ev);
@@ -110,12 +128,18 @@ function run(seed: number, steps: number): string | null {
     if (effects.some((f) => f.kind === 'playReplay') && ev.type !== 'replay') return '重放自己放了';
     if ((ev.type === 'replay' || ev.type === 'replayStop' || ev.type === 'replayEnded') && effects.some((f) => f.kind === 'hold' || f.kind === 'release' || f.kind === 'hush' || f.kind === 'send' || f.kind === 'staged' || f.kind === 'listen')) return '重放告诉了服务端';
     if (ev.type === 'replay' && ev.pending && effects.length) return '脑在写时放了重放';
+    // 不变式 14(点读):只在孩子点了钮才读;hush 只在点读掐断嘴、小课堂时发;点读的事件不发 hold / release / send
+    if (effects.some((f) => f.kind === 'playRead') && ev.type !== 'read') return '点读自己读了';
+    if (ev.type === 'read' && effects.some((f) => f.kind === 'hush') && !(before.status === 'mouth' || before.status === 'lecture')) return '点读没掐什么就 hush 了';
+    if ((ev.type === 'read' || ev.type === 'readStop' || ev.type === 'readEnded') && effects.some((f) => f.kind === 'hold' || f.kind === 'release' || f.kind === 'send' || f.kind === 'staged' || f.kind === 'listen')) return '点读告诉了服务端别的';
     // 照单执行
     for (const f of effects) {
-      if (f.kind === 'enqueue') { if (w.lecture) return '小课堂还在放就放了嘴的'; if (w.replay) return '重放还在放就放了嘴的'; w.mouth = true; }
-      if (f.kind === 'playReplay') { if (w.mouth || w.lecture) return '嘴 / 小课堂在响时放了重放'; w.replay = true; }
+      if (f.kind === 'enqueue') { if (w.lecture) return '小课堂还在放就放了嘴的'; if (w.replay) return '重放还在放就放了嘴的'; if (w.read) return '点读还在读就放了嘴的'; w.mouth = true; }
+      if (f.kind === 'playReplay') { if (w.mouth || w.lecture || w.read) return '嘴 / 小课堂 / 点读在响时放了重放'; w.replay = true; }
       if (f.kind === 'stopReplay') w.replay = false;
-      if (f.kind === 'openLecture') { if (w.mouth || w.replay) return '嘴 / 重放在响时放了小课堂'; w.lecture = true; }
+      if (f.kind === 'playRead') { if (w.mouth || w.lecture || w.replay) return '嘴 / 小课堂 / 重放在响时点读'; w.read = true; }
+      if (f.kind === 'stopRead') w.read = false;
+      if (f.kind === 'openLecture') { if (w.mouth || w.replay || w.read) return '嘴 / 重放 / 点读在响时放了小课堂'; w.lecture = true; }
       if (f.kind === 'stopLecture' || f.kind === 'staged') w.lecture = false;
       if (f.kind === 'flush') w.mouth = false;
       // 不变式 4:每次按下告诉服务端一次,之后一定跟一个 release 或 hush;release 只跟在 hold 后面
@@ -129,7 +153,7 @@ function run(seed: number, steps: number): string | null {
       if (f.kind === 'unduck') w.ducked = false;
     }
     // 不变式 10:推不推 = 一直听、没关麦、小课堂没在放、没在重放;服务端知道的和孩子端推的一样
-    const push = model.open && !model.muted && !w.lecture && !w.replay && model.status !== 'holding';
+    const push = model.open && !model.muted && !w.lecture && !w.replay && !w.read && model.status !== 'holding';
     if (liveGate(model) !== push) return `推不推算错了(${liveGate(model)})`;
     if (liveGate(model) !== w.gate) return '孩子端推不推和告诉服务端的对不上';
     if (w.ducked !== model.ducked) return '压没压低对不上';
@@ -137,11 +161,13 @@ function run(seed: number, steps: number): string | null {
     // 不变式 5:几样声音不同时响;按着时不出声
     if (w.lecture && w.mouth) return '小课堂和嘴同时响';
     if (w.replay && (w.mouth || w.lecture)) return '重放和嘴 / 小课堂同时响';
-    if (model.status === 'holding' && (w.mouth || w.lecture || w.replay)) return '按着时还在出声';
+    if (w.read && (w.mouth || w.lecture || w.replay)) return '点读和别的声音同时响';
+    if (model.status === 'holding' && (w.mouth || w.lecture || w.replay || w.read)) return '按着时还在出声';
     // 不变式 6:状态说的就是在响的
     if ((model.status === 'mouth') !== w.mouth) return `状态 ${model.status} 和嘴在不在响对不上`;
     if ((model.status === 'lecture') !== w.lecture) return `状态 ${model.status} 和小课堂在不在放对不上`;
     if ((model.status === 'replay') !== w.replay) return `状态 ${model.status} 和重放在不在放对不上`;
+    if ((model.status === 'reading') !== w.read) return `状态 ${model.status} 和点读在不在读对不上`;
     // 不变式 12(请他说):轮到他时嘴不在说
     if (model.turn && w.mouth) return '嘴在说时还轮到他';
     if (w.serverHold && model.status !== 'holding') return '服务端以为按着,孩子端不在按着';
@@ -158,7 +184,7 @@ function run(seed: number, steps: number): string | null {
     else if (x < 0.52) ev = { type: 'flush' };
     else if (x < 0.68) { if (w.lecture || r() < 0.1) ev = { type: 'lectureDone' }; else continue; }
     else if (x < 0.8) ev = { type: 'send' };
-    else if (x < 0.89) continue;
+    else if (x < 0.89) { const p = r(); if (w.read && p < 0.3) { w.read = false; ev = { type: 'readEnded' }; } else ev = p < 0.75 ? { type: 'read' } : { type: 'readStop' }; }
     else if (x < 0.935) ev = { type: r() < 0.5 ? 'reset' : 'drop' };
     else if (x < 0.95) ev = { type: 'listen', open: r() < 0.7 };
     else if (x < 0.965) ev = { type: r() < 0.5 ? 'mute' : 'unmute' };

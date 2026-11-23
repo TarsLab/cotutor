@@ -96,5 +96,5 @@
 
 - realtime 模型负责听说,脑(应用直连百炼)生成讲稿和动作。嘴按句照念脑的讲稿。谁先答照 activity 头上的 `reply:` 走,代码不照学科分:脑先答的(缺省)嘴不另编教学内容,只接住、照念;嘴先答的(`reply: mouth`)只在脑给的范围里回应——脑一轮最后那句问话和 `[[请 说 …]]` 要他说的那一句,说中了接一句、没说中提示一下(`cues.ts` 的 `replyCue`),答不了的(说了别的、连着两次没说中、说中了这一步就完了)交给脑,嘴说过的下一轮带给脑(`live.mouth`)。
 - 孩子开口或发出新一轮时,中断旧播放并使旧轮的延迟结果失效,不能把上一轮语音接到下一轮。队列与取消逻辑在 `src/runtime/live/call.ts`、`src/runtime/delivery/queue.ts`。
-- 嘴、小课堂那一段和重放的声音互斥;暂停、恢复和打断统一经 `liveDispatch` / `liveStep`,页面不私自改播放状态。板上的节由 `board/presentation.ts` 的 `step` 管。
+- 嘴、小课堂那一段、重放和点读的声音互斥;暂停、恢复和打断统一经 `liveDispatch` / `liveStep`,页面不私自改播放状态。板上的节由 `board/presentation.ts` 的 `step` 管。
 - 按句交付讲稿,每句的动作念完才落到页上;问答、请他说([[请 说 …]])和「给老师看」的等待时机以 `tests/live-player.test.ts`、`tests/live-flow.test.ts` 与 `tests/player.test.ts` 为准。

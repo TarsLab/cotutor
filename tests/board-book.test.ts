@@ -171,10 +171,20 @@ const ix = bookIndexOf();
   const cellLog = (await readBoard(ws, T, date, thread)).filter((e) => e.k === 'cell');
   check('田字格里写好了:状态里这一格两笔,日志记照着哪个字写的;老师请着用笔(上一轮请了圈)就替他交', cell?.say === null && cell.asked === true && lessonPage(lCell)!.kid.cells?.['2.0']?.length === 2 && cellLog.length === 1 && cellLog[0].k === 'cell' && cellLog[0].text === '泡', JSON.stringify([cell, lessonPage(lCell)!.kid.cells, cellLog]));
   check('田字格:id 不对、坐标出格、笔画不是数组都不收', badCells.every((x) => x === null), JSON.stringify(badCells));
+  // 点读了两回:从标题读到第 2 段停了;第 3 段读到了最后。不叫老师,下一轮老师在「孩子做的」里看到
+  const read1 = await ctx.runner.boardEvent(T, date, { k: 'read', thread, base, from: 0, to: 2 });
+  const read2 = await ctx.runner.boardEvent(T, date, { k: 'read', thread, base, from: 3, to: 3, done: true });
+  const badReads = await Promise.all([
+    ctx.runner.boardEvent(T, date, { k: 'read', thread, base, from: -1, to: 2 }),
+    ctx.runner.boardEvent(T, date, { k: 'read', thread, base, from: 0, to: 1.5 }),
+    ctx.runner.boardEvent(T, date, { k: 'read', thread, base: '语文一年级下册.pdf#目录', from: 0, to: 1 }),
+  ]);
+  check('点读了一回:记一笔,不念、不叫老师;号不对、不是现在这一页的不收', read1?.say === null && read1.still === false && read2?.still === false && badReads.every((x) => x === null) && (await readBoard(ws, T, date, thread)).filter((e) => e.k === 'read').length === 2, JSON.stringify([read1, read2, badReads]));
   now = new Date(2026, 10, 14, 10, 6, 20);
   const third = await kidSend(ctx, T, { text: '这个字怎么读', thread });
   await wait();
   const pr3 = promptOf(String(third.json.job));
+  check('下一轮:孩子做的里说他点读了哪几段、在哪停的', pr3.includes('自己点了课文听(点读的配音):从标题读到第 2 段,在第 2 段停了') && pr3.includes('自己点了课文听(点读的配音):读了第 3 段,读完了全文'), pr3.slice(pr3.indexOf('board:'), pr3.indexOf('board:') + 700));
   check('下一轮:孩子做的里说他在田字格里写了几个、照着哪个字', pr3.includes('在田字格里写了 1 个字(照着「泡」写的),写成什么样看图'), pr3.slice(pr3.indexOf('board:'), pr3.indexOf('board:') + 500));
   check('下一轮:底是这一课,这一课的字分好段(第一次看到,给一条 <page>);他点了什么、最近点的、他在看哪里', pr3.includes('底: "课本《语文一年级下册》:《小鱼吹泡泡》第 1–2 页"') && pr3.includes('第1段 小鱼在水里吹泡泡。') && pr3.includes('点开看了笔顺:泡') && pr3.includes('孩子在看: "第 2 页:第 2–3 段"'), pr3.slice(pr3.indexOf('board:'), pr3.indexOf('board:') + 400));
   now = new Date(2026, 10, 14, 10, 8);
@@ -198,6 +208,17 @@ const ix = bookIndexOf();
   check('一节课的状态:老师、日期、话题不对的 404;没有的 lesson 是 null', (await route('GET', `/api/kid/lesson?tutor=nobody&date=${date}&thread=${thread}`, ctx)).status === 404 && (await route('GET', `/api/kid/lesson?tutor=${T}&date=x&thread=${thread}`, ctx)).status === 404 && ((await route('GET', `/api/kid/lesson?tutor=${T}&date=${date}&thread=0000-9`, ctx)).json as { lesson: unknown }).lesson === null);
   const nf = await Promise.all([route('GET', `/api/kid/textbook/pdf?b=${encodeURIComponent('../cotutor.json')}`, ctx), route('GET', '/api/kid/textbook/pdf?b=x.pdf', ctx), route('GET', `/api/kid/textbook/lines?b=${encodeURIComponent('语文一年级下册.pdf')}&p=x`, ctx)]);
   check('越界、不在、页写错:404', nf.every((r) => r.status === 404));
+  // 点读:第 k 块第 s 句的声音,字由服务端照课本取,用这位老师点读的声音合成(假配音)
+  const { startFakeTts } = await import('./_fake-tts.ts');
+  const tts = await startFakeTts();
+  process.env.COTUTOR_TTS_ENDPOINT = tts.url;
+  const say = (q: string) => route('GET', `/api/kid/textbook/say?tutor=${T}&b=${encodeURIComponent('语文一年级下册.pdf')}&${q}`, ctx);
+  const s0 = await say('p=2-3&k=2&s=1'), sAgain = await say('p=2-3&k=2&s=1');
+  check('点读:第 2 段第 2 句照课本合成(语文老师出厂的点读声音);同一句再要不再合成', s0.status === 200 && s0.contentType === 'audio/mpeg' && readFileSync(s0.file!, 'utf8').endsWith(':泡泡飞呀飞，飞进了井沿边的小花园。”') && sAgain.file === s0.file && tts.requests.length === 1, JSON.stringify([s0, tts.requests]));
+  const sBad = await Promise.all([say('p=2-3&k=9&s=0'), say('p=2-3&k=1&s=5'), say('p=x&k=0&s=0'), say('p=2-3&k=-1&s=0'), route('GET', `/api/kid/textbook/say?tutor=nobody&b=${encodeURIComponent('语文一年级下册.pdf')}&p=2-3&k=0&s=0`, ctx)]);
+  check('点读:块、句越界,页写错,没有这位老师:404', sBad.every((r) => r.status === 404), JSON.stringify(sBad.map((r) => r.status)));
+  delete process.env.COTUTOR_TTS_ENDPOINT;
+  await tts.close();
 
   // ---- 目录能点:孩子端要目录时一起要能点的那几项;一课里按「目录」回去、在目录上点一课翻过去,老师接着讲 ----
   type Toc = { page: { id: string; title: string }; entries: { title: string; box: number[]; page: { id: string; title: string; pages: number[] } }[] };

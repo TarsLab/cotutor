@@ -108,6 +108,10 @@ export function slateOf(x: SlateInput): NonNullable<ContextPack['slate']> {
   const filled = cells.filter((e) => !e.clear && e.blank).length;
   if (filled) did.push(`在页上的空(方框、括号)里填了 ${filled} 处,填的什么看图`);
   if (cells.some((e) => e.clear)) did.push('擦掉了格子里写的');
+  // 点读:点了标题或段首听课文(放的是录好的配音,不是你说的);一回一句,最多说最后三回
+  const part = (n: number): string => (n === 0 ? '标题' : `第 ${n} 段`);
+  const reads = since.filter((e): e is BoardEvent & { k: 'read' } => e.k === 'read' && e.base === base);
+  for (const e of reads.slice(-3)) did.push(`自己点了课文听(点读的配音):${e.from === e.to ? `读了${part(e.from)}` : `从${part(e.from)}读到${part(e.to)}`}${e.done ? ',读完了全文' : `,在${part(e.to)}停了`}`);
   // 白纸条上的图形:画法照几何算的大概(状态,不是这一轮才做的;以图为准)
   if (x.lesson.strip) did.push(...x.lesson.strip);
   // 遮了拼音的、盖住印好的字的:揭了哪些、没揭哪些(这一页上揭过的都算)

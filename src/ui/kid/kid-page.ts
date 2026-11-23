@@ -90,7 +90,8 @@ ${faviconLinks()}
   .av .ring circle { fill:none; stroke:currentColor; stroke-width:7; stroke-linecap:round; stroke-dasharray:221.17 55.29; transform-origin:50px 50px; transform:rotate(36deg); transition:transform .45s cubic-bezier(.3,1.6,.5,1); }
   .av .face { position:absolute; left:15%; top:15%; width:70%; height:70%; border-radius:50%; background:var(--card); overflow:hidden; display:grid; place-items:center; font-size:.76em; line-height:1; }
   /* 头像是按住说话的钮:iPad 的 Safari 长按图片会把图「拎起来」拖、弹存图的菜单——图不收触摸(落在钮上)、不许拖、不弹菜单 */
-  .av img { width:100%; height:100%; object-fit:cover; pointer-events:none; -webkit-user-drag:none; -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
+  /* 图铺满白底圆:绝对定位,不靠 grid 里的百分比高(Safari 在 grid 里算不出 height:100%,图按原尺寸铺开,圆里只露出左上角,底是白的就像没有头像) */
+  .av img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; pointer-events:none; -webkit-user-drag:none; -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
   /* 画出来:从右上起笔逆时针一笔写出 C,写完头像冒出来(首页打开、回到首页、空白板;--d 是首页几位老师错开的那一下) */
   .av.draw .ring circle { animation:av-draw .9s cubic-bezier(.6,0,.3,1) var(--d, 0s) backwards; }
   .av.draw .face { animation:av-pop .5s ease-out calc(var(--d, 0s) + .35s) backwards; }
@@ -1304,11 +1305,14 @@ ${HOME_TILES_JS}
     $('#st-toc').hidden = !tocOf || p.title === '目录';
     // 小课堂那一页:播放器有自己的课名、进度条、画一画,页面的「给老师看」不出
     $('#stage').classList.toggle('lcp', Boolean(p && p.kind === 'lecture'));
-    const key = JSON.stringify(LS.l) + (tocOn ? '|toc' : '');
+    // 翻走了:这一页的点读作废
+    if (RD.at && RD.at !== LS.l.at) readForget();
+    const read = readView();
+    const key = JSON.stringify(LS.l) + (tocOn ? '|toc' : '') + '|' + JSON.stringify(read);
     renderGo();
     if (key === LS.key) return;
     LS.key = key;
-    postStage({ type: 'lesson', id: S.stage.id, lesson: LS.l, readonly: S.readonly || REEL, hand: document.body.classList.contains('hand-left') ? 'left' : 'right', color: tutorColor(), ...(TRIAL ? { mousePen: true } : {}), ...(tocOn ? { toc: { color: tutorColor(), entries: BP.toc.entries.map((e) => ({ title: e.title, box: e.box })) } } : {}), ...(p && p.kind === 'lecture' ? { lecture: { url: lcBundleUrl(p.bundle, p.video), marks: S.lecture && S.lecture.bundle === p.bundle ? S.lecture.marks : [], follow: REEL, ...(LS.playN ? { play: LS.playN } : {}) } } : {}) });
+    postStage({ type: 'lesson', id: S.stage.id, lesson: LS.l, readonly: S.readonly || REEL, hand: document.body.classList.contains('hand-left') ? 'left' : 'right', color: tutorColor(), ...(TRIAL ? { mousePen: true } : {}), ...(tocOn ? { toc: { color: tutorColor(), entries: BP.toc.entries.map((e) => ({ title: e.title, box: e.box })) } } : {}), ...(read ? { read } : {}), ...(p && p.kind === 'lecture' ? { lecture: { url: lcBundleUrl(p.bundle, p.video), marks: S.lecture && S.lecture.bundle === p.bundle ? S.lecture.marks : [], follow: REEL, ...(LS.playN ? { play: LS.playN } : {}) } } : {}) });
     if (!REEL && !S.readonly) { clearTimeout(LS.recT); LS.recT = setTimeout(() => { const k = JSON.stringify(LS.l); if (k !== LS.recKey && S.thread) { LS.recKey = k; playRec({ k: 'lesson', l: LS.l }); } }, 1500); }
   };
   /** 页铺满:舞台开一次,之后只换状态 */
@@ -1331,7 +1335,7 @@ ${HOME_TILES_JS}
     lsOpenStage();
     lsFeed();
   };
-  const lsReset = () => { clearTimeout(LS.recT); clearTimeout(LS.idleT); LS.idleT = 0; LS.on = false; LS.l = null; LS.job = null; LS.key = ''; LS.recKey = ''; LS.asking = false; LS.playN = 0; };
+  const lsReset = () => { readForget(); clearTimeout(LS.recT); clearTimeout(LS.idleT); LS.idleT = 0; LS.on = false; LS.l = null; LS.job = null; LS.key = ''; LS.recKey = ''; LS.asking = false; LS.playN = 0; };
   /** 孩子在页上做的事:先落在自己这一份上,再经实时那条连接报给服务端(它照样落进 lesson.json;base 不是它现在那一页就不落) */
   const lsKid = (ev, report) => {
     if (!LS.on || !LS.l || S.readonly || REEL) return;
@@ -1362,6 +1366,8 @@ ${HOME_TILES_JS}
     if (m.type === 'pick') { pickShow(m.text, Array.isArray(m.at) ? m.at : null); lsKid({ t: 'pick', text: String(m.text || '') }, { k: 'pick', text: m.text }); return; }
     // 目录上点了一项:自己先翻过去,再报给服务端(它照样翻、替他起一轮让老师接着讲);还没有话题(老师第一句还没开始)的不翻
     if (m.type === 'open') { const e = BP.toc && S.thread ? BP.toc.entries.find((x) => x.title === m.title) : null; if (e) { pickHide(); lsKid({ t: 'act', act: { k: '翻', page: e.page } }, { k: 'open', title: e.title }); } return; }
+    // 点了标题、段首的钮:点读
+    if (m.type === 'read') { pickHide(); readTap(m); return; }
     if (m.type === 'reveal') { lsKid({ t: 'reveal', text: String(m.text || '') }, { k: 'reveal', text: m.text }); previewSoon(PV_HAND_MS); return; }
     if (m.type === 'view' && Array.isArray(m.box) && m.box.length === 4) { lsKid({ t: 'view', box: m.box }, { k: 'view', box: m.box }); previewSoon(PV_HAND_MS); return; }
     if (m.type === 'shot' && Array.isArray(m.box) && typeof m.image === 'string' && S.thread && LS.l && LS.l.at && !S.readonly && !REEL) { lvSend({ t: 'board', body: { k: 'shot', thread: S.thread, base: LS.l.at, box: m.box, image: m.image } }); return; }
@@ -2421,6 +2427,8 @@ __REEL_DOCK_JS__
         case 'duck': case 'unduck': if (LV.audio) LV.audio.duck(f.kind === 'duck' ? 0.3 : 1); break;
         case 'playReplay': replayPlay(); break;
         case 'stopReplay': replayStop(); break;
+        case 'playRead': readPlay(); break;
+        case 'stopRead': readStop(); break;
       }
     }
     // 课本做底:嘴说完了,这一节没落的动作落上
@@ -2533,6 +2541,103 @@ __REEL_DOCK_JS__
   };
   const replayStop = () => { clearInterval(RP.timer); RP.line = -1; if (RP.el) { RP.el.onended = null; RP.el.pause(); } renderSubtitle(); };
   $('#lv-replay').addEventListener('click', () => { if (!LV.on) return; unlock(); liveDispatch(LV.model.status === 'replay' ? { type: 'replayStop' } : { type: 'replay', pending: S.pending }); });
+  // ---- 点读课文(语文课本的一课,docs/dev/课本.md):孩子点标题、段首的钮(舞台报 read,带这一课分好的几块:每块是标题还是第几段、几句),
+  //      孩子端用共享的 Audio 一句一句放这位老师「点读的声音」(/api/kid/textbook/say:服务端照课本现取字,合成过的有缓存)。
+  //      一块读完停 READ_GAP_MS,钮挪到下一块接着读,读到课文最后停;暂停停在那一秒,再点那一块的钮接着读;停下 READ_FADE_MS 钮淡掉(再点还是接着读)。
+  //      读到哪停的报给服务端记一笔(下一轮老师在「孩子做的」里看到)。谁让谁在 liveStep(reading);这里只取、放,告诉舞台钮在哪一块、什么样(lsShow 的 read) ----
+  const READ_GAP_MS = 1200, READ_FADE_MS = 5000, READ_WAIT_MS = 350;
+  /** at = 这几块属于哪一页;k / s = 第几块第几句;mode = 钮的样子(playing 暂停钮、loading 转圈、between 挪到下一块转一圈、paused 播放钮、rest 淡掉了);from = 这一回从哪一块读起 */
+  const RD = { at: '', nos: [], parts: [], k: -1, s: 0, mode: '', from: -1, gapT: 0, fadeT: 0, waitT: 0 };
+  /** 这一页能不能点读:实时老师页、这位老师有点读的声音、语文课本的一课(不是目录) */
+  const readOk = () => { const p = LS.on && LS.l ? lessonPage(LS.l) : null; return Boolean(LV.on && !S.readonly && !REEL && S.tutor && S.tutor.hasVoice && p && p.kind === 'book' && p.layout !== 'math' && p.title !== '目录'); };
+  const readUrl = (k, s) => { const p = lessonPage(LS.l); return '/api/kid/textbook/say?tutor=' + encodeURIComponent(S.tutor.name) + '&b=' + encodeURIComponent(p.src) + '&p=' + p.pages[0] + '-' + p.pages[p.pages.length - 1] + '&k=' + k + '&s=' + s; };
+  const readMode = (m) => { if (RD.mode === m) return; RD.mode = m; lsShow(); };
+  /** 读到哪停的报给服务端(一回一条);done = 读到了课文最后 */
+  const readReport = (done) => {
+    const from = RD.nos[RD.from], to = RD.nos[Math.max(0, Math.min(RD.k, RD.nos.length - 1))];
+    const ok = RD.from >= 0 && S.thread && LS.l && RD.at === LS.l.at && from !== undefined && to !== undefined;
+    RD.from = -1;
+    if (ok) lvSend({ t: 'board', body: { k: 'read', thread: S.thread, base: RD.at, from, to, ...(done ? { done: true } : {}) } });
+  };
+  /** 放第 k 块第 s 句;下一句先叫服务端合成着(合成过的直接给文件) */
+  const readSay = () => {
+    clearTimeout(RD.gapT); clearTimeout(RD.waitT);
+    const a = audioEl, k = RD.k, s = RD.s;
+    a.onended = () => readNext();
+    a.onerror = () => readFail();
+    a.onplaying = () => { if (RD.k === k && RD.s === s) { clearTimeout(RD.waitT); readMode('playing'); } };
+    a.src = readUrl(k, s);
+    a.dataset.read = k + '.' + s;
+    const pr = a.play(); if (pr && pr.catch) pr.catch((e) => { if (!(e && e.name === 'AbortError')) readFail(); });
+    // 一会儿还没出声(第一次读这一段,在合成):钮里转一个小圈
+    RD.waitT = setTimeout(() => { if (RD.k === k && RD.s === s && LV.model.status === 'reading' && !(a.currentTime > 0)) readMode('loading'); }, READ_WAIT_MS);
+    const nx = s + 1 < RD.parts[k] ? [k, s + 1] : k + 1 < RD.parts.length ? [k + 1, 0] : null;
+    if (nx) fetch(readUrl(nx[0], nx[1])).catch(() => {});
+  };
+  const readNext = () => {
+    if (LV.model.status !== 'reading' || RD.k < 0) return;
+    if (RD.s + 1 < RD.parts[RD.k]) { RD.s++; readSay(); return; }
+    if (RD.k + 1 < RD.parts.length) {
+      RD.k++; RD.s = 0;
+      readMode('between');
+      RD.gapT = setTimeout(() => { if (LV.model.status === 'reading' && RD.mode === 'between') readSay(); }, READ_GAP_MS);
+      return;
+    }
+    readReport(true);
+    RD.k = -1; RD.s = 0; readMode('');
+    liveDispatch({ type: 'readEnded' });
+  };
+  /** 读不下去了(没配声音、合成失败、放不出来):停下,钮收起,不出错 */
+  const readFail = () => {
+    if (LV.model.status !== 'reading') return;
+    readReport(false);
+    RD.k = -1; RD.s = 0; readMode('');
+    liveDispatch({ type: 'readEnded' });
+  };
+  /** playRead:暂停在这一句的就从那一秒接着读,不然从 RD.k、RD.s 起读 */
+  const readPlay = () => {
+    clearTimeout(RD.fadeT); clearTimeout(RD.gapT);
+    if (RD.k < 0) { setTimeout(() => liveDispatch({ type: 'readEnded' }), 0); return; }
+    if (RD.from < 0) RD.from = RD.k;
+    const a = audioEl;
+    if ((RD.mode === 'paused' || RD.mode === 'rest') && a.dataset.read === RD.k + '.' + RD.s && a.currentTime > 0 && !a.ended) {
+      readMode('playing');
+      a.onended = () => readNext(); a.onerror = () => readFail(); a.onplaying = null;
+      const pr = a.play(); if (pr && pr.catch) pr.catch(() => readFail());
+      return;
+    }
+    readMode('playing');
+    readSay();
+  };
+  /** stopRead:停在这一秒;钮留着(播放的样子),过一会儿淡掉 */
+  const readStop = () => {
+    clearTimeout(RD.gapT); clearTimeout(RD.waitT);
+    try { audioEl.onended = audioEl.onerror = audioEl.onplaying = null; audioEl.pause(); } catch {}
+    if (RD.k < 0) return;
+    readReport(false);
+    readMode('paused');
+    clearTimeout(RD.fadeT); RD.fadeT = setTimeout(() => { if (RD.mode === 'paused') readMode('rest'); }, READ_FADE_MS);
+  };
+  /** 舞台报的:点了第 k 块的钮。在读的那一块 = 暂停;停着的那一块 = 接着读;别的块 = 从那一块读起 */
+  const readTap = (m) => {
+    if (!readOk() || !Array.isArray(m.parts) || !Array.isArray(m.nos) || m.parts.length !== m.nos.length || typeof m.k !== 'number' || !(m.k >= 0 && m.k < m.parts.length)) return;
+    unlock();
+    if (RD.at !== LS.l.at || RD.parts.join() !== m.parts.join()) { RD.at = LS.l.at; RD.parts = m.parts.slice(); RD.nos = m.nos.slice(); RD.k = -1; RD.s = 0; RD.mode = ''; RD.from = -1; }
+    const reading = LV.model.status === 'reading';
+    if (reading && m.k === RD.k) { liveDispatch({ type: 'readStop' }); return; }
+    if (reading) readReport(false);
+    if (m.k !== RD.k || !(RD.mode === 'paused' || RD.mode === 'rest')) { RD.k = m.k; RD.s = 0; RD.mode = ''; }
+    RD.from = -1;
+    liveDispatch({ type: 'read' });
+  };
+  /** 翻走了、关了老师页:这一页的点读作废(在读的停下) */
+  const readForget = () => {
+    const was = LV.model.status === 'reading';
+    clearTimeout(RD.fadeT); RD.at = ''; RD.k = -1; RD.s = 0; RD.mode = ''; RD.from = -1;
+    if (was) setTimeout(() => { if (LV.model.status === 'reading') liveDispatch({ type: 'readStop' }); }, 0);
+  };
+  /** 发给舞台的点读:null = 这一页不点读;k = -1 没在读 */
+  const readView = () => (readOk() ? (RD.at === LS.l.at && RD.k >= 0 && RD.mode && RD.mode !== 'rest' ? { k: RD.k, mode: RD.mode } : { k: -1, mode: '' }) : null);
   const liveCaption = () => {
     liveListenUi();
     lvKid();

@@ -360,6 +360,7 @@ export class Runner {
    *  - 点字 {k:'pick', text}:回这个字词的念法(照片上认字时模型写好的「傍,傍晚的傍」,嘴照念;没有就念它自己);揭开 {k:'reveal', text}:嘴不念
    *  - 自己翻页 {k:'open', title}:目录上点了一课(title 是目录上那一项,tocEntries),或在一课里按「目录」回去(title = 目录,窗停在刚才那一课那一行)。
    *    照这本书的目录翻过去、记进板的日志;点的是一课就记下这本书翻到哪了(book-last),回 open(通话替他起一轮,老师接着讲这一课)
+   *  - 点读了一回 {k:'read', from, to, done?}(课本上点了标题或段首,孩子端放的配音;读到停下才报):记一笔,不叫老师
    * 话题不是今天的一节课、东西不对:回 null,什么都不记
    */
   async boardEvent(tutor: string, date: string, body: unknown): Promise<{ thread: string; say: string | null; still?: false; shot?: true; asked?: true; open?: string } | null> {
@@ -403,6 +404,15 @@ export class Runner {
       if (toc) return { thread, say: null, still: false };
       await rememberBook(ws, book.file, page.title, now);
       return { thread, say: null, still: false, open: page.title };
+    }
+    // 点读了一回:只记一笔(读到哪停的),不念、不叫老师——他在听课文
+    if (b.k === 'read') {
+      const int = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 999;
+      if (!int(b.from) || !int(b.to)) return null;
+      const cur = lessonPage(await readLesson(ws, tutor, date, thread));
+      if (!cur || cur.id !== base || cur.kind !== 'book') return null;
+      await appendBoard(ws, tutor, date, thread, { at, k: 'read', base, from: b.from, to: b.to, ...(b.done === true ? { done: true as const } : {}) });
+      return { thread, say: null, still: false };
     }
     if (b.k === 'turn') {
       if (typeof b.item !== 'string' || b.item.length > 60 || typeof b.deg !== 'number' || !Number.isFinite(b.deg)) return null;

@@ -165,7 +165,20 @@ export function lessonBlocks(pages: readonly BookPage[], layout: BookLayout = 'p
   const weight = new Map<string, number>();
   for (const x of all) if (x.l.chars.length >= 6) weight.set(`${x.l.f}|${x.l.z}`, (weight.get(`${x.l.f}|${x.l.z}`) ?? 0) + x.l.chars.length);
   const key = [...weight].sort((a, b) => b[1] - a[1])[0]?.[0];
-  const isBody = (x: At): boolean => `${x.l.f}|${x.l.z}` === key;
+  // 同一册里字体的名字每页可以不一样(统编语文二上《寒号鸟》第一页 f31、后面 f17):一页上压根没有那种字体,就认这一页同字号里字最多的那种
+  const keyZ = key ? Number(key.slice(key.lastIndexOf('|') + 1)) : NaN;
+  const keyF = key ? key.slice(0, key.lastIndexOf('|')) : '';
+  const pageFont = new Map<BookPage, string>();
+  for (const p of new Set(all.map((x) => x.p))) {
+    const same = all.filter((x) => x.p === p && x.l.z === keyZ);
+    if (!same.length || same.some((x) => x.l.f === keyF)) { pageFont.set(p, keyF); continue; }
+    const w = new Map<string, number>();
+    for (const x of same) w.set(x.l.f, (w.get(x.l.f) ?? 0) + x.l.chars.length);
+    pageFont.set(p, [...w].sort((a, b) => b[1] - a[1])[0][0]);
+  }
+  // 课文后面认字栏的那一排字(「汽越温滴奔海洋发坏」)和正文同字号,换了字体名的那页会混进来:没有标点、全是汉字、字距宽(字号的 1.44 倍,正文 1.2 上下、识字课的诗 1.36)
+  const letterRow = (l: BookLine): boolean => l.chars.length >= 6 && l.chars.every((c) => /\p{Script=Han}/u.test(c.c)) && (l.x2 - l.x1) / l.chars.length / l.z >= 1.4;
+  const isBody = (x: At): boolean => x.l.z === keyZ && x.l.f === pageFont.get(x.p) && !letterRow(x.l);
   const bodies = all.filter(isBody);
   const gaps: number[] = [];
   for (let k = 1; k < bodies.length; k++) if (bodies[k].p === bodies[k - 1].p && bodies[k].l.y1 > bodies[k - 1].l.y1) gaps.push(bodies[k].l.y1 - bodies[k - 1].l.y1);
@@ -175,20 +188,37 @@ export function lessonBlocks(pages: readonly BookPage[], layout: BookLayout = 'p
   for (const x of bodies) {
     const prev = run[run.length - 1];
     if (!prev) { run.push(x); continue; }
-    const ok = prev.p === x.p ? x.l.y1 - prev.l.y1 <= 1.6 * pitch : x.p.n === prev.p.n + 1 && !run.some((y) => y.p === x.p) && x.l.y1 < x.p.h * 0.25;
+    // 下一页顶上是插图(《寒号鸟》第二页)时正文从页中间起:上面没有别的字(图注那种小字不算)也算接着
+    const clearAbove = (): boolean => !all.some((y) => y.p === x.p && y.l.y1 < x.l.y1 && y.l.z >= x.l.z * 0.85);
+    const ok = prev.p === x.p ? x.l.y1 - prev.l.y1 <= 1.6 * pitch : x.p.n === prev.p.n + 1 && !run.some((y) => y.p === x.p) && (x.l.y1 < x.p.h * 0.25 || clearAbove());
     if (!ok) break;
     run.push(x);
   }
   const inRun = new Set(run);
   const poem = run.length > 0 && run.every((x) => x.l.chars.length <= 10);
   const paras: At[][] = [];
+  let stanzas = false;
   run.forEach((x, k) => {
     const z = x.l.z;
     const near = run.filter((y) => y.p === x.p && Math.abs(y.l.y1 - x.l.y1) <= 6 * pitch && y.l.x1 >= x.l.x1 - 4 * z);
     const margin = Math.min(...near.map((y) => y.l.x1));
-    const start = k === 0 || poem || x.l.x1 - margin >= 1.2 * z;
+    // 诗的一节和一节之间空一点(《植物妈妈有办法》行距 40、节间 60):同一页里空出 1.3 倍行距以上另起一段
+    const prev = run[k - 1];
+    const gap = prev && prev.p === x.p && x.l.y1 - prev.l.y1 > 1.3 * pitch;
+    const start = k === 0 || poem || gap || x.l.x1 - margin >= 1.2 * z;
     if (start) paras.push([x]); else paras[paras.length - 1].push(x);
+    if (gap) stanzas = true;
   });
+  // 分节的诗翻页处正好换节(《植物妈妈有办法》第 3、4 节):这一段跨了页,页前或页后正好是一节常见的行数,就在翻页处分开
+  if (stanzas) {
+    const n = new Map<number, number>();
+    for (const ls of paras) n.set(ls.length, (n.get(ls.length) ?? 0) + 1);
+    const usual = [...n].sort((a, b) => b[1] - a[1])[0][0];
+    for (let k = 0; k < paras.length; k++) {
+      const ls = paras[k], cut = ls.findIndex((x, j) => j > 0 && x.p !== ls[j - 1].p);
+      if (cut > 0 && (cut === usual || ls.length - cut === usual)) paras.splice(k, 1, ls.slice(0, cut), ls.slice(cut));
+    }
+  }
   const out: BookBlock[] = [];
   const first = run[0] ? all.indexOf(run[0]) : all.length;
   const title = all.slice(0, first);
@@ -284,6 +314,109 @@ function withPinyin(l: BookLine): string {
   const han = l.chars.filter((c) => /\p{Script=Han}/u.test(c.c));
   if (l.chars.length > 14 || !han.length || han.filter((c) => c.py).length < han.length * 0.8) return l.text;
   return l.chars.map((c) => (c.py ? `${c.c}(${c.py})` : c.c)).join('');
+}
+
+// ——— 点读课文 ———
+
+/** 点读一句最多几个字(合成一次的长度;长的在逗号处再切) */
+export const READ_SAY_MAX = 120;
+
+/**
+ * 一段话切成一句一句(点读一句合成一次、放一次,暂停了从那一句接着读):句号、问号、叹号、省略号、分号收一句,紧跟的引号、括号跟着这一句;
+ * 还是太长的在逗号处切。空白都去掉(PDF 的文字层里一行里偶尔有空格)
+ */
+export function readSentences(text: string): string[] {
+  const cs = Array.from(text.replace(/\s+/g, ''));
+  const out: string[] = [];
+  let cur = '';
+  for (let i = 0; i < cs.length; i++) {
+    cur += cs[i];
+    if (!/[。！？!?…；;]/.test(cs[i])) continue;
+    while (i + 1 < cs.length && /[。！？!?…”’」』)）]/.test(cs[i + 1])) cur += cs[++i];
+    out.push(cur);
+    cur = '';
+  }
+  if (cur) out.push(cur);
+  return out.flatMap((s) => {
+    if (Array.from(s).length <= READ_SAY_MAX) return [s];
+    const parts: string[] = [];
+    let at = '';
+    for (const piece of s.split(/(?<=[，,、：:])/)) {
+      if (at && Array.from(at + piece).length > READ_SAY_MAX) { parts.push(at); at = ''; }
+      at += piece;
+    }
+    if (at) parts.push(at);
+    return parts.flatMap((p) => (Array.from(p).length <= READ_SAY_MAX ? [p] : Array.from({ length: Math.ceil(Array.from(p).length / READ_SAY_MAX) }, (_, k) => Array.from(p).slice(k * READ_SAY_MAX, (k + 1) * READ_SAY_MAX).join(''))));
+  });
+}
+
+/** 标题里的课名:去掉课号和略读课的星号(「5 秋天的信」「*8 古诗二首」→ 课名) */
+const titleSay = (t: string): string => t.replace(/^[\s*＊]*\d{1,2}[\s.．、]*/, '').replace(/\s+/g, '');
+
+/**
+ * 一课里点读的几块(语文课文,docs/dev/课本.md):标题(no 0)和一个个自然段(no = 第几段),每块切成句;
+ * 标题读课名,古诗再读诗题和作者(标题下面同一页、字不太小的那几行:「登鹳雀楼」「[唐]王之涣」);
+ * 一行一段的诗(识字课、古诗)按节读:一节一块(同一页里空出一截、或换页就是下一节),no 是这一节第一行那段。
+ * line = 这一块读的那一行(标题是字号最大的那行,段是段首那一行)。没有自然段(语文园地按栏目分、数学)= 空:不点读。
+ * 服务端照它合成第几块第几句(/api/kid/textbook/say),舞台照它摆段首的钮(bookReadParts),两边拿同一份行,所以块和句对得上。
+ */
+export function bookReadTexts(pages: readonly BookPage[], blocks: readonly BookBlock[]): { no: number; sents: string[]; line: { n: number; i: number } }[] {
+  const paras = blocks.filter((b) => b.kind === 'para' && b.refs.length);
+  if (!paras.length) return [];
+  const lineOf = (r: { n: number; i: number }): BookLine | undefined => pages.find((p) => p.n === r.n)?.lines[r.i];
+  const out: { no: number; sents: string[]; line: { n: number; i: number } }[] = [];
+  // 标题:标题那一块里有汉字、字号最大的那行(前面可能还有上一课的尾巴、单元名)
+  const t = blocks.find((b) => b.kind === 'title');
+  const rows = (t?.refs ?? []).map((r) => ({ r, l: lineOf(r) })).filter((x): x is { r: { n: number; i: number }; l: BookLine } => Boolean(x.l));
+  const main = rows.filter((x) => /\p{Script=Han}/u.test(x.l.text)).sort((a, b) => b.l.z - a.l.z)[0];
+  const say = main ? titleSay(main.l.text) : '';
+  if (main && say) {
+    const sub = rows.filter((x) => x !== main && x.r.n === main.r.n && x.l.y1 > main.l.y1 && x.l.z >= main.l.z * 0.5 && /\p{Script=Han}/u.test(x.l.text) && !/^\d+$/.test(x.l.text.trim()))
+      .map((x) => x.l.text.replace(/[[\]［］〔〕【】]/g, ' ').trim().replace(/\s+/g, ','));
+    out.push({ no: 0, sents: [say, ...sub], line: main.r });
+  }
+  // 一行一段的诗:按节并起来
+  const poem = paras.every((b) => b.refs.length === 1 && Array.from(b.text).length <= 12);
+  if (poem) {
+    const ys = paras.map((b) => ({ b, n: b.refs[0].n, y: lineOf(b.refs[0])?.y1 ?? 0 }));
+    const gaps = ys.slice(1).flatMap((x, k) => (x.n === ys[k].n ? [x.y - ys[k].y] : [])).sort((a, b) => a - b);
+    const pitch = gaps[Math.floor(gaps.length / 2)] ?? 0;
+    let cur: { no: number; sents: string[]; line: { n: number; i: number } } | null = null;
+    ys.forEach((x, k) => {
+      const prev = ys[k - 1];
+      if (!cur || !prev || prev.n !== x.n || x.y - prev.y > pitch * 1.3) { cur = { no: x.b.no!, sents: [], line: x.b.refs[0] }; out.push(cur); }
+      cur.sents.push(...readSentences(x.b.text));
+    });
+    return out.filter((x) => x.sents.length);
+  }
+  for (const b of paras) {
+    const sents = readSentences(b.text);
+    if (sents.length) out.push({ no: b.no!, sents, line: b.refs[0] });
+  }
+  return out;
+}
+
+/**
+ * 点读的几块摆在场景里:hit = 能点的那块空白——段首缩进的那两格(宽两个字,从这一行第一个字往左),标题是课号左边两个字宽;
+ * 高是这一行字连着头上的拼音。dot = 钮的圆心(那两格正中,和字同一高度),r = 钮的半径
+ */
+export interface ReadPart { no: number; sents: string[]; hit: Box; dot: [number, number]; r: number }
+export function bookReadParts(pages: readonly BookPage[], sheets: readonly BookSheet[], blocks: readonly BookBlock[]): ReadPart[] {
+  return bookReadTexts(pages, blocks).flatMap((x) => {
+    const p = pages.find((pp) => pp.n === x.line.n), sh = sheetOf(sheets, x.line.n), l = p?.lines[x.line.i];
+    if (!p || !sh || !l) return [];
+    const [x1, y1, x2, y2] = lineBox(sh, l);
+    const h = y2 - y1;
+    // 一个字宽:这一行的字距(字加字间的空)
+    const step = (x2 - x1) / Math.max(1, l.chars.length);
+    const top = l.chars.some((c) => c.py) ? y1 - h * 0.95 : y1;
+    // 标题:课号印在课名左边(和课名同一高度、在它左边的那几行里最左的字),空白在课号左边
+    const right = x.no === 0 ? Math.min(x1, ...p.lines.filter((o) => o !== l && o.x2 <= l.x1 && o.y1 < l.y2 && o.y2 > l.y1).map((o) => lineBox(sh, o)[0])) : x1;
+    const from = Math.max(0, right - step * 2);
+    if (right - from < step) return [];
+    const r = r1(Math.min(18, h * 0.5, (right - from) * 0.4));
+    return [{ no: x.no, sents: x.sents, hit: [r1(from), r1(top), r1(right), r1(y2)] as Box, dot: [r1((from + right) / 2), r1((y1 + y2) / 2)] as [number, number], r }];
+  });
 }
 
 // ——— 找东西在哪 ———

@@ -81,9 +81,7 @@ export interface Strip { key: string; box: Box; items: StripItem[] }
 
 /** 照片页上的一张:孩子拍的(相对 workspace 根,captures/ 下)和它的像素宽高(场景里一张宽 1000,高照宽高比) */
 export interface PagePhoto { src: string; w: number; h: number }
-/** 一节课的照片页最多几张(孩子连拍几页、拍错了再拍一张都接在后面;多了不收) */
-export const PAGE_PHOTOS_MAX = 6;
-/** 照片页、白纸页、小课堂页的 id(一节课各只有一页;课本的一课是「册子#课名」) */
+/** 照片页、白纸页、小课堂页的 id(一节课各只有一页;课本的一课是「册子#课名」;作业本以前的一天是「作业#<日期>」,今天那一章就是照片页) */
 export const PHOTO_PAGE = '作业';
 export const WHITE_PAGE = '白纸';
 export const LECTURE_PAGE = '小课堂';
@@ -93,7 +91,8 @@ export const BOOK_MAX_SHEETS = 12;
 /**
  * 一页铺的是什么:
  *  book  课本的一课:几页 PDF 竖着连成一条。id = 「册子#课名」(同板的日志里的 base)
- *  photo 孩子拍的作业:几张照片竖着连成一条(先拍的在上),文字层是认字认出的行和题(src/scenes/photo-words/)
+ *  photo 孩子拍的作业:几张照片竖着连成一条(先拍的在上),文字层是认字认出的行和题(src/scenes/photo-words/);张数不限。
+ *        带 day 的是作业本的一章(那一天检查作业拍的,跨话题;base: homework):今天的 id 是「作业」(拍来的接在后面),以前的是「作业#<日期>」
  *  white 白纸:什么都没印,老师在上面摆图形、写字(整页就是一条白纸条)
  *  lecture 小课堂:一堂做好的课(课包 bundles/<id>/ 或视频 lectures/<id>/),按时刻编号的页——放就是窗自己往前走;
  *          文字层是每一句的起点与原话(src/board/lecture.ts 的时钟),老师 [[看 0:19–0:30]] 就是放那一段
@@ -114,7 +113,7 @@ export type PageSource =
     /** 孩子能不能点字看笔顺(语文能,数学的课本上点的是数和算式,不弹) */
     pick: boolean;
   }
-  | { id: string; kind: 'photo'; title: string; photos: PagePhoto[]; pick: boolean }
+  | { id: string; kind: 'photo'; title: string; photos: PagePhoto[]; pick: boolean; day?: string }
   | {
     /** 练习册#<目录名> */
     id: string;
@@ -205,8 +204,8 @@ export type LessonEvent =
   | { t: 'turn'; item: string; deg: number }
   /** 在课本的一个田字格里写好了(放好):这一格的笔画整个换成这些;空的 = 这一格擦干净了 */
   | { t: 'cell'; id: string; strokes: [number, number][][] }
-  /** 孩子拍来了几张(应用收下就铺,不等老师):接在照片页后面,没有照片页就开一页;pick = 这一页能不能点字 */
-  | { t: 'photo'; photos: PagePhoto[]; pick: boolean }
+  /** 孩子拍来了几张(应用收下就铺,不等老师):接在照片页后面,没有照片页就开一页;pick = 这一页能不能点字;day = 作业本今天是哪天(新开的那一页就是今天这一章) */
+  | { t: 'photo'; photos: PagePhoto[]; pick: boolean; day?: string }
   /** 老师念完了一句(这一句的动作已经落了):said 加一 */
   | { t: 'said' }
   /** 老师开始说新的一轮:上一轮指着字的记号(圈、划、加点)都收 */
@@ -231,7 +230,7 @@ const BookSourceSchema = z.object({
   layout: z.enum(['prose', 'math']),
   pick: z.boolean(),
 });
-const PhotoSourceSchema = z.object({ id: z.string().min(1), kind: z.literal('photo'), title: z.string().min(1), photos: z.array(PhotoSchema).min(1).max(PAGE_PHOTOS_MAX), pick: z.boolean() });
+const PhotoSourceSchema = z.object({ id: z.string().min(1), kind: z.literal('photo'), title: z.string().min(1), photos: z.array(PhotoSchema).min(1), pick: z.boolean(), day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() });
 const WorkbookSourceSchema = z.object({ id: z.string().min(1), kind: z.literal('workbook'), src: z.string().min(1), title: z.string().min(1), sheets: z.array(z.object({ w: z.number().positive(), h: z.number().positive() })).min(1).max(BOOK_MAX_SHEETS), pick: z.boolean() });
 const WhiteSourceSchema = z.object({ id: z.string().min(1), kind: z.literal('white'), title: z.string().min(1), pick: z.boolean() });
 const LectureSourceSchema = z.object({ id: z.string().min(1), kind: z.literal('lecture'), title: z.string().min(1), bundle: z.string().min(1), video: z.boolean(), ms: z.number().nonnegative(), pick: z.boolean() });

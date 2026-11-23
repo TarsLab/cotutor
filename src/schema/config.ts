@@ -169,9 +169,10 @@ export const RuntimesSchema = z.object({ default: z.string().min(1) }).catchall(
 /**
  * paths 里 CLI 认识的角色;其余角色原样保留给应用层。vault 侧角色相对 vault 解析,没配 vault 就相对 workspace 根;
  * captures(应用拍的作业照片)是 workspace 侧,相对 workspace 根(《obsidian仓库设计.md》§5:vault 里存文字不存图)。
+ * 例外是作业本 homework:检查作业拍的照片按学科、按天另抄一份进 vault(家长的,能导出 PDF;src/memory/homework.ts)。
  * 缺省是中文名:vault 是家长在 Obsidian 里看的,目录名要像人写的。
  */
-export const PATH_ROLES = ['vault', 'diary', 'plans', 'profile', 'timetable', 'textbooks', 'workbooks', 'reference', 'captures'] as const;
+export const PATH_ROLES = ['vault', 'diary', 'plans', 'profile', 'timetable', 'textbooks', 'workbooks', 'homework', 'reference', 'captures'] as const;
 export type PathRole = (typeof PATH_ROLES)[number];
 /** 相对 workspace 根(不是 vault)的角色 */
 export const WORKSPACE_ROLES: readonly PathRole[] = ['captures'];
@@ -183,6 +184,7 @@ export const ROLE_DEFAULTS: Record<PathRole, string> = {
   timetable: '课程表.md',
   textbooks: '教材',
   workbooks: '练习册',
+  homework: '作业本',
   reference: '参考',
   captures: 'captures',
 };
@@ -292,7 +294,7 @@ export const CotutorConfigSchema = z
         https: z.object({ cert: z.string().min(1), key: z.string().min(1) }).optional(),
       })
       .default({ port: DEFAULT_PORT }),
-    paths: z.record(z.string(), z.string()).default({}).describe('角色 → 目录:vault 指 Obsidian vault 根;diary / plans / profile / timetable / textbooks / workbooks / reference 相对 vault(缺省 日记 / 计划 / 孩子.md / 课程表.md / 教材 / 练习册 / 参考),不配 vault 就相对 workspace 根;profile 只是 init 新建档案的位置,老师按 cotutor: profile 属性找;captures(作业照片)相对 workspace 根'),
+    paths: z.record(z.string(), z.string()).default({}).describe('角色 → 目录:vault 指 Obsidian vault 根;diary / plans / profile / timetable / textbooks / workbooks / homework / reference 相对 vault(缺省 日记 / 计划 / 孩子.md / 课程表.md / 教材 / 练习册 / 作业本 / 参考),不配 vault 就相对 workspace 根;profile 只是 init 新建档案的位置,老师按 cotutor: profile 属性找;captures(作业照片)相对 workspace 根'),
     vault: VaultPolicySchema.default({ keepScore: 4, autoBookkeep: false }).describe('vault 的写入政策:keepScore 话题打几星起才把摘要沉淀进日记(缺省 4);autoBookkeep 自动记账(缺省关)'),
     policyDefaults: PolicyPatchSchema.default({}).describe('所有老师的政策缺省;没写的用出厂缺省(60 字 / 观察 10 条、计划 10 行、原文 4000 字)'),
     tutors: z.record(z.string().regex(AGENT_NAME_RE), TutorSchema).default({}).describe('老师表:键 = 老师的家 agents/<键>/ 的名字;人设、开关、政策都在这里,怎么教在他家里的 activity'),

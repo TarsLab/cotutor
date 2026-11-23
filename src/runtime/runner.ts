@@ -16,7 +16,7 @@ import { dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { buildContextPack } from './context/context-pack.ts';
 import { addMessage, applyRun, jobId, sameRuntime, sessionFor } from './journal/conversation.ts';
 import { localDate, localMinute } from '../shared/time.ts';
-import { conversationFiles, spokeIn, threads } from '../schema/index.ts';
+import { DATE_RE, conversationFiles, spokeIn, threads } from '../schema/index.ts';
 import { bookkeepingPrompt, kidQuestions, textbookHeadings } from '../memory/diary.ts';
 import { actsGuide } from '../board/cards/docs.ts';
 import { activityBase, parseActivity, renderTutorSection } from './activity.ts';
@@ -30,7 +30,7 @@ import { deriveKidView, truncateReply } from './kid-view.ts';
 import { parseSections } from '../board/sections.ts';
 import { threadDigest } from './context/thread-digest.ts';
 import { type RunEvent, type RunEventEnvelope, type RunEventInput } from '../schema/index.ts';
-import { CELL_UNIT, LESSON_CELL_STROKES, LESSON_INK_POINTS, PEN_ASKS, PHOTO_PAGE, type ActivityBase, type Lesson, type LessonAct, type LessonEvent, type PagePhoto, canonicalSubject, subjectLang, MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, VAULT_PACK_ROLES, isApiRuntime, resolvePolicy, type ContextPack, type ConversationIndex, type MemoryProposal, type PendingMemory, type ActivityRun, type ConversationMessage, type MessageFrom, type MessageVia, type Policy, type Timing, type Workbook } from '../schema/index.ts';
+import { CELL_UNIT, LESSON_CELL_STROKES, LESSON_INK_POINTS, PEN_ASKS, PHOTO_PAGE, type ActivityBase, type Lesson, type LessonAct, type LessonEvent, type PagePhoto, type PageSource, canonicalSubject, subjectLang, MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, VAULT_PACK_ROLES, isApiRuntime, resolvePolicy, type ContextPack, type ConversationIndex, type MemoryProposal, type PendingMemory, type ActivityRun, type ConversationMessage, type MessageFrom, type MessageVia, type Policy, type Timing, type Workbook } from '../schema/index.ts';
 import { UsageError } from '../shared/errors.ts';
 import type { Workspace } from '../schema/index.ts';
 import { deleteThread, readIndex, snapshotSources, writeIndex, writeRunFile } from './journal/store.ts';
@@ -52,6 +52,7 @@ import { bookSlateParts, clipNote, lessonSlateBits, slateOf, type PageNote } fro
 import { bookLesson, bookPageOf, fitSection, lessonOpen, pageText, sectionActs, tocEntries, whitePage, type LessonBook, type LessonSource } from '../board/lesson-fit.ts';
 import { readWorkbook } from '../memory/workbook.ts';
 import { bookLast, lastSpot, rememberBook } from './journal/book-last.ts';
+import { homeworkBook, homeworkDaysOf, homeworkPage, homeworkPageId, homeworkSubject, keepPhotos } from './homework.ts';
 import { lessonDone, lessonPage, lessonSection, lessonStep } from '../board/lesson.ts';
 import { readLesson, updateLesson } from './journal/lesson-store.ts';
 import { BOOK_TOC, bookView, photoBookPage, photoText, pickable, workbookInk, workbookPage, workbookPageId, workbookText, type PhotoText } from '../chalk/index.ts';
@@ -59,6 +60,8 @@ import { bookIndex, listBooks, pickBook } from '../memory/textbook-pdf.ts';
 
 /** 课本做底的 activity:家长在按钮上填的这个参数说的是哪一课,进门直接铺它(出厂的课本叫「范围」) */
 const ENTER_RANGE = '范围';
+/** 作业本里老师能 [[翻]] 到的:最近这么多天(一天一张照片页;再早的孩子自己翻) */
+const HOMEWORK_TURN_DAYS = 14;
 
 /** 今天只进了门、没开口的话题(不存:进门时、点回首页时删) */
 const quietThreads = (index: { messages: readonly ConversationMessage[] }): string[] => [...new Set(threads(index.messages))].filter((th) => !spokeIn(index.messages, th));
@@ -369,6 +372,7 @@ export class Runner {
    *  - 自己翻页 {k:'open', title}:目录上点了一课(title 是目录上那一项,tocEntries),在一课里按「目录」回去(title = 目录,窗停在刚才那一课那一行),或翻到上一课、下一课(目录上的另一项)。
    *    照这本书的目录翻过去、记进板的日志;点的是一课就记下这本书翻到哪了(book-last)。不叫老师:下一轮「孩子做的」说他自己翻到了哪
    *  - 点读了一回 {k:'read', from, to, done?}(课本上点了标题或段首,孩子端放的配音;读到停下才报):记一笔,不叫老师
+   *  - 作业本翻到一天 {k:'day', day}(顶栏的前一天、后一天、目录上点的、一天最后那一行):照 vault 里那一天铺(铺过的翻回去),记进板的日志、记下翻到哪,不叫老师
    * 话题不是今天的一节课、东西不对:回 null,什么都不记
    */
   async boardEvent(tutor: string, date: string, body: unknown): Promise<BoardDone | null> {
@@ -417,6 +421,26 @@ export class Runner {
       if (!ok) return null;
       await appendBoard(ws, tutor, date, thread, { at, k: 'open', text: page.title, base: page.id });
       if (!toc) await rememberBook(ws, book.file, page.title, now);
+      return { thread, say: null, still: false };
+    }
+    // 作业本翻到一天:铺过的翻回去,没铺过的照 vault 里那一天铺(和孩子端要的同一份)
+    if (b.k === 'day') {
+      if (typeof b.day !== 'string' || !DATE_RE.test(b.day)) return null;
+      const lesson = await readLesson(ws, tutor, date, thread);
+      const cur = lessonPage(lesson);
+      if (!cur || cur.id !== base || cur.kind !== 'photo' || !cur.day || cur.day === b.day) return null;
+      const id = homeworkPageId(b.day, date);
+      const had = lesson.pages.find((p) => p.id === id);
+      let page: PageSource | null = null;
+      if (had) { const { teacher: _t, kid: _k, open: _o, ...src } = had; page = src; }
+      else page = await homeworkPage(ws, tutor, b.day, date, cur.pick);
+      if (!page) return null;
+      const turn = page;
+      let ok = false;
+      await updateLesson(ws, tutor, date, thread, (l) => { if (l.at !== base) return l; ok = true; return lessonStep(l, { t: 'act', act: { k: '翻', page: turn } }); });
+      if (!ok) return null;
+      await appendBoard(ws, tutor, date, thread, { at, k: 'open', text: page.title, base: page.id });
+      await rememberBook(ws, homeworkBook(homeworkSubject(ws, tutor)), b.day, new Date(at));
       return { thread, say: null, still: false };
     }
     // 点读了一回:只记一笔(读到哪停的),不念、不叫老师——他在听课文
@@ -482,6 +506,7 @@ export class Runner {
       // 这一册翻到哪、窗停在哪(下次进门摆回来);目录不记
       if (page.kind === 'book' && page.title !== BOOK_TOC) await rememberBook(ws, page.src, page.title, new Date(at), box);
       else if (page.kind === 'workbook') await rememberBook(ws, workbookPageId(page.src), page.title, new Date(at), box);
+      else if (page.kind === 'photo' && page.day) await rememberBook(ws, homeworkBook(homeworkSubject(ws, tutor)), page.day, new Date(at), box);
       return { thread, say: null, still: false };
     }
     // 揭开的可以是盖住的算式(盖: 6×4=24),不只是字词
@@ -569,6 +594,8 @@ export class Runner {
   /**
    * 一节课(activity 头上 base:)这一轮开始时的样子:从小课堂按钮进来的先铺那堂课;课本做底的先铺目录;练习册铺参数说的那一册(读不出来铺白纸,给家长记一句);
    * 这一条带的照片接在照片页后面(没有就开一页);
+   * 作业本(base: homework):还没铺页、或这一条带了照片,今天已经拍过的(vault 作业本里今天那一天)先铺成今天这一章,拍来的接在后面;want = 进门要看的那一天;
+   * 这一条带的照片抄进作业本(src/runtime/homework.ts)。
    * 孩子拍的作业但还没有页(不拍,用白纸)就铺一张白纸页。落盘,回页的文字层从哪来、这节课现在的样子。
    * 孩子端照同样的规矩先落在自己那一份上(拍的照片发出去就铺、不等老师)
    */
@@ -583,6 +610,12 @@ export class Runner {
     const sizes = await this.photoSizes(ws, photos);
     // 数学的照片上点的是数和算式,不弹田字格(同数学课本)
     const pick = canonicalSubject(ws.config.tutors[tutor]?.subject) !== '数学';
+    // 作业本:今天那一章(这一条的照片抄进去之前的)、进门要看的那一天、上次翻到今天时窗停在哪
+    const hw = base === 'homework';
+    const hwToday = hw ? await homeworkPage(ws, tutor, date, date, pick) : null;
+    const hwWant = hw && want && want !== date && DATE_RE.test(want) ? await homeworkPage(ws, tutor, want, date, pick) : null;
+    const hwLast = hw ? await lastSpot(ws, homeworkBook(homeworkSubject(ws, tutor))) : null;
+    if (hw && photos.length) await keepPhotos(ws, tutor, photos);
     const lesson = await updateLesson(ws, tutor, date, thread, (l) => {
       // 小课堂(孩子端点了按钮就铺上、先看完才开口;服务端收到第一条时照同样的规矩铺)
       let s = lecture && !l.pages.some((p) => p.kind === 'lecture') ? lessonStep(l, { t: 'act', act: { k: '翻', page: lecturePage(lecture) } }) : l;
@@ -593,12 +626,29 @@ export class Runner {
         s = lessonStep(s, { t: 'act', act: { k: '翻', page: workbookPage(workbook, wbRead.wb, pick) } });
         if (wbLast?.view) s = lessonStep(s, { t: 'view', box: wbLast.view });
       }
-      if (sizes.length) s = lessonStep(s, { t: 'photo', photos: sizes, pick });
-      else if ((base === 'photo' || base === 'workbook') && !s.at) s = lessonStep(s, { t: 'act', act: { k: '翻', page: whitePage() } });
+      if (hwWant && !s.at) s = lessonStep(s, { t: 'act', act: { k: '翻', page: hwWant } });
+      if (hwToday && !s.pages.some((p) => p.id === PHOTO_PAGE) && (!s.at || sizes.length)) {
+        s = lessonStep(s, { t: 'act', act: { k: '翻', page: hwToday } });
+        if (!sizes.length && hwLast?.title === date && hwLast.view) s = lessonStep(s, { t: 'view', box: hwLast.view });
+      }
+      if (sizes.length) s = lessonStep(s, { t: 'photo', photos: sizes, pick, ...(hw ? { day: date } : {}) });
+      else if ((base === 'photo' || base === 'workbook' || hw) && !s.at) s = lessonStep(s, { t: 'act', act: { k: '翻', page: whitePage() } });
       return s;
     });
     const texts = await this.photoTexts(ws, lesson);
-    return { src: { book, photos: texts.photos, lecture: await this.lectureOf(ws, lesson), workbooks: await this.workbooksOf(ws, lesson) }, lesson, running: texts.running, ...(problem ? { problem } : {}) };
+    const homework = hw ? await this.homeworkOf(ws, tutor, date, pick) : undefined;
+    return { src: { book, photos: texts.photos, lecture: await this.lectureOf(ws, lesson), workbooks: await this.workbooksOf(ws, lesson), ...(homework ? { homework } : {}) }, lesson, running: texts.running, ...(problem ? { problem } : {}) };
+  }
+
+  /** 作业本能翻的那几天(老师 [[翻 11月20日]]、board: 里说还有哪几天):最近 HOMEWORK_TURN_DAYS 天,今天的不算(今天那一章就是照片页) */
+  private async homeworkOf(ws: Workspace, tutor: string, date: string, pick: boolean): Promise<NonNullable<LessonSource['homework']>> {
+    const days = (await homeworkDaysOf(ws, tutor)).filter((d) => d.day < date).slice(-HOMEWORK_TURN_DAYS);
+    const pages: PageSource[] = [];
+    for (const d of days) {
+      const p = await homeworkPage(ws, tutor, d.day, date, pick);
+      if (p) pages.push(p);
+    }
+    return { pages };
   }
 
   /**
@@ -622,9 +672,16 @@ export class Runner {
     } else if (page?.kind === 'photo') {
       const n = page.photos.length;
       const reads = opts.reads !== false;
-      const wait = reads ? page.photos.flatMap((ph, i) => (x.running.includes(ph.src) || !x.src.photos?.[ph.src] ? [i + 1] : [])) : [];
+      // 作业本里以前拍的(别的话题的、抄回来的)没认过字就是没认,不是还在认
+      const wait = reads ? page.photos.flatMap((ph, i) => (x.running.includes(ph.src) || (!x.src.photos?.[ph.src] && (!page.day || opts.fresh.includes(ph.src))) ? [i + 1] : [])) : [];
       const note = wait.length ? `;第 ${wait.join('、')} 张${opts.fresh.length ? '刚拍来、图附在这一轮,字' : '的字'}还在认` : !reads ? `;这节课不认照片上的字${opts.fresh.length ? ',图附在这一轮' : ''}` : '';
-      show = `孩子拍的作业照片 ${n} 张(从上往下连着${n > 1 ? `,第 1–${n} 张` : ''})${note}`;
+      const photos = `${n} 张(从上往下连着${n > 1 ? `,第 1–${n} 张` : ''})${note}`;
+      // 作业本:这一天是哪天、以前的记号、还能翻到哪几天
+      const days = (x.src.homework?.pages ?? []).filter((p) => p.kind === 'photo' && p.day !== page.day).map((p) => p.title);
+      const more = days.length ? `;作业本里还有 ${days.join('、')}(翻到那一天写 [[翻 ${days[days.length - 1]}]]${page.id === PHOTO_PAGE ? '' : ',回今天写 [[翻 作业]]'})` : '';
+      show = !page.day ? `孩子拍的作业照片 ${photos}`
+        : page.id === PHOTO_PAGE ? `作业本今天这一章《${page.title}》:今天检查作业拍的 ${photos};前面话题查过的照片上留着那时的记号(只看,孩子擦不掉)${more}`
+        : `作业本《${page.title}》(以前那天,孩子自己翻过来的或你翻的):那天检查作业拍的 ${photos};照片上留着那时最后的记号(只看,孩子擦不掉)${more}`;
       page.photos.forEach((ph, i) => {
         const id = `${PHOTO_PAGE}#${ph.src}`;
         const t = x.src.photos?.[ph.src];
@@ -650,7 +707,7 @@ export class Runner {
       if (c && !told.has(page.id)) notes.push({ id: page.id, name: `小课堂《${page.title}》`, text: clipNote(lectureLines(c)) });
     }
     if (!page && x.problem) show = `课本:${x.problem}(请家长放进 vault 的教材文件夹)`;
-    const others = x.lesson.pages.filter((p) => p !== page).map((p) => (p.kind === 'book' ? `《${p.title}》` : p.kind === 'photo' ? `作业照片(${p.photos.length} 张)` : p.kind === 'lecture' ? `小课堂《${p.title}》` : p.kind === 'workbook' ? `练习册《${p.title}》` : '白纸'));
+    const others = x.lesson.pages.filter((p) => p !== page).map((p) => (p.kind === 'book' ? `《${p.title}》` : p.kind === 'photo' ? (p.day ? `作业本《${p.title}》(${p.photos.length} 张)` : `作业照片(${p.photos.length} 张)`) : p.kind === 'lecture' ? `小课堂《${p.title}》` : p.kind === 'workbook' ? `练习册《${p.title}》` : '白纸'));
     let from = 0;
     events.forEach((e, i) => { if (e.k === 'turn') from = i + 1; });
     const files = conversationFiles(ws.dirs.conversations, tutor, date);
@@ -663,11 +720,11 @@ export class Runner {
 
   /**
    * 进门(孩子先说的 activity):孩子点了首页的砖(activity eval 也先进门)。不请脑:记一条「进门」(话题第一条,带 via、activity、base、listen;text 是按钮上的字),
-   * 把页铺好(课本:家长填的「范围」那一课 → 上次翻到的那一课 → 目录;练习册:按钮挂的那一册;照片页:白纸)就回。
+   * 把页铺好(课本:家长填的「范围」那一课 → 上次翻到的那一课 → 目录;练习册:按钮挂的那一册;作业本:day 那一天,不然今天那一章(今天还没拍过是白纸);照片页:白纸)就回。
    * 孩子开口那条接着这个话题(kidInput 照进门那条补上按钮的讲法)。今天这位老师只进了门的旧话题(没开口就走了、页面没来得及说)先扫掉。
    * 老师正在回上一条 → BusyError(收尾时要整份重写索引,这时插一条会被盖掉;孩子端过一会儿再进)
    */
-  async enter(tutor: string, input: SendInput): Promise<{ tutor: string; date: string; thread: string }> {
+  async enter(tutor: string, input: SendInput, opts: { day?: string } = {}): Promise<{ tutor: string; date: string; thread: string }> {
     const ws = this.getWs();
     const t = ws.config.tutors[tutor];
     if (!t) throw new UsageError(`没有叫 ${tutor} 的老师`);
@@ -686,7 +743,7 @@ export class Runner {
     const wbParam = actDef.params.find((p) => p.type === '练习册');
     const param = (name: string | undefined): string | null => (name ? String(input.activity?.params?.[name] ?? '').trim() || null : null);
     const wbName = wbParam ? param(wbParam.name) ?? (wbParam.default !== undefined ? String(wbParam.default) : null) : null;
-    const les = await this.lessonOn(ws, tutor, now, date, job, base, [], null, wbName, base === 'textbook' ? param(ENTER_RANGE) : null);
+    const les = await this.lessonOn(ws, tutor, now, date, job, base, [], null, wbName, base === 'textbook' ? param(ENTER_RANGE) : base === 'homework' ? opts.day ?? null : null);
     const msg = addMessage(index, { job, thread: job, at: localMinute(now), from: 'kid', text: input.text.trim() || input.activity.name, enter: true, ...(input.via ? { via: input.via } : {}), ...(input.eval ? { eval: true as const } : {}), activity: input.activity, base, ...(actDef.listen === 'open' ? { listen: 'open' as const } : {}), ...(input.device ? { device: input.device } : {}), ...(input.deviceId ? { deviceId: input.deviceId } : {}), ...(les.problem ? { warnings: [les.problem] } : {}), result: 'ok', artifacts: [], kidText: null });
     await writeIndex(ws, msg);
     return { tutor, date, thread: job };

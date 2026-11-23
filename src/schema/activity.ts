@@ -40,6 +40,8 @@ export const ACTIVITY_TOOLS: Readonly<Record<string, { slots: readonly string[] 
  *   小课堂按钮没写 `activity:` 时,看完照这位老师 base: lecture 的那个 activity 聊;按钮挂了别的 activity(如看图说话),页上也先铺这堂课。
  * workbook = vault 练习册/ 下的一册(参数「练习册」说哪一册;首页按钮挂上):进来就铺那一册,每页一张图,孩子用笔直接在页上做;
  *   题框、能写的格子、给老师的答案都在那一册的 workbook.json 里,不认字。
+ * homework = 作业本:同 photo 先拍照(或不拍用白纸),拍来的照片另抄一份进 vault 的 作业本/<学科>/<日期>/,按天攒成一本(一天一章,跨话题);
+ *   今天已经拍过的,进来直接铺今天这一章;往前翻是以前几天,页上留着那时最后的记号(只看不改;src/runtime/homework.ts)。
  * 哪种页上老师都能 [[翻 白纸]] 加一张白纸页。
  */
 export const ACTIVITY_BASES: Readonly<Record<string, string>> = {
@@ -47,8 +49,9 @@ export const ACTIVITY_BASES: Readonly<Record<string, string>> = {
   photo: '孩子拍的作业:进来先拍照,不拍就是白纸',
   lecture: '小课堂:首页小课堂按钮给的那堂课(课包或视频),先看完再问',
   workbook: '练习册:vault 的练习册/ 下的一册(参数「练习册」),孩子用笔在页上做',
+  homework: '作业本:同拍照,拍来的照片按天攒进 vault 的作业本/<学科>/,往前翻看以前几天',
 };
-export type ActivityBase = 'textbook' | 'photo' | 'lecture' | 'workbook';
+export type ActivityBase = 'textbook' | 'photo' | 'lecture' | 'workbook' | 'homework';
 
 /**
  * 头上的 `listen:`:孩子怎么说话。open = 一直听:不用按,孩子开口就听(一问一答多的、请他说的多的);

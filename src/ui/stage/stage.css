@@ -31,6 +31,10 @@ html, body, #root { margin: 0; height: 100%; background: #fffdf8; font: 18px/1.5
 .bk-look-wash rect { fill: rgba(255, 212, 59, .38); }
 /* 老师的圈、划、加点与孩子的笔:正片叠底,画在字的「后面」(记号不盖字,docs/dev/一节课.md);新的 85%,旧的淡到 30%,收掉的淡出(book.tsx 的 MARK_GONE_MS) */
 .bk-teacher .bk-mark, .bk-ink { mix-blend-mode: multiply; }
+/* 作业本上以前的记号:同老师的、孩子的一样画(只看),垫在这一节的下面 */
+.bk-past { mix-blend-mode: multiply; }
+.bk-past .bk-mark { opacity: .85; }
+.bk-past .bk-mark.bk-old { opacity: .3; }
 .bk-teacher .bk-mark { opacity: .85; transition: opacity .45s ease; }
 .bk-teacher .bk-mark.bk-old { opacity: .3; }
 .bk-teacher .bk-mark.bk-gone { opacity: 0; }

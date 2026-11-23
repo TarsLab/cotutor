@@ -1,6 +1,7 @@
 /**
  * 讲稿里的动作落到页上(纯函数,runner 在流式与定稿时都过一遍):老师写的是页上印的字,应用照页的文字层找到它在哪。
- *  - 翻 课名 / 翻 目录:照课本目录找到这一课铺哪几页;翻 白纸:加一张白纸页(有了就回到它);翻 作业:回到孩子拍的照片页;翻 小课堂:回到那堂课;翻 练习册(或册名):回到铺过的那一册
+ *  - 翻 课名 / 翻 目录:照课本目录找到这一课铺哪几页;翻 白纸:加一张白纸页(有了就回到它);翻 作业(今天):回到孩子拍的照片页(作业本今天这一章);
+ *    翻 11月20日:作业本的那一天(铺过的翻回去,没铺过的照 src.homework 给的那几天);翻 小课堂:回到那堂课;翻 练习册(或册名):回到铺过的那一册
  *  - 看 第 3 题 / 例 2 / 原话…:照这一页分好的块找到那一块的框(src/chalk/kit/book.ts 的 bookTarget);照片页还认「第 2 张」「第 2 张第 3 题」,练习册「第 2 页」「第 2 页第 3 题」
  *  - 看 0:19–0:30 / 0:19 / 课里的一句原话(小课堂页):放那一段,对齐到句(src/board/lecture.ts 的 lectureRange);只写起点放到那一句的末尾
  *  - 圈、划、加点、遮、盖 字词:照字找到框;先在「看」着的那一块里找(找不到的那一处不做)。
@@ -35,6 +36,8 @@ export interface LessonSource {
   lecture?: { bundle: string; clock: Pick<LectureClock, 'segments' | 'total'> } | null;
   /** 这节课铺过的练习册(名字 → 读出来的那一册;src/memory/workbook.ts);读不出来的没有 */
   workbooks?: Readonly<Record<string, Workbook>>;
+  /** 作业本(base: homework)能翻到的以前那几天,一天一张照片页(带 day;src/runtime/homework.ts 铺的) */
+  homework?: { pages: readonly PageSource[] };
 }
 
 /** 「看」小课堂:「0:19–0:30」「0:19」(放到那一句的末尾),或课里一句原话的一截(放那一句);对齐到句 */
@@ -111,12 +114,20 @@ function turnTo(l: Lesson, name: string, src: LessonSource): { page: PageSource 
     const { teacher: _t, kid: _k, open: _o, ...page } = p;
     return { page };
   }
-  if (name === PHOTO_PAGE || name === '照片' || name === '作业照片') {
+  if (name === PHOTO_PAGE || name === '照片' || name === '作业照片' || name === '今天') {
     const p = l.pages.find((x) => x.kind === 'photo');
     if (!p) return { why: '孩子还没拍照片,没有照片页可翻' };
     const { teacher: _t, kid: _k, open: _o, ...page } = p;
     return { page };
   }
+  // 作业本的一天:「11月20日」或「2026-11-20」;铺过的翻回去(原来画的都在)
+  const laid = l.pages.find((x) => x.kind === 'photo' && x.day && (name === x.title || name === x.day));
+  if (laid) {
+    const { teacher: _t, kid: _k, open: _o, ...page } = laid;
+    return { page };
+  }
+  const day = src.homework?.pages.find((x) => x.kind === 'photo' && (name === x.title || name === x.day));
+  if (day) return { page: day };
   const wb = l.pages.find((x) => x.kind === 'workbook' && (name === '练习册' || name === x.title || name === x.src));
   if (wb) {
     const { teacher: _t, kid: _k, open: _o, ...page } = wb;

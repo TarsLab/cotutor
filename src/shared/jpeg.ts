@@ -16,9 +16,15 @@ export function imageSize(buf: Buffer): { w: number; h: number } | null {
     const w = buf.readUInt32BE(16), h = buf.readUInt32BE(20);
     return w > 0 && h > 0 ? { w, h } : null;
   }
+  const j = jpegInfo(buf);
+  return j ? { w: j.w, h: j.h } : null;
+}
+
+/** jpeg 的宽高和几个颜色分量(1 灰、3 彩色、4 CMYK;嵌进 PDF 要说是哪种,src/shared/pdf.ts);不是 jpeg、读不出回 null */
+export function jpegInfo(buf: Buffer): { w: number; h: number; c: number } | null {
   if (buf.length < 4 || buf[0] !== 0xff || buf[1] !== 0xd8) return null;
   let i = 2;
-  while (i + 9 < buf.length) {
+  while (i + 10 < buf.length) {
     if (buf[i] !== 0xff) { i++; continue; }
     const m = buf[i + 1];
     // 没有长度的段:填充、RST、SOI、EOI
@@ -28,8 +34,8 @@ export function imageSize(buf: Buffer): { w: number; h: number } | null {
     const len = buf.readUInt16BE(i + 2);
     // SOF0–SOF15,除了 DHT(c4)、JPG(c8)、DAC(cc)
     if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc) {
-      const h = buf.readUInt16BE(i + 5), w = buf.readUInt16BE(i + 7);
-      return w > 0 && h > 0 ? { w, h } : null;
+      const h = buf.readUInt16BE(i + 5), w = buf.readUInt16BE(i + 7), c = buf[i + 9];
+      return w > 0 && h > 0 ? { w, h, c } : null;
     }
     i += 2 + len;
   }

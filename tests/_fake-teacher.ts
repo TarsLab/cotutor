@@ -64,7 +64,9 @@ export function teacherReply(body: ChatBody): FakeReply {
   }
   // 一节课的照片页(tests/board-page.test.ts):讲稿里写动作——看第 3 题、圈一个字、请他圈
   if (prompt.includes('底: "练习册《') && msg.includes('做题')) parts.push('我们做第 2 题。[[看 第 2 题]] [[圈 一盘]]\n你先写第一格。[[请 写]]');
-  if (prompt.includes('底: "孩子拍的作业照片') && msg.includes('讲题')) parts.push('我们看第 3 题。[[看 第 3 题]] [[圈 心理辅导室]]\n你把东面的两间圈出来。[[请 圈]]');
+  // 作业本(tests/homework.test.ts):翻到以前那一天
+  if (prompt.includes('底: "作业本') && msg.includes('翻那天')) parts.push('我们看那天的作业。[[翻 11月20日]]\n你还记得这一题吗?');
+  if ((prompt.includes('底: "孩子拍的作业照片') || prompt.includes('底: "作业本')) && msg.includes('讲题')) parts.push('我们看第 3 题。[[看 第 3 题]] [[圈 心理辅导室]]\n你把东面的两间圈出来。[[请 圈]]');
   parts.push(`${resumed ? '接着说:' : '第一次说:'}${lastLine}`);
   // 请他说的那句是这一轮最后一句(回显那句后面):他说了交给老师
   if (msg.includes('最后请说')) parts.push('鸭子英文怎么说? [[请 说 duck]]');

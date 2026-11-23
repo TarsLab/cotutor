@@ -227,7 +227,7 @@ export interface CheckOptions {
 }
 
 /** 这一节课铺哪种页:头上的 base;没写当 photo(进来先拍照,不拍就是白纸;没有不铺页的课) */
-export const activityBase = (a: Pick<Activity, 'base'>): ActivityBase => (a.base === 'textbook' || a.base === 'lecture' || a.base === 'workbook' ? a.base : 'photo');
+export const activityBase = (a: Pick<Activity, 'base'>): ActivityBase => (a.base === 'textbook' || a.base === 'lecture' || a.base === 'workbook' || a.base === 'homework' ? a.base : 'photo');
 
 /** 对注册表查:参数、裁段的名字、插槽、第一句与收 */
 export function checkActivity(a: Activity, opts: CheckOptions = {}): ActivityIssue[] {

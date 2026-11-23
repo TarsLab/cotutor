@@ -556,6 +556,8 @@ ${pageDomJs(3200)}
     const daily = [];
     // 方砖:课本、预习、检查作业、复习、口语课,老师家里有那个 activity 文件的才列;关掉就是孩子牌上不出那一块;课本没放课本 PDF 时说去哪下载
     for (const x of t.tiles || []) daily.push(h('div', { class: 'it', id: 'daily-tile-' + x.id }, h('span', { class: 'tx' }, h('b', {}, x.label), h('small', {}, !x.usable ? '「' + x.label + '」那份 activity 文件写坏了,孩子那边先不出(工作台看)' : x.noBook || TILE_NOTE[x.id])), sw(x.on, x.label, () => save('PATCH', '/api/parent/settings', { tutors: { [t.name]: { tiles: { [x.id]: !x.on } } } }))));
+    // 作业本:检查作业拍的照片按天攒在 vault 的 作业本/<学科>/ 下;点开选几天导出 PDF
+    if (t.homework) daily.push(h('button', { type: 'button', class: 'it', on: { click: () => exportHomework(t) } }, h('span', { class: 'tx' }, h('b', {}, '作业本'), h('small', {}, t.homework.length ? t.homework.length + ' 天,最近 ' + t.homework[t.homework.length - 1].title + ' · 点开导出 PDF' : '还没有:孩子检查作业拍的照片会按天攒在这里')), h('span', { class: 'chev', html: CHEV })));
     daily.push(h('div', { class: 'it' }, h('span', { class: 'tx' }, h('b', {}, '听写'), h('small', {}, '拍照听写一直在;设了这周的词,孩子点「听写」直接写')), sw(has('dictation'), '听写', () => setExtras(t, 'dictation', !has('dictation')))));
     if (has('dictation') || t.dictation) daily.push(h('button', { type: 'button', class: 'it', on: { click: () => editWords(t) } }, h('span', { class: 'tx' }, h('b', {}, '这周的词'), h('small', {}, t.dictation && t.dictation.length ? t.dictation.length + ' 个词:' + t.dictation.map((w) => w.chars).join('、') : '还没设')), h('span', { class: 'chev', html: CHEV })));
     const extras = h('div', {}, h('div', { class: 'gh' }, h('span', {}, '每天都在 · ' + t.display)), h('div', { class: 'grp' }, ...daily));
@@ -799,6 +801,28 @@ ${pageDomJs(3200)}
       h('div', { class: 'nav' }, h('button', { type: 'button', on: { click: closeSheet } }, '取消'), h('b', {}, t.display + ' · 这周的词'), go),
       h('div', {}, h('div', { class: 'gh' }, h('label', { for: 'w-text' }, '一行一个词,念法空一格写在后面')), ta),
       h('div', { class: 'note' }, en ? '一行一个英文单词,念法空一格写在后面,最多 20 个。孩子点「单词听写」,老师一个一个念,每个念两遍;他在四线三格里写整个单词,写完自己对。清空 = 不要这周的词。' : '一个词一到四个汉字,最多 20 个。孩子点「听写」,老师一个一个念,每个念两遍。清空 = 不要这周的词。想从课本上挑,在孩子的 iPad 上点「拍照听写」。'));
+  };
+
+  // ---- 作业本导出:一天一行(新的在上),勾几天,一张照片一页的 PDF;缺省勾最近那一天 ----
+  const exportHomework = (t) => {
+    const days = (t.homework || []).slice().reverse();
+    const on = new Set(days.length ? [days[0].day] : []);
+    const go = h('a', { class: 'lnk', download: '' }, '导出 PDF');
+    const sync = () => {
+      const pick = days.filter((d) => on.has(d.day)).map((d) => d.day);
+      go.href = pick.length ? '/api/parent/homework/pdf?tutor=' + encodeURIComponent(t.name) + '&days=' + pick.join(',') : '#';
+      go.style.opacity = pick.length ? '' : '.4';
+      go.style.pointerEvents = pick.length ? '' : 'none';
+      list.querySelectorAll('.sw').forEach((b) => b.setAttribute('aria-checked', on.has(b.dataset.day) ? 'true' : 'false'));
+    };
+    const toggle = (d) => { if (on.has(d)) on.delete(d); else on.add(d); sync(); };
+    const list = h('div', { class: 'grp' }, ...(days.length ? days.map((d) => { const b = sw(on.has(d.day), d.title, () => toggle(d.day)); b.dataset.day = d.day; return h('div', { class: 'it' }, h('span', { class: 'tx' }, h('b', {}, d.title + ' · ' + d.day.slice(0, 4)), h('small', {}, d.n + ' 张')), b); }) : [h('div', { class: 'it' }, h('span', { class: 'tx' }, h('small', {}, '还没有:孩子在「检查作业」里拍的照片会按天攒在这里')))]));
+    const week = h('button', { type: 'button', on: { click: () => { on.clear(); days.slice(0, 7).forEach((d) => on.add(d.day)); sync(); } } }, '最近七天');
+    openSheet(
+      h('div', { class: 'nav' }, h('button', { type: 'button', on: { click: closeSheet } }, '关上'), h('b', {}, t.display + ' · 作业本'), week),
+      list,
+      h('div', { class: 'row2', style: 'padding:12px 16px 0' }, h('span', { class: 'note', style: 'padding:0' }, '一张照片一页,A4 竖着;照片在 vault 的 作业本/' + (t.subject || t.name) + '/ 下'), go));
+    sync();
   };
 
   load();

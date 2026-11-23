@@ -12,7 +12,7 @@
  *   {t:'send', body} 不是说的(打字、拍照、「给老师看」、首页按钮):body 是那一条(text / thread / via / photos…,runner.accept 验) · {t:'view', w, h} 屏幕多大 · {t:'bye'}
  *   {t:'staged'} 放小课堂一段的那句([[看 0:19–0:30]])那一段放完了(或放不了、被关):后面的讲稿接着交给嘴
  *   {t:'board', body} 一节课里孩子在页上做了一件事(点字 {k:'pick', thread, text, base};课本上挪了窗 {k:'view', thread, base, box}):记进板的日志(Runner.boardEvent),不起脑;
- *     自己翻页 {k:'open', thread, base, title}(目录上点了一课、按「目录」回去):同样只记下,下一轮「孩子做的」带给老师;
+ *     自己翻页 {k:'open', thread, base, title}(目录上点了一课、按「目录」回去)、作业本翻到一天 {k:'day', thread, base, day}:同样只记下,下一轮「孩子做的」带给老师;
  *     课本的窗停下来以后舞台交的图 {k:'shot', thread, base, box, image} 也走这里:存下来等下一轮附给脑,不算孩子动了手;
  *     课本上落的一笔 {k:'stroke', thread, base, pts}、擦掉 {k:'wipe'} 落进一节课的状态;报来的一件一件排着记,交给脑之前先等记完;
  *   安静时嘴照念这个字词的念法(认字时写好的「傍,傍晚的傍」),老师正在说就不念;再点下一个,上一句掐掉。

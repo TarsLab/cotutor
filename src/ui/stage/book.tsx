@@ -35,7 +35,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type * as Pdfjs from 'pdfjs-dist';
 import { BOOK_ASPECT, BOOK_TOC, BOOK_W, KID_INK, KID_INK_WIDTH, bookCellsOf, bookFrame, bookPick, bookReadParts, bookRows, bookSheets, lessonBlocks, photoBookPage, turnedSkeletons, type BookSheet, type ChalkSkeleton, type ReadPart, type SceneCell, type PhotoLine, type PhotoWord } from '../../chalk/index.ts';
-import { lessonPage, lessonStrip, markFresh } from '../../board/lesson.ts';
+import { lessonPage, lessonStrip, markFresh, photoSheetBox } from '../../board/lesson.ts';
 import { stripLayout, type StripSlot } from '../../board/strip.ts';
 import { CELL_UNIT, LESSON_INK_POINTS, PEN_ASKS, type BookPage, type Lesson, type LessonPage } from '../../schema/index.ts';
 import { CellPad, WRITE_INK, WRITE_WIDTH } from './cell-pad.tsx';
@@ -70,8 +70,13 @@ export interface BookStageProps {
   onSubmit(): void;
   /** 课本的目录上能点的那几项(场景坐标)和按下去铺的颜色;不是目录页、只读的不用 */
   toc?: { color: string; entries: { title: string; box: Box }[] } | null;
-  /** 这一课后面还有一课(页面照目录算的):最后一页下面摆一行「下一课」 */
-  next?: { title: string } | null;
+  /** 这一课后面还有一课(页面照目录算的):最后一页下面摆一行「下一课」;作业本的一天后面还有一天:k = 「后一天」 */
+  next?: { title: string; k?: string } | null;
+  /**
+   * 作业本:照片上以前的话题留下的记号(键是照片的 src;坐标是这张照片自己的,宽 1000、左上角起;src/runtime/homework.ts 的 homeworkPast)。
+   * 垫在这一节老师的那层下面画,只看:擦不掉、不变旧、不收;交给老师的窗图里也有(新的那些)
+   */
+  past?: Readonly<Record<string, StagePast>> | null;
   /** 目录上点中了一项、一课最后那一行的「下一课」(页面先翻过去,再报给服务端) */
   onOpen?(title: string): void;
   /** 点中了一个字(页面弹田字格) */
@@ -256,6 +261,9 @@ function ringPath(box: Box, seed: number): [number, number][] {
   return out;
 }
 
+/** 作业本一张照片上以前的记号(同 src/runtime/homework.ts 的 HomeworkPast) */
+export interface StagePast { marks: { k: string; text: string; box: Box; old?: boolean }[]; ink: [number, number][][] }
+
 /** 划:字下面一道,右头略低一点(手划的) */
 const underPath = (box: Box): [number, number][] => { const h = box[3] - box[1], y = box[3] + h * 0.14; return [[box[0], y], [box[2], y + h * 0.03]]; };
 /** 加点:每个字下面一个点(字按框等分;标点不算) */
@@ -279,7 +287,7 @@ function tocAreas(entries: readonly { title: string; box: Box }[]): { title: str
   });
 }
 
-export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function BookStage({ id: _id, lesson, readonly, hand, mousePen, toc, next, onOpen, onStroke, onPen, onTurn, onWipe, onSubmit, onPick, onPickAt, onCell, color, onReveal, read, onRead, onView, onShot, onError }, ref) {
+export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function BookStage({ id: _id, lesson, readonly, hand, mousePen, toc, next, past, onOpen, onStroke, onPen, onTurn, onWipe, onSubmit, onPick, onPickAt, onCell, color, onReveal, read, onRead, onView, onShot, onError }, ref) {
   const view = useRef<HTMLDivElement>(null);
   const paper = useRef<HTMLDivElement>(null);
   const svg = useRef<SVGSVGElement>(null);
@@ -322,8 +330,8 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
   const tocOn = !readonly && page?.kind === 'book' && page.title === BOOK_TOC && Boolean(toc?.entries.length);
   const tocNow = useRef<{ on: boolean; color: string; areas: ReturnType<typeof tocAreas> }>({ on: false, color: '', areas: [] });
   tocNow.current = { on: tocOn, color: toc?.color ?? '#1c7ed6', areas: tocOn && toc ? tocAreas(toc.entries) : [] };
-  // 一课最后一页下面的「下一课」:课本的一课、孩子能动手的时候才有
-  const nextOn = !readonly && page?.kind === 'book' && page.title !== BOOK_TOC && Boolean(next?.title);
+  // 一课最后一页下面的「下一课」:课本的一课(作业本的一天是「后一天」)、孩子能动手的时候才有
+  const nextOn = !readonly && ((page?.kind === 'book' && page.title !== BOOK_TOC) || (page?.kind === 'photo' && Boolean(page.day))) && Boolean(next?.title);
   const nextNow = useRef(false);
   nextNow.current = nextOn;
   const nextEl = useRef<HTMLDivElement>(null);
@@ -713,6 +721,38 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
     }
   }, []);
 
+  /** 作业本:照片上以前的记号(只看;照片在这一页上的哪儿就挪到哪儿) */
+  const pastRef = useRef(past);
+  pastRef.current = past;
+  const paintPast = useCallback(() => {
+    const layer = svg.current?.querySelector('.bk-past');
+    if (!layer) return;
+    const p = lessonPage(latest.current);
+    const out: SVGElement[] = [];
+    if (p?.kind === 'photo' && p.day) {
+      p.photos.forEach((ph, i) => {
+        const got = pastRef.current?.[ph.src];
+        if (!got) return;
+        const top = photoSheetBox(p.photos, i)[1];
+        const g = el('g', { transform: `translate(0 ${top})` });
+        const line = { fill: 'none', stroke: TEACHER_INK, 'stroke-width': '3', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'vector-effect': 'non-scaling-stroke' };
+        for (const m of got.marks) {
+          const cls = `bk-mark${m.old ? ' bk-old' : ''}`;
+          if (m.k === '圈') g.append(el('path', { d: pathD(ringPath(m.box, seedOf(m.text))), ...line, class: cls }));
+          else if (m.k === '划') g.append(el('path', { d: pathD(underPath(m.box)), ...line, class: cls }));
+          else if (m.k === '加点') {
+            const d = el('g', { class: `${cls} bk-dots` });
+            for (const s2 of dotSpots(m.box, m.text)) d.append(el('circle', { cx: String(s2.cx), cy: String(s2.cy), r: String(s2.r), fill: TEACHER_INK }));
+            g.append(d);
+          }
+        }
+        for (const st of got.ink) g.append(el('path', { d: pathD(st), fill: 'none', stroke: KID_INK, 'stroke-width': String(KID_INK_WIDTH * 0.7), 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'vector-effect': 'non-scaling-stroke', opacity: '0.9', class: 'bk-past-ink' }));
+        out.push(g);
+      });
+    }
+    layer.replaceChildren(...out);
+  }, []);
+
   /** 孩子画的几笔 */
   const paintInk = useCallback(() => {
     const layer = svg.current?.querySelector('.bk-ink');
@@ -941,6 +981,15 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
     if (readonly && lesson.view) moveTo(camFor(lesson.view), true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [teacherNow, inkNow, cellsNow, lesson.look?.n, lesson.view?.join(','), phase, geoKey, JSON.stringify([strip, strip ? page?.kid.stripInk[strip.key]?.length : 0, page?.kid.turns, canTurn])]);
+
+  // 作业本:以前的记号到了、换了一天就重画(只看,和这一节的状态无关)
+  const pastNow = page?.kind === 'photo' && page.day ? JSON.stringify(page.photos.map((ph) => past?.[ph.src] ?? null)) : '';
+  useEffect(() => {
+    if (!geo.current || geo.current.key !== geoKey || phase !== 'ready') return;
+    paintPast();
+    if (pastNow) scheduleShot();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pastNow, geoKey, phase]);
 
   // 写字格开了、换了一格:摆到那一格旁边
   useEffect(() => { if (pad) placePad(); }, [pad]);
@@ -1398,6 +1447,24 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
       ctx.strokeStyle = TEACHER_INK; ctx.fillStyle = TEACHER_INK; ctx.lineWidth = 3 / k;
       for (const e of Array.from(svg.current?.querySelectorAll<SVGPathElement>('.bk-teacher path.bk-mark:not(.bk-old):not(.bk-gone)') ?? [])) ctx.stroke(new Path2D(e.getAttribute('d') ?? ''));
       for (const c of Array.from(svg.current?.querySelectorAll<SVGCircleElement>('.bk-teacher .bk-dots:not(.bk-old):not(.bk-gone) circle') ?? [])) { ctx.beginPath(); ctx.arc(Number(c.getAttribute('cx')), Number(c.getAttribute('cy')), Number(c.getAttribute('r')), 0, Math.PI * 2); ctx.fill(); }
+      // 作业本上以前的记号(只画没淡的;孩子的笔照画)
+      const pp = lessonPage(latest.current);
+      if (pp?.kind === 'photo' && pp.day) pp.photos.forEach((ph, i) => {
+        const got = pastRef.current?.[ph.src];
+        if (!got) return;
+        const top = photoSheetBox(pp.photos, i)[1];
+        ctx.save();
+        ctx.translate(0, top);
+        ctx.strokeStyle = TEACHER_INK; ctx.fillStyle = TEACHER_INK; ctx.lineWidth = 3 / k;
+        for (const m of got.marks) {
+          if (m.old) continue;
+          if (m.k === '加点') { for (const d of dotSpots(m.box, m.text)) { ctx.beginPath(); ctx.arc(d.cx, d.cy, d.r, 0, Math.PI * 2); ctx.fill(); } continue; }
+          ctx.stroke(new Path2D(pathD(m.k === '圈' ? ringPath(m.box, seedOf(m.text)) : underPath(m.box))));
+        }
+        ctx.strokeStyle = KID_INK; ctx.lineWidth = (KID_INK_WIDTH * 0.7) / k;
+        for (const st of got.ink) { ctx.beginPath(); st.forEach(([x, y], j) => (j ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke(); }
+        ctx.restore();
+      });
       ctx.restore();
       // 盖住的(遮、盖):孩子眼前就是盖着的
       ctx.fillStyle = '#f1e6c8';
@@ -1453,6 +1520,7 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
             <canvas className="bk-sharp" ref={sharp} />
             <svg className="bk-svg" ref={svg} xmlns={SVG_NS}>
               <g className="bk-hl" />
+              <g className="bk-past" />
               <g className="bk-teacher" />
               <g className="bk-cells" />
               <g className="bk-strip" />
@@ -1461,7 +1529,7 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
             </svg>
             {nextOn && phase === 'ready' && geo.current ? (
               <div className="bk-next" ref={nextEl} style={{ left: `${BOOK_W / 2}px`, top: `${geo.current.height + NEXT_GAP}px` }}>
-                <span className="k">下一课</span><span className="t">{next!.title}</span>{icon('<path d="M9 5l7 7-7 7"></path>')}
+                <span className="k">{next!.k ?? '下一课'}</span><span className="t">{next!.title}</span>{icon('<path d="M9 5l7 7-7 7"></path>')}
               </div>
             ) : null}
           </div>

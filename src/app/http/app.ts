@@ -15,6 +15,7 @@ import { PHOTO_MAX_SIDE } from '../../ui/kid/photo-edit.ts';
 import { currentThread, lastJobOf, sameRuntime } from '../../runtime/journal/conversation.ts';
 import { localDate, weekOf } from '../../shared/time.ts';
 import { cardVoice, conversationFiles, threads } from '../../schema/index.ts';
+import { homeworkDaysOf, homeworkPage, homeworkPast, homeworkPdf, homeworkPdfName, homeworkSubject } from '../../runtime/homework.ts';
 import { kidConversation, startedThreads, parentConversation, type KidMessage, type KidTodayThread, type ParentMessage } from '../../runtime/kid-view.ts';
 import { previewOf, writePreview } from '../../runtime/journal/preview.ts';
 import { parseEvents } from '../../runtime/journal/events.ts';
@@ -100,6 +101,8 @@ export interface RouteResult {
   cacheControl?: string;
   /** 要种的 cookie(/api/auth 对了 PIN) */
   setCookie?: string;
+  /** body 是要下载的文件(作业本导出的 PDF):文件名 */
+  download?: string;
 }
 
 export interface AppContext {
@@ -902,6 +905,39 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       if (p === '/api/kid/workbook/lines') return { status: 200, json: { pages: got.wb.pages.map((pg, i) => workbookBookPage(i + 1, pg).page) } };
       return { status: 404, json: { error: 'not_found' } };
     }
+    // 作业本(base: homework,检查作业;src/runtime/homework.ts):
+    //   base  有哪几天(章名、几张)、今天那一章此刻的样子(今天拍过的;没有 = null),孩子端点了检查作业先要它:今天拍过就直接铺开,没拍过先到拍照屏
+    //   day   以前那一天铺成的一页(孩子翻过去先落在自己那一份上,服务端收到 {k:'day'} 照同一份铺)
+    //   past  一张照片(captures 里的)上以前的话题留下的记号(这张照片自己的坐标);date + thread = 现在这个话题(它自己的、在它之后的不算)
+    if (p.startsWith('/api/kid/homework/') && method === 'GET') {
+      const q = url.searchParams, tutor = q.get('tutor') ?? '';
+      const t = ws.config.tutors[tutor];
+      if (!t) return { status: 404, json: { error: 'not_found' } };
+      const today = localDate(ctx.now());
+      const pick = canonicalSubject(t.subject) !== '数学';
+      if (p === '/api/kid/homework/base') return { status: 200, json: { today, days: await homeworkDaysOf(ws, tutor), page: await homeworkPage(ws, tutor, today, today, pick) } };
+      if (p === '/api/kid/homework/day') {
+        const day = q.get('day') ?? '';
+        const page = DATE_RE.test(day) ? await homeworkPage(ws, tutor, day, today, pick) : null;
+        return page ? { status: 200, json: { page } } : { status: 404, json: { error: 'not_found' } };
+      }
+      if (p === '/api/kid/homework/past') {
+        const src = q.get('p') ?? '', date = q.get('date') ?? '', thread = q.get('thread') ?? '';
+        if (!(await capturePathOk(ws, src))) return { status: 404, json: { error: 'not_found' } };
+        const mine = DATE_RE.test(date) && /^\d{4}-\d+$/.test(thread) ? { date, thread } : null;
+        return { status: 200, json: await homeworkPast(ws, tutor, src, mine) };
+      }
+      return { status: 404, json: { error: 'not_found' } };
+    }
+    // 家长端导出作业本:days = 选的那几天(逗号隔开),一张照片一页的 PDF(src/shared/pdf.ts);不是 jpeg 的跳过
+    if (p === '/api/parent/homework/pdf' && method === 'GET') {
+      const tutor = url.searchParams.get('tutor') ?? '';
+      if (!ws.config.tutors[tutor]) return { status: 404, json: { error: 'not_found' } };
+      const days = (url.searchParams.get('days') ?? '').split(',').filter((d) => DATE_RE.test(d));
+      if (!days.length) return { status: 400, json: { error: 'bad_request', message: '要 days=YYYY-MM-DD,…' } };
+      const r = await homeworkPdf(ws, tutor, days);
+      return { status: 200, body: r.pdf, contentType: 'application/pdf', cacheControl: 'no-store', download: homeworkPdfName(homeworkSubject(ws, tutor), days) };
+    }
     // 进门(孩子先说):首页 activity 按钮点进来,body 同孩子发的一条少 text({via, device});服务端记一条「进门」、铺好页,不叫老师,回话题 id。
     // 老师正在回上一条 → 409(孩子端过一会儿再进);离开(点回首页)时没开口的话题删掉({thread})
     if (p === '/api/kid/enter' && method === 'POST') {
@@ -911,7 +947,9 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       const got = await ctx.runner.accept(tutor, { ...(isObj(body) ? body : {}), text: '' }, date, client.device);
       if ('reject' in got) return { status: got.reject.status, json: { error: got.reject.error } };
       if (!got.input.activity || !got.input.via || got.input.lecture) return { status: 400, json: { error: 'bad_request' } };
-      return { status: 200, json: await ctx.runner.enter(tutor, got.input) };
+      // 作业本:day = 要看以前的那一天(拍照屏上「翻作业本」);不给照今天那一章
+      const day = isObj(body) && typeof body.day === 'string' && DATE_RE.test(body.day) ? body.day : undefined;
+      return { status: 200, json: await ctx.runner.enter(tutor, got.input, day ? { day } : {}) };
     }
     if (p === '/api/kid/leave' && method === 'POST') {
       const tutor = url.searchParams.get('tutor') ?? '';
@@ -1217,7 +1255,7 @@ export function createHandler(ctx: AppContext): (req: IncomingMessage, res: Serv
       }
       if (r.file !== undefined) await sendFile(req, res, r as RouteResult & { file: string });
       else if (r.body !== undefined) {
-        res.writeHead(r.status, { 'content-type': r.contentType ?? 'application/octet-stream', 'cache-control': r.cacheControl ?? 'private, max-age=86400' });
+        res.writeHead(r.status, { 'content-type': r.contentType ?? 'application/octet-stream', 'cache-control': r.cacheControl ?? 'private, max-age=86400', ...(r.download ? { 'content-disposition': `attachment; filename="homework.pdf"; filename*=UTF-8''${encodeURIComponent(r.download)}` } : {}) });
         res.end(Buffer.from(r.body));
       } else if (r.html !== undefined) {
         res.writeHead(r.status, { 'content-type': r.contentType ?? 'text/html; charset=utf-8', 'cache-control': 'no-store' });

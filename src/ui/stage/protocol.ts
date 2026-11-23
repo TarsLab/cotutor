@@ -16,8 +16,10 @@ export type ToStage =
     lecture?: { url: string; marks: unknown[]; follow?: boolean; play?: number };
     /** 现在这一页是课本的目录:能点的那几项(课名、印在哪一行,场景坐标)、按下去那一行铺的颜色(老师的学科色);点中了回 open */
     toc?: { color: string; entries: { title: string; box: [number, number, number, number] }[] };
-    /** 现在这一页是课本的一课、目录上还有下一项:这一课最后一页下面摆一行「下一课」,点中了回 open */
-    next?: { title: string };
+    /** 现在这一页是课本的一课、目录上还有下一项:这一课最后一页下面摆一行「下一课」,点中了回 open;作业本的一天后面还有一天:k = 「后一天」 */
+    next?: { title: string; k?: string };
+    /** 作业本的一天:照片上以前的话题留下的记号(键是照片的 src,照片自己的坐标;book.tsx 的 StagePast) */
+    past?: Record<string, { marks: { k: string; text: string; box: [number, number, number, number]; old?: boolean }[]; ink: [number, number][][] }>;
     /** 老师的学科色(写字格的「放好」、点开的那一格) */
     color?: string;
     /** 点读(语文课本的一课,这位老师有点读的声音):给了舞台才认标题、段首的钮;k = 在读哪一块(-1 没在读),mode = 钮的样子(playing / loading / between / paused) */

@@ -3,7 +3,7 @@
  * 按钮与听写的词改的是已发布那份首页的原文(editPublished:检查、留历史、发布);开关与几项常改的设置写回 cotutor.json(patchConfig)。
  * 页面每次现读,不缓存:家长也可能同时在编辑器里改 cotutor.json、在编程助手里发布首页。
  *
- *   GET   /api/parent/home                          老师们(按首页的先后)、各自的按钮(带讲法)、听写的词、常驻入口与方砖
+ *   GET   /api/parent/home                          老师们(按首页的先后)、各自的按钮(带讲法)、听写的词、常驻入口与方砖、作业本有哪几天(导出 PDF 是 app.ts 的 /api/parent/homework/pdf)
  *   PUT   /api/parent/home/tutors/<老师>/buttons     {buttons: [{kind, label, brief?, until?, activity?, params?, bundle?}]} 换掉这位老师的按钮(只有 activity、小课堂两种)
  *   PUT   /api/parent/home/tutors/<老师>/dictation   {words: [{chars, say?}]} 这周的词;[] = 删掉
  *   PUT   /api/parent/home/order                    {tutors: [老师…]} 老师的先后(排第一的进首页时在最前)
@@ -21,6 +21,7 @@ import { TTS_VOICES } from '../../media/tts.ts';
 import type { AppContext, RouteResult } from './app.ts';
 import { bookReady, editPublished, noBookNote, readPublished, usableActivity, type PublishResult } from '../../runtime/home/store.ts';
 import { patchConfig } from '../workspace.ts';
+import { homeworkDaysOf } from '../../runtime/homework.ts';
 import { tutorColors } from '../../ui/shared/tutor-color.ts';
 import { wordEmoji } from '../../ui/kid/word-emoji.ts';
 import { shownAvatar } from './avatars.ts';
@@ -49,6 +50,8 @@ export interface ParentHomeTutor {
    * noBook = 铺课本的那块 vault 里还没有这一科的课本 PDF(孩子端不出),给家长的一句去哪下载、放哪
    */
   tiles: { id: HomeTileId; label: string; on: boolean; usable: boolean; noBook?: string }[];
+  /** 作业本(这位老师有铺作业本的方砖,base: homework):有哪几天、每天几张,从早到晚;家长点开选几天导出 PDF(GET /api/parent/homework/pdf) */
+  homework?: { day: string; n: number; title: string }[];
   /** 首页里这位老师的按钮(文件里的,带讲法与留到) */
   buttons: TutorButton[];
   /** 这周的词:写了这位老师的听写卡;没有 = null */
@@ -89,7 +92,14 @@ export async function parentHome(ctx: AppContext): Promise<Record<string, unknow
     return out;
   };
   const tiles = new Map<string, ParentHomeTutor['tiles']>();
-  for (const name of order) tiles.set(name, await tilesOf(name));
+  const homework = new Map<string, NonNullable<ParentHomeTutor['homework']>>();
+  for (const name of order) {
+    tiles.set(name, await tilesOf(name));
+    for (const t of HOME_TILES) {
+      if (!existsSync(findActivityFile(ctx.ws.root, name, t.activity))) continue;
+      if ((await usableActivity(ctx.ws, name, t.activity))?.base === 'homework') { homework.set(name, await homeworkDaysOf(ctx.ws, name)); break; }
+    }
+  }
   const tutors: ParentHomeTutor[] = order.map((name) => {
     const t = c.tutors[name];
     const card = cards.find((x) => x.kind === 'tutor' && x.props.tutor === name);
@@ -103,6 +113,7 @@ export async function parentHome(ctx: AppContext): Promise<Record<string, unknow
       extras: tutorExtras(t),
       extrasSet: t.extras ?? null,
       tiles: tiles.get(name) ?? [],
+      ...(homework.has(name) ? { homework: homework.get(name) } : {}),
       buttons: ((card?.props.buttons ?? []) as TutorButton[]),
       dictation: dict ? ((dict.props.words ?? []) as { chars: string; say?: string; emoji?: string }[]) : null,
       lang: subjectLang(t.subject),

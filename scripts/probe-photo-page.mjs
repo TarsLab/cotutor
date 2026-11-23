@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 铺孩子拍的照片的一节课(数学「检查作业」,activity 头上 base: photo)孩子端整条线的手动验收:不进 pnpm test,要本机 Chrome;假百炼 + 假老师 + 假看图,不花钱。
+ * 铺孩子拍的照片的一节课(数学「检查作业」,activity 头上 base: homework,作业本也是照片页)孩子端整条线的手动验收:不进 pnpm test,要本机 Chrome;假百炼 + 假老师 + 假看图,不花钱。
  * 本进程起服务(临时 workspace;vault 的 教材/数学二年级上册/ 里放一张作业图当「课本页」,选它就当孩子拍的照片发;认字是假的,回一道第 3 题和一行字),无头 Chrome 开孩子端:
  *  一、首页点数学的「检查作业」方砖:先到拍照屏(拍照、相册、选课本页、不拍用白纸),不发东西。
  *  二、选那一页:照片马上铺上照片页(舞台 book.tsx 画一张),不等老师;顶栏有拍照、相册。
@@ -121,10 +121,10 @@ try {
 
   // 一、首页点数学的「检查作业」
   await send('Page.navigate', { url: `${base}/` });
-  // 先点数学的签换到他(第一个 [data-tutor] 是签),再用鼠标点他的方砖
+  // 先点数学的小旗换到他那一章,再用鼠标点他的方砖
   await until(`Boolean(document.querySelector('[data-tutor="math-tutor"]'))`);
-  await evaluate(`document.querySelector('[data-tutor="math-tutor"]').click(), true`);
-  await until(`document.querySelector('[data-tutor="math-tutor"]').classList.contains('front')`, 5000);
+  await evaluate(`document.querySelector('#tabs .tab[data-tutor="math-tutor"]').click(), true`);
+  await until(`document.querySelector('.pc[data-tutor="math-tutor"]').classList.contains('front')`, 5000);
   await sleep(800);
   const tile = await until(`(() => { const b = document.querySelector('[data-tutor="math-tutor"] .bt-tile[data-tile="check"]'); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
   ok('首页有数学的「检查作业」方砖', Boolean(tile));
@@ -146,7 +146,7 @@ try {
   ok('选了一页:照片铺上照片页(一张),不等老师;顶栏有拍照、相册', Boolean(laid) && top.ph && top.cam !== 'none', JSON.stringify({ top, st: await pageState() }));
   await idle();
   const first = (await day()).messages?.[0];
-  ok('开了一节课:话题第一条记 base: photo,带着那张照片', first?.base === 'photo' && first.photos?.length === 1, JSON.stringify(first));
+  ok('开了一节课:话题第一条记 base: homework,带着那张照片', first?.base === 'homework' && first.photos?.length === 1, JSON.stringify(first));
   await sleep(1500);
   console.log('  ', await shot('2-照片页.png'));
 
@@ -180,8 +180,8 @@ try {
   await idle();
   await evaluate(`document.querySelector('#back').click(), true`);
   await until(`Boolean(document.querySelector('[data-tutor="english-tutor"]'))`);
-  await evaluate(`document.querySelector('[data-tutor="english-tutor"]').click(), true`);
-  await until(`document.querySelector('[data-tutor="english-tutor"]').classList.contains('front')`, 5000);
+  await evaluate(`document.querySelector('#tabs .tab[data-tutor="english-tutor"]').click(), true`);
+  await until(`document.querySelector('.pc[data-tutor="english-tutor"]').classList.contains('front')`, 5000);
   await sleep(800);
   const talkTile = await until(`(() => { const b = document.querySelector('[data-tutor="english-tutor"] .bt-tile[data-tile="talk"]'); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
   ok('英语老师的牌上有「口语课」方砖', Boolean(talkTile));

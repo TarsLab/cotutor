@@ -217,8 +217,8 @@ td .was { display:block; margin-top:4px; font-size:12.5px; color:var(--muted); }
       <tr><td class="n">B3</td><td><b>翻章是孩子自己的事:</b>不叫老师(O2),记进板的日志,下一轮「孩子做的」说「自己翻到了《…》」。老师照旧能 <code>[[翻 …]]</code>,能跨章(<code>[[翻 11月20日]]</code> 翻作业本那天)。</td><td><span class="st now">现状</span></td></tr>
       <tr><td class="n">B4</td><td><b>记住位置。</b>每册记 <code>{章, 页, 页里滚到哪(比例), 时间}</code>,孩子翻的、老师翻的都算,目录不算。进门直接铺到那里(O3 的第二档)。第一次进来:课本铺目录,练习册铺第一章,作业本铺今天。<span class="was">现状:<code>.cotutor/book-last.json</code> 只记课本的课名,进来停在目录那一行。</span></td><td><span class="st now">现状</span></td></tr>
       <tr><td class="n">B5</td><td><b>位置存在哪。</b>还是 <code>.cotutor/book-last.json</code>,键:课本照文件名(现状),练习册 <code>练习册#&lt;名&gt;</code>,作业本 <code>作业本#&lt;学科&gt;</code>。旧的只有课名的记录读进来当「那一课第 1 页顶上」。</td><td><span class="st now">现状</span></td></tr>
-      <tr><td class="n">B6</td><td><b>作业本按天攒。</b>检查作业拍的照片接在今天那章后面,跨话题;存进 vault,不再只在话题旁边。今天的话题铺今天这章,往前翻能看以前几天。一天几张不限(Q4)。以前几天的页上留着那天最后的记号(Q5)。<span class="was">现状:一个话题最多 6 张(<code>PAGE_PHOTOS_MAX</code>),话题结束就散了。</span></td><td><span class="st ok">已定</span></td></tr>
-      <tr><td class="n">B7</td><td><b>导出 PDF。</b>家长端作业本那里选日期,一张照片一页(A4 竖,照片照比例放),先只有原照片。照片本来是 JPEG,直接嵌进 PDF,不加运行时依赖。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">B6</td><td><b>作业本按天攒。</b>检查作业(<code>base: homework</code>)拍的照片接在今天那章后面,跨话题;照原名另抄一份进 vault 的 <code>作业本/&lt;学科&gt;/&lt;日期&gt;/</code>。今天拍过的,点检查作业直接铺今天这章;没拍过先到拍照屏,多一颗「翻作业本」。往前翻能看以前几天。一天几张不限(Q4)。以前几天的页上留着那天最后的记号(Q5)。目录是一天一行的一张单子(新的在上,星期、几张),不是舞台上的一页。<span class="was">以前:一个话题最多 6 张,话题结束就散了。</span></td><td><span class="st now">现状</span></td></tr>
+      <tr><td class="n">B7</td><td><b>导出 PDF。</b>家长端首页那位老师「每天都在」里的「作业本」点开,一天一行勾几天,一张照片一页(A4 竖,照片照比例放),先只有原照片。照片本来是 JPEG,直接嵌进 PDF,不加运行时依赖。</td><td><span class="st now">现状</span></td></tr>
       <tr><td class="n">B8</td><td><b>课本封面。</b>服务端只读文字层,画不出图。舞台第一次打开这本书时画 PDF 第 1 页,长边 480 的 jpeg 传回来存 <code>.cotutor/covers/&lt;指纹&gt;.jpg</code>(同首页预览图那条路)。还没有就用学科色加书名的占位。</td><td><span class="st new">提议</span></td></tr>
       <tr><td class="n">B9</td><td><b>Codex 出练习册</b>有一篇文档可照:目录结构、坐标(千分比)、题框、能写的格子、答案、<code>chapters</code>。<span class="was">现状:格式在 <code>src/schema/workbook.ts</code>,只有给开发者的 <code>docs/dev/练习册.md</code>。</span></td><td><span class="st new">提议</span></td></tr>
     </tbody>
@@ -276,6 +276,7 @@ td .was { display:block; margin-top:4px; font-size:12.5px; color:var(--muted); }
       <li><b>有,留着最后的样子。</b>每张照片属于拍它的那个检查作业话题;翻回去,铺那个话题结束时这张照片上的全部记号:老师的圈、划、点、盖,孩子的笔、写进格子的字、白纸条上摆的图形,原样不动。</li>
       <li>以前的记号只看不改:擦不掉,也不再变旧、不再收。</li>
       <li>今天在以前的照片上再写、老师今天又圈的,记在今天的话题里,叠在那天的上面;今天的话题结束以后,这张照片「最后的样子」就是今天的。</li>
+      <li><b>做的时候改了一处:</b>只带老师的圈、划、加点和孩子的笔。遮、盖、白纸条不带:它们盖着页上的字,在只看的页上孩子揭不开、收不起来。照片页上没有能写的格子。</li>
     </ul></div>
     <div class="q"><h4><span class="st ok">已定</span> <span class="rid">Q6</span>章底要不要一条「下一课《…》」</h4><ul>
       <li class="rec"><b>定了</b> 要,章的最后一页下面一行安静的字,点了同顶栏的下一章。滚到底的孩子手就在那儿。</li>
@@ -293,7 +294,7 @@ td .was { display:block; margin-top:4px; font-size:12.5px; color:var(--muted); }
       <tr><td class="n">1 ✓</td><td>孩子先开口(O1–O8,2026-11-23 做完,规矩在 <code>docs/dev/首页与听写.md</code>)</td><td>kid-page 的 <code>openTutor</code>、<code>kid-input.ts</code>、<code>runner.send</code> 与 <code>boardEvent</code>、<code>kid-view.ts</code> 的 <code>startsThread</code>、<code>live/call.ts</code> 的 open 那一轮、<code>schema/activity.ts</code> 的 <code>start</code>、全部 activity 与例子、<code>activity-eval</code></td><td>activity、live-board、live-flow、kid-view、mock、probe</td></tr>
       <tr><td class="n">2 ✓</td><td>册与记住位置(B1–B5,2026-11-23 做完;顶栏照 <a href="https://claude.ai/artifact/4bSS84UgBieKXpgdJFpbPk">翻页设计稿</a> 的 B)</td><td><code>book-last.ts</code>、<code>lesson-fit.ts</code> 的 <code>lessonOpen</code>、kid-page 的 <code>BP</code> 顶栏、<code>book.tsx</code>、<code>schema/workbook.ts</code> 的 <code>chapters</code></td><td>textbook、board-book、workbook-page、probe-book-page</td></tr>
       <tr><td class="n">3 ✓</td><td>课本合并(C1–C5,2026-11-23 做完,规矩在 <code>docs/dev/首页与听写.md</code>;方砖的图先用预习那张书,竖版封面在第 5 步)</td><td><code>grades/grade-2/agents/{chinese,math}-tutor/activities/</code>、<code>HOME_TILES</code>、refresh 退役、方砖的图</td><td>activity、grades、cards</td></tr>
-      <tr><td class="n">4</td><td>作业本与导出(B6、B7)</td><td>照片落 vault、照片页按天成章、家长端导出路由</td><td>photo-words、strip、新加的导出测试</td></tr>
+      <tr><td class="n">4 ✓</td><td>作业本与导出(B6、B7,2026-11-23 做完,规矩在 <code>docs/dev/照片页.md</code> 的「作业本」)</td><td><code>src/memory/homework.ts</code>、<code>src/runtime/homework.ts</code>、<code>src/shared/pdf.ts</code>、runner 的 <code>lessonOn</code> 与 <code>{k:'day'}</code>、kid-page 的 <code>hw*</code>、舞台的 <code>.bk-past</code>、家长端「作业本」</td><td>homework、lesson、board-page、probe-homework</td></tr>
       <tr><td class="n">5</td><td>首页竖版卡与封面(B8、H1–H4)</td><td>先改首页设计稿;再 <code>cards/tutor/card.css</code>、<code>home-tiles.ts</code>、封面回传</td><td>mock、probe</td></tr>
     </tbody>
   </table></div>

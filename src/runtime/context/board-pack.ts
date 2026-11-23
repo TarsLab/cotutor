@@ -13,7 +13,7 @@
 import { BOOK_TOC, lessonBlocks } from '../../chalk/index.ts';
 import { lessonPage, lessonStrip } from '../../board/lesson.ts';
 import { stripRead } from '../../board/strip.ts';
-import type { BoardEvent, BookIndex, BookPage, ContextPack, Lesson, MarkName, StripItem } from '../../schema/index.ts';
+import { PHOTO_PAGE, type BoardEvent, type BookIndex, type BookPage, type ContextPack, type Lesson, type MarkName, type StripItem } from '../../schema/index.ts';
 
 /** 「最近点的」多久以内算(孩子说「这个」指它);起点,试用后调 */
 export const RECENT_PICK_MS = 30_000;
@@ -94,7 +94,7 @@ export function slateOf(x: SlateInput): NonNullable<ContextPack['slate']> {
   const picked = since.filter(onBase).map((e) => e.text);
   // 他自己翻过去的(目录上点了一课、按「目录」回去):只说最后那次,翻到的就是现在这一页
   const turned = [...since].reverse().find((e): e is BoardEvent & { k: 'open' } => e.k === 'open' && e.base === base);
-  const did = [...(x.did ?? []), ...(turned ? [turned.text === BOOK_TOC ? '自己按「目录」翻回了目录' : `自己在目录上点了《${turned.text}》,翻到了这一课`] : []), pickLine(picked.filter((t) => !isEnglish(t)), '笔顺'), pickLine(picked.filter(isEnglish), '单词')].filter((s): s is string => Boolean(s));
+  const did = [...(x.did ?? []), ...(turned ? [turned.text === BOOK_TOC ? '自己按「目录」翻回了目录' : turned.base === PHOTO_PAGE || turned.base.startsWith(`${PHOTO_PAGE}#`) ? `自己翻到了作业本的《${turned.text}》` : `自己在目录上点了《${turned.text}》,翻到了这一课`] : []), pickLine(picked.filter((t) => !isEnglish(t)), '笔顺'), pickLine(picked.filter(isEnglish), '单词')].filter((s): s is string => Boolean(s));
   // 页上写画的:几笔(笔画本身看图)、擦没擦过
   const inks = since.filter((e): e is BoardEvent & { k: 'ink' } => e.k === 'ink' && e.base === base);
   const wiped = inks.map((e) => Boolean(e.wipe)).lastIndexOf(true);

@@ -32,6 +32,9 @@ for (const t of Object.values((cfg as { tutors: Record<string, { runtime?: strin
 cfg.paths = { vault: 'vault' };
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 mkdirSync(join(root, 'vault'), { recursive: true });
+// 语文有课本(只看文件在不在,首页出「课本」那块),数学没有
+mkdirSync(join(root, 'vault', '教材'), { recursive: true });
+writeFileSync(join(root, 'vault', '教材', '语文二年级上册.pdf'), '%PDF-1.4 假的\n');
 
 async function run(argv: string[]): Promise<{ out: string; code: number }> {
   const w = process.stdout.write;
@@ -111,7 +114,7 @@ for: 2026-09-18
 ---
 
 \`\`\`tutor chinese-tutor
-activity 预习 我要预习小蝌蚪找妈妈
+activity 课本 我要预习小蝌蚪找妈妈
 讲法: 第 22 课,先读顺 1–3 段
 activity 看图说话 我要看图说话
 讲法: 先问他图上有谁
@@ -136,14 +139,14 @@ activity 看图说话 我要看图说话
 `;
   draft(BAD);
   const c1 = await run(['home', 'check']);
-  check('check:要改两条(首页放不了选择题、小课堂的课包不在)带行号,exit 1;缺的老师说会补', c1.code === 1 && c1.out.includes('要改 2 条') && c1.out.includes('✗ 第 16 行 首页只放老师卡(tutor)和听写卡(dictation),choice 卡放不了') && c1.out.includes('2026-09-15-nope') && c1.out.includes('英语老师 english-tutor(没写,应用补):▦ 预习') && c1.out.includes('▶ 我要预习小蝌蚪找妈妈 → activity 预习(讲法 16 字)') && c1.out.includes('dictation「'), c1.out);
+  check('check:要改两条(首页放不了选择题、小课堂的课包不在)带行号,exit 1;缺的老师说会补', c1.code === 1 && c1.out.includes('要改 2 条') && c1.out.includes('✗ 第 16 行 首页只放老师卡(tutor)和听写卡(dictation),choice 卡放不了') && c1.out.includes('2026-09-15-nope') && c1.out.includes('英语老师 english-tutor(没写,应用补):▦ 预习') && c1.out.includes('▶ 我要预习小蝌蚪找妈妈 → activity 课本(讲法 16 字)') && c1.out.includes('dictation「'), c1.out);
   const p1 = await run(['home', 'publish']);
   check('publish:有要改的不发,exit 1,没有 published.json', p1.code === 1 && p1.out.includes('没发布') && !existsSync(join(root, 'home', 'published.json')), p1.out);
 
   const f1j = await publishHome(ctx.ws, { force: true, now });
   check('--force:丢掉选择题与那个坏按钮照发', f1j.ok && f1j.home?.id === '2026-09-17-2130' && f1j.dropped.length === 2 && existsSync(join(root, 'home', 'history', '2026-09-17-2130.md')), JSON.stringify({ ok: f1j.ok, id: f1j.home?.id, dropped: f1j.dropped }));
 
-  const GOOD = BAD.replace('小课堂 2026-09-15-nope 找不到的\n', 'activity 复习 再练两道退位减法\n讲法: 52−7、80−3\n').replace('```choice\n问?\n- [x] a\n```\n\n', '');
+  const GOOD = BAD.replace('小课堂 2026-09-15-nope 找不到的\n', 'activity 检查作业 再练两道退位减法\n讲法: 52−7、80−3\n').replace('```choice\n问?\n- [x] a\n```\n\n', '');
   draft(GOOD);
   const f2 = await publishHome(ctx.ws, { now });
   check('同一分钟再发:id 加序号', f2.ok && f2.home?.id === '2026-09-17-2130-2', JSON.stringify({ ok: f2.ok, id: f2.home?.id }));
@@ -182,7 +185,7 @@ activity 看图说话 我要看图说话
   const m0 = idx17.messages.find((m) => m.job === j0)!;
   const run0 = await readRunFile(ctx.ws, 'chinese-tutor', '2026-09-17', j0);
   check('孩子找过语文老师了:他的橙点灭,数学的还亮', newsOf(await kidHome()) === 'math-tutor', newsOf(await kidHome()));
-  check('activity 按钮:发的是按钮上的字、新话题、消息记 via 与 activity', m0.text === '我要预习小蝌蚪找妈妈' && m0.thread === j0 && JSON.stringify(m0.via) === JSON.stringify({ home: h1.home, button: 0, label: '我要预习小蝌蚪找妈妈' }) && m0.activity?.name === '预习', JSON.stringify(m0));
+  check('activity 按钮:发的是按钮上的字、新话题、消息记 via 与 activity', m0.text === '我要预习小蝌蚪找妈妈' && m0.thread === j0 && JSON.stringify(m0.via) === JSON.stringify({ home: h1.home, button: 0, label: '我要预习小蝌蚪找妈妈' }) && m0.activity?.name === '课本', JSON.stringify(m0));
   check('activity 按钮:上下文包带 home 段(按钮字与讲法)', run0?.prompt.includes('  home:\n    button: "我要预习小蝌蚪找妈妈"\n    brief: "第 22 课,先读顺 1–3 段"') === true, run0?.prompt);
 
   const s1 = await kidSend('chinese-tutor', { text: '', thread: j0, via: { home: h1.home, button: 1 } });
@@ -204,11 +207,12 @@ activity 看图说话 我要看图说话
   const m3 = (await readIndex(ctx.ws, 'chinese-tutor', '2026-09-17')).messages.find((m) => m.job === (s3.json as { job: string }).job)!;
   check('不带按钮的接着那个话题:孩子自己的话', m3.thread === j1 && m3.text === '小蝌蚪后来呢' && !m3.via);
 
-  // 方砖(预习、检查作业、复习):出厂的老师家里都有,不经发布常驻;点了 = 那个 activity、发方砖上的字;关掉的不出、点了 400
+  // 方砖:出厂的老师家里有的,不经发布常驻(语文、数学课本、检查作业;英语预习、检查作业、复习、口语课);课本要有课本;点了 = 那个 activity、发方砖上的字;关掉的不出、点了 400
   type Tile = { id: string; label: string };
   const tilesOf = (h: KidHome, tutor: string): Tile[] => (h.cards.find((c) => c.kind === 'tutor' && c.props.tutor === tutor)?.props as { tiles?: Tile[] } | undefined)?.tiles ?? [];
   const ht = await kidHome();
-  check('方砖:三位老师都有预习、检查作业、复习(牌上的先后),英语老师还有口语课(一直听)', ['chinese-tutor', 'math-tutor'].every((n) => tilesOf(ht, n).map((x) => `${x.id}:${x.label}`).join() === 'preview:预习,check:检查作业,review:复习') && tilesOf(ht, 'english-tutor').map((x) => `${x.id}:${x.label}`).join() === 'preview:预习,check:检查作业,review:复习,talk:口语课' && (tilesOf(ht, 'english-tutor')[3] as { listen?: string } | undefined)?.listen === 'open', JSON.stringify(tilesOf(ht, 'english-tutor')));
+  check('方砖:语文有课本、检查作业;数学没放课本,只有检查作业;英语预习、检查作业、复习、口语课(一直听)', tilesOf(ht, 'chinese-tutor').map((x) => `${x.id}:${x.label}`).join() === 'textbook:课本,check:检查作业' && (tilesOf(ht, 'chinese-tutor')[0] as { base?: string }).base === 'textbook' && tilesOf(ht, 'math-tutor').map((x) => `${x.id}:${x.label}`).join() === 'check:检查作业' && tilesOf(ht, 'english-tutor').map((x) => `${x.id}:${x.label}`).join() === 'preview:预习,check:检查作业,review:复习,talk:口语课' && (tilesOf(ht, 'english-tutor')[3] as { listen?: string } | undefined)?.listen === 'open', JSON.stringify(tilesOf(ht, 'english-tutor')));
+  check('没放课本的点「课本」400', (await kidSend('math-tutor', { text: '', via: { home: h1.home, button: 'textbook' } })).status === 400);
   const sTile = await kidSend('english-tutor', { text: '', via: { home: h1.home, button: 'check' } });
   await wait('english-tutor');
   const mt = (await readIndex(ctx.ws, 'english-tutor', '2026-09-17')).messages.find((m) => m.job === (sTile.json as { job: string }).job);

@@ -15,7 +15,7 @@ import { guideText } from './guide.ts';
 import { makeCert, trustCommand, trustPrompt } from './cert.ts';
 import { PIN_RE, USER_PIN_FILE, clearPin, readPin, setPin } from '../http/access.ts';
 import { addTutorHome, retiredTutorFiles } from './tutors.ts';
-import { activityRunFor, checkActivities, restoreActivity, upgradeActivities } from './activities.ts';
+import { EXAMPLES_SUFFIX, activityRunFor, checkActivities, restoreActivity, upgradeActivities } from './activities.ts';
 import { configGapsOf, migrateLayout, upgradeConfig } from './migrate.ts';
 import { linkClaudeSkills, upgradeSkills } from './skills.ts';
 import { addTheme, upgradeThemes } from './themes.ts';
@@ -549,7 +549,7 @@ export async function main(argv: string[]): Promise<void> {
         // 只把点名的出厂 activity 换回出厂那份(工作台「恢复出厂」同一条路),别的不碰;现在那份存 .bak
         if (!positionals.length) throw new ArgError('reset 要说换回哪几份,如 cotutor reset chinese-tutor/看图说话');
         const bare = positionals.find((x) => !x.includes('/'));
-        if (bare) throw new ArgError(`reset 要写「老师/activity」,如 cotutor reset ${bare}/预习(老师文件 2026-11-16 起没有了)`);
+        if (bare) throw new ArgError(`reset 要写「老师/activity」,如 cotutor reset ${bare}/检查作业(老师文件 2026-11-16 起没有了)`);
         const { root } = resolveRoot(workspace);
         const said = await backupBeforeUpgrade(root);
         if (said && !json) process.stdout.write(`${said}\n`);
@@ -604,12 +604,13 @@ export async function main(argv: string[]): Promise<void> {
         else {
           for (const s of layoutSteps) process.stdout.write(`${s.action === 'kept' ? '!' : '✓'} ${s.item.padEnd(24)} ${s.note ?? ''}\n`);
           if (link.action !== 'exists') process.stdout.write(`${link.action === 'kept' ? '!' : '✓'} ${link.item.padEnd(24)} ${link.note ?? ''}\n`);
-          const word: Record<string, string> = { upgraded: '已换新', latest: '已是最新', 'kept-custom': '自定义,保留', forced: '已覆盖(原文 .bak)', installed: '补上了', retired: '不再出厂,删了', renamed: '改了名', moved: '从 activities/ 挪到老师的家里(听写不是 activity 了)' };
+          const word: Record<string, string> = { upgraded: '已换新', latest: '已是最新', 'kept-custom': '自定义,保留', forced: '已覆盖(原文 .bak)', installed: '补上了', retired: '不再出厂,删了', renamed: '改了名', 'kept-retired': '不再出厂,你改过,留着', moved: '从 activities/ 挪到老师的家里(听写不是 activity 了)' };
           for (const s of skillSteps) process.stdout.write(`${s.action === 'kept-custom' ? '!' : '✓'} skill ${s.name.padEnd(18)} ${word[s.action]}${s.basedOn && s.action !== 'latest' ? `(基于 ${s.basedOn})` : ''}${s.machine ? '(机器件)' : ''}\n`);
           for (const s of themeSteps) process.stdout.write(`${s.action === 'kept-custom' ? '!' : '✓'} theme ${s.name.padEnd(18)} ${word[s.action]}${s.basedOn && s.action !== 'latest' ? `(基于 ${s.basedOn})` : ''}${s.action === 'kept-custom' ? '(themes/ 里改过的主题不动)' : ''}\n`);
           for (const f of retired) process.stdout.write(`! ${f.padEnd(24)} 不再读了(一科通用的做法并进了每个 activity);改过的话,把要的挪进 activity 的「老师怎么带」,再删掉它\n`);
           for (const s of activitySteps) {
-            process.stdout.write(`${s.action === 'kept-custom' ? '!' : '✓'} activity ${s.key.padEnd(18)} ${word[s.action]}${s.from ? `(原来叫「${s.from}」)` : ''}${s.basedOn && s.action !== 'latest' ? `(基于 ${s.basedOn})` : ''}\n`);
+            process.stdout.write(`${s.action === 'kept-custom' || s.action === 'kept-retired' ? '!' : '✓'} activity ${s.key.padEnd(18)} ${word[s.action]}${s.from ? `(原来叫「${s.from}」)` : ''}${s.note ? `(${s.note})` : ''}${s.basedOn && s.action !== 'latest' ? `(基于 ${s.basedOn})` : ''}\n`);
+            if (s.action === 'kept-retired' && !s.key.endsWith(EXAMPLES_SUFFIX)) process.stdout.write(`    孩子牌上还会出它的方砖;要的改动挪进新的那份再删掉它(agents/${s.key.replace('/', '/activities/')}.md)\n`);
             if (s.diff?.length) {
               process.stdout.write(`    你的 vs 新版(- 你的 / + 新版),想用新版:cotutor reset ${s.key}\n`);
               for (const l of s.diff.slice(0, 40)) process.stdout.write(`    ${l}\n`);

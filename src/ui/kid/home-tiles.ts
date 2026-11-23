@@ -1,9 +1,9 @@
 /**
- * 首页老师牌上常驻的方砖(预习、检查作业、复习、口语课;口语课只有英语老师家里有):
+ * 首页老师牌上常驻的方砖(课本、预习、检查作业、复习、口语课;出厂语文、数学有课本,英语有预习、复习、口语课):
  * 和别的入口一样是书页上的一幅图画框(框在 cards/tutor/card.css),图在框里、字在框下;三科同一个位置、同一个样子,分辨全靠图——
- * 预习 = 翻开的书 + 一颗小星星,检查作业 = 作业本 + 放大镜,复习 = 学过的一摞,口语课 = 拍来的一页 + 说话的气泡。学科特色只在图里(颜色只用学科色,currentColor)。
+ * 课本、预习 = 翻开的书 + 一颗小星星(同一张,一位老师家里不会两样都有),检查作业 = 作业本 + 放大镜,复习 = 学过的一摞,口语课 = 拍来的一页 + 说话的气泡。学科特色只在图里(颜色只用学科色,currentColor)。
  * 图按老师的 mark(板的底纹那个:三门主科各一套)挑,别的老师用不带学科内容的一套。数学三张都有阿拉伯数字。
- * 预习那张把要学的用学科色的笔圈一圈。方砖下面不写小字(家长填的范围不上孩子的牌)。点了和 activity 按钮一样:新开话题、发出方砖上的字。
+ * 书那张把要学的用学科色的笔圈一圈。方砖下面不写小字(家长填的范围不上孩子的牌)。点了和 activity 按钮一样(铺页的只进门,见 kid-page 的 openTutor)。
  */
 import type { HomeTileId } from '../../schema/index.ts';
 import type { BoardMarkId } from './board-mark.ts';
@@ -32,32 +32,35 @@ const bubble = (text: string, size: number, font: string): string =>
 const grid = (x: number, y: number, s: number, ch: string, size: number, color = '#8f836c'): string =>
   `<rect x="${x}" y="${y}" width="${s}" height="${s}" fill="none" stroke="#e2d6bd"></rect>${ch ? `<text x="${x + s / 2}" y="${y + s / 2 + size * 0.38}" font-size="${size}" text-anchor="middle" fill="${color}" ${SONG}>${ch}</text>` : ''}`;
 
+/** 课本那块用预习那张书 */
+const withBook = (set: Omit<TileArt, 'textbook'>): TileArt => ({ textbook: set.preview, ...set });
+
 export const TILE_ART: Readonly<Record<BoardMarkId | 'plain', TileArt>> = {
-  yuwen: {
+  yuwen: withBook({
     preview: `${STAR}${BOOK}<path d="M15 24 H37 M15 32 H37 M15 40 H31" stroke="#d9b97a" stroke-width="2" stroke-linecap="round"></path><rect x="52" y="21" width="21" height="21" fill="#fff" stroke="currentColor" stroke-width="1.5"></rect><path d="M62.5 21 V42 M52 31.5 H73" stroke="currentColor" stroke-opacity=".35" stroke-width="1" stroke-dasharray="2 2"></path><text x="62.5" y="37.5" font-size="16" font-weight="700" text-anchor="middle" fill="currentColor" ${SONG}>春</text>${loop('M54 19 C66 12 82 18 80 32 C78 47 56 49 49 38 C44 29 51 19 66 17')}`,
     check: `${NOTEBOOK}${grid(14, 14, 14, '天', 11)}${grid(30, 14, 14, '地', 11)}${grid(46, 14, 14, '人', 11)}${grid(14, 32, 14, '日', 11)}${grid(30, 32, 14, '月', 11)}${LENS}`,
     talk: bubble('你好', 13, SONG),
     review: `${back(4, 24, 24, 24, '水', 14, SONG)}${back(60, 24, 24, 24, '火', 14, SONG)}<rect x="28" y="14" width="32" height="32" rx="3" fill="#fff" stroke="currentColor" stroke-width="2"></rect><path d="M44 14 V46 M28 30 H60" stroke="currentColor" stroke-opacity=".3" stroke-width="1" stroke-dasharray="2 2"></path><text x="44" y="37" font-size="20" font-weight="700" text-anchor="middle" fill="currentColor" ${SONG}>山</text>`,
-  },
-  shuxue: {
+  }),
+  shuxue: withBook({
     preview: `${STAR}${BOOK}<path d="M17 21 V35 M22 21 V35 M27 21 V35" stroke="#e3a64a" stroke-width="2.6" stroke-linecap="round"></path><text x="22" y="47" font-size="11" font-weight="700" text-anchor="middle" fill="#8f836c" ${ROUND}>3</text><text x="61.5" y="31" font-size="13" font-weight="800" text-anchor="middle" fill="currentColor" ${ROUND}>3+4</text><text x="61.5" y="46" font-size="13" font-weight="800" text-anchor="middle" fill="currentColor" ${ROUND}>=?</text>${loop('M50 17 C66 10 84 18 81 33 C78 50 52 52 45 40 C40 30 48 18 64 15')}`,
     check: `${NOTEBOOK}<text x="44" y="21" font-size="11" text-anchor="end" fill="#8f836c" ${MONO}>27</text><text x="44" y="33" font-size="11" text-anchor="end" fill="#8f836c" ${MONO}>+15</text><path d="M20 37 H46" stroke="#8f836c" stroke-width="1.2"></path><text x="44" y="48" font-size="11" text-anchor="end" fill="#8f836c" ${MONO}>42</text>${LENS}`,
     talk: bubble('3+4', 13, ROUND),
     review: `${back(4, 6, 36, 22, '6+9', 11, ROUND, 5)}${back(48, 6, 36, 22, '15−7', 11, ROUND, 5)}<rect x="19" y="25" width="50" height="32" rx="5" fill="#fff" stroke="currentColor" stroke-width="2"></rect><text x="44" y="47" font-size="17" font-weight="800" text-anchor="middle" fill="currentColor" ${ROUND}>8×7</text>`,
-  },
-  english: {
+  }),
+  english: withBook({
     preview: `${STAR}${BOOK}<path d="M14 23 H38 M14 29 H38 M14 41 H38" stroke="#cdd6e2" stroke-width="1.2"></path><path d="M14 35 H38" stroke="#e39a9a" stroke-width="1.2"></path><text x="62" y="39" font-size="18" font-weight="700" text-anchor="middle" fill="currentColor" ${HAND}>Aa</text>${loop('M52 22 C64 16 80 22 77 32 C74 44 54 45 48 37 C44 30 50 22 63 20')}`,
     check: `${NOTEBOOK}<path d="M14 14 H58 M14 19 H58 M14 29 H58 M14 34 H58 M14 39 H58 M14 49 H58" stroke="#cdd6e2" stroke-width="1"></path><path d="M14 24 H58 M14 44 H58" stroke="#e39a9a" stroke-width="1"></path><text x="16" y="24" font-size="11" fill="#8f836c" ${HAND}>apple</text><text x="16" y="44" font-size="11" fill="#8f836c" ${HAND}>pen</text>${LENS}`,
     talk: bubble('Hi!', 16, HAND),
     review: `${back(6, 3, 44, 24, 'dog', 13, HAND, 5)}<rect x="30" y="25" width="50" height="30" rx="5" fill="#fff" stroke="currentColor" stroke-width="2"></rect><text x="55" y="46" font-size="16" font-weight="700" text-anchor="middle" fill="currentColor" ${HAND}>cat</text>`,
-  },
+  }),
   // 别的老师:同样的书、本子、一摞,不带学科内容
-  plain: {
+  plain: withBook({
     preview: `${STAR}${BOOK}<path d="M15 24 H37 M15 32 H37 M15 40 H31 M51 24 H73 M51 32 H73 M51 40 H67" stroke="#d9b97a" stroke-width="2" stroke-linecap="round"></path>`,
     check: `${NOTEBOOK}<path d="M15 18 H58 M15 28 H52 M15 38 H46" stroke="#cdbf9f" stroke-width="2" stroke-linecap="round"></path>${LENS}`,
     talk: bubble('', 0, ROUND),
     review: `${back(4, 6, 36, 22, '', 12, ROUND, 5)}${back(48, 6, 36, 22, '', 12, ROUND, 5)}<rect x="19" y="25" width="50" height="32" rx="5" fill="#fff" stroke="currentColor" stroke-width="2"></rect><path d="M28 36 H60 M28 45 H52" stroke="currentColor" stroke-opacity=".5" stroke-width="2" stroke-linecap="round"></path>`,
-  },
+  }),
 };
 
 /**

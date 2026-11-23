@@ -1,5 +1,5 @@
 /**
- * 课本:家长从教育网站下载的教材 PDF 放在 vault 的 `教材/` 下,预习时整页铺成页。
+ * 课本:家长从教育网站下载的教材 PDF 放在 vault 的 `教材/` 下,进「课本」时整页铺成页。
  * 应用读 PDF 的文字层(不认图):每个字在页上的位置、头上的拼音、目录、印刷页码。读一次存成索引(`.cotutor/textbooks/<指纹>.json`,能重新生成)。
  *
  * 坐标:PDF 的点(pt),原点在页的左上角,y 往下长。PdfItem 的 y 是这一段字的基线。
@@ -122,7 +122,7 @@ export interface BookIndex {
   title: string;
   layout: BookLayout;
   pages: BookPage[];
-  /** 目录在 PDF 的哪几页(刚进预习、还没定哪一课时铺的就是它) */
+  /** 目录在 PDF 的哪几页(第一次进课本、还没翻到哪一课时铺的就是它) */
   toc: number[];
   lessons: BookLesson[];
   /** 自检发现的问题(拼音解不出、没有页码、没有目录……);有问题这一册照样能看,但给家长端报一行 */

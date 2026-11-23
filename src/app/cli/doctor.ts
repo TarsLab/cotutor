@@ -360,6 +360,21 @@ export async function doctorWorkspace(
       }
     }
 
+    // ---- 课本:方砖「课本」开着、老师家里有这个铺课本的 activity,vault 里却没有这一科的课本 PDF:孩子端不出那块 ----
+    {
+      const { bookReady, noBookNote, usableActivity } = await import('../../runtime/home/store.ts');
+      const { HOME_TILES, tutorTiles } = await import('../../schema/index.ts');
+      const now = opts.now ?? new Date();
+      for (const [name, tc] of Object.entries(ws.config.tutors)) {
+        if (!tc.enabled || tc.hidden) continue;
+        for (const t of HOME_TILES) {
+          if (!tutorTiles(tc).includes(t.id) || (await usableActivity(ws, name, t.activity))?.base !== 'textbook') continue;
+          const ready = await bookReady(ws, name, now);
+          push({ name: `tutor.${name}.textbook`, ok: ready, required: false, detail: ready ? `${tc.display}的「${t.activity}」有课本可铺` : `${tc.display}的「${t.activity}」:${noBookNote(tc.subject)}`, fix: ready ? undefined : `教材文件夹在 ${redactHome(ws.paths.textbooks)}` });
+        }
+      }
+    }
+
     // ---- paths 角色指向:配了就该在 ----
     for (const [role, value] of Object.entries(ws.config.paths)) {
       const target = ws.paths[role] ?? expandPath(value, ws.root);

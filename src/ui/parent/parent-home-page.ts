@@ -272,7 +272,7 @@ ${pageDomJs(3200)}
   // 学科色服务端定好随老师下发(src/ui/shared/tutor-color.ts)
   const avatar = (t) => { const el = h('span', { class: 'av', style: 'color:' + t.color }); el.innerHTML = '<svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="44"></circle></svg>'; const f = h('span', { class: 'face' }); if (t.avatar && /\.(png|jpe?g|webp|svg)$/i.test(t.avatar)) f.append(h('img', { src: '/api/kid/avatar/' + t.name, alt: '' })); else f.textContent = t.avatar || (t.subject || t.display || '?').slice(0, 1); el.append(f); return el; };
   // 方砖在「每天都在」里的那句:点进去老师怎么带(参数都空着,老师先请孩子拍材料)
-  const TILE_NOTE = { preview: '孩子拍新课的那页,老师带着先读一读、问一问', check: '作业写完拍给老师,一次看一处、改一处', review: '学过的拿出来,挑一点再练一练', talk: '孩子拍今天学的那页,看着页先跟读,再用英文一问一答' };
+  const TILE_NOTE = { textbook: '翻开这一科的课本:预习新课、复习学过的都在这里,孩子先说想看哪一课', preview: '孩子拍新课的那页,老师带着先读一读、问一问', check: '作业写完拍给老师,一次看一处、改一处', review: '学过的拿出来,挑一点再练一练', talk: '孩子拍今天学的那页,看着页先跟读,再用英文一问一答' };
   const sw = (on, label, click, disabled) => h('button', { type: 'button', class: 'sw', role: 'switch', 'aria-checked': on ? 'true' : 'false', 'aria-label': label, disabled: disabled || null, on: { click } });
   const md = (d) => Number(d.slice(5, 7)) + '/' + Number(d.slice(8, 10));
   // 留多久:只今天 = 今天;到周日 = 这周日(今天是周日就是今天);一直 = 不写
@@ -554,8 +554,8 @@ ${pageDomJs(3200)}
     // 每天都在
     const has = (k) => t.extras.includes(k);
     const daily = [];
-    // 方砖:预习、检查作业、复习、口语课,老师家里有那个 activity 文件的才列;关掉就是孩子牌上不出那一块
-    for (const x of t.tiles || []) daily.push(h('div', { class: 'it', id: 'daily-tile-' + x.id }, h('span', { class: 'tx' }, h('b', {}, x.label), h('small', {}, x.usable ? TILE_NOTE[x.id] : '「' + x.label + '」那份 activity 文件写坏了,孩子那边先不出(工作台看)')), sw(x.on, x.label, () => save('PATCH', '/api/parent/settings', { tutors: { [t.name]: { tiles: { [x.id]: !x.on } } } }))));
+    // 方砖:课本、预习、检查作业、复习、口语课,老师家里有那个 activity 文件的才列;关掉就是孩子牌上不出那一块;课本没放课本 PDF 时说去哪下载
+    for (const x of t.tiles || []) daily.push(h('div', { class: 'it', id: 'daily-tile-' + x.id }, h('span', { class: 'tx' }, h('b', {}, x.label), h('small', {}, !x.usable ? '「' + x.label + '」那份 activity 文件写坏了,孩子那边先不出(工作台看)' : x.noBook || TILE_NOTE[x.id])), sw(x.on, x.label, () => save('PATCH', '/api/parent/settings', { tutors: { [t.name]: { tiles: { [x.id]: !x.on } } } }))));
     daily.push(h('div', { class: 'it' }, h('span', { class: 'tx' }, h('b', {}, '听写'), h('small', {}, '拍照听写一直在;设了这周的词,孩子点「听写」直接写')), sw(has('dictation'), '听写', () => setExtras(t, 'dictation', !has('dictation')))));
     if (has('dictation') || t.dictation) daily.push(h('button', { type: 'button', class: 'it', on: { click: () => editWords(t) } }, h('span', { class: 'tx' }, h('b', {}, '这周的词'), h('small', {}, t.dictation && t.dictation.length ? t.dictation.length + ' 个词:' + t.dictation.map((w) => w.chars).join('、') : '还没设')), h('span', { class: 'chev', html: CHEV })));
     const extras = h('div', {}, h('div', { class: 'gh' }, h('span', {}, '每天都在 · ' + t.display)), h('div', { class: 'grp' }, ...daily));

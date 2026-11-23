@@ -1,7 +1,7 @@
 /**
- * 课本做底(语文预习,activity 头上 base: textbook;2026-11-14《语文预习:PDF 课本与镜头交互》)服务端那一半:
+ * 课本做底(语文、数学的「课本」,activity 头上 base: textbook)服务端那一半:
  * 讲稿里的动作落到页上(src/board/lesson-fit.ts,翻、看、圈换成框);板此刻的样子里的课本(board-pack 的 bookSlateParts);
- * 全流程:点「预习」方砖(不拍照)→ 底是目录 → 老师翻到一课、看第 1 段再看第 2 段 → 孩子挪窗、点字记进日志 → 下一轮老师看到他在看哪里。
+ * 全流程:还没放课本时不出方砖 → 放了以后点「课本」方砖(不拍照)→ 底是目录 → 老师翻到一课、看第 1 段再看第 2 段 → 孩子挪窗、点字记进日志 → 下一轮老师看到他在看哪里。
  * 书用 tests/_book.ts 造的那本;PDF 是个假文件,它的指纹对上一份事先写好的索引缓存(读 PDF 的那一层走 scripts/probe-book.mjs)。
  */
 import { createHash } from 'node:crypto';
@@ -106,14 +106,15 @@ const ix = bookIndexOf();
   const ws = loadWorkspace(root);
 
   const h = (await route('GET', '/api/kid/home', ctx)).json as { home: string | null; cards: { kind: string; props: { tutor?: string; tiles?: { id: string; base?: string }[] } }[] };
-  const tile = h.cards.find((c) => c.props.tutor === T)?.props.tiles?.find((x) => x.id === 'preview');
-  check('首页的语文「预习」方砖:铺课本(孩子端不到拍照屏)', tile?.base === 'textbook', JSON.stringify(tile));
+  check('还没放课本:语文、数学的牌上都不出「课本」,点了 400', h.cards.every((c) => !c.props.tiles?.some((x) => x.id === 'textbook')) && (await kidSend(ctx, T, { text: '', via: { home: h.home, button: 'textbook' } })).status === 400, JSON.stringify(h.cards.map((c) => c.props.tiles)));
+  const parentTile = ((await route('GET', '/api/parent/home', ctx)).json as { tutors: { name: string; tiles: { id: string; noBook?: string }[] }[] }).tutors.find((t) => t.name === T)?.tiles.find((x) => x.id === 'textbook');
+  check('家长端那块说去哪下载、放哪', Boolean(parentTile?.noBook?.includes('教材/') && parentTile.noBook.includes('语文')), JSON.stringify(parentTile));
 
-  // 还没放课本:老师的底说没有,家长端记一行
-  const none = await kidSend(ctx, T, { text: '', via: { home: h.home, button: 'preview' } });
+  // 话题里课本不在了(终端 send、进来以后家长挪走了):老师的底说没有,家长端记一行
+  const none = await ctx.runner.send(T, { from: 'kid', text: '我想看课本', newThread: true, activity: { name: '课本', params: {} } });
   await wait();
-  const pr0 = promptOf(String(none.json.job));
-  check('教材文件夹里没有课本 PDF:底说没有、请家长放;家长端记一行', pr0.includes('底: "课本:教材文件夹里没有语文的课本 PDF(请家长放进 vault 的教材文件夹)"') && (index().messages.find((m) => m.job === none.json.job)?.warnings ?? []).some((w) => w.includes('没有语文的课本')), pr0.slice(pr0.indexOf('board:'), pr0.indexOf('board:') + 160));
+  const pr0 = promptOf(String(none.job));
+  check('教材文件夹里没有课本 PDF:底说没有、请家长放;家长端记一行', pr0.includes('底: "课本:教材文件夹里没有语文的课本 PDF(请家长放进 vault 的教材文件夹)"') && (index().messages.find((m) => m.job === none.job)?.warnings ?? []).some((w) => w.includes('没有语文的课本')), pr0.slice(pr0.indexOf('board:'), pr0.indexOf('board:') + 160));
 
   // 放一本:假 PDF + 对得上指纹的索引缓存
   const pdf = Buffer.from('%PDF-1.4 假的,只为算指纹\n');
@@ -125,7 +126,9 @@ const ix = bookIndexOf();
   writeFileSync(join(root, '.cotutor', 'textbooks', `${sha}.json`), JSON.stringify({ ...ix, sha }));
 
   now = new Date(2026, 10, 14, 10, 5);
-  const first = await kidSend(ctx, T, { text: '', via: { home: h.home, button: 'preview' } });
+  const tile = ((await route('GET', '/api/kid/home', ctx)).json as typeof h).cards.find((c) => c.props.tutor === T)?.props.tiles?.find((x) => x.id === 'textbook');
+  check('放了课本:首页的语文「课本」方砖出来,铺课本(孩子端不到拍照屏)', tile?.base === 'textbook', JSON.stringify(tile));
+  const first = await kidSend(ctx, T, { text: '', via: { home: h.home, button: 'textbook' } });
   await wait();
   const job1 = String(first.json.job);
   const thread = String(first.json.thread);
@@ -274,15 +277,15 @@ const ix = bookIndexOf();
   writeFileSync(join(ws.paths.textbooks, '数学一年级下册.pdf'), mpdf);
   const msha = createHash('sha1').update(mpdf).digest('hex').slice(0, 16);
   writeFileSync(join(root, '.cotutor', 'textbooks', `${msha}.json`), JSON.stringify({ ...mathIndexOf(), sha: msha }));
-  const mtile = h.cards.find((c) => c.props.tutor === M)?.props.tiles?.find((x) => x.id === 'preview');
+  const mtile = ((await route('GET', '/api/kid/home', ctx)).json as typeof h).cards.find((c) => c.props.tutor === M)?.props.tiles?.find((x) => x.id === 'textbook');
   const mbase0 = (await route('GET', `/api/kid/textbook/base?tutor=${M}`, ctx)).json as { lesson: Lesson | null };
   const mtoc = mbase0.lesson ? lessonPage(mbase0.lesson) : null;
-  check('数学「预习」方砖也铺课本;目录当一页,不开点字、什么都没请', mtile?.base === 'textbook' && mtoc?.kind === 'book' && mtoc.src === '数学一年级下册.pdf' && mtoc.title === '目录' && mtoc.pick === false && mtoc.open.length === 0, JSON.stringify({ mtile, mbase0 }));
+  check('数学「课本」方砖也铺课本;目录当一页,不开点字、什么都没请', mtile?.base === 'textbook' && mtoc?.kind === 'book' && mtoc.src === '数学一年级下册.pdf' && mtoc.title === '目录' && mtoc.pick === false && mtoc.open.length === 0, JSON.stringify({ mtile, mbase0 }));
   const mPrompt = (job: string): string => (JSON.parse(readFileSync(join(root, 'conversations', M, `${date}.${job}.run.json`), 'utf8')) as { prompt: string }).prompt;
   const mIndex = (): { messages: { job: string; section?: BoardSection }[] } => JSON.parse(readFileSync(join(root, 'conversations', M, `${date}.json`), 'utf8'));
   const mwait = async (): Promise<void> => { for (let i = 0; i < 200 && ctx.runner.running(M); i++) await new Promise((r) => setTimeout(r, 25)); await ctx.runner.flush(); };
   now = new Date(2026, 10, 14, 11, 0);
-  const mt1 = await kidSend(ctx, M, { text: '', via: { home: h.home, button: 'preview' } });
+  const mt1 = await kidSend(ctx, M, { text: '', via: { home: h.home, button: 'textbook' } });
   await mwait();
   const mth = String(mt1.json.thread);
   const mp1 = mPrompt(String(mt1.json.job));

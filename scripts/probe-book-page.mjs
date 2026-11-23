@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * 课本做底的孩子端整条线(语文预习,activity 头上 base: textbook)手动验收:不进 pnpm test,要本机 Chrome 和一本课本 PDF;假百炼 + 假老师,不花钱。
+ * 课本做底的孩子端整条线(语文的「课本」,activity 头上 base: textbook)手动验收:不进 pnpm test,要本机 Chrome 和一本课本 PDF;假百炼 + 假老师,不花钱。
  * 本进程起服务(临时 workspace,vault 的 教材/ 里放一条指向给的 PDF 的链接;老师是 tests/_fake-teacher.ts,嘴是 tests/_fake-realtime.ts),无头 Chrome 开孩子端:
- *  一、首页点语文的「预习」方砖:不到拍照屏,直接上板,板上是课本的目录(舞台 book.tsx 铺好两页);板的顶栏没有拍照、相册;只进门(记一条进门),老师不开口。
+ *  一、首页点语文的「课本」方砖:不到拍照屏,直接上板,板上是课本的目录(舞台 book.tsx 铺好两页);板的顶栏没有拍照、相册;只进门(记一条进门),老师不开口。
  *  二、孩子说「我要预习坐井观天」:老师的课本卡落下,板换成这一课(两页),窗对着第 6–7 段,「井沿」圈上了。
  *  三、手指点板上的一个字:田字格浮出来;经实时那条连接报 {k:'pick', base:'<册子>#坐井观天'};服务端记进板的日志。
  *  四、手指拖着往下看:报 {k:'view', box};服务端说成一句(「第 55 页:…」)记进板的日志。
@@ -126,13 +126,13 @@ try {
   await send('Network.enable');
   await send('Emulation.setDeviceMetricsOverride', { width: 1180, height: 820, deviceScaleFactor: 1, mobile: false });
 
-  // 一、首页点语文的「预习」
+  // 一、首页点语文的「课本」
   await send('Page.navigate', { url: `${base}/` });
   // 首页一位老师一章:先点语文老师的小旗翻到那一章
   const flag = await until(`(() => { const b = document.querySelector('.tab[data-tutor="${T}"]'); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
   if (flag) { await tapAt(flag.x, flag.y); await sleep(600); }
-  const tile = await until(`(() => { const b = document.querySelector('.pc[data-tutor="${T}"] .bt-tile[data-tile="preview"]'); if (!b) return null; const r = b.getBoundingClientRect(); return r.width ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null; })()`);
-  ok('首页有语文的「预习」方砖', Boolean(tile));
+  const tile = await until(`(() => { const b = document.querySelector('.pc[data-tutor="${T}"] .bt-tile[data-tile="textbook"]'); if (!b) return null; const r = b.getBoundingClientRect(); return r.width ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null; })()`);
+  ok('首页有语文的「课本」方砖', Boolean(tile));
   await tapAt(tile.x, tile.y);
   const opened = await until(`(() => { const d = ${STAGE}; return d && d.querySelector('.bk-board')?.dataset.phase === 'ready' && d.querySelectorAll('.bk-page').length >= 1; })()`, 20000);
   const top = await evaluate(`({ bp: document.querySelector('#stage').classList.contains('bp'), bk: document.querySelector('#stage').classList.contains('bk'), cam: getComputedStyle(document.querySelector('#st-bp')).display, start: Boolean(document.querySelector('#board .bp-start')) })`);

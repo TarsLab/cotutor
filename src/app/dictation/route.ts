@@ -135,7 +135,7 @@ export function dictationDeps(ctx: AppContext): DictationDeps {
       if (!name || !ix) return null;
       const tables = bookWordTables(ix);
       if (!tables.ci && !tables.zi) return null;
-      // 上次翻到的那一课(预习时孩子点的、老师翻的)→ 表里那一行
+      // 上次翻到的那一课(课本里孩子翻的、老师翻的)→ 表里那一行
       const lastName = await bookLast(w, name);
       const l = lastName ? findLesson(ix.lessons, lastName) : null;
       const rows = [...(tables.ci?.rows ?? []), ...(tables.zi?.rows ?? [])];

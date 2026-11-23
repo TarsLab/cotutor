@@ -29,6 +29,9 @@ mkdirSync(shots, { recursive: true });
 const root = join(home, 'ws');
 const run = (args) => new Promise((resolve, reject) => { const p = spawn(process.execPath, [join(repo, 'bin', 'cotutor.js'), ...args], { env: { ...process.env, HOME: home, COTUTOR_WORKSPACE: '' }, stdio: 'pipe' }); let out = ''; p.stdout.on('data', (d) => (out += d)); p.stderr.on('data', (d) => (out += d)); p.on('exit', (c) => (c === 0 ? resolve(out) : reject(new Error(out)))); });
 await run(['init', 'probe', '--dir', root, '--name', '小探']);
+// 语文有课本(假 PDF,首页只看文件在不在,出「课本」那块);vault 是 init 缺省建在旁边的 ws-vault/
+mkdirSync(join(home, 'ws-vault', '教材'), { recursive: true });
+writeFileSync(join(home, 'ws-vault', '教材', '语文二年级上册.pdf'), '%PDF-1.4 假的\n');
 const cfgFile = join(root, 'cotutor.json');
 const cfg = JSON.parse(readFileSync(cfgFile, 'utf8'));
 // 老师是假老师(tests/_fake-teacher.ts,逐行吐),serve 经 COTUTOR_BRAIN_ENDPOINT 找它
@@ -59,13 +62,13 @@ for: ${day}
 ---
 
 \`\`\`tutor chinese-tutor
-activity 预习 我要预习小蝌蚪找妈妈
+activity 课本 我要预习小蝌蚪找妈妈
 讲法: 第 22 课。先带他把 1–3 自然段读顺,重点字 塘、脑、袋
 activity 看图说话 我要看图说话
 \`\`\`
 
 \`\`\`tutor math-tutor
-activity 复习 再练两道退位减法
+activity 检查作业 再练两道退位减法
 讲法: 出 52−7、80−3,先让他说怎么想
 \`\`\`
 
@@ -102,7 +105,7 @@ activity 复习 再练两道退位减法
   const v0 = await stack();
   ok('小旗的先后照家长排的:语文、数学、补的英语;语文那章摊开,书里只摆他', v0.order.join() === 'chinese-tutor,math-tutor,english-tutor' && v0.front.join() === 'chinese-tutor' && v0.shown.join() === 'chinese-tutor' && v0.card === 'chinese-tutor', JSON.stringify(v0));
   ok('语文的卡:按钮齐(没有新话题、开场、接着);「每天都在」有拍照听写;讲法不在页面里', v0.buttons.join('|') === '我要预习小蝌蚪找妈妈|我要看图说话' && v0.extras.join() === '/dictation?tutor=chinese-tutor' && !v0.brief, JSON.stringify(v0.buttons));
-  ok('方砖:第一行三张纸,预习、检查作业、复习,都有图', v0.tiles.join() === 'preview:预习:true,check:检查作业:true,review:复习:true', JSON.stringify(v0.tiles));
+  ok('方砖:第一行两张纸,课本、检查作业,都有图', v0.tiles.join() === 'textbook:课本:true,check:检查作业:true', JSON.stringify(v0.tiles));
   ok('手机:小旗钉在屏幕左下角一排(贴着下沿、一张挨一张往右),写着学科;名牌在书下面的桌上、靠右,不碰小旗', v0.fixed === 'fixed' && v0.rects[0][0] < v0.rects[1][0] && v0.rects[1][0] < v0.rects[2][0] && v0.rects[0][0] < 60 && v0.rects.every((x) => x[1] === v0.vh) && v0.subs.every(Boolean) && v0.ttl && v0.plateText[1] > v0.vw - 30 && v0.plateText[0] > v0.rects[2][0] + 58, JSON.stringify([v0.rects, v0.vh, v0.fixed, v0.subs, v0.ttl, v0.plateText]));
   ok('首页只有老师卡:书外、牌里都没有别的卡', v0.shared.length === 0 && v0.owned.length === 0, JSON.stringify([v0.shared, v0.owned]));
   ok('橙点在小旗上:数学(家长排了按钮、孩子还没找过)亮;最前的语文、什么都没排的英语不亮', v0.dots.join() === 'math-tutor', JSON.stringify(v0.dots));

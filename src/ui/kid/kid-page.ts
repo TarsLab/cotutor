@@ -819,7 +819,7 @@ ${BOARD_MARK_JS}
     const first = b.start === 'tutor' ? { send: b.label } : { enter: true };
     // 铺课本的 activity:不拍照,进门铺课本(范围那一课、上次翻到的那一课或目录);铺练习册的:同样不拍照,先铺按钮挂的那一册
     if (b.kind === 'start' && (b.base === 'textbook' || b.base === 'workbook')) openTutor(t, { kind: 'new', via, base: b.base, label: b.label, ...first, ...(b.workbook ? { workbook: b.workbook } : {}), ...look });
-    // 铺作业照片的 activity(检查作业、复习):先到拍照屏,带着照片开话题(拍照交上来就是开口);用白纸也是进门
+    // 铺作业照片的 activity(检查作业、英语的预习复习):先到拍照屏,带着照片开话题(拍照交上来就是开口);用白纸也是进门
     else if (b.kind === 'start' && b.base === 'photo') openTutor(t, { kind: 'new', via, base: 'photo', label: b.label, ...(b.start === 'tutor' ? { start: 'tutor' } : {}), ...look });
     else if (b.kind === 'start') openTutor(t, { kind: 'new', via, ...first, ...look });
     // 小课堂:新话题,页上先铺那堂课;看完才能开口,开口那条带上 via 与看的情况。看完照着聊的 activity 是铺作业照片的(看图说话),顶栏有拍照
@@ -860,7 +860,7 @@ ${BOARD_MARK_JS}
       h('span', { class: 'lm' }, h('small', { class: 'tg' }, '小课堂'), h('span', { class: 'btx' }, b.label), b.ms ? h('small', { class: 'ln' }, lcLen(b.ms)) : null));
     return h('button', { type: 'button', class: 'bt bt-' + b.kind + ' bt-act', 'data-bid': String(b.id), on }, h('span', { class: 'ta', html: actArt(b.base) }), h('span', { class: 'btx' }, b.label));
   };
-  // ---- 常驻的三块方砖(预习、检查作业、复习;服务端照老师家里的 activity 文件给,src/ui/kid/home-tiles.ts):牌上第一行;点了和 activity 按钮一样 ----
+  // ---- 常驻的方砖(课本、预习、检查作业、复习、口语课;服务端照老师家里的 activity 文件给,src/ui/kid/home-tiles.ts):牌上第一行;点了和 activity 按钮一样 ----
 ${HOME_TILES_JS}
   const tileButton = (t, x) => h('button', { type: 'button', class: 'bt bt-tile', 'data-tile': x.id, style: '--sc:' + colorOf(t), on: { click: () => pickButton(t, { id: x.id, kind: 'start', label: x.label, base: x.base, listen: x.listen, start: x.start }) } },
     h('span', { class: 'ta', html: tileArt(t.mark, x.id) }), h('span', { class: 'btx' }, x.label));

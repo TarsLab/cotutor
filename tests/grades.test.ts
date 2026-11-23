@@ -70,9 +70,10 @@ try {
 
   // 每个新 activity 都能检查、解析例子、填参数并进入独立提示词。
   const refs = await shippedActivities(root);
-  const common = ['预习', '检查作业', '复习'];
-  for (const tutor of ['chinese-tutor', 'math-tutor', 'english-tutor']) {
-    for (const name of common) {
+  // 语文、数学的预习、复习合成了「课本」;英语照旧
+  const common: Record<string, string[]> = { 'chinese-tutor': ['课本', '检查作业'], 'math-tutor': ['课本', '检查作业'], 'english-tutor': ['预习', '检查作业', '复习'] };
+  for (const [tutor, names] of Object.entries(common)) {
+    for (const name of names) {
       const file = refs.find((r) => r.tutor === tutor && r.name === name)!.file;
       const parsed = lintActivity(readFileSync(file, 'utf8'), { fileName: name });
       check(`${tutor}/${name} 独立提示词通过检查`, parsed.issues.length === 0 && !!renderTutorSection(parsed.activity, {})?.includes('二年级'), JSON.stringify(parsed.issues));
@@ -138,6 +139,29 @@ try {
     check('upgrade 把 activities/听写.md 挪到老师的家里,activities/ 下不留', steps.filter((s) => s.action === 'moved').map((s) => s.key).sort().join() === 'chinese-tutor/听写,english-tutor/听写' && !existsSync(inActs('chinese-tutor')) && !existsSync(inActs('english-tutor')), JSON.stringify(steps.filter((s) => s.action === 'moved')));
     check('没改过的换成新版(头上 lang),改过的内容不动、算自定义', readFileSync(home('chinese-tutor'), 'utf8') === shippedZh && readFileSync(home('english-tutor'), 'utf8') === mineEn && steps.find((s) => s.key === 'english-tutor/听写' && s.action !== 'moved')?.action === 'kept-custom');
     check('再 upgrade 一次不再挪', !(await upgradeActivities(old)).some((s) => s.action === 'moved'));
+  }
+
+  // 2026-11-23 语文、数学的预习、复习合成「课本」:没改过的 refresh 删掉,改过的留着、报一句;英语的不动
+  {
+    const old = join(testHome, 'textbook-merged');
+    await initWorkspace({ slug: 'kid', dir: old, grade: 2 });
+    const dir = (t: string): string => join(old, 'agents', t, 'activities');
+    const om = await readManifest(old);
+    const put = (t: string, name: string, text: string, recorded: string): void => {
+      writeFileSync(join(dir(t), `${name}.md`), text);
+      om.activities![`${t}/${name}`] = { hash: sha256(recorded), version: '0.1.0' };
+    };
+    put('math-tutor', '预习', '旧的数学预习\n', '旧的数学预习\n');
+    put('math-tutor', '预习.例子', '旧的例子\n', '旧的例子\n');
+    put('math-tutor', '复习', '旧的数学复习\n', '旧的数学复习\n');
+    put('chinese-tutor', '预习', '旧的语文预习\n家长加的一句\n', '旧的语文预习\n');
+    put('chinese-tutor', '预习.例子', '旧的例子\n', '旧的例子\n');
+    await writeManifest(old, om);
+    const steps = await upgradeActivities(old);
+    const act = (key: string): string | undefined => steps.find((s) => s.key === key)?.action;
+    check('没改过的删掉(连例子),出厂记录也删', act('math-tutor/预习') === 'retired' && act('math-tutor/预习.例子') === 'retired' && act('math-tutor/复习') === 'retired' && !existsSync(join(dir('math-tutor'), '预习.md')) && !existsSync(join(dir('math-tutor'), '复习.md')) && !('math-tutor/预习' in (await readManifest(old)).activities!), JSON.stringify(steps.filter((s) => s.action.includes('retired'))));
+    check('改过的留着、例子跟着留,说为什么', act('chinese-tutor/预习') === 'kept-retired' && act('chinese-tutor/预习.例子') === 'kept-retired' && existsSync(join(dir('chinese-tutor'), '预习.例子.md')) && readFileSync(join(dir('chinese-tutor'), '预习.md'), 'utf8').includes('家长加的一句') && steps.find((s) => s.key === 'chinese-tutor/预习')?.note === '出厂已经合成「课本」');
+    check('英语的预习、复习照旧是出厂件;两位老师都有课本', act('english-tutor/预习') === 'latest' && act('english-tutor/复习') === 'latest' && act('math-tutor/课本') === 'latest' && act('chinese-tutor/课本') === 'latest', JSON.stringify(steps.filter((s) => s.key.startsWith('english-tutor'))));
   }
 
   const { readLecture } = await import('../src/runtime/lecture.ts');

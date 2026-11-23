@@ -17,6 +17,8 @@ import { HOME_ID_RE, HOME_TILES, PublishedHomeSchema, tutorTiles, type Activity,
 import { listDates, readIndex } from '../journal/store.ts';
 import { bakeSoon, inspectLecture, readLecture, type Lecture } from '../lecture.ts';
 import { readWorkbook } from '../../memory/workbook.ts';
+import { listBooks, pickBook } from '../../memory/textbook-pdf.ts';
+import { canonicalSubject } from '../../schema/index.ts';
 
 export function homeFiles(ws: Pick<Workspace, 'dirs'>): { dir: string; draft: string; published: string; history: string } {
   const dir = ws.dirs.home;
@@ -109,6 +111,27 @@ export async function usableActivity(ws: Workspace, tutor: string, name: string)
   if (text === null) return null;
   const { activity, issues } = lintActivity(text, { fileName: activityName(ws.root, tutor, name) });
   return issues.some((i) => i.level === 'fix') ? null : activity;
+}
+
+/**
+ * 这位老师有没有课本可铺:vault 的教材下有这一科这学期那一册(和进门铺页的 runner.bookOf 同一个挑法;读不读得出不管,进来以后老师的底会说)。
+ * 铺课本的 activity(base: textbook)没有课本,孩子端的方砖、按钮都不出:点进去只有一句「请爸爸妈妈放课本」
+ */
+export async function bookReady(ws: Workspace, tutor: string, now: Date): Promise<boolean> {
+  const subject = canonicalSubject(ws.config.tutors[tutor]?.subject);
+  return pickBook(await listBooks(ws.paths.textbooks, subject || null), now) !== null;
+}
+
+/** 还没有课本时给家长的一句(家长端首页、doctor):去哪下载、放哪、文件名要带什么 */
+export function noBookNote(subject: string | null | undefined): string {
+  const sub = canonicalSubject(subject);
+  return `vault 的 教材/ 下还没有${sub ?? '这一科'}的课本 PDF,孩子那边先不出。从国家中小学智慧教育平台下载这学期的课本,放进 教材/ 文件夹${sub ? `(文件名里带「${sub}」)` : ''}`;
+}
+
+/** 孩子端点得进去的 activity:用得了(usableActivity),铺课本的还要有课本(bookReady) */
+async function openableActivity(ws: Workspace, tutor: string, name: string, now: Date): Promise<Activity | null> {
+  const act = await usableActivity(ws, tutor, name);
+  return act && (act.base !== 'textbook' || (await bookReady(ws, tutor, now))) ? act : null;
 }
 
 /** 已发布那份里现在还坏着的引用(doctor 与家长端用) */
@@ -242,7 +265,7 @@ export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'pu
   const lectureActs = await lectureActivitiesOf(ws);
   const usable = new Map<string, Activity>();
   for (const a of homeActivities({ cards }, (t) => lectureActs.get(t))) {
-    const act = await usableActivity(ws, a.tutor, a.name);
+    const act = await openableActivity(ws, a.tutor, a.name, now);
     if (act) usable.set(`${a.tutor}/${a.name}`, act);
   }
   // 按钮挂的练习册:读不出来的,按钮不出
@@ -270,11 +293,11 @@ export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'pu
     // 橙点:这份首页给他排了按钮或卡,而发布以来孩子还没找过他
     const arranged = buttons.some((b) => typeof b.id === 'number') || cards.some((x) => x.kind === 'dictation' && owners.get(x) === name);
     const news = Boolean(publishedAt && arranged && !(await talkedSince(ws, name, publishedAt, now)));
-    // 常驻的方砖(预习、检查作业、复习):不经发布,家里有那个 activity、没关掉就在
+    // 常驻的方砖(课本、预习、检查作业、复习、口语课):不经发布,家里有那个 activity、没关掉就在;课本还要有课本
     const tiles: HomeTileId[] = [];
     const looks = new Map<string, ActivityLook>();
     for (const t of HOME_TILES) {
-      const act = tutorTiles(ws.config.tutors[name] ?? {}).includes(t.id) ? await usableActivity(ws, name, t.activity) : null;
+      const act = tutorTiles(ws.config.tutors[name] ?? {}).includes(t.id) ? await openableActivity(ws, name, t.activity, now) : null;
       if (!act) continue;
       tiles.push(t.id);
       looks.set(t.activity, activityLook(act));
@@ -294,7 +317,7 @@ export type ResolvedVia =
  * 孩子发来的 via → 这个按钮是什么(讲法从服务端的发布件取,不经过孩子设备)。
  * 对不上(不是当前发布的那份、这位老师没有这个按钮、老师不上首页、以前发布的那份里的开场 / 接着按钮)→ null,路由回 400。
  */
-export async function resolveVia(ws: Workspace, tutor: string, via: HomeVia): Promise<ResolvedVia | null> {
+export async function resolveVia(ws: Workspace, tutor: string, via: HomeVia, now = new Date()): Promise<ResolvedVia | null> {
   if (!faceTutor(tutorInfos(ws)[tutor])) return null;
   // activity 的参数在点的那一刻按 activity 文件解析、补缺省,跟着话题走(家长后来改了只管以后的话题);文件不在、参数不对 → null
   const runOf = async (name: string, params: Record<string, string>): Promise<ActivityRun | null> => {
@@ -303,10 +326,10 @@ export async function resolveVia(ws: Workspace, tutor: string, via: HomeVia): Pr
     const r = resolveParams(parseActivity(text).activity, params);
     return r.issues.length ? null : { name, params: r.values };
   };
-  // 方砖:不看是哪份首页(缺省首页也有);关掉了、家里那个 activity 用不了 → null。参数全用缺省(三份都可空,老师先请孩子拍材料)
+  // 方砖:不看是哪份首页(缺省首页也有);关掉了、家里那个 activity 用不了(课本没有课本)→ null。参数全用缺省(出厂的都可空)
   const tile = HOME_TILES.find((t) => t.id === via.button);
   if (tile) {
-    if (!tutorTiles(ws.config.tutors[tutor] ?? {}).includes(tile.id) || !(await usableActivity(ws, tutor, tile.activity))) return null;
+    if (!tutorTiles(ws.config.tutors[tutor] ?? {}).includes(tile.id) || !(await openableActivity(ws, tutor, tile.activity, now))) return null;
     const run = await runOf(tile.activity, {});
     return run ? { kind: 'activity', label: tile.activity, activity: tile.activity, params: run.params } : null;
   }
@@ -324,6 +347,7 @@ export async function resolveVia(ws: Workspace, tutor: string, via: HomeVia): Pr
     return run ? { kind: 'lecture', label: b.label, bundle: b.bundle, ...brief, activity: run } : null;
   }
   if (b.kind === 'activity') {
+    if (!(await openableActivity(ws, tutor, b.activity, now))) return null;
     const run = await runOf(b.activity, b.params);
     return run ? { kind: 'activity', label: b.label, activity: b.activity, params: run.params, ...brief } : null;
   }

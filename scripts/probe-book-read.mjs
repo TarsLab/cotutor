@@ -2,7 +2,7 @@
 /**
  * 点读课文(语文课本的一课,docs/dev/课本.md)的孩子端整条线手动验收:不进 pnpm test,要本机 Chrome 和一本语文课本 PDF;假百炼 + 假老师 + 假配音,不花钱。
  * 搭法同 scripts/probe-book-page.mjs(本进程起服务,临时 workspace 的 教材/ 里链着给的 PDF):
- *  一、首页点语文的「预习」,孩子说「我要预习坐井观天」:翻到这一课。
+ *  一、首页点语文的「课本」,孩子说「我要预习坐井观天」:翻到这一课。
  *  二、鼠标移到第 6 段段首的空白:浅浅出一个描边的播放钮;移开就收。
  *  三、点它:钮变成暂停的样子(合成慢时先转圈),假配音收到第 6 段的句子;页上不刷黄。
  *  四、第 6 段读完:钮挪到第 7 段、转一圈,接着读第 7 段。
@@ -134,13 +134,13 @@ try {
   const btn = () => stageEval(`(d) => [...d.querySelectorAll('.bk-read-btn:not(.bk-gone)')].map((g) => { const c = g.querySelector('circle'); return { mode: g.dataset.mode, cy: +c.getAttribute('cy') }; })`);
   const yellow = () => stageEval(`(d) => d.querySelectorAll('.bk-look rect').length`);
 
-  // 一、进预习,翻到坐井观天
+  // 一、进课本,翻到坐井观天
   await send('Page.navigate', { url: `${base}/` });
-  // 首页是桌上一本书:先点下沿语文老师的小旗翻到那一章,再点「预习」
+  // 首页是桌上一本书:先点下沿语文老师的小旗翻到那一章,再点「课本」
   const flag = await until(`(() => { const b = document.querySelector('#tabs .tab[data-tutor="${T}"]'); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + 30 }; })()`);
   if (flag) { await tapAt(flag.x, flag.y); await sleep(900); }
-  const tile = await until(`(() => { const b = document.querySelector('.pc.front[data-tutor="${T}"] .bt-tile[data-tile="preview"]') ?? document.querySelector('[data-tutor="${T}"] .bt-tile[data-tile="preview"]'); if (!b) return null; const r = b.getBoundingClientRect(); return r.width ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null; })()`);
-  ok('首页有语文的「预习」方砖', Boolean(tile));
+  const tile = await until(`(() => { const b = document.querySelector('.pc.front[data-tutor="${T}"] .bt-tile[data-tile="textbook"]') ?? document.querySelector('[data-tutor="${T}"] .bt-tile[data-tile="textbook"]'); if (!b) return null; const r = b.getBoundingClientRect(); return r.width ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null; })()`);
+  ok('首页有语文的「课本」方砖', Boolean(tile));
   await tapAt(tile.x, tile.y);
   await until(`(() => { const d = ${STAGE}; return d && d.querySelector('.bk-board')?.dataset.phase === 'ready'; })()`, 20000);
   await idle();

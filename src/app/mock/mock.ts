@@ -389,7 +389,7 @@ export function createMock(opts: MockOptions = {}): Mock {
     const cards = arrangeHome(parsed, names).map((c) => {
       if (c.kind !== 'tutor') return { ...stripCard(c), owner: owners.get(c) ?? null }; // 同真服务:答案(听写卡的字)不下发;非老师卡带归属
       const name = String(c.props.tutor);
-      // 方砖:照出厂年级包里这位老师家里有没有那个 activity 文件(三门主科有预习、检查作业、复习,英语老师还有口语课;真服务看 workspace 里的)
+      // 方砖:照出厂年级包里这位老师家里有没有那个 activity 文件(语文、数学有课本、检查作业,英语有预习、检查作业、复习、口语课;真服务看 workspace 里的,课本还要有课本 PDF)
       const shipped = (activity: string): boolean => existsSync(join(PACKAGE_GRADES_DIR, `grade-${DEFAULT_GRADE}`, 'agents', name, 'activities', `${activity}.md`));
       return { kind: 'tutor', props: { tutor: name, tiles: kidTiles(HOME_TILE_IDS, { usable: shipped }), buttons: kidButtons((c.props.buttons ?? []) as TutorButton[], { lecture: (id) => Boolean(mockLecture(id)), today: localDate(d) }).map((b) => { const l = b.kind === 'lecture' ? mockLecture(b.bundle) : null; return l ? { ...b, title: l.title, ms: l.ms, ...(l.video ? { video: true as const } : {}) } : b; }) } };
     });

@@ -122,8 +122,10 @@ check('actText 说回原文', actText({ name: '看', arg: '第 3 题' }) === '[[
   check('动作怎么写.md:每个 [[ ]] 都是读得成的动作', all.length >= 15 && !wrong.length, wrong.join(' / '));
   const g = actsGuide();
   check('递给老师的那一页剥掉了给人看的注释', g.startsWith('# 讲稿与动作怎么写') && !g.includes('给人看'), g.slice(0, 80));
-  const math = readFileSync(new URL('../grades/grade-2/agents/math-tutor/activities/预习.md', import.meta.url), 'utf8');
-  const mwrong = [...math.matchAll(/\[\[([^\[\]]+)\]\]/g)].map((m) => m[1]).filter((x) => readMark(x).kind !== 'act');
-  check('数学「预习」里写的动作都读得成', !mwrong.length, mwrong.join(' / '));
+  for (const t of ['math-tutor', 'chinese-tutor']) {
+    const text = readFileSync(new URL(`../grades/grade-2/agents/${t}/activities/课本.md`, import.meta.url), 'utf8');
+    const wrong = [...text.matchAll(/\[\[([^\[\]]+)\]\]/g)].map((m) => m[1]).filter((x) => readMark(x).kind !== 'act');
+    check(`${t}「课本」里写的动作都读得成`, !wrong.length, wrong.join(' / '));
+  }
 }
 done();

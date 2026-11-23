@@ -870,7 +870,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       const path = await writeCapture(ws, ctx.now(), data, /\.png$/i.test(file) ? 'png' : 'jpg');
       return { status: 200, json: { path, ...(imageSize(data) ?? {}) } };
     }
-    // 课本(语文预习,base: textbook):PDF 本身(舞台的 pdf.js 分段取,Range 由 sendFile 管)与几页的行和字(点字、找位置);b = 册子的文件名,p = PDF 的几页(59-60)
+    // 课本(base: textbook 的 activity,出厂语文、数学的「课本」):PDF 本身(舞台的 pdf.js 分段取,Range 由 sendFile 管)与几页的行和字(点字、找位置);b = 册子的文件名,p = PDF 的几页(59-60)
     if (p === '/api/kid/textbook/pdf' && method === 'GET') {
       const file = await bookFile(ws.paths.textbooks, url.searchParams.get('b') ?? '');
       if (!file) return { status: 404, json: { error: 'not_found' } };

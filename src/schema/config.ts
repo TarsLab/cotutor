@@ -69,9 +69,11 @@ export type TutorExtra = (typeof TUTOR_EXTRAS)[number];
 /**
  * 老师卡上常驻的方砖:先后就是牌上的先后。
  * id 记在消息的 via.button;activity 是老师家里同名的文件(agents/<老师>/activities/<名>.md),孩子看到的字也是它。
- * 家里有那个文件才出那一块(预习、检查作业、复习三门主科出厂都有;口语课只有英语老师有);cotutor.json 的 tiles 只记关掉的,升级来的老 workspace 自动就有
+ * 家里有那个文件才出那一块(语文、数学出厂有课本、检查作业;英语有预习、检查作业、复习、口语课);cotutor.json 的 tiles 只记关掉的,升级来的老 workspace 自动就有。
+ * 铺课本的(base: textbook)还要 vault 里有这一科这学期的课本 PDF 才出(src/runtime/home/store.ts 的 bookReady)
  */
 export const HOME_TILES = [
+  { id: 'textbook', activity: '课本' },
   { id: 'preview', activity: '预习' },
   { id: 'check', activity: '检查作业' },
   { id: 'review', activity: '复习' },
@@ -99,8 +101,8 @@ export const TutorSchema = z.object({
   /** 这位老师用哪个运行时(runtimes 里的键);不配用 runtimes.default。要更大预算与时限的老师配一个自己的 */
   runtime: z.string().optional().describe('这位老师用的运行时(runtimes 里的键;不配用 default)——要换模型的老师配自己的'),
   extras: z.preprocess((v) => (Array.isArray(v) ? v.filter((k) => !RETIRED_EXTRAS.includes(k)) : v), z.array(z.enum(TUTOR_EXTRAS))).optional().describe('老师卡上的常驻入口:dictation 听写(含拍照听写);不写按学科给缺省:语文有听写,其余没有;[] = 都不要'),
-  /** 三块方砖(HOME_TILES)哪块关掉:只记 false;没写 = 开着(家里有那个 activity 文件才出) */
-  tiles: z.object(Object.fromEntries(HOME_TILE_IDS.map((id) => [id, z.boolean().optional()])) as Record<HomeTileId, z.ZodOptional<z.ZodBoolean>>).strict().optional().describe('老师卡上常驻的方砖:preview 预习、check 检查作业、review 复习、talk 口语课;写 false 关掉,没写 = 开着(老师家里有那个 activity 文件才出)'),
+  /** 常驻的方砖(HOME_TILES)哪块关掉:只记 false;没写 = 开着(家里有那个 activity 文件才出) */
+  tiles: z.object(Object.fromEntries(HOME_TILE_IDS.map((id) => [id, z.boolean().optional()])) as Record<HomeTileId, z.ZodOptional<z.ZodBoolean>>).strict().optional().describe('老师卡上常驻的方砖:textbook 课本、preview 预习、check 检查作业、review 复习、talk 口语课;写 false 关掉,没写 = 开着(老师家里有那个 activity 文件才出;课本还要 vault 里有这一科的课本 PDF)'),
 });
 export type Tutor = z.infer<typeof TutorSchema>;
 

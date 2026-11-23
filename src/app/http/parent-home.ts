@@ -19,7 +19,7 @@ import { findActivityFile } from '../../runtime/activities.ts';
 import { REALTIME_VOICES } from '../../realtime/voices.ts';
 import { TTS_VOICES } from '../../media/tts.ts';
 import type { AppContext, RouteResult } from './app.ts';
-import { editPublished, readPublished, usableActivity, type PublishResult } from '../../runtime/home/store.ts';
+import { bookReady, editPublished, noBookNote, readPublished, usableActivity, type PublishResult } from '../../runtime/home/store.ts';
 import { patchConfig } from '../workspace.ts';
 import { tutorColors } from '../../ui/shared/tutor-color.ts';
 import { wordEmoji } from '../../ui/kid/word-emoji.ts';
@@ -44,8 +44,11 @@ export interface ParentHomeTutor {
   /** 卡上的常驻入口(按学科补过缺省的);extrasSet = cotutor.json 里写的(没写 = null,走缺省) */
   extras: string[];
   extrasSet: string[] | null;
-  /** 常驻的方砖(HOME_TILES 的先后):家里有那个 activity 文件的才列;on = 没关掉,usable = 文件检查过得去(写坏了孩子端不出) */
-  tiles: { id: HomeTileId; label: string; on: boolean; usable: boolean }[];
+  /**
+   * 常驻的方砖(HOME_TILES 的先后):家里有那个 activity 文件的才列;on = 没关掉,usable = 文件检查过得去(写坏了孩子端不出);
+   * noBook = 铺课本的那块 vault 里还没有这一科的课本 PDF(孩子端不出),给家长的一句去哪下载、放哪
+   */
+  tiles: { id: HomeTileId; label: string; on: boolean; usable: boolean; noBook?: string }[];
   /** 首页里这位老师的按钮(文件里的,带讲法与留到) */
   buttons: TutorButton[];
   /** 这周的词:写了这位老师的听写卡;没有 = null */
@@ -79,7 +82,9 @@ export async function parentHome(ctx: AppContext): Promise<Record<string, unknow
     const out: ParentHomeTutor['tiles'] = [];
     for (const t of HOME_TILES) {
       if (!existsSync(findActivityFile(ctx.ws.root, name, t.activity))) continue;
-      out.push({ id: t.id, label: t.activity, on: on.includes(t.id), usable: Boolean(await usableActivity(ctx.ws, name, t.activity)) });
+      const act = await usableActivity(ctx.ws, name, t.activity);
+      const noBook = act?.base === 'textbook' && !(await bookReady(ctx.ws, name, new Date())) ? noBookNote(c.tutors[name]?.subject) : null;
+      out.push({ id: t.id, label: t.activity, on: on.includes(t.id), usable: Boolean(act), ...(noBook ? { noBook } : {}) });
     }
     return out;
   };

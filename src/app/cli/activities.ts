@@ -126,6 +126,38 @@ async function migrateDictations(root: string): Promise<string[]> {
   return out;
 }
 
+/**
+ * 不再出厂的 activity(连同例子):refresh 时 workspace 里没改过的(和出厂记录的 hash 一样)删掉、出厂记录跟着删;
+ * 改过的、没有出厂记录的留着,报一句为什么不再出厂。合并不是改名,不进 ACTIVITY_RENAMES;以前的话题照看
+ */
+export const RETIRED_ACTIVITIES: readonly { tutor: string; name: string; why: string }[] = (['chinese-tutor', 'math-tutor'] as const).flatMap((tutor) =>
+  ['预习', '复习'].map((name) => ({ tutor, name, why: '出厂已经合成「课本」' })),
+);
+
+async function retireActivities(root: string, manifest: ShippedManifest): Promise<ActivityUpgradeStep[]> {
+  const out: ActivityUpgradeStep[] = [];
+  for (const r of RETIRED_ACTIVITIES) {
+    let kept = false;
+    // 先主文件再例子:主文件留着,例子也留着(家长还能拿它跑 eval)
+    for (const name of [r.name, r.name + EXAMPLES_SUFFIX]) {
+      const key = `${r.tutor}/${name}`;
+      const file = activityFile(root, r.tutor, name);
+      const text = await readFile(file, 'utf8').catch(() => null);
+      if (text === null) continue;
+      const rec = manifest.activities?.[key];
+      if (!kept && rec && rec.hash === sha256(text)) {
+        await unlink(file);
+        delete manifest.activities![key];
+        out.push({ key, action: 'retired', note: r.why });
+      } else {
+        if (name === r.name) kept = true;
+        out.push({ key, action: 'kept-retired', note: r.why, basedOn: rec?.version });
+      }
+    }
+  }
+  return out;
+}
+
 export interface ActivityInstallStep {
   item: string;
   action: 'created' | 'exists' | 'kept' | 'replaced';
@@ -158,8 +190,11 @@ export async function installActivities(root: string): Promise<ActivityInstallSt
 
 export interface ActivityUpgradeStep {
   key: string;
-  action: 'upgraded' | 'latest' | 'kept-custom' | 'forced' | 'installed' | 'renamed' | 'moved';
+  /** retired = 不再出厂、没改过,删了;kept-retired = 不再出厂、改过,留着 */
+  action: 'upgraded' | 'latest' | 'kept-custom' | 'forced' | 'installed' | 'renamed' | 'moved' | 'retired' | 'kept-retired';
   basedOn?: string;
+  /** retired / kept-retired:为什么不再出厂 */
+  note?: string;
   diff?: string[];
   /** renamed:原来的名字 */
   from?: string;
@@ -171,6 +206,7 @@ export async function upgradeActivities(root: string, opts: { force?: string[] }
   manifest.teachingPack ??= { grade: (await workspaceGradePack(root)).grade };
   const steps: ActivityUpgradeStep[] = (await migrateRenames(root, manifest)).map((r) => ({ key: r.key, action: 'renamed', from: r.from }));
   for (const k of await migrateDictations(root)) steps.push({ key: k, action: 'moved' });
+  steps.push(...(await retireActivities(root, manifest)));
   for (const a of await shippedActivities(root)) {
     const s = await readState(root, a, manifest);
     if (s.state === 'latest') steps.push({ key: s.key, action: 'latest', basedOn: s.basedOn });

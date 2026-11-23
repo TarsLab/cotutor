@@ -57,7 +57,7 @@ import { readLesson, updateLesson } from './journal/lesson-store.ts';
 import { BOOK_TOC, bookView, photoBookPage, photoText, pickable, workbookInk, workbookPage, workbookPageId, workbookText, type PhotoText } from '../chalk/index.ts';
 import { bookIndex, listBooks, pickBook } from '../memory/textbook-pdf.ts';
 
-/** 课本做底的 activity:家长在按钮上填的这个参数说的是哪一课,进门直接铺它(出厂的预习、复习都叫「范围」) */
+/** 课本做底的 activity:家长在按钮上填的这个参数说的是哪一课,进门直接铺它(出厂的课本叫「范围」) */
 const ENTER_RANGE = '范围';
 
 /** 今天只进了门、没开口的话题(不存:进门时、点回首页时删) */

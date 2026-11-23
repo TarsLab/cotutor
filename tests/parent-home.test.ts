@@ -39,7 +39,7 @@ activity 看图说话 我要看图说话
 \`\`\`
 
 \`\`\`tutor math-tutor
-activity 复习 再练两道退位减法
+activity 检查作业 再练两道退位减法
 \`\`\`
 
 ## 为什么这么排
@@ -54,7 +54,7 @@ activity 复习 再练两道退位减法
   const zh = d1.cards.find((c) => c.kind === 'tutor' && c.props.tutor === 'chinese-tutor');
   check('换按钮:讲法多行、留到、小课堂都写回去,解析得回来;别的块与家长段一个字不动', JSON.stringify(zh?.props.buttons) === JSON.stringify([{ kind: 'activity', label: '我要预习小蝌蚪找妈妈', activity: '预习', params: { 范围: '第 22 课' }, brief: '第 22 课\n重点字 塘', until: '2026-10-10' }, { kind: 'lecture', label: '分一分', bundle: '2026-10-08-fenyifen' }]) && b1.includes('```tianzige\n塘脑袋\n```') && b1.includes('- 语文:看图说话') && b1.startsWith('---\nfor: 2026-10-10\n---'), b1);
   const b2 = setTutorButtons(MD, 'english-tutor', [{ kind: 'activity', label: '我想说说我的小汽车', activity: '口语课', params: {} }]);
-  check('没有老师卡的老师:加在最后一位老师后面、家长段前面', /```tutor math-tutor\nactivity 复习 再练两道退位减法\n```\n\n```tutor english-tutor\nactivity 口语课 我想说说我的小汽车\n```\n\n## 为什么这么排/.test(b2), b2);
+  check('没有老师卡的老师:加在最后一位老师后面、家长段前面', /```tutor math-tutor\nactivity 检查作业 再练两道退位减法\n```\n\n```tutor english-tutor\nactivity 口语课 我想说说我的小汽车\n```\n\n## 为什么这么排/.test(b2), b2);
   const w1 = setTutorDictation(MD, 'chinese-tutor', [{ chars: '春天' }, { chars: '叶', say: '树叶的叶' }]);
   check('这周的词:紧跟在他的老师卡后面加一张写了他的听写卡', /```tutor chinese-tutor\nactivity 看图说话 我要看图说话\n讲法: 孩子会拍一张图\n```\n\n```dictation chinese-tutor\n春天\n叶 树叶的叶\n```\n\n```tianzige/.test(w1), w1);
   const w2 = setTutorDictation(w1, 'chinese-tutor', [{ chars: '花朵' }]);
@@ -160,11 +160,13 @@ try {
   // 方砖:家长端列着三块(老师家里有那个 activity 文件的),开关写回 cotutor.json 的 tiles(只记关掉的)
   type TL = { id: string; label: string; on: boolean; usable: boolean };
   const tilesP = (g: PH, n: string): TL[] => (g.tutors.find((t) => t.name === n) as unknown as { tiles: TL[] }).tiles;
-  check('家长端列着方砖:三位老师都是预习、检查作业、复习,英语老师还有口语课;都开着、都用得了', ['chinese-tutor', 'math-tutor', 'english-tutor'].every((n) => tilesP(g3, n).map((x) => `${x.id}:${x.label}:${x.on}:${x.usable}`).join() === 'preview:预习:true:true,check:检查作业:true:true,review:复习:true:true' + (n === 'english-tutor' ? ',talk:口语课:true:true' : '')), JSON.stringify(tilesP(g3, 'english-tutor')));
-  const t1 = await call('PATCH', '/api/parent/settings', { tutors: { 'math-tutor': { tiles: { review: false } } } });
+  const row = (n: string): string => tilesP(g3, n).map((x) => `${x.id}:${x.label}:${x.on}:${x.usable}`).join();
+  check('家长端列着方砖:语文、数学课本、检查作业,英语预习、检查作业、复习、口语课;都开着、都用得了', row('chinese-tutor') === 'textbook:课本:true:true,check:检查作业:true:true' && row('math-tutor') === row('chinese-tutor') && row('english-tutor') === 'preview:预习:true:true,check:检查作业:true:true,review:复习:true:true,talk:口语课:true:true', JSON.stringify(tilesP(g3, 'english-tutor')));
+  check('没放课本:课本那块说去哪下载(带学科),别的块没有这句', (tilesP(g3, 'math-tutor')[0] as TL & { noBook?: string }).noBook?.includes('数学') === true && !('noBook' in tilesP(g3, 'math-tutor')[1]));
+  const t1 = await call('PATCH', '/api/parent/settings', { tutors: { 'math-tutor': { tiles: { check: false } } } });
   const ct1 = JSON.parse(readFileSync(cfgFile, 'utf8')) as { tutors: Record<string, { tiles?: Record<string, boolean> }> };
-  check('关掉一块:cotutor.json 记 false,家长端那块 off', t1.status === 200 && JSON.stringify(ct1.tutors['math-tutor'].tiles) === '{"review":false}' && tilesP(t1.json as PH, 'math-tutor').find((x) => x.id === 'review')?.on === false);
-  await call('PATCH', '/api/parent/settings', { tutors: { 'math-tutor': { tiles: { review: true } } } });
+  check('关掉一块:cotutor.json 记 false,家长端那块 off', t1.status === 200 && JSON.stringify(ct1.tutors['math-tutor'].tiles) === '{"check":false}' && tilesP(t1.json as PH, 'math-tutor').find((x) => x.id === 'check')?.on === false);
+  await call('PATCH', '/api/parent/settings', { tutors: { 'math-tutor': { tiles: { check: true } } } });
   const ct2 = JSON.parse(readFileSync(cfgFile, 'utf8')) as { tutors: Record<string, { tiles?: Record<string, boolean> }> };
   check('再打开:那一项删掉(只记关掉的),空了整个 tiles 也不留', !('tiles' in ct2.tutors['math-tutor']), JSON.stringify(ct2.tutors['math-tutor']));
   check('方砖设置不对 400:不认识的方砖、不是开关', (await call('PATCH', '/api/parent/settings', { tutors: { 'math-tutor': { tiles: { painting: false } } } })).status === 400 && (await call('PATCH', '/api/parent/settings', { tutors: { 'math-tutor': { tiles: { review: 'no' } } } })).status === 400);

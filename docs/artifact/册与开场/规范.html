@@ -231,11 +231,11 @@ td .was { display:block; margin-top:4px; font-size:12.5px; color:var(--muted); }
   <div class="tbl"><table>
     <thead><tr><th>编号</th><th>规则</th><th>状态</th></tr></thead>
     <tbody>
-      <tr><td class="n">C1</td><td><b>语文、数学各一个</b> <code>课本.md</code>(<code>base: textbook</code>),替掉 <code>预习.md</code>、<code>复习.md</code>。英语没有,英语的预习、复习照旧。</td><td><span class="st ok">已定</span></td></tr>
-      <tr><td class="n">C2</td><td><b>没有课本就不出砖。</b>vault 里没有这一科这学期的课本,老师牌上不出「课本」,家长端首页和 doctor 说一句去哪下载、放哪。<span class="was">现状:砖照出,进来没课本就收起舞台。</span></td><td><span class="st new">提议</span></td></tr>
-      <tr><td class="n">C3</td><td><b>老师怎么分预习、复习:</b>看孩子说的,看这一课在档案、课程表里学没学过,看家长填的「重点」。「老师怎么带」只有一份,里面预习、复习各一段带法。</td><td><span class="st new">提议</span></td></tr>
-      <tr><td class="n">C4</td><td><b>方砖表</b> <code>HOME_TILES</code> 加 <code>textbook</code>(课本)。<code>preview</code>、<code>review</code> 留给英语:语文、数学家里没有那两个文件,砖自然不出。</td><td><span class="st new">提议</span></td></tr>
-      <tr><td class="n">C5</td><td><b>旧文件。</b>没改过的 <code>预习.md</code>、<code>复习.md</code>(语文、数学)refresh 删掉;改过的留着,报一句「出厂已经合成『课本』」。两个合成一个不是改名,不进 <code>ACTIVITY_RENAMES</code>。以前的话题照看。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">C1</td><td><b>语文、数学各一个</b> <code>课本.md</code>(<code>base: textbook</code>),替掉 <code>预习.md</code>、<code>复习.md</code>。英语没有,英语的预习、复习照旧。</td><td><span class="st now">现状</span></td></tr>
+      <tr><td class="n">C2</td><td><b>没有课本就不出砖。</b>vault 里没有这一科这学期的课本,老师牌上不出「课本」,家长端首页和 doctor 说一句去哪下载、放哪。<span class="was">现状:砖照出,进来没课本就收起舞台。</span></td><td><span class="st now">现状</span></td></tr>
+      <tr><td class="n">C3</td><td><b>老师怎么分预习、复习:</b>看孩子说的,看这一课在档案、课程表里学没学过,看家长填的「重点」。「老师怎么带」只有一份,里面预习、复习各一段带法。</td><td><span class="st now">现状</span></td></tr>
+      <tr><td class="n">C4</td><td><b>方砖表</b> <code>HOME_TILES</code> 加 <code>textbook</code>(课本)。<code>preview</code>、<code>review</code> 留给英语:语文、数学家里没有那两个文件,砖自然不出。</td><td><span class="st now">现状</span></td></tr>
+      <tr><td class="n">C5</td><td><b>旧文件。</b>没改过的 <code>预习.md</code>、<code>复习.md</code>(语文、数学)refresh 删掉;改过的留着,报一句「出厂已经合成『课本』」。两个合成一个不是改名,不进 <code>ACTIVITY_RENAMES</code>。以前的话题照看。</td><td><span class="st now">现状</span></td></tr>
     </tbody>
   </table></div>
 </section>
@@ -292,7 +292,7 @@ td .was { display:block; margin-top:4px; font-size:12.5px; color:var(--muted); }
     <tbody>
       <tr><td class="n">1 ✓</td><td>孩子先开口(O1–O8,2026-11-23 做完,规矩在 <code>docs/dev/首页与听写.md</code>)</td><td>kid-page 的 <code>openTutor</code>、<code>kid-input.ts</code>、<code>runner.send</code> 与 <code>boardEvent</code>、<code>kid-view.ts</code> 的 <code>startsThread</code>、<code>live/call.ts</code> 的 open 那一轮、<code>schema/activity.ts</code> 的 <code>start</code>、全部 activity 与例子、<code>activity-eval</code></td><td>activity、live-board、live-flow、kid-view、mock、probe</td></tr>
       <tr><td class="n">2 ✓</td><td>册与记住位置(B1–B5,2026-11-23 做完;顶栏照 <a href="https://claude.ai/artifact/4bSS84UgBieKXpgdJFpbPk">翻页设计稿</a> 的 B)</td><td><code>book-last.ts</code>、<code>lesson-fit.ts</code> 的 <code>lessonOpen</code>、kid-page 的 <code>BP</code> 顶栏、<code>book.tsx</code>、<code>schema/workbook.ts</code> 的 <code>chapters</code></td><td>textbook、board-book、workbook-page、probe-book-page</td></tr>
-      <tr><td class="n">3</td><td>课本合并(C1–C5)</td><td><code>grades/grade-2/agents/{chinese,math}-tutor/activities/</code>、<code>HOME_TILES</code>、refresh 退役、方砖的图</td><td>activity、grades、cards</td></tr>
+      <tr><td class="n">3 ✓</td><td>课本合并(C1–C5,2026-11-23 做完,规矩在 <code>docs/dev/首页与听写.md</code>;方砖的图先用预习那张书,竖版封面在第 5 步)</td><td><code>grades/grade-2/agents/{chinese,math}-tutor/activities/</code>、<code>HOME_TILES</code>、refresh 退役、方砖的图</td><td>activity、grades、cards</td></tr>
       <tr><td class="n">4</td><td>作业本与导出(B6、B7)</td><td>照片落 vault、照片页按天成章、家长端导出路由</td><td>photo-words、strip、新加的导出测试</td></tr>
       <tr><td class="n">5</td><td>首页竖版卡与封面(B8、H1–H4)</td><td>先改首页设计稿;再 <code>cards/tutor/card.css</code>、<code>home-tiles.ts</code>、封面回传</td><td>mock、probe</td></tr>
     </tbody>

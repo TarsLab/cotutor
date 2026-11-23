@@ -334,6 +334,16 @@ ${BACK_TINT_CSS}
   #st-toc { display:none; }
   #stage.bp.bk #st-toc:not([hidden]) { display:flex; align-items:center; gap:6px; flex:none; height:40px; padding:0 16px 0 12px; border:0; border-radius:20px; background:#fffffff0; box-shadow:0 2px 10px #00000014; font:inherit; font-size:16px; font-weight:600; color:var(--ink); cursor:pointer; }
   #st-toc svg { width:20px; height:20px; }
+  /* 课本的一课里:课名两边一对箭头(上一课、下一课,照目录的先后;到头的那颗不出),和课名合成一颗胶囊;别处 #st-nav 不占地方 */
+  #st-nav { display:contents; }
+  #st-prev, #st-next { display:none; }
+  #stage.bp.bk #st-nav.on { display:flex; align-items:center; flex:0 1 auto; min-width:0; height:40px; border-radius:20px; background:#fffffff0; box-shadow:0 2px 10px #00000014; }
+  #stage.bp.bk #st-nav.on .ttl:not(:empty) { padding:0 16px; background:none; box-shadow:none; border-radius:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #stage.bp.bk #st-nav.on #st-prev:not([hidden]) + .ttl { padding-left:2px; }
+  #stage.bp.bk #st-nav.on .ttl:has(+ #st-next:not([hidden])) { padding-right:2px; }
+  #stage.bp.bk #st-nav.on #st-prev:not([hidden]), #stage.bp.bk #st-nav.on #st-next:not([hidden]) { display:flex; align-items:center; justify-content:center; flex:none; width:46px; height:40px; padding:0; border:0; border-radius:20px; background:none; color:var(--ink); cursor:pointer; }
+  #st-nav button:active { background:#0000000d; }
+  #st-nav button svg { width:22px; height:22px; }
   #stage.bp #st-frame { position:absolute; inset:0; height:100%; }
   /* 「给老师看」:没东西可交就不出现(原来是半透明的一颗,像是坏了);能交了是实心的学科色。旁边那行小字垫白底 */
   #stage.bp #st-act { top:calc(env(safe-area-inset-top) + 10px); right:calc(env(safe-area-inset-right) + 4px); }
@@ -644,7 +654,7 @@ __VOICE_CSS__
     <div id="wrap">
       <div id="bmark" hidden></div>
       <div id="board"></div>
-      <div id="stage"><div class="top"><span class="ttl" id="st-ttl"></span><button type="button" id="st-toc" hidden></button><span id="st-bp"><button type="button" id="st-tb" hidden></button><button type="button" id="st-cam"></button><button type="button" id="st-alb"></button></span><button id="st-x" type="button"></button></div><iframe id="st-frame" hidden title="stage"></iframe><div id="st-pick" hidden></div><div id="st-act" hidden><span class="note" id="st-note"></span><button id="st-go" type="button">给老师看</button></div><button id="cv-hold" class="vb-mini" type="button"></button><button id="cv-type" type="button"><span class="ic"></span>打字</button><div id="cv-cap"></div></div>
+      <div id="stage"><div class="top"><span id="st-nav"><button type="button" id="st-prev" hidden></button><span class="ttl" id="st-ttl"></span><button type="button" id="st-next" hidden></button></span><button type="button" id="st-toc" hidden></button><span id="st-bp"><button type="button" id="st-tb" hidden></button><button type="button" id="st-cam"></button><button type="button" id="st-alb"></button></span><button id="st-x" type="button"></button></div><iframe id="st-frame" hidden title="stage"></iframe><div id="st-pick" hidden></div><div id="st-act" hidden><span class="note" id="st-note"></span><button id="st-go" type="button">给老师看</button></div><button id="cv-hold" class="vb-mini" type="button"></button><button id="cv-type" type="button"><span class="ic"></span>打字</button><div id="cv-cap"></div></div>
       <div id="st-dim"></div>
     </div>
     <div id="lv"><div id="lv-av"></div><div id="lv-kid"></div><div id="lv-cap"><div class="lv-prev"></div><div class="lv-cur"></div></div><div id="lv-ask"><b></b><small></small></div><div id="lv-acts"></div><button id="lv-replay" type="button" hidden><span class="ic"></span><span class="tx"></span></button><button id="lv-hold" type="button"></button><div id="lv-tools"><button type="button" id="lv-cam"><span class="ic"></span>拍照</button><button type="button" id="lv-album"><span class="ic"></span>相册</button><button type="button" id="lv-type"><span class="ic"></span>打字</button></div></div>
@@ -729,6 +739,8 @@ ${pageDomJs(4000)}
     album: __ALBUM_28__,
     toc: SVG('<path d="M9 6h11M9 12h11M9 18h11"></path><circle cx="4.5" cy="6" r="1.2" fill="currentColor"></circle><circle cx="4.5" cy="12" r="1.2" fill="currentColor"></circle><circle cx="4.5" cy="18" r="1.2" fill="currentColor"></circle>', 20, 2.2),
     close: SVG('<path d="M6 6l12 12M18 6L6 18"></path>', 24, 2.2),
+    prev: SVG('<path d="M15 5l-7 7 7 7"></path>', 22, 2.4),
+    next: SVG('<path d="M9 5l7 7-7 7"></path>', 22, 2.4),
     closeSm: SVG('<path d="M7 7l10 10M17 7L7 17"></path>', 14, 2.8),
     check: SVG('<path d="M5 12l5 5 9-10"></path>', 16, 3),
     lock: SVG('<rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path>', 14, 2.2),
@@ -764,7 +776,7 @@ ${BOARD_MARK_JS}
 
   // ---- 状态 ----
   /** 铺页的话题:on = 这个话题的页面是板;base = 现在的底(照片路径,null 白板,undefined 还没定);label = 方砖上的字(不拍照直接开始时发它);workbook = 首页按钮挂的那一册练习册 */
-  const BP = { on: false, base: null, label: '', books: [], toc: null, workbook: null, start: null };
+  const BP = { on: false, base: null, label: '', books: [], toc: null, workbook: null, start: null, nb: null };
   const S = { home: null, tutor: null, day: null, sections: [], played: new Set(), state: { section: -1, line: -1, status: 'idle' }, pending: false, waitSince: null, offline: false, bar: 'idle', pollTimer: null, stage: null, partial: null, thread: null, threadAt: null, hist: null, readonly: false, newThread: false, device: 'phone', via: null, door: null, cont: null, ask: null, reel: null, pendSaid: null, homeDraw: true, autoOpened: new Set() };
   // 实时的老师这一次(连、发、收、画在下面「实时的老师」那一块):on = 这位老师这一次走实时(左栏的样子);ready = 嘴连上了;
   // model = liveStep 的状态(只在 liveDispatch 里写);cap = 字幕(上一句、在说的、被打断的那句);heard = 每一轮(job)念到第几句
@@ -1327,16 +1339,23 @@ ${HOME_TILES_JS}
     const tocOf = p && p.kind === 'book' && BP.toc && BP.toc.page && BP.toc.page.src === p.src && !S.readonly && !REEL;
     const tocOn = tocOf && p.title === '目录';
     $('#st-toc').hidden = !tocOf || p.title === '目录';
+    // 上一课、下一课:一课里才有(目录上没有);下一课也交给舞台,在这一课最后一页下面摆一行
+    const nb = tocOf && p.title !== '目录' && S.thread ? bpNeighbors(p) : { prev: null, next: null };
+    BP.nb = nb;
+    $('#st-nav').classList.toggle('on', Boolean(tocOf && p.title !== '目录'));
+    $('#st-prev').hidden = !nb.prev; $('#st-next').hidden = !nb.next;
+    if (nb.prev) $('#st-prev').setAttribute('aria-label', '上一课:' + nb.prev.title);
+    if (nb.next) $('#st-next').setAttribute('aria-label', '下一课:' + nb.next.title);
     // 小课堂那一页:播放器有自己的课名、进度条、画一画,页面的「给老师看」不出
     $('#stage').classList.toggle('lcp', Boolean(p && p.kind === 'lecture'));
     // 翻走了:这一页的点读作废
     if (RD.at && RD.at !== LS.l.at) readForget();
     const read = readView();
-    const key = JSON.stringify(LS.l) + (tocOn ? '|toc' : '') + '|' + JSON.stringify(read);
+    const key = JSON.stringify(LS.l) + (tocOn ? '|toc' : '') + '|' + JSON.stringify(read) + '|' + (nb.next ? nb.next.title : '');
     renderGo();
     if (key === LS.key) return;
     LS.key = key;
-    postStage({ type: 'lesson', id: S.stage.id, lesson: LS.l, readonly: S.readonly || REEL, hand: document.body.classList.contains('hand-left') ? 'left' : 'right', color: tutorColor(), ...(TRIAL ? { mousePen: true } : {}), ...(tocOn ? { toc: { color: tutorColor(), entries: BP.toc.entries.map((e) => ({ title: e.title, box: e.box })) } } : {}), ...(read ? { read } : {}), ...(p && p.kind === 'lecture' ? { lecture: { url: lcBundleUrl(p.bundle, p.video), marks: S.lecture && S.lecture.bundle === p.bundle ? S.lecture.marks : [], follow: REEL, ...(LS.playN ? { play: LS.playN } : {}) } } : {}) });
+    postStage({ type: 'lesson', id: S.stage.id, lesson: LS.l, readonly: S.readonly || REEL, hand: document.body.classList.contains('hand-left') ? 'left' : 'right', color: tutorColor(), ...(TRIAL ? { mousePen: true } : {}), ...(tocOn ? { toc: { color: tutorColor(), entries: BP.toc.entries.map((e) => ({ title: e.title, box: e.box })) } } : {}), ...(nb.next ? { next: { title: nb.next.title } } : {}), ...(read ? { read } : {}), ...(p && p.kind === 'lecture' ? { lecture: { url: lcBundleUrl(p.bundle, p.video), marks: S.lecture && S.lecture.bundle === p.bundle ? S.lecture.marks : [], follow: REEL, ...(LS.playN ? { play: LS.playN } : {}) } } : {}) });
     if (!REEL && !S.readonly) { clearTimeout(LS.recT); LS.recT = setTimeout(() => { const k = JSON.stringify(LS.l); if (k !== LS.recKey && S.thread) { LS.recKey = k; playRec({ k: 'lesson', l: LS.l }); } }, 1500); }
   };
   /** 页铺满:舞台开一次,之后只换状态 */
@@ -1407,6 +1426,35 @@ ${HOME_TILES_JS}
     if (m.type === 'close' || m.type === 'error') { /* 页铺不出来:舞台留着,老师会说 */ }
   };
 
+  /**
+   * 课本一课的上一课、下一课(目录上能点的那几项,照先后):下一课 = 后面第一项、它的页在这一课最后一页之后(诗嵌在课下面、页码重叠的跳过);
+   * 上一课 = 前面那一项里「下一课」正好是这一课的第一个(没有就是紧挨着的前一项)。这一课不在目录上(老师翻到的小节):上一课是它落在的那一项,下一课照它的页往后找
+   */
+  const bpNeighbors = (p) => {
+    const es = (BP.toc && BP.toc.entries) || [];
+    const first = (e) => e.page.pages[0], last = (pages) => Math.max(...pages);
+    const nextOf = (i, end) => { for (let k = i + 1; k < es.length; k++) if (first(es[k]) > end) return k; return -1; };
+    let i = es.findIndex((e) => e.title === p.title);
+    if (i < 0) {
+      for (let k = 0; k < es.length; k++) if (first(es[k]) <= p.pages[0]) i = k;
+      const n = nextOf(i, last(p.pages));
+      return { prev: i >= 0 ? es[i] : null, next: n >= 0 ? es[n] : null };
+    }
+    const n = nextOf(i, last(p.pages));
+    let pv = -1;
+    for (let k = 0; k < i; k++) if (nextOf(k, last(es[k].page.pages)) === i) { pv = k; break; }
+    if (pv < 0) pv = i - 1;
+    return { prev: pv >= 0 ? es[pv] : null, next: n >= 0 ? es[n] : null };
+  };
+  /** 翻到目录上的另一项(上一课、下一课、一课最后那一行):自己先翻过去,再报给服务端(它照样翻、记下,不叫老师) */
+  const bpGo = (e) => {
+    if (!e || !LS.on || !LS.l || S.readonly || REEL || !S.thread) return;
+    pickHide();
+    lsKid({ t: 'act', act: { k: '翻', page: e.page } }, { k: 'open', title: e.title });
+  };
+  $('#st-prev').innerHTML = ICON.prev; $('#st-next').innerHTML = ICON.next;
+  $('#st-prev').addEventListener('click', () => bpGo(BP.nb && BP.nb.prev));
+  $('#st-next').addEventListener('click', () => bpGo(BP.nb && BP.nb.next));
   /** 课本的一课里按「目录」:翻回目录,窗停在这一课那一行;报给服务端(它照样翻,不叫老师) */
   $('#st-toc').innerHTML = ICON.toc + '<span>目录</span>';
   $('#st-toc').addEventListener('click', () => {

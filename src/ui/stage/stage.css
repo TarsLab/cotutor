@@ -14,6 +14,11 @@ html, body, #root { margin: 0; height: 100%; background: #fffdf8; font: 18px/1.5
 .bk-page { position: absolute; display: block; background: #ffffff; box-shadow: 0 1px 6px rgba(0, 0, 0, .14); }
 .bk-wipe { position: absolute; z-index: 3; left: 0; top: calc(50% + 84px); width: 88px; height: 52px; display: flex; align-items: center; justify-content: center; gap: 4px; border: 1.5px solid #e2dfd6; border-left: 0; border-radius: 0 24px 24px 0; background: #ffffff; color: #2b2b2b; font: inherit; font-size: 15px; font-weight: 700; box-shadow: 0 8px 28px rgba(70, 55, 30, .2); cursor: pointer; -webkit-tap-highlight-color: transparent; transition: transform .12s; }
 .bk-wipe svg { width: 22px; height: 22px; }
+/* 一课最后一页下面的「下一课」:在纸上(场景坐标,跟着窗缩放),一颗安静的白胶囊;点中由舞台照位置认(book.tsx 的 nextHit) */
+.bk-next { position: absolute; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; height: 56px; padding: 0 18px 0 24px; border-radius: 28px; background: #ffffff; box-shadow: 0 2px 10px rgba(0, 0, 0, .08); color: #2b2b2b; white-space: nowrap; cursor: pointer; }
+.bk-next .k { font-size: 15px; color: #6b6455; }
+.bk-next .t { font-family: 'Kaiti SC', STKaiti, KaiTi, serif; font-size: 24px; letter-spacing: 3px; }
+.bk-next svg { width: 20px; height: 20px; color: var(--bk-next, #6b6455); }
 .bk-wipe:active { transform: scale(.94); }
 .kt-hand-left .bk-wipe { left: auto; right: 0; border-left: 1.5px solid #e2dfd6; border-right: 0; border-radius: 24px 0 0 24px; }
 .bk-page.bk-joined { box-shadow: none; }

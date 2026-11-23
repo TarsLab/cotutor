@@ -250,16 +250,22 @@ export function tocEntries(book: LessonBook): { page: Extract<PageSource, { kind
 const r1 = (n: number): number => Math.round(n * 10) / 10;
 
 /**
- * 还没有页的一节课(课本做底):want = 家长在按钮上填的范围(找得到这一课就直接铺它),再是 last = 这本书上次翻到的那一课(直接铺它);
+ * 还没有页的一节课(课本做底):want = 家长在按钮上填的范围(找得到这一课就直接铺它),再是 last = 这本书上次翻到的那一课(直接铺它,窗摆回上次停的地方);
  * 都没有(或找不到)铺目录,窗停在目录上 last 那一行
  */
-export function lessonOpen(l: Lesson, book: LessonBook, last?: string | null, want?: string | null): Lesson {
+export function lessonOpen(l: Lesson, book: LessonBook, last?: string | { title: string; view?: Box } | null, want?: string | null): Lesson {
   if (l.at) return l;
-  const direct = [want, last].map((n) => (n ? bookPageOf(book, n) : null)).find((p) => p && p.title !== BOOK_TOC);
-  if (direct) return lessonStep(l, { t: 'act', act: { k: '翻', page: direct } });
+  const spot = typeof last === 'string' ? { title: last } : (last ?? null);
+  const asked = want ? bookPageOf(book, want) : null;
+  if (asked && asked.title !== BOOK_TOC) return lessonStep(l, { t: 'act', act: { k: '翻', page: asked } });
+  const back = spot ? bookPageOf(book, spot.title) : null;
+  if (back && back.title !== BOOK_TOC) {
+    const s = lessonStep(l, { t: 'act', act: { k: '翻', page: back } });
+    return spot?.view ? lessonStep(s, { t: 'view', box: spot.view }) : s;
+  }
   const page = bookPageOf(book, null);
   if (!page) return l;
   const s = lessonStep(l, { t: 'act', act: { k: '翻', page } });
-  const at = last ? tocEntries(book)?.entries.find((e) => e.title === last) : undefined;
+  const at = spot ? tocEntries(book)?.entries.find((e) => e.title === spot.title) : undefined;
   return at ? lessonStep(s, { t: 'view', box: at.box }) : s;
 }

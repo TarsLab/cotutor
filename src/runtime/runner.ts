@@ -51,10 +51,10 @@ import { appendBoard, readBoard } from './journal/board-log.ts';
 import { bookSlateParts, clipNote, lessonSlateBits, slateOf, type PageNote } from './context/board-pack.ts';
 import { bookLesson, bookPageOf, fitSection, lessonOpen, pageText, sectionActs, tocEntries, whitePage, type LessonBook, type LessonSource } from '../board/lesson-fit.ts';
 import { readWorkbook } from '../memory/workbook.ts';
-import { bookLast, rememberBook } from './journal/book-last.ts';
+import { bookLast, lastSpot, rememberBook } from './journal/book-last.ts';
 import { lessonDone, lessonPage, lessonSection, lessonStep } from '../board/lesson.ts';
 import { readLesson, updateLesson } from './journal/lesson-store.ts';
-import { BOOK_TOC, bookView, photoBookPage, photoText, pickable, workbookInk, workbookPage, workbookText, type PhotoText } from '../chalk/index.ts';
+import { BOOK_TOC, bookView, photoBookPage, photoText, pickable, workbookInk, workbookPage, workbookPageId, workbookText, type PhotoText } from '../chalk/index.ts';
 import { bookIndex, listBooks, pickBook } from '../memory/textbook-pdf.ts';
 
 /** 课本做底的 activity:家长在按钮上填的这个参数说的是哪一课,进门直接铺它(出厂的预习、复习都叫「范围」) */
@@ -366,7 +366,7 @@ export class Runner {
    *  - 窗停下来 {k:'view', box}:照页的文字层说成一句(「第 55 页:第 7 段」「第 1 张:第 3 题」)记下
    *  - 窗里的图 {k:'shot', box, image}(jpeg data URL):只留最新一张,下一轮附给老师;不算孩子动了手
    *  - 点字 {k:'pick', text}:回这个字词的念法(照片上认字时模型写好的「傍,傍晚的傍」,嘴照念;没有就念它自己);揭开 {k:'reveal', text}:嘴不念
-   *  - 自己翻页 {k:'open', title}:目录上点了一课(title 是目录上那一项,tocEntries),或在一课里按「目录」回去(title = 目录,窗停在刚才那一课那一行)。
+   *  - 自己翻页 {k:'open', title}:目录上点了一课(title 是目录上那一项,tocEntries),在一课里按「目录」回去(title = 目录,窗停在刚才那一课那一行),或翻到上一课、下一课(目录上的另一项)。
    *    照这本书的目录翻过去、记进板的日志;点的是一课就记下这本书翻到哪了(book-last)。不叫老师:下一轮「孩子做的」说他自己翻到了哪
    *  - 点读了一回 {k:'read', from, to, done?}(课本上点了标题或段首,孩子端放的配音;读到停下才报):记一笔,不叫老师
    * 话题不是今天的一节课、东西不对:回 null,什么都不记
@@ -401,8 +401,8 @@ export class Runner {
       const now = (this.opts.now ?? (() => new Date()))();
       const { book } = await this.bookOf(ws, tutor, now);
       const toc = b.title === BOOK_TOC;
-      // 目录上只能点一课,一课里只能回目录
-      if (!book || book.file !== cur.src || toc === (cur.title === BOOK_TOC)) return null;
+      // 目录上点一课;一课里回目录,或翻到上一课、下一课(目录上的另一项);同一课、目录上点目录不翻
+      if (!book || book.file !== cur.src || b.title === cur.title) return null;
       const entries = tocEntries(book)?.entries ?? [];
       const page = toc ? bookPageOf(book, null) : (entries.find((e) => e.title === b.title)?.page ?? null);
       if (!page) return null;
@@ -479,6 +479,9 @@ export class Runner {
       }
       await appendBoard(ws, tutor, date, thread, { at, k: 'view', text, base });
       await step({ t: 'view', box });
+      // 这一册翻到哪、窗停在哪(下次进门摆回来);目录不记
+      if (page.kind === 'book' && page.title !== BOOK_TOC) await rememberBook(ws, page.src, page.title, new Date(at), box);
+      else if (page.kind === 'workbook') await rememberBook(ws, workbookPageId(page.src), page.title, new Date(at), box);
       return { thread, say: null, still: false };
     }
     // 揭开的可以是盖住的算式(盖: 6×4=24),不只是字词
@@ -575,7 +578,8 @@ export class Runner {
     let problem = 'problem' in got ? got.problem : undefined;
     const wbRead = base === 'workbook' ? (workbook ? await readWorkbook(ws.paths.workbooks, workbook) : { why: '这个 activity 没给练习册参数' }) : null;
     if (wbRead && 'why' in wbRead) problem = `练习册:${wbRead.why}`;
-    const last = book ? await bookLast(ws, book.file) : null;
+    const last = book ? await lastSpot(ws, book.file) : null;
+    const wbLast = workbook ? await lastSpot(ws, workbookPageId(workbook)) : null;
     const sizes = await this.photoSizes(ws, photos);
     // 数学的照片上点的是数和算式,不弹田字格(同数学课本)
     const pick = canonicalSubject(ws.config.tutors[tutor]?.subject) !== '数学';
@@ -584,7 +588,11 @@ export class Runner {
       let s = lecture && !l.pages.some((p) => p.kind === 'lecture') ? lessonStep(l, { t: 'act', act: { k: '翻', page: lecturePage(lecture) } }) : l;
       s = book ? lessonOpen(s, book, last, want) : s;
       // 练习册:这一册还没铺过才铺(铺过的翻回来原样在)
-      if (workbook && wbRead && 'wb' in wbRead && !s.pages.some((p) => p.kind === 'workbook' && p.src === workbook)) s = lessonStep(s, { t: 'act', act: { k: '翻', page: workbookPage(workbook, wbRead.wb, pick) } });
+      // 第一次铺这一册:窗摆回上次停的地方
+      if (workbook && wbRead && 'wb' in wbRead && !s.pages.some((p) => p.kind === 'workbook' && p.src === workbook)) {
+        s = lessonStep(s, { t: 'act', act: { k: '翻', page: workbookPage(workbook, wbRead.wb, pick) } });
+        if (wbLast?.view) s = lessonStep(s, { t: 'view', box: wbLast.view });
+      }
       if (sizes.length) s = lessonStep(s, { t: 'photo', photos: sizes, pick });
       else if ((base === 'photo' || base === 'workbook') && !s.at) s = lessonStep(s, { t: 'act', act: { k: '翻', page: whitePage() } });
       return s;

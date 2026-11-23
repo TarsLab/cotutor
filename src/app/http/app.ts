@@ -64,10 +64,10 @@ import { listTextbookPages, textbookPageFile } from '../../memory/textbook-pages
 import { bookFile, bookIndex, listBooks, pickBook } from '../../memory/textbook-pdf.ts';
 import { readWorkbook, workbookImageFile } from '../../memory/workbook.ts';
 import { lessonOpen, tocEntries } from '../../board/lesson-fit.ts';
-import { bookLast } from '../../runtime/journal/book-last.ts';
-import { lessonInit, lessonStep } from '../../board/lesson.ts';
+import { lastSpot } from '../../runtime/journal/book-last.ts';
+import { lessonInit, lessonPage, lessonStep } from '../../board/lesson.ts';
 import { readLesson } from '../../runtime/journal/lesson-store.ts';
-import { bookPages, bookReadTexts, lessonBlocks, workbookBookPage, workbookPage } from '../../chalk/index.ts';
+import { BOOK_TOC, bookPages, bookReadTexts, lessonBlocks, workbookBookPage, workbookPage } from '../../chalk/index.ts';
 import { synthesize } from '../../media/tts.ts';
 import type { Look } from '../../scenes/look.ts';
 import { IndexError, capturePathOk, deleteThread, listDates, rateThread, readErrLog, readIndex, readTranscript, undoVaultWrite, writeCapture, type VaultWrite } from '../../runtime/journal/store.ts';
@@ -248,6 +248,10 @@ export async function kidToday(ws: Workspace, tutors: readonly string[], date: s
     const index = await readIndex(ws, tutor, date).catch(() => null);
     if (!index) continue;
     for (const { photo, ...t } of startedThreads(index.messages)) {
+      // 课名:这节课此刻停在哪一课(进门铺的、孩子翻的、老师翻的都在里面);停在目录、不是课本的,照讲稿里老师最后翻到的(startedThreads)
+      const l = await readLesson(ws, tutor, date, t.thread).catch(() => null);
+      const page = l ? lessonPage(l) : null;
+      if (page?.kind === 'book' && page.title !== BOOK_TOC) t.lesson = page.title;
       const pv = await previewOf(ws, tutor, date, t.thread);
       const image = pv ? `/api/kid/conversations/${tutor}/preview?thread=${encodeURIComponent(t.thread)}&date=${date}&v=${pv.mtime}` : photo ? `/api/kid/image?p=${encodeURIComponent(photo)}` : null;
       out.push({ ...t, tutor, image });
@@ -378,7 +382,7 @@ async function bookBase(ws: Workspace, name: string): Promise<{ lesson: Lesson; 
   const index = await bookIndex(ws.paths.textbooks, join(ws.root, '.cotutor', 'textbooks'), name).catch(() => null);
   if (!index) return null;
   const book = { file: name, index };
-  const l = lessonOpen(lessonInit(), book, await bookLast(ws, name));
+  const l = lessonOpen(lessonInit(), book, await lastSpot(ws, name));
   return l.at ? { lesson: l, toc: tocEntries(book) } : null;
 }
 

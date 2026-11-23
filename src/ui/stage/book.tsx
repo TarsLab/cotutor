@@ -70,7 +70,9 @@ export interface BookStageProps {
   onSubmit(): void;
   /** 课本的目录上能点的那几项(场景坐标)和按下去铺的颜色;不是目录页、只读的不用 */
   toc?: { color: string; entries: { title: string; box: Box }[] } | null;
-  /** 目录上点中了一项(页面先翻过去,再报给服务端) */
+  /** 这一课后面还有一课(页面照目录算的):最后一页下面摆一行「下一课」 */
+  next?: { title: string } | null;
+  /** 目录上点中了一项、一课最后那一行的「下一课」(页面先翻过去,再报给服务端) */
   onOpen?(title: string): void;
   /** 点中了一个字(页面弹田字格) */
   onPick?(text: string, at: Box | null): void;
@@ -129,6 +131,8 @@ const LOOK_DELAY_MS = 250, LOOK_SWEEP_MS = 320, LOOK_STEP_MS = 140, LOOK_SPAN_MS
 const LOOK_PAD: [number, number] = [5, 3.5];
 /** 目录:手指按住多久才铺那一行(刚滚起来的不闪);松手后那一行停多久再翻过去;范围上下最多再撑开几成行高 */
 const TOC_PRESS_MS = 80, TOC_HOLD_MS = 250, TOC_GROW = 0.2;
+/** 一课最后一页下面「下一课」那一行:离页多远、这一截多高(场景坐标;窗能多往下滚这么多) */
+const NEXT_GAP = 44, NEXT_H = 170;
 /** 交给老师的那张图的长边 */
 const SHOT_SIDE = 1024;
 /** 窗停下来多久交窗里的图(清楚的那一块多半已经重画好了) */
@@ -275,7 +279,7 @@ function tocAreas(entries: readonly { title: string; box: Box }[]): { title: str
   });
 }
 
-export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function BookStage({ id: _id, lesson, readonly, hand, mousePen, toc, onOpen, onStroke, onPen, onTurn, onWipe, onSubmit, onPick, onPickAt, onCell, color, onReveal, read, onRead, onView, onShot, onError }, ref) {
+export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function BookStage({ id: _id, lesson, readonly, hand, mousePen, toc, next, onOpen, onStroke, onPen, onTurn, onWipe, onSubmit, onPick, onPickAt, onCell, color, onReveal, read, onRead, onView, onShot, onError }, ref) {
   const view = useRef<HTMLDivElement>(null);
   const paper = useRef<HTMLDivElement>(null);
   const svg = useRef<SVGSVGElement>(null);
@@ -318,6 +322,11 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
   const tocOn = !readonly && page?.kind === 'book' && page.title === BOOK_TOC && Boolean(toc?.entries.length);
   const tocNow = useRef<{ on: boolean; color: string; areas: ReturnType<typeof tocAreas> }>({ on: false, color: '', areas: [] });
   tocNow.current = { on: tocOn, color: toc?.color ?? '#1c7ed6', areas: tocOn && toc ? tocAreas(toc.entries) : [] };
+  // 一课最后一页下面的「下一课」:课本的一课、孩子能动手的时候才有
+  const nextOn = !readonly && page?.kind === 'book' && page.title !== BOOK_TOC && Boolean(next?.title);
+  const nextNow = useRef(false);
+  nextNow.current = nextOn;
+  const nextEl = useRef<HTMLDivElement>(null);
   /** 能落笔:课本页上随时(目录除外);别的页老师请了用笔才能 */
   const canMark = !tocOn && (page?.kind === 'book' || page?.kind === 'workbook' || open.some((o) => PEN_ASKS.includes(o)));
   const canPick = !tocOn && (Boolean(page?.pick) || open.includes('点'));
@@ -357,7 +366,7 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
   const clamp = (c: Cam): Cam => {
     if (!readonly) {
       const [vw, vh] = vsize();
-      const h = geo.current?.height ?? BOOK_W;
+      const h = (geo.current?.height ?? BOOK_W) + (nextNow.current ? NEXT_H : 0);
       const s = (vw / BOOK_W) * zoom.current;
       const hw = vw / 2 / s, hh = vh / 2 / s;
       return { s, cx: hw * 2 >= BOOK_W ? BOOK_W / 2 : Math.min(BOOK_W - hw, Math.max(hw, c.cx)), cy: hh * 2 >= h ? hh : Math.min(h - hh, Math.max(hh, c.cy)) };
@@ -1068,8 +1077,16 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
     }, TOC_HOLD_MS);
   };
 
+  /** 点中了一课最后那一行「下一课」:告诉页面翻过去(手指按着时舞台捕获了指针,行上的点按照位置认) */
+  const nextHit = (x: number, y: number): boolean => {
+    const r = nextNow.current ? nextEl.current?.getBoundingClientRect() : null;
+    if (!r || x < r.left || x > r.right || y < r.top || y > r.bottom || !next) return false;
+    onOpen?.(next.title);
+    return true;
+  };
   /** 轻点:先看是不是盖住的拼音,再看是不是一个字 */
   const tap = (x: number, y: number): void => {
+    if (nextHit(x, y)) return;
     // 点读的钮(笔、鼠标点一下不动)
     const rk = readAt(x, y);
     if (rk >= 0) { readTap(rk); return; }
@@ -1310,7 +1327,8 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
     // 目录、点读的钮不等双击:点一下就是点一项
     const rk = g?.kind === 'tap' && e.type === 'pointerup' && !tocNow.current.on ? readAt(e.clientX, e.clientY) : -1;
     if (rk < 0 && readHover.current?.mode === 'press') readHint(-1, 'press');
-    if (rk >= 0) readTap(rk);
+    if (g?.kind === 'tap' && e.type === 'pointerup' && nextHit(e.clientX, e.clientY)) { /* 翻到下一课 */ }
+    else if (rk >= 0) readTap(rk);
     else if (g?.kind === 'tap' && e.type === 'pointerup') { if (tocNow.current.on) tocTap(e.clientX, e.clientY); else fingerTap(e.clientX, e.clientY); }
     else if (tocNow.current.on && !tocGoing.current) { window.clearTimeout(tocPressTimer.current); tocShow(null, 'press'); }
     if (g?.kind === 'pan' && e.type === 'pointerup' && fling()) return;
@@ -1441,6 +1459,11 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
               <g className="bk-ink" />
               <g className="bk-read" />
             </svg>
+            {nextOn && phase === 'ready' && geo.current ? (
+              <div className="bk-next" ref={nextEl} style={{ left: `${BOOK_W / 2}px`, top: `${geo.current.height + NEXT_GAP}px` }}>
+                <span className="k">下一课</span><span className="t">{next!.title}</span>{icon('<path d="M9 5l7 7-7 7"></path>')}
+              </div>
+            ) : null}
           </div>
         </div>
         {/* 课本铺满屏宽,没有工具那一栏:「擦掉」贴着屏幕边、在页面那张老师签的正下方,画了才出现 */}

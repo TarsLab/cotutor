@@ -11,6 +11,8 @@
  *  七、顶栏「目录」:翻回目录,窗停在《坐井观天》那一行(中间);报 {k:'open', title:'目录'};目录上点字不弹田字格。
  *  八、鼠标移到《寒号鸟》那一行:浅浅铺上它的范围;拖着滚不算点。
  *  九、按下窗里的一项:按着的那一行深一点;松手翻到那一课、报 {k:'open'},不叫老师(下一轮「孩子做的」带上)。
+ *  十、顶栏课名两边的一对箭头:点「›」翻到下一课、「‹」翻回来,报 {k:'open'},不叫老师。
+ *  十一、滚到这一课最后一页下面:一行「下一课 …」,点了翻过去。
  * iPad 横屏各截一张。
  * 用法:node scripts/probe-book-page.mjs --pdf <课本 PDF> [--out <截图目录>]
  */
@@ -282,6 +284,42 @@ try {
   ok('点了一课不叫老师:没有新的一轮', (await day()).messages.length === n0, JSON.stringify((await indexNow()).slice(-2).map((m) => ({ t: m.text, enter: m.enter }))));
   await sleep(1500);
   console.log('  ', await shot('9-点过去.png'));
+
+  // 十、顶栏的上一课、下一课:课名两边一对箭头;点了翻过去、报 open,不叫老师
+  const navState = () => evaluate(`({ on: document.querySelector('#st-nav').classList.contains('on'), prev: !document.querySelector('#st-prev').hidden, next: !document.querySelector('#st-next').hidden, ttl: document.querySelector('#st-ttl').textContent })`);
+  const nav0 = await navState();
+  ok('一课里:课名两边一对箭头', nav0.on && nav0.prev && nav0.next, JSON.stringify(nav0));
+  const n10 = (await day()).messages.length;
+  const nNext = frames.length;
+  const nb = await center('#st-next');
+  await tapAt(nb.x, nb.y);
+  const went = await until(`document.querySelector('#st-ttl').textContent !== ${JSON.stringify(nav0.ttl)}`, 10000);
+  const nav1 = await navState();
+  const fNext = frames.slice(nNext).find((f) => f.t === 'board' && f.body?.k === 'open');
+  await sleep(1500);
+  const after10 = (await day()).messages;
+  ok(`点「›」:从《${nav0.ttl}》翻到下一课《${nav1.ttl}》,报 open,不叫老师`, Boolean(went) && fNext?.body?.title === nav1.ttl && after10.length === n10, JSON.stringify({ nav0, nav1, f: fNext?.body, n10, n: after10.length }));
+  console.log('  ', await shot('10-下一课.png'));
+  const pb = await center('#st-prev');
+  await tapAt(pb.x, pb.y);
+  const back10 = await until(`document.querySelector('#st-ttl').textContent === ${JSON.stringify(nav0.ttl)}`, 10000);
+  ok(`点「‹」:翻回《${nav0.ttl}》`, Boolean(back10), JSON.stringify(await navState()));
+  // 十一、滚到这一课最后一页下面:一行「下一课」,点了翻过去
+  await until(`(() => { const d = ${STAGE}; return d && d.querySelector('.bk-board')?.dataset.phase === 'ready'; })()`, 15000);
+  let row = null;
+  for (let i = 0; i < 40 && !row; i++) {
+    await send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: 700, y: 500, deltaX: 0, deltaY: 600 });
+    await sleep(120);
+    row = await stageEval(`(d, fr) => { const n = d.querySelector('.bk-next'); if (!n) return null; const r = n.getBoundingClientRect(); return r.bottom > 0 && r.bottom < fr.height - 10 ? { x: fr.left + r.left + r.width / 2, y: fr.top + r.top + r.height / 2, text: n.textContent } : null; }`);
+  }
+  console.log('  ', await shot('11-最后一页下面.png'));
+  ok('滚到最后一页下面:一行「下一课」(写着下一课的名字)', Boolean(row) && row.text.includes(nav1.ttl), JSON.stringify(row));
+  if (row) {
+    const nRow = frames.length;
+    await tapAt(row.x, row.y);
+    const rowWent = await until(`document.querySelector('#st-ttl').textContent === ${JSON.stringify(nav1.ttl)}`, 10000);
+    ok('点那一行:翻到下一课,报 open', Boolean(rowWent) && frames.slice(nRow).some((f) => f.t === 'board' && f.body?.k === 'open' && f.body.title === nav1.ttl));
+  }
   ok('页面没有脚本报错', errors.length === 0, errors.slice(0, 3).join(' | '));
   console.log(`\n截图在 ${shots}`);
   ws.close();

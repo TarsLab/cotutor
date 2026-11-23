@@ -243,6 +243,21 @@ const ix = bookIndexOf();
   const lOpen = ((await route('GET', `/api/kid/lesson?tutor=${T}&date=${date}&thread=${thread}`, ctx)).json as { lesson: Lesson }).lesson;
   const opens = (await readBoard(ws, T, date, thread)).filter((e) => e.k === 'open');
   check('目录上点了一课:翻过去、记进板的日志、记下这本书翻到哪了;不叫老师', opened?.still === false && opened.say === null && lOpen.at === '语文一年级下册.pdf#古诗两首' && lOpen.view === null && opens.map((e) => `${e.text}@${e.base}`).join() === `目录@${tocId},古诗两首@语文一年级下册.pdf#古诗两首` && JSON.parse(readFileSync(join(root, '.cotutor', 'book-last.json'), 'utf8'))['语文一年级下册.pdf']?.title === '古诗两首', JSON.stringify([opened, lOpen.at, opens]));
+  // 挪窗停下:这一册记下窗停在哪,下次进门(孩子端先要的那份也一样)摆回来
+  const gushiBase = '语文一年级下册.pdf#古诗两首';
+  await ctx.runner.boardEvent(T, date, { k: 'view', thread, base: gushiBase, box: [0, 300, 1000, 900] });
+  const spot1 = JSON.parse(readFileSync(join(root, '.cotutor', 'book-last.json'), 'utf8'))['语文一年级下册.pdf'];
+  const back1 = ((await route('GET', `/api/kid/textbook/base?tutor=${T}`, ctx)).json as { lesson: Lesson }).lesson;
+  check('挪窗停下:记下这一课和窗;再进门直接铺这一课,窗摆回那里', spot1?.title === '古诗两首' && JSON.stringify(spot1.view) === '[0,300,1000,900]' && lessonPage(back1)?.title === '古诗两首' && JSON.stringify(back1.view) === '[0,300,1000,900]', JSON.stringify([spot1, back1.view]));
+  // 一课里翻到别的课(上一课、下一课):翻过去、不叫老师;换了一课,记的窗清掉
+  const prev = await ctx.runner.boardEvent(T, date, { k: 'open', thread, base: gushiBase, title: '小鱼吹泡泡' });
+  const lPrev = ((await route('GET', `/api/kid/lesson?tutor=${T}&date=${date}&thread=${thread}`, ctx)).json as { lesson: Lesson }).lesson;
+  const spot2 = JSON.parse(readFileSync(join(root, '.cotutor', 'book-last.json'), 'utf8'))['语文一年级下册.pdf'];
+  const same = await ctx.runner.boardEvent(T, date, { k: 'open', thread, base: '语文一年级下册.pdf#小鱼吹泡泡', title: '小鱼吹泡泡' });
+  check('一课里翻到上一课:翻过去、不叫老师,记下的换成这一课(窗清掉);翻到自己这一课不理', prev?.still === false && lPrev.at === '语文一年级下册.pdf#小鱼吹泡泡' && spot2?.title === '小鱼吹泡泡' && spot2.view === undefined && same === null, JSON.stringify([prev, lPrev.at, spot2, same]));
+  await ctx.runner.boardEvent(T, date, { k: 'open', thread, base: '语文一年级下册.pdf#小鱼吹泡泡', title: '古诗两首' });
+  const today1 = ((await route('GET', '/api/kid/home', ctx)).json as { today: { thread: string; lesson?: string }[] }).today.find((x) => x.thread === thread);
+  check('首页「今天」的课名:孩子自己翻到的那一课也算', today1?.lesson === '古诗两首', JSON.stringify(today1));
   now = new Date(2026, 10, 14, 10, 9);
   const fifth = await kidSend(ctx, T, { text: '这一课讲什么', thread });
   await wait();

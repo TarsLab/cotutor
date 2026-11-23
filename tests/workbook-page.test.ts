@@ -213,6 +213,13 @@ try {
   await wait();
   check('下一轮:孩子做的里说圈住了几个', (await prompt(String(t3.json.job))).includes('第1题「积木区」圈了 1 圈,各围住 1 个积木'), (await prompt(String(t3.json.job))).slice((await prompt(String(t3.json.job))).indexOf('孩子做的'), (await prompt(String(t3.json.job))).indexOf('孩子做的') + 300));
   check('下一轮:孩子做的里说填了一处', (await prompt(String(t3.json.job))).includes('在页上的空(方框、括号)里填了 1 处'), (await prompt(String(t3.json.job))).slice((await prompt(String(t3.json.job))).indexOf('孩子做的'), (await prompt(String(t3.json.job))).indexOf('孩子做的') + 120));
+
+  // 记住翻到哪:挪窗停下记在「练习册#<名>」上;下次进门铺这一册,窗摆回那里
+  await ctx.runner.boardEvent(M, DATE, { k: 'view', thread, base: '练习册#表内乘法', box: [0, 1400, 1000, 2100] });
+  const door = await route('POST', `/api/kid/enter?tutor=${M}`, ctx, { via: { home: kid.home, button: 0 } });
+  const th2 = String((door.json as { thread?: string }).thread ?? '');
+  const lDoor = ((await route('GET', `/api/kid/lesson?tutor=${M}&date=${DATE}&thread=${th2}`, ctx)).json as { lesson: Lesson }).lesson;
+  check('再进门:铺这一册,窗摆回上次停的地方', door.status === 200 && lDoor.at === '练习册#表内乘法' && JSON.stringify(lDoor.view) === '[0,1400,1000,2100]', JSON.stringify([door.status, lDoor.at, lDoor.view]));
 } finally {
   await teacher.close();
 }

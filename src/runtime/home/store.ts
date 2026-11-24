@@ -125,7 +125,7 @@ export async function bookReady(ws: Workspace, tutor: string, now: Date): Promis
   return pickBook(await listBooks(ws.paths.textbooks, subject || null), now) !== null;
 }
 
-/** 课本那张卡的封面:这学期那一册,画好的封面(没有 image = 孩子端画占位、进了课本叫舞台补画);没有课本 = null */
+/** 课本那张卡的封面:这学期那一册,画好的封面(没有 image = 孩子端先画占位、空闲时画第 1 页交上来);没有课本 = null */
 async function bookCover(ws: Workspace, tutor: string, now: Date): Promise<KidCover | null> {
   const subject = canonicalSubject(ws.config.tutors[tutor]?.subject);
   const book = pickBook(await listBooks(ws.paths.textbooks, subject || null), now);

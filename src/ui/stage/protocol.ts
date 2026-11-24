@@ -26,8 +26,6 @@ export type ToStage =
     read?: { k: number; mode: string } }
   /** peek = 板此刻的样子导一张小图(话题的预览图,首页「今天」用;回 peek);unpick = 页面把点字的卡收了(舞台不再跟着那个字、不再标着它) */
   | { source: typeof STAGE_SOURCE; type: 'control'; action: 'toggle' | 'next' | 'prev' | 'play' | 'pause' | 'submit' | 'peek' | 'unpick' }
-  /** 画这一册课本 PDF 的第 1 页(首页课本那张卡的封面;回 cover):孩子端进了课本、首页说这一册还没有封面时发一次 */
-  | { source: typeof STAGE_SOURCE; type: 'cover'; book: string }
   /** 家长看录像时的小课堂(lesson 的 lecture.follow):录像这一刻停在课里的哪儿、在不在放、倍速、到这一刻画过的几处;页面每 100 毫秒发一次 */
   | { source: typeof STAGE_SOURCE; type: 'follow'; ms: number; playing: boolean; rate: number; marks: unknown[] };
 
@@ -63,8 +61,6 @@ export type FromStage =
   | { source: typeof STAGE_SOURCE; type: 'wipe' }
   /** control peek 的回话:板此刻的样子(长边 480 的 jpeg data URL;课本是窗里那块;导不出、小课堂这种不是板的 null) */
   | { source: typeof STAGE_SOURCE; type: 'peek'; image: string | null }
-  /** cover 的回话:第 1 页(长边 480 的 jpeg data URL;画不出 null) */
-  | { source: typeof STAGE_SOURCE; type: 'cover'; book: string; image: string | null }
   | { source: typeof STAGE_SOURCE; type: 'close' }
   /** 小课堂:放到结尾一次 = finished(停在最后一帧);带看了多久、停过几次 */
   | { source: typeof STAGE_SOURCE; type: 'lecture'; event: 'finished'; watchedMs: number; finished: boolean; pauses: number }

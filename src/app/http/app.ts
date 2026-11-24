@@ -881,7 +881,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       if (!file) return { status: 404, json: { error: 'not_found' } };
       return { status: 200, file, contentType: 'application/pdf' };
     }
-    // 课本的封面(首页课本那张卡;src/memory/textbook-cover.ts):GET ?b= 取画好的;PUT {book, image} 孩子端进了课本、舞台画了第 1 页交上来
+    // 课本的封面(首页课本那张卡;src/memory/textbook-cover.ts):GET ?b= 取画好的;PUT {book, image} 孩子端首页画了第 1 页交上来
     if (p === '/api/kid/textbook/cover' && (method === 'GET' || method === 'PUT')) {
       const covers = join(ws.root, '.cotutor', 'covers');
       if (method === 'PUT') {

@@ -34,6 +34,7 @@
  */
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type * as Pdfjs from 'pdfjs-dist';
+import { openPdf } from './pdf.ts';
 import { BOOK_ASPECT, BOOK_TOC, BOOK_W, KID_INK, KID_INK_WIDTH, bookCellsOf, bookFrame, bookPick, bookReadParts, bookRows, bookSheets, lessonBlocks, photoBookPage, turnedSkeletons, type BookSheet, type ChalkSkeleton, type ReadPart, type SceneCell, type PhotoLine, type PhotoWord } from '../../chalk/index.ts';
 import { lessonPage, lessonStrip, markFresh, photoSheetBox } from '../../board/lesson.ts';
 import { stripLayout, type StripSlot } from '../../board/strip.ts';
@@ -100,10 +101,8 @@ export interface BookStageProps {
   onError(message: string): void;
 }
 
-type Lib = typeof Pdfjs;
 type Box = [number, number, number, number];
 const SVG_NS = 'http://www.w3.org/2000/svg';
-const PDF_BASE = '/stage/pdf/';
 /** 老师的线:朱橙(红圈在孩子眼里是「错了」;数学的学科色和孩子的蓝笔同色,也不用) */
 const TEACHER_INK = '#e8590c';
 /** 收掉的记号淡出多久(同 stage.css 的 .bk-gone) */
@@ -143,45 +142,16 @@ const SHOT_SIDE = 1024;
 /** 窗停下来多久交窗里的图(清楚的那一块多半已经重画好了) */
 const SHOT_MS = 1200;
 
-let libP: Promise<Lib> | null = null;
-/** pdf.js:不打进 stage.js,铺课本时才取(build:stage 拷到 dist/stage/pdf/) */
-function loadLib(): Promise<Lib> {
-  libP ??= (async () => {
-    const url = `${PDF_BASE}pdf.min.mjs`;
-    const lib = (await import(/* @vite-ignore */ url)) as Lib;
-    lib.GlobalWorkerOptions.workerSrc = `${PDF_BASE}pdf.worker.min.mjs`;
-    return lib;
-  })();
-  libP.catch(() => { libP = null; });
-  return libP;
-}
 const docs = new Map<string, Promise<Pdfjs.PDFDocumentProxy>>();
 /** 一本 PDF 只开一次(老师换一课、换一张卡都还是它);分段取,只拉要画的那几页 */
 function openDoc(url: string): Promise<Pdfjs.PDFDocumentProxy> {
   let d = docs.get(url);
   if (!d) {
-    d = loadLib().then((lib) => lib.getDocument({ url, cMapUrl: `${PDF_BASE}cmaps/`, cMapPacked: true, standardFontDataUrl: `${PDF_BASE}standard_fonts/`, rangeChunkSize: 1 << 16, disableAutoFetch: true, disableStream: true }).promise);
+    d = openPdf(url);
     docs.set(url, d);
     d.catch(() => docs.delete(url));
   }
   return d;
-}
-
-/** 首页课本那张卡的封面:这一册 PDF 的第 1 页,长边 side 的 jpeg(白底);画不出 = null。孩子端进了课本、首页那一册还没有封面时叫(control cover) */
-export async function bookCover(book: string, side: number): Promise<string | null> {
-  try {
-    const doc = await openDoc(`/api/kid/textbook/pdf?b=${encodeURIComponent(book)}`);
-    const page = await doc.getPage(1);
-    const vp0 = page.getViewport({ scale: 1 });
-    const vp = page.getViewport({ scale: side / Math.max(vp0.width, vp0.height) });
-    const cv = document.createElement('canvas');
-    cv.width = Math.max(1, Math.round(vp.width));
-    cv.height = Math.max(1, Math.round(vp.height));
-    await page.render({ canvas: cv, viewport: vp, background: '#ffffff', annotationMode: 0 }).promise;
-    return cv.toDataURL('image/jpeg', 0.82);
-  } catch {
-    return null;
-  }
 }
 
 const el = <K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, string>): SVGElementTagNameMap[K] => {

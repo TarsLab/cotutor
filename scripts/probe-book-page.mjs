@@ -2,6 +2,7 @@
 /**
  * 课本做底的孩子端整条线(语文的「课本」,activity 头上 base: textbook)手动验收:不进 pnpm test,要本机 Chrome 和一本课本 PDF;假百炼 + 假老师,不花钱。
  * 本进程起服务(临时 workspace,vault 的 教材/ 里放一条指向给的 PDF 的链接;老师是 tests/_fake-teacher.ts,嘴是 tests/_fake-realtime.ts),无头 Chrome 开孩子端:
+ *  〇、首页不进课本,课本那张就换上封面(首页空闲时画了第 1 页交上来)。
  *  一、首页点语文的「课本」方砖:不到拍照屏,直接上板,板上是课本的目录(舞台 book.tsx 铺好两页);板的顶栏没有拍照、相册;只进门(记一条进门),老师不开口。
  *  二、孩子说「我要预习坐井观天」:老师的课本卡落下,板换成这一课(两页),窗对着第 6–7 段,「井沿」圈上了。
  *  三、手指点板上的一个字:田字格浮出来;经实时那条连接报 {k:'pick', base:'<册子>#坐井观天'};服务端记进板的日志。
@@ -133,6 +134,15 @@ try {
   if (flag) { await tapAt(flag.x, flag.y); await sleep(600); }
   const tile = await until(`(() => { const b = document.querySelector('.pc[data-tutor="${T}"] .bt-tile[data-tile="textbook"]'); if (!b) return null; const r = b.getBoundingClientRect(); return r.width ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null; })()`);
   ok('首页有语文的「课本」方砖', Boolean(tile));
+  // 首页课本那张卡的封面:一开始没有,首页空闲时画第 1 页交上来、直接换上(长边 480 的 jpeg),不用先进课本
+  let cover = null;
+  for (let t = 0; t < 20000 && !cover; t += 300) { const h = await (await fetch(`${base}/api/kid/home`)).json(); cover = h.cards.find((c) => c.kind === 'tutor' && c.props.tutor === T)?.props.tiles?.find((x) => x.id === 'textbook')?.cover?.image ?? null; if (!cover) await sleep(300); }
+  const coverImg = cover ? await fetch(`${base}${cover}`) : null;
+  const coverBuf = coverImg?.ok ? Buffer.from(await coverImg.arrayBuffer()) : null;
+  const coverShown = await until(`(() => { const i = document.querySelector('.pc[data-tutor="${T}"] .bt-tile[data-tile="textbook"] .cv-book img'); return i && i.complete && i.naturalWidth > 0 ? i.naturalWidth : null; })()`, 5000);
+  ok('没进课本:首页画了第 1 页交上来,课本那张换上封面(jpeg)', Boolean(coverBuf && coverBuf[0] === 0xff && coverBuf[1] === 0xd8 && coverBuf.length > 5000 && coverShown), JSON.stringify({ cover, size: coverBuf?.length, coverShown }));
+  if (coverBuf) writeFileSync(join(shots, '0-封面.jpg'), coverBuf);
+  console.log('  ', await shot('0-首页.png'));
   await tapAt(tile.x, tile.y);
   const opened = await until(`(() => { const d = ${STAGE}; return d && d.querySelector('.bk-board')?.dataset.phase === 'ready' && d.querySelectorAll('.bk-page').length >= 1; })()`, 20000);
   const top = await evaluate(`({ bp: document.querySelector('#stage').classList.contains('bp'), bk: document.querySelector('#stage').classList.contains('bk'), cam: getComputedStyle(document.querySelector('#st-bp')).display, start: Boolean(document.querySelector('#board .bp-start')) })`);
@@ -140,13 +150,6 @@ try {
   ok('板的顶栏没有拍照、相册', top.bk && top.cam === 'none', JSON.stringify(top));
   await sleep(1500);
   console.log('  ', await shot('1-目录.png'));
-  // 首页课本那张卡的封面:进来时还没有,舞台画了第 1 页交上来,首页那张就带上它(长边 480 的 jpeg)
-  let cover = null;
-  for (let t = 0; t < 15000 && !cover; t += 300) { const h = await (await fetch(`${base}/api/kid/home`)).json(); cover = h.cards.find((c) => c.kind === 'tutor' && c.props.tutor === T)?.props.tiles?.find((x) => x.id === 'textbook')?.cover?.image ?? null; if (!cover) await sleep(300); }
-  const coverImg = cover ? await fetch(`${base}${cover}`) : null;
-  const coverBuf = coverImg?.ok ? Buffer.from(await coverImg.arrayBuffer()) : null;
-  ok('进了课本:舞台画了第 1 页交上来,首页课本那张带封面(jpeg)', Boolean(coverBuf && coverBuf[0] === 0xff && coverBuf[1] === 0xd8 && coverBuf.length > 5000), JSON.stringify({ cover, size: coverBuf?.length }));
-  if (coverBuf) writeFileSync(join(shots, '0-封面.jpg'), coverBuf);
 
   // 二、孩子说要预习坐井观天(另起一条实时连接发进同一个话题;页面轮询拿到老师的卡)
   const day = async () => (await (await fetch(`${base}/api/kid/conversations/${T}/today`)).json());

@@ -226,7 +226,7 @@ activity 看图说话 我要看图说话
   const themeCss = await route('GET', '/kid/theme.css', ctx);
   check('孩子端页面带方砖的图,theme.css 带竖版卡与封面的样式', ((await route('GET', '/', ctx)).html ?? '').includes('TILE_ART') && JSON.stringify(themeCss).includes('.bt-cover') && JSON.stringify(themeCss).includes('.cv-book'), JSON.stringify(themeCss).slice(0, 200));
 
-  // ---- 册的方砖带封面:课本先是占位(学科 + 几年级几册),舞台画了第 1 页交上来以后换成它;作业本还没拍过只有标签 ----
+  // ---- 册的方砖带封面:课本先是占位(学科 + 几年级几册),首页画了第 1 页交上来以后换成它;作业本还没拍过只有标签 ----
   type Cover = { kind: string; book?: string; title?: string; sub?: string; image?: string; subject?: string };
   const coverOf = (h: KidHome, tutor: string, id: string): Cover | undefined => (tilesOf(h, tutor).find((x) => x.id === id) as { cover?: Cover } | undefined)?.cover;
   const cv0 = coverOf(await kidHome(), 'chinese-tutor', 'textbook');

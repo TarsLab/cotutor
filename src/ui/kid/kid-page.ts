@@ -794,7 +794,7 @@ ${BOARD_MARK_JS}
 
   // ---- 状态 ----
   /** 铺页的话题:on = 这个话题的页面是板;base = 现在的底(照片路径,null 白板,undefined 还没定);label = 方砖上的字(不拍照直接开始时发它);workbook = 首页按钮挂的那一册练习册 */
-  const BP = { on: false, base: null, label: '', books: [], toc: null, workbook: null, start: null, nb: null, hw: null, past: {}, day: null, cover: null };
+  const BP = { on: false, base: null, label: '', books: [], toc: null, workbook: null, start: null, nb: null, hw: null, past: {}, day: null };
   const S = { home: null, tutor: null, day: null, sections: [], played: new Set(), state: { section: -1, line: -1, status: 'idle' }, pending: false, waitSince: null, offline: false, bar: 'idle', pollTimer: null, stage: null, partial: null, thread: null, threadAt: null, hist: null, readonly: false, newThread: false, device: 'phone', via: null, door: null, cont: null, ask: null, reel: null, pendSaid: null, homeDraw: true, autoOpened: new Set() };
   // 实时的老师这一次(连、发、收、画在下面「实时的老师」那一块):on = 这位老师这一次走实时(左栏的样子);ready = 嘴连上了;
   // model = liveStep 的状态(只在 liveDispatch 里写);cap = 字幕(上一句、在说的、被打断的那句);heard = 每一轮(job)念到第几句
@@ -836,9 +836,7 @@ ${BOARD_MARK_JS}
     // 孩子先说:进门(enter)只铺页、不叫老师,孩子开口才是第一轮;activity 头上写了 start: tutor 的老师先说,照旧把按钮上的字发出去
     const first = b.start === 'tutor' ? { send: b.label } : { enter: true };
     // 铺课本的 activity:不拍照,进门铺课本(范围那一课、上次翻到的那一课或目录);铺练习册的:同样不拍照,先铺按钮挂的那一册
-    // 首页这一册课本还没有封面:进去以后叫舞台画第 1 页交上来(BP.cover)
-    const coverBook = b.cover && b.cover.kind === 'book' && !b.cover.image ? { coverBook: b.cover.book } : {};
-    if (b.kind === 'start' && (b.base === 'textbook' || b.base === 'workbook')) openTutor(t, { kind: 'new', via, base: b.base, label: b.label, ...first, ...(b.workbook ? { workbook: b.workbook } : {}), ...coverBook, ...look });
+    if (b.kind === 'start' && (b.base === 'textbook' || b.base === 'workbook')) openTutor(t, { kind: 'new', via, base: b.base, label: b.label, ...first, ...(b.workbook ? { workbook: b.workbook } : {}), ...look });
     // 铺作业照片的 activity(英语的预习复习、看图说话):先到拍照屏,带着照片开话题(拍照交上来就是开口);用白纸也是进门。
     // 作业本(检查作业,base: homework):今天拍过的直接进门铺今天这一章,没拍过同照片先到拍照屏(hwStart)
     else if (b.kind === 'start' && (b.base === 'photo' || b.base === 'homework')) openTutor(t, { kind: 'new', via, base: b.base, label: b.label, ...(b.start === 'tutor' ? { start: 'tutor' } : {}), ...look });
@@ -1110,8 +1108,37 @@ ${HOME_TILES_JS}
     fetch(url + 'api/health', { mode: 'no-cors', cache: 'no-store' }).then(() => { el.hidden = false; }, () => { el.hidden = true; });
   };
   const loadHome = async () => {
-    try { S.home = await api('GET', '/api/kid/home'); setOffline(false); document.body.classList.toggle('hand-left', S.home.hand === 'left'); setGated(!REEL && S.home.ready === false); renderHome(); phIdle(); }
+    try { S.home = await api('GET', '/api/kid/home'); setOffline(false); document.body.classList.toggle('hand-left', S.home.hand === 'left'); setGated(!REEL && S.home.ready === false); renderHome(); phIdle(); coverSoon(); }
     catch { setOffline(true); }
+  };
+  /**
+   * 课本封面:首页上有一册还没有封面(cover 没有 image,底下是学科色 + 书名的占位),空闲时在本页画第 1 页交上来(PUT /api/kid/textbook/cover),
+   * 画好直接换上。画的那一小块是舞台包的 cover.js(src/ui/stage/pdf.ts:pdf.js 分段取,只拉第 1 页),不开舞台。
+   * 一册一次、一次画一册;画不出、交不上就一直是占位,这次打开不再试。家长端首页里的预览是同一个页面,家长放好课本、开家长端首页时就画好了;录像不画
+   */
+  const COVER = { tried: new Set(), busy: false, timer: 0 };
+  const coverSoon = () => {
+    if (REEL || COVER.busy || COVER.timer) return;
+    const wait = (fn) => (window.requestIdleCallback ? window.requestIdleCallback(fn, { timeout: 3000 }) : setTimeout(fn, 1500));
+    COVER.timer = setTimeout(() => wait(() => { COVER.timer = 0; coverDraw(); }), 800);
+  };
+  /** 首页上所有课本的封面(方砖和 activity 按钮上的) */
+  const bookCovers = () => (S.home && Array.isArray(S.home.cards) ? S.home.cards : []).filter((c) => c.kind === 'tutor').flatMap((c) => [...(Array.isArray(c.props.tiles) ? c.props.tiles : []), ...(Array.isArray(c.props.buttons) ? c.props.buttons : [])]).map((x) => x.cover).filter((c) => c && c.kind === 'book' && typeof c.book === 'string');
+  const coverDraw = async () => {
+    const c = bookCovers().find((x) => !x.image && !COVER.tried.has(x.book));
+    if (!c || document.hidden || S.tutor) return;
+    COVER.tried.add(c.book); COVER.busy = true;
+    try {
+      const mod = await import('/stage/cover.js?v=' + STAGE_V);
+      const image = await mod.bookCover(c.book);
+      if (image) {
+        await api('PUT', '/api/kid/textbook/cover', { book: c.book, image });
+        for (const x of bookCovers()) if (x.book === c.book && !x.image) x.image = image;
+        if (!S.tutor) renderHome();
+      }
+    } catch {}
+    COVER.busy = false;
+    coverSoon();
   };
   /** 嘴连不上时:要家长动手的(欠费、key 失效,服务端的 ready 变 false)回首页说「叫爸爸妈妈」,别的(网络抖)留在原地接着重连 */
   const gateCheck = async () => {
@@ -1145,7 +1172,7 @@ ${HOME_TILES_JS}
     S.tutor = t; S.sections = []; S.played = new Set(); dispatch({ type: 'reset' }); S.pending = false; S.stage = null; S.partial = null; $('#stage').classList.remove('on', 'cv');
     S.thread = intent.kind === 'thread' ? intent.thread : null; S.threadAt = null; S.hist = null; S.readonly = false; S.newThread = intent.kind === 'new';
     S.via = intent.via || null; S.lecture = intent.lecture ? { ...intent.lecture, watch: null, sent: false, marks: [], done: [], log: [] } : null;
-    BP.on = Boolean(intent.base); BP.base = intent.base || null; BP.label = intent.label || ''; BP.toc = null; BP.workbook = intent.workbook || null; BP.cover = intent.coverBook || null; BP.start = intent.start || null; BP.hw = null; BP.past = {}; BP.day = null; S.door = null; lsReset();
+    BP.on = Boolean(intent.base); BP.base = intent.base || null; BP.label = intent.label || ''; BP.toc = null; BP.workbook = intent.workbook || null; BP.start = intent.start || null; BP.hw = null; BP.past = {}; BP.day = null; S.door = null; lsReset();
     if (BP.base === 'photo' || BP.base === 'homework') bpBooks();
     const hwReady = BP.base === 'homework' ? hwLoad() : null;
     // 先定走不走实时,再热麦克风:实时时麦克风的自检要开在实时那个 AudioContext 里(liveOpen)
@@ -1519,9 +1546,8 @@ ${HOME_TILES_JS}
   const lsInk = () => { const p = LS.l && lessonPage(LS.l); return p ? p.kid.ink.length + Object.values(p.kid.stripInk || {}).reduce((n, x) => n + x.length, 0) + Object.values(p.kid.cells || {}).reduce((n, x) => n + x.length, 0) : 0; };
   /** 舞台说话(一节课):落笔、擦掉、点字、揭开、挪窗、窗里的图、给老师看 */
   const lsStageMsg = (m) => {
-    if (m.type === 'ready') { LS.key = ''; lsShow(); if (REEL && S.reel && S.reel.lcMsg) postStage(S.reel.lcMsg); if (BP.cover && !REEL && !PREVIEW && !S.readonly) postStage({ type: 'cover', book: BP.cover }); return; }
+    if (m.type === 'ready') { LS.key = ''; lsShow(); if (REEL && S.reel && S.reel.lcMsg) postStage(S.reel.lcMsg); return; }
     // 课本封面画好了:交给服务端(首页课本那张卡换上它);只交一次
-    if (m.type === 'cover') { if (BP.cover && m.book === BP.cover && m.image) { BP.cover = null; api('PUT', '/api/kid/textbook/cover', { book: m.book, image: m.image }).catch(() => {}); } return; }
     // 小课堂那一页:画了 / 擦了(整张单子)、看的过程、放完了、老师放的那一段放完了
     if (m.type === 'marks') { if (S.lecture && !S.readonly && !REEL && Array.isArray(m.marks)) { S.lecture.marks = m.marks; previewSoon(PV_HAND_MS); } return; }
     if (m.type === 'watch') { if (S.lecture && !S.readonly && !REEL && S.lecture.log.length < 500) S.lecture.log.push({ at: m.at, pos: m.pos, play: m.play }); return; }

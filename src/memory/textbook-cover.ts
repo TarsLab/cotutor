@@ -1,7 +1,7 @@
 /**
  * 课本封面(首页课本那张卡,设计稿 https://claude.ai/artifact/KJFiRZD6E45YEKGQBbw98Q):服务端只读文字层,画不出图;
- * 孩子进了课本、舞台开着这本 PDF 时用 pdf.js 画第 1 页(长边 480 的 jpeg)交上来,存 `.cotutor/covers/<指纹>.jpg`。
- * 还没有就是学科色 + 书名的占位(kid-page 画,字从 coverText 来)。
+ * 孩子端首页(家长端首页里的预览也是它)见这一册还没有封面,空闲时用 pdf.js 画第 1 页(长边 480 的 jpeg,src/ui/stage/pdf.ts)交上来,存 `.cotutor/covers/<指纹>.jpg`。
+ * 画好之前是学科色 + 书名的占位(kid-page 画,字从 coverText 来)。
  * 指纹 = 文件名 + 大小 + 改动时间:首页 5 秒刷一轮,不能每次读整本 PDF 算内容的指纹;PDF 换了(或碰过)就再画一张。能重新生成,不进备份、不拷进 sandbox。
  */
 import { createHash } from 'node:crypto';
@@ -10,8 +10,6 @@ import { join } from 'node:path';
 import { jpegFromDataUrl } from '../shared/jpeg.ts';
 import { bookFile } from './textbook-pdf.ts';
 
-/** 舞台画封面的长边(首页的卡一两百像素宽,按 2 倍屏) */
-export const COVER_SIDE = 480;
 /** 交上来的封面 base64 最多多长(长边 480 的 jpeg 几十 KB) */
 const COVER_B64_MAX = 400_000;
 
@@ -30,7 +28,7 @@ export async function readCover(dir: string, cacheDir: string, name: string): Pr
   return (await stat(file).catch(() => null))?.isFile() ? { file, key } : null;
 }
 
-/** 存舞台画的封面(jpeg 的 data URL);册子不在、不是 jpeg、太大 → false */
+/** 存孩子端画的封面(jpeg 的 data URL);册子不在、不是 jpeg、太大 → false */
 export async function saveCover(dir: string, cacheDir: string, name: string, image: unknown): Promise<boolean> {
   const buf = jpegFromDataUrl(image, COVER_B64_MAX);
   const key = buf ? await coverKey(dir, name) : null;

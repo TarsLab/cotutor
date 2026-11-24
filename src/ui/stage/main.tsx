@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { LectureStage, type LectureStageHandle, type LectureWatch, type StageMark, type WatchEntry } from './lecture.tsx';
-import { BookStage, bookCover, type BookStageHandle } from './book.tsx';
+import { BookStage, type BookStageHandle } from './book.tsx';
 import type { Lesson } from '../../schema/index.ts';
 import { STAGE_SOURCE, type FromStage, type ToStage } from './protocol.ts';
 import './stage.css';
@@ -17,8 +17,6 @@ type Outgoing = FromStage extends infer U ? (U extends FromStage ? Omit<U, 'sour
 
 /** 话题预览图的长边(首页「今天」那一格两三百像素宽,按 2 倍屏) */
 const PEEK_SIDE = 480;
-/** 课本封面的长边(同 src/memory/textbook-cover.ts 的 COVER_SIDE:首页的卡一两百像素宽,按 2 倍屏) */
-const COVER_SIDE = 480;
 /** 一张图(data URL)缩成长边 side 的 jpeg;本来就小的照原尺寸转 */
 async function shrinkJpeg(url: string, side: number): Promise<string | null> {
   const img = new Image();
@@ -56,7 +54,6 @@ function App(): JSX.Element {
       const m = e.data;
       if (!m || m.source !== STAGE_SOURCE) return;
       if (m.type === 'lesson') setLesson(m);
-      else if (m.type === 'cover') { const book = m.book; void bookCover(book, COVER_SIDE).then((image) => post({ type: 'cover', book, image })); }
       else if (m.type === 'follow') { if (lecture.current) lecture.current.follow(m.ms, m.playing, m.rate, m.marks as StageMark[]); else pendingFollow.current = m; }
       else if (m.type === 'control') {
         if (m.action === 'submit') book.current?.submit();

@@ -262,7 +262,7 @@ export type KidHomeButton =
 
 /**
  * 册的卡上的封面(首页的卡是竖版的,册铺封面;设计稿 https://claude.ai/artifact/KJFiRZD6E45YEKGQBbw98Q):
- * book = 课本,PDF 第 1 页(舞台画了交上来的,src/memory/textbook-cover.ts;还没有 image 就画学科色 + title、sub 的占位,孩子端进了课本叫舞台补画 book 那一册);
+ * book = 课本,PDF 第 1 页(孩子端首页画了交上来的,src/memory/textbook-cover.ts;还没有 image 就先画学科色 + title、sub 的占位,空闲时画 book 那一册);
  * homework = 作业本,生成的(学科色 +「作业本」+ 最近一张照片和那天,一张都没有就只有字);workbook = 练习册,第一页的图
  */
 export type KidCover =

@@ -1,5 +1,6 @@
 /**
- * 舞台包:src/ui/stage/(React + 课包的画面 src/ui/stage/chalk/ + excalidraw)→ dist/stage/stage.js + chunk-*.js + stage.css + index.html(esbuild)。
+ * 舞台包:src/ui/stage/(React + 课包的画面 src/ui/stage/chalk/ + excalidraw)→ dist/stage/stage.js + chunk-*.js + stage.css + index.html(esbuild);
+ * 另一个入口 cover.js(src/ui/stage/pdf.ts)是孩子端首页画课本封面的那一小块。
  * 字体进包(2026-11-07 起):excalidraw 的字体拷到 dist/stage/fonts/,index.html 把 EXCALIDRAW_ASSET_PATH 指到 /stage/。
  * 这样运行时不要 excalidraw、react、react-dom 这几个包(它们只在打包时用,在 devDependencies):装 cotutor 从 275 个包变 15 个、346 MB 变 123 MB,
  * Windows 上第一次装从 3 分钟变 1 分钟;画板、小课堂、做课包在两种装法下逐项一样(实测过)。
@@ -27,10 +28,11 @@ const out = join(root, 'dist', 'stage');
 await mkdir(out, { recursive: true });
 const t0 = Date.now();
 const r = await build({
-  entryPoints: [join(root, 'src', 'ui', 'stage', 'main.tsx')],
+  // cover.js:孩子端首页画课本封面用的那一小块(src/ui/stage/pdf.ts),不带 React、excalidraw
+  entryPoints: { stage: join(root, 'src', 'ui', 'stage', 'main.tsx'), cover: join(root, 'src', 'ui', 'stage', 'pdf.ts') },
   bundle: true,
   outdir: out,
-  entryNames: 'stage',
+  entryNames: '[name]',
   chunkNames: 'chunk-[hash]',
   splitting: true,
   format: 'esm',

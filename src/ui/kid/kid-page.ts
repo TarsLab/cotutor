@@ -844,8 +844,6 @@ ${BOARD_MARK_JS}
     // 小课堂:新话题,页上先铺那堂课;看完才能开口,开口那条带上 via 与看的情况。看完照着聊的 activity 是铺作业照片的(看图说话),顶栏有拍照
     else if (b.kind === 'lecture') openTutor(t, { kind: 'new', via, base: b.base || 'lecture', label: b.label, lecture: { bundle: b.bundle, title: b.title || b.label, ms: b.ms || 0, ...(b.video ? { video: true } : {}) }, ...look });
   };
-  /** 小课堂的课长:「1 分 40 秒」 */
-  const lcLen = (ms) => { const s = Math.floor(ms / 1000); return s >= 60 ? Math.floor(s / 60) + ' 分' + (s % 60 ? ' ' + (s % 60) + ' 秒' : '') : s + ' 秒'; };
   // ---- 常驻入口:听写、拍照听写一直在那位老师的卡上,不经首页发布(口语课是方砖) ----
   /** 听写:一整条,上面一排空格子,几个词几格(最多 6,英文是四线三格),下面「听写 · 几个词」和「去写」 */
   const dictationBtn = (label, sub, n, en, href) => h('a', { class: 'bt bt-extra bt-x-dictation' + (en ? ' en' : ''), href },
@@ -874,9 +872,9 @@ ${BOARD_MARK_JS}
   // 牌上的按钮:小课堂是胶带贴着的截图(占两格);activity 是一张卡,图照它往页上铺什么挑(actArt)。孩子看到的字都在 .btx 里(探针按它读)
   const tutorButton = (t, b) => {
     const on = { click: () => pickButton(t, b) };
-    // 小课堂:竖框里摆课的截图(横的)和播放键,截图下「小课堂」与课长;框下序号和课名
+    // 小课堂:竖框里摆课的截图(横的)和播放键,截图下是课名(按钮上的字),不写课长;框下序号和「小课堂」
     if (b.kind === 'lecture') return h('button', { type: 'button', class: 'bt bt-lecture', 'data-bid': String(b.id), on },
-      h('span', { class: 'lf' }, lecturePic(b), h('span', { class: 'lm' }, h('small', { class: 'tg' }, '小课堂'), b.ms ? h('small', { class: 'ln' }, lcLen(b.ms)) : null)), h('span', { class: 'btx' }, b.label));
+      h('span', { class: 'lf' }, lecturePic(b), h('span', { class: 'lm' }, h('b', { class: 'lt' }, b.label))), h('span', { class: 'btx' }, '小课堂'));
     if (b.cover) return h('button', { type: 'button', class: 'bt bt-' + b.kind + ' bt-act bt-cover', 'data-bid': String(b.id), on }, coverArt(t, b.cover), h('span', { class: 'btx' }, b.label));
     return h('button', { type: 'button', class: 'bt bt-' + b.kind + ' bt-act', 'data-bid': String(b.id), on }, h('span', { class: 'ta', html: actArt(b.base) }), h('span', { class: 'btx' }, b.label));
   };

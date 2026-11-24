@@ -63,7 +63,7 @@ export function lectureTarget(clock: Pick<LectureClock, 'segments' | 'total'>, w
 export function bookPageOf(book: LessonBook, name: string | null): Extract<PageSource, { kind: 'book' }> | null {
   const at = bookLesson(book.index, name);
   if (!at || !at.pages.length) return null;
-  return { id: `${book.file}#${at.title}`, kind: 'book', src: book.file, title: at.title, pages: at.pages.map((p) => p.n), cut: bookCut(book.index.pages), layout: book.index.layout, pick: book.index.layout !== 'math' };
+  return { id: `${book.file}#${at.title}`, kind: 'book', src: book.file, title: at.title, pages: at.pages.map((p) => p.n), cut: bookCut(book.index.pages), layout: book.index.layout, pick: book.index.layout === 'prose' };
 }
 
 /** 白纸页(一节课只有一张,翻回来原来摆的都在) */

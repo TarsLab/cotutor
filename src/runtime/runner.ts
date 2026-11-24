@@ -486,10 +486,10 @@ export class Runner {
       const lesson = await readLesson(ws, tutor, date, thread);
       const page = lessonPage(lesson);
       if (!page || page.id !== base) return null;
-      // 窗里的图:语文课本、目录不要(课文就是字,都在页的文字层里,每轮多一张图只多花钱);数学课本、照片、白纸要(数、图、孩子写的在图上);
+      // 窗里的图:语文课本、目录不要(课文就是字,都在页的文字层里,每轮多一张图只多花钱);数学、科学课本、照片、白纸要(数、图、孩子写的在图上);
       // 语文课本上孩子在田字格里写了字也要(写成什么样只有图上有)
       const wrote = Object.keys(page.kid.cells ?? {}).length > 0;
-      if (shot && page.kind === 'book' && (page.layout !== 'math' || page.title === BOOK_TOC) && !wrote) return null;
+      if (shot && page.kind === 'book' && (page.layout === 'prose' || page.title === BOOK_TOC) && !wrote) return null;
       const src = await this.lessonSource(ws, tutor, page.kind === 'book', lesson);
       const t = pageText(page, src);
       const text = (page.kind === 'white' ? '白纸' : bookView(t.pages, t.sheets, t.blocks, box, page.kind === 'photo' ? '张' : '页')).slice(0, 80);

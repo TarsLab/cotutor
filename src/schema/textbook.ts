@@ -104,13 +104,14 @@ export interface BookLesson {
 }
 
 /** 索引的版本:取字、分行的规则改了就加一,旧缓存重做 */
-export const BOOK_INDEX_VERSION = 5;
+export const BOOK_INDEX_VERSION = 6;
 
 /**
  * 一册怎么分块(src/chalk/kit/book.ts 的 lessonBlocks):prose = 课文(自然段、语文园地的栏目);
- * math = 数学课本(例题、做一做 / 练一练这些栏目和下面的题)。照文件名定:带「数学」的是 math
+ * math = 数学课本(例题、做一做 / 练一练这些栏目和下面的题);science = 科学课本(问题与想法、探索与实践这些栏目,栏目下面分段)。
+ * 照文件名定:带「数学」的是 math,带「科学」的是 science
  */
-export type BookLayout = 'prose' | 'math';
+export type BookLayout = 'prose' | 'math' | 'science';
 
 export interface BookIndex {
   v: number;
@@ -133,6 +134,17 @@ export interface BookIndex {
 
 /** 数学课本的栏目名:和课题一个字号,不算课题(整理和复习的「复」有的字体取出来是乱码) */
 export const MATH_COLUMNS = /^(做一做|练一练|试一试|整理和.习|你知道吗[?？]?|成长小档案|小讲堂|自我评价|后记)$/;
+
+// ——— 科学课本的版式(分块的 src/chalk/kit/book.ts 用) ———
+
+/**
+ * 科学课本的栏目名独占一行,后面可带一个序号(广东版「探索与实践1」;教科版的聚焦、探索、研讨、拓展);回「探索与实践 1」这样的名字,不是 = null
+ */
+const SCIENCE_COLUMN = /^(问题与想法|探索与实践|讨论与发现|思考与练习|聚焦|探索|研讨|拓展)(\d{0,2})$/;
+export function scienceColumn(text: string): string | null {
+  const m = SCIENCE_COLUMN.exec(text.replace(/\s/g, ''));
+  return m ? (m[2] ? `${m[1]} ${m[2]}` : m[1]) : null;
+}
 
 /** 正文的字号:六个字以上的汉字行里字最多的那种 */
 export function bodySize(lines: readonly BookLine[]): number {

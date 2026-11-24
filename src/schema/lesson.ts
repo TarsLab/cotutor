@@ -227,7 +227,7 @@ const BookSourceSchema = z.object({
   title: z.string().min(1),
   pages: z.array(z.number().int().positive()).min(1),
   cut: z.number().finite().min(0),
-  layout: z.enum(['prose', 'math']),
+  layout: z.enum(['prose', 'math', 'science']),
   pick: z.boolean(),
 });
 const PhotoSourceSchema = z.object({ id: z.string().min(1), kind: z.literal('photo'), title: z.string().min(1), photos: z.array(PhotoSchema).min(1), pick: z.boolean(), day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() });

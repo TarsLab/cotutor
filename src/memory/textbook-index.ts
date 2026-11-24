@@ -13,6 +13,9 @@
  *  - 目录没有点线、课名居中:大号的单元序号(一、二……)印在左边、比课名高半行,页码在最右;没序号的是单元之间的综合实践(校园小导游)。
  *  - 单元下面再分:页里的小节标题(比正文大两成以上、「1.」起头:1.乘法的初步认识)、课题标题(比正文大一成、靠左:6的乘法口诀)。
  *    做一做、练一练这些栏目名也是这个字号,不算课题。
+ * 2026-11-24 照广东版科学二年级上册(印厂的 PDF,页框外有裁切线,CropBox 是成品)加的:
+ *  - 拼音是标准 Unicode,一个音节一段,只是 g 印成 ɡ、轻声的 a 印成 ɑ。
+ *  - 目录是「第1单元 空气和水 / 1」「第1课 认识空气 / 2」:页码前一道斜杠,单元也带页码(单元页),课号写成「第1课」。
  */
 import { BOOK_INDEX_VERSION, bodySize, mathHeading, type BookCell, type BookChar, type BookIndex, type PdfCell, type BookLayout, type BookLesson, type BookLine, type BookPage, type PdfItem, type PdfPage } from '../schema/index.ts';
 
@@ -26,7 +29,8 @@ export const PINYIN_TONES: Readonly<Record<string, string>> = {
   V: 'ǚ', C: 'ǜ',
 };
 const TONED = 'āáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜü';
-const RAW_PINYIN = new RegExp(`^[a-zA-Z${TONED}]+$`);
+// 广东版科学的拼音是标准 Unicode,只是 g 印成 ɡ(U+0261)、轻声的 a 印成 ɑ(U+0251)
+const RAW_PINYIN = new RegExp(`^[a-zA-Zɡɑ${TONED}]+$`);
 /** 全是大写的(封面的 YUWEN)不是拼音 */
 const ALL_CAPS = /^[A-Z]{2,}$/;
 /** 一个音节大致的样子(用来自检解码对不对,不求全) */
@@ -116,7 +120,7 @@ export function pageLines(page: PdfPage, bad: string[] = []): BookLine[] {
   // 拼音:字的正上方,中心对得上(差不到字号的 0.6),基线在字的基线上面两个字号以内
   for (const p of pys) {
     const raw = p.s.trim();
-    const py = decodePinyin(raw);
+    const py = decodePinyin(raw.replace(/ɡ/g, 'g').replace(/ɑ/g, 'a'));
     if (!py || !SYLLABLE.test(py)) { bad.push(raw); continue; }
     const cx = p.x + p.w / 2;
     let best: { ch: BookChar; d: number } | null = null;
@@ -143,8 +147,14 @@ export function printedOf(page: PdfPage): number | null {
 }
 
 const UNIT = /^第.{1,3}单元/;
+/** 带页码的单元(「第1单元 空气和水 / 1」):序号、单元名 */
+const UNIT_ROW = /^第(.{1,3}?)单元(.*)$/;
+/** 课名前印的「第1课」:序号、课名 */
+const LESSON_NO = /^第(\d{1,2}|[一二三四五六七八九十]{1,3})课(.+)$/;
 /** 课名和页码之间的点线 */
 const LEADER = /^[.．·…‥・]$/;
+/** 课名和页码之间的一道斜杠(「认识空气 / 2」) */
+const SLASH = /^[/／]$/;
 const DIGIT = /^\d$/;
 /** 大号的单元序号(人教数学的一、二……);一两位数的也算 */
 const BIG_MARK = /^(?:[一二三四五六七八九十]{1,3}|\d{1,2})$/;
@@ -176,7 +186,8 @@ function tocLines(glyphs: readonly Glyph[]): TocLine[] {
 
 /**
  * 一行是不是目录的一项:末尾是 1–3 位的页码,前面是课名(有汉字或字母);课名和页码之间有点线,或者空开一个半字号以上。
- * 序号:开头的 ◎,或开头隔开的一两位数(「11 坐井观天」;「1～6 的表内乘法」的 1 和后面挨着,是课名的一部分)
+ * 中间是一道斜杠(「认识空气 / 2」)也算隔开。
+ * 序号:开头的 ◎,开头隔开的一两位数(「11 坐井观天」;「1～6 的表内乘法」的 1 和后面挨着,是课名的一部分),或「第1课」
  */
 function tocHit(line: TocLine): TocHit | null {
   const gs = line.g;
@@ -186,10 +197,12 @@ function tocHit(line: TocLine): TocHit | null {
   if (!digits || digits > 3) return null;
   let j = k;
   while (j > 0 && LEADER.test(gs[j - 1].c)) j--;
+  const slash = j === k && j > 0 && SLASH.test(gs[j - 1].c);
+  if (slash) j--;
   const body = gs.slice(0, j);
   if (!body.length) return null;
   const z = Math.max(...body.map((g) => g.z));
-  if (k - j < 3 && gs[k].x1 - body[body.length - 1].x2 < 1.5 * z) return null;
+  if (!slash && k - j < 3 && gs[k].x1 - body[body.length - 1].x2 < 1.5 * z) return null;
   let i = 0;
   let mark: string | null = null;
   if (body[0].c === '◎') { mark = '◎'; i = 1; }
@@ -198,7 +211,9 @@ function tocHit(line: TocLine): TocHit | null {
     while (d < body.length && d < 2 && DIGIT.test(body[d].c)) d++;
     if (d && d < body.length && body[d].x1 - body[d - 1].x2 > 0.4 * z) { mark = body.slice(0, d).map((g) => g.c).join(''); i = d; }
   }
-  const words = body.slice(i);
+  let words = body.slice(i);
+  const ord = mark ? null : LESSON_NO.exec(words.map((g) => g.c).join(''));
+  if (ord) { mark = ord[1]; words = words.slice(Array.from(ord[0]).length - Array.from(ord[2]).length); }
   const title = words.map((g) => g.c).join('').replace(/[.．·…]+$/, '');
   if (!words.length || !(HAN.test(title) || /[A-Za-z]/.test(title))) return null;
   return { line, mark, title, from: Number(gs.slice(k).map((g) => g.c).join('')), tx: words[0].x1, tx2: words[words.length - 1].x2, z };
@@ -255,6 +270,7 @@ const rising = (xs: readonly number[]): boolean => xs.every((x, i) => i === 0 ||
  * 目录页:一页上三项以上、页码照读的顺序不往回走的,是目录的第一页;紧跟着的页有两项以上、页码接得上的也是。
  * 不认出版社:点线可有可无,一栏两栏都行(分不分栏照哪样认出的项多),序号是 ◎、隔开的编号,或单独印在左边的大号一、二。
  *  - 不带页码的行:「第一单元」这样的是单元;◎ 起头的是下一项的前半(◎ 快乐读书吧 / 读读童话故事……15)
+ *  - 带页码的单元(广东版科学「第1单元 空气和水 / 1」):自己也是一项,只管单元开头那几页(单元页),下面的课照常一项一项接着(unit 是「第1单元 空气和水」)
  *  - 没序号的:课名左对齐的目录里比这一栏缩进的是上一课下面的一首(古诗二首 → 登鹳雀楼),不缩进的是附录(识字表,other);
  *    课名居中的目录(人教数学)不看缩进,没序号的是单元之间的综合实践(校园小导游,garden)
  */
@@ -291,6 +307,14 @@ export function parseToc(pages: readonly PdfPage[]): { rows: TocRow[]; pages: nu
         const big = col.marks.get(l);
         const at = { n, box: boxOf([...l.g, ...(big ?? []), ...(prefix?.g ?? [])]) };
         const title = h.title;
+        const u = !prefix && !h.mark ? UNIT_ROW.exec(title) : null;
+        if (u) {
+          const name = u[2].trim();
+          unit = name ? `第${u[1]}单元 ${name}` : `第${u[1]}单元`;
+          out.push({ title: name || unit, unit, no: null, kind: 'lesson', from: h.from, at });
+          lastLesson = null;
+          continue;
+        }
         if (prefix) { out.push({ title: `${prefix.title} ${title}`, unit, no: null, kind: 'garden', from: h.from, at }); prefix = null; lastLesson = null; continue; }
         if (h.mark === '◎') { out.push({ title, unit, no: null, kind: 'garden', from: h.from, at }); lastLesson = null; continue; }
         const no = big ? flat(big.map((g) => g.c).join('')) : h.mark;
@@ -410,8 +434,8 @@ export function blankCells(p: Pick<PdfPage, 'items' | 'boxes'>): BookCell[] {
 }
 
 /** 整本:每页分行、读页码、认田字格和填空,读目录,自检 */
-/** 一册怎么分块:文件名带「数学」的是 math */
-export const layoutOf = (title: string): BookLayout => (title.includes('数学') ? 'math' : 'prose');
+/** 一册怎么分块:文件名带「数学」的是 math,带「科学」的是 science */
+export const layoutOf = (title: string): BookLayout => (title.includes('数学') ? 'math' : title.includes('科学') ? 'science' : 'prose');
 
 export function buildBookIndex(raw: readonly PdfPage[], meta: { file: string; sha: string; title: string }): BookIndex {
   const bad: string[] = [];

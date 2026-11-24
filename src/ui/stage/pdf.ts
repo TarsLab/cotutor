@@ -39,7 +39,10 @@ export async function openPdf(url: string): Promise<Pdfjs.PDFDocumentProxy> {
 /** 封面的长边(首页的卡一两百像素宽,按 2 倍屏;服务端收的上限在 src/memory/textbook-cover.ts) */
 const COVER_SIDE = 480;
 
-/** 首页课本那张卡的封面:这一册 PDF 的第 1 页,长边 side 的 jpeg(白底);画不出 = null。画完就关掉这本(首页不留着它) */
+/**
+ * 首页课本那张卡的封面:这一册 PDF 的第 1 页,长边 side 的 jpeg(白底);画不出 = null。画完就关掉这本(首页不留着它)。
+ * 第 1 页横着的(宽过高的 1.2 倍)是封底连封面摊开的一张,只画右半边的封面:广东版科学二上(印厂的骑马钉 PDF)第 1 页正好两页宽,书脊不占宽(2026-11-24 量过)
+ */
 export async function bookCover(book: string, side = COVER_SIDE): Promise<string | null> {
   let task: Pdfjs.PDFDocumentLoadingTask | null = null;
   try {
@@ -47,9 +50,12 @@ export async function bookCover(book: string, side = COVER_SIDE): Promise<string
     const doc = await task.promise;
     const page = await doc.getPage(1);
     const vp0 = page.getViewport({ scale: 1 });
-    const vp = page.getViewport({ scale: side / Math.max(vp0.width, vp0.height) });
+    const spread = vp0.width > vp0.height * 1.2;
+    const w0 = spread ? vp0.width / 2 : vp0.width;
+    const scale = side / Math.max(w0, vp0.height);
+    const vp = page.getViewport({ scale, ...(spread ? { offsetX: -vp0.width / 2 * scale } : {}) });
     const cv = document.createElement('canvas');
-    cv.width = Math.max(1, Math.round(vp.width));
+    cv.width = Math.max(1, Math.round(w0 * scale));
     cv.height = Math.max(1, Math.round(vp.height));
     await page.render({ canvas: cv, viewport: vp, background: '#ffffff', annotationMode: 0 }).promise;
     return cv.toDataURL('image/jpeg', 0.82);

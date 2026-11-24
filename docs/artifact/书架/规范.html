@@ -1,0 +1,268 @@
+<title>书架</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<!-- 协议类设计稿:书架(一本书怎么存、预处理、孩子和老师怎么用、家长端有哪几样)。怎么提议、什么时候搬进 docs/dev/ 见上一层的 README.md -->
+<style>
+/* 版式:工作台「纸面控制台」的色板(src/ui/dev/dev-theme.ts),单栏长页 + 顶上一条目录;同「页上记号」「册与开场」 */
+:root {
+  --ground:#F5F3EE; --surface:#FFFFFF; --surface-2:#FAF9F6; --sunk:#EDEAE3;
+  --line:#E5E1D8; --line-soft:#EFECE6;
+  --ink:#2B2B2B; --ink-2:#4A4740; --muted:#6B675F; --faint:#8A8781;
+  --accent:#B4531F; --accent-soft:#F7E8DE;
+  --ok:#1F7A44; --ok-soft:#E5F4EA;
+  --warn:#8A5A12; --warn-soft:#F9F1DE;
+  --info:#2F5E9E; --info-soft:#E9F1FB;
+  --paper:#FFFFFF; --zh:#C43C74; --ma:#2F7FC1; --kid:#2F6FD6;
+  --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif;
+  --mono:"SF Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --kai:"Kaiti SC","STKaiti","KaiTi","BiauKai","Songti SC",serif;
+  --r-card:18px; --r-item:12px; --r-tag:6px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --ground:#1C1B19; --surface:#262522; --surface-2:#2B2A27; --sunk:#33312D; --line:#3D3A35; --line-soft:#34322E;
+  --ink:#ECE8E1; --ink-2:#CFCAC0; --muted:#A39E94; --faint:#8C877D;
+  --accent:#E58A55; --accent-soft:#3A2A20; --ok:#6CC58F; --ok-soft:#1F3328; --warn:#E0B060; --warn-soft:#3A3020; --info:#8AB4EE; --info-soft:#22303F;
+  --paper:#F4F1EA; --zh:#E36A9C; --ma:#6AAAE0; --kid:#6F9BEA; color-scheme:dark; } }
+:root[data-theme="dark"] {
+  --ground:#1C1B19; --surface:#262522; --surface-2:#2B2A27; --sunk:#33312D; --line:#3D3A35; --line-soft:#34322E;
+  --ink:#ECE8E1; --ink-2:#CFCAC0; --muted:#A39E94; --faint:#8C877D;
+  --accent:#E58A55; --accent-soft:#3A2A20; --ok:#6CC58F; --ok-soft:#1F3328; --warn:#E0B060; --warn-soft:#3A3020; --info:#8AB4EE; --info-soft:#22303F;
+  --paper:#F4F1EA; --zh:#E36A9C; --ma:#6AAAE0; --kid:#6F9BEA; color-scheme:dark; }
+* { box-sizing:border-box; }
+html { background:var(--ground); }
+body { margin:0; background:var(--ground); color:var(--ink); font:15px/1.65 var(--sans); }
+.wrap { max-width:1080px; margin:0 auto; padding-block:28px 72px; padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); }
+header.top { display:flex; flex-direction:column; gap:10px; padding-bottom:18px; }
+header.top .crumb { font:500 12px/1 var(--mono); color:var(--faint); letter-spacing:.04em; }
+h1 { margin:0; font-size:30px; font-weight:700; text-wrap:balance; }
+header.top p { margin:0; max-width:68ch; color:var(--ink-2); }
+.legend { display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center; font-size:13px; color:var(--muted); }
+nav.toc { position:sticky; top:env(safe-area-inset-top, 0px); z-index:5; background:var(--ground); border-bottom:1px solid var(--line); margin:0 calc(-1 * max(16px, env(safe-area-inset-left, 0px))); padding:0 max(16px, env(safe-area-inset-left, 0px)); }
+nav.toc .row { display:flex; gap:4px; overflow-x:auto; padding:8px 0; scrollbar-width:none; }
+nav.toc a { flex:none; padding:6px 12px; border-radius:8px; color:var(--ink-2); font-size:13.5px; text-decoration:none; }
+nav.toc a:hover, nav.toc a:focus-visible { background:var(--sunk); color:var(--ink); outline:none; }
+nav.toc a b { font:600 11.5px/1 var(--mono); color:var(--faint); margin-right:5px; }
+body::before { content:""; position:fixed; inset:0 0 auto; height:env(safe-area-inset-top, 0px); z-index:10; background:var(--ground); }
+section { padding-top:44px; scroll-margin-top:56px; }
+section > h2 { margin:0 0 6px; font-size:21px; font-weight:700; display:flex; align-items:baseline; gap:10px; text-wrap:balance; }
+section > h2 .id { font:600 13px/1 var(--mono); color:var(--accent); }
+section > .lead { margin:0 0 18px; max-width:72ch; color:var(--ink-2); }
+h3 { margin:26px 0 10px; font-size:16px; font-weight:650; }
+p { margin:0 0 10px; }
+code { font:500 12.5px/1.4 var(--mono); background:var(--sunk); border-radius:5px; padding:1px 5px; color:var(--ink-2); }
+.st { display:inline-flex; align-items:center; font:600 11.5px/19px var(--sans); border-radius:var(--r-tag); padding:0 7px; white-space:nowrap; vertical-align:1px; }
+.st.now { background:var(--sunk); color:var(--muted); }
+.st.new { background:var(--accent-soft); color:var(--accent); }
+.st.tbd { background:var(--warn-soft); color:var(--warn); }
+.st.ok { background:var(--ok-soft); color:var(--ok); }
+.card { background:var(--surface); border-radius:var(--r-card); box-shadow:0 0 0 1px var(--line); padding:18px; min-width:0; }
+.grid2 { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap:16px; }
+.cap { font-size:13px; color:var(--muted); margin-top:10px; }
+.decided { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap:12px; }
+.decided div { background:var(--surface); border-radius:var(--r-item); box-shadow:0 0 0 1px var(--line); padding:12px 14px; font-size:13.5px; color:var(--ink-2); }
+.decided b { display:block; color:var(--ink); font-size:14.5px; margin-bottom:2px; }
+.tbl { overflow-x:auto; background:var(--surface); border-radius:var(--r-card); box-shadow:0 0 0 1px var(--line); }
+table { border-collapse:collapse; width:100%; font-size:13.5px; min-width:760px; }
+th, td { text-align:left; vertical-align:top; padding:10px 14px; border-bottom:1px solid var(--line-soft); }
+th { font-size:12px; font-weight:600; color:var(--muted); background:var(--surface-2); white-space:nowrap; }
+tr:last-child td { border-bottom:0; }
+td.n { font:600 12px/1.5 var(--mono); color:var(--accent); white-space:nowrap; }
+td .was { display:block; margin-top:4px; font-size:12.5px; color:var(--muted); }
+.flow { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap:16px; }
+.flow ol { margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:8px; }
+.flow li { display:grid; grid-template-columns:64px 1fr; gap:10px; font-size:13.5px; color:var(--ink-2); }
+.flow li .who { font:600 12px/22px var(--mono); color:var(--faint); }
+.flow li.t .who { color:var(--accent); }
+.flow li.k .who { color:var(--kid); }
+.flow li.quiet { color:var(--muted); }
+.flow h4 { margin:0 0 12px; font-size:15px; display:flex; gap:8px; align-items:center; }
+.svgbox { background:var(--sunk); border-radius:var(--r-item); padding:14px; overflow-x:auto; }
+.svgbox svg { display:block; width:100%; min-width:520px; height:auto; }
+.qs { display:flex; flex-direction:column; gap:12px; }
+.q { background:var(--surface); border-radius:var(--r-card); box-shadow:0 0 0 1px var(--line); padding:16px 18px; }
+.q h4 { margin:0 0 6px; font-size:15.5px; }
+.q h4 .rid { font:600 12px/1 var(--mono); color:var(--warn); margin-right:8px; }
+.q ul { margin:6px 0 0; padding-left:20px; font-size:13.5px; color:var(--ink-2); }
+.q li.rec::marker { color:var(--accent); }
+.q li.rec b { color:var(--accent); }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior:auto !important; } }
+</style>
+
+<div class="wrap">
+<header class="top">
+  <span class="crumb">docs/artifact/书架 · 2026-11-24 · 提议</span>
+  <h1>书架</h1>
+  <p>每位老师一个书架:课本在上面,家长另放的科普书、百科也在上面。家长把书放进来(PDF、EPUB、手机拍的照片),服务端转成同一种样子;孩子在首页点一本就读,老师陪着。这份写书怎么存、怎么预处理、孩子和老师怎么用,家长端的样子在样稿上。</p>
+  <div class="legend"><span class="st now">现状</span><span class="st new">提议</span><span class="st tbd">待定</span><span class="st ok">已定</span> 规则编号:S 一本书、P 预处理、K 孩子与老师、J 家长端、Q 待讨论</div>
+  <p class="cap">家长端样稿:<a href="https://claude.ai/artifact/QQJY12McnohWQ5F7a1PW6G">书架 · 家长端</a>(电脑和手机各几块)。</p>
+</header>
+
+<nav class="toc"><div class="row">
+  <a href="#decided"><b>0</b>已定的</a>
+  <a href="#book"><b>S</b>一本书</a>
+  <a href="#prep"><b>P</b>预处理</a>
+  <a href="#kid"><b>K</b>孩子与老师</a>
+  <a href="#parent"><b>J</b>家长端</a>
+  <a href="#q"><b>Q</b>待讨论</a>
+  <a href="#plan"><b>→</b>先后与影响面</a>
+</div></nav>
+
+<section id="decided">
+  <h2><span class="id">0</span>已定的</h2>
+  <p class="lead">2026-11-24 定下的,下面的规则照这些写。</p>
+  <div class="decided">
+    <div><b>学科写「科学」</b>科学老师 <code>science-tutor</code>,对得上课程表、课本文件名、观察。显示名「科学老师」。</div>
+    <div><b>科学老师只有一个 activity</b>陪孩子读书:他自己读、自己翻,不懂了问。不考、不出题。</div>
+    <div><b>科学课本能铺了</b>广东版科学二上:Unicode 拼音、带页码的单元、栏目下面分段(<code>layout: science</code>),见 <code>docs/dev/课本.md</code>。</div>
+    <div><b>多种格式</b>PDF(有字的、扫描的)、EPUB、手机拍的照片都收。预处理在家长端点,服务端做。</div>
+  </div>
+</section>
+
+<section id="book">
+  <h2><span class="id">S</span>一本书</h2>
+  <p class="lead">不管家长放进来的是什么,转完都是同一种样子:一个 PDF 加一份说明。孩子端、舞台、老师只认这两样,课本那条线(pdf.js 画页、文字层建索引、窗图给老师)整条照用。</p>
+
+  <div class="svgbox" role="img" aria-label="家长放进来的几种文件经预处理变成一本书:书.pdf 加 书.json,原件留着;孩子端和老师只读书.pdf 和 书.json">
+    <svg viewBox="0 0 760 250" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,PingFang SC,sans-serif" font-size="13">
+      <g fill="#FFFFFF" stroke="#E5E1D8">
+        <rect x="16" y="20" width="150" height="34" rx="8"/><rect x="16" y="64" width="150" height="34" rx="8"/><rect x="16" y="108" width="150" height="34" rx="8"/><rect x="16" y="152" width="150" height="34" rx="8"/>
+      </g>
+      <g fill="#4A4740"><text x="30" y="42">PDF(有字)</text><text x="30" y="86">PDF(扫描的)</text><text x="30" y="130">EPUB</text><text x="30" y="174">手机拍的照片</text></g>
+      <g stroke="#8A8781" stroke-width="1.4" fill="none"><path d="M166 37 C210 37 210 103 250 103"/><path d="M166 81 C210 81 210 103 250 103"/><path d="M166 125 C210 125 210 103 250 103"/><path d="M166 169 C210 169 210 103 250 103"/></g>
+      <rect x="250" y="72" width="170" height="62" rx="10" fill="#F7E8DE" stroke="#B4531F"/>
+      <text x="335" y="98" text-anchor="middle" fill="#B4531F" font-weight="600">预处理(服务端)</text>
+      <text x="335" y="118" text-anchor="middle" fill="#4A4740" font-size="12">转 PDF · 认字 · 封面 · 目录</text>
+      <path d="M420 103 H470" stroke="#8A8781" stroke-width="1.4"/>
+      <rect x="470" y="20" width="160" height="200" rx="10" fill="#FFFFFF" stroke="#E5E1D8"/>
+      <text x="486" y="44" fill="#2B2B2B" font-weight="600">书架/科学/星空/</text>
+      <g fill="#4A4740" font-size="12.5"><text x="492" y="74">书.pdf</text><text x="492" y="100">书.json</text><text x="492" y="126">原件/</text></g>
+      <g fill="#8A8781" font-size="11.5"><text x="540" y="74">孩子看的</text><text x="546" y="100">说明</text><text x="534" y="126">放进来的</text></g>
+      <text x="486" y="160" fill="#8A8781" font-size="11.5">在家长的 vault 里</text>
+      <path d="M630 90 H676" stroke="#8A8781" stroke-width="1.4"/>
+      <g fill="#4A4740" font-size="12.5"><text x="682" y="80">孩子端</text><text x="682" y="100">舞台</text><text x="682" y="120">老师</text></g>
+    </svg>
+  </div>
+
+  <h3>规则</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>编号</th><th>规则</th><th>状态</th></tr></thead>
+    <tbody>
+      <tr><td class="n">S1</td><td><b>一本一个文件夹:</b>vault 的 <code>书架/&lt;学科&gt;/&lt;书名&gt;/</code>,同练习册。里面三样:<code>书.pdf</code>(孩子看的,只读它)、<code>书.json</code>(说明)、<code>原件/</code>(家长放进来的,原样留着,转法改了能重做)。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">S2</td><td><b>书.json 记:</b>书名、学科、原件是什么格式、封面是哪一页、不给孩子看的页、目录(章名 + 从哪一页起)、每页的字从哪来(PDF 文字层 / 认字)、认出来的行与字框(同 <code>BookPage.lines</code>)、处理到哪一步。家长端写,孩子端和舞台只读。形状进 <code>src/schema/shelf.ts</code>。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">S3</td><td><b>索引照课本建:</b><code>BookIndex</code> 一样;有文字层的页照 <code>readPdfPages</code>,认字的页用书.json 里的行;目录用书.json 里家长核过的,不再猜。缓存照旧在 <code>.cotutor/textbooks/</code>。科普书按段分(<code>layout: prose</code>)。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">S4</td><td><b>课本不搬:</b>还在 <code>教材/</code>,目录照现在自动认。书架上排第一,标「课本」;家长不能在家长端改它的目录、不能删(换课本就是换文件)。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">S5</td><td><b>一本书在一位老师的书架上</b>,照学科(文件夹)。不分年级、学期。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">S6</td><td><b>书只在家里。</b>放在家长的 vault 里,不进仓库、不进 npm 包、不进年级包。认字要把那一页的图发给百炼(家长那把 key),家长端点认字前说一句。</td><td><span class="st new">提议</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="prep">
+  <h2><span class="id">P</span>预处理</h2>
+  <p class="lead">家长在家长端放一本书、点几下;转换、认字在服务端跑,家长端关了也接着做,回来看进度。一次处理一本,别的排队。</p>
+
+  <h3>几种格式</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>放进来的</th><th>转成书.pdf</th><th>字从哪来</th><th>目录从哪来</th><th>状态</th></tr></thead>
+    <tbody>
+      <tr><td class="n">PDF 有字</td><td>不转,拷一份</td><td>文字层</td><td>PDF 书签 → 目录页(<code>parseToc</code>)</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">PDF 扫描的</td><td>不转,拷一份</td><td>认字(P4)</td><td>PDF 书签 → 认字以后的目录页</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">EPUB(流式)</td><td>本机 Chrome 排成平板的页(3:4,字照低年级的大小),打印成 PDF</td><td>文字层(Chrome 印出来的自带)</td><td>EPUB 自己的目录(nav)</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">EPUB(固定版式,绘本)</td><td>一页一张,照它的页面大小</td><td>文字层;图里的字不认</td><td>EPUB 自己的目录</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">手机拍的照片</td><td>照文件名或拍摄时间排,家长能拖着换、转 90°;一张一页拼成 PDF(本机 Chrome)</td><td>认字(P4)</td><td>没有,家长定(P7)</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">Kindle(MOBI、AZW3)等</td><td colspan="3">不收。说一句:先用 Calibre 转成 EPUB(多半带 DRM,我们也打不开)</td><td><span class="st new">提议</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>规则</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>编号</th><th>规则</th><th>状态</th></tr></thead>
+    <tbody>
+      <tr><td class="n">P1</td><td><b>收下:</b>家长端「加一本」选文件:电脑上拖进来,手机上从相册、文件里选。一次一本:一个 PDF、一个 EPUB,或一组照片。边收边写进 <code>原件/</code>,单本 500 MB 封顶。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">P2</td><td><b>认格式</b>看文件头,不看扩展名;PDF 再看文字层有多少字(同课本自检的「几乎没有文字」)分有字、扫描。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">P3</td><td><b>转 PDF 用本机 Chrome</b>(同小课堂烤画面那个;Windows 上用 Edge)。没有的话,EPUB 和照片这两种说一句做不了,PDF 照收。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">P4</td><td><b>认字:</b>没有文字层的页用百炼识图认,回每行的字和框,存进书.json。先报一共几页要认、大概多少钱,家长点了才认。一页一页认,能停、能接着;认完的页马上能用。不认也能上架:没字的页只能翻、看,老师靠窗图,不点读。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">P5</td><td><b>封面</b>缺省第 1 页(横着的取右半边,同课本封面),家长能换成别的页。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">P6</td><td><b>不给孩子看的页:</b>版权页、广告、空白页,家长在缩略图上点掉。只是不铺,书.pdf 不改。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">P7</td><td><b>目录:</b>先自动认(上表最后一列);都没有就按 Q2。家长能改章名、删一章、在某一页「从这里起一章」。还能「让老师起个草稿」:把每页头几行字给脑,回章名和起始页,家长看过再定。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">P8</td><td><b>上架:</b>有书.pdf、有封面就能上架;目录、认字可以以后补。上架了孩子首页出这本书的卡;改了目录、认完字,索引重做。下架不删文件。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">P9</td><td><b>出错:</b>哪一步没成,家长端说一句、能重来,原件留着。孩子端看不到半截的书。</td><td><span class="st new">提议</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="kid">
+  <h2><span class="id">K</span>孩子与老师</h2>
+  <p class="lead">书架上的书和课本走同一条线。孩子首页的卡怎么画,另出孩子首页的设计稿。</p>
+  <div class="tbl"><table>
+    <thead><tr><th>编号</th><th>规则</th><th>状态</th></tr></thead>
+    <tbody>
+      <tr><td class="n">K1</td><td><b>一本书一张卡:</b>在那位老师牌的左页上,竖版封面,框下写书名。课本那张还叫「课本」,排第一。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">K2</td><td><b>一位老师一个读书的 activity:</b>头上 <code>base: book</code>,参数「书」说哪一本;卡就是挂了「书」的按钮(同练习册)。课本是书架上的一本。科学老师现在的 <code>课本.md</code> 改名(Q1)。语文、数学的「课本」不动。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">K3</td><td><b>进门</b>照「册与开场」:铺上次那一章那一页,第一次铺目录;孩子先开口。位置记在 <code>.cotutor/book-last.json</code>,键 <code>书架#&lt;学科&gt;/&lt;书名&gt;</code>。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">K4</td><td><b>老师看到的</b>同课本:哪本书、哪一章、这一章的字(认过字的页也有)、窗图。书架上的书都收窗图(图比字要紧)。没字的页,<code>全文</code> 那一页写「这一页没有字,看图」。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">K5</td><td><b>点读</b>有字、分得出段的页才有;认字的页照认出的行分段。</td><td><span class="st new">提议</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="parent">
+  <h2><span class="id">J</span>家长端</h2>
+  <p class="lead">样子看样稿。这里只定有哪几样、在哪。</p>
+  <div class="tbl"><table>
+    <thead><tr><th>编号</th><th>规则</th><th>状态</th></tr></thead>
+    <tbody>
+      <tr><td class="n">J1</td><td><b>入口:</b>首页右栏「每天都在 · &lt;老师&gt;」里,「课本」那一行换成「书架」:几本、有没有在等家长的(在认字、要看一眼)。点开是书架那一页,整页,同作业本。<span class="was">现状:「课本」一行是开关,没放课本时说去哪下载。</span></td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">J2</td><td><b>书架页:</b>一本一行:封面小图、书名、几页几章、从什么来、状态;右边「在孩子首页上」开关;点这一行进整理。顶上「加一本」。课本那一行只有开关,点进去只看不改。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">J3</td><td><b>加一本:</b>选文件 → 收下的进度 → 认出是什么、要做几步 → 有要家长定的(认字花钱、目录没认出来)就停下问,别的自己往下做。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">J4</td><td><b>整理一本:</b>书名、封面、页(缩略图,点掉不给看的)、目录(能改)、认字(还剩几页、大概多少钱)、上架 / 下架、删掉(连原件,问一次)。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">J5</td><td><b>手机上</b>同一套,一列排下来,缩略图一行三张。照片多半是手机拍的,手机上加照片要顺手。</td><td><span class="st new">提议</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="q">
+  <h2><span class="id">Q</span>待讨论</h2>
+  <div class="qs">
+    <div class="q"><h4><span class="rid">Q1</span>读书的 activity 叫什么</h4>
+      <ul>
+        <li class="rec"><b>推荐:「读书」。</b>书架上有课本也有别的书,孩子看到的是卡上的书名,不是 activity 名。</li>
+        <li>还叫「课本」:不用改名,但读科普书时也叫课本,对不上。</li>
+      </ul></div>
+    <div class="q"><h4><span class="rid">Q2</span>没有目录的书一章算多少</h4>
+      <ul>
+        <li class="rec"><b>推荐 A:两页一章</b>(一个跨页)。百科多是一个跨页一个话题;家长能改。</li>
+        <li>B:整本一章,超过 13 页只铺前 13 页(<code>BOOK_MAX_PAGES</code>),后面的到不了。</li>
+        <li>C:家长不定目录不能上架。最准,最麻烦。</li>
+      </ul></div>
+    <div class="q"><h4><span class="rid">Q3</span>跨页的版式</h4>
+      <ul>
+        <li class="rec"><b>推荐 A:照现在一页一页竖着排。</b>先看孩子怎么用。</li>
+        <li>B:左右两页并成一张横的(平板横屏刚好),一个话题不切开;舞台、窗图、找位置都要跟着改。</li>
+      </ul></div>
+    <div class="q"><h4><span class="rid">Q4</span>照片要不要自动裁边、拉正</h4>
+      <ul>
+        <li class="rec"><b>推荐:先不做。</b>只给转 90°。拍歪的书先看认字认不认得出。</li>
+        <li>做:用识图模型找纸的四个角,拉正、裁掉桌面。每张多花一次钱。</li>
+      </ul></div>
+    <div class="q"><h4><span class="rid">Q5</span>老师能不能翻到别的书上找图</h4>
+      <ul>
+        <li class="rec"><b>推荐:以后再做。</b>先只读孩子打开的那一本。</li>
+        <li>做:孩子在课本上问「为什么有四季」,老师在书架上搜到百科那一页,<code>[[翻 《星空与宇宙》 四季]]</code>。要跨书搜、跨书翻,上下文包要带书架的目录。</li>
+      </ul></div>
+    <div class="q"><h4><span class="rid">Q6</span>认字用哪个模型、一本大概多少钱</h4>
+      <ul><li>拿一本真的扫描书量过再定。家长端的报价照量出来的写,不估。</li></ul></div>
+  </div>
+</section>
+
+<section id="plan">
+  <h2><span class="id">→</span>先后与影响面</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>步</th><th>做什么</th><th>碰到哪里</th></tr></thead>
+    <tbody>
+      <tr><td class="n">1</td><td>有字的 PDF 上架:书架的形状(S)、收下、封面、目录核对、开关;孩子首页的卡和 <code>base: book</code>(K1–K3;卡的样子先出孩子首页的设计稿)</td><td><code>src/schema/shelf.ts</code>(新)、<code>src/memory/shelf.ts</code>(新)、<code>textbook-index.ts</code> 接书.json 的目录、<code>runtime/home/</code> 的卡、<code>ui/parent/</code> 书架页、<code>app/http/</code> 上传接口</td></tr>
+      <tr><td class="n">2</td><td>EPUB:用本机 Chrome 排版、打印成 PDF</td><td><code>src/app/machine/</code> 找 Chrome(小课堂已有)、新的转换</td></tr>
+      <tr><td class="n">3</td><td>扫描 PDF、照片:拼 PDF、认字、报价、能停能接</td><td><code>src/media/</code> 认字一家、书.json 的行进索引、家长端进度</td></tr>
+    </tbody>
+  </table></div>
+</section>
+</div>

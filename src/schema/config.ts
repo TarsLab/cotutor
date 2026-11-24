@@ -93,7 +93,7 @@ export const TutorSchema = z.object({
   /** 学科色:头像的环、牌的边、新话题气泡(白字压在上面)、听写页的按钮;不写 = 自动(src/ui/shared/tutor-color.ts) */
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/, '要 #rrggbb').optional().describe('学科色 #rrggbb:头像的环、牌的边、新话题气泡(白字压在上面,要够深,doctor 会查)、听写页的按钮;不写 = 语文粉、数学蓝、英语绿,其余按先后自动分、不撞色'),
   /** 卡的配音音色 id(src/media/tts-voices.ts);没有 = 卡不配音 */
-  voice: z.string().optional().describe('配音用的音色 id(百炼 Qwen-Audio-TTS,如 qwen-audio-3.0-tts-plus-longcanzhuyue;家长端首页「样子与声音」里挑;听写念词、课包配音的声音)。不写 = 语文、数学、英语老师用出厂的那个,别的老师没有配音。老师开口的嘴在 live.voices'),
+  voice: z.string().optional().describe('配音用的音色 id(百炼 Qwen-Audio-TTS 3.1,如 longanlingxin_v3.1、yezhiqing_v3.1;家长端首页「样子与声音」里挑;听写念词、课包配音、点读课文的声音;以前选的 3.0 音色 qwen-audio-3.0-tts-plus-xxx 照样能用)。不写 = 语文、数学、英语老师用出厂的那个,别的老师没有配音。老师开口的嘴在 live.voices'),
   enabled: z.boolean().default(true).describe('开关:false 时两端都不见'),
   /** 孩子端不露(家长端「在孩子的首页上」关掉) */
   hidden: z.boolean().default(false).describe('孩子端不露(家长端「在孩子的首页上」关掉)'),
@@ -229,12 +229,13 @@ export type LiveConfig = z.infer<typeof LiveSchema>;
 /** 这位老师的嘴用哪个音色 */
 export const mouthVoice = (live: Pick<LiveConfig, 'voices'>, tutor: string): string => live.voices[tutor] ?? SHIPPED_MOUTHS[tutor] ?? MOUTH_VOICE;
 
-/** 配音(听写念词、课包、点读)的缺省:出厂三位各一个(照 Ray 那里用着的),不写进 cotutor.json;别的老师没配就不配音。
- *  语文是 3.1-plus 的龙安灵心:点读课文给孩子做朗读示范,整篇听下来比 3.0 的基础音色自然(2026-11-25 家长拿《坐井观天》比过) */
+/** 配音(听写念词、课包、点读)的缺省:出厂三位各一个(都在音色表 src/media/tts-voices.ts 里),不写进 cotutor.json;别的老师没配就不配音。
+ *  语文是 3.1-plus 的龙安灵心:点读课文给孩子做朗读示范,整篇听下来比 3.0 的基础音色自然(2026-11-25 家长拿《坐井观天》比过);
+ *  数学是 3.1-flash 的安明远(清亮、自然的男声),英语是 3.1-flash 的 Ava(美式女声) */
 export const SHIPPED_CARD_VOICES: Readonly<Record<string, string>> = {
   'chinese-tutor': 'longanlingxin_v3.1',
-  'math-tutor': 'qwen-audio-3.0-tts-plus-longyingsongliu',
-  'english-tutor': 'qwen-audio-3.0-tts-plus-loongnorahu',
+  'math-tutor': 'anmingyuan_v3.1',
+  'english-tutor': 'Ava_v3.1',
 };
 /** 这位老师卡的配音用哪个音色:家长挑的,没挑用出厂的;都没有 undefined(不配音) */
 export const cardVoice = (tutors: Readonly<Record<string, { voice?: string }>>, tutor: string): string | undefined => tutors[tutor]?.voice ?? SHIPPED_CARD_VOICES[tutor];

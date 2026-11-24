@@ -1,5 +1,6 @@
 /**
- * 家长端「样子与声音」(家长端首页点一位老师的那一行):头像、说话的声音(嘴,全部 56 个)、点读的声音(配音,3.1-plus 的 4 个 + 3.0-plus 的 597 个),点了就存。
+ * 家长端「样子与声音」(家长端首页点一位老师的那一行):头像、说话的声音(嘴,全部 56 个)、点读的声音(配音,3.1 的 plus 与 flash,src/media/tts-voices.ts),点了就存。
+ * 以前选的、不在表里的(3.0 的基础音色)排最前、标「以前选的」,照样能用。
  * 声音全给,页面上点「换一个」开弹窗挑:搜、按男女 / 口音 / 中英 / 年纪 / 场景筛;现在用的排最前、出厂的那个标出来。头像与声音只在这里改(工作台不重复);别的头像直接写 cotutor.json。
  *
  *   GET  /api/parent/tutors/<老师>/look                          现在用的与可选的(头像、嘴、配音)
@@ -44,9 +45,6 @@ const ranked = <T extends { voice: string }>(all: readonly T[], current: string 
   return [...all].sort((a, b) => rank(a) - rank(b));
 };
 
-/** 表里十几种「某某型客服」并成一个场景,筛的时候不占一排 */
-const sceneOf = (scene: string): string => (scene.endsWith('客服') ? '客服' : scene);
-
 function mouthOptions(c: CotutorConfig, name: string): VoiceOption[] {
   const current = mouthVoice(c.live, name);
   const known = REALTIME_VOICES.some((v) => v.voice === current) ? [] : [{ voice: current, name: current, gender: '', trait: '', lang: '普通话' }];
@@ -59,10 +57,10 @@ function mouthOptions(c: CotutorConfig, name: string): VoiceOption[] {
 
 function cardOptions(c: CotutorConfig, name: string): VoiceOption[] {
   const current = cardVoice(c.tutors, name);
-  const known = !current || TTS_VOICES.some((v) => v.voice === current) ? [] : [{ voice: current, name: current, gender: '', age: 0, trait: '', scene: '', lang: '中文' }];
+  const known = !current || TTS_VOICES.some((v) => v.voice === current) ? [] : [{ voice: current, model: '', name: current.replace(/^qwen-audio-[\d.]+-tts-[a-z]+-/, ''), gender: '', age: 0, trait: '以前选的,不在现在的音色表里;还能用,换了就选不回来', scene: '', lang: '中文' }];
   return ranked([...known, ...TTS_VOICES], current, SHIPPED_CARD_VOICES[name]).map((v) => ({
     voice: v.voice, name: v.name, gender: v.gender === '女' || v.gender === '男' ? v.gender : '', lang: v.lang, trait: v.trait,
-    ...(v.age ? { age: v.age } : {}), ...(v.scene ? { scene: sceneOf(v.scene) } : {}), shipped: SHIPPED_CARD_VOICES[name] === v.voice,
+    ...(v.age ? { age: v.age } : {}), ...(v.scene ? { scene: v.scene } : {}), shipped: SHIPPED_CARD_VOICES[name] === v.voice,
   }));
 }
 

@@ -731,6 +731,8 @@ ${pageDomJs(3200)}
     const groups = VP_DIMS[kind].map(([k, label, of]) => {
       const vals = [];
       all.forEach((v) => { const x = of(v); if (x && !vals.includes(x)) vals.push(x); });
+      // 表里没有这一栏(3.1 的音色官方没写年纪):不出这一排
+      if (!vals.length) return null;
       const n = (x) => all.filter((v) => vpPass(v, k) && (!x || of(v) === x)).length;
       let list = VP_ORDER[k] ? VP_ORDER[k].filter((x) => vals.includes(x)) : vals.slice().sort((a, b) => all.filter((v) => of(v) === b).length - all.filter((v) => of(v) === a).length);
       if (k === 'lang' && kind === 'mouth') list = ['普通话'].concat(list.filter((x) => x !== '普通话'));
@@ -740,7 +742,7 @@ ${pageDomJs(3200)}
       if (cut) chips.push(h('button', { type: 'button', class: 'chip more', on: { click: () => { VP.more = true; vpPaint(); } } }, '更多 ' + (list.length - SCENE_SHOWN) + ' 种'));
       return h('div', { class: 'vpg' }, h('span', { class: 'lbl' }, label), h('div', { class: 'chips' }, ...chips));
     });
-    $('#vp-f').replaceChildren(...groups);
+    $('#vp-f').replaceChildren(...groups.filter(Boolean));
     const hits = all.filter((v) => vpPass(v, ''));
     const shown = hits.slice(0, VP.n);
     const cards = shown.map((v) => {

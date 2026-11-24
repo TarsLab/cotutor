@@ -2,7 +2,8 @@
  * 配音:听写念的词、课包配音、点读课文与家长端的试听;讲稿不配音,由实时的嘴照念。
  * 百炼 Qwen-Audio-TTS 的非实时合成:POST 回一个 24 小时有效的音频地址,马上下载。
  * 走哪条线按模型定(src/shared/qianwen.ts):Token Plan 有这个模型就走它;否则百炼按量,端点是业务空间的域名(2026-08-07 实测,公网域名不认)。
- * 模型看音色 id 的前缀(qwen-audio-3.0-tts-plus-xxx / -flash-xxx,flash 的音色给 plus 回 400);3.1-plus 的四个音色没有前缀(longanlingxin_v3.1,TTS_31_PLUS);别的没前缀的老短名走 TTS_MODEL。
+ * 模型:id 带前缀的看前缀(以前选的 3.0 基础音色 qwen-audio-3.0-tts-plus-xxx;flash 的音色给 plus 回 400);3.1 的 id 不带前缀,照音色表(tts-voices.ts)的 model;
+ * 都不是的老短名走 TTS_MODEL。
  * 点读课文整篇一次合成、要每个字的时间(synthesizeTimed):同一个接口开 SSE(X-DashScope-SSE: enable)加 word_timestamp_enabled,
  * 声音一块一块(base64)、字的时间在 output.sentence.words 里;时间戳只有流式给(非流式不给,WebSocket 也给但要另写一套任务协议)。
  * 2026-11-25 实测:3.0-plus 的基础音色、3.1-plus 龙安灵心都回字级时间戳;《坐井观天》整篇 199 字 SSE 10.9 秒收完;一次最多多少字文档没写。
@@ -15,6 +16,8 @@ import { createHash } from 'node:crypto';
 import { copyFile, mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { bailianWorkspaceId, qianwenKeys, qianwenLine, ttsUrl, workspaceHost } from '../shared/qianwen.ts';
+
+import { TTS_VOICES } from './tts-voices.ts';
 
 export { TTS_VOICES, type TtsVoice } from './tts-voices.ts';
 
@@ -38,12 +41,11 @@ export interface TtsOptions {
   timeoutMs?: number;
 }
 
-/** qwen-audio-3.1-tts-plus 的音色(官方音色列表就这四个;音色不能跨模型用) */
-export const TTS_31_PLUS: ReadonlySet<string> = new Set(['longanlingxin_v3.1', 'xunanchuan_v3.1', 'longanhuan_v3.1', 'longanfengyue_v3.1']);
+const MODEL_OF = new Map(TTS_VOICES.map((v) => [v.voice, v.model]));
 
-/** 音色 id 的前缀就是模型;3.1-plus 的音色照表 */
+/** 音色 id 的前缀就是模型;没前缀的照音色表 */
 export function ttsModelOf(voice: string): string {
-  return /^(qwen-audio-[\d.]+-tts-[a-z]+)-/.exec(voice)?.[1] ?? (TTS_31_PLUS.has(voice) ? 'qwen-audio-3.1-tts-plus' : TTS_MODEL);
+  return /^(qwen-audio-[\d.]+-tts-[a-z]+)-/.exec(voice)?.[1] ?? MODEL_OF.get(voice) ?? TTS_MODEL;
 }
 
 /** 这个模型发到哪、带哪把 key;两把 key 都用不上、按量又没有业务空间 id → 原因 */

@@ -29,7 +29,7 @@ const toolsOf = (prompt: string): string[] | null => {
   return req ? (req.tools ?? []).map((t) => t.function.name) : null;
 };
 const { startFakeTts } = await import('./_fake-tts.ts');
-const { TTS_VOICES, TTS_31_PLUS } = await import('../src/media/tts.ts');
+const { TTS_VOICES, ttsModelOf } = await import('../src/media/tts.ts');
 const tts = await startFakeTts();
 process.env.COTUTOR_TTS_ENDPOINT = tts.url;
 
@@ -173,7 +173,7 @@ try {
   check('看原文:没有这一轮 → 404', (await route('GET', '/api/conversations/math-tutor/2026-09-08/raw/9999-9', ctx)).status === 404);
   // 试听(src/app/http/voice-preview.ts,家长端「样子与声音」用):音色表字段齐;同句同音色只合成一次;坏 id 400、合成失败 502 带原因
   const { cardPreview } = await import('../src/app/http/voice-preview.ts');
-  check('音色表:整张、字段齐', TTS_VOICES.length > 500 && TTS_VOICES.every((v) => (v.voice.startsWith('qwen-audio-3.0-tts-plus-') || TTS_31_PLUS.has(v.voice)) && v.name && v.gender && typeof v.age === 'number'));
+  check('音色表:3.1 的 plus、flash,id 不重、字段齐,模型照表认得出', TTS_VOICES.length > 50 && new Set(TTS_VOICES.map((v) => v.voice)).size === TTS_VOICES.length && TTS_VOICES.every((v) => /^qwen-audio-3\.1-tts-(plus|flash)$/.test(v.model) && ttsModelOf(v.voice) === v.model && v.name && typeof v.gender === 'string' && typeof v.age === 'number' && v.lang));
   const asked = tts.requests.length;
   const SAY = '你好呀,我是你的老师。';
   const pv = await cardPreview(ctx.ws, 'v-kid', SAY);

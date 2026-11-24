@@ -17,6 +17,7 @@ process.env.COTUTOR_TTS_ENDPOINT = tts.url;
 const { initWorkspace } = await import('../src/app/cli/init.ts');
 const { loadWorkspace } = await import('../src/app/workspace.ts');
 const { createContext, route } = await import('../src/app/http/app.ts');
+const { TTS_VOICES } = await import('../src/media/tts.ts');
 const { cardVoice, SHIPPED_CARD_VOICES } = await import('../src/schema/index.ts');
 
 type Opt = { voice: string; name: string; gender: string; lang: string; trait: string; age?: number; scene?: string; warn?: string; shipped: boolean };
@@ -30,7 +31,7 @@ try {
   const cfg = (): Record<string, any> => JSON.parse(readFileSync(join(root, 'cotutor.json'), 'utf8'));
 
   // ---- 出厂的点读声音:cotutor.json 不写,三位各一个(照 Ray 的) ----
-  check('出厂的点读声音:照 Ray 的,不写进 cotutor.json', cardVoice(ctx.ws.config.tutors, 'chinese-tutor') === 'longanlingxin_v3.1' && cardVoice(ctx.ws.config.tutors, 'math-tutor') === 'qwen-audio-3.0-tts-plus-longyingsongliu' && cardVoice(ctx.ws.config.tutors, 'english-tutor') === 'qwen-audio-3.0-tts-plus-loongnorahu' && !('voice' in cfg().tutors['chinese-tutor']));
+  check('出厂的点读声音:3.1 的,不写进 cotutor.json', cardVoice(ctx.ws.config.tutors, 'chinese-tutor') === 'longanlingxin_v3.1' && cardVoice(ctx.ws.config.tutors, 'math-tutor') === 'anmingyuan_v3.1' && cardVoice(ctx.ws.config.tutors, 'english-tutor') === 'Ava_v3.1' && !('voice' in cfg().tutors['chinese-tutor']));
   check('别的老师没配就不配音', cardVoice({ 'science-tutor': {} }, 'science-tutor') === undefined && Object.keys(SHIPPED_CARD_VOICES).length === 3);
 
   // ---- 读 ----
@@ -43,22 +44,26 @@ try {
   check('说话的声音:特点不带表里的「(缺省)」;lang 是口音;每个都标了男女', tina?.trait === '甜美温暖,解决问题果断' && tina.gender === '女' && sichuan?.lang === '四川话' && l0.mouth.options.find((o) => o.voice === 'Raymond')?.gender === '男' && l0.mouth.options.every((o) => o.gender === '男' || o.gender === '女'), JSON.stringify([tina, sichuan]));
   check('说话的声音:中英夹着说带英文腔的拆成 warn(舒然、詹妮弗),别的没有', mia?.trait === '细腻,生活美学风格的温柔博主' && mia.warn === '中英夹着说带英文腔' && l0.mouth.options.filter((o) => o.warn).map((o) => o.voice).sort().join() === 'Jennifer,Mia', JSON.stringify(mia));
   const c0 = l0.card.options[0];
-  check('点读的声音:3.1-plus 4 个 + 3.0-plus 597 个;现在是出厂的龙安灵心(3.1),排第一、标出厂;官方没写男女年纪的就空着', l0.card.current === 'longanlingxin_v3.1' && l0.card.options.length === 601 && c0.voice === 'longanlingxin_v3.1' && c0.shipped && c0.gender === '' && c0.age === undefined && c0.lang === '中文', JSON.stringify(c0));
-  const fy = l0.card.options.find((o) => o.voice === 'qwen-audio-3.0-tts-plus-longfengyutong');
-  check('点读的声音:3.0 的基础音色男女、年纪、特点、场景各一栏', fy?.gender === '女' && fy.age === 27 && fy.trait === '标准播音音' && fy.scene === '新闻播报', JSON.stringify(fy));
-  check('点读的声音:十几种「某某型客服」并成一个场景「客服」', l0.card.options.some((o) => o.scene === '客服') && !l0.card.options.some((o) => o.scene && o.scene !== '客服' && o.scene.endsWith('客服')));
+  check('点读的声音:3.1 的 plus 与 flash(没有 3.0 的);现在是出厂的龙安灵心,排第一、标出厂;官方没写年纪就不给', l0.card.current === 'longanlingxin_v3.1' && l0.card.options.length === TTS_VOICES.length && !l0.card.options.some((o) => o.voice.startsWith('qwen-audio-3.0')) && c0.voice === 'longanlingxin_v3.1' && c0.shipped && c0.gender === '女' && c0.age === undefined && c0.lang === '中文', JSON.stringify(c0));
+  const yz = l0.card.options.find((o) => o.voice === 'yezhiqing_v3.1');
+  check('点读的声音:flash 的精品中文男女、特点、场景各一栏', yz?.gender === '女' && yz.trait === '轻快、自然' && yz.scene === '儿童故事', JSON.stringify(yz));
   const lm = (await call('GET', '/api/parent/tutors/english-tutor/look')).json as Look;
-  check('英语老师:出厂的予安、Nora Hu 排第一;英文的音色 lang 是英文', lm.mouth.options[0].voice === 'Theo Calm' && lm.card.options[0].name === 'Nora Hu' && lm.card.options[0].lang === '英文');
+  check('英语老师:出厂的予安、Ava 排第一;英文的音色 lang 是英文', lm.mouth.options[0].voice === 'Theo Calm' && lm.card.options[0].name === 'Ava' && lm.card.options[0].lang === '英文');
   check('不是老师 → 404', (await call('GET', '/api/parent/tutors/nobody-tutor/look')).status === 404);
 
   // ---- 存 ----
-  const s1 = (await call('PUT', '/api/parent/tutors/chinese-tutor/look', { mouth: 'Maia', voice: 'qwen-audio-3.0-tts-plus-longliuxulan', avatar: '📖' })).json as Look;
-  check('点了就存:说话、点读、头像都写进 cotutor.json,回新的', s1.mouth.current === 'Maia' && s1.card.current === 'qwen-audio-3.0-tts-plus-longliuxulan' && s1.avatar.current === '📖' && cfg().live.voices['chinese-tutor'] === 'Maia' && cfg().tutors['chinese-tutor'].voice === 'qwen-audio-3.0-tts-plus-longliuxulan' && cfg().tutors['chinese-tutor'].avatar === '📖', JSON.stringify(cfg().tutors['chinese-tutor']));
+  const s1 = (await call('PUT', '/api/parent/tutors/chinese-tutor/look', { mouth: 'Maia', voice: 'yezhiqing_v3.1', avatar: '📖' })).json as Look;
+  check('点了就存:说话、点读、头像都写进 cotutor.json,回新的', s1.mouth.current === 'Maia' && s1.card.current === 'yezhiqing_v3.1' && s1.avatar.current === '📖' && cfg().live.voices['chinese-tutor'] === 'Maia' && cfg().tutors['chinese-tutor'].voice === 'yezhiqing_v3.1' && cfg().tutors['chinese-tutor'].avatar === '📖', JSON.stringify(cfg().tutors['chinese-tutor']));
   check('热重载了:服务里用的也是新的', ctx.ws.config.live.voices['chinese-tutor'] === 'Maia');
   const s2 = (await call('PUT', '/api/parent/tutors/chinese-tutor/look', { mouth: 'Serena', voice: 'longanlingxin_v3.1', avatar: null })).json as Look;
   check('挑回出厂的:那几项从 cotutor.json 删掉,不留和缺省一样的值', s2.mouth.current === 'Serena' && s2.avatar.current === null && !('chinese-tutor' in (cfg().live?.voices ?? {})) && !('voice' in cfg().tutors['chinese-tutor']) && !('avatar' in cfg().tutors['chinese-tutor']), JSON.stringify({ live: cfg().live, t: cfg().tutors['chinese-tutor'] }));
   const badA = await call('PUT', '/api/parent/tutors/chinese-tutor/look', { avatar: '../../etc/x.png' });
   check('头像只收选项里的值:别的 400,说直接写 cotutor.json', badA.status === 400 && String((badA.json as { message: string }).message).includes('cotutor.json'));
+  // 以前选的 3.0 基础音色:不在表里了,照样排第一、标「以前选的」,名字去掉模型前缀
+  ctx.ws.config.tutors['math-tutor'].voice = 'qwen-audio-3.0-tts-plus-longyingsongliu';
+  const old = ((await call('GET', '/api/parent/tutors/math-tutor/look')).json as Look).card.options[0];
+  check('以前选的 3.0 音色:排第一、写「以前选的」,还能用', old.voice === 'qwen-audio-3.0-tts-plus-longyingsongliu' && old.name === 'longyingsongliu' && old.trait.startsWith('以前选的'), JSON.stringify(old));
+  delete ctx.ws.config.tutors['math-tutor'].voice;
   check('不认的声音 400', (await call('PUT', '/api/parent/tutors/chinese-tutor/look', { mouth: 'Bella' })).status === 400 && (await call('PUT', '/api/parent/tutors/chinese-tutor/look', { voice: 'qwen-audio-3.0-tts-plus-nope' })).status === 400);
   const cindy = (await call('PUT', '/api/parent/tutors/chinese-tutor/look', { mouth: 'Cindy' })).json as Look;
   check('换了以后:现在用的排第一,出厂的苏瑶第二', cindy.mouth.options[0].voice === 'Cindy' && cindy.mouth.options[1].voice === 'Serena' && cindy.mouth.options.length === 56);

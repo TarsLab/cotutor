@@ -213,14 +213,20 @@ const ix = bookIndexOf();
   const nf = await Promise.all([route('GET', `/api/kid/textbook/pdf?b=${encodeURIComponent('../cotutor.json')}`, ctx), route('GET', '/api/kid/textbook/pdf?b=x.pdf', ctx), route('GET', `/api/kid/textbook/lines?b=${encodeURIComponent('语文一年级下册.pdf')}&p=x`, ctx)]);
   check('越界、不在、页写错:404', nf.every((r) => r.status === 404));
   // 点读:第 k 块第 s 句的声音,字由服务端照课本取,用这位老师点读的声音合成(假配音)
-  const { startFakeTts } = await import('./_fake-tts.ts');
+  const { startFakeTts, WORD_MS } = await import('./_fake-tts.ts');
   const tts = await startFakeTts();
   process.env.COTUTOR_TTS_ENDPOINT = tts.url;
-  const say = (q: string) => route('GET', `/api/kid/textbook/say?tutor=${T}&b=${encodeURIComponent('语文一年级下册.pdf')}&${q}`, ctx);
-  const s0 = await say('p=2-3&k=2&s=1'), sAgain = await say('p=2-3&k=2&s=1');
-  check('点读:第 2 段第 2 句照课本合成(语文老师出厂的点读声音);同一句再要不再合成', s0.status === 200 && s0.contentType === 'audio/mpeg' && readFileSync(s0.file!, 'utf8').endsWith(':泡泡飞呀飞，飞进了井沿边的小花园。”') && sAgain.file === s0.file && tts.requests.length === 1, JSON.stringify([s0, tts.requests]));
-  const sBad = await Promise.all([say('p=2-3&k=9&s=0'), say('p=2-3&k=1&s=5'), say('p=x&k=0&s=0'), say('p=2-3&k=-1&s=0'), route('GET', `/api/kid/textbook/say?tutor=nobody&b=${encodeURIComponent('语文一年级下册.pdf')}&p=2-3&k=0&s=0`, ctx)]);
-  check('点读:块、句越界,页写错,没有这位老师:404', sBad.every((r) => r.status === 404), JSON.stringify(sBad.map((r) => r.status)));
+  const rd = (q: string, tutor = T) => route('GET', `/api/kid/textbook/read?tutor=${tutor}&b=${encodeURIComponent('语文一年级下册.pdf')}&${q}`, ctx);
+  const r0 = await rd('p=2-3'), rAudio = await rd('p=2-3&audio=1'), rAgain = await rd('p=2-3');
+  const said = tts.requests[0];
+  const flat = (said?.text ?? '').replace(/\s+/g, '');
+  const at = (sent: string): number => (Array.from(flat.slice(0, flat.indexOf(sent))).length + 1) * WORD_MS;
+  const times = (r0.json as { times: number[][]; end: number }).times;
+  check('点读:整篇一次合成(SSE 带字的时间;语文出厂的龙安灵心走 3.1-plus),一块一行', tts.requests.length === 1 && said.sse === true && said.model === 'qwen-audio-3.1-tts-plus' && said.voice === 'longanlingxin_v3.1' && said.text.split('\n')[0] === '小鱼吹泡泡' && said.text.split('\n').length === 4, JSON.stringify(tts.requests));
+  check('点读:回每块每句从第几毫秒起(第 2 段第 2 句「泡泡飞呀飞」照字对上)', r0.status === 200 && times.map((x) => x.length).join() === '1,1,2,1' && times[0][0] === WORD_MS && times[2][1] === at('泡泡飞呀飞') && times[3][0] === at('小鸟听了'), JSON.stringify([r0.json, flat]));
+  check('点读:audio=1 给那份声音;再要不再合成', rAudio.status === 200 && rAudio.contentType === 'audio/mpeg' && readFileSync(rAudio.file!, 'utf8') === `fake-mp3:longanlingxin_v3.1:${said.text}` && rAgain.status === 200 && tts.requests.length === 1, JSON.stringify([rAudio, tts.requests.length]));
+  const rBad = await Promise.all([rd('p=x'), rd('p=2-3', 'nobody'), route('GET', `/api/kid/textbook/read?tutor=${T}&b=${encodeURIComponent('没有这本.pdf')}&p=2-3`, ctx)]);
+  check('点读:页写错、没有这位老师、没有这本书:404', rBad.every((r) => r.status === 404), JSON.stringify(rBad.map((r) => r.status)));
   delete process.env.COTUTOR_TTS_ENDPOINT;
   await tts.close();
 

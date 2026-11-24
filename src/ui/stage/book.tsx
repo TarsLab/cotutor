@@ -31,7 +31,7 @@
  * 能写的格平时不画;鼠标、悬着的笔移上去浅浅铺一层学科色,手指按住一会儿(TOC_PRESS_MS,刚滚起来的不算)深一点(同目录;.bk-cell-hint)。
  * 点读(语文课文,页面给了 read):标题、段首缩进的那两格(bookReadParts:连着头上的拼音)能点,平时不画,也不画出这块范围;鼠标、悬着的笔移上去只出一个淡淡的描边播放钮
  * (在两格正中、和汉字那一行齐),手指按住一会儿钮深一点;点一下(手指不等双击,笔、鼠标点一下不动)告诉页面(read,带这一课分好的几块各几句)。读不读、读到哪是页面的事(它放配音),
- * 它发来的 read.k / mode 照着画钮:playing 实心暂停钮、loading 转一个小圈、between 挪到下一块转一圈、paused 描边播放钮;
+ * 它发来的 read.k / mode 照着画钮:playing 实心暂停钮、loading 转一个小圈(第一次要等整篇合成)、paused 描边播放钮;读到下一块钮跟着挪;
  * read.invite(进了这一课还没点过读):标题前的钮先摆着,描边播放形同暂停,不闪不动(手指没有悬着,孩子看不见能点哪;设计稿 https://claude.ai/artifact/RPqnrMdNvmqjvD14ES1nS5 的 V2)。
  * 正在读的那一句(read.s):字连拼音铺一层学科色(.bk-say,正片叠底,ReadPart.says 一行一个框),暂停时淡一半;段间、停下淡掉后不铺。别的不刷不画。
  * 读到窗外的一句:孩子 READ_IDLE_MS 内没动过手就把窗挪过去,动过就不抢。
@@ -1172,10 +1172,6 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
       g.append(el('circle', { cx: String(cx), cy: String(cy), r: String(r * 0.58), fill: 'none', stroke: c, 'stroke-width': '3', 'stroke-linecap': 'round', 'vector-effect': 'non-scaling-stroke', pathLength: '100', 'stroke-dasharray': '26 74', class: 'bk-read-spin' }));
     } else {
       g.append(el('path', { d: `M${cx - r * 0.26} ${cy - r * 0.4} L${cx + r * 0.46} ${cy} L${cx - r * 0.26} ${cy + r * 0.4} Z`, fill: c, 'fill-opacity': soft ? '0.62' : '1', stroke: c, 'stroke-opacity': soft ? '0.62' : '1', 'stroke-width': '1.5', 'stroke-linejoin': 'round', 'vector-effect': 'non-scaling-stroke' }));
-      if (mode === 'between') {
-        g.append(el('circle', { cx: String(cx), cy: String(cy), r: String(r * 1.12), fill: 'none', stroke: c, 'stroke-opacity': '0.18', 'stroke-width': '3', 'vector-effect': 'non-scaling-stroke' }));
-        g.append(el('circle', { cx: String(cx), cy: String(cy), r: String(r * 1.12), fill: 'none', stroke: c, 'stroke-width': '3', 'stroke-linecap': 'round', 'vector-effect': 'non-scaling-stroke', pathLength: '100', 'stroke-dasharray': '100', 'stroke-dashoffset': '100', transform: `rotate(-90 ${cx} ${cy})`, class: 'bk-read-ring' }));
-      }
     }
     return g;
   };

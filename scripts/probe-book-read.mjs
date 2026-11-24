@@ -5,8 +5,8 @@
  *  一、首页点语文的「课本」,孩子说「我要预习坐井观天」:翻到这一课。
  *  一之二、还没点过读:标题前的钮先摆着(描边播放形,invite)。
  *  二、鼠标移到第 6 段段首的空白:浅浅出一个描边的播放钮;移开就收。
- *  三、点它:钮变成暂停的样子(合成慢时先转圈),假配音收到第 6 段的句子;标题前的钮收起;正在读的那一句铺一层学科色(.bk-say),页上不刷黄;换到第二句框跟着挪。
- *  四、第 6 段读完:钮挪到第 7 段、转一圈,接着读第 7 段。
+ *  三、点它:钮变成暂停的样子(合成慢时先转圈),假配音收到整篇(一次,SSE 带字的时间);标题前的钮收起;正在读的那一句铺一层学科色(.bk-say),页上不刷黄;换到第二句框跟着挪。
+ *  四、第 6 段读完:同一份声音接着放,钮挪到第 7 段。
  *  五、点第 7 段的钮:暂停(钮变回播放的样子);报 {k:'read', from: 6, to: 7};服务端记进板的日志。
  *  六、孩子再说一句:那一轮的上下文包「孩子做的」里有「自己点了课文听」。
  * iPad 横屏各截一张。
@@ -180,8 +180,8 @@ try {
   const n0 = tts.requests.length;
   await tapAt(z6.x, z6.y);
   const playing = await until(`(() => { const d = ${STAGE}; const g = d && d.querySelector('.bk-read-btn:not(.bk-gone)'); return g && g.dataset.mode === 'playing'; })()`, 15000);
-  const sent = tts.requests.slice(n0).map((r) => r.text);
-  ok('点第 6 段:钮变成暂停的样子,假配音收到第 6 段的第一句(下一句同时预取着)', Boolean(playing) && sent.includes(parts[k6].sents[0]), JSON.stringify({ sent, want: parts[k6].sents }));
+  const sent = tts.requests.slice(n0);
+  ok('点第 6 段:钮变成暂停的样子,假配音收到整篇一次(SSE,里面有第 6 段)', Boolean(playing) && sent.length === 1 && sent[0].sse && sent[0].text.split('\n').includes(parts[k6].sents.join('')), JSON.stringify({ sent, want: parts[k6].sents }));
   ok('读的时候页上不刷黄', (await yellow()) === 0);
   ok('点过了:标题前的钮收起', (await btn()).every((b) => b.mode !== 'invite'), JSON.stringify(await btn()));
   const l0 = await lit();
@@ -192,12 +192,10 @@ try {
   }
   console.log('  ', await shot('2-在读.png'));
 
-  // 四、读完第 6 段:钮挪到第 7 段转一圈,接着读
-  const between = await until(`(() => { const d = ${STAGE}; const g = d && d.querySelector('.bk-read-btn:not(.bk-gone)'); return g && g.dataset.mode === 'between' ? +g.querySelector('circle').getAttribute('cy') : null; })()`, 30000);
-  ok('第 6 段读完:钮挪到第 7 段,转一圈', between !== null && Math.abs(between - parts[k7].dot[1]) < 1, String(between));
-  console.log('  ', await shot('3-段间.png'));
-  const again = await until(`(() => { const d = ${STAGE}; const g = d && d.querySelector('.bk-read-btn:not(.bk-gone)'); return g && g.dataset.mode === 'playing'; })()`, 8000);
-  ok('停一下接着读第 7 段', Boolean(again) && tts.requests.some((r) => r.text === parts[k7].sents[0]));
+  // 四、读完第 6 段:同一份声音接着放,钮挪到第 7 段
+  const moved = await until(`(() => { const d = ${STAGE}; const g = d && d.querySelector('.bk-read-btn:not(.bk-gone)'); const c = g && g.querySelector('circle'); return g && g.dataset.mode === 'playing' && Math.abs(+c.getAttribute('cy') - ${parts[k7].dot[1]}) < 1 ? true : null; })()`, 30000);
+  ok('第 6 段读完:接着读第 7 段,钮挪过去;不再合成', Boolean(moved) && tts.requests.length === n0 + 1);
+  console.log('  ', await shot('3-下一段.png'));
 
   // 五、点第 7 段的钮:暂停,报 read
   const nf = frames.length;

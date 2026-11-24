@@ -426,7 +426,7 @@ const titleSay = (t: string): string => t.replace(/^[\s*＊]*(?:第\s*\d{1,2}\s*
  * 标题读课名,古诗再读诗题和作者(标题下面同一页、字不太小的那几行:「登鹳雀楼」「[唐]王之涣」);
  * 一行一段的诗(识字课、古诗)按节读:一节一块(同一页里空出一截、或换页就是下一节),no 是这一节第一行那段。
  * line = 这一块读的那一行(标题是字号最大的那行,段是段首那一行);rows = 这一块的字在哪几行(照读的先后;舞台照它把句对到字上)。没有自然段(语文园地按栏目分、数学)= 空:不点读。
- * 服务端照它合成第几块第几句(/api/kid/textbook/say),舞台照它摆段首的钮、铺正在读的那一句(bookReadParts),两边拿同一份行,所以块和句对得上。
+ * 服务端照它整篇合成(/api/kid/textbook/read,readLessonText、readTimes),舞台照它摆段首的钮、铺正在读的那一句(bookReadParts),两边拿同一份行,所以块和句对得上。
  */
 export interface ReadText { no: number; sents: string[]; line: { n: number; i: number }; rows: { n: number; i: number }[] }
 export function bookReadTexts(pages: readonly BookPage[], blocks: readonly BookBlock[]): ReadText[] {
@@ -464,6 +464,34 @@ export function bookReadTexts(pages: readonly BookPage[], blocks: readonly BookB
     if (sents.length) out.push({ no: b.no!, sents, line: b.refs[0], rows: b.refs });
   }
   return out;
+}
+
+/** 点读整篇一次合成的字:一块一行(标题、一段、诗的一节),块里的句连着;服务端照它合成,照 readTimes 对回块和句 */
+export const readLessonText = (texts: readonly ReadText[]): string => texts.map((x) => x.sents.join('')).join('\n');
+
+/**
+ * 整篇的声音里每一句从第几毫秒起(times[k][s]):把合成回来的字(一个字一条,标点粘在后一个字前面)连成一串,
+ * 句里的字(不算标点、空白)照先后一个一个对上去,句的起点 = 对上的第一个字的起点;一个字都没对上的句照前一句。
+ * end = 最后一个字读完
+ */
+export function readTimes(texts: readonly ReadText[], words: readonly { text: string; begin_time: number; end_time: number }[]): { times: number[][]; end: number } {
+  const chars: { c: string; t: number }[] = [];
+  for (const w of words) for (const c of Array.from(w.text)) if (!PUNCT.test(c)) chars.push({ c, t: w.begin_time });
+  let at = 0, prev = 0;
+  const times = texts.map((x) => x.sents.map((sent) => {
+    let start: number | null = null;
+    for (const c of Array.from(sent)) {
+      if (PUNCT.test(c)) continue;
+      let j = at;
+      while (j < chars.length && j < at + SAY_LOOK && chars[j].c !== c) j++;
+      if (j >= chars.length || chars[j].c !== c) continue;
+      if (start === null) start = chars[j].t;
+      at = j + 1;
+    }
+    prev = start ?? prev;
+    return prev;
+  }));
+  return { times, end: words.length ? words[words.length - 1].end_time : 0 };
 }
 
 /**

@@ -229,9 +229,10 @@ export type LiveConfig = z.infer<typeof LiveSchema>;
 /** 这位老师的嘴用哪个音色 */
 export const mouthVoice = (live: Pick<LiveConfig, 'voices'>, tutor: string): string => live.voices[tutor] ?? SHIPPED_MOUTHS[tutor] ?? MOUTH_VOICE;
 
-/** 配音(听写念词、课包)的缺省:出厂三位各一个(照 Ray 那里用着的),不写进 cotutor.json;别的老师没配就不配音 */
+/** 配音(听写念词、课包、点读)的缺省:出厂三位各一个(照 Ray 那里用着的),不写进 cotutor.json;别的老师没配就不配音。
+ *  语文是 3.1-plus 的龙安灵心:点读课文给孩子做朗读示范,整篇听下来比 3.0 的基础音色自然(2026-11-25 家长拿《坐井观天》比过) */
 export const SHIPPED_CARD_VOICES: Readonly<Record<string, string>> = {
-  'chinese-tutor': 'qwen-audio-3.0-tts-plus-longfengyutong',
+  'chinese-tutor': 'longanlingxin_v3.1',
   'math-tutor': 'qwen-audio-3.0-tts-plus-longyingsongliu',
   'english-tutor': 'qwen-audio-3.0-tts-plus-loongnorahu',
 };

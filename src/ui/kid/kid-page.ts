@@ -2762,15 +2762,17 @@ __REEL_DOCK_JS__
   const replayStop = () => { clearInterval(RP.timer); RP.line = -1; if (RP.el) { RP.el.onended = null; RP.el.pause(); } renderSubtitle(); };
   $('#lv-replay').addEventListener('click', () => { if (!LV.on) return; unlock(); liveDispatch(LV.model.status === 'replay' ? { type: 'replayStop' } : { type: 'replay', pending: S.pending }); });
   // ---- 点读课文(语文课本的一课,docs/dev/课本.md):孩子点标题、段首的钮(舞台报 read,带这一课分好的几块:每块是标题还是第几段、几句),
-  //      孩子端用共享的 Audio 一句一句放这位老师「点读的声音」(/api/kid/textbook/say:服务端照课本现取字,合成过的有缓存)。
-  //      一块读完停 READ_GAP_MS,钮挪到下一块接着读,读到课文最后停;暂停停在那一秒,再点那一块的钮接着读;停下 READ_FADE_MS 钮淡掉(再点还是接着读)。
+  //      孩子端用共享的 Audio 放这一课整篇的声音(/api/kid/textbook/read:服务端照课本现取字、整篇一次合成,带每句从第几毫秒起;合成过的有缓存),
+  //      第一次要等整篇合成完(钮转圈);从点的那一块起读,照放到第几秒告诉舞台在读哪一块哪一句,读到课文最后停;
+  //      暂停停在那一秒,再点那一块的钮接着读;点别的块跳到那一块;停下 READ_FADE_MS 钮淡掉(再点还是接着读)。
   //      读到哪停的报给服务端记一笔(下一轮老师在「孩子做的」里看到)。谁让谁在 liveStep(reading);这里只取、放,告诉舞台钮在哪一块、什么样(lsShow 的 read) ----
-  const READ_GAP_MS = 1200, READ_FADE_MS = 5000, READ_WAIT_MS = 350;
-  /** at = 这几块属于哪一页;k / s = 第几块第几句;mode = 钮的样子(playing 暂停钮、loading 转圈、between 挪到下一块转一圈、paused 播放钮、rest 淡掉了);from = 这一回从哪一块读起 */
-  const RD = { at: '', nos: [], parts: [], k: -1, s: 0, mode: '', from: -1, gapT: 0, fadeT: 0, waitT: 0 };
+  const READ_FADE_MS = 5000, READ_TICK_MS = 100, READ_LEAD_MS = 120;
+  /** at = 这几块属于哪一页;k / s = 第几块第几句;mode = 钮的样子(playing 暂停钮、loading 转圈、paused 播放钮、rest 淡掉了);from = 这一回从哪一块读起;
+   *  times = 这一页整篇的声音里第 k 块第 s 句从第几毫秒起(拿到才有);req = 第几回要(停了、翻走了,晚到的作废) */
+  const RD = { at: '', nos: [], parts: [], k: -1, s: 0, mode: '', from: -1, times: null, req: 0, fadeT: 0, tick: 0 };
   /** 这一页能不能点读:实时老师页、这位老师有点读的声音、语文课本的一课(不是目录) */
   const readOk = () => { const p = LS.on && LS.l ? lessonPage(LS.l) : null; return Boolean(LV.on && !S.readonly && !REEL && S.tutor && S.tutor.hasVoice && p && p.kind === 'book' && p.layout !== 'math' && p.title !== '目录'); };
-  const readUrl = (k, s) => { const p = lessonPage(LS.l); return '/api/kid/textbook/say?tutor=' + encodeURIComponent(S.tutor.name) + '&b=' + encodeURIComponent(p.src) + '&p=' + p.pages[0] + '-' + p.pages[p.pages.length - 1] + '&k=' + k + '&s=' + s; };
+  const readUrl = (audio) => { const p = lessonPage(LS.l); return new URL('/api/kid/textbook/read?tutor=' + encodeURIComponent(S.tutor.name) + '&b=' + encodeURIComponent(p.src) + '&p=' + p.pages[0] + '-' + p.pages[p.pages.length - 1] + (audio ? '&audio=1' : ''), location.href).href; };
   const readMode = (m) => { if (RD.mode === m) return; RD.mode = m; lsShow(); };
   /** 读到哪停的报给服务端(一回一条);done = 读到了课文最后 */
   const readReport = (done) => {
@@ -2779,59 +2781,77 @@ __REEL_DOCK_JS__
     RD.from = -1;
     if (ok) lvSend({ t: 'board', body: { k: 'read', thread: S.thread, base: RD.at, from, to, ...(done ? { done: true } : {}) } });
   };
-  /** 放第 k 块第 s 句;下一句先叫服务端合成着(合成过的直接给文件) */
-  const readSay = () => {
-    clearTimeout(RD.gapT); clearTimeout(RD.waitT);
-    const a = audioEl, k = RD.k, s = RD.s;
-    a.onended = () => readNext();
-    a.onerror = () => readFail();
-    a.onplaying = () => { if (RD.k === k && RD.s === s) { clearTimeout(RD.waitT); readMode('playing'); } };
-    a.src = readUrl(k, s);
-    a.dataset.read = k + '.' + s;
-    const pr = a.play(); if (pr && pr.catch) pr.catch((e) => { if (!(e && e.name === 'AbortError')) readFail(); });
-    // 一会儿还没出声(第一次读这一段,在合成):钮里转一个小圈
-    RD.waitT = setTimeout(() => { if (RD.k === k && RD.s === s && LV.model.status === 'reading' && !(a.currentTime > 0)) readMode('loading'); }, READ_WAIT_MS);
-    const nx = s + 1 < RD.parts[k] ? [k, s + 1] : k + 1 < RD.parts.length ? [k + 1, 0] : null;
-    if (nx) fetch(readUrl(nx[0], nx[1])).catch(() => {});
+  /** 整篇每句的时间:有了直接给;没有叫服务端合成(第一次要等整篇);块数、句数对不上 = 读不了 */
+  const readLoad = async () => {
+    if (RD.times) return true;
+    const r = await fetch(readUrl(false), { cache: 'no-store' }).catch(() => null);
+    const j = r && r.ok ? await r.json().catch(() => null) : null;
+    const t = j && Array.isArray(j.times) ? j.times : null;
+    if (!t || t.length !== RD.parts.length || t.some((x, k) => !Array.isArray(x) || x.length !== RD.parts[k])) return false;
+    RD.times = t;
+    return true;
   };
-  const readNext = () => {
+  /** 放到第几秒 → 在读哪一块哪一句(只往后走:从一块起读时先放的那一点不算回到上一句) */
+  const readTick = () => {
+    if (LV.model.status !== 'reading' || !RD.times || RD.k < 0) return;
+    const t = audioEl.currentTime * 1000 + READ_LEAD_MS;
+    let k = RD.k, s = RD.s;
+    RD.times.forEach((x, kk) => x.forEach((ms, ss) => { if (ms <= t && (kk > k || (kk === k && ss > s))) { k = kk; s = ss; } }));
+    if (k !== RD.k || s !== RD.s) { RD.k = k; RD.s = s; lsShow(); }
+  };
+  const readQuiet = () => { clearInterval(RD.tick); RD.tick = 0; };
+  /** 读到课文最后 */
+  const readDone = () => {
+    readQuiet();
     if (LV.model.status !== 'reading' || RD.k < 0) return;
-    if (RD.s + 1 < RD.parts[RD.k]) { RD.s++; lsShow(); readSay(); return; }
-    if (RD.k + 1 < RD.parts.length) {
-      RD.k++; RD.s = 0;
-      readMode('between');
-      RD.gapT = setTimeout(() => { if (LV.model.status === 'reading' && RD.mode === 'between') readSay(); }, READ_GAP_MS);
-      return;
-    }
     readReport(true);
     RD.k = -1; RD.s = 0; readMode('');
     liveDispatch({ type: 'readEnded' });
   };
   /** 读不下去了(没配声音、合成失败、放不出来):停下,钮收起,不出错 */
   const readFail = () => {
+    readQuiet();
     if (LV.model.status !== 'reading') return;
     readReport(false);
     RD.k = -1; RD.s = 0; readMode('');
     liveDispatch({ type: 'readEnded' });
   };
-  /** playRead:暂停在这一句的就从那一秒接着读,不然从 RD.k、RD.s 起读 */
+  /** 从第 RD.k 块起放(整篇的声音已经在 Audio 上就直接跳过去) */
+  const readFrom = () => {
+    const a = audioEl, src = readUrl(true), sec = Math.max(0, (RD.times[RD.k][0] - READ_LEAD_MS) / 1000);
+    a.onended = () => readDone();
+    a.onerror = () => readFail();
+    a.onplaying = () => readMode('playing');
+    if (a.src.split('#')[0] === src && a.readyState > 0) a.currentTime = sec;
+    else a.src = src + '#t=' + sec.toFixed(2);
+    const pr = a.play(); if (pr && pr.catch) pr.catch((e) => { if (!(e && e.name === 'AbortError')) readFail(); });
+    readQuiet(); RD.tick = setInterval(readTick, READ_TICK_MS);
+  };
+  /** playRead:暂停在这一课的就从那一秒接着读,不然从 RD.k 那一块起读 */
   const readPlay = () => {
-    clearTimeout(RD.fadeT); clearTimeout(RD.gapT);
+    clearTimeout(RD.fadeT);
     if (RD.k < 0) { setTimeout(() => liveDispatch({ type: 'readEnded' }), 0); return; }
     if (RD.from < 0) RD.from = RD.k;
     const a = audioEl;
-    if ((RD.mode === 'paused' || RD.mode === 'rest') && a.dataset.read === RD.k + '.' + RD.s && a.currentTime > 0 && !a.ended) {
+    if ((RD.mode === 'paused' || RD.mode === 'rest') && RD.times && a.src.split('#')[0] === readUrl(true) && a.currentTime > 0 && !a.ended) {
       readMode('playing');
-      a.onended = () => readNext(); a.onerror = () => readFail(); a.onplaying = null;
+      a.onended = () => readDone(); a.onerror = () => readFail(); a.onplaying = null;
       const pr = a.play(); if (pr && pr.catch) pr.catch(() => readFail());
+      readQuiet(); RD.tick = setInterval(readTick, READ_TICK_MS);
       return;
     }
-    readMode('playing');
-    readSay();
+    const req = ++RD.req, at = RD.at;
+    readMode('loading');
+    readLoad().then((ok) => {
+      if (req !== RD.req || RD.at !== at || LV.model.status !== 'reading') return;
+      if (!ok) { readFail(); return; }
+      readFrom();
+    });
   };
-  /** stopRead:停在这一秒;钮留着(播放的样子),过一会儿淡掉 */
+  /** stopRead:停在这一秒;钮留着(播放的样子),过一会儿淡掉;还在等合成的作废 */
   const readStop = () => {
-    clearTimeout(RD.gapT); clearTimeout(RD.waitT);
+    RD.req++;
+    readQuiet();
     try { audioEl.onended = audioEl.onerror = audioEl.onplaying = null; audioEl.pause(); } catch {}
     if (RD.k < 0) return;
     readReport(false);
@@ -2842,10 +2862,10 @@ __REEL_DOCK_JS__
   const readTap = (m) => {
     if (!readOk() || !Array.isArray(m.parts) || !Array.isArray(m.nos) || m.parts.length !== m.nos.length || typeof m.k !== 'number' || !(m.k >= 0 && m.k < m.parts.length)) return;
     unlock();
-    if (RD.at !== LS.l.at || RD.parts.join() !== m.parts.join()) { RD.at = LS.l.at; RD.parts = m.parts.slice(); RD.nos = m.nos.slice(); RD.k = -1; RD.s = 0; RD.mode = ''; RD.from = -1; }
+    if (RD.at !== LS.l.at || RD.parts.join() !== m.parts.join()) { RD.at = LS.l.at; RD.parts = m.parts.slice(); RD.nos = m.nos.slice(); RD.k = -1; RD.s = 0; RD.mode = ''; RD.from = -1; RD.times = null; }
     const reading = LV.model.status === 'reading';
     if (reading && m.k === RD.k) { liveDispatch({ type: 'readStop' }); return; }
-    if (reading) readReport(false);
+    if (reading) { readReport(false); RD.req++; readQuiet(); }
     if (m.k !== RD.k || !(RD.mode === 'paused' || RD.mode === 'rest')) { RD.k = m.k; RD.s = 0; RD.mode = ''; }
     RD.from = -1;
     liveDispatch({ type: 'read' });
@@ -2853,7 +2873,7 @@ __REEL_DOCK_JS__
   /** 翻走了、关了老师页:这一页的点读作废(在读的停下) */
   const readForget = () => {
     const was = LV.model.status === 'reading';
-    clearTimeout(RD.fadeT); RD.at = ''; RD.k = -1; RD.s = 0; RD.mode = ''; RD.from = -1;
+    clearTimeout(RD.fadeT); readQuiet(); RD.req++; RD.at = ''; RD.k = -1; RD.s = 0; RD.mode = ''; RD.from = -1; RD.times = null;
     if (was) setTimeout(() => { if (LV.model.status === 'reading') liveDispatch({ type: 'readStop' }); }, 0);
   };
   /** 发给舞台的点读:null = 这一页不点读;k = -1 没在读,s = 第几句(舞台铺那一句);invite = 进了这一课还没点过读(RD.at 点了才记上、翻走就清掉),标题前的钮先摆着 */

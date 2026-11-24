@@ -70,8 +70,8 @@ import { lessonOpen, tocEntries } from '../../board/lesson-fit.ts';
 import { lastSpot } from '../../runtime/journal/book-last.ts';
 import { lessonInit, lessonPage, lessonStep } from '../../board/lesson.ts';
 import { readLesson } from '../../runtime/journal/lesson-store.ts';
-import { BOOK_TOC, bookPages, bookReadTexts, lessonBlocks, workbookBookPage, workbookPage } from '../../chalk/index.ts';
-import { synthesize } from '../../media/tts.ts';
+import { BOOK_TOC, bookPages, bookReadTexts, lessonBlocks, readLessonText, readTimes, workbookBookPage, workbookPage } from '../../chalk/index.ts';
+import { synthesizeTimed } from '../../media/tts.ts';
 import type { Look } from '../../scenes/look.ts';
 import { IndexError, capturePathOk, deleteThread, listDates, rateThread, readErrLog, readIndex, readTranscript, undoVaultWrite, writeCapture, type VaultWrite } from '../../runtime/journal/store.ts';
 import { memoryLineText } from '../../memory/vault-notes.ts';
@@ -976,21 +976,24 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       if (!ix) return { status: 404, json: { error: 'not_found' } };
       return { status: 200, json: { pages: ix.pages.filter((x) => want.includes(x.n)) } };
     }
-    // 点读课文(语文课本的一课,docs/dev/课本.md):第 k 块(标题、一段、诗的一节)第 s 句的声音,用这位老师「点读的声音」合成(有缓存,再读不花钱);
-    // 块和句照 bookReadTexts 分,舞台照同一份行摆钮,所以对得上;字由服务端照课本现取,孩子端只给号。没配声音、合成失败 404(孩子端停下,不出错)
-    if (p === '/api/kid/textbook/say' && method === 'GET') {
-      const q = url.searchParams, tutor = q.get('tutor') ?? '', k = Number(q.get('k')), s = Number(q.get('s'));
+    // 点读课文(语文课本的一课,docs/dev/课本.md):这一课整篇一次合成(块和句照 bookReadTexts 分,舞台照同一份行摆钮),用这位老师「点读的声音」,
+    // 带每个字的时间(有缓存,再读不花钱);回 {times[k][s]: 第 k 块第 s 句从第几毫秒起, end},加 audio=1 回那份声音(同一份缓存,能分段取)。
+    // 字由服务端照课本现取,孩子端只给页。没配声音、合成失败 404(孩子端停下,不出错)
+    if (p === '/api/kid/textbook/read' && method === 'GET') {
+      const q = url.searchParams, tutor = q.get('tutor') ?? '';
       const voice = ws.config.tutors[tutor] ? cardVoice(ws.config.tutors, tutor) : undefined;
       const want = bookPages(q.get('p') ?? '');
-      if (!voice || !want.length || !Number.isInteger(k) || !Number.isInteger(s) || k < 0 || s < 0) return { status: 404, json: { error: 'not_found' } };
+      if (!voice || !want.length) return { status: 404, json: { error: 'not_found' } };
       const ix = await bookIndex(ws.paths.textbooks, join(ws.root, '.cotutor', 'textbooks'), q.get('b') ?? '').catch(() => null);
       if (!ix || ix.layout === 'math') return { status: 404, json: { error: 'not_found' } };
       const pages = ix.pages.filter((x) => want.includes(x.n));
-      const text = bookReadTexts(pages, lessonBlocks(pages, ix.layout))[k]?.sents[s];
-      if (!text) return { status: 404, json: { error: 'not_found' } };
-      const r = await synthesize({ text, voice }, { cacheDir: ws.dirs.tts, env: process.env });
-      if (!r.file) { console.error(`点读:「${text}」没合成(${r.error ?? '?'})`); return { status: 404, json: { error: 'no_audio' } }; }
-      return { status: 200, file: r.file, contentType: r.file.endsWith('.wav') ? 'audio/wav' : 'audio/mpeg' };
+      const texts = bookReadTexts(pages, lessonBlocks(pages, ix.layout));
+      if (!texts.length) return { status: 404, json: { error: 'not_found' } };
+      const text = readLessonText(texts);
+      const r = await synthesizeTimed({ text, voice }, { cacheDir: ws.dirs.tts, env: process.env });
+      if (!r.file) { console.error(`点读:《${pages[0]?.n ?? '?'} 页起》整篇 ${text.length} 字没合成(${r.error ?? '?'})`); return { status: 404, json: { error: 'no_audio' } }; }
+      if (q.get('audio') === '1') return { status: 200, file: r.file, contentType: 'audio/mpeg' };
+      return { status: 200, json: readTimes(texts, r.words) };
     }
     if (p === '/api/kid/photo-words' && method === 'GET') {
       const rel = url.searchParams.get('p') ?? '';

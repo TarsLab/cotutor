@@ -7,7 +7,7 @@
  * 数学(2026-11-15)用 tests/_math-book.ts 照人教版数学排的那本:目录没有点线、单元下面的小节和课题从页里读、例题、栏目和题。
  * 科学(2026-11-24)用 tests/_science-book.ts 照广东版科学排的那本:Unicode 拼音、目录的「/ 页码」和带页码的单元、栏目下面分段。
  */
-import { BOOK_MAX_PAGES, READ_SAY_MAX, bookCut, bookFind, bookFrame, bookPages, bookPick, bookReadParts, bookReadTexts, bookRows, bookSheets, bookTarget, bookView, findLesson, lessonBlocks, lessonName, readSentences } from '../src/chalk/index.ts';
+import { BOOK_MAX_PAGES, READ_SAY_MAX, bookCut, bookFind, bookFrame, bookPages, bookPick, bookReadParts, bookReadTexts, bookRows, bookSheets, bookTarget, bookView, findLesson, lessonBlocks, lessonName, readLessonText, readSentences, readTimes } from '../src/chalk/index.ts';
 import type { BookLine, BookPage } from '../src/schema/index.ts';
 import { bookLesson, fitActs, lessonOpen, tocEntries } from '../src/board/lesson-fit.ts';
 import { lessonInit } from '../src/board/lesson.ts';
@@ -104,6 +104,24 @@ check('点读:标题(只读课名)在前,接着一段一块,句照段切', reads
 const poemReads = bookReadTexts(lp('静夜思'), poem);
 check('点读:诗一节一块(一行一段的并起来);标题读课名,再读标题下面的诗题', poemReads.map((x) => `${x.no}:${x.sents.join('/')}`).join('|') === '0:古诗两首/静夜思|1:床前明月光，/疑是地上霜。', JSON.stringify(poemReads));
 check('点读:语文园地(按栏目分)不点读', bookReadTexts(lp('语文园地一'), garden).length === 0);
+{
+  // 整篇一次合成:合成回来的字像百炼那样,标点粘在后一个字前面(「。泡」),一个 100 毫秒;句的起点 = 句里第一个字
+  const text = readLessonText(reads);
+  check('点读整篇的字:一块一行', text.split('\n').length === reads.length && text.split('\n')[2] === reads[2].sents.join(''), text);
+  const words: { text: string; begin_time: number; end_time: number }[] = [];
+  let glue = '';
+  for (const c of Array.from(text.replace(/\s+/g, ''))) {
+    if (/\p{P}/u.test(c)) { glue += c; continue; }
+    words.push({ text: glue + c, begin_time: words.length * 100, end_time: words.length * 100 + 100 });
+    glue = '';
+  }
+  if (glue) words[words.length - 1].text += glue;
+  const tm = readTimes(reads, words);
+  const startOf = (sent: string): number => words.findIndex((w) => w.text.replace(/\p{P}/gu, '').startsWith(Array.from(sent.replace(/\p{P}/gu, ''))[0]) && words.slice(words.indexOf(w)).map((x) => x.text).join('').replace(/\p{P}/gu, '').startsWith(sent.replace(/\p{P}/gu, ''))) * 100;
+  check('点读整篇的时间:每块每句从第几毫秒起,标点粘着也对得上;end = 最后一个字读完', tm.times.map((x) => x.length).join() === reads.map((x) => x.sents.length).join() && tm.times[0][0] === 0 && tm.times[2][1] === startOf('泡泡飞呀飞') && tm.times[3][0] === startOf('小鸟听了') && tm.end === words.length * 100, JSON.stringify(tm));
+  const short = readTimes(reads, words.slice(0, 3));
+  check('点读整篇的时间:后面没对上的句照前一句(不往回走)', short.times.flat().every((t, i, a) => i === 0 || t >= a[i - 1]), JSON.stringify(short));
+}
 {
   const sh = bookSheets(fish, undefined, bookCut(ix.pages));
   const parts = bookReadParts(fish, sh, blocks);

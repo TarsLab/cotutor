@@ -40,7 +40,7 @@ const cl3 = compatibleLine('qwen3.8-max', { HOME: keysHome({ payg: 'sk-ws-b' }) 
 check('脑:只有按量 key、没有业务空间 id → 公网域名', cl3?.plan === false && cl3.baseURL === `https://${DASHSCOPE_HOST}/compatible-mode/v1`, JSON.stringify(cl3));
 check('脑:一把都没有 → null', compatibleLine('qwen3.8-max', { HOME: keysHome() }) === null);
 
-check('配音的模型看音色前缀:plus / flash;没前缀的老短名走 plus', ttsModelOf('qwen-audio-3.0-tts-plus-longcanzhuyue') === 'qwen-audio-3.0-tts-plus' && ttsModelOf('qwen-audio-3.0-tts-flash-longxiaochun') === 'qwen-audio-3.0-tts-flash' && ttsModelOf('longanlingxin') === 'qwen-audio-3.0-tts-plus');
+check('配音的模型看音色前缀:plus / flash;3.1-plus 的四个照表;没前缀的老短名走 3.0 plus', ttsModelOf('qwen-audio-3.0-tts-plus-longcanzhuyue') === 'qwen-audio-3.0-tts-plus' && ttsModelOf('qwen-audio-3.0-tts-flash-longxiaochun') === 'qwen-audio-3.0-tts-flash' && ttsModelOf('longanlingxin') === 'qwen-audio-3.0-tts-plus' && ttsModelOf('longanlingxin_v3.1') === 'qwen-audio-3.1-tts-plus');
 const tts = (u: string): string => `https://${u}/api/v1/services/audio/tts/SpeechSynthesizer`;
 const t1 = ttsTarget('qwen-audio-3.0-tts-plus', { HOME: home });
 check('配音:Token Plan 有这个模型 → 它的域名与 key', 'url' in t1 && t1.url === tts(TOKEN_PLAN_HOST) && t1.key === 'sk-sp-a' && t1.plan, JSON.stringify(t1));

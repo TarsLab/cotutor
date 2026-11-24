@@ -24,7 +24,7 @@ export type ToStage =
     past?: Record<string, { marks: { k: string; text: string; box: [number, number, number, number]; old?: boolean }[]; ink: [number, number][][] }>;
     /** 老师的学科色(写字格的「放好」、点开的那一格) */
     color?: string;
-    /** 点读(语文课本的一课,这位老师有点读的声音):给了舞台才认标题、段首的钮;k = 在读哪一块(-1 没在读),s = 第几句,mode = 钮的样子(playing / loading / between / paused);
+    /** 点读(语文课本的一课,这位老师有点读的声音):给了舞台才认标题、段首的钮;k = 在读哪一块(-1 没在读),s = 第几句,mode = 钮的样子(playing / loading / paused);
      *  invite = 进了这一课还没点过读,标题前的钮先摆着 */
     read?: { k: number; s?: number; mode: string; invite?: boolean } }
   /** peek = 板此刻的样子导一张小图(话题的预览图,首页「今天」用;回 peek);unpick = 页面把点字的卡收了(舞台不再跟着那个字、不再标着它) */

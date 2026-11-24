@@ -30,7 +30,7 @@ try {
   const cfg = (): Record<string, any> => JSON.parse(readFileSync(join(root, 'cotutor.json'), 'utf8'));
 
   // ---- 出厂的点读声音:cotutor.json 不写,三位各一个(照 Ray 的) ----
-  check('出厂的点读声音:照 Ray 的,不写进 cotutor.json', cardVoice(ctx.ws.config.tutors, 'chinese-tutor') === 'qwen-audio-3.0-tts-plus-longfengyutong' && cardVoice(ctx.ws.config.tutors, 'math-tutor') === 'qwen-audio-3.0-tts-plus-longyingsongliu' && cardVoice(ctx.ws.config.tutors, 'english-tutor') === 'qwen-audio-3.0-tts-plus-loongnorahu' && !('voice' in cfg().tutors['chinese-tutor']));
+  check('出厂的点读声音:照 Ray 的,不写进 cotutor.json', cardVoice(ctx.ws.config.tutors, 'chinese-tutor') === 'longanlingxin_v3.1' && cardVoice(ctx.ws.config.tutors, 'math-tutor') === 'qwen-audio-3.0-tts-plus-longyingsongliu' && cardVoice(ctx.ws.config.tutors, 'english-tutor') === 'qwen-audio-3.0-tts-plus-loongnorahu' && !('voice' in cfg().tutors['chinese-tutor']));
   check('别的老师没配就不配音', cardVoice({ 'science-tutor': {} }, 'science-tutor') === undefined && Object.keys(SHIPPED_CARD_VOICES).length === 3);
 
   // ---- 读 ----
@@ -43,7 +43,9 @@ try {
   check('说话的声音:特点不带表里的「(缺省)」;lang 是口音;每个都标了男女', tina?.trait === '甜美温暖,解决问题果断' && tina.gender === '女' && sichuan?.lang === '四川话' && l0.mouth.options.find((o) => o.voice === 'Raymond')?.gender === '男' && l0.mouth.options.every((o) => o.gender === '男' || o.gender === '女'), JSON.stringify([tina, sichuan]));
   check('说话的声音:中英夹着说带英文腔的拆成 warn(舒然、詹妮弗),别的没有', mia?.trait === '细腻,生活美学风格的温柔博主' && mia.warn === '中英夹着说带英文腔' && l0.mouth.options.filter((o) => o.warn).map((o) => o.voice).sort().join() === 'Jennifer,Mia', JSON.stringify(mia));
   const c0 = l0.card.options[0];
-  check('点读的声音:全部 597 个;现在是出厂的龙凤雨桐,排第一、标出厂;男女、年纪、特点、场景各一栏', l0.card.current === 'qwen-audio-3.0-tts-plus-longfengyutong' && l0.card.options.length === 597 && c0.shipped && c0.gender === '女' && c0.age === 27 && c0.trait === '标准播音音' && c0.scene === '新闻播报' && c0.lang === '中文', JSON.stringify(c0));
+  check('点读的声音:3.1-plus 4 个 + 3.0-plus 597 个;现在是出厂的龙安灵心(3.1),排第一、标出厂;官方没写男女年纪的就空着', l0.card.current === 'longanlingxin_v3.1' && l0.card.options.length === 601 && c0.voice === 'longanlingxin_v3.1' && c0.shipped && c0.gender === '' && c0.age === undefined && c0.lang === '中文', JSON.stringify(c0));
+  const fy = l0.card.options.find((o) => o.voice === 'qwen-audio-3.0-tts-plus-longfengyutong');
+  check('点读的声音:3.0 的基础音色男女、年纪、特点、场景各一栏', fy?.gender === '女' && fy.age === 27 && fy.trait === '标准播音音' && fy.scene === '新闻播报', JSON.stringify(fy));
   check('点读的声音:十几种「某某型客服」并成一个场景「客服」', l0.card.options.some((o) => o.scene === '客服') && !l0.card.options.some((o) => o.scene && o.scene !== '客服' && o.scene.endsWith('客服')));
   const lm = (await call('GET', '/api/parent/tutors/english-tutor/look')).json as Look;
   check('英语老师:出厂的予安、Nora Hu 排第一;英文的音色 lang 是英文', lm.mouth.options[0].voice === 'Theo Calm' && lm.card.options[0].name === 'Nora Hu' && lm.card.options[0].lang === '英文');
@@ -53,7 +55,7 @@ try {
   const s1 = (await call('PUT', '/api/parent/tutors/chinese-tutor/look', { mouth: 'Maia', voice: 'qwen-audio-3.0-tts-plus-longliuxulan', avatar: '📖' })).json as Look;
   check('点了就存:说话、点读、头像都写进 cotutor.json,回新的', s1.mouth.current === 'Maia' && s1.card.current === 'qwen-audio-3.0-tts-plus-longliuxulan' && s1.avatar.current === '📖' && cfg().live.voices['chinese-tutor'] === 'Maia' && cfg().tutors['chinese-tutor'].voice === 'qwen-audio-3.0-tts-plus-longliuxulan' && cfg().tutors['chinese-tutor'].avatar === '📖', JSON.stringify(cfg().tutors['chinese-tutor']));
   check('热重载了:服务里用的也是新的', ctx.ws.config.live.voices['chinese-tutor'] === 'Maia');
-  const s2 = (await call('PUT', '/api/parent/tutors/chinese-tutor/look', { mouth: 'Serena', voice: 'qwen-audio-3.0-tts-plus-longfengyutong', avatar: null })).json as Look;
+  const s2 = (await call('PUT', '/api/parent/tutors/chinese-tutor/look', { mouth: 'Serena', voice: 'longanlingxin_v3.1', avatar: null })).json as Look;
   check('挑回出厂的:那几项从 cotutor.json 删掉,不留和缺省一样的值', s2.mouth.current === 'Serena' && s2.avatar.current === null && !('chinese-tutor' in (cfg().live?.voices ?? {})) && !('voice' in cfg().tutors['chinese-tutor']) && !('avatar' in cfg().tutors['chinese-tutor']), JSON.stringify({ live: cfg().live, t: cfg().tutors['chinese-tutor'] }));
   const badA = await call('PUT', '/api/parent/tutors/chinese-tutor/look', { avatar: '../../etc/x.png' });
   check('头像只收选项里的值:别的 400,说直接写 cotutor.json', badA.status === 400 && String((badA.json as { message: string }).message).includes('cotutor.json'));

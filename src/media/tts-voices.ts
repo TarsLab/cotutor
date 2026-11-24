@@ -1,6 +1,7 @@
 /**
- * 配音(听写念词、课包)认的音色:百炼 Qwen-Audio-TTS(qwen-audio-3.0-tts-plus)的 597 个基础音色,照官方音色列表整理的;
- * id 带模型前缀,旧代短名(如 longanlingxin)也能合成,但不在表里。
+ * 配音(听写念词、课包、点读)认的音色:百炼 Qwen-Audio-TTS 的 3.1-plus 四个系统音色(id 不带前缀,模型照 tts.ts 的 TTS_31_PLUS;
+ * 官方列表只给了名字,没写男女年龄),和 qwen-audio-3.0-tts-plus 的 597 个基础音色(照官方音色列表整理的,id 带模型前缀);
+ * 旧代短名(如 longanlingxin)也能合成,但不在表里。
  * 家长端「样子与声音」点读的声音照这张表列、试听、挑(写进 cotutor.json 的 tutors.<名>.voice);老师开口的嘴是另一张表(src/realtime/voices.ts)。
  */
 
@@ -20,7 +21,13 @@ export interface TtsVoice {
 const PREFIX = 'qwen-audio-3.0-tts-plus-';
 const v = (id: string, name: string, gender: string, age: number, trait: string, scene: string, lang = '中文'): TtsVoice => ({ voice: PREFIX + id, name, gender, age, trait, scene, lang });
 
+const v31 = (id: string, name: string): TtsVoice => ({ voice: id, name, gender: '未标注', age: 0, trait: '3.1 旗舰音色(音质、朗读更好)', scene: '', lang: '中文' });
+
 export const TTS_VOICES: readonly TtsVoice[] = [
+  v31('longanlingxin_v3.1', '龙安灵心'),
+  v31('xunanchuan_v3.1', '许南川'),
+  v31('longanhuan_v3.1', '龙安欢'),
+  v31('longanfengyue_v3.1', '龙安风悦'),
   v('longcanzhuyue', '龙璨竹月', '女', 26, '平实质朴音', '日常对话'),
   v('longrongzhihe', '龙蓉芷荷', '女', 24, '电台质感音', '日常对话'),
   v('longlanghongmo', '龙朗虹沫', '女', 25, '温柔亲和音', '情感陪伴'),

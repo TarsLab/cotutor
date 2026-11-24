@@ -2876,7 +2876,7 @@ __REEL_DOCK_JS__
     clearTimeout(RD.fadeT); readQuiet(); RD.req++; RD.at = ''; RD.k = -1; RD.s = 0; RD.mode = ''; RD.from = -1; RD.times = null;
     if (was) setTimeout(() => { if (LV.model.status === 'reading') liveDispatch({ type: 'readStop' }); }, 0);
   };
-  /** 发给舞台的点读:null = 这一页不点读;k = -1 没在读,s = 第几句(舞台铺那一句);invite = 进了这一课还没点过读(RD.at 点了才记上、翻走就清掉),标题前的钮先摆着 */
+  /** 发给舞台的点读:null = 这一页不点读;k = -1 没在读,s = 第几截(舞台铺那一截;一截是一个停顿);invite = 进了这一课还没点过读(RD.at 点了才记上、翻走就清掉),标题前的钮先摆着 */
   const readView = () => (readOk() ? (RD.at === LS.l.at && RD.k >= 0 && RD.mode && RD.mode !== 'rest' ? { k: RD.k, s: RD.s, mode: RD.mode } : { k: -1, mode: '', ...(RD.at === LS.l.at ? {} : { invite: true }) }) : null);
   const liveCaption = () => {
     liveListenUi();

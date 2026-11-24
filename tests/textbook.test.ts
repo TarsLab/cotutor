@@ -7,7 +7,7 @@
  * 数学(2026-11-15)用 tests/_math-book.ts 照人教版数学排的那本:目录没有点线、单元下面的小节和课题从页里读、例题、栏目和题。
  * 科学(2026-11-24)用 tests/_science-book.ts 照广东版科学排的那本:Unicode 拼音、目录的「/ 页码」和带页码的单元、栏目下面分段。
  */
-import { BOOK_MAX_PAGES, READ_SAY_MAX, bookCut, bookFind, bookFrame, bookPages, bookPick, bookReadParts, bookReadTexts, bookRows, bookSheets, bookTarget, bookView, findLesson, lessonBlocks, lessonName, readLessonText, readSentences, readTimes } from '../src/chalk/index.ts';
+import { BOOK_MAX_PAGES, bookCut, bookFind, bookFrame, bookPages, bookPick, bookReadParts, bookReadTexts, bookRows, bookSheets, bookTarget, bookView, findLesson, lessonBlocks, lessonName, readLessonText, readSentences, readTimes } from '../src/chalk/index.ts';
 import type { BookLine, BookPage } from '../src/schema/index.ts';
 import { bookLesson, fitActs, lessonOpen, tocEntries } from '../src/board/lesson-fit.ts';
 import { lessonInit } from '../src/board/lesson.ts';
@@ -95,12 +95,14 @@ check('语文园地:按栏目分(跨页的栏目也认)', garden.filter((b) => b
   check('分段:诗一节一节空开一点就是一段;翻页处正好换节也分开', st.map((x) => x.text).join('|') === '孩子如果已经长大，就得告别妈妈出发。|蒲公英准备了小伞，把它送给自己的那些小娃娃。|苍耳妈妈有个好办法，给孩子穿上小铠甲。|植物妈妈的办法多，不信你就仔细观察。', JSON.stringify(st.map((x) => x.text)));
 }
 
-// ---- 点读:一课分成标题和一段一段,一段切成句;诗按节;舞台的钮在段首的空白里 ----
-check('点读切句:句号、问号、叹号收一句,紧跟的引号跟着;空白去掉', readSentences('小鱼说：“泡泡圆圆的！”小鸟 听了。真的吗？').join('|') === '小鱼说：“泡泡圆圆的！”|小鸟听了。|真的吗？');
-const longSay = readSentences('一'.repeat(70) + '，' + '二'.repeat(70) + '。');
-check('点读切句:太长的一句在逗号处切开', longSay.length === 2 && longSay.every((x) => Array.from(x).length <= READ_SAY_MAX) && longSay.join('') === '一'.repeat(70) + '，' + '二'.repeat(70) + '。', JSON.stringify(longSay));
+// ---- 点读:一课分成标题和一段一段,一段切成一截一截(停顿处);诗按节;舞台的钮在段首的空白里 ----
+check('点读切截:句末和逗号、顿号、冒号后面切,紧跟的引号跟着前一截;空白去掉', readSentences('小鱼说：“泡泡圆圆的！”小鸟 听了。真的吗？').join('|') === '小鱼说：|“泡泡圆圆的！”|小鸟听了。|真的吗？');
+check('点读切截:真课文(坐井观天)', readSentences('小鸟回答说：“我从天上来，我飞了一百多里，口渴了，下来找点儿水喝。”').join('|') === '小鸟回答说：|“我从天上来，|我飞了一百多里，|口渴了，|下来找点儿水喝。”');
+check('点读切截:顿号也切', readSentences('青蛙、小鸟、蝴蝶都来了。').join('|') === '青蛙、|小鸟、|蝴蝶都来了。');
+check('点读切截:不管长短,一个停顿一截;逗号后的引号跟着前一截', readSentences('啊，你来了，好。“你好，”他说。').join('|') === '啊，|你来了，|好。|“你好，”|他说。');
+check('点读切截:半角逗号、冒号不切(数里有)', readSentences('一共1,000个，8:30到。').join('|') === '一共1,000个，|8:30到。');
 const reads = bookReadTexts(fish, blocks);
-check('点读:标题(只读课名)在前,接着一段一块,句照段切', reads.map((x) => `${x.no}:${x.sents.join('/')}`).join('|') === '0:小鱼吹泡泡|1:小鱼在水里吹泡泡。|2:小鱼说：“泡泡圆圆的，像一个个小月亮，飞到天上去。/泡泡飞呀飞，飞进了井沿边的小花园。”|3:小鸟听了，也来吹泡泡。', JSON.stringify(reads));
+check('点读:标题(只读课名)在前,接着一段一块,一段切成一截一截', reads.map((x) => `${x.no}:${x.sents.join('/')}`).join('|') === '0:小鱼吹泡泡|1:小鱼在水里吹泡泡。|2:小鱼说：/“泡泡圆圆的，/像一个个小月亮，/飞到天上去。/泡泡飞呀飞，/飞进了井沿边的小花园。”|3:小鸟听了，/也来吹泡泡。', JSON.stringify(reads));
 const poemReads = bookReadTexts(lp('静夜思'), poem);
 check('点读:诗一节一块(一行一段的并起来);标题读课名,再读标题下面的诗题', poemReads.map((x) => `${x.no}:${x.sents.join('/')}`).join('|') === '0:古诗两首/静夜思|1:床前明月光，/疑是地上霜。', JSON.stringify(poemReads));
 check('点读:语文园地(按栏目分)不点读', bookReadTexts(lp('语文园地一'), garden).length === 0);
@@ -118,7 +120,7 @@ check('点读:语文园地(按栏目分)不点读', bookReadTexts(lp('语文园�
   if (glue) words[words.length - 1].text += glue;
   const tm = readTimes(reads, words);
   const startOf = (sent: string): number => words.findIndex((w) => w.text.replace(/\p{P}/gu, '').startsWith(Array.from(sent.replace(/\p{P}/gu, ''))[0]) && words.slice(words.indexOf(w)).map((x) => x.text).join('').replace(/\p{P}/gu, '').startsWith(sent.replace(/\p{P}/gu, ''))) * 100;
-  check('点读整篇的时间:每块每句从第几毫秒起,标点粘着也对得上;end = 最后一个字读完', tm.times.map((x) => x.length).join() === reads.map((x) => x.sents.length).join() && tm.times[0][0] === 0 && tm.times[2][1] === startOf('泡泡飞呀飞') && tm.times[3][0] === startOf('小鸟听了') && tm.end === words.length * 100, JSON.stringify(tm));
+  check('点读整篇的时间:每块每截从第几毫秒起,标点粘着也对得上;end = 最后一个字读完', tm.times.map((x) => x.length).join() === reads.map((x) => x.sents.length).join() && tm.times[0][0] === 0 && tm.times[2][4] === startOf('泡泡飞呀飞') && tm.times[3][0] === startOf('小鸟听了') && tm.end === words.length * 100, JSON.stringify(tm));
   const short = readTimes(reads, words.slice(0, 3));
   check('点读整篇的时间:后面没对上的句照前一句(不往回走)', short.times.flat().every((t, i, a) => i === 0 || t >= a[i - 1]), JSON.stringify(short));
 }
@@ -130,12 +132,12 @@ check('点读:语文园地(按栏目分)不点读', bookReadTexts(lp('语文园�
   check('点读的钮:能点的是段首缩进的那两格(宽两个字,到第一个字为止);钮在正中;高连着头上的拼音', parts.length === 4 && Math.abs(p1.hit[2] - p1.hit[0] - 2 * 18 * sh[0].s) < 2 && Math.abs((p1.hit[0] + p1.hit[2]) / 2 - p1.dot[0]) < 1 && Math.abs(p1.hit[2] - x1) < 3 && p1.dot[0] < x1 && p1.dot[0] > x1 - 40 && p1.hit[1] < line1.y1 * sh[0].s - (line1.y2 - line1.y1) * sh[0].s * 0.9, JSON.stringify(p1));
   const t = parts.find((x) => x.no === 0)!;
   check('点读的钮:标题的钮在课名左边', t.dot[0] < fish[0].lines.find((l) => l.text === '小鱼吹泡泡')!.x1 * sh[0].s, JSON.stringify(t));
-  // 正在读的那一句铺在哪:一句一行一个框,从这句第一个字到最后一个字,连着头上的拼音
+  // 正在读的那一截铺在哪:一截一行一个框,从这截第一个字到最后一个字,连着头上的拼音
   const p2 = parts.find((x) => x.no === 2)!;
   const fly = fish.flatMap((pg) => pg.lines.map((l) => ({ pg, l }))).find((x) => x.l.text.endsWith('泡泡飞呀'))!;
   const flyAt = Array.from(fly.l.text).indexOf('泡'), flySh = sh.find((x) => x.n === fly.pg.n)!;
-  const says2 = p2.says[1] ?? [];
-  check('点读的句框:第 2 段第 2 句从「泡泡飞呀」的第一个字起,跨页的段照行分框', p2.says.length === 2 && says2.length === 2 && says2[1][1] > flySh.top + flySh.height && Math.abs(says2[0][0] - fly.l.chars[flyAt].x1 * flySh.s) < 1 && says2[0][1] < (flySh.top + fly.l.y1 * flySh.s), JSON.stringify(p2.says));
+  const says2 = p2.says[4] ?? [];
+  check('点读的框:第 2 段第 5 截从「泡泡飞呀」的第一个字起,跨页的照行分框', p2.says.length === 6 && says2.length === 2 && says2[1][1] > flySh.top + flySh.height && Math.abs(says2[0][0] - fly.l.chars[flyAt].x1 * flySh.s) < 1 && says2[0][1] < (flySh.top + fly.l.y1 * flySh.s), JSON.stringify(p2.says));
   check('点读的句框:标题那一句只框课名(不框课号),每块每句都有框', Math.abs(t.says[0][0][0] - fish[0].lines.find((l) => l.text === '小鱼吹泡泡')!.x1 * sh[0].s) < 1 && parts.every((x) => x.says.length === x.sents.length && x.says.every((b) => b.length > 0)), JSON.stringify(parts.map((x) => x.says)));
 }
 
@@ -240,7 +242,7 @@ check('科学:和正文并排的安全提示不打断这一段;跨页的栏目�
 const ss = bookSheets(air);
 const ex1 = bookTarget(air, ss, sb, '探索与实践1');
 check('看栏目(空格可有可无):连着这个栏目下的段、提示、表,到下一个栏目为止', ex1?.label === '探索与实践 1' && ex1.rows.length === 7 && bookTarget(air, ss, sb, '探索与实践 1')?.rows.length === 7, JSON.stringify(ex1));
-check('科学点读:标题读课名(去掉「第1课」),一段一块', bookReadTexts(air, sb).map((x) => `${x.no}:${x.sents.join('/')}`).slice(0, 2).join('|') === '0:认识空气|1:雨后的公园里，他们在说什么？', JSON.stringify(bookReadTexts(air, sb)));
+check('科学点读:标题读课名(去掉「第1课」),一段一块', bookReadTexts(air, sb).map((x) => `${x.no}:${x.sents.join('/')}`).slice(0, 2).join('|') === '0:认识空气|1:雨后的公园里，/他们在说什么？', JSON.stringify(bookReadTexts(air, sb)));
 const sp = bookSlateParts(sx, bookLesson(sx, '认识空气')!);
 check('给老师的科学课:栏目、段、图里的字', sp.text.includes('【探索与实践 1】') && sp.text.includes('第3段 准备一个保鲜袋，观察袋内是否有东西。') && sp.text.includes('空气在哪里？'), JSON.stringify(sp));
 check('给老师的科学目录:一个单元一行,单元页也是一项', bookSlateParts(sx, bookLesson(sx, null)!).text.join('|') === '第1单元 空气和水:空气和水(1)、1 认识空气(2)、2 观察水(4)', JSON.stringify(bookSlateParts(sx, bookLesson(sx, null)!).text));

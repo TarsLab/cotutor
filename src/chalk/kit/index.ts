@@ -9,7 +9,7 @@ import { compass } from './compass.ts';
 import { dots } from './dots.ts';
 import type { Kit } from './types.ts';
 
-export { BOOK_ASPECT, BOOK_GAP, BOOK_MAX_PAGES, BOOK_TOC, BOOK_W, PICK_CHARS, READ_SAY_MAX, SECTION_NAMES, bookCut, bookCellsOf, bookFind, bookSpot, bookFrame, bookHeight, bookPages, bookPick, bookReadParts, bookReadTexts, bookRows, bookSheets, bookTarget, bookView, findLesson, lessonBlocks, lessonName, lineBox, pickEnglish, pickable, readLessonText, readSentences, readTimes, type BookBlock, type BookSheet, type ReadPart, type ReadText, type SceneCell } from './book.ts';
+export { BOOK_ASPECT, BOOK_GAP, BOOK_MAX_PAGES, BOOK_TOC, BOOK_W, PICK_CHARS, SECTION_NAMES, bookCut, bookCellsOf, bookFind, bookSpot, bookFrame, bookHeight, bookPages, bookPick, bookReadParts, bookReadTexts, bookRows, bookSheets, bookTarget, bookView, findLesson, lessonBlocks, lessonName, lineBox, pickEnglish, pickable, readLessonText, readSentences, readTimes, type BookBlock, type BookSheet, type ReadPart, type ReadText, type SceneCell } from './book.ts';
 export { PHOTO_ITEM, photoBookPage, photoText, type PhotoLine, type PhotoQuestion, type PhotoText, type PhotoWord } from './photo.ts';
 export { workbookBookPage, workbookInk, workbookPage, workbookPageId, workbookText, workbookWriteRegions } from './workbook.ts';
 export type { Kit, KitParam, KitScene, KitState, KitTurn } from './types.ts';

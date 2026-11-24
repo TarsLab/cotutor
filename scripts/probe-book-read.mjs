@@ -5,7 +5,7 @@
  *  一、首页点语文的「课本」,孩子说「我要预习坐井观天」:翻到这一课。
  *  一之二、还没点过读:标题前的钮先摆着(描边播放形,invite)。
  *  二、鼠标移到第 6 段段首的空白:浅浅出一个描边的播放钮;移开就收。
- *  三、点它:钮变成暂停的样子(合成慢时先转圈),假配音收到整篇(一次,SSE 带字的时间);标题前的钮收起;正在读的那一句铺一层学科色(.bk-say),页上不刷黄;换到第二句框跟着挪。
+ *  三、点它:钮变成暂停的样子(合成慢时先转圈),假配音收到整篇(一次,SSE 带字的时间);标题前的钮收起;正在读的那一截(停顿处切)铺一层学科色(.bk-say),页上不刷黄;换到第二截框跟着挪。
  *  四、第 6 段读完:同一份声音接着放,钮挪到第 7 段。
  *  五、点第 7 段的钮:暂停(钮变回播放的样子);报 {k:'read', from: 6, to: 7};服务端记进板的日志。
  *  六、孩子再说一句:那一轮的上下文包「孩子做的」里有「自己点了课文听」。
@@ -185,10 +185,10 @@ try {
   ok('读的时候页上不刷黄', (await yellow()) === 0);
   ok('点过了:标题前的钮收起', (await btn()).every((b) => b.mode !== 'invite'), JSON.stringify(await btn()));
   const l0 = await lit();
-  ok('正在读的那一句铺一层(第 6 段第 1 句,框在这一段的第一行)', l0.length === 1 && l0[0].say === `${k6}.0` && Math.abs(l0[0].ys[0] - (parts[k6].says[0][0][1] - 3)) < 1, JSON.stringify({ l0, want: parts[k6].says[0] }));
+  ok('正在读的那一截铺一层(第 6 段第 1 截,框在这一段的第一行)', l0.length === 1 && l0[0].say === `${k6}.0` && Math.abs(l0[0].ys[0] - (parts[k6].says[0][0][1] - 3)) < 1, JSON.stringify({ l0, want: parts[k6].says[0] }));
   if (parts[k6].sents.length > 1) {
     const l1 = await until(`(() => { const d = ${STAGE}; const g = d && d.querySelector('.bk-say g:not(.bk-gone)'); return g && g.dataset.say === '${k6}.1' ? g.dataset.say : null; })()`, 20000);
-    ok('读到第二句:框挪到第二句', Boolean(l1));
+    ok('读到第二截:框挪到第二截', Boolean(l1));
   }
   console.log('  ', await shot('2-在读.png'));
 
@@ -207,7 +207,7 @@ try {
   const rf = frames.slice(nf).find((f) => f.t === 'board' && f.body?.k === 'read');
   ok('点在读的那段:暂停,钮变回播放的样子;报 read 从第 6 段到第 7 段', ps.length === 1 && ps[0].mode === 'paused' && rf?.body?.from === 6 && rf.body.to === 7 && !rf.body.done, JSON.stringify({ ps, rf }));
   const lp = await lit();
-  ok('暂停:那一句的底色淡一半、留着', lp.length === 1 && lp[0].soft && lp[0].say.startsWith(`${k7}.`), JSON.stringify(lp));
+  ok('暂停:那一截的底色淡一半、留着', lp.length === 1 && lp[0].soft && lp[0].say.startsWith(`${k7}.`), JSON.stringify(lp));
   console.log('  ', await shot('4-暂停.png'));
   await sleep(500);
   const log = await readBoard(wsx, T, (await day()).date, (await day()).messages.slice(-1)[0].thread);

@@ -386,12 +386,9 @@ function withPinyin(l: BookLine): string {
 
 // ——— 点读课文 ———
 
-/** 点读一句最多几个字(合成一次的长度;长的在逗号处再切) */
-export const READ_SAY_MAX = 120;
-
 /**
- * 一段话切成一句一句(点读一句合成一次、放一次,暂停了从那一句接着读):句号、问号、叹号、省略号、分号收一句,紧跟的引号、括号跟着这一句;
- * 还是太长的在逗号处切。空白都去掉(PDF 的文字层里一行里偶尔有空格)
+ * 一段话切成一截一截(点读时正在读的那一截铺底色):句末(。！？…；)和停顿(，、：)后面切开,紧跟的引号、括号跟着前一截;不管长短,一个停顿一截。
+ * 半角的逗号、冒号不切(数里有:1,000、8:30)。空白都去掉(PDF 的文字层里一行里偶尔有空格)
  */
 export function readSentences(text: string): string[] {
   const cs = Array.from(text.replace(/\s+/g, ''));
@@ -399,34 +396,24 @@ export function readSentences(text: string): string[] {
   let cur = '';
   for (let i = 0; i < cs.length; i++) {
     cur += cs[i];
-    if (!/[。！？!?…；;]/.test(cs[i])) continue;
+    if (!/[。！？!?…；;，、：]/.test(cs[i])) continue;
     while (i + 1 < cs.length && /[。！？!?…”’」』)）]/.test(cs[i + 1])) cur += cs[++i];
     out.push(cur);
     cur = '';
   }
   if (cur) out.push(cur);
-  return out.flatMap((s) => {
-    if (Array.from(s).length <= READ_SAY_MAX) return [s];
-    const parts: string[] = [];
-    let at = '';
-    for (const piece of s.split(/(?<=[，,、：:])/)) {
-      if (at && Array.from(at + piece).length > READ_SAY_MAX) { parts.push(at); at = ''; }
-      at += piece;
-    }
-    if (at) parts.push(at);
-    return parts.flatMap((p) => (Array.from(p).length <= READ_SAY_MAX ? [p] : Array.from({ length: Math.ceil(Array.from(p).length / READ_SAY_MAX) }, (_, k) => Array.from(p).slice(k * READ_SAY_MAX, (k + 1) * READ_SAY_MAX).join(''))));
-  });
+  return out;
 }
 
 /** 标题里的课名:去掉课号和略读课的星号(「5 秋天的信」「*8 古诗二首」「第1课认识空气」→ 课名) */
 const titleSay = (t: string): string => t.replace(/^[\s*＊]*(?:第\s*\d{1,2}\s*课|\d{1,2})[\s.．、]*/, '').replace(/\s+/g, '');
 
 /**
- * 一课里点读的几块(语文课文,docs/dev/课本.md):标题(no 0)和一个个自然段(no = 第几段),每块切成句;
+ * 一课里点读的几块(语文课文,docs/dev/课本.md):标题(no 0)和一个个自然段(no = 第几段),每块切成一截一截(readSentences,停顿处切;sents 就是这些截);
  * 标题读课名,古诗再读诗题和作者(标题下面同一页、字不太小的那几行:「登鹳雀楼」「[唐]王之涣」);
  * 一行一段的诗(识字课、古诗)按节读:一节一块(同一页里空出一截、或换页就是下一节),no 是这一节第一行那段。
  * line = 这一块读的那一行(标题是字号最大的那行,段是段首那一行);rows = 这一块的字在哪几行(照读的先后;舞台照它把句对到字上)。没有自然段(语文园地按栏目分、数学)= 空:不点读。
- * 服务端照它整篇合成(/api/kid/textbook/read,readLessonText、readTimes),舞台照它摆段首的钮、铺正在读的那一句(bookReadParts),两边拿同一份行,所以块和句对得上。
+ * 服务端照它整篇合成(/api/kid/textbook/read,readLessonText、readTimes),舞台照它摆段首的钮、铺正在读的那一截(bookReadParts),两边拿同一份行,所以块和截对得上。
  */
 export interface ReadText { no: number; sents: string[]; line: { n: number; i: number }; rows: { n: number; i: number }[] }
 export function bookReadTexts(pages: readonly BookPage[], blocks: readonly BookBlock[]): ReadText[] {
@@ -497,7 +484,7 @@ export function readTimes(texts: readonly ReadText[], words: readonly { text: st
 /**
  * 点读的几块摆在场景里:hit = 能点的那块空白——段首缩进的那两格(宽两个字,从这一行第一个字往左),标题是课号左边两个字宽;
  * 高是这一行字连着头上的拼音。dot = 钮的圆心(那两格正中,和字同一高度),r = 钮的半径;
- * says[s] = 第 s 句在页上的框,一行一个(从这句第一个字到最后一个字,连着头上的拼音;正在读的那一句舞台照它铺一层学科色)
+ * says[s] = 第 s 截在页上的框,一行一个(从这截第一个字到最后一个字,连着头上的拼音;正在读的那一截舞台照它铺一层学科色)
  */
 export interface ReadPart { no: number; sents: string[]; hit: Box; dot: [number, number]; r: number; says: Box[][] }
 export function bookReadParts(pages: readonly BookPage[], sheets: readonly BookSheet[], blocks: readonly BookBlock[]): ReadPart[] {

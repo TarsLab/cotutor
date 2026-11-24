@@ -66,7 +66,7 @@ html, body, #root { margin: 0; height: 100%; background: #fffdf8; font: 18px/1.5
 .bk-read-spin { transform-box: fill-box; transform-origin: center; animation: bk-read-spin .8s linear infinite; }
 @keyframes bk-read-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes bk-read-spin { to { transform: rotate(360deg); } }
-/* 正在读的那一句(book.tsx 的 paintRead):学科色铺一层,正片叠底;暂停淡一半,换句、停下淡出 */
+/* 正在读的那一截(book.tsx 的 paintRead):学科色铺一层,正片叠底;暂停淡一半,换截、停下淡出 */
 .bk-say { mix-blend-mode: multiply; }
 .bk-say g { opacity: .13; transition: opacity .25s ease; animation: bk-say-in .25s ease-out; }
 .bk-say g.bk-soft { opacity: .07; }

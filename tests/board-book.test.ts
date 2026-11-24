@@ -223,7 +223,7 @@ const ix = bookIndexOf();
   const at = (sent: string): number => (Array.from(flat.slice(0, flat.indexOf(sent))).length + 1) * WORD_MS;
   const times = (r0.json as { times: number[][]; end: number }).times;
   check('点读:整篇一次合成(SSE 带字的时间;语文出厂的龙安灵心走 3.1-plus),一块一行', tts.requests.length === 1 && said.sse === true && said.model === 'qwen-audio-3.1-tts-plus' && said.voice === 'longanlingxin_v3.1' && said.text.split('\n')[0] === '小鱼吹泡泡' && said.text.split('\n').length === 4, JSON.stringify(tts.requests));
-  check('点读:回每块每句从第几毫秒起(第 2 段第 2 句「泡泡飞呀飞」照字对上)', r0.status === 200 && times.map((x) => x.length).join() === '1,1,2,1' && times[0][0] === WORD_MS && times[2][1] === at('泡泡飞呀飞') && times[3][0] === at('小鸟听了'), JSON.stringify([r0.json, flat]));
+  check('点读:回每块每截从第几毫秒起(第 2 段第 5 截「泡泡飞呀飞」照字对上)', r0.status === 200 && times.map((x) => x.length).join() === '1,1,6,2' && times[0][0] === WORD_MS && times[2][4] === at('泡泡飞呀飞') && times[3][0] === at('小鸟听了'), JSON.stringify([r0.json, flat]));
   check('点读:audio=1 给那份声音;再要不再合成', rAudio.status === 200 && rAudio.contentType === 'audio/mpeg' && readFileSync(rAudio.file!, 'utf8') === `fake-mp3:longanlingxin_v3.1:${said.text}` && rAgain.status === 200 && tts.requests.length === 1, JSON.stringify([rAudio, tts.requests.length]));
   const rBad = await Promise.all([rd('p=x'), rd('p=2-3', 'nobody'), route('GET', `/api/kid/textbook/read?tutor=${T}&b=${encodeURIComponent('没有这本.pdf')}&p=2-3`, ctx)]);
   check('点读:页写错、没有这位老师、没有这本书:404', rBad.every((r) => r.status === 404), JSON.stringify(rBad.map((r) => r.status)));

@@ -425,23 +425,24 @@ const titleSay = (t: string): string => t.replace(/^[\s*＊]*(?:第\s*\d{1,2}\s*
  * 一课里点读的几块(语文课文,docs/dev/课本.md):标题(no 0)和一个个自然段(no = 第几段),每块切成句;
  * 标题读课名,古诗再读诗题和作者(标题下面同一页、字不太小的那几行:「登鹳雀楼」「[唐]王之涣」);
  * 一行一段的诗(识字课、古诗)按节读:一节一块(同一页里空出一截、或换页就是下一节),no 是这一节第一行那段。
- * line = 这一块读的那一行(标题是字号最大的那行,段是段首那一行)。没有自然段(语文园地按栏目分、数学)= 空:不点读。
- * 服务端照它合成第几块第几句(/api/kid/textbook/say),舞台照它摆段首的钮(bookReadParts),两边拿同一份行,所以块和句对得上。
+ * line = 这一块读的那一行(标题是字号最大的那行,段是段首那一行);rows = 这一块的字在哪几行(照读的先后;舞台照它把句对到字上)。没有自然段(语文园地按栏目分、数学)= 空:不点读。
+ * 服务端照它合成第几块第几句(/api/kid/textbook/say),舞台照它摆段首的钮、铺正在读的那一句(bookReadParts),两边拿同一份行,所以块和句对得上。
  */
-export function bookReadTexts(pages: readonly BookPage[], blocks: readonly BookBlock[]): { no: number; sents: string[]; line: { n: number; i: number } }[] {
+export interface ReadText { no: number; sents: string[]; line: { n: number; i: number }; rows: { n: number; i: number }[] }
+export function bookReadTexts(pages: readonly BookPage[], blocks: readonly BookBlock[]): ReadText[] {
   const paras = blocks.filter((b) => b.kind === 'para' && b.refs.length);
   if (!paras.length) return [];
   const lineOf = (r: { n: number; i: number }): BookLine | undefined => pages.find((p) => p.n === r.n)?.lines[r.i];
-  const out: { no: number; sents: string[]; line: { n: number; i: number } }[] = [];
+  const out: ReadText[] = [];
   // 标题:标题那一块里有汉字、字号最大的那行(前面可能还有上一课的尾巴、单元名)
   const t = blocks.find((b) => b.kind === 'title');
   const rows = (t?.refs ?? []).map((r) => ({ r, l: lineOf(r) })).filter((x): x is { r: { n: number; i: number }; l: BookLine } => Boolean(x.l));
   const main = rows.filter((x) => /\p{Script=Han}/u.test(x.l.text)).sort((a, b) => b.l.z - a.l.z)[0];
   const say = main ? titleSay(main.l.text) : '';
   if (main && say) {
-    const sub = rows.filter((x) => x !== main && x.r.n === main.r.n && x.l.y1 > main.l.y1 && x.l.z >= main.l.z * 0.5 && /\p{Script=Han}/u.test(x.l.text) && !/^\d+$/.test(x.l.text.trim()))
-      .map((x) => x.l.text.replace(/[[\]［］〔〕【】]/g, ' ').trim().replace(/\s+/g, ','));
-    out.push({ no: 0, sents: [say, ...sub], line: main.r });
+    const subRows = rows.filter((x) => x !== main && x.r.n === main.r.n && x.l.y1 > main.l.y1 && x.l.z >= main.l.z * 0.5 && /\p{Script=Han}/u.test(x.l.text) && !/^\d+$/.test(x.l.text.trim()));
+    const sub = subRows.map((x) => x.l.text.replace(/[[\]［］〔〕【】]/g, ' ').trim().replace(/\s+/g, ','));
+    out.push({ no: 0, sents: [say, ...sub], line: main.r, rows: [main.r, ...subRows.map((x) => x.r)] });
   }
   // 一行一段的诗:按节并起来
   const poem = paras.every((b) => b.refs.length === 1 && Array.from(b.text).length <= 12);
@@ -449,26 +450,28 @@ export function bookReadTexts(pages: readonly BookPage[], blocks: readonly BookB
     const ys = paras.map((b) => ({ b, n: b.refs[0].n, y: lineOf(b.refs[0])?.y1 ?? 0 }));
     const gaps = ys.slice(1).flatMap((x, k) => (x.n === ys[k].n ? [x.y - ys[k].y] : [])).sort((a, b) => a - b);
     const pitch = gaps[Math.floor(gaps.length / 2)] ?? 0;
-    let cur: { no: number; sents: string[]; line: { n: number; i: number } } | null = null;
+    let cur: ReadText | null = null;
     ys.forEach((x, k) => {
       const prev = ys[k - 1];
-      if (!cur || !prev || prev.n !== x.n || x.y - prev.y > pitch * 1.3) { cur = { no: x.b.no!, sents: [], line: x.b.refs[0] }; out.push(cur); }
+      if (!cur || !prev || prev.n !== x.n || x.y - prev.y > pitch * 1.3) { cur = { no: x.b.no!, sents: [], line: x.b.refs[0], rows: [] }; out.push(cur); }
       cur.sents.push(...readSentences(x.b.text));
+      cur.rows.push(...x.b.refs);
     });
     return out.filter((x) => x.sents.length);
   }
   for (const b of paras) {
     const sents = readSentences(b.text);
-    if (sents.length) out.push({ no: b.no!, sents, line: b.refs[0] });
+    if (sents.length) out.push({ no: b.no!, sents, line: b.refs[0], rows: b.refs });
   }
   return out;
 }
 
 /**
  * 点读的几块摆在场景里:hit = 能点的那块空白——段首缩进的那两格(宽两个字,从这一行第一个字往左),标题是课号左边两个字宽;
- * 高是这一行字连着头上的拼音。dot = 钮的圆心(那两格正中,和字同一高度),r = 钮的半径
+ * 高是这一行字连着头上的拼音。dot = 钮的圆心(那两格正中,和字同一高度),r = 钮的半径;
+ * says[s] = 第 s 句在页上的框,一行一个(从这句第一个字到最后一个字,连着头上的拼音;正在读的那一句舞台照它铺一层学科色)
  */
-export interface ReadPart { no: number; sents: string[]; hit: Box; dot: [number, number]; r: number }
+export interface ReadPart { no: number; sents: string[]; hit: Box; dot: [number, number]; r: number; says: Box[][] }
 export function bookReadParts(pages: readonly BookPage[], sheets: readonly BookSheet[], blocks: readonly BookBlock[]): ReadPart[] {
   return bookReadTexts(pages, blocks).flatMap((x) => {
     const p = pages.find((pp) => pp.n === x.line.n), sh = sheetOf(sheets, x.line.n), l = p?.lines[x.line.i];
@@ -483,7 +486,40 @@ export function bookReadParts(pages: readonly BookPage[], sheets: readonly BookS
     const from = Math.max(0, right - step * 2);
     if (right - from < step) return [];
     const r = r1(Math.min(18, h * 0.5, (right - from) * 0.4));
-    return [{ no: x.no, sents: x.sents, hit: [r1(from), r1(top), r1(right), r1(y2)] as Box, dot: [r1((from + right) / 2), r1((y1 + y2) / 2)] as [number, number], r }];
+    return [{ no: x.no, sents: x.sents, hit: [r1(from), r1(top), r1(right), r1(y2)] as Box, dot: [r1((from + right) / 2), r1((y1 + y2) / 2)] as [number, number], r, says: readSays(pages, sheets, x) }];
+  });
+}
+
+/** 句里的字对不上时往后找几个字(句是去了空白的段文字,标题的诗题把空格换成了逗号) */
+const SAY_LOOK = 6;
+
+/**
+ * 每一句在页上的框:把这一块那几行的字连成一串,句里的字照先后一个一个对上去(对不上的字跳过,往后最多找 SAY_LOOK 个),
+ * 对上的字按行并成框;一句没对上一个字 = 空(不铺)
+ */
+function readSays(pages: readonly BookPage[], sheets: readonly BookSheet[], x: ReadText): Box[][] {
+  const chars: { c: string; row: number; x1: number; x2: number }[] = [];
+  const rows: { y1: number; y2: number; s: number }[] = [];
+  for (const ref of x.rows) {
+    const p = pages.find((pp) => pp.n === ref.n), sh = sheetOf(sheets, ref.n), l = p?.lines[ref.i];
+    if (!p || !sh || !l) continue;
+    const [, y1, , y2] = lineBox(sh, l);
+    const top = l.chars.some((c) => c.py) ? y1 - (y2 - y1) * 0.95 : y1;
+    const row = rows.push({ y1: top, y2, s: sh.s }) - 1;
+    for (const ch of l.chars) if (!/\s/.test(ch.c)) chars.push({ c: ch.c, row, x1: ch.x1, x2: ch.x2 });
+  }
+  let at = 0;
+  return x.sents.map((sent) => {
+    const hit = new Map<number, [number, number]>();
+    for (const c of Array.from(sent.replace(/\s+/g, ''))) {
+      let j = at;
+      while (j < chars.length && j < at + SAY_LOOK && chars[j].c !== c) j++;
+      if (j >= chars.length || chars[j].c !== c) continue;
+      const ch = chars[j], had = hit.get(ch.row);
+      hit.set(ch.row, had ? [Math.min(had[0], ch.x1), Math.max(had[1], ch.x2)] : [ch.x1, ch.x2]);
+      at = j + 1;
+    }
+    return [...hit.entries()].sort((a, b) => a[0] - b[0]).map(([row, [a, b]]): Box => [r1(a * rows[row].s), r1(rows[row].y1), r1(b * rows[row].s), r1(rows[row].y2)]);
   });
 }
 

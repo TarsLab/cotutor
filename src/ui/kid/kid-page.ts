@@ -2796,7 +2796,7 @@ __REEL_DOCK_JS__
   };
   const readNext = () => {
     if (LV.model.status !== 'reading' || RD.k < 0) return;
-    if (RD.s + 1 < RD.parts[RD.k]) { RD.s++; readSay(); return; }
+    if (RD.s + 1 < RD.parts[RD.k]) { RD.s++; lsShow(); readSay(); return; }
     if (RD.k + 1 < RD.parts.length) {
       RD.k++; RD.s = 0;
       readMode('between');
@@ -2856,8 +2856,8 @@ __REEL_DOCK_JS__
     clearTimeout(RD.fadeT); RD.at = ''; RD.k = -1; RD.s = 0; RD.mode = ''; RD.from = -1;
     if (was) setTimeout(() => { if (LV.model.status === 'reading') liveDispatch({ type: 'readStop' }); }, 0);
   };
-  /** 发给舞台的点读:null = 这一页不点读;k = -1 没在读 */
-  const readView = () => (readOk() ? (RD.at === LS.l.at && RD.k >= 0 && RD.mode && RD.mode !== 'rest' ? { k: RD.k, mode: RD.mode } : { k: -1, mode: '' }) : null);
+  /** 发给舞台的点读:null = 这一页不点读;k = -1 没在读,s = 第几句(舞台铺那一句);invite = 进了这一课还没点过读(RD.at 点了才记上、翻走就清掉),标题前的钮先摆着 */
+  const readView = () => (readOk() ? (RD.at === LS.l.at && RD.k >= 0 && RD.mode && RD.mode !== 'rest' ? { k: RD.k, s: RD.s, mode: RD.mode } : { k: -1, mode: '', ...(RD.at === LS.l.at ? {} : { invite: true }) }) : null);
   const liveCaption = () => {
     liveListenUi();
     lvKid();

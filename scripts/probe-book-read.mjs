@@ -3,8 +3,9 @@
  * 点读课文(语文课本的一课,docs/dev/课本.md)的孩子端整条线手动验收:不进 pnpm test,要本机 Chrome 和一本语文课本 PDF;假百炼 + 假老师 + 假配音,不花钱。
  * 搭法同 scripts/probe-book-page.mjs(本进程起服务,临时 workspace 的 教材/ 里链着给的 PDF):
  *  一、首页点语文的「课本」,孩子说「我要预习坐井观天」:翻到这一课。
+ *  一之二、还没点过读:标题前的钮先摆着(描边播放形,invite)。
  *  二、鼠标移到第 6 段段首的空白:浅浅出一个描边的播放钮;移开就收。
- *  三、点它:钮变成暂停的样子(合成慢时先转圈),假配音收到第 6 段的句子;页上不刷黄。
+ *  三、点它:钮变成暂停的样子(合成慢时先转圈),假配音收到第 6 段的句子;标题前的钮收起;正在读的那一句铺一层学科色(.bk-say),页上不刷黄;换到第二句框跟着挪。
  *  四、第 6 段读完:钮挪到第 7 段、转一圈,接着读第 7 段。
  *  五、点第 7 段的钮:暂停(钮变回播放的样子);报 {k:'read', from: 6, to: 7};服务端记进板的日志。
  *  六、孩子再说一句:那一轮的上下文包「孩子做的」里有「自己点了课文听」。
@@ -132,6 +133,7 @@ try {
   const day = async () => (await (await fetch(`${base}/api/kid/conversations/${T}/today`)).json());
   const idle = async () => { for (let i = 0; i < 80 && (await day()).messages?.some((m) => m.result === 'running'); i++) await sleep(250); };
   const btn = () => stageEval(`(d) => [...d.querySelectorAll('.bk-read-btn:not(.bk-gone)')].map((g) => { const c = g.querySelector('circle'); return { mode: g.dataset.mode, cy: +c.getAttribute('cy') }; })`);
+  const lit = () => stageEval(`(d) => [...d.querySelectorAll('.bk-say g:not(.bk-gone)')].map((g) => ({ say: g.dataset.say, soft: g.classList.contains('bk-soft'), ys: [...g.querySelectorAll('rect')].map((r) => +r.getAttribute('y')) }))`);
   const yellow = () => stageEval(`(d) => d.querySelectorAll('.bk-look rect').length`);
 
   // 一、进课本,翻到坐井观天
@@ -159,15 +161,20 @@ try {
   const z6 = scr(parts[k6]);
   ok('第 6 段段首的空白在窗里', z6.y > cam.top + 20 && z6.y < cam.top + cam.h - 60, JSON.stringify({ z6, cam }));
 
+  const tk = parts.findIndex((p) => p.no === 0);
+  const inv = await btn();
+  ok('还没点过读:标题前的钮先摆着(描边播放形)', inv.length === 1 && inv[0].mode === 'invite' && Math.abs(inv[0].cy - parts[tk].dot[1]) < 1, JSON.stringify(inv));
+  console.log('  ', await shot('0-进来.png'));
+
   // 二、悬停
   await mouse('mouseMoved', z6.x, z6.y);
   await sleep(300);
   const hv = await btn();
-  ok('鼠标移到第 6 段段首:浅浅出一个描边的播放钮', hv.length === 1 && hv[0].mode === 'hover' && Math.abs(hv[0].cy - parts[k6].dot[1]) < 1, JSON.stringify(hv));
+  ok('鼠标移到第 6 段段首:浅浅出一个描边的播放钮(标题前那颗还在)', hv.length === 2 && hv.some((b) => b.mode === 'hover' && Math.abs(b.cy - parts[k6].dot[1]) < 1) && hv.some((b) => b.mode === 'invite'), JSON.stringify(hv));
   console.log('  ', await shot('1-悬停.png'));
   await mouse('mouseMoved', cam.left + cam.w / 2, cam.top + 40);
   await sleep(600);
-  ok('移开:钮收起', (await btn()).length === 0, JSON.stringify(await btn()));
+  ok('移开:只剩标题前那颗', (await btn()).map((b) => b.mode).join() === 'invite', JSON.stringify(await btn()));
 
   // 三、点它:读第 6 段
   const n0 = tts.requests.length;
@@ -176,6 +183,13 @@ try {
   const sent = tts.requests.slice(n0).map((r) => r.text);
   ok('点第 6 段:钮变成暂停的样子,假配音收到第 6 段的第一句(下一句同时预取着)', Boolean(playing) && sent.includes(parts[k6].sents[0]), JSON.stringify({ sent, want: parts[k6].sents }));
   ok('读的时候页上不刷黄', (await yellow()) === 0);
+  ok('点过了:标题前的钮收起', (await btn()).every((b) => b.mode !== 'invite'), JSON.stringify(await btn()));
+  const l0 = await lit();
+  ok('正在读的那一句铺一层(第 6 段第 1 句,框在这一段的第一行)', l0.length === 1 && l0[0].say === `${k6}.0` && Math.abs(l0[0].ys[0] - (parts[k6].says[0][0][1] - 3)) < 1, JSON.stringify({ l0, want: parts[k6].says[0] }));
+  if (parts[k6].sents.length > 1) {
+    const l1 = await until(`(() => { const d = ${STAGE}; const g = d && d.querySelector('.bk-say g:not(.bk-gone)'); return g && g.dataset.say === '${k6}.1' ? g.dataset.say : null; })()`, 20000);
+    ok('读到第二句:框挪到第二句', Boolean(l1));
+  }
   console.log('  ', await shot('2-在读.png'));
 
   // 四、读完第 6 段:钮挪到第 7 段转一圈,接着读
@@ -194,6 +208,8 @@ try {
   const ps = await btn();
   const rf = frames.slice(nf).find((f) => f.t === 'board' && f.body?.k === 'read');
   ok('点在读的那段:暂停,钮变回播放的样子;报 read 从第 6 段到第 7 段', ps.length === 1 && ps[0].mode === 'paused' && rf?.body?.from === 6 && rf.body.to === 7 && !rf.body.done, JSON.stringify({ ps, rf }));
+  const lp = await lit();
+  ok('暂停:那一句的底色淡一半、留着', lp.length === 1 && lp[0].soft && lp[0].say.startsWith(`${k7}.`), JSON.stringify(lp));
   console.log('  ', await shot('4-暂停.png'));
   await sleep(500);
   const log = await readBoard(wsx, T, (await day()).date, (await day()).messages.slice(-1)[0].thread);

@@ -68,7 +68,13 @@ html, body, #root { margin: 0; height: 100%; background: #fffdf8; font: 18px/1.5
 @keyframes bk-read-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes bk-read-spin { to { transform: rotate(360deg); } }
 @keyframes bk-read-ring { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
-@media (prefers-reduced-motion: reduce) { .bk-read-btn, .bk-read-spin, .bk-read-ring { animation: none; transition: none; } .bk-read-ring { stroke-dashoffset: 0; } }
+/* 正在读的那一句(book.tsx 的 paintRead):学科色铺一层,正片叠底;暂停淡一半,换句、停下淡出 */
+.bk-say { mix-blend-mode: multiply; }
+.bk-say g { opacity: .13; transition: opacity .25s ease; animation: bk-say-in .25s ease-out; }
+.bk-say g.bk-soft { opacity: .07; }
+.bk-say g.bk-gone { opacity: 0; }
+@keyframes bk-say-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .bk-read-btn, .bk-read-spin, .bk-read-ring, .bk-say g { animation: none; transition: none; } .bk-read-ring { stroke-dashoffset: 0; } }
 
 /* ---- 小课堂(一节课里的一页):一条竖栏(课名、画一画 / 擦掉),画面占满中间,下面字幕、一行控制(播放、进度条、时间、提示)。
    回首页的胶囊、老师的牌、老师说的话是页面的(kid-page.ts 的 #stage.bp.lcp),浮在舞台上:竖栏在老师牌的对面(右手的老师牌在左,竖栏在右),顶上让出胶囊 ---- */

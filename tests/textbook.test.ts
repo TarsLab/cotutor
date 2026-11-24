@@ -112,6 +112,13 @@ check('点读:语文园地(按栏目分)不点读', bookReadTexts(lp('语文园�
   check('点读的钮:能点的是段首缩进的那两格(宽两个字,到第一个字为止);钮在正中;高连着头上的拼音', parts.length === 4 && Math.abs(p1.hit[2] - p1.hit[0] - 2 * 18 * sh[0].s) < 2 && Math.abs((p1.hit[0] + p1.hit[2]) / 2 - p1.dot[0]) < 1 && Math.abs(p1.hit[2] - x1) < 3 && p1.dot[0] < x1 && p1.dot[0] > x1 - 40 && p1.hit[1] < line1.y1 * sh[0].s - (line1.y2 - line1.y1) * sh[0].s * 0.9, JSON.stringify(p1));
   const t = parts.find((x) => x.no === 0)!;
   check('点读的钮:标题的钮在课名左边', t.dot[0] < fish[0].lines.find((l) => l.text === '小鱼吹泡泡')!.x1 * sh[0].s, JSON.stringify(t));
+  // 正在读的那一句铺在哪:一句一行一个框,从这句第一个字到最后一个字,连着头上的拼音
+  const p2 = parts.find((x) => x.no === 2)!;
+  const fly = fish.flatMap((pg) => pg.lines.map((l) => ({ pg, l }))).find((x) => x.l.text.endsWith('泡泡飞呀'))!;
+  const flyAt = Array.from(fly.l.text).indexOf('泡'), flySh = sh.find((x) => x.n === fly.pg.n)!;
+  const says2 = p2.says[1] ?? [];
+  check('点读的句框:第 2 段第 2 句从「泡泡飞呀」的第一个字起,跨页的段照行分框', p2.says.length === 2 && says2.length === 2 && says2[1][1] > flySh.top + flySh.height && Math.abs(says2[0][0] - fly.l.chars[flyAt].x1 * flySh.s) < 1 && says2[0][1] < (flySh.top + fly.l.y1 * flySh.s), JSON.stringify(p2.says));
+  check('点读的句框:标题那一句只框课名(不框课号),每块每句都有框', Math.abs(t.says[0][0][0] - fish[0].lines.find((l) => l.text === '小鱼吹泡泡')!.x1 * sh[0].s) < 1 && parts.every((x) => x.says.length === x.sents.length && x.says.every((b) => b.length > 0)), JSON.stringify(parts.map((x) => x.says)));
 }
 
 // ---- 找位置 ----

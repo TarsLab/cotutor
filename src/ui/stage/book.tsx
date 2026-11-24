@@ -31,8 +31,10 @@
  * 能写的格平时不画;鼠标、悬着的笔移上去浅浅铺一层学科色,手指按住一会儿(TOC_PRESS_MS,刚滚起来的不算)深一点(同目录;.bk-cell-hint)。
  * 点读(语文课文,页面给了 read):标题、段首缩进的那两格(bookReadParts:连着头上的拼音)能点,平时不画,也不画出这块范围;鼠标、悬着的笔移上去只出一个淡淡的描边播放钮
  * (在两格正中、和汉字那一行齐),手指按住一会儿钮深一点;点一下(手指不等双击,笔、鼠标点一下不动)告诉页面(read,带这一课分好的几块各几句)。读不读、读到哪是页面的事(它放配音),
- * 它发来的 read.k / mode 照着画钮:playing 实心暂停钮、loading 转一个小圈、between 挪到下一块转一圈、paused 描边播放钮;页上不刷不画。
- * 读到窗外的一块:孩子 READ_IDLE_MS 内没动过手就把窗挪过去,动过就不抢。
+ * 它发来的 read.k / mode 照着画钮:playing 实心暂停钮、loading 转一个小圈、between 挪到下一块转一圈、paused 描边播放钮;
+ * read.invite(进了这一课还没点过读):标题前的钮先摆着,描边播放形同暂停,不闪不动(手指没有悬着,孩子看不见能点哪;设计稿 https://claude.ai/artifact/RPqnrMdNvmqjvD14ES1nS5 的 V2)。
+ * 正在读的那一句(read.s):字连拼音铺一层学科色(.bk-say,正片叠底,ReadPart.says 一行一个框),暂停时淡一半;段间、停下淡掉后不铺。别的不刷不画。
+ * 读到窗外的一句:孩子 READ_IDLE_MS 内没动过手就把窗挪过去,动过就不抢。
  * 类名带 bk-(舞台页也装孩子端的 theme.css);没有工具那一栏(课本铺满屏宽):只有一颗「擦掉」浮在屏幕边上(.bk-wipe)。
  */
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
@@ -100,7 +102,7 @@ export interface BookStageProps {
   /** 点开了一块盖住的(遮、盖) */
   onReveal?(text: string): void;
   /** 点读:这一页能点读就给(k = 在读哪一块,-1 没在读;mode 见文件头);不给 = 不点读 */
-  read?: { k: number; mode: string } | null;
+  read?: { k: number; s?: number; mode: string; invite?: boolean } | null;
   /** 点了第 k 块的钮:这一课分好的几块各几句(parts)、各是标题 0 还是第几段(nos) */
   onRead?(k: number, parts: number[], nos: number[]): void;
   /** 孩子挪完窗停下来的地方(场景坐标 [左, 上, 右, 下]) */
@@ -119,6 +121,8 @@ const MARK_GONE_MS = 450;
 const PAPER = '#f4f1ea';
 /** 点读读到窗外的一块:孩子这么久没动过手才把窗挪过去 */
 const READ_IDLE_MS = 4000;
+/** 正在读的那一句的框往外多铺一点(场景坐标) */
+const SAY_PAD = 3;
 /** 动了多少像素以内算轻点 */
 const TAP_PX = 10;
 /** 停下来多久才算挪完(报给老师、重画清楚的那一块) */
@@ -393,14 +397,15 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
   const canTurn = open.includes('转');
   /** 点读:页面给了 read、语文课本的一课(不是目录) */
   const readOn = !readonly && Boolean(read) && page?.kind === 'book' && page.layout !== 'math' && page.title !== BOOK_TOC;
-  const readNow = useRef<{ on: boolean; read: { k: number; mode: string } | null }>({ on: false, read: null });
+  const readNow = useRef<{ on: boolean; read: { k: number; s?: number; mode: string; invite?: boolean } | null }>({ on: false, read: null });
   readNow.current = { on: readOn, read: read ?? null };
   /** 这一课点读的几块(场景坐标;文字层拉下来才有);悬着 / 按着的那一块;孩子上次动手的时刻(读到窗外时挪不挪窗) */
   const readParts = useRef<ReadPart[]>([]);
   const readHover = useRef<{ k: number; mode: 'hover' | 'press' } | null>(null);
   const readPressTimer = useRef(0);
   const readPainted = useRef('');
-  const readPrevK = useRef(-1);
+  /** 上回窗跟到的那一句(k.s);换了句才考虑挪窗 */
+  const readPrevK = useRef('');
   const lastHand = useRef(0);
 
   // ---- 窗 ----
@@ -953,7 +958,7 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
       geo.current = { key: geoKey, pdf: pdfUrl, sheets, height, aspect, base, drawn: new Set(), lines: blank, linesDone: p.kind !== 'book' && p.kind !== 'photo' && p.kind !== 'workbook', hw };
       dayTold.current = '';
       setGeoRev((n) => n + 1);
-      readParts.current = []; readHover.current = null; readPrevK.current = -1; paintRead();
+      readParts.current = []; readHover.current = null; readPrevK.current = ''; paintRead();
       if (svg.current) { svg.current.setAttribute('viewBox', `0 0 ${BOOK_W} ${height}`); Object.assign(svg.current.style, { width: `${BOOK_W}px`, height: `${height}px` }); }
       if (sharp.current) sharp.current.style.display = 'none';
       // 这一页上孩子画的、老师的记号照状态摆(换页再回来还在)
@@ -1040,20 +1045,24 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [geoKey]);
 
-  // ---- 点读:页面说在读哪一块、什么样就照着画钮;读到窗外的一块,孩子一会儿没动手就把窗挪过去(动过就不抢) ----
+  // ---- 点读:页面说在读哪一块哪一句、什么样就照着画钮、铺那一句;读到窗外的一句,孩子一会儿没动手就把窗挪过去(动过就不抢) ----
   const readKey = JSON.stringify([readOn, read ?? null]);
   useEffect(() => {
     if (phase !== 'ready') return;
     paintRead();
     const r = readNow.current.read, prev = readPrevK.current;
-    readPrevK.current = readOn && r && r.k >= 0 ? r.k : -1;
-    if (!readOn || !r || r.k < 0 || r.k === prev || r.mode === 'paused') return;
+    const now = readOn && r && r.k >= 0 ? `${r.k}.${r.s ?? 0}` : '';
+    readPrevK.current = now;
+    if (!readOn || !r || r.k < 0 || now === prev || r.mode === 'paused') return;
     const pt = readParts.current[r.k];
     if (!pt || performance.now() - lastHand.current < READ_IDLE_MS) return;
+    // 这一句的框(没对上字的照这一块的钮)
+    const say = pt.says[r.s ?? 0] ?? [];
+    const top = say.length ? Math.min(...say.map((b) => b[1])) : pt.hit[1], bottom = say.length ? Math.max(...say.map((b) => b[3])) : pt.hit[3];
     const vb = viewBox(), h = vb[3] - vb[1];
-    if (pt.hit[1] >= vb[1] && pt.hit[3] <= vb[3] - h * 0.2) return;
+    if (top >= vb[1] && bottom <= vb[3] - h * 0.2) return;
     const c = cam.current, [, vh] = vsize();
-    moveTo(clamp({ ...c, cy: pt.hit[1] - (vh * 0.15) / c.s + vh / 2 / c.s }), true);
+    moveTo(clamp({ ...c, cy: top - (vh * 0.15) / c.s + vh / 2 / c.s }), true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [readKey, phase]);
 
@@ -1155,7 +1164,7 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
     const g = el('g', { class: 'bk-read-btn', 'data-mode': mode });
     const soft = mode === 'hover' || mode === 'press';
     const solid = mode === 'playing';
-    g.append(el('circle', { cx: String(cx), cy: String(cy), r: String(r), fill: solid ? c : soft ? c : '#ffffff', 'fill-opacity': soft ? (mode === 'press' ? '0.14' : '0.06') : '1', stroke: c, 'stroke-opacity': soft ? (mode === 'press' ? '0.6' : '0.42') : mode === 'paused' ? '1' : '0', 'stroke-width': '2', 'vector-effect': 'non-scaling-stroke', class: solid || soft ? '' : 'bk-read-lift' }));
+    g.append(el('circle', { cx: String(cx), cy: String(cy), r: String(r), fill: solid ? c : soft ? c : '#ffffff', 'fill-opacity': soft ? (mode === 'press' ? '0.14' : '0.06') : '1', stroke: c, 'stroke-opacity': soft ? (mode === 'press' ? '0.6' : '0.42') : mode === 'paused' || mode === 'invite' ? '1' : '0', 'stroke-width': '2', 'vector-effect': 'non-scaling-stroke', class: solid || soft ? '' : 'bk-read-lift' }));
     if (mode === 'playing') {
       const w = r * 0.22, h = r * 0.8;
       for (const x of [cx - r * 0.36, cx + r * 0.14]) g.append(el('rect', { x: String(x), y: String(cy - h / 2), width: String(w), height: String(h), rx: String(w * 0.35), fill: '#ffffff' }));
@@ -1170,21 +1179,39 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
     }
     return g;
   };
-  /** 照页面给的 read 和悬着的那一块画钮;没变不重画(转圈、转一圈的动画不重来),收掉的淡出 */
+  /** 照页面给的 read 和悬着的那一块画钮、铺正在读的那一句;没变不重画(转圈、转一圈的动画不重来),收掉的淡出 */
   const paintRead = (): void => {
-    const layer = svg.current?.querySelector('.bk-read');
-    if (!layer) return;
+    const layer = svg.current?.querySelector('.bk-read'), sayer = svg.current?.querySelector('.bk-say');
+    if (!layer || !sayer) return;
     const { on, read: r } = readNow.current;
     const parts = readParts.current, hv = readHover.current;
     const active = on && r && r.k >= 0 && r.mode && parts[r.k] ? r : null;
     const hover = on && hv && parts[hv.k] && hv.k !== active?.k ? hv : null;
-    const key = JSON.stringify([active, hover, parts.length]);
+    // 还没点过读:标题前的钮先摆着(悬着、按着标题时照悬着画)
+    const title = parts.findIndex((pt) => pt.no === 0);
+    const invite = on && r?.invite && !active && title >= 0 && hover?.k !== title ? title : -1;
+    // 正在读(等合成、暂停)的那一句
+    const lit = active && (active.mode === 'playing' || active.mode === 'loading' || active.mode === 'paused') ? parts[active.k].says[active.s ?? 0] ?? [] : [];
+    const key = JSON.stringify([active, hover, invite, parts.length]);
     if (key === readPainted.current) return;
     readPainted.current = key;
     const c = color ?? TEACHER_INK;
     for (const old of Array.from(layer.children)) { old.classList.add('bk-gone'); window.setTimeout(() => old.remove(), MARK_GONE_MS); }
     if (hover) layer.append(readButton(parts[hover.k], hover.mode, c));
     if (active) layer.append(readButton(parts[active.k], active.mode, c));
+    if (invite >= 0) layer.append(readButton(parts[invite], 'invite', c));
+    // 句框:换了句旧的淡出、新的淡入;同一句只改深浅(暂停淡一半)
+    const sayKey = lit.length && active ? `${active.k}.${active.s ?? 0}` : '';
+    const cur = sayer.querySelector<SVGGElement>('g:not(.bk-gone)');
+    if (cur && cur.dataset.say !== sayKey) { cur.classList.add('bk-gone'); window.setTimeout(() => cur.remove(), MARK_GONE_MS); }
+    if (!sayKey) return;
+    let g = cur?.dataset.say === sayKey ? cur : null;
+    if (!g) {
+      g = el('g', { 'data-say': sayKey }) as SVGGElement;
+      for (const b of lit) g.append(el('rect', { x: String(b[0] - SAY_PAD), y: String(b[1] - SAY_PAD), width: String(b[2] - b[0] + SAY_PAD * 2), height: String(b[3] - b[1] + SAY_PAD * 2), rx: '6', fill: c }));
+      sayer.append(g);
+    }
+    g.classList.toggle('bk-soft', active!.mode === 'paused');
   };
   /** 点中的地方是哪一块的钮(场景里能点的那块空白;叠着的取钮离得近的);-1 = 不是 */
   const readAt = (x: number, y: number): number => {
@@ -1663,6 +1690,7 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
             <canvas className="bk-sharp" ref={sharp} />
             <svg className="bk-svg" ref={svg} xmlns={SVG_NS}>
               <g className="bk-hl" />
+              <g className="bk-say" />
               <g className="bk-past" />
               <g className="bk-teacher" />
               <g className="bk-cells" />

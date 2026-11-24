@@ -389,17 +389,30 @@ ${BACK_TINT_CSS}
   #tbk .pg img { width:100%; aspect-ratio:3 / 4; object-fit:cover; background:#f3efe6; }
   #tbk .pg span { padding:6px; font-size:15px; font-weight:600; color:var(--ink); }
   #tbk .pg.busy { opacity:.5; }
-  /* 作业本的目录:一天一行(新的在上),章名、星期、几张;点一行翻到那一天 */
-  #hwk { position:fixed; inset:0; z-index:40; background:var(--paper); display:none; flex-direction:column; }
+  /* 作业本的目录:一张纸,一周一排(老的在上),周的那一行写日子;一天一张竖的小卡(那天第一张的缩图,多张的叠一张),卡下写星期几;窗停在的那一天描学科色 */
+  #hwk { position:fixed; inset:0; z-index:40; background:#fffdf8; display:none; flex-direction:column; }
   #hwk.on { display:flex; }
-  #hwk .hd { display:flex; align-items:center; justify-content:space-between; padding:calc(env(safe-area-inset-top) + 12px) 16px 12px; font-size:20px; border-bottom:1px solid #0000000f; }
+  #hwk .hd { display:flex; align-items:center; justify-content:space-between; padding:calc(env(safe-area-inset-top) + 12px) 16px 12px; font-size:18px; }
   #hwk-x { width:44px; height:44px; border:0; border-radius:50%; background:#0000000a; display:grid; place-items:center; cursor:pointer; }
-  #hwk .ls { flex:1; overflow:auto; width:100%; max-width:640px; margin:0 auto; box-sizing:border-box; padding:8px 16px calc(env(safe-area-inset-bottom) + 24px); }
-  #hwk .day { display:flex; align-items:baseline; gap:14px; width:100%; padding:18px 8px; border:0; border-bottom:1px solid #0000000f; background:none; font:inherit; color:var(--ink); text-align:left; cursor:pointer; }
-  #hwk .day:active { background:#0000000a; }
-  #hwk .day b { font-family:'Kaiti SC', STKaiti, KaiTi, serif; font-size:26px; font-weight:400; letter-spacing:2px; }
-  #hwk .day span { font-size:16px; color:var(--dim); }
-  #hwk .day small { margin-left:auto; font-size:16px; color:var(--dim); }
+  #hwk .ls { flex:1; overflow:auto; width:100%; max-width:920px; margin:0 auto; box-sizing:border-box; padding:4px 20px calc(env(safe-area-inset-bottom) + 28px); display:flex; flex-direction:column; gap:22px; }
+  #hwk section { display:flex; flex-direction:column; gap:10px; }
+  #hwk h4 { margin:0; display:flex; align-items:center; gap:14px; font:400 17px 'Songti SC', STSong, serif; letter-spacing:1px; color:#4f4b45; }
+  #hwk h4::after { content:''; flex:1; height:1px; background:#d9d2c3; }
+  #hwk .row { display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:18px; }
+  #hwk .c { display:flex; flex-direction:column; align-items:center; gap:8px; padding:10px 0 8px; border:0; border-radius:14px; background:none; font:inherit; color:var(--ink); cursor:pointer; }
+  #hwk .c:active { background:#0000000a; }
+  #hwk .c.cur { background:color-mix(in srgb, var(--bk) 8%, #fff); box-shadow:inset 0 0 0 2.5px var(--bk); }
+  #hwk .th { position:relative; width:78%; aspect-ratio:3 / 4; }
+  #hwk .th img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:top; background:#f6f3ea; border:1px solid #e3ddd0; border-radius:4px; box-shadow:0 2px 6px #46371e1a; }
+  #hwk .c.many .th::before { content:''; position:absolute; inset:0; background:#f1eee5; border:1px solid #e3ddd0; border-radius:4px; transform:translate(6px, -3px) rotate(4deg); }
+  #hwk .c.none .th > span { position:absolute; inset:0; display:grid; place-items:center; border:2px dashed color-mix(in srgb, var(--bk) 45%, #fff); border-radius:6px; background:color-mix(in srgb, var(--bk) 4%, #fff); font-size:14px; color:var(--bk); }
+  #hwk .c b { font-family:'Kaiti SC', STKaiti, KaiTi, serif; font-size:26px; font-weight:400; letter-spacing:3px; line-height:1.2; }
+  #hwk .c.cur b { color:var(--bk); }
+  @media (max-width:600px) { #hwk .row { grid-template-columns:repeat(3, minmax(0, 1fr)); gap:10px; } #hwk .c b { font-size:20px; letter-spacing:2px; } }
+  /* 作业本的顶栏:窗停在哪一天(星期几加小字日子);没有拍照、相册(在最后那张白纸上) */
+  #st-ttl small { margin-left:6px; font-size:13px; font-weight:500; color:var(--dim); }
+  #stage.hw #st-bp { display:none; }
+  #stage.bp.bk.hw #st-nav.on { flex:none; }
   /* 手机上作业本的顶栏挤:拍照、相册、目录只留图标 */
   @media (max-width:600px) { #stage.ph #st-bp button span, #stage.ph #st-toc span { display:none; } #stage.ph #st-bp button { padding:0 10px; } #stage.ph.bk #st-toc:not([hidden]) { padding:0 10px; } }
   /* 孩子从纸上交的画:节前一张——图(点开看大图)、几笔、接着画 */
@@ -701,7 +714,7 @@ __VOICE_CSS__
     <div class="foot" id="ps-foot"><button type="button" id="ps-cancel">取消</button><button type="button" id="ps-go">发给老师</button></div>
   </div>
   <div id="tbk"><div class="hd"><b>选课本页</b><button type="button" id="tbk-x" aria-label="关上"></button></div><div class="ls"></div></div>
-  <div id="hwk"><div class="hd"><b>作业本</b><button type="button" id="hwk-x" aria-label="关上"></button></div><div class="ls"></div></div>
+  <div id="hwk"><div class="hd"><b>作业本 · 目录</b><button type="button" id="hwk-x" aria-label="关上"></button></div><div class="ls"></div></div>
 </section>
 <script>
 // 孩子端的流水(kid-log.ts):最先装上出错的监听;打开那一下在下面 kidLog.start
@@ -794,7 +807,7 @@ ${BOARD_MARK_JS}
 
   // ---- 状态 ----
   /** 铺页的话题:on = 这个话题的页面是板;base = 现在的底(照片路径,null 白板,undefined 还没定);label = 方砖上的字(不拍照直接开始时发它);workbook = 首页按钮挂的那一册练习册 */
-  const BP = { on: false, base: null, label: '', books: [], toc: null, workbook: null, start: null, nb: null, hw: null, past: {}, day: null };
+  const BP = { on: false, base: null, label: '', books: [], toc: null, workbook: null, start: null, nb: null, past: null, dayView: '', go: null };
   const S = { home: null, tutor: null, day: null, sections: [], played: new Set(), state: { section: -1, line: -1, status: 'idle' }, pending: false, waitSince: null, offline: false, bar: 'idle', pollTimer: null, stage: null, partial: null, thread: null, threadAt: null, hist: null, readonly: false, newThread: false, device: 'phone', via: null, door: null, cont: null, ask: null, reel: null, pendSaid: null, homeDraw: true, autoOpened: new Set() };
   // 实时的老师这一次(连、发、收、画在下面「实时的老师」那一块):on = 这位老师这一次走实时(左栏的样子);ready = 嘴连上了;
   // model = liveStep 的状态(只在 liveDispatch 里写);cap = 字幕(上一句、在说的、被打断的那句);heard = 每一轮(job)念到第几句
@@ -835,11 +848,11 @@ ${BOARD_MARK_JS}
     // 每个按钮进去都是新话题;今天聊过的在首页「今天」那一行接。按钮只有 activity(含方砖,start)和小课堂
     // 孩子先说:进门(enter)只铺页、不叫老师,孩子开口才是第一轮;activity 头上写了 start: tutor 的老师先说,照旧把按钮上的字发出去
     const first = b.start === 'tutor' ? { send: b.label } : { enter: true };
-    // 铺课本的 activity:不拍照,进门铺课本(范围那一课、上次翻到的那一课或目录);铺练习册的:同样不拍照,先铺按钮挂的那一册
-    if (b.kind === 'start' && (b.base === 'textbook' || b.base === 'workbook')) openTutor(t, { kind: 'new', via, base: b.base, label: b.label, ...first, ...(b.workbook ? { workbook: b.workbook } : {}), ...look });
-    // 铺作业照片的 activity(英语的预习复习、看图说话):先到拍照屏,带着照片开话题(拍照交上来就是开口);用白纸也是进门。
-    // 作业本(检查作业,base: homework):今天拍过的直接进门铺今天这一章,没拍过同照片先到拍照屏(hwStart)
-    else if (b.kind === 'start' && (b.base === 'photo' || b.base === 'homework')) openTutor(t, { kind: 'new', via, base: b.base, label: b.label, ...(b.start === 'tutor' ? { start: 'tutor' } : {}), ...look });
+    // 铺课本的 activity:不拍照,进门铺课本(范围那一课、上次翻到的那一课或目录);铺练习册的:同样不拍照,先铺按钮挂的那一册;
+    // 作业本(检查作业,base: homework):进门铺整本,窗停在最后那张白纸(在纸上拍照)
+    if (b.kind === 'start' && (b.base === 'textbook' || b.base === 'workbook' || b.base === 'homework')) openTutor(t, { kind: 'new', via, base: b.base, label: b.label, ...first, ...(b.workbook ? { workbook: b.workbook } : {}), ...look });
+    // 铺作业照片的 activity(英语的预习复习、看图说话):先到拍照屏,带着照片开话题(拍照交上来就是开口);用白纸也是进门
+    else if (b.kind === 'start' && b.base === 'photo') openTutor(t, { kind: 'new', via, base: b.base, label: b.label, ...(b.start === 'tutor' ? { start: 'tutor' } : {}), ...look });
     else if (b.kind === 'start') openTutor(t, { kind: 'new', via, ...first, ...look });
     // 小课堂:新话题,页上先铺那堂课;看完才能开口,开口那条带上 via 与看的情况。看完照着聊的 activity 是铺作业照片的(看图说话),顶栏有拍照
     else if (b.kind === 'lecture') openTutor(t, { kind: 'new', via, base: b.base || 'lecture', label: b.label, lecture: { bundle: b.bundle, title: b.title || b.label, ms: b.ms || 0, ...(b.video ? { video: true } : {}) }, ...look });
@@ -1170,9 +1183,8 @@ ${HOME_TILES_JS}
     S.tutor = t; S.sections = []; S.played = new Set(); dispatch({ type: 'reset' }); S.pending = false; S.stage = null; S.partial = null; $('#stage').classList.remove('on', 'cv');
     S.thread = intent.kind === 'thread' ? intent.thread : null; S.threadAt = null; S.hist = null; S.readonly = false; S.newThread = intent.kind === 'new';
     S.via = intent.via || null; S.lecture = intent.lecture ? { ...intent.lecture, watch: null, sent: false, marks: [], done: [], log: [] } : null;
-    BP.on = Boolean(intent.base); BP.base = intent.base || null; BP.label = intent.label || ''; BP.toc = null; BP.workbook = intent.workbook || null; BP.start = intent.start || null; BP.hw = null; BP.past = {}; BP.day = null; S.door = null; lsReset();
-    if (BP.base === 'photo' || BP.base === 'homework') bpBooks();
-    const hwReady = BP.base === 'homework' ? hwLoad() : null;
+    BP.on = Boolean(intent.base); BP.base = intent.base || null; BP.label = intent.label || ''; BP.toc = null; BP.workbook = intent.workbook || null; BP.start = intent.start || null; BP.past = null; BP.dayView = ''; BP.go = null; S.door = null; lsReset();
+    if (BP.base === 'photo') bpBooks();
     // 先定走不走实时,再热麦克风:实时时麦克风的自检要开在实时那个 AudioContext 里(liveOpen)
     if (liveWanted(t)) liveOpen(intent); else liveClose();
     renderBar(); renderHeader();
@@ -1181,12 +1193,12 @@ ${HOME_TILES_JS}
     // 小课堂:页上先铺那堂课(服务端收到第一条时照同样的规矩铺)
     if (S.lecture) lsStart(lessonStep(lessonInit(), { t: 'act', act: { k: '翻', page: lcPage(S.lecture) } }));
     // 进门:舞台先铺上(不露空的老师页),服务端记下、铺好页再照它铺
-    else if ((BP.base === 'textbook' || BP.base === 'workbook') && intent.enter) lsOpenStage();
-    else if (BP.base === 'textbook' || BP.base === 'workbook') bpOpenLesson();
+    else if ((BP.base === 'textbook' || BP.base === 'workbook' || BP.base === 'homework') && intent.enter) lsOpenStage();
+    else if (BP.base === 'textbook' || BP.base === 'workbook' || BP.base === 'homework') bpOpenLesson();
     else if (BP.base === 'photo') $('#board').append(bpStartBoard());
     $('#tutor').classList.add('on'); pageTheme(false);
     setBar('idle');
-    loadDay(true).then(() => { if (intent.send) send(intent.send); else if (intent.enter) bpEnter(0); else if (hwReady && intent.kind === 'new') hwReady.then(hwStart); });
+    loadDay(true).then(() => { if (intent.send) send(intent.send); else if (intent.enter) bpEnter(0); });
     viewKey = ''; viewNote();
   };
   /** 空板挂上老师要说的(开场那句 big、下面一行 small、选择 acts:{cls, icon, k 上面的小字, s 大字, sub 下面的小字, tm 时刻, id, go}) */
@@ -1196,17 +1208,14 @@ ${HOME_TILES_JS}
   /** 拍照屏:拍一页、从相册选、不拍用白纸(左栏照 _open 画同样三颗) */
   const bpStartBoard = () => {
     const go = (cls, icon, label, f) => h('button', { type: 'button', class: 'ask-go ' + cls, style: cls === 'fresh' ? 'background:' + tutorColor() : 'color:' + tutorColor() + ';border-color:' + tutorColor(), on: { click: f } }, h('span', { class: 't' }, h('span', { class: 'ic', html: ICON[icon] }), label));
-    // 作业本里有以前几天的:多一颗「翻作业本」(铺最近那一天)
-    const hwOld = BP.base === 'homework' && BP.hw && BP.hw.days.length > 0;
-    // 课本页的清单先拉回来了(作业本等进门的那一下):「选课本页」直接排上,不然 bpBooks 回来再插
+    // 课本页的清单先拉回来了:「选课本页」直接排上,不然 bpBooks 回来再插
     const tb = BP.books.length > 0;
     return withOpen(h('div', { class: 'blank ask bp-start' }, avatarEl(S.tutor, 'draw'), h('span', { class: 'nm' }, S.tutor.display), h('b', {}, '先拍一页给老师看'), h('small', {}, '拍正一点,整页都拍进来;没有要拍的,就用白纸'),
-      h('div', { class: 'ask-row' }, go('fresh', 'camera', '拍照', () => bpPick(true)), tb ? go('back tb-go', 'album', '选课本页', tbkOpen) : null, go('back', 'album', '从相册选', () => bpPick(false)), hwOld ? go('back', 'toc', '翻作业本', hwBrowse) : null, go('back', 'spark', '不拍,用白纸', bpWhite))),
+      h('div', { class: 'ask-row' }, go('fresh', 'camera', '拍照', () => bpPick(true)), tb ? go('back tb-go', 'album', '选课本页', tbkOpen) : null, go('back', 'album', '从相册选', () => bpPick(false)), go('back', 'spark', '不拍,用白纸', bpWhite))),
       { kind: 'board', big: '先拍一页给老师看', small: '拍正一点,整页都拍进来;没有要拍的,就用白纸', acts: [
         { cls: 'fresh', icon: 'camera', s: '拍照', go: () => bpPick(true) },
         ...(tb ? [{ cls: 'back', icon: 'album', s: '选课本页', go: tbkOpen }] : []),
         { cls: 'back', icon: 'album', s: '从相册选', go: () => bpPick(false) },
-        ...(hwOld ? [{ cls: 'back', icon: 'toc', s: '翻作业本', go: hwBrowse }] : []),
         { cls: 'back', icon: 'spark', s: '不拍,用白纸', go: bpWhite }] });
   };
   /** 这位老师学科的课本页(vault 里教材旁边的图):有就在拍照屏和页的顶栏多一颗「选课本页」 */
@@ -1255,11 +1264,11 @@ ${HOME_TILES_JS}
   const bpEnter = (tries) => {
     const t = S.tutor;
     if (!t || !S.newThread || !S.via) return;
-    api('POST', '/api/kid/enter?tutor=' + encodeURIComponent(t.name), { via: S.via, device: S.device, ...(BP.day ? { day: BP.day } : {}) }).then((j) => {
+    api('POST', '/api/kid/enter?tutor=' + encodeURIComponent(t.name), { via: S.via, device: S.device }).then((j) => {
       if (S.tutor !== t || !S.newThread || !j || !j.thread) return;
       S.thread = j.thread; S.door = j.thread; S.newThread = false; S.via = null;
-      // 作业本进门铺开的(今天那一章、翻作业本的那一天)照服务端铺的;用白纸的已经铺上了
-      if (BP.on && BP.base !== 'photo' && !(BP.base === 'homework' && LS.on)) bpOpenLesson(true);
+      // 课本、练习册、作业本照服务端铺的;用白纸的已经铺上了
+      if (BP.on && BP.base !== 'photo') bpOpenLesson(true);
       loadDay(false);
     }, (e) => { if (S.tutor === t && e && e.status === 409 && tries < 30) setTimeout(() => bpEnter(tries + 1), 1000); });
   };
@@ -1291,89 +1300,68 @@ ${HOME_TILES_JS}
     if (BP.base !== 'photo' && BP.base !== 'homework') return;
     const photos = list.filter((x) => x && x.path && x.w > 0 && x.h > 0).map((x) => ({ src: x.path, w: x.w, h: x.h }));
     if (!photos.length) return;
-    // 数学的照片上点的是数和算式,不弹田字格(同服务端)
-    const hw = BP.base === 'homework' ? BP.hw : null;
-    const ev = { t: 'photo', photos, pick: !(S.tutor && S.tutor.subject === '数学'), ...(hw ? { day: hw.today } : {}) };
-    // 作业本:今天拍过的(别的话题拍的)先铺成今天这一章,拍来的接在后面(同服务端)
-    let l = LS.on && LS.l ? LS.l : lessonInit();
-    if (hw && hw.page && !l.pages.some((x) => x.id === '作业')) l = lessonStep(l, { t: 'act', act: { k: '翻', page: hw.page } });
-    l = lessonStep(l, ev);
-    if (hw && !hw.days.some((d) => d.day === hw.today)) hw.days.push({ day: hw.today, n: photos.length, title: lessonPage(l).title });
+    // 数学的照片上点的是数和算式,不弹田字格(同服务端);作业本:接在整本后面,记着今天(同服务端)
+    const book = BP.base === 'homework' && LS.l ? LS.l.pages.find((x) => x.kind === 'photo' && x.day) : null;
+    const today = BP.base === 'homework' ? (book ? book.day : (S.day && S.day.date) || '') : '';
+    const ev = { t: 'photo', photos, pick: !(S.tutor && S.tutor.subject === '数学'), ...(today ? { day: today } : {}) };
+    const l = lessonStep(LS.on && LS.l ? LS.l : lessonInit(), ev);
     if (LS.on && LS.l) { LS.l = l; lsShow(); return; }
     lsStart(l);
   };
-  /** 作业本有哪几天、今天那一章此刻的样子(今天拍过的);拿到了顶栏的前一天、后一天跟着出 */
-  const hwLoad = () => {
-    const name = S.tutor && S.tutor.name;
-    if (!name) return Promise.resolve(null);
-    return api('GET', '/api/kid/homework/base?tutor=' + encodeURIComponent(name)).then((j) => {
-      if (!S.tutor || S.tutor.name !== name || !j || !Array.isArray(j.days)) return null;
-      BP.hw = { today: j.today, days: j.days, page: j.page || null };
-      LS.key = ''; lsShow();
-      return BP.hw;
-    }, () => null);
-  };
-  /** 新开的检查作业:今天拍过就进门、铺今天这一章(孩子接着拍、接着说);没拍过先到拍照屏 */
-  const hwStart = (hw) => {
-    if (!S.tutor || BP.base !== 'homework' || !S.newThread || LS.on || $('#board .blank')) return;
-    if (hw && hw.page && BP.start !== 'tutor') { lsOpenStage(); bpEnter(0); return; }
-    $('#board').append(bpStartBoard());
-  };
-  /** 拍照屏上「翻作业本」:进门铺最近那一天(以前的;孩子往后翻、拍照都在页上) */
-  const hwBrowse = () => {
-    if (!S.tutor || S.pending || !canSend() || !BP.hw || !BP.hw.days.length) return;
-    const b = $('#board .blank'); if (b) b.remove();
-    BP.day = BP.hw.days[BP.hw.days.length - 1].day;
-    lsOpenStage(); bpEnter(0);
-  };
-  /** 作业本的几天(从早到晚):服务端列的,加上这节课里今天那一章(刚拍的还没进列表) */
-  const hwDays = () => {
-    const out = (BP.hw ? BP.hw.days : []).map((d) => ({ day: d.day, title: d.title, n: d.n }));
-    for (const p of (LS.l ? LS.l.pages : [])) if (p.kind === 'photo' && p.day && !out.some((d) => d.day === p.day)) out.push({ day: p.day, title: p.title, n: p.photos.length });
-    return out.sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0));
-  };
-  const hwNeighbors = (p) => { const ds = hwDays(), i = ds.findIndex((d) => d.day === p.day); return { prev: i > 0 ? ds[i - 1] : null, next: i >= 0 && i < ds.length - 1 ? ds[i + 1] : null }; };
+  // ---- 作业本(检查作业,base: homework):一整本连着滚(舞台画),顶栏写窗停在哪一天,目录是一周一排的小卡 ----
   const WEEK = '日一二三四五六';
-  const weekday = (day) => { const [y, m, d] = day.split('-').map(Number); return '星期' + WEEK[new Date(y, m - 1, d).getDay()]; };
-  /** 翻到作业本的另一天:铺过的翻回去,没铺过的先要那一天的页;自己先翻过去,再报给服务端(它照同一份铺、记下,不叫老师) */
-  const hwGo = async (day) => {
-    if (!LS.on || !LS.l || S.readonly || REEL || !S.thread || !BP.hw || !S.tutor) return;
-    const cur = lessonPage(LS.l);
-    $('#hwk').classList.remove('on');
-    if (!cur || cur.kind !== 'photo' || !cur.day || cur.day === day) return;
-    const id = day === BP.hw.today ? '作业' : '作业#' + day;
-    const had = LS.l.pages.find((x) => x.id === id);
-    let page = null;
-    if (had) { const { teacher: _t, kid: _k, open: _o, ...src } = had; page = src; }
-    else { try { const j = await api('GET', '/api/kid/homework/day?tutor=' + encodeURIComponent(S.tutor.name) + '&day=' + encodeURIComponent(day)); page = j && j.page; } catch {} }
-    if (!page || !LS.l || LS.l.at !== cur.id) return;
-    pickHide();
-    lsKid({ t: 'act', act: { k: '翻', page } }, { k: 'day', day });
+  const dateUTC = (day) => new Date(Date.UTC(Number(day.slice(0, 4)), Number(day.slice(5, 7)) - 1, Number(day.slice(8, 10))));
+  const weekday = (day) => '星期' + WEEK[dateUTC(day).getUTCDay()];
+  /** 周的那一行:「11月16日 – 22日」(跨月写全) */
+  const weekName = (day) => { const a = dateUTC(weekOf(day)), b = new Date(a.getTime() + 6 * 86400000); return (a.getUTCMonth() + 1) + '月' + a.getUTCDate() + '日 – ' + (b.getUTCMonth() === a.getUTCMonth() ? '' : (b.getUTCMonth() + 1) + '月') + b.getUTCDate() + '日'; };
+  /** 作业本的几天(从早到晚):哪天、那天的照片;今天还没拍也有一天(空的) */
+  const hwDays = (p) => {
+    const out = [];
+    for (const ph of p.photos) { const d = photoDay(ph, p.day), last = out[out.length - 1]; if (last && last.day === d) last.photos.push(ph); else out.push({ day: d, photos: [ph] }); }
+    if (!out.length || out[out.length - 1].day !== p.day) out.push({ day: p.day, photos: [] });
+    return out;
   };
-  /** 作业本的目录:一天一行,新的在上;点了翻过去 */
+  /** 顶栏:窗停在哪一天(今天写「今天」,以前写「星期五」加小字日子) */
+  const hwTitle = (p) => {
+    const d = BP.dayView || p.day;
+    $('#st-ttl').replaceChildren(...(d === p.day ? [h('b', {}, '今天')] : [h('b', {}, weekday(d)), h('small', {}, dayTitle(d))]));
+  };
+  /** 作业本的目录:一周一排(老的在上,这一周在最下;进来停在最下),一天一张小卡(那天第一张的缩图,多张的叠一张),卡下写星期几;点了滚到那一天 */
   const hwToc = () => {
-    if (!BP.hw || !LS.l) return;
-    const cur = lessonPage(LS.l);
-    $('#hwk .ls').replaceChildren(...hwDays().reverse().map((d) => h('button', { type: 'button', class: 'day', ...(cur && cur.day === d.day ? { 'aria-current': 'true', style: 'color:' + tutorColor() } : {}), on: { click: () => hwGo(d.day) } },
-      h('b', {}, d.title), h('span', {}, weekday(d.day) + (d.day === BP.hw.today ? ' · 今天' : '')), h('small', {}, d.n + ' 张'))));
+    const p = LS.l && lessonPage(LS.l);
+    if (!p || p.kind !== 'photo' || !p.day) return;
+    const cur = BP.dayView || p.day, weeks = [];
+    for (const d of hwDays(p)) { const w = weekOf(d.day), last = weeks[weeks.length - 1]; if (last && last.w === w) last.days.push(d); else weeks.push({ w, days: [d] }); }
+    const card = (d) => h('button', { type: 'button', class: 'c' + (d.photos.length > 1 ? ' many' : '') + (d.photos.length ? '' : ' none') + (d.day === cur ? ' cur' : ''), 'aria-label': weekday(d.day) + ' ' + dayTitle(d.day) + (d.photos.length ? '' : ',还没拍'), on: { click: () => hwGoDay(d.day) } },
+      h('span', { class: 'th' }, d.photos.length ? h('img', { src: '/api/kid/image?p=' + encodeURIComponent(d.photos[0].src), alt: '', loading: 'lazy' }) : h('span', {}, '还没拍')),
+      h('b', {}, d.day === p.day ? '今天' : weekday(d.day)));
+    $('#hwk').style.setProperty('--bk', tutorColor());
+    $('#hwk .ls').replaceChildren(...weeks.map((w) => h('section', {}, h('h4', {}, h('span', {}, weekName(w.days[0].day))), h('div', { class: 'row' }, ...w.days.map(card)))));
     $('#hwk').classList.add('on');
+    const ls = $('#hwk .ls'); ls.scrollTop = ls.scrollHeight;
   };
   $('#hwk-x').innerHTML = ICON.close;
   $('#hwk-x').addEventListener('click', () => $('#hwk').classList.remove('on'));
-  /** 作业本一天上的照片:以前的话题留下的记号(拿过的不再拿;要等话题有了才拿,不然会把这一节自己的也算进去) */
-  const hwPast = (p) => {
-    const out = {};
-    for (const ph of p.photos) {
-      const got = BP.past[ph.src];
-      if (got && got !== 1) out[ph.src] = got;
-      if (got || !S.thread || !S.tutor) continue;
-      BP.past[ph.src] = 1;
-      const q = '/api/kid/homework/past?tutor=' + encodeURIComponent(S.tutor.name) + '&p=' + encodeURIComponent(ph.src) + '&thread=' + encodeURIComponent(S.thread) + '&date=' + encodeURIComponent((S.day && S.day.date) || '');
-      api('GET', q).then((j) => { if (j && Array.isArray(j.marks) && (j.marks.length || j.ink.length)) { BP.past[ph.src] = j; LS.key = ''; lsShow(); } else BP.past[ph.src] = { marks: [], ink: [] }; }, () => { delete BP.past[ph.src]; });
-    }
-    return out;
+  /** 目录上点了一天:收起目录,舞台滚到那一天的分割线(停下来照挪窗报给服务端) */
+  const hwGoDay = (day) => {
+    $('#hwk').classList.remove('on');
+    pickHide();
+    BP.go = { day, n: (BP.go ? BP.go.n : 0) + 1 };
+    lsShow();
   };
-  /** 进一节课:回到的(有话题)照服务端记的;新开的课本铺目录,作业照片等孩子拍(拍照屏)。
+  /** 作业本上每张照片以前的话题留下的记号:话题有了才要(不然会把这一节自己的也算进去),一节课要一次 */
+  const hwPast = () => {
+    if (BP.past) return BP.past === 1 ? null : BP.past;
+    if (!S.thread || !S.tutor || !S.day || !S.day.date) return null;
+    BP.past = 1;
+    const name = S.tutor.name;
+    api('GET', '/api/kid/homework/past?tutor=' + encodeURIComponent(name) + '&thread=' + encodeURIComponent(S.thread) + '&date=' + encodeURIComponent(S.day.date)).then((j) => {
+      if (!S.tutor || S.tutor.name !== name) return;
+      BP.past = (j && j.past) || {}; LS.key = ''; lsShow();
+    }, () => { BP.past = null; });
+    return null;
+  };
+  /** 进一节课:回到的(有话题)照服务端记的;新开的课本铺目录,作业本铺整本,作业照片等孩子拍(拍照屏)。
    *  课本、回到的课:舞台先铺上再去要(不先露一下空的老师页;iframe 和这一问一起装),要回来没有课再收起。
    *  课本做底的(回到的也是)一起要目录上能点的那几项(BP.toc:点了铺哪一页、印在哪一行),拿到了再铺;
    *  练习册:新开的照按钮挂的那一册(BP.workbook)先铺上,不等老师。opened = 舞台是进门时先铺开的(要回来没有课一样收起) */
@@ -1405,8 +1393,7 @@ ${HOME_TILES_JS}
     if (S.newThread || S.readonly || REEL) return;
     const first = mine.find((m) => m.base);
     if (!first) { BP.on = false; return; }
-    if (!BP.on && (first.base === 'photo' || first.base === 'homework')) bpBooks();
-    if (first.base === 'homework' && !BP.hw) { BP.base = first.base; hwLoad(); }
+    if (!BP.on && first.base === 'photo') bpBooks();
     BP.on = true; BP.base = first.base;
     if (!LS.on) bpOpenLesson(); else lsFeed();
   };
@@ -1483,32 +1470,34 @@ ${HOME_TILES_JS}
     // 老师「看」了别处、翻了页:点字的卡收起来
     const lookKey = (LS.l.look ? LS.l.look.n : 0) + '|' + LS.l.at;
     if (LS.lookKey !== lookKey) { if (LS.lookKey) pickHide(); LS.lookKey = lookKey; }
-    // 作业本的一天(检查作业):顶栏是那一天的章名,两边前一天、后一天,「目录」是一天一行的那一页
+    // 作业本(检查作业):顶栏写窗停在哪一天,没有前后的箭头;「目录」是一周一排的小卡
     const hwp = p && p.kind === 'photo' && p.day ? p : null;
-    const hwNav = Boolean(hwp && BP.hw && !S.readonly && !REEL && S.thread);
-    $('#st-ttl').textContent = p && p.kind === 'book' && p.title !== '目录' ? p.title : hwp ? hwp.title : '';
+    const hwNav = Boolean(hwp && !S.readonly && !REEL);
+    $('#stage').classList.toggle('hw', Boolean(hwp));
+    if (hwp) hwTitle(hwp); else $('#st-ttl').textContent = p && p.kind === 'book' && p.title !== '目录' ? p.title : '';
     // 课本的目录:能点的那几项交给舞台;一课里顶栏有「目录」回去(这本书读出了目录才有)
     const tocOf = p && p.kind === 'book' && BP.toc && BP.toc.page && BP.toc.page.src === p.src && !S.readonly && !REEL;
     const tocOn = tocOf && p.title === '目录';
     $('#st-toc').hidden = !(tocOf && p.title !== '目录') && !hwNav;
     // 上一课、下一课:一课里才有(目录上没有);下一课也交给舞台,在这一课最后一页下面摆一行
-    const nb = tocOf && p.title !== '目录' && S.thread ? bpNeighbors(p) : hwNav ? hwNeighbors(hwp) : { prev: null, next: null };
+    const nb = tocOf && p.title !== '目录' && S.thread ? bpNeighbors(p) : { prev: null, next: null };
     BP.nb = nb;
     $('#st-nav').classList.toggle('on', Boolean((tocOf && p.title !== '目录') || hwp));
     $('#st-prev').hidden = !nb.prev; $('#st-next').hidden = !nb.next;
-    if (nb.prev) $('#st-prev').setAttribute('aria-label', (hwp ? '前一天:' : '上一课:') + nb.prev.title);
-    if (nb.next) $('#st-next').setAttribute('aria-label', (hwp ? '后一天:' : '下一课:') + nb.next.title);
-    const past = hwp ? hwPast(hwp) : null;
+    if (nb.prev) $('#st-prev').setAttribute('aria-label', '上一课:' + nb.prev.title);
+    if (nb.next) $('#st-next').setAttribute('aria-label', '下一课:' + nb.next.title);
+    const past = hwp ? hwPast() : null;
+    const go = hwp && BP.go ? BP.go : null;
     // 小课堂那一页:播放器有自己的课名、进度条、画一画,页面的「给老师看」不出
     $('#stage').classList.toggle('lcp', Boolean(p && p.kind === 'lecture'));
     // 翻走了:这一页的点读作废
     if (RD.at && RD.at !== LS.l.at) readForget();
     const read = readView();
-    const key = JSON.stringify(LS.l) + (tocOn ? '|toc' : '') + '|' + JSON.stringify(read) + '|' + (nb.next ? nb.next.title : '') + '|' + (past ? Object.keys(past).length : '');
+    const key = JSON.stringify(LS.l) + (tocOn ? '|toc' : '') + '|' + JSON.stringify(read) + '|' + (nb.next ? nb.next.title : '') + '|' + (past ? Object.keys(past).length : '') + '|' + (go ? go.n : '');
     renderGo();
     if (key === LS.key) return;
     LS.key = key;
-    postStage({ type: 'lesson', id: S.stage.id, lesson: LS.l, readonly: S.readonly || REEL, hand: document.body.classList.contains('hand-left') ? 'left' : 'right', color: tutorColor(), ...(TRIAL ? { mousePen: true } : {}), ...(tocOn ? { toc: { color: tutorColor(), entries: BP.toc.entries.map((e) => ({ title: e.title, box: e.box })) } } : {}), ...(nb.next ? { next: { title: nb.next.title, ...(hwp ? { k: '后一天' } : {}) } } : {}), ...(past ? { past } : {}), ...(read ? { read } : {}), ...(p && p.kind === 'lecture' ? { lecture: { url: lcBundleUrl(p.bundle, p.video), marks: S.lecture && S.lecture.bundle === p.bundle ? S.lecture.marks : [], follow: REEL, ...(LS.playN ? { play: LS.playN } : {}) } } : {}) });
+    postStage({ type: 'lesson', id: S.stage.id, lesson: LS.l, readonly: S.readonly || REEL, hand: document.body.classList.contains('hand-left') ? 'left' : 'right', color: tutorColor(), ...(TRIAL ? { mousePen: true } : {}), ...(tocOn ? { toc: { color: tutorColor(), entries: BP.toc.entries.map((e) => ({ title: e.title, box: e.box })) } } : {}), ...(nb.next ? { next: { title: nb.next.title } } : {}), ...(go ? { go } : {}), ...(past ? { past } : {}), ...(read ? { read } : {}), ...(p && p.kind === 'lecture' ? { lecture: { url: lcBundleUrl(p.bundle, p.video), marks: S.lecture && S.lecture.bundle === p.bundle ? S.lecture.marks : [], follow: REEL, ...(LS.playN ? { play: LS.playN } : {}) } } : {}) });
     if (!REEL && !S.readonly) { clearTimeout(LS.recT); LS.recT = setTimeout(() => { const k = JSON.stringify(LS.l); if (k !== LS.recKey && S.thread) { LS.recKey = k; playRec({ k: 'lesson', l: LS.l }); } }, 1500); }
   };
   /** 页铺满:舞台开一次,之后只换状态 */
@@ -1518,7 +1507,7 @@ ${HOME_TILES_JS}
     S.stage = { section: -1, card: -1, id: 'lesson:' + (S.thread || 'new'), lesson: true, playing: null, delegate: false, autoplay: false };
     $('#st-ttl').classList.remove('open');
     $('#stage').classList.add('cv', 'bp', 'bk', 'on');
-    $('#stage').classList.toggle('ph', BP.base === 'photo' || BP.base === 'homework');
+    $('#stage').classList.toggle('ph', BP.base === 'photo');
     frame.hidden = false; frame.src = stageUrl(S.stage.id);
     LS.key = '';
     renderGo();
@@ -1561,9 +1550,10 @@ ${HOME_TILES_JS}
     if (m.type === 'cell' && typeof m.id === 'string' && Array.isArray(m.strokes)) { const model = typeof m.model === 'string' ? m.model : ''; lsKid({ t: 'cell', id: m.id, strokes: m.strokes }, { k: 'cell', id: m.id, strokes: m.strokes, ...(model ? { text: model } : {}), ...(m.blank === true ? { blank: true } : {}) }); previewSoon(PV_HAND_MS); return; }
     if (m.type === 'pickAt') { if (!$('#st-pick').hidden) { if (Array.isArray(m.at)) pickPlace(m.at); else pickHide(true); } return; }
     if (m.type === 'pick') { pickShow(m.text, Array.isArray(m.at) ? m.at : null); lsKid({ t: 'pick', text: String(m.text || '') }, { k: 'pick', text: m.text }); return; }
+    // 作业本:窗停在哪一天(顶栏跟着写);最后那张白纸上按了拍照、从相册选
+    if (m.type === 'day' && typeof m.day === 'string') { BP.dayView = m.day; lsShow(); return; }
+    if (m.type === 'capture') { bpPick(m.camera === true); return; }
     // 目录上点了一项:自己先翻过去,再报给服务端(它照样翻、记下,不叫老师);还没进门(话题还没有)的不翻
-    // 作业本一天最后那一行「后一天」:翻过去
-    if (m.type === 'open' && BP.nb && BP.nb.next && BP.nb.next.day && BP.nb.next.title === m.title) { hwGo(BP.nb.next.day); return; }
     if (m.type === 'open') { const e = BP.toc && S.thread ? BP.toc.entries.find((x) => x.title === m.title) : null; if (e) { pickHide(); lsKid({ t: 'act', act: { k: '翻', page: e.page } }, { k: 'open', title: e.title }); } return; }
     // 点了标题、段首的钮:点读
     if (m.type === 'read') { pickHide(); readTap(m); return; }
@@ -1604,7 +1594,6 @@ ${HOME_TILES_JS}
   };
   /** 翻到目录上的另一项(上一课、下一课、一课最后那一行):自己先翻过去,再报给服务端(它照样翻、记下,不叫老师) */
   const bpGo = (e) => {
-    if (e && e.day) { hwGo(e.day); return; }
     if (!e || !LS.on || !LS.l || S.readonly || REEL || !S.thread) return;
     pickHide();
     lsKid({ t: 'act', act: { k: '翻', page: e.page } }, { k: 'open', title: e.title });
@@ -1616,7 +1605,7 @@ ${HOME_TILES_JS}
   $('#st-toc').innerHTML = ICON.toc + '<span>目录</span>';
   $('#st-toc').addEventListener('click', () => {
     const p0 = LS.l && lessonPage(LS.l);
-    if (p0 && p0.kind === 'photo' && p0.day) { hwToc(); return; }
+    if (p0 && p0.kind === 'photo' && p0.day) { if (!S.readonly && !REEL) hwToc(); return; }
     if (!LS.on || !LS.l || !BP.toc || S.readonly || REEL || !S.thread) return;
     const p = lessonPage(LS.l), base = LS.l.at;
     if (!p || p.kind !== 'book' || p.title === '目录' || !base) return;
@@ -1651,7 +1640,7 @@ ${HOME_TILES_JS}
   new MutationObserver(openSync).observe($('#board'), { childList: true });
   /** 浏览器的主题色跟着这一页的底色:首页桌面色,老师页纸色 */
   const pageTheme = (home) => { const m = document.querySelector('meta[name="theme-color"]'); if (m) m.content = home ? '#ebe4d4' : '#faf9f4'; };
-  const closeTutor = () => { bpLeave(); clearTimeout(PV.timer); liveDispatch({ type: 'reset' }); liveClose(); S.lecture = null; reelStop(); clearTimeout(S.pollTimer); dispatch({ type: 'halt' }); psClose(); S.tutor = null; S.via = null;  S.ask = null; BP.on = false; BP.base = null; BP.toc = null; BP.hw = null; BP.past = {}; BP.day = null; $('#hwk').classList.remove('on'); lsReset(); $('#tutor').classList.remove('on'); pageTheme(true); document.body.classList.remove('pending', 'speaking'); S.homeDraw = true; loadHome(); };
+  const closeTutor = () => { bpLeave(); clearTimeout(PV.timer); liveDispatch({ type: 'reset' }); liveClose(); S.lecture = null; reelStop(); clearTimeout(S.pollTimer); dispatch({ type: 'halt' }); psClose(); S.tutor = null; S.via = null;  S.ask = null; BP.on = false; BP.base = null; BP.toc = null; BP.past = null; BP.dayView = ''; BP.go = null; $('#hwk').classList.remove('on'); lsReset(); $('#tutor').classList.remove('on'); pageTheme(true); document.body.classList.remove('pending', 'speaking'); S.homeDraw = true; loadHome(); };
   $('#back').addEventListener('click', closeTutor);
   $('#back-ic').innerHTML = ICON.back;
 

@@ -277,7 +277,8 @@ export interface KidHomeTile {
   /** 铺课本、作业本的方砖的封面 */
   cover?: KidCover;
   /**
-   * 这一节课铺哪种页(头上的 base:):photo = 孩子端点了先到拍照屏,带着照片(或白纸)开话题;textbook = 不到拍照屏,直接开话题、铺课本的目录
+   * 这一节课铺哪种页(头上的 base:):photo = 孩子端点了先到拍照屏,带着照片(或白纸)开话题;textbook = 不到拍照屏,直接开话题、铺课本的目录;
+   * homework = 不到拍照屏,直接开话题、铺作业本一整本(在最后那张白纸上拍照)
    */
   base?: ActivityBase;
   /** 一直听(头上的 listen: open):孩子端进去不用按着说 */

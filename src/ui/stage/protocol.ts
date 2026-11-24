@@ -16,9 +16,11 @@ export type ToStage =
     lecture?: { url: string; marks: unknown[]; follow?: boolean; play?: number };
     /** 现在这一页是课本的目录:能点的那几项(课名、印在哪一行,场景坐标)、按下去那一行铺的颜色(老师的学科色);点中了回 open */
     toc?: { color: string; entries: { title: string; box: [number, number, number, number] }[] };
-    /** 现在这一页是课本的一课、目录上还有下一项:这一课最后一页下面摆一行「下一课」,点中了回 open;作业本的一天后面还有一天:k = 「后一天」 */
+    /** 现在这一页是课本的一课、目录上还有下一项:这一课最后一页下面摆一行「下一课」,点中了回 open */
     next?: { title: string; k?: string };
-    /** 作业本的一天:照片上以前的话题留下的记号(键是照片的 src,照片自己的坐标;book.tsx 的 StagePast) */
+    /** 作业本:滚到那一天(页面的目录上点的);n 变了才滚 */
+    go?: { day: string; n: number };
+    /** 作业本:照片上以前的话题留下的记号(键是照片的 src,照片自己的坐标;book.tsx 的 StagePast) */
     past?: Record<string, { marks: { k: string; text: string; box: [number, number, number, number]; old?: boolean }[]; ink: [number, number][][] }>;
     /** 老师的学科色(写字格的「放好」、点开的那一格) */
     color?: string;
@@ -48,6 +50,10 @@ export type FromStage =
   | { source: typeof STAGE_SOURCE; type: 'view'; box: [number, number, number, number] }
   /** 一节课:窗停下来以后窗里那一块的图(jpeg data URL,长边 1024);页面交给服务端,下一轮附给老师 */
   | { source: typeof STAGE_SOURCE; type: 'shot'; box: [number, number, number, number]; image: string }
+  /** 作业本:窗停在哪一天(YYYY-MM-DD;最后那张白纸是今天);页面顶栏写它 */
+  | { source: typeof STAGE_SOURCE; type: 'day'; day: string }
+  /** 作业本最后那张白纸上按了拍照(camera)/ 从相册选:页面开相机或相册 */
+  | { source: typeof STAGE_SOURCE; type: 'capture'; camera: boolean }
   /** 「给老师看」(窗里的图已经先交了,shot) */
   | { source: typeof STAGE_SOURCE; type: 'submit' }
   /** 一节课:笔落下了(孩子写着,应用不替他交给老师;抬笔就是下面的 stroke) */

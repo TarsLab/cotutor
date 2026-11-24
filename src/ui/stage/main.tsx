@@ -1,6 +1,6 @@
 /**
  * 舞台包入口(打成 dist/stage/stage.js,页面在 iframe 里装 /stage/?card=<id>):照页面发来的一节课的状态画现在那一页——
- * 课本、作业照片、白纸 = book.tsx;小课堂 = lecture.tsx。所有对外说话都走 postMessage(protocol.ts)。
+ * 课本、作业照片(作业本)、白纸 = book.tsx;小课堂 = lecture.tsx。所有对外说话都走 postMessage(protocol.ts)。
  * ?bundle=<课包 URL> 不用页面也能开小课堂(调试、截图);?chalk=bake|snap 是做课包时 CDP 开的(chalk/tool.ts),不是孩子端。
  * 界面上没有错误文案:装不上就发 error,什么都不显示。
  */
@@ -86,6 +86,8 @@ function App(): JSX.Element {
   const onCell = useCallback((id: string, strokes: [number, number][][], model: string | null, blank: boolean) => post({ type: 'cell', id, strokes, model, ...(blank ? { blank } : {}) }), []);
   const onWipe = useCallback(() => post({ type: 'wipe' }), []);
   const onPen = useCallback(() => post({ type: 'pen' }), []);
+  const onDay = useCallback((day: string) => post({ type: 'day', day }), []);
+  const onCapture = useCallback((camera: boolean) => post({ type: 'capture', camera }), []);
   const onLectureDone = useCallback((w: LectureWatch) => post({ type: 'lecture', event: 'finished', ...w }), []);
   const onRangeDone = useCallback(() => post({ type: 'phase', phase: 'done' }), []);
   const onMarks = useCallback((marks: StageMark[]) => post({ type: 'marks', marks }), []);
@@ -100,7 +102,7 @@ function App(): JSX.Element {
     const lc = lesson.lecture;
     return <LectureStage ref={lecture} key={`lc:${page.bundle}`} bundleUrl={lc.url} title={page.title} video={page.video} marks={lc.marks as StageMark[]} view={lesson.readonly === true} follow={lc.follow === true} left={lesson.hand === 'left'} look={l.look?.at ?? null} play={lc.play} onRangeDone={onRangeDone} onLog={onWatch} onMarks={onMarks} onFinished={onLectureDone} onError={onError} />;
   }
-  if (lesson) return <BookStage ref={book} key={lesson.id} id={lesson.id} lesson={lesson.lesson as Lesson} readonly={lesson.readonly === true} hand={lesson.hand === 'left' ? 'left' : 'right'} mousePen={lesson.mousePen === true} toc={lesson.toc ?? null} next={lesson.next ?? null} past={lesson.past ?? null} onOpen={onOpen} read={lesson.read ?? null} onRead={onRead} onStroke={onStroke} onPen={onPen} onTurn={onTurn} onWipe={onWipe} onSubmit={onLessonSubmit} onPick={onPick} onPickAt={onPickAt} onCell={onCell} color={lesson.color} onReveal={onReveal} onView={onBookView} onShot={onBookShot} onError={onError} />;
+  if (lesson) return <BookStage ref={book} key={lesson.id} id={lesson.id} lesson={lesson.lesson as Lesson} readonly={lesson.readonly === true} hand={lesson.hand === 'left' ? 'left' : 'right'} mousePen={lesson.mousePen === true} toc={lesson.toc ?? null} next={lesson.next ?? null} go={lesson.go ?? null} onDay={onDay} onCapture={onCapture} past={lesson.past ?? null} onOpen={onOpen} read={lesson.read ?? null} onRead={onRead} onStroke={onStroke} onPen={onPen} onTurn={onTurn} onWipe={onWipe} onSubmit={onLessonSubmit} onPick={onPick} onPickAt={onPickAt} onCell={onCell} color={lesson.color} onReveal={onReveal} onView={onBookView} onShot={onBookShot} onError={onError} />;
   return <div className="stage-wait" />;
 }
 

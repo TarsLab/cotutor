@@ -20,6 +20,24 @@ html, body, #root { margin: 0; height: 100%; background: #fffdf8; font: 18px/1.5
 .bk-next .t { font-family: 'Kaiti SC', STKaiti, KaiTi, serif; font-size: 24px; letter-spacing: 3px; }
 .bk-next svg { width: 20px; height: 20px; color: var(--bk-next, #6b6455); }
 .bk-wipe:active { transform: scale(.94); }
+/* 作业本:天与周的分割线(在照片之间空出来的那一截里,场景坐标);字在手机上缩得太小就照 --inv(窗的倍数的倒数,book.tsx 的 apply 设)放大 */
+.bk-div { position: absolute; left: 0; width: 1000px; display: flex; flex-direction: column; justify-content: flex-end; pointer-events: none; }
+.bk-div .wk { flex: 1; max-height: 80px; margin: 14px 0 8px; background: #dcd5c6; display: flex; align-items: center; justify-content: center; }
+.bk-div .wk span { font-family: 'Songti SC', STSong, serif; font-size: max(19px, calc(13px * var(--inv, 1))); letter-spacing: 2px; color: #4f4b45; white-space: nowrap; }
+.bk-div .dy { height: 76px; flex: none; display: flex; align-items: center; justify-content: center; gap: 18px; }
+.bk-div .dy i { width: 100px; height: 1px; background: #b8b0a0; }
+.bk-div .dy span { font-family: 'Kaiti SC', STKaiti, KaiTi, serif; font-size: max(24px, calc(15px * var(--inv, 1))); letter-spacing: 4px; color: #2b2b2b; white-space: nowrap; }
+/* 作业本最后那张白纸:拍照、从相册选(点中由舞台照位置认,book.tsx 的 blankHit);--bk-c 是老师的学科色;手机上照 --inv 放大到按得着 */
+.bk-blank { position: absolute; left: 0; width: 1000px; background: #fffdf8; box-shadow: 0 1px 6px rgba(0, 0, 0, .10); display: flex; justify-content: center; }
+.bk-blank .in { margin-top: 64px; display: flex; flex-direction: column; align-items: center; gap: 16px; transform-origin: top center; transform: scale(max(1, calc(var(--inv, 1) * .9))); color: #2b2b2b; }
+.bk-blank .in > svg { width: 60px; height: 60px; color: var(--bk-c, #2c6bd6); stroke-width: 1.6; }
+.bk-blank b { font-family: 'Kaiti SC', STKaiti, KaiTi, serif; font-size: 32px; font-weight: 400; letter-spacing: 4px; }
+.bk-blank small { font-size: 16px; color: #6b6455; }
+.bk-blank .go { display: flex; gap: 14px; margin-top: 8px; }
+.bk-blank .go span { display: flex; align-items: center; gap: 8px; height: 56px; box-sizing: border-box; padding: 0 28px 0 22px; border-radius: 28px; font-size: 19px; font-weight: 700; white-space: nowrap; cursor: pointer; }
+.bk-blank .go svg { width: 22px; height: 22px; }
+.bk-blank .go .cam { background: var(--bk-c, #2c6bd6); color: #ffffff; }
+.bk-blank .go .alb { border: 2px solid var(--bk-c, #2c6bd6); color: var(--bk-c, #2c6bd6); background: #ffffff; }
 .kt-hand-left .bk-wipe { left: auto; right: 0; border-left: 1.5px solid #e2dfd6; border-right: 0; border-radius: 24px 0 0 24px; }
 .bk-page.bk-joined { box-shadow: none; }
 .bk-sharp { position: absolute; display: none; pointer-events: none; }

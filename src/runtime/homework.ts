@@ -1,12 +1,12 @@
 /**
- * 作业本(activity 头上 base: homework,出厂的「检查作业」):检查作业拍的照片按学科、按天攒成一本,一天一章,跨话题。
+ * 作业本(activity 头上 base: homework,出厂的「检查作业」):检查作业拍的照片按学科、按天攒成一本,跨话题;孩子端是一整本连着往下滚(老的在上,新拍的接在后面,最后一张白纸)。
  * vault 那一侧(列哪几天、抄进去)在 src/memory/homework.ts;这里把它和一节课接上:
  *  - 收到照片:照原名抄进 vault 的 作业本/<学科>/<日期>/(keepHomework)。
- *  - 铺一天(homeworkPage):照 vault 里那一天的照片铺一张照片页(带 day);照片在页上照旧用 captures/ 的路径(认字、取图、附给老师都认那里),
- *    captures 里没有的(sandbox、家长自己放进 vault 的)先抄回去。今天那一章的 id 是照片页「作业」(拍来的接在后面),以前的是「作业#<日期>」。
+ *  - 铺作业本(homeworkBookPage):最近 HOMEWORK_BOOK_DAYS 个拍过的天(和今天)铺成一张照片页(id「作业」,title「作业本」,day = 今天),每张记着哪天拍的;
+ *    照片在页上照旧用 captures/ 的路径(认字、取图、附给老师都认那里),captures 里没有的(sandbox、家长自己放进 vault 的)先抄回去。
  *  - 以前的记号(homeworkPast):一张照片上,别的话题(在这个话题之前的)画的圈、划、加点和孩子的笔,照那个话题最后的样子,
  *    换成这张照片自己的坐标(一张宽 1000,左上角起)。只看不改:舞台垫在这一节自己的那层下面画,擦不掉、不变旧、不收。
- *    遮、盖和白纸条不带:它们盖着页上的字,只看不改的页上孩子揭不开、收不起来。
+ *    遮、盖和白纸条不带:它们盖着页上的字,只看不改的页上孩子揭不开、收不起来。一次给一整本的(读一遍以前的话题)。
  *  - 导出(homeworkPdf):家长端选几天,一张照片一页(src/shared/pdf.ts)。
  * 规矩与样子在 docs/dev/照片页.md 的「作业本」。
  */
@@ -14,7 +14,7 @@ import { copyFile, mkdir, readFile, readdir, stat } from 'node:fs/promises';
 import { basename, dirname, join, relative, sep } from 'node:path';
 import { dayTitle, markFresh, photoSheetBox } from '../board/lesson.ts';
 import { homeworkDays, homeworkFile, homeworkPhotos, keepHomework } from '../memory/homework.ts';
-import { DATE_RE, LINE_MARKS, LessonSchema, PHOTO_PAGE, canonicalSubject, type Box, type Lesson, type PagePhoto, type PageSource, type Workspace } from '../schema/index.ts';
+import { DATE_RE, HOMEWORK_TITLE, LINE_MARKS, LessonSchema, PHOTO_PAGE, canonicalSubject, type Box, type Lesson, type PagePhoto, type PageSource, type Workspace } from '../schema/index.ts';
 import { imageSize, jpegInfo } from '../shared/jpeg.ts';
 import { jpegPdf } from '../shared/pdf.ts';
 
@@ -23,11 +23,8 @@ export function homeworkSubject(ws: Workspace, tutor: string): string {
   return canonicalSubject(ws.config.tutors[tutor]?.subject) ?? tutor;
 }
 
-/** 记翻到哪(.cotutor/book-last.json)用的册名 */
-export const homeworkBook = (subject: string): string => `作业本#${subject}`;
-
-/** 作业本一天那一页的 id:今天的是照片页(拍来的接在后面),以前的是「作业#<日期>」 */
-export const homeworkPageId = (day: string, today: string): string => (day === today ? PHOTO_PAGE : `${PHOTO_PAGE}#${day}`);
+/** 作业本铺最近多少个拍过的天(一天一两张,够一个多学期;再早的家长端还能导出) */
+export const HOMEWORK_BOOK_DAYS = 60;
 
 /** captures 里的一张(相对 workspace 根)是哪天、叫什么;不在 captures/<日期>/ 下 = null */
 function captureDay(ws: Workspace, rel: string): { day: string; name: string } | null {
@@ -49,12 +46,8 @@ export async function keepPhotos(ws: Workspace, tutor: string, photos: readonly 
   }
 }
 
-/**
- * 作业本的一天铺成一张照片页(带 day;今天的 id 是「作业」);这一天一张都没有 = null。
- * 照片照 vault 里那一天的先后;页上用 captures/<日期>/<名> 的路径,captures 里没有的先从 vault 抄回去
- */
-export async function homeworkPage(ws: Workspace, tutor: string, day: string, today: string, pick: boolean): Promise<PageSource | null> {
-  const subject = homeworkSubject(ws, tutor);
+/** 作业本里一天的照片(照 vault 里的先后,day 记着那一天);captures 里没有的先从 vault 抄回去,抄不回来、读不出宽高的跳过 */
+async function dayPhotos(ws: Workspace, subject: string, day: string): Promise<PagePhoto[]> {
   const photos: PagePhoto[] = [];
   for (const name of await homeworkPhotos(ws.paths.homework, subject, day)) {
     const file = join(ws.paths.captures, day, name);
@@ -65,9 +58,21 @@ export async function homeworkPage(ws: Workspace, tutor: string, day: string, to
       if (!(await copyFile(from, file).then(() => true, () => false))) continue;
     }
     const size = imageSize(await readFile(file).catch(() => Buffer.alloc(0)));
-    if (size) photos.push({ src: relative(ws.root, file).split(sep).join('/'), ...size });
+    if (size) photos.push({ src: relative(ws.root, file).split(sep).join('/'), ...size, day });
   }
-  return photos.length ? { id: homeworkPageId(day, today), kind: 'photo', title: dayTitle(day), photos, pick, day } : null;
+  return photos;
+}
+
+/**
+ * 作业本铺成一页:最近 HOMEWORK_BOOK_DAYS 个拍过的天,从早到晚,一张照片一个 day;今天(today)拍过的也在里面(这一条带的照片抄进去之前的)。
+ * 一张都没拍过也铺(photos 空,舞台只画最后那张白纸)
+ */
+export async function homeworkBookPage(ws: Workspace, tutor: string, today: string, pick: boolean): Promise<Extract<PageSource, { kind: 'photo' }>> {
+  const subject = homeworkSubject(ws, tutor);
+  const days = (await homeworkDays(ws.paths.homework, subject)).filter((d) => d.day <= today).slice(-HOMEWORK_BOOK_DAYS);
+  const photos: PagePhoto[] = [];
+  for (const d of days) photos.push(...(await dayPhotos(ws, subject, d.day)));
+  return { id: PHOTO_PAGE, kind: 'photo', title: HOMEWORK_TITLE, photos, pick, day: today };
 }
 
 /** 以前的记号:一张照片上别的话题留下的(这张照片自己的坐标:宽 1000,左上角起) */
@@ -88,13 +93,13 @@ const threadKey = (date: string, thread: string): string => {
 };
 
 /**
- * 这张照片(captures 里的,相对 workspace 根)上别的话题留下的记号,照话题的先后叠起来。
- * mine = 现在这个话题(它自己的不算,在它之后的也不算);没有(还没进门)= 别的都算。只看同一科的老师
+ * 这几张照片(captures 里的,相对 workspace 根)上别的话题留下的记号,照话题的先后叠起来;键是照片的 src,没有记号的不给。
+ * mine = 现在这个话题(它自己的不算,在它之后的也不算);没有(还没进门)= 别的都算。只看同一科的老师。以前的话题读一遍
  */
-export async function homeworkPast(ws: Workspace, tutor: string, src: string, mine: { date: string; thread: string } | null): Promise<HomeworkPast> {
-  const out: HomeworkPast = { marks: [], ink: [] };
-  const at = captureDay(ws, src);
-  if (!at) return out;
+export async function homeworkPast(ws: Workspace, tutor: string, srcs: readonly string[], mine: { date: string; thread: string } | null): Promise<Record<string, HomeworkPast>> {
+  const want = new Set(srcs.filter((src) => captureDay(ws, src)));
+  if (!want.size) return {};
+  const first = [...want].map((src) => captureDay(ws, src)!.day).sort()[0];
   const subject = homeworkSubject(ws, tutor);
   const upTo = mine ? threadKey(mine.date, mine.thread) : null;
   const found: { key: string; lesson: Lesson }[] = [];
@@ -102,7 +107,7 @@ export async function homeworkPast(ws: Workspace, tutor: string, src: string, mi
     const dir = join(ws.dirs.conversations, name);
     for (const f of await readdir(dir).catch(() => [] as string[])) {
       const m = /^(\d{4}-\d{2}-\d{2})\.(.+)\.lesson\.json$/.exec(f);
-      if (!m || m[1] < at.day) continue;
+      if (!m || m[1] < first) continue;
       const key = threadKey(m[1], m[2]);
       if (upTo && key >= upTo) continue;
       const raw = await readFile(join(dir, f), 'utf8').catch(() => '');
@@ -112,26 +117,33 @@ export async function homeworkPast(ws: Workspace, tutor: string, src: string, mi
     }
   }
   found.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+  const out: Record<string, HomeworkPast> = {};
+  const of = (src: string): HomeworkPast => (out[src] ??= { marks: [], ink: [] });
   for (const { lesson } of found) {
     for (const p of lesson.pages) {
       if (p.kind !== 'photo') continue;
-      const i = p.photos.findIndex((x) => x.src === src);
-      if (i < 0) continue;
-      const [, top, , bottom] = photoSheetBox(p.photos, i);
       const fresh = markFresh(lesson, p);
-      p.teacher.marks.forEach((mk, j) => {
-        const cy = (mk.box[1] + mk.box[3]) / 2;
-        if (!(LINE_MARKS as readonly string[]).includes(mk.k) || cy < top || cy > bottom) return;
-        out.marks.push({ k: mk.k as HomeworkPast['marks'][number]['k'], text: mk.text, box: [mk.box[0], mk.box[1] - top, mk.box[2], mk.box[3] - top], ...(fresh[j] ? {} : { old: true as const }) });
+      p.photos.forEach((ph, i) => {
+        if (!want.has(ph.src)) return;
+        const [, top, , bottom] = photoSheetBox(p.photos, i, p.day);
+        p.teacher.marks.forEach((mk, j) => {
+          const cy = (mk.box[1] + mk.box[3]) / 2;
+          if (!(LINE_MARKS as readonly string[]).includes(mk.k) || cy < top || cy > bottom) return;
+          of(ph.src).marks.push({ k: mk.k as HomeworkPast['marks'][number]['k'], text: mk.text, box: [mk.box[0], mk.box[1] - top, mk.box[2], mk.box[3] - top], ...(fresh[j] ? {} : { old: true as const }) });
+        });
+        for (const st of p.kid.ink) {
+          const y = st[0]?.[1];
+          if (y === undefined || y < top || y > bottom) continue;
+          of(ph.src).ink.push(st.map(([x, yy]) => [x, yy - top] as [number, number]));
+        }
       });
-      for (const st of p.kid.ink) {
-        const y = st[0]?.[1];
-        if (y === undefined || y < top || y > bottom) continue;
-        out.ink.push(st.map(([x, yy]) => [x, yy - top] as [number, number]));
-      }
     }
   }
-  return { marks: out.marks.slice(-PAST_MARKS_MAX), ink: out.ink.slice(-PAST_INK_MAX) };
+  for (const [src, v] of Object.entries(out)) {
+    if (!v.marks.length && !v.ink.length) delete out[src];
+    else out[src] = { marks: v.marks.slice(-PAST_MARKS_MAX), ink: v.ink.slice(-PAST_INK_MAX) };
+  }
+  return out;
 }
 
 /** 导出:选的那几天,一张照片一页;不是 jpeg 的跳过(skipped 几张) */

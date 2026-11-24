@@ -144,15 +144,15 @@ activity 检查作业 再练两道退位减法
   ok('老师页铺上了这一节', d && page.secs === 1 && !page.blank, JSON.stringify(page));
   console.log('  ', await shot('tutor-after-start.png'));
 
-  // ---- 方砖:三块都以板为主(board: page),点「检查作业」先到拍照屏,拍了才发 ----
+  // ---- 方砖:点「检查作业」不到拍照屏,直接铺作业本(只进门,老师不开口) ----
   await evaluate(`document.querySelector('#back').click()`);
   await sleep(1500);
   const before = (await api('GET', '/api/conversations/chinese-tutor/today')).json?.index?.messages.length ?? 0;
   await evaluate(`document.querySelector('#deck .pc.front[data-tutor="chinese-tutor"] .bt-tile[data-tile="check"]').click()`);
   await sleep(1200);
-  const bp = await evaluate(`({ on: document.querySelector('#tutor').classList.contains('on'), start: Boolean(document.querySelector('#board .bp-start')) })`);
-  const after = (await api('GET', '/api/conversations/chinese-tutor/today')).json?.index?.messages.length ?? 0;
-  ok('方砖「检查作业」:老师页打开、先到拍照屏,还没发消息', bp.on && bp.start && after === before, JSON.stringify({ ...bp, before, after }));
+  const bp = await evaluate(`({ on: document.querySelector('#tutor').classList.contains('on'), start: Boolean(document.querySelector('#board .bp-start')), stage: document.querySelector('#stage').classList.contains('on') })`);
+  const after = (await api('GET', '/api/conversations/chinese-tutor/today')).json?.index?.messages ?? [];
+  ok('方砖「检查作业」:不到拍照屏,直接铺作业本;只进了门(老师没开口)', bp.on && !bp.start && bp.stage && after.length === before + 1 && after.at(-1)?.enter === true, JSON.stringify({ ...bp, before, after: after.length }));
 
   ws.close();
 } finally {

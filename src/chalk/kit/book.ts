@@ -27,15 +27,19 @@ type Box = [number, number, number, number];
 /** 一页在场景里的位置:top 是页顶,s 是 PDF 的点到场景坐标的倍数 */
 export interface BookSheet { n: number; top: number; s: number; height: number }
 
-/** 几页从上往下排(页的宽高比照各页自己的;只给页号时都按 aspect);cut 是每页底下裁掉多少(场景坐标),裁了页和页就直接连着 */
-export function bookSheets(pages: readonly { n: number; w?: number; h?: number }[], aspect = BOOK_ASPECT, cut = 0): BookSheet[] {
+/**
+ * 几页从上往下排(页的宽高比照各页自己的;只给页号时都按 aspect);cut 是每页底下裁掉多少(场景坐标),裁了页和页就直接连着。
+ * gaps = 每页上面空多少(第一页上面的也算;作业本照天、周分开,src/board/lesson.ts 的 photoGaps);不给就是第一页贴顶、之后空 BOOK_GAP
+ */
+export function bookSheets(pages: readonly { n: number; w?: number; h?: number }[], aspect = BOOK_ASPECT, cut = 0, gaps?: readonly number[]): BookSheet[] {
   let top = 0;
-  return pages.map((p) => {
+  return pages.map((p, i) => {
     const s = p.w ? BOOK_W / p.w : 1;
     const full = p.w && p.h ? (BOOK_W * p.h) / p.w : BOOK_W * aspect;
     const height = cut > 0 ? Math.max(full / 2, full - cut) : full;
+    top += gaps ? (gaps[i] ?? 0) : i && cut <= 0 ? BOOK_GAP : 0;
     const sh = { n: p.n, top, s, height };
-    top += height + (cut > 0 ? 0 : BOOK_GAP);
+    top += height;
     return sh;
   });
 }

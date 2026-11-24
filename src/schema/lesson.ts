@@ -79,10 +79,15 @@ export type StripItem =
  */
 export interface Strip { key: string; box: Box; items: StripItem[] }
 
-/** 照片页上的一张:孩子拍的(相对 workspace 根,captures/ 下)和它的像素宽高(场景里一张宽 1000,高照宽高比) */
-export interface PagePhoto { src: string; w: number; h: number }
-/** 照片页、白纸页、小课堂页的 id(一节课各只有一页;课本的一课是「册子#课名」;作业本以前的一天是「作业#<日期>」,今天那一章就是照片页) */
+/**
+ * 照片页上的一张:孩子拍的(相对 workspace 根,captures/ 下)和它的像素宽高(场景里一张宽 1000,高照宽高比)。
+ * day = 作业本里这一张是哪天拍的(YYYY-MM-DD);作业本的照片页上天与天、周与周之间空得多(src/board/lesson.ts 的 photoTops),以前没写的当是页的 day
+ */
+export interface PagePhoto { src: string; w: number; h: number; day?: string }
+/** 照片页、白纸页、小课堂页的 id(一节课各只有一页;课本的一课是「册子#课名」;作业本就是照片页) */
 export const PHOTO_PAGE = '作业';
+/** 作业本那一页(带 day 的照片页)的 title */
+export const HOMEWORK_TITLE = '作业本';
 export const WHITE_PAGE = '白纸';
 export const LECTURE_PAGE = '小课堂';
 /** 一册练习册最多铺几页(几页从上往下连着,同课本一课最多铺的页数) */
@@ -92,7 +97,8 @@ export const BOOK_MAX_SHEETS = 12;
  * 一页铺的是什么:
  *  book  课本的一课:几页 PDF 竖着连成一条。id = 「册子#课名」(同板的日志里的 base)
  *  photo 孩子拍的作业:几张照片竖着连成一条(先拍的在上),文字层是认字认出的行和题(src/scenes/photo-words/);张数不限。
- *        带 day 的是作业本的一章(那一天检查作业拍的,跨话题;base: homework):今天的 id 是「作业」(拍来的接在后面),以前的是「作业#<日期>」
+ *        带 day 的是作业本(base: homework;day = 这节课的今天):检查作业拍的照片按天攒成一本、跨话题,老的在上、今天拍的接在后面,每张记着哪天拍的;
+ *        还一张都没拍过的作业本 photos 是空的(舞台只画最后那张白纸)
  *  white 白纸:什么都没印,老师在上面摆图形、写字(整页就是一条白纸条)
  *  lecture 小课堂:一堂做好的课(课包 bundles/<id>/ 或视频 lectures/<id>/),按时刻编号的页——放就是窗自己往前走;
  *          文字层是每一句的起点与原话(src/board/lecture.ts 的时钟),老师 [[看 0:19–0:30]] 就是放那一段
@@ -204,7 +210,7 @@ export type LessonEvent =
   | { t: 'turn'; item: string; deg: number }
   /** 在课本的一个田字格里写好了(放好):这一格的笔画整个换成这些;空的 = 这一格擦干净了 */
   | { t: 'cell'; id: string; strokes: [number, number][][] }
-  /** 孩子拍来了几张(应用收下就铺,不等老师):接在照片页后面,没有照片页就开一页;pick = 这一页能不能点字;day = 作业本今天是哪天(新开的那一页就是今天这一章) */
+  /** 孩子拍来了几张(应用收下就铺,不等老师):接在照片页后面,没有照片页就开一页;pick = 这一页能不能点字;day = 作业本今天是哪天(新拍的记着这一天) */
   | { t: 'photo'; photos: PagePhoto[]; pick: boolean; day?: string }
   /** 老师念完了一句(这一句的动作已经落了):said 加一 */
   | { t: 'said' }
@@ -219,7 +225,8 @@ const StripItemSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('write'), text: z.string().min(1).max(40), size: SizeSchema }),
   z.object({ kind: z.literal('shape'), kit: z.string().min(1), params: z.record(z.string(), z.string()), size: SizeSchema }),
 ]);
-const PhotoSchema = z.object({ src: z.string().min(1), w: z.number().int().positive(), h: z.number().int().positive() });
+const DaySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const PhotoSchema = z.object({ src: z.string().min(1), w: z.number().int().positive(), h: z.number().int().positive(), day: DaySchema.optional() });
 const BookSourceSchema = z.object({
   id: z.string().min(1),
   kind: z.literal('book'),
@@ -230,7 +237,8 @@ const BookSourceSchema = z.object({
   layout: z.enum(['prose', 'math', 'science']),
   pick: z.boolean(),
 });
-const PhotoSourceSchema = z.object({ id: z.string().min(1), kind: z.literal('photo'), title: z.string().min(1), photos: z.array(PhotoSchema).min(1), pick: z.boolean(), day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() });
+/** 照片页的照片可以一张都没有:作业本(带 day)还没拍过;别的照片页拍了才开 */
+const PhotoSourceSchema = z.object({ id: z.string().min(1), kind: z.literal('photo'), title: z.string().min(1), photos: z.array(PhotoSchema), pick: z.boolean(), day: DaySchema.optional() });
 const WorkbookSourceSchema = z.object({ id: z.string().min(1), kind: z.literal('workbook'), src: z.string().min(1), title: z.string().min(1), sheets: z.array(z.object({ w: z.number().positive(), h: z.number().positive() })).min(1).max(BOOK_MAX_SHEETS), pick: z.boolean() });
 const WhiteSourceSchema = z.object({ id: z.string().min(1), kind: z.literal('white'), title: z.string().min(1), pick: z.boolean() });
 const LectureSourceSchema = z.object({ id: z.string().min(1), kind: z.literal('lecture'), title: z.string().min(1), bundle: z.string().min(1), video: z.boolean(), ms: z.number().nonnegative(), pick: z.boolean() });

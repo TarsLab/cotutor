@@ -5,7 +5,7 @@
  * 规矩:
  *  - 翻:换到那一页(课本的一课、照片页、白纸页;还没铺过就铺上:老师的一层、孩子的一层都是空的、什么都没请);窗回到页顶,白纸条收起来。翻回铺过的,原来画的都在
  *    (离开的那一页上老师指着字的记号收掉:圈、划、加点跟着话走,不跟着去)
- *  - 孩子拍来了照片(photo):接在照片页后面(没有就开一页,张数不限;带 day 的新开那一页就是作业本今天这一章),换到照片页,窗移到新拍的第一张的顶上
+ *  - 孩子拍来了照片(photo):接在照片页后面(没有就开一页,张数不限;带 day 的是作业本今天拍的,照片记着这一天),换到照片页,窗移到新拍的第一张的顶上
  *  - 看:窗移到那一处;那一处有白纸条就打开它(回到这道题,原来摆的还在),没有就收起开着的;小课堂上是放那一段(at)。
  *    看的是别处:这一页上老师的圈、划、加点收掉
  *  - 圈、划、加点、遮、盖:记号加在这一页上(同一处不重复;再圈一遍算新的)。圈、划、加点记下画它时念完了几句(at)
@@ -28,6 +28,8 @@ const LS_STRIP_MAX = 8;
 const LS_JOBS_MAX = 60;
 const LS_PHOTO_PAGE = '作业';
 const LS_WHITE_PAGE = '白纸';
+/** 作业本那一页的名字(同 src/schema/lesson.ts 的 HOMEWORK_TITLE) */
+const LS_HOMEWORK = '作业本';
 /** 场景里一页多宽、照片和照片之间空多少(同 src/chalk/kit/book.ts 的 BOOK_W、BOOK_GAP) */
 const LS_W = 1000;
 const LS_GAP = 30;
@@ -39,7 +41,7 @@ const LS_FRESH_LINES = 2;
 const LS_CELLS_MAX = 120;
 const LS_CELL_STROKES = 40;
 /** 上限与几个名字(测试拿去和 schema、chalk 比) */
-export const LESSON_CAPS = { PAGES_MAX: LS_PAGES_MAX, INK_MAX: LS_INK_MAX, INK_POINTS: LS_INK_POINTS, PICK_MAX: LS_PICK_MAX, MARKS_MAX: LS_MARKS_MAX, STRIP_ITEMS_MAX: LS_STRIP_MAX, JOBS_MAX: LS_JOBS_MAX, PHOTO_PAGE: LS_PHOTO_PAGE, WHITE_PAGE: LS_WHITE_PAGE, W: LS_W, GAP: LS_GAP, LINE_MARKS: LS_LINE_MARKS, MARKS_NEW_MAX: LS_NEW_MAX, MARK_FRESH_LINES: LS_FRESH_LINES, CELLS_MAX: LS_CELLS_MAX, CELL_STROKES: LS_CELL_STROKES };
+export const LESSON_CAPS = { PAGES_MAX: LS_PAGES_MAX, INK_MAX: LS_INK_MAX, INK_POINTS: LS_INK_POINTS, PICK_MAX: LS_PICK_MAX, MARKS_MAX: LS_MARKS_MAX, STRIP_ITEMS_MAX: LS_STRIP_MAX, JOBS_MAX: LS_JOBS_MAX, PHOTO_PAGE: LS_PHOTO_PAGE, WHITE_PAGE: LS_WHITE_PAGE, HOMEWORK_TITLE: LS_HOMEWORK, W: LS_W, GAP: LS_GAP, LINE_MARKS: LS_LINE_MARKS, MARKS_NEW_MAX: LS_NEW_MAX, MARK_FRESH_LINES: LS_FRESH_LINES, CELLS_MAX: LS_CELLS_MAX, CELL_STROKES: LS_CELL_STROKES };
 
 /** 一页上老师的圈、划、加点都收掉(遮、盖留着) */
 const dropLineMarks = (p: LessonPage): LessonPage => (p.teacher.marks.some((m) => LS_LINE_MARKS.includes(m.k)) ? { ...p, teacher: { ...p.teacher, marks: p.teacher.marks.filter((m) => !LS_LINE_MARKS.includes(m.k)) } } : p);
@@ -62,14 +64,44 @@ export function markFresh(l: Lesson, p: LessonPage): boolean[] {
   return fresh;
 }
 
-/** 照片页上第 i 张(从 0 起)在场景里的框:一张宽 1000,高照宽高比,从上往下连着,中间空 LS_GAP */
-export function photoSheetBox(photos: readonly PagePhoto[], i: number): Box {
+/**
+ * 作业本的照片页上照片之间空多少(场景坐标):同一天的两张之间 LS_GAP;换了一天空 LS_DAY_GAP(舞台在里面写「星期一」);
+ * 换了一周空 LS_WEEK_GAP(一道宽条「11月23日 – 29日」再一行星期几);第一张上面也留一周的地方。舞台照它画分割线(src/ui/stage/book.tsx)
+ */
+const LS_DAY_GAP = 100;
+const LS_WEEK_GAP = 190;
+export const PHOTO_GAPS = { same: LS_GAP, day: LS_DAY_GAP, week: LS_WEEK_GAP };
+
+/** 一天在哪一周:那一周的星期一(YYYY-MM-DD) */
+export function weekOf(day: string): string {
+  const t = new Date(Date.UTC(Number(day.slice(0, 4)), Number(day.slice(5, 7)) - 1, Number(day.slice(8, 10))));
+  t.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 6) % 7));
+  return t.toISOString().slice(0, 10);
+}
+
+/** 作业本里一张是哪天拍的:照片记着的,没记(以前的)当是页的 day */
+export const photoDay = (ph: PagePhoto, pageDay: string): string => ph.day ?? pageDay;
+
+/** 照片页上每张照片上面空多少(第一张上面的也算):不是作业本(pageDay 没有)的第一张贴着顶、之后都空 LS_GAP;作业本照 PHOTO_GAPS */
+export function photoGaps(photos: readonly PagePhoto[], pageDay?: string): number[] {
+  return photos.map((ph, i) => {
+    if (!pageDay) return i ? LS_GAP : 0;
+    if (!i) return LS_WEEK_GAP;
+    const a = photoDay(photos[i - 1], pageDay), b = photoDay(ph, pageDay);
+    return a === b ? LS_GAP : weekOf(a) === weekOf(b) ? LS_DAY_GAP : LS_WEEK_GAP;
+  });
+}
+
+/** 照片页上第 i 张(从 0 起)在场景里的框:一张宽 1000,高照宽高比,从上往下连着,中间空的照 photoGaps(pageDay = 作业本的页的 day) */
+export function photoSheetBox(photos: readonly PagePhoto[], i: number, pageDay?: string): Box {
+  const gaps = photoGaps(photos, pageDay);
   let top = 0;
-  for (let k = 0; k < i; k++) top += (LS_W * photos[k].h) / photos[k].w + LS_GAP;
+  for (let k = 0; k < i; k++) top += gaps[k] + (LS_W * photos[k].h) / photos[k].w;
+  top += gaps[i] ?? 0;
   return [0, top, LS_W, top + (LS_W * photos[i].h) / photos[i].w];
 }
 
-/** 作业本一天的章名:「11月20日」(YYYY-MM-DD;页的 title、顶栏、目录、老师 [[翻 11月20日]] 都照它) */
+/** 作业本里一天:「11月20日」(YYYY-MM-DD;老师 [[翻 11月20日]]、给老师的底、孩子在看哪一天都照它) */
 export const dayTitle = (day: string): string => `${Number(day.slice(5, 7))}月${Number(day.slice(8, 10))}日`;
 
 /** 白纸页上的白纸条:整页就是一条,从页顶摆起(Strip.box 是它上面那道「题」,白纸页上是页顶一条线) */
@@ -215,15 +247,16 @@ export function lessonStep(l: Lesson, ev: LessonEvent): Lesson {
     case 'photo': {
       const had = l.pages.find((p) => p.id === LS_PHOTO_PAGE);
       const old = had && had.kind === 'photo' ? had.photos : [];
-      const add = ev.photos.filter((x) => x.w > 0 && x.h > 0 && !old.some((o) => o.src === x.src));
+      const add = ev.photos.filter((x) => x.w > 0 && x.h > 0 && !old.some((o) => o.src === x.src)).map((x) => (ev.day ? { ...x, day: ev.day } : x));
       if (!add.length) return had ? { ...l, at: LS_PHOTO_PAGE } : l;
       const photos = [...old, ...add];
-      const page: LessonPage = had && had.kind === 'photo' ? { ...had, photos } : { id: LS_PHOTO_PAGE, kind: 'photo', title: ev.day ? dayTitle(ev.day) : LS_PHOTO_PAGE, photos, pick: ev.pick, ...(ev.day ? { day: ev.day } : {}), ...emptyLayers() };
+      const page: LessonPage = had && had.kind === 'photo' ? { ...had, photos } : { id: LS_PHOTO_PAGE, kind: 'photo', title: ev.day ? LS_HOMEWORK : LS_PHOTO_PAGE, photos, pick: ev.pick, ...(ev.day ? { day: ev.day } : {}), ...emptyLayers() };
       const pages = had ? l.pages.map((p) => (p === had ? page : p)) : [...l.pages, page].slice(-LS_PAGES_MAX);
-      // 窗移到新拍的第一张的顶上(当老师「看」了它:舞台照 look.n 移窗)
+      // 窗移到新拍的第一张的顶上(当老师「看」了它:舞台照 look.n 移窗);作业本里是今天的第几张
       const first = old.length;
-      const b = photoSheetBox(photos, first);
-      return { ...l, pages, at: LS_PHOTO_PAGE, strip: null, view: null, look: { label: `第${first + 1}张`, box: [b[0], b[1], b[2], Math.min(b[3], b[1] + LS_W * 0.6)], n: (l.look?.n ?? 0) + 1 } };
+      const b = photoSheetBox(photos, first, page.kind === 'photo' ? page.day : undefined);
+      const nth = page.kind === 'photo' && page.day ? photos.filter((x) => photoDay(x, page.day!) === page.day).length - add.length : first;
+      return { ...l, pages, at: LS_PHOTO_PAGE, strip: null, view: null, look: { label: `第${nth + 1}张`, box: [b[0], b[1], b[2], Math.min(b[3], b[1] + LS_W * 0.6)], n: (l.look?.n ?? 0) + 1 } };
     }
   }
 }

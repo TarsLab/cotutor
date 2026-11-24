@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * 铺孩子拍的照片的一节课(数学「检查作业」,activity 头上 base: homework,作业本也是照片页)孩子端整条线的手动验收:不进 pnpm test,要本机 Chrome;假百炼 + 假老师 + 假看图,不花钱。
- * 本进程起服务(临时 workspace;vault 的 教材/数学二年级上册/ 里放一张作业图当「课本页」,选它就当孩子拍的照片发;认字是假的,回一道第 3 题和一行字),无头 Chrome 开孩子端:
- *  一、首页点数学的「检查作业」方砖:先到拍照屏(拍照、相册、选课本页、不拍用白纸),不发东西。
+ * 铺孩子拍的照片的一节课(英语「复习」,activity 头上 base: photo)孩子端整条线的手动验收:不进 pnpm test,要本机 Chrome;假百炼 + 假老师 + 假看图,不花钱。
+ * 本进程起服务(临时 workspace;vault 的 教材/英语二年级上册/ 里放一张作业图当「课本页」,选它就当孩子拍的照片发;认字是假的,回一道第 3 题和一行字),无头 Chrome 开孩子端:
+ *  一、首页点英语的「复习」方砖:先到拍照屏(拍照、相册、选课本页、不拍用白纸),不发东西。
  *  二、选那一页:照片马上铺上照片页(舞台 book.tsx 画一张),不等老师;顶栏有拍照、相册。
  *  三、孩子说「讲题吧」:老师写 [[看 第 3 题]] [[圈 心理辅导室]] [[请 圈]],念完那一句落上:窗移到第 3 题、「心理辅导室」圈上了。
  *  四、笔画一道:「给老师看」出现;按它:舞台先交窗里的图(shot),再发一条交了(action submit)。
@@ -56,11 +56,11 @@ const cfgFile = join(wsRoot, 'cotutor.json');
 const cfg = JSON.parse(readFileSync(cfgFile, 'utf8'));
 cfg.runtimes = { default: 'stream', stream: { api: 'bailian', model: 'fake-stream' } };
 for (const t of Object.values(cfg.tutors)) delete t.runtime;
-cfg.live = { voices: { 'math-tutor': 'Serena', 'english-tutor': 'Theo Calm' } };
+cfg.live = { voices: { 'english-tutor': 'Theo Calm' } };
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 const wsx = loadWorkspace(wsRoot);
-mkdirSync(join(wsx.paths.textbooks, '数学二年级上册'), { recursive: true });
-copyFileSync(photo, join(wsx.paths.textbooks, '数学二年级上册', '42.jpg'));
+mkdirSync(join(wsx.paths.textbooks, '英语二年级上册'), { recursive: true });
+copyFileSync(photo, join(wsx.paths.textbooks, '英语二年级上册', '42.jpg'));
 const ctx = createContext(wsx, { look });
 await ctx.reload();
 const upgrade = makeLiveUpgrade({ endpoint: fake.endpoint });
@@ -68,7 +68,7 @@ const server = createServer(createHandler(ctx));
 server.on('upgrade', (req, socket, head) => { void upgrade(req, socket, head, ctx).then((took) => { if (!took) socket.destroy(); }); });
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const base = `http://127.0.0.1:${server.address().port}`;
-const T = 'math-tutor';
+const T = 'english-tutor';
 
 let browser = null;
 try {
@@ -119,15 +119,15 @@ try {
   await send('Network.enable');
   await send('Emulation.setDeviceMetricsOverride', { width: 1180, height: 820, deviceScaleFactor: 1, mobile: false });
 
-  // 一、首页点数学的「检查作业」
+  // 一、首页点英语的「复习」
   await send('Page.navigate', { url: `${base}/` });
-  // 先点数学的小旗换到他那一章,再用鼠标点他的方砖
-  await until(`Boolean(document.querySelector('[data-tutor="math-tutor"]'))`);
-  await evaluate(`document.querySelector('#tabs .tab[data-tutor="math-tutor"]').click(), true`);
-  await until(`document.querySelector('.pc[data-tutor="math-tutor"]').classList.contains('front')`, 5000);
+  // 先点英语的小旗换到他那一章,再用鼠标点他的方砖
+  await until(`Boolean(document.querySelector('[data-tutor="english-tutor"]'))`);
+  await evaluate(`document.querySelector('#tabs .tab[data-tutor="english-tutor"]').click(), true`);
+  await until(`document.querySelector('.pc[data-tutor="english-tutor"]').classList.contains('front')`, 5000);
   await sleep(800);
-  const tile = await until(`(() => { const b = document.querySelector('[data-tutor="math-tutor"] .bt-tile[data-tile="check"]'); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
-  ok('首页有数学的「检查作业」方砖', Boolean(tile));
+  const tile = await until(`(() => { const b = document.querySelector('[data-tutor="english-tutor"] .bt-tile[data-tile="review"]'); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+  ok('首页有英语的「复习」方砖', Boolean(tile));
   await tapAt(tile.x, tile.y);
   // 「选课本页」等课本页的清单拉回来才插进去:等它(拉不回来 until 到时候照样往下走,下面那条就红)
   const start = await until(`(() => { const b = document.querySelector('#board .bp-start'); const t = b ? [...b.querySelectorAll('.ask-go')].map((x) => x.textContent.trim()) : null; return t && t.includes('选课本页') ? t : null; })()`) ?? (await evaluate(`[...document.querySelectorAll('#board .bp-start .ask-go')].map((x) => x.textContent.trim())`));
@@ -146,7 +146,7 @@ try {
   ok('选了一页:照片铺上照片页(一张),不等老师;顶栏有拍照、相册', Boolean(laid) && top.ph && top.cam !== 'none', JSON.stringify({ top, st: await pageState() }));
   await idle();
   const first = (await day()).messages?.[0];
-  ok('开了一节课:话题第一条记 base: homework,带着那张照片', first?.base === 'homework' && first.photos?.length === 1, JSON.stringify(first));
+  ok('开了一节课:话题第一条记 base: photo,带着那张照片', first?.base === 'photo' && first.photos?.length === 1, JSON.stringify(first));
   await sleep(1500);
   console.log('  ', await shot('2-照片页.png'));
 
@@ -197,7 +197,9 @@ try {
   const conn = () => fake.conns[fake.conns.length - 1];
   const said = () => conn().responses.map((r) => r?.instructions ?? '');
   const warm = await (async () => { for (let i = 0; i < 100; i++) { if (said().some((x) => x.includes("我先来:duck!"))) return true; await sleep(200); } return false; })();
-  const m0 = (await day('english-tutor')).messages?.[0];
+  // 英语老师今天前面还有复习那个话题:只看口语课的(最后一个话题,第一条带 base)
+  const oral = async () => { const ms = (await day('english-tutor')).messages ?? []; const i = ms.map((m) => Boolean(m.base)).lastIndexOf(true); return i < 0 ? [] : ms.slice(i); };
+  const m0 = (await oral())[0];
   ok("不拍用白纸:开了一节口语课(第一条记 base: photo、listen: open),老师写热身", warm && m0?.base === 'photo' && m0?.listen === 'open', JSON.stringify({ warm, base: m0?.base, listen: m0?.listen }));
   const turn = await until(`document.querySelector('#lv-hold').dataset.voice === 'turn'`, 20000);
   ok('请他说的那句念完:按钮「轮到你说」,服务端不往下念', Boolean(turn) && !said().some((x) => x.includes('小声一点')), JSON.stringify(said()));
@@ -205,7 +207,7 @@ try {
   fake.kidText = 'duck';
   const next = await (async () => { for (let i = 0; i < 100; i++) { if (said().some((x) => x.includes('小声一点'))) return true; await sleep(200); } return false; })();
   fake.kidText = '';
-  ok('他说了 duck:接着念下一拍,不开新的一轮', next && (await day('english-tutor')).messages?.length === 1, JSON.stringify(said()));
+  ok('他说了 duck:接着念下一拍,不开新的一轮', next && (await oral()).length === 1, JSON.stringify(said()));
   ok('页面没有脚本报错', errors.length === 0, errors.slice(0, 3).join(' | '));
   console.log(`\n截图在 ${shots}`);
   ws.close();

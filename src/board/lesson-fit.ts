@@ -1,8 +1,10 @@
 /**
  * 讲稿里的动作落到页上(纯函数,runner 在流式与定稿时都过一遍):老师写的是页上印的字,应用照页的文字层找到它在哪。
- *  - 翻 课名 / 翻 目录:照课本目录找到这一课铺哪几页;翻 白纸:加一张白纸页(有了就回到它);翻 作业(今天):回到孩子拍的照片页(作业本今天这一章);
- *    翻 11月20日:作业本的那一天(铺过的翻回去,没铺过的照 src.homework 给的那几天);翻 小课堂:回到那堂课;翻 练习册(或册名):回到铺过的那一册
- *  - 看 第 3 题 / 例 2 / 原话…:照这一页分好的块找到那一块的框(src/chalk/kit/book.ts 的 bookTarget);照片页还认「第 2 张」「第 2 张第 3 题」,练习册「第 2 页」「第 2 页第 3 题」
+ *  - 翻 课名 / 翻 目录:照课本目录找到这一课铺哪几页;翻 白纸:加一张白纸页(有了就回到它);翻 作业(今天):回到孩子拍的照片页(作业本);
+ *    翻 小课堂:回到那堂课;翻 练习册(或册名):回到铺过的那一册。
+ *    作业本是一整本连着滚的一页(老的在上):在作业本上「翻 11月20日」「翻 今天」就是窗移到那一天(落成「看」);在别的页上翻回作业本
+ *  - 看 第 3 题 / 例 2 / 原话…:照这一页分好的块找到那一块的框(src/chalk/kit/book.ts 的 bookTarget);照片页还认「第 2 张」「第 2 张第 3 题」,练习册「第 2 页」「第 2 页第 3 题」;
+ *    作业本上「第 2 张」是今天的第 2 张,以前那天的写「11月20日第 2 张」「11月20日第 2 张第 3 题」,「11月20日」是那一天的第一张
  *  - 看 0:19–0:30 / 0:19 / 课里的一句原话(小课堂页):放那一段,对齐到句(src/board/lecture.ts 的 lectureRange);只写起点放到那一句的末尾
  *  - 圈、划、加点、遮、盖 字词:照字找到框;先在「看」着的那一块里找(找不到的那一处不做)。
  *    圈的框连着字头上的拼音(圈住整个字块,不切拼音那一行);划一句跨了行就一行一截;一句里圈、划、加点最多做 3 处,多写的给家长记一句
@@ -12,11 +14,11 @@
  * 练习册是 workbook.json 里排版时记下的行和题(src/chalk/kit/workbook.ts);小课堂是每一句的起点与原话;白纸没有。
  * 一节里的动作照先后一个一个落(先翻再看,看的是新的那一页),落不了的记一句给家长(why),动作本身留在讲稿上、不带 do。
  */
-import { BOOK_MAX_PAGES, BOOK_TOC, bookCut, bookFind, bookSheets, bookSpot, bookTarget, findLesson, lessonBlocks, lessonName, photoBookPage, workbookBookPage, type BookBlock, type BookSheet, type PhotoText } from '../chalk/index.ts';
+import { BOOK_MAX_PAGES, BOOK_TOC, bookCut, bookFind, bookSheets, bookSpot, bookTarget, bookView, findLesson, lessonBlocks, lessonName, photoBookPage, workbookBookPage, type BookBlock, type BookSheet, type PhotoText } from '../chalk/index.ts';
 import { LECTURE_PAGE, LOOK_ROWS_MAX, PHOTO_PAGE, WHITE_PAGE, type BoardSection, type BookIndex, type BookPage, type Box, type Lesson, type LessonAct, type LineAct, type PageSource, type Workbook } from '../schema/index.ts';
 import { actParts } from './acts.ts';
 import { clockLabel, lectureRange, parseClock, type LectureClock } from './lecture.ts';
-import { lessonPage, lessonStep } from './lesson.ts';
+import { dayTitle, lessonPage, lessonStep, photoDay, photoGaps } from './lesson.ts';
 
 /** 一课(或目录)铺哪几页(最多 BOOK_MAX_PAGES 页,数学一个小节能有十几页);认不出 = null。title 是这一课在页上的名字(同名的带编号,lessonName) */
 export function bookLesson(index: BookIndex, name: string | null): { title: string; pages: BookPage[] } | null {
@@ -36,8 +38,6 @@ export interface LessonSource {
   lecture?: { bundle: string; clock: Pick<LectureClock, 'segments' | 'total'> } | null;
   /** 这节课铺过的练习册(名字 → 读出来的那一册;src/memory/workbook.ts);读不出来的没有 */
   workbooks?: Readonly<Record<string, Workbook>>;
-  /** 作业本(base: homework)能翻到的以前那几天,一天一张照片页(带 day;src/runtime/homework.ts 铺的) */
-  homework?: { pages: readonly PageSource[] };
 }
 
 /** 「看」小课堂:「0:19–0:30」「0:19」(放到那一句的末尾),或课里一句原话的一截(放那一句);对齐到句 */
@@ -79,7 +79,7 @@ export function pageText(p: PageSource, src: LessonSource): { pages: BookPage[];
   if (p.kind === 'photo') {
     const layers = p.photos.map((ph, i) => photoBookPage(i + 1, ph, src.photos?.[ph.src] ?? null));
     const pages = layers.map((x) => x.page);
-    return { pages, sheets: bookSheets(pages), blocks: layers.flatMap((x) => x.blocks) };
+    return { pages, sheets: bookSheets(pages, undefined, 0, photoGaps(p.photos, p.day)), blocks: layers.flatMap((x) => x.blocks) };
   }
   if (p.kind === 'workbook') {
     const wb = src.workbooks?.[p.src];
@@ -93,6 +93,58 @@ export function pageText(p: PageSource, src: LessonSource): { pages: BookPage[];
 
 /** 照片页上的「第 2 张」「第 2 张第 3 题」,练习册上的「第 2 页」「第 2 页第 3 题」 */
 const SHEET = { 张: /^第?\s*(\d{1,2})\s*张(?:\s*的?\s*第?\s*(\d{1,2})\s*题)?$/, 页: /^第?\s*(\d{1,2})\s*页(?:\s*的?\s*第?\s*(\d{1,2})\s*题)?$/ } as const;
+
+type PhotoPage = Extract<PageSource, { kind: 'photo' }>;
+
+/** 作业本里每一张:哪天拍的、是那天的第几张(从 1 起)、给老师看的名字(今天的「第2张」,以前的「11月20日第2张」) */
+export function homeworkLabels(p: PhotoPage): { day: string; k: number; label: string }[] {
+  const today = p.day ?? '';
+  const seen = new Map<string, number>();
+  return p.photos.map((ph) => {
+    const day = photoDay(ph, today);
+    const k = (seen.get(day) ?? 0) + 1;
+    seen.set(day, k);
+    return { day, k, label: day === today ? `第${k}张` : `${dayTitle(day)}第${k}张` };
+  });
+}
+
+/** 作业本里说的是哪一天:「今天」、「11月20日」、「2026-11-20」;这本里没有那天 = null */
+function homeworkDay(p: PhotoPage, name: string): string | null {
+  const t = name.replace(/\s/g, '');
+  if (t === '今天' || t === PHOTO_PAGE) return p.day ?? null;
+  const days = [...new Set(p.photos.map((ph) => photoDay(ph, p.day ?? '')))];
+  return days.find((d) => d === t || dayTitle(d) === t) ?? null;
+}
+
+/** 作业本上「看」:「11月20日」(那天的第一张)、「第 2 张」(今天的)、「11月20日第 2 张」、「…第 3 题」;别的同课本 */
+function homeworkTarget(p: PhotoPage, t: ReturnType<typeof pageText>, what: string): { label: string; box: Box; rows?: Box[] } | null {
+  const w = what.replace(/\s/g, '');
+  const m = /^(今天|\d{1,2}月\d{1,2}日|\d{4}-\d{2}-\d{2})?的?(?:第?(\d{1,2})张(?:的?第?(\d{1,2})题)?)?$/.exec(w);
+  if (!m || (!m[1] && !m[2])) return bookTarget(t.pages, t.sheets, t.blocks, what);
+  const day = m[1] ? homeworkDay(p, m[1]) : (p.day ?? null);
+  if (!day) return null;
+  const labels = homeworkLabels(p);
+  const i = labels.findIndex((x) => x.day === day && x.k === (m[2] ? Number(m[2]) : 1));
+  const sh = i >= 0 ? t.sheets.find((x) => x.n === i + 1) : undefined;
+  if (!sh) return null;
+  const name = m[2] ? labels[i].label : day === p.day ? '今天' : dayTitle(day);
+  if (!m[3]) return { label: name, box: [0, sh.top, 1000, sh.top + sh.height] };
+  const hit = bookTarget(t.pages, t.sheets, t.blocks.filter((b) => b.area?.n === i + 1), `第${m[3]}题`);
+  return hit ? { label: `${name}${hit.label}`, box: hit.box, rows: hit.rows } : null;
+}
+
+/** 窗停下来的那一块说成一句(给老师的「孩子在看」):照片页「第 1 张:第 3 题」;作业本带哪天(「11月20日第 1 张:第 3 题」),窗在最后那张白纸上说白纸 */
+export function photoView(p: PhotoPage, t: ReturnType<typeof pageText>, box: Box): string {
+  const said = bookView(t.pages, t.sheets, t.blocks, box, '张');
+  if (!p.day) return said;
+  const labels = homeworkLabels(p);
+  const shown = t.sheets.filter((s) => s.top < box[3] && s.top + s.height > box[1]).map((s) => labels[s.n - 1]).filter(Boolean);
+  const rest = said.replace(/^第 [\d–]+ 张:?/, '').replace(/^空白处$/, '');
+  if (!shown.length) return '作业本最后那张白纸(拍照的地方)';
+  const days = [...new Set(shown.map((x) => x.day))];
+  const where = days.length > 1 ? `${shown[0].label}到${shown[shown.length - 1].label}` : shown.length > 1 ? `${shown[0].label}–${shown[shown.length - 1].k}张` : shown[0].label;
+  return [where, rest].filter(Boolean).join(':');
+}
 
 /** 「看」照片页、练习册:第几张(页)、第几张(页)的第几题;别的同课本 */
 function photoTarget(t: ReturnType<typeof pageText>, what: string, unit: keyof typeof SHEET = '张'): { label: string; box: Box; rows?: Box[] } | null {
@@ -114,20 +166,14 @@ function turnTo(l: Lesson, name: string, src: LessonSource): { page: PageSource 
     const { teacher: _t, kid: _k, open: _o, ...page } = p;
     return { page };
   }
-  if (name === PHOTO_PAGE || name === '照片' || name === '作业照片' || name === '今天') {
+  // 作业本的一天(「11月20日」「2026-11-20」)也是回到作业本那一页
+  const hwBook = l.pages.find((x): x is Extract<typeof x, { kind: 'photo' }> => x.kind === 'photo' && Boolean(x.day));
+  if (name === PHOTO_PAGE || name === '照片' || name === '作业照片' || name === '今天' || name === '作业本' || (hwBook && homeworkDay(hwBook, name))) {
     const p = l.pages.find((x) => x.kind === 'photo');
     if (!p) return { why: '孩子还没拍照片,没有照片页可翻' };
     const { teacher: _t, kid: _k, open: _o, ...page } = p;
     return { page };
   }
-  // 作业本的一天:「11月20日」或「2026-11-20」;铺过的翻回去(原来画的都在)
-  const laid = l.pages.find((x) => x.kind === 'photo' && x.day && (name === x.title || name === x.day));
-  if (laid) {
-    const { teacher: _t, kid: _k, open: _o, ...page } = laid;
-    return { page };
-  }
-  const day = src.homework?.pages.find((x) => x.kind === 'photo' && (name === x.title || name === x.day));
-  if (day) return { page: day };
   const wb = l.pages.find((x) => x.kind === 'workbook' && (name === '练习册' || name === x.title || name === x.src));
   if (wb) {
     const { teacher: _t, kid: _k, open: _o, ...page } = wb;
@@ -143,6 +189,12 @@ export function fitAct(l: Lesson, a: LineAct, src: LessonSource): { do: LessonAc
   let parts;
   try { parts = actParts(a); } catch (e) { return { why: e instanceof Error ? e.message : String(e) }; }
   if (parts.name === '翻') {
+    // 作业本上翻到一天:作业本是连着滚的一整本,翻一天就是窗移到那一天
+    const cur = lessonPage(l);
+    if (cur?.kind === 'photo' && cur.day && homeworkDay(cur, parts.lesson)) {
+      const hit = homeworkTarget(cur, pageText(cur, src), parts.lesson);
+      if (hit) return { do: { k: '看', label: hit.label, box: hit.box } };
+    }
     const r = turnTo(l, parts.lesson, src);
     return 'page' in r ? { do: { k: '翻', page: r.page } } : { why: r.why };
   }
@@ -158,7 +210,7 @@ export function fitAct(l: Lesson, a: LineAct, src: LessonSource): { do: LessonAc
         return hit ? { do: { k: '看', label: hit.label, box: [0, 0, 0, 0], at: hit.at } } : { why: `「${parts.target}」在小课堂《${p.title}》里找不到(写 0:19–0:30,或课里一句原话)` };
       }
       const t = pageText(p, src);
-      const hit = p.kind === 'photo' ? photoTarget(t, parts.target) : p.kind === 'workbook' ? photoTarget(t, parts.target, '页') : bookTarget(t.pages, t.sheets, t.blocks, parts.target);
+      const hit = p.kind === 'photo' ? (p.day ? homeworkTarget(p, t, parts.target) : photoTarget(t, parts.target)) : p.kind === 'workbook' ? photoTarget(t, parts.target, '页') : bookTarget(t.pages, t.sheets, t.blocks, parts.target);
       return hit ? { do: { k: '看', label: hit.label, box: hit.box, ...(hit.rows?.length ? { rows: hit.rows.slice(0, LOOK_ROWS_MAX) } : {}) } } : { why: `「${parts.target}」在《${p.title}》里找不到${p.kind === 'photo' ? '(照片上认出的题没有它,或者还没认完)' : ''}` };
     }
     case '圈':

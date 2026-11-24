@@ -1,6 +1,6 @@
 /** 一节课的状态(src/board/lesson.ts 的 lessonStep):老师的动作、孩子的事各自怎么改它。做法同 player.test.ts 对 step。 */
-import { LESSON_CAPS, lessonActs, lessonSection, markFresh, photoSheetBox, lessonDone, lessonInit, lessonPage, lessonStep, lessonStrip } from '../src/board/lesson.ts';
-import { LESSON_CELLS_MAX, LESSON_CELL_STROKES, LINE_MARKS, MARKS_NEW_MAX, MARK_FRESH_LINES, LESSON_JOBS_MAX, LESSON_INK_MAX, LESSON_INK_POINTS, LESSON_MARKS_MAX, LESSON_PAGES_MAX, LESSON_PICK_MAX, LessonSchema, PHOTO_PAGE, STRIP_ITEMS_MAX, WHITE_PAGE, type Box, type Lesson, type LessonAct, type LessonEvent, type PageSource } from '../src/schema/index.ts';
+import { LESSON_CAPS, lessonActs, lessonSection, markFresh, photoGaps, photoSheetBox, weekOf, lessonDone, lessonInit, lessonPage, lessonStep, lessonStrip } from '../src/board/lesson.ts';
+import { LESSON_CELLS_MAX, LESSON_CELL_STROKES, LINE_MARKS, MARKS_NEW_MAX, MARK_FRESH_LINES, LESSON_JOBS_MAX, LESSON_INK_MAX, LESSON_INK_POINTS, LESSON_MARKS_MAX, LESSON_PAGES_MAX, LESSON_PICK_MAX, LessonSchema, HOMEWORK_TITLE, PHOTO_PAGE, STRIP_ITEMS_MAX, WHITE_PAGE, type Box, type Lesson, type LessonAct, type LessonEvent, type PageSource } from '../src/schema/index.ts';
 import { check, done } from './_check.ts';
 
 const page = (title: string, extra: Partial<Extract<PageSource, { kind: 'book' }>> = {}): Extract<PageSource, { kind: 'book' }> => ({ id: `数学.pdf#${title}`, kind: 'book', src: '数学.pdf', title, pages: [50, 51], cut: 40, layout: 'math', pick: false, ...extra });
@@ -10,7 +10,7 @@ const B1: Box = [80, 300, 900, 420];
 const B2: Box = [80, 700, 900, 820];
 const valid = (l: Lesson): boolean => LessonSchema.safeParse(l).success;
 
-check('上限和 schema 一样', LESSON_CAPS.PAGES_MAX === LESSON_PAGES_MAX && LESSON_CAPS.INK_MAX === LESSON_INK_MAX && LESSON_CAPS.INK_POINTS === LESSON_INK_POINTS && LESSON_CAPS.PICK_MAX === LESSON_PICK_MAX && LESSON_CAPS.MARKS_MAX === LESSON_MARKS_MAX && LESSON_CAPS.STRIP_ITEMS_MAX === STRIP_ITEMS_MAX && LESSON_CAPS.JOBS_MAX === LESSON_JOBS_MAX && LESSON_CAPS.PHOTO_PAGE === PHOTO_PAGE && LESSON_CAPS.WHITE_PAGE === WHITE_PAGE && LESSON_CAPS.LINE_MARKS.join() === LINE_MARKS.join() && LESSON_CAPS.MARKS_NEW_MAX === MARKS_NEW_MAX && LESSON_CAPS.MARK_FRESH_LINES === MARK_FRESH_LINES && LESSON_CAPS.CELLS_MAX === LESSON_CELLS_MAX && LESSON_CAPS.CELL_STROKES === LESSON_CELL_STROKES);
+check('上限和 schema 一样', LESSON_CAPS.PAGES_MAX === LESSON_PAGES_MAX && LESSON_CAPS.INK_MAX === LESSON_INK_MAX && LESSON_CAPS.INK_POINTS === LESSON_INK_POINTS && LESSON_CAPS.PICK_MAX === LESSON_PICK_MAX && LESSON_CAPS.MARKS_MAX === LESSON_MARKS_MAX && LESSON_CAPS.STRIP_ITEMS_MAX === STRIP_ITEMS_MAX && LESSON_CAPS.JOBS_MAX === LESSON_JOBS_MAX && LESSON_CAPS.PHOTO_PAGE === PHOTO_PAGE && LESSON_CAPS.WHITE_PAGE === WHITE_PAGE && LESSON_CAPS.HOMEWORK_TITLE === HOMEWORK_TITLE && LESSON_CAPS.LINE_MARKS.join() === LINE_MARKS.join() && LESSON_CAPS.MARKS_NEW_MAX === MARKS_NEW_MAX && LESSON_CAPS.MARK_FRESH_LINES === MARK_FRESH_LINES && LESSON_CAPS.CELLS_MAX === LESSON_CELLS_MAX && LESSON_CAPS.CELL_STROKES === LESSON_CELL_STROKES);
 
 // ——— 还没有页 ———
 {
@@ -183,8 +183,15 @@ check('同一处再看一遍:n 加一(窗再移一次)', look2.look?.n === 2);
   const full = run(lessonInit(), { t: 'photo', photos: Array.from({ length: 20 }, (_, i) => ({ src: `captures/${i}.jpg`, w: 10, h: 10 })), pick: true });
   check('张数不限;宽高不对的不收', (lessonPage(full) as { photos: unknown[] }).photos.length === 20 && LessonSchema.safeParse(full).success && run(lessonInit(), { t: 'photo', photos: [{ src: 'x', w: 0, h: 10 }], pick: true }).at === null);
   const day = run(lessonInit(), { t: 'photo', photos: [{ src: 'captures/a.jpg', w: 10, h: 10 }], pick: true, day: '2026-11-23' });
-  const dp = lessonPage(day) as { title: string; day?: string };
-  check('带 day 新开的照片页是作业本今天这一章:章名「11月23日」', dp.title === '11月23日' && dp.day === '2026-11-23' && LessonSchema.safeParse(day).success);
+  const dp = lessonPage(day) as { title: string; day?: string; photos: { day?: string }[] };
+  check('带 day 新开的照片页是作业本:名字「作业本」,拍来的记着今天', dp.title === HOMEWORK_TITLE && dp.day === '2026-11-23' && dp.photos[0].day === '2026-11-23' && LessonSchema.safeParse(day).success);
+  const book = (['2026-11-19', '2026-11-20', '2026-11-20', '2026-11-23'] as const).map((d, i) => ({ src: `captures/${d}/${i}.jpg`, w: 1000, h: 1000, day: d }));
+  check('作业本里照片之间:第一张上面留一周的,换天 100,同一天 30,换周 190;不是作业本的照旧', JSON.stringify(photoGaps(book, '2026-11-23')) === '[190,100,30,190]' && photoSheetBox(book, 1, '2026-11-23')[1] === 1290 && JSON.stringify(photoGaps(book)) === '[0,30,30,30]', JSON.stringify(photoGaps(book, '2026-11-23')));
+  check('一周从星期一起', weekOf('2026-11-22') === '2026-11-16' && weekOf('2026-11-23') === '2026-11-23' && weekOf('2026-12-01') === '2026-11-30');
+  const hwBook = run(lessonInit(), A({ k: '翻', page: { id: PHOTO_PAGE, kind: 'photo', title: HOMEWORK_TITLE, photos: book.slice(0, 3), pick: false, day: '2026-11-23' } }));
+  check('一张都没有的作业本也铺得上', LessonSchema.safeParse(run(lessonInit(), A({ k: '翻', page: { id: PHOTO_PAGE, kind: 'photo', title: HOMEWORK_TITLE, photos: [], pick: false, day: '2026-11-23' } }))).success);
+  const hw2 = run(hwBook, { t: 'photo', photos: [{ src: 'captures/2026-11-23/x.jpg', w: 1000, h: 500 }], pick: false, day: '2026-11-23' });
+  check('作业本拍来的接在整本后面:窗移到它,看的是今天的第 1 张', (lessonPage(hw2) as { photos: unknown[] }).photos.length === 4 && hw2.look?.label === '第1张' && hw2.look.box[1] === photoSheetBox((lessonPage(hw2) as { photos: typeof book }).photos, 3, '2026-11-23')[1], JSON.stringify(hw2.look));
   const white = run(both, A({ k: '翻', page: { id: WHITE_PAGE, kind: 'white', title: WHITE_PAGE, pick: false } }), A({ k: '写', text: '23 + 18 =', size: '大' }), A({ k: '摆', kit: '点阵', params: { 行: '2', 每行: '9' }, size: '中' }));
   check('白纸页:不用先看,写、摆都落在整页那一条白纸条上', white.at === WHITE_PAGE && lessonStrip(white)?.key === WHITE_PAGE && lessonStrip(white)?.items.length === 2 && valid(white), JSON.stringify(white.pages.map((p) => p.id)));
   const back = run(white, { t: 'photo', photos: [], pick: true });

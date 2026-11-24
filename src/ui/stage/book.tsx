@@ -18,7 +18,10 @@
  *    鼠标或悬着的笔移到上面才铺一层学科色;松手在范围里就让它停 TOC_HOLD_MS 再告诉页面(open),页面自己先翻过去。
  *    窗:页面发来的状态带着 view(上次翻到的那一课那一行、在一课里按「目录」回来的那一课)就把它摆在窗中间。
  * 画面:课本 pdf.js(/stage/pdf/,不打进 stage.js)现画,每页先画一张中等清晰度的(移动、缩放时用它),停下来再把窗里那一块照屏幕的像素重画一张盖上去,放大了字也清楚;
- * 照片照原图画进一张画布(孩子端上传前已缩到长边 2000,够清楚);白纸是一张白底。点字照页的文字层:课本是 PDF 的行和字,照片是认字认出的(src/chalk/kit/photo.ts 换成同样的样子)。
+ * 照片照原图画进一张画布(孩子端上传前已缩到长边 2000,够清楚),只画窗附近的几张(作业本攒得多,全画 iPad 的内存不够),远了放掉;白纸是一张白底。
+ * 作业本(带 day 的照片页):一整本连着滚,老的在上。天与天之间一行「星期一」(今天写「今天」),周与周之间一道宽条「11月23日 – 29日」(空多少照 src/board/lesson.ts 的 photoGaps);
+ * 最后一张白纸,纸上「拍照」「从相册选」(点中了告诉页面 capture);一进来窗停在白纸的顶上(上半是最近拍的,下半是白纸)。以前那天的照片上落不了笔(只看);
+ * 窗停在哪一天告诉页面(day,顶栏写它);页面要去哪一天(go,目录上点的)就滚到那一天的分割线。点字照页的文字层:课本是 PDF 的行和字,照片是认字认出的(src/chalk/kit/photo.ts 换成同样的样子)。
  * 老师的记号(圈、划、加点、盖拼音的块)和孩子的笔画是一层 SVG,和页面在同一个随窗变换的容器里,所以对得齐;孩子的笔画挂在书页上(一节课的状态里),换课再回来还在。
  * 记号的样子(docs/dev/一节课.md 的四条原则):老师的线朱橙、孩子的蓝,都正片叠底(记号不盖字:黑字叠上任何颜色还是黑的);遮、盖是故意挡住的,不透明。
  * 圈、划、加点照 markFresh 分新的(实色)和旧的(淡),收掉的淡出;在页上的记号不重画(圈的一笔画出来只放一次)。交给老师的窗图只画新的。
@@ -36,7 +39,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useSta
 import type * as Pdfjs from 'pdfjs-dist';
 import { openPdf } from './pdf.ts';
 import { BOOK_ASPECT, BOOK_TOC, BOOK_W, KID_INK, KID_INK_WIDTH, bookCellsOf, bookFrame, bookPick, bookReadParts, bookRows, bookSheets, lessonBlocks, photoBookPage, turnedSkeletons, type BookSheet, type ChalkSkeleton, type ReadPart, type SceneCell, type PhotoLine, type PhotoWord } from '../../chalk/index.ts';
-import { lessonPage, lessonStrip, markFresh, photoSheetBox } from '../../board/lesson.ts';
+import { PHOTO_GAPS, lessonPage, lessonStrip, markFresh, photoDay, photoGaps, photoSheetBox, weekOf } from '../../board/lesson.ts';
 import { stripLayout, type StripSlot } from '../../board/strip.ts';
 import { CELL_UNIT, LESSON_INK_POINTS, PEN_ASKS, type BookPage, type Lesson, type LessonPage } from '../../schema/index.ts';
 import { CellPad, WRITE_INK, WRITE_WIDTH } from './cell-pad.tsx';
@@ -71,8 +74,14 @@ export interface BookStageProps {
   onSubmit(): void;
   /** 课本的目录上能点的那几项(场景坐标)和按下去铺的颜色;不是目录页、只读的不用 */
   toc?: { color: string; entries: { title: string; box: Box }[] } | null;
-  /** 这一课后面还有一课(页面照目录算的):最后一页下面摆一行「下一课」;作业本的一天后面还有一天:k = 「后一天」 */
+  /** 这一课后面还有一课(页面照目录算的):最后一页下面摆一行「下一课」 */
   next?: { title: string; k?: string } | null;
+  /** 作业本:滚到那一天(目录上点的);n 变了才滚 */
+  go?: { day: string; n: number } | null;
+  /** 作业本:窗停在哪一天(YYYY-MM-DD;白纸是今天) */
+  onDay?(day: string): void;
+  /** 作业本最后那张白纸上按了拍照(camera)/ 从相册选 */
+  onCapture?(camera: boolean): void;
   /**
    * 作业本:照片上以前的话题留下的记号(键是照片的 src;坐标是这张照片自己的,宽 1000、左上角起;src/runtime/homework.ts 的 homeworkPast)。
    * 垫在这一节老师的那层下面画,只看:擦不掉、不变旧、不收;交给老师的窗图里也有(新的那些)
@@ -182,6 +191,51 @@ interface Geo {
   lines: BookPage[];
   /** 字行拉完了(课本拉到了、照片认完了;白纸本来就没有):这时还找不到字行的「看」整块铺底 */
   linesDone: boolean;
+  /** 作业本:分割线、最后那张白纸 */
+  hw: HwGeo | null;
+}
+
+/** 作业本最后那张白纸多高(场景坐标) */
+const HW_PAPER_H = 760;
+/** 作业本铺好的样子:今天、白纸的顶(tail)和底(end)、天与周的分割线(在照片之间空出来的那一截里)、每天从哪儿起(分割线的顶) */
+interface HwGeo {
+  today: string;
+  tail: number;
+  end: number;
+  /** 今天拍过了(白纸上的话不一样) */
+  shot: boolean;
+  dividers: { top: number; h: number; day: string; week?: string }[];
+  days: { day: string; top: number }[];
+}
+const WEEKDAY = '日一二三四五六';
+const dateOf = (day: string): Date => new Date(Date.UTC(Number(day.slice(0, 4)), Number(day.slice(5, 7)) - 1, Number(day.slice(8, 10))));
+/** 分割线上的一行:今天、星期一 */
+const dayLabel = (day: string, today: string): string => (day === today ? '今天' : `星期${WEEKDAY[dateOf(day).getUTCDay()]}`);
+/** 周的宽条:「11月23日 – 29日」,跨月「11月30日 – 12月6日」 */
+function weekLabel(day: string): string {
+  const a = dateOf(weekOf(day)), b = new Date(a.getTime() + 6 * 86_400_000);
+  const m1 = a.getUTCMonth() + 1, m2 = b.getUTCMonth() + 1;
+  return `${m1}月${a.getUTCDate()}日 – ${m2 === m1 ? '' : `${m2}月`}${b.getUTCDate()}日`;
+}
+/** 作业本的分割线和白纸照照片排好的位置算 */
+function hwGeo(p: Extract<LessonPage, { kind: 'photo' }>, sheets: readonly BookSheet[]): HwGeo {
+  const today = p.day!;
+  const gaps = photoGaps(p.photos, today);
+  const dividers: HwGeo['dividers'] = [];
+  p.photos.forEach((ph, i) => {
+    if (gaps[i] <= PHOTO_GAPS.same || !sheets[i]) return;
+    dividers.push({ top: sheets[i].top - gaps[i], h: gaps[i], day: photoDay(ph, today), ...(gaps[i] >= PHOTO_GAPS.week ? { week: weekLabel(photoDay(ph, today)) } : {}) });
+  });
+  const lastSheet = sheets[sheets.length - 1];
+  const bottom = lastSheet ? lastSheet.top + lastSheet.height : 0;
+  const last = p.photos.length ? photoDay(p.photos[p.photos.length - 1], today) : null;
+  let tail = bottom + PHOTO_GAPS.same;
+  if (last !== today) {
+    const g = last === null || weekOf(last) !== weekOf(today) ? PHOTO_GAPS.week : PHOTO_GAPS.day;
+    dividers.push({ top: bottom, h: g, day: today, ...(g >= PHOTO_GAPS.week ? { week: weekLabel(today) } : {}) });
+    tail = bottom + g;
+  }
+  return { today, tail, end: tail + HW_PAPER_H, shot: last === today, dividers, days: dividers.map((d) => ({ day: d.day, top: d.top })) };
 }
 
 /** 老师要看的那一块 → 窗里留出来的那一块(四周留边、太小放大;src/chalk/kit/book.ts 的 bookFrame) */
@@ -274,7 +328,7 @@ function tocAreas(entries: readonly { title: string; box: Box }[]): { title: str
   });
 }
 
-export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function BookStage({ id: _id, lesson, readonly, hand, mousePen, toc, next, past, onOpen, onStroke, onPen, onTurn, onWipe, onSubmit, onPick, onPickAt, onCell, color, onReveal, read, onRead, onView, onShot, onError }, ref) {
+export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function BookStage({ id: _id, lesson, readonly, hand, mousePen, toc, next, go, onDay, onCapture, past, onOpen, onStroke, onPen, onTurn, onWipe, onSubmit, onPick, onPickAt, onCell, color, onReveal, read, onRead, onView, onShot, onError }, ref) {
   const view = useRef<HTMLDivElement>(null);
   const paper = useRef<HTMLDivElement>(null);
   const svg = useRef<SVGSVGElement>(null);
@@ -299,13 +353,15 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
   /** 手指轻点了一下,等着看是不是双击 */
   const lastTap = useRef<{ t: number; x: number; y: number; timer: number } | null>(null);
   /** 笔:正在画的一笔 */
-  const pen = useRef<{ id: number; pts: [number, number][]; el: SVGPathElement; x0: number; y0: number } | null>(null);
+  const pen = useRef<{ id: number; pts: [number, number][]; el: SVGPathElement; x0: number; y0: number; ok: boolean } | null>(null);
   /** 孩子手上动着的时候老师的新窗先记着,手停了再去(白纸条开着的另记,照 goStrip 去) */
   const pendingFrame = useRef<{ box: Box; rows?: Box[] } | null>(null);
   const pendingStrip = useRef<Box | null>(null);
   /** 移过窗的那一次「看」(look.n):同一次不再移 */
   const lookedN = useRef(-1);
   const [phase, setPhase] = useState<'loading' | 'ready'>('loading');
+  /** 铺过几回页:分割线、白纸照 geo 画,换了一份(照片多了一张也算)要重画;照片页铺得快,loading 和 ready 同一下,phase 不变 */
+  const [, setGeoRev] = useState(0);
   const [marks, setMarks] = useState(0);
 
   const page = lessonPage(lesson);
@@ -317,8 +373,8 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
   const tocOn = !readonly && page?.kind === 'book' && page.title === BOOK_TOC && Boolean(toc?.entries.length);
   const tocNow = useRef<{ on: boolean; color: string; areas: ReturnType<typeof tocAreas> }>({ on: false, color: '', areas: [] });
   tocNow.current = { on: tocOn, color: toc?.color ?? '#1c7ed6', areas: tocOn && toc ? tocAreas(toc.entries) : [] };
-  // 一课最后一页下面的「下一课」:课本的一课(作业本的一天是「后一天」)、孩子能动手的时候才有
-  const nextOn = !readonly && ((page?.kind === 'book' && page.title !== BOOK_TOC) || (page?.kind === 'photo' && Boolean(page.day))) && Boolean(next?.title);
+  // 一课最后一页下面的「下一课」:课本的一课、孩子能动手的时候才有
+  const nextOn = !readonly && page?.kind === 'book' && page.title !== BOOK_TOC && Boolean(next?.title);
   const nextNow = useRef(false);
   nextNow.current = nextOn;
   const nextEl = useRef<HTMLDivElement>(null);
@@ -361,7 +417,7 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
   const clamp = (c: Cam): Cam => {
     if (!readonly) {
       const [vw, vh] = vsize();
-      const h = (geo.current?.height ?? BOOK_W) + (nextNow.current ? NEXT_H : 0);
+      const h = bottomOf();
       const s = (vw / BOOK_W) * zoom.current;
       const hw = vw / 2 / s, hh = vh / 2 / s;
       return { s, cx: hw * 2 >= BOOK_W ? BOOK_W / 2 : Math.min(BOOK_W - hw, Math.max(hw, c.cx)), cy: hh * 2 >= h ? hh : Math.min(h - hh, Math.max(hh, c.cy)) };
@@ -371,12 +427,16 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
     const h = geo.current?.height ?? BOOK_W;
     return { s, cx: Math.min(BOOK_W, Math.max(0, c.cx)), cy: Math.min(h, Math.max(0, c.cy)) };
   };
+  /** 这一条的底(窗能滚到哪):作业本到白纸的底,课本的一课多一行「下一课」 */
+  const bottomOf = (): number => { const g = geo.current; return g?.hw && !readonly ? g.hw.end : (g?.height ?? BOOK_W) + (nextNow.current ? NEXT_H : 0); };
   /** 窗现在看着的那一块(场景坐标) */
   const viewBox = (c = cam.current): Box => { const [vw, vh] = vsize(); return [c.cx - vw / 2 / c.s, c.cy - vh / 2 / c.s, c.cx + vw / 2 / c.s, c.cy + vh / 2 / c.s]; };
   const apply = (): void => {
     const [vw, vh] = vsize();
     const c = cam.current;
-    if (paper.current) paper.current.style.transform = `translate(${vw / 2 - c.cx * c.s}px, ${vh / 2 - c.cy * c.s}px) scale(${c.s})`;
+    if (paper.current) { paper.current.style.transform = `translate(${vw / 2 - c.cx * c.s}px, ${vh / 2 - c.cy * c.s}px) scale(${c.s})`; paper.current.style.setProperty('--inv', String(1 / c.s)); }
+    drawNear();
+    dayNow();
     // 点中的那个字跟着窗:卡贴着它走,出了窗就收
     if (picked.current) { const at = screenOf(picked.current); if (at) pickAtRef.current?.(at); else unpickHere(true); }
     placePad();
@@ -558,6 +618,24 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
     const s = vw / BOOK_W;
     return clamp({ s, cx: BOOK_W / 2, cy: vh / 2 / s });
   };
+  /** 作业本一进来:页宽铺满,白纸的顶在窗中间(上半是最近拍的那一张,下半是白纸) */
+  const hwStart = (hw: HwGeo): Cam => {
+    const [vw] = vsize();
+    return clamp({ s: vw / BOOK_W, cx: BOOK_W / 2, cy: hw.tail });
+  };
+  /** 窗中间在哪一天;最后那张白纸露出来过半截窗就是今天(手机竖着窗高,白纸在下面露着时中间还在前一天);变了告诉页面 */
+  const dayTold = useRef('');
+  const dayNow = (): void => {
+    const hw = geo.current?.hw;
+    if (!hw || readonly) return;
+    const cy = cam.current.cy, [, vh] = vsize(), half = vh / 2 / cam.current.s;
+    let d = hw.days[0]?.day ?? hw.today;
+    for (const x of hw.days) if (x.top <= cy) d = x.day;
+    if (hw.tail <= cy + half * 0.5) d = hw.today;
+    if (d !== dayTold.current) { dayTold.current = d; onDayRef.current?.(d); }
+  };
+  const onDayRef = useRef(onDay);
+  onDayRef.current = onDay;
   const moveTo = (to: Cam, animate: boolean): void => {
     cancelAnimationFrame(glide.current);
     const from = { ...cam.current };
@@ -720,7 +798,7 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
       p.photos.forEach((ph, i) => {
         const got = pastRef.current?.[ph.src];
         if (!got) return;
-        const top = photoSheetBox(p.photos, i)[1];
+        const top = photoSheetBox(p.photos, i, p.day)[1];
         const g = el('g', { transform: `translate(0 ${top})` });
         const line = { fill: 'none', stroke: TEACHER_INK, 'stroke-width': '3', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'vector-effect': 'non-scaling-stroke' };
         for (const m of got.marks) {
@@ -791,6 +869,48 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
   const canTurnRef = useRef(canTurn);
   canTurnRef.current = canTurn;
 
+  /** 一张照片认出的字(换成课本的样子);done = 认完了(没在认) */
+  const photoWords = async (ph: { src: string; w: number; h: number }, i: number): Promise<{ page: BookPage; done: boolean }> => {
+    const r = await fetch(`/api/kid/photo-words?p=${encodeURIComponent(ph.src)}`, { cache: 'no-store' }).catch(() => null);
+    const j = r?.ok ? ((await r.json()) as { state?: string; items?: PhotoWord[]; lines?: PhotoLine[] }) : null;
+    return { page: photoBookPage(i + 1, ph, j ? { items: j.items ?? [], lines: j.lines ?? [], questions: [] } : null).page, done: j?.state !== 'running' };
+  };
+  /** 照片页正在画的、拉过字的几张(键带这一页的 key,换页作废) */
+  const drawing = useRef(new Set<string>());
+  const worded = useRef(new Set<string>());
+  /**
+   * 照片只画窗附近的:上下各两屏以内的画上(照片画进画布),十屏以外画过的放掉(画布清空,纸色占位);
+   * 作业本以前那天的照片到了附近顺手拉一次认出的字(点字、老师「看」刷荧光用)
+   */
+  const drawNear = (): void => {
+    const g = geo.current, p = lessonPage(latest.current);
+    if (!g || g.pdf || p?.kind !== 'photo' || g.key !== sourceKey(p, 0)) return;
+    const [, vh] = vsize();
+    const c = cam.current, half = vh / 2 / c.s;
+    for (const sh of g.sheets) {
+      const cv = g.base.get(sh.n), ph = p.photos[sh.n - 1];
+      if (!cv || !ph) continue;
+      const near = sh.top < c.cy + half * 5 && sh.top + sh.height > c.cy - half * 5;
+      const far = sh.top > c.cy + half * 20 || sh.top + sh.height < c.cy - half * 20;
+      const k = `${g.key}|${sh.n}`;
+      if (far && g.drawn.has(sh.n)) { cv.width = 0; cv.height = 0; g.drawn.delete(sh.n); continue; }
+      if (!near || g.drawn.has(sh.n) || drawing.current.has(k)) continue;
+      drawing.current.add(k);
+      void loadImage(`/api/kid/image?p=${encodeURIComponent(ph.src)}`).catch(() => null).then((img) => {
+        drawing.current.delete(k);
+        if (geo.current !== g || !img) return;
+        const r = Math.min(1, PHOTO_PX / img.naturalWidth);
+        cv.width = Math.round(img.naturalWidth * r); cv.height = Math.round(img.naturalHeight * r);
+        cv.getContext('2d')?.drawImage(img, 0, 0, cv.width, cv.height);
+        g.drawn.add(sh.n);
+      });
+      if (p.day && photoDay(ph, p.day) !== p.day && !worded.current.has(k)) {
+        worded.current.add(k);
+        void photoWords(ph, sh.n - 1).then((x) => { if (geo.current === g) g.lines[sh.n - 1] = x.page; });
+      }
+    }
+  };
+
   // ---- 铺这一页:量页(课本开 PDF 量,照片照状态里记的宽高,白纸一张)、每页先画一张、拉行和字 ----
   useEffect(() => {
     const p = latest.current && lessonPage(latest.current);
@@ -807,11 +927,12 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
       else if (p.kind === 'workbook') p.sheets.forEach((sh, i) => dims.push({ n: i + 1, w: sh.w, h: sh.h }));
       else dims.push({ n: 1, w: BOOK_W, h: whiteH });
       if (cancelled) return;
-      // 每页底下不铺的那一条(课本;应用照这一册算好的,bookCut):有它页和页就直接连着
+      // 每页底下不铺的那一条(课本;应用照这一册算好的,bookCut):有它页和页就直接连着;作业本照天、周分开
       const cut = p.kind === 'book' ? p.cut : 0;
-      const sheets = bookSheets(dims, undefined, cut).map((sh, i) => ({ ...sh, w: dims[i].w, h: dims[i].h }));
-      const height = sheets.length ? sheets[sheets.length - 1].top + sheets[sheets.length - 1].height : BOOK_W;
-      const aspect = Math.round((dims[0].h / dims[0].w) * 10000) / 10000;
+      const sheets = bookSheets(dims, undefined, cut, p.kind === 'photo' ? photoGaps(p.photos, p.day) : undefined).map((sh, i) => ({ ...sh, w: dims[i].w, h: dims[i].h }));
+      const height = sheets.length ? sheets[sheets.length - 1].top + sheets[sheets.length - 1].height : p.kind === 'photo' ? 0 : BOOK_W;
+      const aspect = dims.length ? Math.round((dims[0].h / dims[0].w) * 10000) / 10000 : BOOK_ASPECT;
+      const hw = p.kind === 'photo' && p.day ? hwGeo(p, sheets) : null;
       const [vw] = vsize();
       const px = Math.min(BASE_PX, Math.round(vw * (window.devicePixelRatio || 1)));
       const base = new Map<number, HTMLCanvasElement>();
@@ -827,7 +948,11 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
         host.prepend(cv);
         base.set(sh.n, cv);
       }
-      geo.current = { key: geoKey, pdf: pdfUrl, sheets, height, aspect, base, drawn: new Set(), lines: [], linesDone: p.kind !== 'book' && p.kind !== 'photo' && p.kind !== 'workbook' };
+      // 照片页的字行先占好位(一张一页,认出来的后到)
+      const blank = p.kind === 'photo' ? p.photos.map((ph, i) => photoBookPage(i + 1, ph, null).page) : [];
+      geo.current = { key: geoKey, pdf: pdfUrl, sheets, height, aspect, base, drawn: new Set(), lines: blank, linesDone: p.kind !== 'book' && p.kind !== 'photo' && p.kind !== 'workbook', hw };
+      dayTold.current = '';
+      setGeoRev((n) => n + 1);
       readParts.current = []; readHover.current = null; readPrevK.current = -1; paintRead();
       if (svg.current) { svg.current.setAttribute('viewBox', `0 0 ${BOOK_W} ${height}`); Object.assign(svg.current.style, { width: `${BOOK_W}px`, height: `${height}px` }); }
       if (sharp.current) sharp.current.style.display = 'none';
@@ -843,12 +968,12 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
       const v = readonly ? latest.current.view : null;
       // 孩子的窗:老师让看的那一块;没有就照状态里记的窗(目录上次翻到的那一课那一行、刷新前停的地方),摆在窗中间
       const kv = !readonly && !fb ? latest.current.view : null;
-      cam.current = v ? camFor(v) : fb ? lookAt(fb) : kv ? camFor(kv) : pageTop();
+      cam.current = v ? camFor(v) : fb ? lookAt(fb) : kv ? camFor(kv) : hw && !readonly ? hwStart(hw) : pageTop();
       apply();
       if (L && !v) flashLook(L.box, L.rows);
       setPhase('ready');
-      // 每页先画一张(从窗里看得见的那页起)
-      const order = [...sheets].sort((a, b) => Math.abs(a.top + a.height / 2 - cam.current.cy) - Math.abs(b.top + b.height / 2 - cam.current.cy));
+      // 每页先画一张(从窗里看得见的那页起);照片只画窗附近的(drawNear,apply 里已经起了)
+      const order = p.kind === 'photo' ? [] : [...sheets].sort((a, b) => Math.abs(a.top + a.height / 2 - cam.current.cy) - Math.abs(b.top + b.height / 2 - cam.current.cy));
       for (const sh of order) {
         const cv = base.get(sh.n)!;
         if (doc) {
@@ -859,8 +984,8 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
           // 画布只有铺出来的那么高(页底裁掉的那一条不画);批注不画:平台盖在页顶的社标是一条水印批注
           cv.width = Math.round(vp.width); cv.height = Math.round(sh.height / sh.s * k);
           await pg.render({ canvas: cv, viewport: vp, annotationMode: 0 }).promise.catch(() => {});
-        } else if (p.kind === 'photo' || p.kind === 'workbook') {
-          const url = p.kind === 'photo' ? `/api/kid/image?p=${encodeURIComponent(p.photos[sh.n - 1].src)}` : `/api/kid/workbook/image?w=${encodeURIComponent(p.src)}&p=${sh.n}`;
+        } else if (p.kind === 'workbook') {
+          const url = `/api/kid/workbook/image?w=${encodeURIComponent(p.src)}&p=${sh.n}`;
           const img = await loadImage(url).catch(() => null);
           if (cancelled) return;
           if (img) {
@@ -898,14 +1023,12 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
         paintCells();
         paintLook(false);
       } else if (p.kind === 'photo') {
+        // 认出的字:作业本只等今天拍的(以前的照片到了窗附近再拉一次,drawNear),别的照片页等全部
+        const want = p.photos.flatMap((ph, i) => (!p.day || photoDay(ph, p.day) === p.day ? [i] : []));
         for (let round = 0; round < 40 && !cancelled; round++) {
-          const got = await Promise.all(p.photos.map(async (ph, i) => {
-            const r = await fetch(`/api/kid/photo-words?p=${encodeURIComponent(ph.src)}`, { cache: 'no-store' }).catch(() => null);
-            const j = r?.ok ? ((await r.json()) as { state?: string; items?: PhotoWord[]; lines?: PhotoLine[] }) : null;
-            return { page: photoBookPage(i + 1, ph, j ? { items: j.items ?? [], lines: j.lines ?? [], questions: [] } : null).page, done: j?.state !== 'running' };
-          }));
+          const got = await Promise.all(want.map((i) => photoWords(p.photos[i], i)));
           if (cancelled || geo.current?.key !== geoKey) return;
-          geo.current.lines = got.map((x) => x.page);
+          got.forEach((x, k) => { geo.current!.lines[want[k]] = x.page; });
           if (got.every((x) => x.done)) geo.current.linesDone = true;
           paintLook(false);
           if (geo.current.linesDone) break;
@@ -980,6 +1103,22 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
 
   // 写字格开了、换了一格:摆到那一格旁边
   useEffect(() => { if (pad) placePad(); }, [pad]);
+
+  // 作业本:页面要去哪一天(目录上点的):滚到那一天的分割线,当孩子自己挪的(停下来报窗)
+  const goN = useRef(go?.n ?? 0);
+  useEffect(() => {
+    const hw = geo.current?.hw;
+    if (!go || go.n === goN.current || !hw || phase !== 'ready') return;
+    goN.current = go.n;
+    const at = hw.days.find((d) => d.day === go.day);
+    if (!at) return;
+    const [vw, vh] = vsize();
+    const s = (vw / BOOK_W) * zoom.current;
+    moveTo(clamp({ s, cx: cam.current.cx, cy: at.top - LOOK_TOP_PX / s + vh / 2 / s }), true);
+    moved.current = true;
+    settled();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [go?.n, phase]);
 
   useEffect(() => {
     const ro = new ResizeObserver(() => { cam.current = clamp(cam.current); apply(); scheduleSharp(); });
@@ -1113,6 +1252,22 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
     }, TOC_HOLD_MS);
   };
 
+  /** 作业本上这一处(场景 y)能不能落笔:今天拍的照片上能;以前那天的(只看)、分割线、白纸上不能。别的页都能 */
+  const inkHere = (y: number): boolean => {
+    const g = geo.current, p = lessonPage(latest.current);
+    if (!g?.hw || p?.kind !== 'photo' || !p.day) return true;
+    const sh = g.sheets.find((x) => y >= x.top && y <= x.top + x.height);
+    const ph = sh ? p.photos[sh.n - 1] : undefined;
+    return Boolean(ph && photoDay(ph, p.day) === p.day);
+  };
+  /** 点中了作业本最后那张白纸上的「拍照」「从相册选」(同「下一课」照位置认) */
+  const blankHit = (x: number, y: number): boolean => {
+    for (const b of Array.from(paper.current?.querySelectorAll<HTMLElement>('.bk-blank [data-go]') ?? [])) {
+      const r = b.getBoundingClientRect();
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) { onCapture?.(b.dataset.go === 'camera'); return true; }
+    }
+    return false;
+  };
   /** 点中了一课最后那一行「下一课」:告诉页面翻过去(手指按着时舞台捕获了指针,行上的点按照位置认) */
   const nextHit = (x: number, y: number): boolean => {
     const r = nextNow.current ? nextEl.current?.getBoundingClientRect() : null;
@@ -1122,7 +1277,7 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
   };
   /** 轻点:先看是不是盖住的拼音,再看是不是一个字 */
   const tap = (x: number, y: number): void => {
-    if (nextHit(x, y)) return;
+    if (nextHit(x, y) || blankHit(x, y)) return;
     // 点读的钮(笔、鼠标点一下不动)
     const rk = readAt(x, y);
     if (rk >= 0) { readTap(rk); return; }
@@ -1227,8 +1382,9 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
       try { (e.currentTarget as Element).setPointerCapture(e.pointerId); } catch { /* 合成的指针捕获不了 */ }
       const p = toScene(e.clientX, e.clientY);
       const path = el('path', { d: pathD([p]), fill: 'none', stroke: KID_INK, 'stroke-width': String(KID_INK_WIDTH * 0.7), 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'vector-effect': 'non-scaling-stroke', opacity: '0.9' });
-      if (canMark && !readonly) { svg.current?.querySelector('.bk-ink')?.append(path); onPen?.(); unpickHere(true); if (padCell.current && !padDirty.current) closePad(); }
-      pen.current = { id: e.pointerId, pts: [p], el: path, x0: e.clientX, y0: e.clientY };
+      const ok = canMark && !readonly && inkHere(p[1]);
+      if (ok) { svg.current?.querySelector('.bk-ink')?.append(path); onPen?.(); unpickHere(true); if (padCell.current && !padDirty.current) closePad(); }
+      pen.current = { id: e.pointerId, pts: [p], el: path, x0: e.clientX, y0: e.clientY, ok };
       return;
     }
     // 笔在纸上:别的手(手掌)不算;孩子的窗不两指缩放,第二根手指不算
@@ -1284,7 +1440,7 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
     if (readHover.current?.mode === 'press' && gesture.current?.kind !== 'tap') { window.clearTimeout(readPressTimer.current); readHint(-1, 'press'); }
     const p = pen.current;
     if (p && e.pointerId === p.id) {
-      if (!canMark || readonly) return;
+      if (!p.ok) return;
       const q = toScene(e.clientX, e.clientY);
       const last = p.pts[p.pts.length - 1];
       if (Math.hypot(q[0] - last[0], q[1] - last[1]) * cam.current.s < 2) return;
@@ -1326,7 +1482,7 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
     if (p && e.pointerId === p.id) {
       pen.current = null;
       const tiny = Math.hypot(e.clientX - p.x0, e.clientY - p.y0) < TAP_PX && p.pts.length < 6;
-      if (tiny || !canMark || readonly) { p.el.remove(); if (tiny) tap(e.clientX, e.clientY); settled(); return; }
+      if (tiny || !p.ok) { p.el.remove(); if (tiny) tap(e.clientX, e.clientY); settled(); return; }
       const step = Math.ceil(p.pts.length / LESSON_INK_POINTS);
       const pts = p.pts.filter((_, i) => i % step === 0 || i === p.pts.length - 1).slice(-LESSON_INK_POINTS).map(([x, y]) => [Math.round(x), Math.round(y)] as [number, number]);
       // 落在开着的白纸条上(中点在白纸条里):跟着白纸条
@@ -1439,7 +1595,7 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
       if (pp?.kind === 'photo' && pp.day) pp.photos.forEach((ph, i) => {
         const got = pastRef.current?.[ph.src];
         if (!got) return;
-        const top = photoSheetBox(pp.photos, i)[1];
+        const top = photoSheetBox(pp.photos, i, pp.day)[1];
         ctx.save();
         ctx.translate(0, top);
         ctx.strokeStyle = TEACHER_INK; ctx.fillStyle = TEACHER_INK; ctx.lineWidth = 3 / k;
@@ -1514,6 +1670,25 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
               <g className="bk-ink" />
               <g className="bk-read" />
             </svg>
+            {phase === 'ready' && geo.current?.hw ? geo.current.hw.dividers.map((d) => (
+              <div className="bk-div" key={`${d.day}|${d.top}`} style={{ top: `${d.top}px`, height: `${d.h}px` }}>
+                {d.week ? <div className="wk"><span>{d.week}</span></div> : null}
+                <div className="dy"><i /><span>{dayLabel(d.day, geo.current!.hw!.today)}</span><i /></div>
+              </div>
+            )) : null}
+            {phase === 'ready' && geo.current?.hw && !readonly ? (
+              <div className="bk-blank" style={{ top: `${geo.current.hw.tail}px`, height: `${HW_PAPER_H}px`, ...(color ? { ['--bk-c' as string]: color } : {}) }}>
+                <div className="in">
+                  {icon('<path d="M4 8h3.5l2-3h5l2 3H20v11H4z"></path><circle cx="12" cy="13" r="3.2"></circle>')}
+                  <b>{geo.current.hw.shot ? '接着拍下一页' : '把写好的作业拍进来'}</b>
+                  {geo.current.hw.shot ? null : <small>拍正一点,整页都拍进来;几张都行</small>}
+                  <div className="go">
+                    <span className="cam" data-go="camera">{icon('<path d="M4 8h3.5l2-3h5l2 3H20v11H4z"></path><circle cx="12" cy="13" r="3.2"></circle>')}拍照</span>
+                    <span className="alb" data-go="album">{icon('<rect x="4" y="5" width="16" height="14" rx="2"></rect><path d="M4 16l5-5 4 4 2.5-2.5L20 17"></path>')}从相册选</span>
+                  </div>
+                </div>
+              </div>
+            ) : null}
             {nextOn && phase === 'ready' && geo.current ? (
               <div className="bk-next" ref={nextEl} style={{ left: `${BOOK_W / 2}px`, top: `${geo.current.height + NEXT_GAP}px` }}>
                 <span className="k">{next!.k ?? '下一课'}</span><span className="t">{next!.title}</span>{icon('<path d="M9 5l7 7-7 7"></path>')}

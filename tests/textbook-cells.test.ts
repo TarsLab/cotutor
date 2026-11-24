@@ -103,6 +103,8 @@ check('没有格的页:没有', bookCellsOf([{ ...page, cells: undefined }], she
   const got = page?.cells ?? [];
   check('真的 pdf.js:认出三个田字格(左上角起、y 往下)', got.length === 3 && got.every((c, i) => Math.abs(c.x1 - (40 + i * 39)) < 0.5 && Math.abs(c.y1 - 61) < 0.5 && Math.abs(c.x2 - c.x1 - 39) < 0.5), JSON.stringify(got));
   check('真的 pdf.js:深灰的字是范字,红的是描红,第三格空着', got[0]?.ch === 'A' && !got[0]?.red && got[1]?.ch === 'A' && got[1]?.red === true && got[2] && !got[2].ch, JSON.stringify(got));
+  const [bare] = await readPdfPages(new TextEncoder().encode(pdf), { cells: false });
+  check('cells: false 不读画图的指令(科学课本):没有格子,字照读', !bare?.cells && bare?.items.length === page?.items.length, JSON.stringify(bare));
 }
 
 done();

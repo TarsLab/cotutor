@@ -2,7 +2,7 @@
 /**
  * 工作台「分块」页的手动验收(不进 pnpm test;要本机 Chrome、一个跑着的 serve,vault 的 教材/ 里放了课本 PDF;舞台包要打过,页图才画得出)。
  * 会写 vault 的 教材/.zones/(存一课、再还原),拿试用 workspace 跑:cotutor serve --sandbox --http --port <n>。
- * 走一遍设计稿(docs/artifact/分块/,画布 https://claude.ai/artifact/Xvt6t4pp1xkLJ6VA6GBnkR)的六张:
+ * 走一遍工作台分块页画布(https://claude.ai/artifact/Xvt6t4pp1xkLJ6VA6GBnkR)的六张:
  *   看(页图画出来、最外一层的块带叫法)→ 选中套在里面的一块(单击落最里面、同一处再点往外一层、面包屑)→ 改念法(顶上出「没存」那条)→
  *   拉边(吸到候选、画参考线)→ 当孩子点(说落到哪)→ 存规则出的那一课(问一次、整课进 vault)→ 还原(问一次、回到规则出的);每屏截一张。
  *

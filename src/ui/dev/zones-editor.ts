@@ -1,13 +1,13 @@
 /**
- * 工作台「分块」页的脚本(设计稿 docs/artifact/分块/ 的 V;画布 https://claude.ai/artifact/Xvt6t4pp1xkLJ6VA6GBnkR,Q9–Q12 都照推荐的):
+ * 工作台「分块」页的脚本(docs/dev/课本.md;画布 https://claude.ai/artifact/Xvt6t4pp1xkLJ6VA6GBnkR):
  * 剥类型内联进 dev-page 的脚本里(./zones-tab.ts),用那边的 $ / h / api / ask / copy / state;名字都带 zn 前缀,别和 dev-page 的撞。接口在 src/app/http/dev-zones.ts。
  *   左边:挑课本、课(目录上最里一层;每课标着用的哪份)、这一课的页;还原成规则出的;课本换过留下的旧分块。
  *   中间:pdf.js 画页(同舞台,/stage/pdf/),上面叠四层:块(最外一层实线带叫法、里面一层虚线、再里面不画)、作答区、没人认领的候选、字行。
- *     选块:单击落最里面(作答区先),同一处再点往外一层,Esc 回外一层(Q9);拖框、拉边吸到候选和字行(6px 以内,画参考线说吸到哪);
+ *     选块:单击落最里面(作答区先),同一处再点往外一层,Esc 回外一层;拖框、拉边吸到候选和字行(6px 以内,画参考线说吸到哪);
  *     「加一块」画框,落进框住它的最里面那块;点没人认领的候选:认成作答区 / 不是要写的(进 ignore)。
- *     当孩子点:不画,点一下照孩子端的先后(K1:能写的格、语文的字、有念法的最小的块)说落到哪、会做什么。
- *   右边:面包屑、改种类叫法念法和给老师的(练什么、怎么引、答案、备注,Q11)、这一页的块的树(拖到一行上 = 放进去,两行之间 = 排在那里,Q12)、检查。
- * 一课一起存(Q10):改了就现查(同 cotutor textbook check),有要改的不让存;规则出的那一课存的时候整课写进 vault(V3),问一次。
+ *     当孩子点:不画,点一下照孩子端的先后(能写的格、语文的字、有念法的最小的块)说落到哪、会做什么。
+ *   右边:面包屑、改种类叫法念法和给老师的(练什么、怎么引、答案、备注)、这一页的块的树(拖到一行上 = 放进去,两行之间 = 排在那里)、检查。
+ * 一课一起存:改了就现查(同 cotutor textbook check),有要改的不让存;规则出的那一课存的时候整课写进 vault,问一次。
  */
 import type { PermilleBox, RegionKind, Zone, ZoneKind, ZonePage, ZoneRegion, ZoneWriter } from '../../schema/index.ts';
 
@@ -317,7 +317,7 @@ function znStack(x: number, y: number): ({ kind: 'cand'; c: ZnCell } | { kind: '
   return out;
 }
 
-/** 单击:落最里面;同一处再点往外一层(Q9) */
+/** 单击:落最里面;同一处再点往外一层 */
 function znClick(x: number, y: number): void {
   const st = znStack(x, y);
   const near = ZN.last && Math.abs(ZN.last.x - x) * ZN.W / 1000 <= 4 && Math.abs(ZN.last.y - y) * znH() / 1000 <= 4;
@@ -335,7 +335,7 @@ function znClick(x: number, y: number): void {
   znPaint();
 }
 
-/** 当孩子点(K1):能写的格开写字卡、语文的字点字、再是框住这一点的有念法的最小的块 */
+/** 当孩子点:能写的格开写字卡、语文的字点字、再是框住这一点的有念法的最小的块 */
 function znKidHit(x: number, y: number): void {
   const p = znPage(), zp = znWork();
   if (!p || !zp) return;
@@ -603,7 +603,7 @@ function znZoneForm(z: Zone, f: NonNullable<ReturnType<typeof znFind>>): HTMLEle
     out.push(h('div', { class: 'zn-sec' }, h('span', { class: 'zn-lab' }, '作答区 ' + z.regions.length + ' 个'),
       ...z.regions.map((r) => h('button', { type: 'button', class: 'zn-reg', on: { click: () => { ZN.sel = { kind: 'region', id: r.id }; znPaint(); } } }, h('i'), r.label, h('span', { class: 'st' }, ZN_RKIND[r.kind]), h('span', { class: 'num' + (loose.has(r.id) ? ' ok' : '') }, loose.has(r.id) ? '候选 ' + r.id : r.src === 'measured' ? '量的' : r.id)))));
   }
-  // 给老师的(Q11):练什么、卡住怎么引、每一格的答案、备注;都空了就去掉 teacher
+  // 给老师的:练什么、卡住怎么引、每一格的答案、备注;都空了就去掉 teacher
   const t = (): NonNullable<Zone['teacher']> => (z.teacher ??= {});
   const tidy = (): void => { const tt = z.teacher; if (tt && !tt.goal && !tt.hint && !tt.note && !(tt.answers?.length)) delete z.teacher; else if (tt && tt.answers && !tt.answers.length) delete tt.answers; };
   const answers: HTMLElement[] = [];
@@ -718,7 +718,7 @@ function znPaintSide(): void {
   if (ZN.mode === 'kid') {
     ZN.el.form = ZN.el.tree = ZN.el.check = undefined;
     const hit = ZN.hit;
-    secs.push(h('div', { class: 'zn-sec' }, h('h3', {}, '这一下落在哪'), h('span', { class: 'zn-lab' }, '照孩子端的先后(K1):先能写的格,再语文的字,再有念法的块;在页上点一下')));
+    secs.push(h('div', { class: 'zn-sec' }, h('h3', {}, '这一下落在哪'), h('span', { class: 'zn-lab' }, '照孩子端的先后:先能写的格,再语文的字,再有念法的块;在页上点一下')));
     if (hit) {
       secs.push(h('div', { class: 'zn-sec', style: 'gap:6px' }, ...hit.tiers.map((t, k) => h('div', { class: 'zn-hit' + (t.win ? ' win' : '') }, h('span', { class: 'num' }, String(k + 1)), h('div', {}, h('b', {}, t.title), h('span', {}, t.detail), t.win ? h('small', {}, '落在这里') : null))),
         hit.tiers.every((t) => !t.win) ? h('div', { class: 'zn-note' }, '都不是:孩子点这里没有回应。') : null));

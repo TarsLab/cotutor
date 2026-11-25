@@ -1,5 +1,5 @@
 /**
- * 工作台「分块」那一页的样式与脚本(设计稿 docs/artifact/分块/ 的 V,画布 https://claude.ai/artifact/Xvt6t4pp1xkLJ6VA6GBnkR):
+ * 工作台「分块」那一页的样式与脚本(docs/dev/课本.md,画布 https://claude.ai/artifact/Xvt6t4pp1xkLJ6VA6GBnkR):
  * 样式在这里,脚本是 ./zones-editor.ts(剥类型内联进 dev-page 的脚本里,用那边的 $ / h / api / ask / copy / state)。接口在 src/app/http/dev-zones.ts。
  * 颜色只用 dev-theme.ts 的变量;块蓝(--info)、作答区橙(--accent)、没人认领的候选红(--err)、字行灰,同 cotutor textbook preview 的意思。
  */

@@ -70,7 +70,7 @@ check('查:少交一页,说一课的页要一起存', (await chk([pages[0]])).pr
 const bad = (await route('PUT', '/api/dev/zones/lesson', ctx, { ...body(dup), version: one.version })).json as { ok: boolean; problems: string[] };
 check('存:有要改的不存', !bad.ok && bad.problems.length > 0 && !existsSync(vaultZonesDir(ws.paths.textbooks, sha)));
 
-// ---- 存:规则出的那一课整课写进 vault(V3),记 workbench ----
+// ---- 存:规则出的那一课整课写进 vault,记 workbench ----
 const mine = structuredClone(pages);
 let said = '';
 walkZones(mine[0].zones, (z) => { if (!said && z.kind === 'para') { z.say = '小鱼吹泡泡。'; z.teacher = { goal: '读通第 1 段' }; said = z.id; } });
@@ -104,8 +104,19 @@ writeFileSync(join(old, 'p002.json'), JSON.stringify({ page: 2, zones: [] }));
 writeFileSync(join(old, 'book.json'), JSON.stringify({ title: '语文一年级下册', sha: 'abcdef0123456789', pages: { p002: { by: 'agent', at: '2026-11-20T00:00:00.000Z' } } }));
 const l2 = (await get<List>('/api/dev/zones')).json;
 check('换过的课本:列出旧指纹的分块(册名、几页)', l2.stale.length === 1 && l2.stale[0].sha === 'abcdef0123456789' && l2.stale[0].title === '语文一年级下册' && l2.stale[0].pages === 1, JSON.stringify(l2.stale));
+{
+  const { doctorWorkspace } = await import('../src/app/cli/doctor.ts');
+  const { staleZoneDirs } = await import('../src/memory/textbook-zones.ts');
+  const st = await staleZoneDirs(ws.paths.textbooks);
+  const z = (await doctorWorkspace(ws.root, { probeEnv: false, env: {} })).checks.find((c) => c.name === 'textbook.zones');
+  check('doctor:换过的课本说一句(册名、几页),不挡用;现在用着的指纹不算', st.map((d) => d.sha).join() === 'abcdef0123456789' && z?.ok === false && z.required === false && z.detail.includes('《语文一年级下册》(1 页)') && Boolean(z.fix?.includes('工作台')), JSON.stringify([st, z]));
+}
 check('删旧的:现在用着的指纹不删', (await route('DELETE', '/api/dev/zones/stale?sha=' + sha, ctx)).status === 404);
 check('删旧的:旧指纹的整个目录删掉', (await route('DELETE', '/api/dev/zones/stale?sha=abcdef0123456789', ctx)).status === 200 && !existsSync(old));
+{
+  const { doctorWorkspace } = await import('../src/app/cli/doctor.ts');
+  check('doctor:删掉以后不再说', !(await doctorWorkspace(ws.root, { probeEnv: false, env: {} })).checks.some((c) => c.name === 'textbook.zones'));
+}
 
 // ---- 念一遍:没配声音 404,不出错 ----
 const say = await route('POST', '/api/dev/zones/say', ctx, { b: FILE, text: '' });

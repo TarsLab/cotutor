@@ -1,14 +1,14 @@
 /**
- * 工作台「分块」页的接口(页面在 src/ui/dev/zones-tab.ts;设计稿 docs/artifact/分块/ 的 V,画布 https://claude.ai/artifact/Xvt6t4pp1xkLJ6VA6GBnkR):
+ * 工作台「分块」页的接口(页面在 src/ui/dev/zones-tab.ts;docs/dev/课本.md,画布 https://claude.ai/artifact/Xvt6t4pp1xkLJ6VA6GBnkR):
  *   GET    /api/dev/zones                 每本课本、每一课用的是哪份(规则 / 编程助手 / 工作台,谁什么时候存的),vault 里读不出的页,换过课本留下的旧指纹
  *   GET    /api/dev/zones/lesson?b&l      一课(l = 「课名@PDF 头一页」,目录上最里一层;给的课里的页落在别的课里的,那几课一起带上,同 pull)
  *                                         每页挑好的分块(全的,给老师的、答案都在)、候选(文字层的行、能写的格、表格;语文带每个字的左右,当孩子点用)
  *                                         和 version(vault 里这几页现在的样子;存的时候带回来,对不上 409)
  *   POST   /api/dev/zones/check {b,l,pages}          边改边查,同 cotutor textbook check(checkZonePages),不落盘
- *   PUT    /api/dev/zones/lesson {b,l,version,pages} 一课一起存(Q10):查干净才写 vault 的 教材/.zones/<指纹>/,写之前吸到候选上(同 push),book.json 记 workbench;
- *                                         规则出的那一课也是整课写进去(V3:没改的页照规则出的抄一份)
- *   DELETE /api/dev/zones/lesson?b&l      还原成规则出的(V4):删掉 vault 里这一课的页
- *   DELETE /api/dev/zones/stale?sha       删掉换过的课本留下的旧分块(M5;现在哪本课本的指纹都不删)
+ *   PUT    /api/dev/zones/lesson {b,l,version,pages} 一课一起存:查干净才写 vault 的 教材/.zones/<指纹>/,写之前吸到候选上(同 push),book.json 记 workbench;
+ *                                         规则出的那一课也是整课写进去(没改的页照规则出的抄一份)
+ *   DELETE /api/dev/zones/lesson?b&l      还原成规则出的:删掉 vault 里这一课的页
+ *   DELETE /api/dev/zones/stale?sha       删掉换过的课本留下的旧分块(现在哪本课本的指纹都不删)
  *   POST   /api/dev/zones/say {b,text}    念一遍:用这一科老师「点读的声音」合成(有缓存),回声音
  * 只认 教材/ 里列得出的册名和目录里有的课,不拼路径;课本 PDF 不动。
  */

@@ -375,6 +375,13 @@ export async function doctorWorkspace(
       }
     }
 
+    // ---- 课本的分块:家长换了课本 PDF,vault 里以前改好的分块(旧指纹)用不上了;没有改过的分块不说 ----
+    {
+      const { staleZoneDirs } = await import('../../memory/textbook-zones.ts');
+      const stale = await staleZoneDirs(ws.paths.textbooks);
+      if (stale.length) push({ name: 'textbook.zones', ok: false, required: false, detail: `这本课本换过,以前改的分块用不上了:${stale.map((d) => `${d.title ? `《${d.title}》` : d.sha}(${d.pages} 页)`).join('、')}`, fix: '要接着用,把原来那份课本 PDF 放回教材文件夹;不要了,在工作台「分块」页删掉旧的。新课本照规则出的分块照样能用,也能让编程助手照 cotutor-textbook 重新改' });
+    }
+
     // ---- paths 角色指向:配了就该在 ----
     for (const [role, value] of Object.entries(ws.config.paths)) {
       const target = ws.paths[role] ?? expandPath(value, ws.root);

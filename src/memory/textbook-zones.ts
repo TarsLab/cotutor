@@ -5,7 +5,9 @@
  * 一页一份 `p078.json` 外加 `book.json`(每页最后是谁写的);写的时候先写临时文件再改名,写坏了只坏一页。读不过形状的那一页当没有(给家长端报一行)。
  * 运行时一课挑一份(schema 的 pickZones):这一课的页在 vault 里都有就用 vault 的,不然用规则出的。工作台「还原成规则出的」删掉 vault 里那一课的页(removeZonePages)。
  * 规则出一整册约几十毫秒(人教数学二上 126 页),第一次用到这一册时出完,不分先后。
+ * 家长换了课本 PDF(指纹变了),vault 里旧指纹的分块用不上了:staleZoneDirs 列出来,工作台能删、doctor 说一句。
  */
+import { createHash } from 'node:crypto';
 import { mkdir, readFile, readdir, rename, rm, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { BOOK_INDEX_VERSION, ZONES_RULES_VERSION, ZoneBookSchema, ZonePageSchema, zoneFile, zoneKey, type BookIndex, type BookZones, type ZoneBook, type ZonePage, type ZoneWriter } from '../schema/index.ts';
@@ -87,6 +89,21 @@ export async function vaultZoneDirs(textbooksDir: string): Promise<{ sha: string
     out.push({ sha, title: (await readZoneBook(dir))?.title ?? null, pages });
   }
   return out;
+}
+
+/**
+ * vault 里指纹不是哪本现在课本的分块(家长换了课本 PDF,以前改的用不上了):有页的才算。
+ * vault 里没有分块目录就不读 PDF;有才把 教材/ 下每本 PDF 的指纹现算一遍(sha1 前 16 位,同索引)
+ */
+export async function staleZoneDirs(textbooksDir: string): Promise<{ sha: string; title: string | null; pages: number }[]> {
+  const dirs = (await vaultZoneDirs(textbooksDir)).filter((d) => d.pages > 0);
+  if (!dirs.length) return [];
+  const now = new Set<string>();
+  for (const f of (await readdir(textbooksDir).catch(() => [] as string[])).filter((x) => /\.pdf$/i.test(x) && !x.startsWith('.'))) {
+    const data = await readFile(join(textbooksDir, f)).catch(() => null);
+    if (data) now.add(createHash('sha1').update(data).digest('hex').slice(0, 16));
+  }
+  return dirs.filter((d) => !now.has(d.sha));
 }
 
 const ruled = new Map<string, Promise<Record<number, ZonePage>>>();

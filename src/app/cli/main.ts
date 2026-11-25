@@ -993,6 +993,11 @@ export async function main(argv: string[]): Promise<void> {
         }
         return;
       }
+      case 'textbook': {
+        const { textbookCommand } = await import('./textbook.ts');
+        await textbookCommand(positionals, flags, { workspace, json });
+        return;
+      }
       case 'chalk': {
         const { chalkCommand } = await import('./chalk/main.ts');
         await chalkCommand(positionals, flags, { workspace, json });

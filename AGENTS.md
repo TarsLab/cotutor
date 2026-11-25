@@ -15,7 +15,7 @@
 ## 目录
 
 - `grades/grade-<n>/agents/<老师>/activities/<名>.md` 出厂 activity(孩子从首页一个按钮进去的一种做法):一节一个读者,「老师怎么带」就是这个话题老师的整份系统提示(人设、`第一句:`、`收:` 都在里面);一科通用的做法是其中「### <科>这一科」那一节,这位老师的每个 activity 里一字不差(`tests/activity.test.ts` 盯着)。init 拷进 workspace 的 `agents/<老师>/activities/`(老师的家),hash 记 `.cotutor/shipped.json`;形状在 `src/schema/activity.ts`,解析与检查在 `src/runtime/activity.ts`;文件写法在 `docs/写提示词.md`。老师文件(`agents/<老师>.md`)不出厂、不读;旧 workspace 里的不删,refresh 与 doctor 的 `tutor.files` 提一句(`src/app/cli/tutors.ts` 的 `retiredTutorFiles`)
-- `skills/<name>/` 出厂技能:cotutor-tutor(老师们共同的守则,应用注入上下文包)、cotutor-analyze、cotutor-tune、cotutor-home(家长在 workspace 里排首页,references 里有 `cards/*/card.md`)、cotutor-workbook(出练习册,配 `cotutor workbook check`);init 拷进 workspace 的 `.agents/skills/`(Codex、Qwen Code 认这里),`.claude/skills` 是链到它的(Claude Code 只认那里);不再出厂的机器件列在 `src/app/cli/skills.ts` 的 `RETIRED_SKILLS`,refresh 时删
+- `skills/<name>/` 出厂技能:cotutor-tutor(老师们共同的守则,应用注入上下文包)、cotutor-analyze、cotutor-tune、cotutor-home(家长在 workspace 里排首页,references 里有 `cards/*/card.md`)、cotutor-workbook(出练习册,配 `cotutor workbook check`)、cotutor-textbook(改课本的分块,配 `cotutor textbook pull/check/preview/push`);init 拷进 workspace 的 `.agents/skills/`(Codex、Qwen Code 认这里),`.claude/skills` 是链到它的(Claude Code 只认那里);不再出厂的机器件列在 `src/app/cli/skills.ts` 的 `RETIRED_SKILLS`,refresh 时删
 - `cards/<kind>/` 首页两种牌(老师牌 `tutor`、听写牌 `dictation`)的协议:`card.md` 八栏(例子即测试)+ `card.css`;`cards/动作怎么写.md` 是给老师的讲稿与动作写法(进系统提示)
 - `themes/default/` 出厂主题:`theme.json` 槽表、`kid.css`
 - `avatars/` 出厂头像,跟着包走、不拷进 workspace

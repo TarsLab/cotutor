@@ -30,6 +30,8 @@ export const ZoneRegionSchema = RegionSchema.extend({
   cell: z.enum(['model', 'trace', 'empty', 'blank', 'table']).optional(),
   ch: z.string().min(1).optional(),
   m: z.string().min(1).optional(),
+  /** 框不是 PDF 量出来的候选(横线、圈画区、插图里的空):编程助手写脚本量图量的 */
+  src: z.literal('measured').optional(),
 });
 export type ZoneRegion = z.infer<typeof ZoneRegionSchema>;
 
@@ -72,6 +74,8 @@ export const ZonePageSchema = z.object({
   zones: z.array(ZoneSchema),
   /** 不在哪一块里的作答区(块外面的田字格) */
   regions: z.array(ZoneRegionSchema).optional(),
+  /** 候选里不是孩子要写的格(装饰的框、图里的格):列它们的 id,cotutor textbook check 不再说漏了 */
+  ignore: z.array(z.string().min(1)).optional(),
 });
 export type ZonePage = z.infer<typeof ZonePageSchema>;
 

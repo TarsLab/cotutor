@@ -6,7 +6,7 @@
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { bookCellsOf, bookSheets, zoneBlocks } from '../src/chalk/index.ts';
+import { bookCellsOf, bookSheets, bookTarget, zoneBlocks } from '../src/chalk/index.ts';
 import { ruleLessonZones, ruleZones } from '../src/memory/textbook-zones-rules.ts';
 import { bookZones, forgetZones, readZoneBook, ruleZonesDir, vaultZonesDir, writeZonePages } from '../src/memory/textbook-zones.ts';
 import { ZonePageSchema, pickZones, walkZones, zonePageProblems, zonesKidPage, type BookPage, type Zone, type ZonePage } from '../src/schema/index.ts';
@@ -44,6 +44,19 @@ const fz = ruleLessonZones(fish, 'prose');
   const p = mx.pages.find((x) => zs.find((z) => z.page === x.n)?.zones.some((z) => z.kind === 'column' && z.children?.length))!;
   const back = zoneBlocks([p], zs.filter((z) => z.page === p.n), 'math');
   check('数学读回来:题号、栏目名从叫法和上一层来', back.some((b) => b.kind === 'problem' && b.no !== undefined && b.head && b.head.length > 0), JSON.stringify(back.map((b) => [b.kind, b.no, b.head])));
+  // 编程助手把栏目改成「例 1 的做一做」、题跟着改:老师写全了照叫法找到那道题;只写「做一做第 N 题」还找得到
+  const zp = structuredClone(zs.find((z) => z.page === p.n)!);
+  const col = zp.zones.find((z) => z.kind === 'column' && z.children?.length)!;
+  const first = col.children![0];
+  const old1 = first.label;
+  col.label = `例 1 的${col.label}`;
+  for (const k of col.children!) k.label = `例 1 的${k.label}`;
+  const renamed = zoneBlocks([p], [zp], 'math');
+  const sh = bookSheets([p]);
+  const byLabel = bookTarget([p], sh, renamed, first.label);
+  const plain = bookTarget([p], sh, renamed, old1);
+  const want = bookTarget([p], sh, back, old1);
+  check('改过叫法:[[看 例 1 的做一做第 1 题]] 照叫法找到那道题;只写「做一做第 1 题」也找得到同一道', byLabel?.label === first.label && JSON.stringify(byLabel?.box) === JSON.stringify(want?.box) && JSON.stringify(plain?.box) === JSON.stringify(want?.box), JSON.stringify([first.label, old1, byLabel, plain, want]));
 }
 
 // ---- 没写 rows 的块(编程助手改的):框里没被占的行归框住它中心的最里面那块 ----

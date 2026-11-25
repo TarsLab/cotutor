@@ -136,6 +136,8 @@ export interface BookBlock {
   refs: { n: number; i: number }[];
   /** 这一块自己的框(页的坐标,PDF 的点):照片上认出的题框住整道题(题里的图、要填的空也在里面),比框里那几行的并集大;没有就照 refs 算 */
   area?: { n: number; box: Box };
+  /** 老师和孩子怎么叫它(分块的 label:「例 2」「练一练第 3 题」);老师 [[看 …]] 先照它找 */
+  label?: string;
 }
 
 const linePm = (p: BookPage, l: BookLine): Box => [(l.x1 / p.w) * 1000, (l.y1 / p.h) * 1000, (l.x2 / p.w) * 1000, (l.y2 / p.h) * 1000];
@@ -206,6 +208,10 @@ export function zoneBlocks(pages: readonly BookPage[], zones: readonly ZonePage[
 
 /** 一块读回来是哪种、第几、在哪个栏目下、字(照 lines 重拼) */
 function zoneBlock(z: Zone, lines: readonly BookLine[], parent: Zone | null, layout: BookLayout): Omit<BookBlock, 'refs'> {
+  return { ...zoneKind(z, lines, parent, layout), label: z.label };
+}
+
+function zoneKind(z: Zone, lines: readonly BookLine[], parent: Zone | null, layout: BookLayout): Omit<BookBlock, 'refs'> {
   const num = (re: RegExp): number | undefined => { const m = re.exec(z.label.replace(/\s/g, '')); return m ? Number(m[1]) : undefined; };
   const col = parent?.kind === 'column' ? parent.label : undefined;
   const join = (ls: readonly BookLine[], f: (l: BookLine) => string = (l) => l.text): string => ls.map(f).filter(Boolean).join(' ');
@@ -479,7 +485,7 @@ const EXAMPLE = /^例\s*(\d{1,2})$/;
 const PROBLEM = /^(做一做|练一练|试一试|整理和复习)?\s*的?\s*第?\s*(\d{1,2})\s*(?:题|小题)$/;
 
 /**
- * 老师的「看」→ 那一块(场景坐标)与给人看的名字。认这几种写法:
+ * 老师的「看」→ 那一块(场景坐标)与给人看的名字。认这几种写法(下面几种认不出的,先照分块的叫法 label 找,再认栏目名、原话):
  *  第 6 段 / 第 6–7 段(一课的自然段)· 第 55 页(印的页码,整页)· 栏目名(日积月累;数学的做一做、练一练连着下面的题)· 标题 / 开头 · 课本上的一句原话(取它所在的几行)
  *  数学:例 2 · 练一练第 3 题(只写「第 3 题」是这一课里第一个第 3 题)。同名的栏目、例题有几处取第一处,要别的那处写原话
  *  科学:栏目名带序号(探索与实践 2,连着这个栏目下的段、表、图里的字;只写「探索与实践」是第一个)
@@ -509,9 +515,21 @@ export function bookTarget(pages: readonly BookPage[], sheets: readonly BookShee
   }
   const pr = PROBLEM.exec(q.replace(/\s/g, ''));
   if (pr) {
-    const b = blocks.find((x) => x.kind === 'problem' && x.no === Number(pr[2]) && (!pr[1] || x.head === pr[1]));
+    // 栏目改过叫法(「例 1 的做一做」)也认:写「做一做第 2 题」找叫法以它收尾的那个栏目下的
+    const b = blocks.find((x) => x.kind === 'problem' && x.no === Number(pr[2]) && (!pr[1] || x.head === pr[1] || x.head?.replace(/\s/g, '').endsWith(pr[1])));
     const box = b ? blockBox(pages, sheets, b) : null;
     return box ? { label: `${b!.head ?? ''}第${pr[2]}题`, box, rows: refsRows(pages, sheets, b!.refs) } : null;
+  }
+  // 分块里的叫法一字不差(不管空格;编程助手改的「例 1 的做一做第 2 题」):栏目连着下面的小块(同下面认栏目名)
+  const nq = q.replace(/\s/g, '');
+  const byLabel = nq ? blocks.findIndex((x) => x.label !== undefined && x.label.replace(/\s/g, '') === nq) : -1;
+  if (byLabel >= 0) {
+    const b = blocks[byLabel];
+    let end = byLabel + 1;
+    if (b.kind === 'section') while (end < blocks.length && (blocks[end].kind === 'problem' || (blocks[end].kind !== 'section' && blocks[end].head === b.head))) end++;
+    const refs = blocks.slice(byLabel, end).flatMap((x) => x.refs);
+    const box = b.area && end === byLabel + 1 ? blockBox(pages, sheets, b) : refsBox(pages, sheets, refs);
+    if (box) return { label: b.label!, box, rows: refsRows(pages, sheets, refs) };
   }
   if (/^(标题|题目|开头|课题)$/.test(q)) {
     const t = blocks.filter((x) => x.kind === 'title' || (x.kind === 'para' && x.no === 1));

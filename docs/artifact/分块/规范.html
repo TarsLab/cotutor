@@ -90,7 +90,7 @@ pre.code { margin:0; background:var(--surface); border-radius:var(--r-card); box
 
 <div class="wrap">
 <header class="top">
-  <span class="crumb">docs/artifact/分块 · 2026-11-26 · 第 1–6 步做完、搬进 docs/dev/;剩一件提议</span>
+  <span class="crumb">docs/artifact/分块 · 2026-11-26 · 第 1–6 步做完、搬进 docs/dev/;剩一件,画布等你看</span>
   <h1>分块:工作台认练习册</h1>
   <p>课本的分块(规则自动出、编程助手照学科规范改、工作台看和改、运行时只读分块)和练习册换成同一种写法(<code>workbook.json</code> 版本 2,一页的题就是分块)都做完了,规则搬进了 <code>docs/dev/课本.md</code>、<code>docs/dev/练习册.md</code> 和技能 cotutor-textbook、cotutor-workbook,原来那份长设计稿在 git 里(2026-11-25 那几次提交)。剩下的一件:当初定「练习册和课本一种写法」时说的「一套检查、一个工作台页」,检查已经是一套,工作台的「分块」页还只认课本。</p>
   <div class="legend"><span class="st now">现状</span><span class="st new">提议</span><span class="st tbd">待定</span><span class="st ok">已定</span> 规则编号:W 工作台认练习册、Q 待讨论</div>
@@ -121,8 +121,8 @@ pre.code { margin:0; background:var(--surface); border-radius:var(--r-card); box
       <tr><td class="n">W1</td><td><b>挑得到练习册</b>左边挑课本的地方,下面多一组「练习册」(vault 练习册/ 下每一册,读不出来的列出原因,同 <code>cotutor workbook check</code> 的第一条);挑了一册,页是它的几页 PNG(<code>/api/kid/workbook/image</code> 那份),不走 pdf.js。</td><td><span class="st new">提议</span></td></tr>
       <tr><td class="n">W2</td><td><b>看</b>同课本:页上叠块(最外一层实线带叫法、里面一层虚线)、作答区、文字层的行三层,没有候选那一层;点一块看叫法、念法、给老师的、答案;右边这一页的块的树;检查照 <code>workbookProblems</code>(和 check 同一份)。</td><td><span class="st new">提议</span></td></tr>
       <tr><td class="n">W3</td><td><b>当孩子点</b>同课本:点一下说落到哪(能写的格、有念法的最小的块),能用点读的声音听一遍(练习册的念法走 <code>/api/kid/workbook/say</code> 那一套)。家长最常要核的就是这个:点第 3 题念的对不对。</td><td><span class="st new">提议</span></td></tr>
-      <tr><td class="n">W4</td><td><b>改不改</b>看 Q13。</td><td><span class="st tbd">待定</span></td></tr>
-      <tr><td class="n">W5</td><td><b>先出画布再写代码</b>在现有的分块页画布上加一张「挑了一册练习册」的样子(W1–W3,和 Q13 定的那种改法),家长看过再写。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">W4</td><td><b>只看不改</b>(Q13 定了 A):不出「加一块」、拉手、存、还原、「改了没存」那一条,右边的字段都只读。要改的在右边「复制这一句」(带上册名、题、小题,家长补一句改成什么),贴给编程助手,它改排版脚本重跑、再 check;页面顶上「复制给编程助手的一句」挑了练习册时说这一册。</td><td><span class="st ok">已定</span></td></tr>
+      <tr><td class="n">W5</td><td><b>先出画布再写代码</b>画布 https://claude.ai/artifact/Xvt6t4pp1xkLJ6VA6GBnkR 最下面一排 ⑦–⑨(2026-11-26,拿 docs/wip 的《表内乘法（一）练习册》第 2 页画的):挑一册看块、选中小题「2×6」、当孩子点。家长看过再写。</td><td><span class="st new">提议</span></td></tr>
     </tbody>
   </table></div>
 </section>
@@ -130,9 +130,9 @@ pre.code { margin:0; background:var(--surface); border-radius:var(--r-card); box
 <section id="q">
   <h2><span class="id">Q</span>讨论</h2>
   <div class="qs">
-    <div class="q"><h4><span class="rid">Q13</span>工作台能不能改练习册 <span class="st tbd">待定</span></h4>
+    <div class="q"><h4><span class="rid">Q13</span>工作台能不能改练习册 <span class="st ok">已定</span></h4>
       <ul>
-        <li class="rec"><b>推荐 A:只看不改。</b>看块、当孩子点、听念法、看检查;要改的复制一句给编程助手(同课本页顶上那句,如「练习册《表内乘法一》第 8 题的念法改成……」),它改脚本重跑。和技能的铁律一致,不会丢;做起来是课本那页去掉改的部分。</li>
+        <li class="rec"><b>定了 A:只看不改(2026-11-26)。</b>看块、当孩子点、听念法、看检查;要改的复制一句给编程助手(同课本页顶上那句,如「练习册《表内乘法一》第 8 题的念法改成……」),它改脚本重跑。和技能的铁律一致,不会丢;做起来是课本那页去掉改的部分。</li>
         <li>B:能改叫法、念法、给老师的(不动框),直接写 <code>workbook.json</code>,记下是工作台改的;编程助手重跑脚本前 <code>cotutor workbook check</code> 报「工作台改过 n 处,重跑会盖掉」,它把改的抄进脚本。省一来一回,但要多一份「谁改过」的记账,编程助手也得记得抄。</li>
         <li>C:工作台的改动另存一份(<code>workbook.edits.json</code>,照块的 id 盖上去),应用读的时候叠上;脚本重跑不丢。最省心,但块的 id 一变就对不上,还多一套叠加的逻辑。</li>
       </ul></div>

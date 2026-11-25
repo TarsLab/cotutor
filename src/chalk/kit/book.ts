@@ -128,7 +128,8 @@ export function lessonName(lessons: readonly BookLesson[], l: BookLesson): strin
  * 课本的块从分块文件读回来(zoneBlocks);照片、练习册的题由 ./photo.ts、./workbook.ts 换成同样的块(带 area)
  */
 export interface BookBlock {
-  kind: 'title' | 'para' | 'section' | 'other' | 'example' | 'problem';
+  /** group = 分块里没有自己字行的块(表格、插图、一组口诀):只为老师照叫法找得到,上下文包、「孩子在看」不列它 */
+  kind: 'title' | 'para' | 'section' | 'other' | 'example' | 'problem' | 'group';
   no?: number;
   head?: string;
   text: string;
@@ -138,6 +139,8 @@ export interface BookBlock {
   area?: { n: number; box: Box };
   /** 老师和孩子怎么叫它(分块的 label:「例 2」「练一练第 3 题」);老师 [[看 …]] 先照它找 */
   label?: string;
+  /** 套在它里面的块有几个(分块读回来的,照先后紧跟在它后面):「看」一块连着它里面的 */
+  kids?: number;
 }
 
 const linePm = (p: BookPage, l: BookLine): Box => [(l.x1 / p.w) * 1000, (l.y1 / p.h) * 1000, (l.x2 / p.w) * 1000, (l.y2 / p.h) * 1000];
@@ -152,7 +155,8 @@ const iou = (a: Box, b: Box): number => {
 /**
  * 一课的块(给老师看的段、栏目、题,点读的段):照这一课挑好的分块(schema 的 pickZones)读回来。
  * 块的行:写了 rows 的照框对上这一页没被占的行里重合最多的那行(重合一半以上);没写 rows 的,框里没被占的行归框住它中心的最里面那块。
- * 跨页的同一块(两页上同一个 id)连成一块,照先出现的先后;栏目下面的小块记着栏目名(head);一行字都没有的块(表格、插图)不成块。
+ * 跨页的同一块(两页上同一个 id)连成一块,照先出现的先后;栏目下面的小块记着栏目名(head);一行字都没有的块(表格、插图、一组口诀)成 group 块,只带叫法和框;
+ * 小块照先后紧跟在它外面那块后面,kids 是有几个。
  * 字照行重拼,和规则分块时一样(src/memory/textbook-zones-rules.ts):段的行直接连,别的用空格隔开,语文的栏目、别的字带读音,例题去掉开头的例题号
  */
 export function zoneBlocks(pages: readonly BookPage[], zones: readonly ZonePage[], layout: BookLayout = 'prose'): BookBlock[] {
@@ -194,12 +198,24 @@ export function zoneBlocks(pages: readonly BookPage[], zones: readonly ZonePage[
     }
   }
   const lineOf = (r: { n: number; i: number }): BookLine | undefined => pages.find((p) => p.n === r.n)?.lines[r.i];
+  // 没有字行的块(表格、插图、一组口诀)记它在头一页的框(PDF 的点),照叫法找得到
+  const firstBox = (z: Zone): { n: number; box: Box } | undefined => {
+    for (const zp of zones) {
+      const p = pages.find((x) => x.n === zp.page);
+      let hit: Zone | undefined;
+      walkZones(zp.zones, (y) => { if (!hit && y.id === z.id) hit = y; });
+      if (p && hit) return { n: p.n, box: [(hit.box[0] * p.w) / 1000, (hit.box[1] * p.h) / 1000, (hit.box[2] * p.w) / 1000, (hit.box[3] * p.h) / 1000] };
+    }
+    return undefined;
+  };
   const out: BookBlock[] = [];
   const walk = (ns: readonly Node[]): void => {
     for (const node of ns) {
-      // 没有字行的块(表格、插图)不成块:老师看的、刷的字照旧在外面那块里;它下面的小块照走
+      const at = out.length;
       if (node.refs.length) out.push({ ...zoneBlock(node.z, node.refs.map(lineOf).filter((l): l is BookLine => Boolean(l)), node.parent?.z ?? null, layout), refs: node.refs });
+      else { const area = firstBox(node.z); out.push({ kind: 'group', text: '', refs: [], label: node.z.label, ...(node.parent?.z.kind === 'column' ? { head: node.parent.z.label } : {}), ...(area ? { area } : {}) }); }
       walk(node.kids);
+      if (out.length - at > 1) out[at].kids = out.length - at - 1;
     }
   };
   walk(top);
@@ -479,6 +495,18 @@ export function bookSpot(pages: readonly BookPage[], sheets: readonly BookSheet[
   return hit && box ? { box, rows: hit.rows, py: hit.py } : null;
 }
 
+/** 一块连着它里面的那几块(kids);照片、练习册的块没有 kids,只是它自己 */
+const subtree = (blocks: readonly BookBlock[], k: number): BookBlock[] => blocks.slice(k, k + 1 + (blocks[k].kids ?? 0));
+
+/** 一串块在场景里的框与字行:有字行的照行;一行字都没有的(表格、插图)照它的框,字行在框里现挑 */
+function blocksBox(pages: readonly BookPage[], sheets: readonly BookSheet[], bs: readonly BookBlock[]): { box: Box; rows: Box[] } | null {
+  const refs = bs.flatMap((x) => x.refs);
+  const areas = bs.flatMap((x) => (x.area && (x.kind === 'group' || bs.length === 1) ? [blockBox(pages, sheets, x)] : [])).filter((b): b is Box => b !== null);
+  const box = union([...(refs.length ? [refsBox(pages, sheets, refs)].filter((b): b is Box => b !== null) : []), ...areas]);
+  if (!box) return null;
+  return { box, rows: refs.length ? refsRows(pages, sheets, refs) : bookRows(pages, sheets, box) };
+}
+
 const RANGE = /^第?\s*(\d{1,2})\s*(?:[-–—~～到至]\s*第?\s*(\d{1,2}))?\s*(?:自然)?段$/;
 const PAGE = /^第?\s*(\d{1,3})\s*页$/;
 const EXAMPLE = /^例\s*(\d{1,2})$/;
@@ -509,27 +537,26 @@ export function bookTarget(pages: readonly BookPage[], sheets: readonly BookShee
   }
   const ex = EXAMPLE.exec(q.replace(/\s/g, ''));
   if (ex) {
-    const b = blocks.find((x) => x.kind === 'example' && x.no === Number(ex[1]));
-    const box = b ? refsBox(pages, sheets, b.refs) : null;
-    return box ? { label: `例${ex[1]}`, box, rows: refsRows(pages, sheets, b!.refs) } : null;
+    const k = blocks.findIndex((x) => x.kind === 'example' && x.no === Number(ex[1]));
+    const got = k >= 0 ? blocksBox(pages, sheets, subtree(blocks, k)) : null;
+    return got ? { label: `例${ex[1]}`, ...got } : null;
   }
   const pr = PROBLEM.exec(q.replace(/\s/g, ''));
   if (pr) {
     // 栏目改过叫法(「例 1 的做一做」)也认:写「做一做第 2 题」找叫法以它收尾的那个栏目下的
-    const b = blocks.find((x) => x.kind === 'problem' && x.no === Number(pr[2]) && (!pr[1] || x.head === pr[1] || x.head?.replace(/\s/g, '').endsWith(pr[1])));
-    const box = b ? blockBox(pages, sheets, b) : null;
-    return box ? { label: `${b!.head ?? ''}第${pr[2]}题`, box, rows: refsRows(pages, sheets, b!.refs) } : null;
+    const k = blocks.findIndex((x) => x.kind === 'problem' && x.no === Number(pr[2]) && (!pr[1] || x.head === pr[1] || x.head?.replace(/\s/g, '').endsWith(pr[1])));
+    const b = blocks[k];
+    if (!b) return null;
+    // 照片、练习册的题有自己的框(题里的图、要填的空都在里面);课本的题连着它里面的小题
+    const box = b.kids ? blocksBox(pages, sheets, subtree(blocks, k))?.box ?? null : blockBox(pages, sheets, b);
+    return box ? { label: `${b.head ?? ''}第${pr[2]}题`, box, rows: refsRows(pages, sheets, subtree(blocks, k).flatMap((x) => x.refs)) } : null;
   }
   // 分块里的叫法一字不差(不管空格;编程助手改的「例 1 的做一做第 2 题」):栏目连着下面的小块(同下面认栏目名)
   const nq = q.replace(/\s/g, '');
   const byLabel = nq ? blocks.findIndex((x) => x.label !== undefined && x.label.replace(/\s/g, '') === nq) : -1;
   if (byLabel >= 0) {
-    const b = blocks[byLabel];
-    let end = byLabel + 1;
-    if (b.kind === 'section') while (end < blocks.length && (blocks[end].kind === 'problem' || (blocks[end].kind !== 'section' && blocks[end].head === b.head))) end++;
-    const refs = blocks.slice(byLabel, end).flatMap((x) => x.refs);
-    const box = b.area && end === byLabel + 1 ? blockBox(pages, sheets, b) : refsBox(pages, sheets, refs);
-    if (box) return { label: b.label!, box, rows: refsRows(pages, sheets, refs) };
+    const got = blocksBox(pages, sheets, subtree(blocks, byLabel));
+    if (got) return { label: blocks[byLabel].label!, ...got };
   }
   if (/^(标题|题目|开头|课题)$/.test(q)) {
     const t = blocks.filter((x) => x.kind === 'title' || (x.kind === 'para' && x.no === 1));
@@ -544,7 +571,8 @@ export function bookTarget(pages: readonly BookPage[], sheets: readonly BookShee
     // 数学的栏目连着下面的题;科学的连着记着这个栏目的段和别的字
     const k = blocks.indexOf(sec);
     let end = k + 1;
-    while (end < blocks.length && (blocks[end].kind === 'problem' || (blocks[end].kind !== 'section' && blocks[end].head === sec.head))) end++;
+    if (sec.kids !== undefined) end = k + 1 + sec.kids;
+    else while (end < blocks.length && (blocks[end].kind === 'problem' || (blocks[end].kind !== 'section' && blocks[end].head === sec.head))) end++;
     const refs = blocks.slice(k, end).flatMap((x) => x.refs);
     const box = refsBox(pages, sheets, refs);
     return box ? { label: sec.head!, box, rows: refsRows(pages, sheets, refs) } : null;

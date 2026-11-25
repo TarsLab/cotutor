@@ -16,7 +16,7 @@ import { dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { buildContextPack } from './context/context-pack.ts';
 import { addMessage, applyRun, jobId, sameRuntime, sessionFor } from './journal/conversation.ts';
 import { localDate, localMinute } from '../shared/time.ts';
-import { conversationFiles, pickZones, spokeIn, threads } from '../schema/index.ts';
+import { conversationFiles, pickBookZones, spokeIn, threads } from '../schema/index.ts';
 import { bookkeepingPrompt, kidQuestions, textbookHeadings } from '../memory/diary.ts';
 import { actsGuide } from '../board/cards/docs.ts';
 import { activityBase, parseActivity, renderTutorSection } from './activity.ts';
@@ -630,7 +630,7 @@ export class Runner {
     let show = '还没有页';
     if (page?.kind === 'book') {
       const at = x.src.book && page.src === x.src.book.file ? bookLesson(x.src.book.index, page.title) : null;
-      const parts = at && x.src.book ? bookSlateParts(x.src.book.index, at, pickZones(x.src.book.zones, at.pages.map((p) => p.n)).pages, page.title === BOOK_TOC ? await bookLast(ws, x.src.book.file) : null) : null;
+      const parts = at && x.src.book ? bookSlateParts(x.src.book.index, at, pickBookZones(x.src.book.index, x.src.book.zones, at.pages.map((p) => p.n)).pages, page.title === BOOK_TOC ? await bookLast(ws, x.src.book.file) : null) : null;
       show = parts?.show ?? `课本《${page.src}》读不出来`;
       if (parts && !told.has(page.id)) notes.push({ id: page.id, name: page.title === BOOK_TOC ? '目录' : `《${page.title}》`, text: clipNote(parts.text) });
     } else if (page?.kind === 'photo' && page.day) {

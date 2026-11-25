@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { bookCellsOf, bookSheets, bookTarget, zoneBlocks } from '../src/chalk/index.ts';
 import { ruleLessonZones, ruleZones } from '../src/memory/textbook-zones-rules.ts';
 import { bookZones, forgetZones, readZoneBook, ruleZonesDir, vaultZonesDir, writeZonePages } from '../src/memory/textbook-zones.ts';
-import { ZonePageSchema, pickZones, walkZones, zonePageProblems, zonesKidPage, type BookPage, type Zone, type ZonePage } from '../src/schema/index.ts';
+import { ZonePageSchema, pickBookZones, pickZones, walkZones, zonePageProblems, zonesKidPage, type BookPage, type Zone, type ZonePage } from '../src/schema/index.ts';
 import { bookIndexOf } from './_book.ts';
 import { mathIndexOf } from './_math-book.ts';
 import { scienceIndexOf } from './_science-book.ts';
@@ -109,7 +109,11 @@ const fz = ruleLessonZones(fish, 'prose');
   const says = all.filter((z) => z.say).map((z) => z.say);
   check('语文正文后面的块写上念什么:题照印的,认字栏一个字一个字顿开;写字栏(字印在田字格里)、页下的注不念', says.includes('能否看见空气') && says.includes('观、沿、渴、话') && !says.includes('观') && !says.some((x) => x!.includes('本文选自')), JSON.stringify(says));
   const blocks = zoneBlocks([p], [zs], 'prose');
-  check('读回来:表格不成块,块数和字行数对得上', blocks.every((b) => b.refs.length > 0) && blocks.reduce((n, b) => n + b.refs.length, 0) === p.lines.length, JSON.stringify(blocks.map((b) => [b.kind, b.text])));
+  const tb = blocks.filter((b) => b.kind === 'group');
+  check('读回来:表格是 group 块(不带字行,只有叫法和框),别的块的字行加起来正好是这一页的行', tb.length === 1 && tb[0].label === '第 4 页的表格' && tb[0].refs.length === 0 && tb[0].area?.n === 5 && blocks.filter((b) => b.kind !== 'group').every((b) => b.refs.length > 0) && blocks.reduce((n, b) => n + b.refs.length, 0) === p.lines.length, JSON.stringify(blocks.map((b) => [b.kind, b.text, b.label])));
+  const sh = bookSheets([p]);
+  const lt = bookTarget([p], sh, blocks, '第 4 页的表格');
+  check('[[看 第 4 页的表格]]:照它的框找到(场景坐标,页宽 1000)', !!lt && Math.abs(lt.box[0] - (60 * 1000) / 520) < 0.5 && Math.abs(lt.box[3] - (260 * 1000) / 520) < 0.5, JSON.stringify(lt));
 }
 
 // ---- 孩子端那份:给老师的、答案、物件、作答区的名字不下发 ----
@@ -117,6 +121,15 @@ const fz = ruleLessonZones(fish, 'prose');
   const full: ZonePage = { page: 9, zones: [{ id: 'q', kind: 'problem', label: '练一练第 3 题', box: [10, 10, 500, 500], say: '第 3 题。', regions: [{ id: 'q-a', kind: 'write', label: '乘号左边', box: [20, 20, 60, 60] }], objects: [{ id: 'o', label: '积木', box: [100, 100, 120, 120], center: [110, 110] }], teacher: { goal: '七的乘法口诀', answers: [{ at: ['q-a'], ok: ['14'] }] } }] };
   const kid = JSON.stringify(zonesKidPage(full));
   check('孩子端:框、种类、叫法(书上的号)在;teacher、答案、物件、作答区的名字不在', kid.includes('练一练第 3 题') && kid.includes('"write"') && !kid.includes('七的乘法口诀') && !kid.includes('14') && !kid.includes('积木') && !kid.includes('乘号左边'), kid);
+}
+
+// ---- 铺开一个单元(外面那课)时照里面的课分开挑:改好的那一课用 vault 的,别的照规则 ----
+{
+  const all = Object.fromEntries(ruleZones(ix).map((z) => [z.page, z]));
+  const mine = { ...all[4], zones: all[4].zones.map((z) => ({ ...z, say: '编程助手写的' })) };
+  const z = { rules: all, vault: { 4: mine } };
+  const both = pickBookZones(ix, z, [4, 5]);
+  check('《古诗两首》(4–5 页)铺开:《静夜思》(第 4 页)改好了用 vault 的,《春晓》照规则;一课挑一份就整个用规则', both.which === 'mixed' && both.pages[0] === mine && both.pages[1] === all[5] && pickZones(z, [4, 5]).which === 'rules' && pickBookZones(ix, z, [4]).which === 'vault', JSON.stringify(both.which));
 }
 
 // ---- 文件:规则出的写进缓存、再读不重出;vault 里一课的页齐了才用 vault 的;读不出的页报一行 ----

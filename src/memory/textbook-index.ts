@@ -445,13 +445,16 @@ const overlap = (a: readonly number[], b: readonly number[]): number => {
 
 /**
  * 表格里没字的格(2026-11-25 照 scripts/probe-book-zones.mjs 核过的,人教数学二上第 78 页「拼图个数 / 拼板块数」那种):表格是画图指令里的线拼的(textbook-cells.ts 的 findTables),
- * 格里没印字的是孩子要填的;已经认成填空的(格里的空括号)不重复。tables = 有空格的那几张表的外框,格的 t 是第几张
+ * 格里没印字的是孩子要填的;已经认成填空的(格里的空括号)不重复;一格字都没有、格都不到 20pt 见方的是图(数小正方形、钢琴键),不算。
+ * tables = 有空格的那几张表的外框,格的 t 是第几张
  */
 export function tableCells(p: Pick<PdfPage, 'items' | 'tables' | 'w' | 'h'>, blanks: readonly BookCell[]): { cells: BookCell[]; tables: [number, number, number, number][] } {
   const cells: BookCell[] = [], tables: [number, number, number, number][] = [];
   const onPage = (b: readonly number[]): boolean => b[0] >= -1 && b[1] >= -1 && b[2] <= p.w + 1 && b[3] <= p.h + 1;
   for (const t of p.tables ?? []) {
     if (!t.every((c) => onPage(c.box))) continue;
+    // 一格字都没有、格又小(写不下一个数)的是图:数小正方形、钢琴键、点子图(人教数学二上第 81 页,编程助手试改时一格一格排除过)
+    if (t.every((c) => !textIn(p.items, c.box) && c.box[2] - c.box[0] < 20 && c.box[3] - c.box[1] < 20)) continue;
     const empty = t.filter((c) => !textIn(p.items, c.box) && !blanks.some((b) => { const x = (b.x1 + b.x2) / 2, y = (b.y1 + b.y2) / 2; return x > c.box[0] && x < c.box[2] && y > c.box[1] && y < c.box[3]; }));
     if (!empty.length) continue;
     const k = tables.push([r2(Math.min(...t.map((c) => c.box[0]))), r2(Math.min(...t.map((c) => c.box[1]))), r2(Math.max(...t.map((c) => c.box[2]))), r2(Math.max(...t.map((c) => c.box[3])))]) - 1;

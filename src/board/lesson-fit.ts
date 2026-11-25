@@ -15,7 +15,7 @@
  * 一节里的动作照先后一个一个落(先翻再看,看的是新的那一页),落不了的记一句给家长(why),动作本身留在讲稿上、不带 do。
  */
 import { BOOK_MAX_PAGES, BOOK_TOC, bookCut, bookFind, bookSheets, bookSpot, bookTarget, bookView, findLesson, lessonName, photoBookPage, workbookBookPage, zoneBlocks, type BookBlock, type BookSheet, type PhotoText } from '../chalk/index.ts';
-import { LECTURE_PAGE, pickZones, LOOK_ROWS_MAX, PHOTO_PAGE, WHITE_PAGE, type BoardSection, type BookIndex, type BookPage, type BookZones, type Box, type Lesson, type LessonAct, type LineAct, type PageSource, type Workbook } from '../schema/index.ts';
+import { LECTURE_PAGE, pickBookZones, LOOK_ROWS_MAX, PHOTO_PAGE, WHITE_PAGE, type BoardSection, type BookIndex, type BookPage, type BookZones, type Box, type Lesson, type LessonAct, type LineAct, type PageSource, type Workbook } from '../schema/index.ts';
 import { actParts } from './acts.ts';
 import { clockLabel, lectureRange, parseClock, type LectureClock } from './lecture.ts';
 import { dayTitle, lessonPage, lessonStep, photoDay, photoGaps } from './lesson.ts';
@@ -74,7 +74,7 @@ export function pageText(p: PageSource, src: LessonSource): { pages: BookPage[];
   if (p.kind === 'book') {
     if (!src.book || p.src !== src.book.file) return { pages: [], sheets: [], blocks: [] };
     const pages = src.book.index.pages.filter((x) => p.pages.includes(x.n));
-    return { pages, sheets: bookSheets(pages, undefined, p.cut), blocks: zoneBlocks(pages, pickZones(src.book.zones, p.pages).pages, p.layout) };
+    return { pages, sheets: bookSheets(pages, undefined, p.cut), blocks: zoneBlocks(pages, pickBookZones(src.book.index, src.book.zones, p.pages).pages, p.layout) };
   }
   if (p.kind === 'photo') {
     const layers = p.photos.map((ph, i) => photoBookPage(i + 1, ph, src.photos?.[ph.src] ?? null));

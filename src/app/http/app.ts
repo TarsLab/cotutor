@@ -19,7 +19,7 @@ import { homeworkPast, homeworkPdf, homeworkPdfName, homeworkSubject } from '../
 import { kidConversation, startedThreads, parentConversation, type KidMessage, type KidTodayThread, type ParentMessage } from '../../runtime/kid-view.ts';
 import { previewOf, writePreview } from '../../runtime/journal/preview.ts';
 import { parseEvents } from '../../runtime/journal/events.ts';
-import { pickZones, zonesKidPage, type Lesson, type RunEvent } from '../../schema/index.ts';
+import { pickBookZones, zonesKidPage, type Lesson, type RunEvent } from '../../schema/index.ts';
 import { NEUTRAL_COLOR, SUBJECT_COLORS, TUTOR_PALETTE, tutorColors } from '../../ui/shared/tutor-color.ts';
 import { boardMarkOf, type BoardMarkId } from '../../ui/kid/board-mark.ts';
 import { buildReel, playRecordOk, reelHolds, reelMissRuns, type PlayRecord, type Reel, type ReelCall } from '../../ui/kid/reel.ts';
@@ -983,7 +983,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       const want = bookPages(url.searchParams.get('p') ?? '');
       const book = want.length ? await bookOpen(ws, url.searchParams.get('b') ?? '') : null;
       if (!book) return { status: 404, json: { error: 'not_found' } };
-      return { status: 200, json: { pages: book.index.pages.filter((x) => want.includes(x.n)).map(({ cells: _c, ...pg }) => pg), zones: pickZones(book.zones, want).pages.map(zonesKidPage) } };
+      return { status: 200, json: { pages: book.index.pages.filter((x) => want.includes(x.n)).map(({ cells: _c, ...pg }) => pg), zones: pickBookZones(book.index, book.zones, want).pages.map(zonesKidPage) } };
     }
     // 点读课文(语文课本的一课,docs/dev/课本.md):这一课整篇一次合成(块和句照 bookReadTexts 分,舞台照同一份行摆钮),用这位老师「点读的声音」,
     // 带每个字的时间(有缓存,再读不花钱);回 {times[k][s]: 第 k 块第 s 句从第几毫秒起, end},加 audio=1 回那份声音(同一份缓存,能分段取)。
@@ -996,7 +996,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       const book = await bookOpen(ws, q.get('b') ?? '');
       if (!book || book.index.layout === 'math') return { status: 404, json: { error: 'not_found' } };
       const pages = book.index.pages.filter((x) => want.includes(x.n));
-      const texts = bookReadTexts(pages, zoneBlocks(pages, pickZones(book.zones, want).pages, book.index.layout));
+      const texts = bookReadTexts(pages, zoneBlocks(pages, pickBookZones(book.index, book.zones, want).pages, book.index.layout));
       if (!texts.length) return { status: 404, json: { error: 'not_found' } };
       const text = readLessonText(texts);
       const r = await synthesizeTimed({ text, voice }, { cacheDir: ws.dirs.tts, env: process.env });

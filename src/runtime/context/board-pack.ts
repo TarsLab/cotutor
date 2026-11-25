@@ -181,6 +181,8 @@ export function bookSlateParts(index: BookIndex, at: { title: string; pages: rea
   const text: string[] = [];
   let page: number | null = null;
   for (const b of zoneBlocks(at.pages, zones, index.layout)) {
+    // 没有字行的块(表格、插图、一组口诀)不另列:里面的字在它的小块、外面那块里
+    if (b.kind === 'group') continue;
     const n = b.refs[0]?.n ?? null;
     const pr = at.pages.find((p) => p.n === n)?.printed ?? null;
     if (n !== page && page !== null && pr !== null) text.push(`—— 第 ${pr} 页 ——`);

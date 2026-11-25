@@ -19,7 +19,7 @@ import { join, resolve } from 'node:path';
 import { bookIndex, bookFile, listBooks } from '../../memory/textbook-pdf.ts';
 import { linePermille } from '../../memory/textbook-zones-rules.ts';
 import { bookZones, vaultZonesDir, writeZonePages } from '../../memory/textbook-zones.ts';
-import { ZonePageSchema, bookChrome, pickZones, walkZones, zoneFile, zoneKey, zonePageProblems, type BookIndex, type BookLesson, type BookPage, type BookZones, type PermilleBox, type Workspace, type Zone, type ZonePage, type ZoneRegion } from '../../schema/index.ts';
+import { ZonePageSchema, bookChrome, pickBookZones, pickZones, walkZones, zoneFile, zoneKey, zonePageProblems, type BookIndex, type BookLesson, type BookPage, type BookZones, type PermilleBox, type Workspace, type Zone, type ZonePage, type ZoneRegion } from '../../schema/index.ts';
 import { decodePng, encodePng } from '../../ui/shared/png.ts';
 import { UsageError, loadWorkspace, redactDeep, redactHome } from '../workspace.ts';
 
@@ -119,7 +119,7 @@ const pageRange = (v: string): number[] => {
 
 // ——— list ———
 
-export async function listCommand(ws: Workspace, name?: string): Promise<{ books: { file: string; sha: string; layout: string; pages: number; vaultPages: number; lessons: { title: string; printed: [number, number]; pages: [number, number]; zones: 'vault' | 'rules'; depth: number }[] }[] }> {
+export async function listCommand(ws: Workspace, name?: string): Promise<{ books: { file: string; sha: string; layout: string; pages: number; vaultPages: number; lessons: { title: string; printed: [number, number]; pages: [number, number]; zones: 'vault' | 'rules' | 'mixed'; depth: number }[] }[] }> {
   const files = name ? [(await openBook(ws, name)).file] : await listBooks(ws.paths.textbooks, null);
   const out = [];
   for (const f of files) {
@@ -129,7 +129,7 @@ export async function listCommand(ws: Workspace, name?: string): Promise<{ books
       file: b.file, sha: b.index.sha, layout: b.index.layout, pages: b.index.pages.length, vaultPages: Object.keys(b.zones.vault).length,
       lessons: b.index.lessons.map((l) => {
         const ns = Array.from({ length: l.pages[1] - l.pages[0] + 1 }, (_, k) => l.pages[0] + k);
-        return { title: l.title, printed: [l.from, l.to] as [number, number], pages: l.pages, zones: pickZones(b.zones, ns).which, depth: depth(l) };
+        return { title: l.title, printed: [l.from, l.to] as [number, number], pages: l.pages, zones: pickBookZones(b.index, b.zones, ns).which, depth: depth(l) };
       }),
     });
   }
@@ -333,7 +333,7 @@ export async function textbookCommand(positionals: readonly string[], flags: Rec
     if (o.json) { say(JSON.stringify(redactDeep(r), null, 2)); return; }
     for (const b of r.books) {
       say(`《${b.file}》 ${b.layout},${b.pages} 页,指纹 ${b.sha}${b.vaultPages ? `,vault 里改好的 ${b.vaultPages} 页` : ''}`);
-      for (const l of b.lessons) say(`  ${'  '.repeat(l.depth)}${l.title}  印 ${l.printed[0]}–${l.printed[1]} 页 = PDF ${l.pages[0]}–${l.pages[1]}${l.zones === 'vault' ? '  [vault 里改好的]' : ''}`);
+      for (const l of b.lessons) say(`  ${'  '.repeat(l.depth)}${l.title}  印 ${l.printed[0]}–${l.printed[1]} 页 = PDF ${l.pages[0]}–${l.pages[1]}${l.zones === 'vault' ? '  [vault 里改好的]' : l.zones === 'mixed' ? '  [有几课是 vault 里改好的]' : ''}`);
     }
     return;
   }

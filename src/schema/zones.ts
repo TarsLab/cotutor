@@ -13,6 +13,7 @@
  * 孩子端只拿块的框、kind、label(书上印的号)、rows、作答区的框和种类;teacher、物件、答案不下发(zonesKidPage)。
  */
 import { z } from 'zod';
+import type { BookIndex } from './textbook.ts';
 import { PermilleBoxSchema, RegionObjectSchema, RegionSchema, TeacherSchema, regionId, regionProblems, type PermilleBox } from './regions.ts';
 
 /** 规则出分块的版本:规则改了就加一,旧的重出(同 BOOK_INDEX_VERSION) */
@@ -156,4 +157,25 @@ export function pickZones(z: BookZones, pages: readonly number[]): { which: 'vau
   const vault = pages.length > 0 && pages.every((n) => z.vault[n]);
   const from = vault ? z.vault : z.rules;
   return { which: vault ? 'vault' : 'rules', pages: pages.flatMap((n) => (from[n] ? [from[n]] : [])) };
+}
+
+/**
+ * 铺着的几页挑分块:照目录上最里一层的课分开挑(每一课 pickZones,一课里不混),不在课里的页(目录、封面)一页一挑。
+ * 数学一个单元铺开时,编程助手改好的那一课用 vault 的,没改的课用规则出的。which:都是 vault 的、都是规则出的,还是 mixed
+ */
+export function pickBookZones(index: Pick<BookIndex, 'lessons'>, z: BookZones, pages: readonly number[]): { which: 'vault' | 'rules' | 'mixed'; pages: ZonePage[] } {
+  const leaf = (n: number): string => {
+    const l = index.lessons.filter((x) => n >= x.pages[0] && n <= x.pages[1]).sort((a, b) => a.pages[1] - a.pages[0] - (b.pages[1] - b.pages[0]))[0];
+    return l ? `${l.title}@${l.pages[0]}` : `p${n}`;
+  };
+  const groups = new Map<string, number[]>();
+  for (const n of pages) groups.set(leaf(n), [...(groups.get(leaf(n)) ?? []), n]);
+  const got = new Map<number, ZonePage>();
+  const whiches = new Set<'vault' | 'rules'>();
+  for (const ns of groups.values()) {
+    const r = pickZones(z, ns);
+    whiches.add(r.which);
+    for (const p of r.pages) got.set(p.page, p);
+  }
+  return { which: whiches.size > 1 ? 'mixed' : whiches.has('vault') ? 'vault' : 'rules', pages: pages.flatMap((n) => (got.has(n) ? [got.get(n)!] : [])) };
 }

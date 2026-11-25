@@ -26,8 +26,8 @@ export const ZONES_CSS = `
   .zn-ls .num { font-size:11px; color:var(--faint); }
   .zn-thumbs { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:8px; }
   .zn-th { position:relative; display:flex; flex-direction:column; align-items:center; gap:2px; border:0; background:none; padding:0; cursor:pointer; }
-  .zn-th canvas, .zn-th i { width:36px; height:50px; border-radius:3px; background:var(--surface); box-shadow:0 0 0 1px var(--line); display:block; }
-  .zn-th.on canvas, .zn-th.on i { box-shadow:0 0 0 2px var(--info); }
+  .zn-th canvas, .zn-th i, .zn-th img { width:36px; height:50px; object-fit:cover; border-radius:3px; background:var(--surface); box-shadow:0 0 0 1px var(--line); display:block; }
+  .zn-th.on canvas, .zn-th.on i, .zn-th.on img { box-shadow:0 0 0 2px var(--info); }
   .zn-th small { font:11px var(--mono); color:var(--muted); }
   .zn-th .dot { position:absolute; right:2px; top:-3px; background:var(--warn-dot); box-shadow:0 0 0 2px var(--surface); }
 
@@ -46,12 +46,12 @@ export const ZONES_CSS = `
   .zn-tg:disabled { opacity:.4; cursor:default; }
   .zn-stage { display:flex; justify-content:center; padding:14px 0 10px; border-radius:14px; background:var(--sunk); overflow:auto; }
   .zn-page { position:relative; flex:none; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.12); }
-  .zn-page canvas { position:absolute; inset:0; width:100%; height:100%; }
+  .zn-page canvas, .zn-page img { position:absolute; inset:0; width:100%; height:100%; }
   .zn-page .zn-msg { position:absolute; left:16px; right:16px; top:16px; font-size:12.5px; color:var(--muted); }
   .zn-ov { position:absolute; inset:0; touch-action:none; cursor:default; }
   .zn-ov.add { cursor:crosshair; }
   .zn-ov > * { position:absolute; pointer-events:none; box-sizing:border-box; }
-  .zn-tag { left:-1px; top:-19px; padding:0 6px; border-radius:4px; font:600 11px/17px var(--sans); white-space:nowrap; background:var(--surface); color:var(--info); box-shadow:0 0 0 1px var(--info); }
+  .zn-tag { position:absolute; left:-1px; top:-19px; padding:0 6px; border-radius:4px; font:600 11px/17px var(--sans); white-space:nowrap; background:var(--surface); color:var(--info); box-shadow:0 0 0 1px var(--info); }
   .zn-tag.in { top:1px; left:1px; }
   .zn-tag.on { background:var(--info); color:#fff; }
   .zn-hd { width:9px; height:9px; margin:-4.5px 0 0 -4.5px; background:#fff; border:1.5px solid var(--info); border-radius:2px; }
@@ -67,6 +67,12 @@ export const ZONES_CSS = `
   .zn-sec:first-child { border-top:0; }
   .zn-sec h3 { margin:0; font-size:14px; font-weight:600; display:flex; align-items:baseline; gap:8px; }
   .zn-sec h3 small { font-size:12px; color:var(--muted); font-weight:400; }
+  .zn-dl { margin:0; display:grid; grid-template-columns:56px minmax(0,1fr); gap:6px 10px; font-size:13px; }
+  .zn-dl dt { color:var(--muted); }
+  .zn-dl dd { margin:0; min-width:0; overflow-wrap:anywhere; }
+  .zn-ask { background:var(--surface-2); }
+  .zn-quote { padding:9px 11px; border-radius:10px; background:var(--surface); box-shadow:0 0 0 1px var(--line); font-size:13px; line-height:1.55; }
+  .zn-ls[aria-disabled="true"] { cursor:default; }
   .zn-crumb { display:flex; align-items:center; flex-wrap:wrap; gap:4px; font-size:13px; }
   .zn-crumb button { border:0; background:none; padding:0; color:var(--accent); cursor:pointer; font-size:13px; }
   .zn-crumb i { font-style:normal; color:var(--faint); }

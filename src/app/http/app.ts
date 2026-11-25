@@ -49,7 +49,7 @@ import { photosOf } from '../../runtime/kid-input.ts';
 import { DEV_PAGE } from '../../ui/dev/dev-page.ts';
 import { devOverview } from './dev-overview.ts';
 import { ActivityConflict, checkDevActivity, findDevActivity, listDevActivities, readDevActivity, restoreDevActivity, saveDevActivity } from './dev-activities.ts';
-import { ZonesConflict, checkDevZoneLesson, devZoneLesson, dropStaleZones, listDevZones, readDevZoneLesson, restoreDevZoneLesson, saveDevZoneLesson, sayDevZone } from './dev-zones.ts';
+import { ZonesConflict, checkDevZoneLesson, devZoneLesson, dropStaleZones, listDevZones, readDevWorkbook, readDevZoneLesson, restoreDevZoneLesson, saveDevZoneLesson, sayDevZone, workbookSubject } from './dev-zones.ts';
 import { doctorWorkspace } from '../cli/doctor.ts';
 import { VOICE_GALLERY_PAGE } from '../../ui/dev/voice-gallery-page.ts';
 import { BusyError, Runner } from '../../runtime/runner.ts';
@@ -661,12 +661,19 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       if (sub === '/restore' && method === 'POST') return { status: 200, json: await restoreDevActivity(ws, tutor, name) };
       return { status: 405, json: { error: 'method_not_allowed' } };
     }
-    // 工作台「分块」页(src/app/http/dev-zones.ts):课本一课的分块看、查、存、还原;一课一起存,带读进来时的 version,对不上 409
+    // 工作台「分块」页(src/app/http/dev-zones.ts):课本一课的分块看、查、存、还原;一课一起存,带读进来时的 version,对不上 409。练习册只看
     if (p === '/api/dev/zones' && method === 'GET') return { status: 200, json: await listDevZones(ws) };
     if (p === '/api/dev/zones/stale' && method === 'DELETE') return (await dropStaleZones(ws, url.searchParams.get('sha') ?? '')) ? { status: 200, json: { ok: true } } : { status: 404, json: { error: 'not_found' } };
+    if (p === '/api/dev/zones/workbook' && method === 'GET') {
+      const got = await readDevWorkbook(ws, url.searchParams.get('w') ?? '');
+      return got ? { status: 200, json: got } : { status: 404, json: { error: 'no_such_workbook' } };
+    }
     if (p === '/api/dev/zones/say' && method === 'POST') {
-      if (!isObj(body) || typeof body.b !== 'string' || typeof body.text !== 'string' || !body.text.trim() || body.text.length > 400) return { status: 400, json: { error: 'bad_request', message: '要 {b, text}' } };
-      const r = await sayDevZone(ws, body.b, body.text.trim());
+      if (!isObj(body) || (typeof body.b !== 'string' && typeof body.w !== 'string') || typeof body.text !== 'string' || !body.text.trim() || body.text.length > 400) return { status: 400, json: { error: 'bad_request', message: '要 {b 或 w, text}' } };
+      // 练习册照它的 subject 挑这一科老师的声音(sayVoice 看名字里有没有学科)
+      const who = typeof body.w === 'string' ? await workbookSubject(ws, body.w) : (body.b as string);
+      if (who === null) return { status: 404, json: { error: 'no_such_workbook' } };
+      const r = await sayDevZone(ws, who, body.text.trim());
       return 'file' in r ? { status: 200, file: r.file, contentType: 'audio/mpeg' } : { status: 404, json: { error: 'no_audio', message: r.error } };
     }
     if (p === '/api/dev/zones/lesson' || p === '/api/dev/zones/check') {

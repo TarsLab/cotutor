@@ -122,10 +122,43 @@ check('删旧的:旧指纹的整个目录删掉', (await route('DELETE', '/api/d
 const say = await route('POST', '/api/dev/zones/say', ctx, { b: FILE, text: '' });
 check('念一遍:没有字 400', say.status === 400);
 
+// ---- 练习册:只看(块是排版脚本写的) ----
+{
+  const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452000000000000000008060000000000', 'hex');
+  PNG.writeUInt32BE(2000, 16);
+  PNG.writeUInt32BE(2800, 20);
+  const wbDir = join(ws.paths.workbooks, '表内乘法');
+  mkdirSync(wbDir, { recursive: true });
+  writeFileSync(join(wbDir, '01.png'), PNG);
+  writeFileSync(join(wbDir, 'workbook.json'), JSON.stringify({
+    version: 2, id: '表内乘法', title: '表内乘法练习册', subject: '语文', grade: 2, term: '上',
+    source: { edition: '统编', unit: '第一单元', printed: [1, 2] },
+    pages: [{
+      image: { file: '01.png', w: 2000, h: 2800, sha256: createHash('sha256').update(PNG).digest('hex') },
+      lines: [{ text: '看拼音写词。', box: [100, 100, 400, 130] }],
+      terms: [],
+      zones: [{ id: 'q1', kind: 'problem', label: '第 1 题', box: [60, 80, 940, 480], say: '看拼音写词。', teacher: { goal: '会写办法' },
+        children: [{ id: 'q1-小题1', kind: 'sub', label: 'bàn fǎ', box: [100, 200, 300, 300], regions: [{ id: 'q1-1', kind: 'write', label: '第 1 格', box: [110, 210, 190, 290], tian: true }], teacher: { answers: [{ at: ['q1-1'], ok: ['办'] }] } }] }],
+    }],
+  }));
+  mkdirSync(join(ws.paths.workbooks, '旧的'), { recursive: true });
+  writeFileSync(join(ws.paths.workbooks, '旧的', 'workbook.json'), JSON.stringify({ version: 1 }));
+  interface WbRow { name: string; title?: string; pages: number; questions: number; at?: string; why?: string }
+  const wl = (await get<{ workbooks: WbRow[] }>('/api/dev/zones')).json.workbooks;
+  const good = wl.find((w) => w.name === '表内乘法'), bad = wl.find((w) => w.name === '旧的');
+  check('列:练习册/ 下每一册,几页几题、什么时候写的;读不出来的带一句为什么', good?.title === '表内乘法练习册' && good.pages === 1 && good.questions === 1 && Boolean(good.at) && !good.why && Boolean(bad?.why?.includes('version')), JSON.stringify(wl));
+  const one = await get<Lesson & { kind: string; check: { problems: string[]; notes: string[] }; says: number }>('/api/dev/zones/workbook?w=' + encodeURIComponent('表内乘法'));
+  const pg = one.json.pages?.[0];
+  check('读一册:同一课的样子,页号是第几页,分块带答案(工作台只看),行是文字层、语文带字的左右;检查同 cotutor workbook check', one.status === 200 && one.json.kind === 'workbook' && one.json.which === 'workbook' && pg?.n === 1 && pg.zones.zones[0]?.children?.[0]?.teacher?.answers?.[0]?.ok?.[0] === '办' && pg.cand.lines[0]?.id === 'L1' && pg.cand.lines[0]?.ch?.length === 5 && pg.cand.cells.length === 0 && one.json.check.problems.length === 0 && one.json.says === 1, JSON.stringify(one.json).slice(0, 400));
+  check('读一册:没有这一册、读不出来的 404', (await route('GET', '/api/dev/zones/workbook?w=nope', ctx)).status === 404 && (await route('GET', '/api/dev/zones/workbook?w=' + encodeURIComponent('旧的'), ctx)).status === 404 && (await route('GET', '/api/dev/zones/workbook?w=' + encodeURIComponent('../表内乘法'), ctx)).status === 404);
+  const wsay = await Promise.all([route('POST', '/api/dev/zones/say', ctx, { w: 'nope', text: '看拼音写词。' }), route('POST', '/api/dev/zones/say', ctx, { w: '表内乘法', text: '' })]);
+  check('念一遍(练习册):没有这一册 404,没有字 400', wsay[0].status === 404 && wsay[1].status === 400, JSON.stringify(wsay.map((r) => r.status)));
+}
+
 // ---- 页面 ----
 const scripts = [...DEV_PAGE.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
 let parsed = true;
 for (const s of scripts) { try { new Function(s); } catch { parsed = false; } }
-check('工作台:有「分块」一项,内联的分块脚本剥了类型、能解析', DEV_PAGE.includes('data-tab="zones"') && DEV_PAGE.includes('renderZones') && !/^\s*declare const /m.test(DEV_PAGE) && parsed);
+check('工作台:有「分块」一项,内联的分块脚本剥了类型、能解析;认练习册', DEV_PAGE.includes('data-tab="zones"') && DEV_PAGE.includes('renderZones') && DEV_PAGE.includes('znOpenWorkbook') && !/^\s*declare const /m.test(DEV_PAGE) && parsed);
 
 done();

@@ -1,6 +1,9 @@
 /**
  * 工作台「分块」页的接口(页面在 src/ui/dev/zones-tab.ts;docs/dev/课本.md,画布 https://claude.ai/artifact/Xvt6t4pp1xkLJ6VA6GBnkR):
- *   GET    /api/dev/zones                 每本课本、每一课用的是哪份(规则 / 编程助手 / 工作台,谁什么时候存的),vault 里读不出的页,换过课本留下的旧指纹
+ *   GET    /api/dev/zones                 每本课本、每一课用的是哪份(规则 / 编程助手 / 工作台,谁什么时候存的),vault 里读不出的页,换过课本留下的旧指纹;
+ *                                         vault 练习册/ 下每一册(几页几题,workbook.json 什么时候写的;读不出来的带一句为什么,同 cotutor workbook check 的第一条)
+ *   GET    /api/dev/zones/workbook?w      一册练习册,同一课的样子(每页的分块、文字层的行,语文、英语的行带每个字的左右),外加 check(同 cotutor workbook check);
+ *                                         练习册只看不改:块是排版脚本写的,这里改了脚本一重跑就没了,要改复制一句给编程助手(docs/dev/练习册.md)
  *   GET    /api/dev/zones/lesson?b&l      一课(l = 「课名@PDF 头一页」,目录上最里一层;给的课里的页落在别的课里的,那几课一起带上,同 pull)
  *                                         每页挑好的分块(全的,给老师的、答案都在)、候选(文字层的行、能写的格、表格;语文带每个字的左右,当孩子点用)
  *                                         和 version(vault 里这几页现在的样子;存的时候带回来,对不上 409)
@@ -9,17 +12,20 @@
  *                                         规则出的那一课也是整课写进去(没改的页照规则出的抄一份)
  *   DELETE /api/dev/zones/lesson?b&l      还原成规则出的:删掉 vault 里这一课的页
  *   DELETE /api/dev/zones/stale?sha       删掉换过的课本留下的旧分块(现在哪本课本的指纹都不删)
- *   POST   /api/dev/zones/say {b,text}    念一遍:用这一科老师「点读的声音」合成(有缓存),回声音
+ *   POST   /api/dev/zones/say {b|w,text}  念一遍:用这一科老师「点读的声音」合成(有缓存),回声音;w 是练习册,照它的 subject 挑老师
  * 只认 教材/ 里列得出的册名和目录里有的课,不拼路径;课本 PDF 不动。
  */
 import { createHash } from 'node:crypto';
-import { readFile, rm } from 'node:fs/promises';
+import { readFile, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { candidatesOf, checkZonePages, lessonDraft, loadBook, snapZonePage, wholeLessons, type Book, type Candidates } from '../cli/textbook.ts';
+import { checkWorkbook } from '../cli/workbook.ts';
+import { WORKBOOK_FILE, listWorkbooks, readWorkbook } from '../../memory/workbook.ts';
+import { workbookLayer } from '../../chalk/index.ts';
 import { listBooks } from '../../memory/textbook-pdf.ts';
 import { bookZones, readZoneBook, removeZonePages, vaultZoneDirs, vaultZonesDir, writeZonePages } from '../../memory/textbook-zones.ts';
 import { synthesize } from '../../media/tts.ts';
-import { canonicalSubject, cardVoice, pickBookZones, zoneFile, zoneKey, type BookLesson, type Workspace, type ZonePage, type ZoneWriter } from '../../schema/index.ts';
+import { canonicalSubject, cardVoice, pickBookZones, workbookZonePage, zoneFile, zoneKey, type BookLesson, type Workspace, type ZonePage, type ZoneWriter } from '../../schema/index.ts';
 
 export interface DevZoneLessonRow {
   title: string;
@@ -57,7 +63,21 @@ function lastWriter(meta: Awaited<ReturnType<typeof readZoneBook>>, pages: reado
   return best;
 }
 
-export async function listDevZones(ws: Workspace): Promise<{ books: DevZoneBook[]; unreadable: string[]; stale: { sha: string; title: string | null; pages: number }[] }> {
+/** 练习册/ 下的一册:读得出来的带册名、几页几题;读不出来的只有 why */
+export interface DevWorkbookRow { name: string; title?: string; subject?: string; pages: number; questions: number; at?: string; why?: string }
+
+async function listDevWorkbooks(ws: Workspace): Promise<DevWorkbookRow[]> {
+  const out: DevWorkbookRow[] = [];
+  for (const name of await listWorkbooks(ws.paths.workbooks)) {
+    const at = (await stat(join(ws.paths.workbooks, name, WORKBOOK_FILE)).catch(() => null))?.mtime.toISOString();
+    const r = await readWorkbook(ws.paths.workbooks, name);
+    if ('why' in r) { out.push({ name, pages: 0, questions: 0, ...(at ? { at } : {}), why: r.why.replace(/^练习册\/[^/]+\//, '') }); continue; }
+    out.push({ name, title: r.wb.title, subject: r.wb.subject, pages: r.wb.pages.length, questions: r.wb.pages.reduce((n, p) => n + p.zones.length, 0), ...(at ? { at } : {}) });
+  }
+  return out;
+}
+
+export async function listDevZones(ws: Workspace): Promise<{ books: DevZoneBook[]; unreadable: string[]; stale: { sha: string; title: string | null; pages: number }[]; workbooks: DevWorkbookRow[] }> {
   const books: DevZoneBook[] = [];
   const unreadable: string[] = [];
   for (const file of await listBooks(ws.paths.textbooks, null)) {
@@ -79,7 +99,7 @@ export async function listDevZones(ws: Workspace): Promise<{ books: DevZoneBook[
   }
   const shas = new Set(books.map((b) => b.sha));
   const stale = (await vaultZoneDirs(ws.paths.textbooks)).filter((d) => !shas.has(d.sha) && d.pages > 0);
-  return { books, unreadable, stale };
+  return { books, unreadable, stale, workbooks: await listDevWorkbooks(ws) };
 }
 
 interface LessonRef { book: Book; lessons: { title: string; pages: [number, number] }[]; pages: number[] }
@@ -128,6 +148,36 @@ export async function readDevZoneLesson(ws: Workspace, ref: LessonRef): Promise<
     return { n, printed: p.printed, w: p.w, h: p.h, zones: draft.get(n) ?? { page: n, zones: [] }, cand: { ...cand, lines }, ...(w ? { by: w.by, at: w.at } : {}) };
   });
   return { file: book.file, title: book.index.title, sha: book.index.sha, layout: book.index.layout, lessons: ref.lessons, which, version: await vaultVersion(ws, ref), pages };
+}
+
+/**
+ * 一册练习册,同一课的样子给工作台看:页号就是第几页,页宽 1000、高照图(src/chalk/kit/workbook.ts 的 workbookLayer),分块就是这一页的块;
+ * 候选只有文字层的行(框是排版时记下的,没有要认领的格);语文、英语的行照字数等分出每个汉字的左右(同孩子端照片页的点字),当孩子点用。读不出来 = null
+ */
+export async function readDevWorkbook(ws: Workspace, name: string): Promise<{ kind: 'workbook'; file: string; title: string; subject: string; layout: 'math' | 'prose'; lessons: []; which: 'workbook'; version: ''; sha: ''; pages: DevZonePage[]; check: { problems: string[]; notes: string[] }; says: number; at?: string } | null> {
+  const r = await readWorkbook(ws.paths.workbooks, name);
+  if ('why' in r) return null;
+  const { wb } = r;
+  const c = await checkWorkbook(ws.paths.workbooks, name);
+  const layer = workbookLayer(wb);
+  const prose = wb.subject !== '数学';
+  const r1 = (v: number): number => Math.round(v * 10) / 10;
+  const pages = wb.pages.map((pg, i): DevZonePage => {
+    const lines = pg.lines.map((l, k) => {
+      const cs = Array.from(l.text), w = (l.box[2] - l.box[0]) / Math.max(1, cs.length);
+      const ch = cs.flatMap((x, j): [number, number][] => (/\p{Script=Han}/u.test(x) ? [[r1(l.box[0] + j * w), r1(l.box[0] + (j + 1) * w)]] : []));
+      return { id: `L${k + 1}`, text: l.text, box: l.box, ...(prose ? { ch } : {}) };
+    });
+    return { n: i + 1, printed: null, w: layer.pages[i]!.w, h: layer.pages[i]!.h, zones: workbookZonePage(pg, i + 1), cand: { page: i + 1, printed: null, lines, cells: [], tables: [] } };
+  });
+  const at = (await stat(join(ws.paths.workbooks, name, WORKBOOK_FILE)).catch(() => null))?.mtime.toISOString();
+  return { kind: 'workbook', file: name, title: wb.title, subject: wb.subject, layout: prose ? 'prose' : 'math', lessons: [], which: 'workbook', version: '', sha: '', pages, check: { problems: c.problems, notes: c.notes }, says: c.says, ...(at ? { at } : {}) };
+}
+
+/** 练习册念一遍用哪一科的声音:读得出来就照它的 subject */
+export async function workbookSubject(ws: Workspace, name: string): Promise<string | null> {
+  const r = await readWorkbook(ws.paths.workbooks, name);
+  return 'wb' in r ? r.wb.subject : null;
 }
 
 /** 页面交上来的几页 → 页号 → 原样(没交的那页记一句) */

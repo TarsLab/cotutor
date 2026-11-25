@@ -8,6 +8,8 @@
  *     当孩子点:不画,点一下照孩子端的先后(能写的格、语文的字、有念法的最小的块)说落到哪、会做什么。
  *   右边:面包屑、改种类叫法念法和给老师的(练什么、怎么引、答案、备注)、这一页的块的树(拖到一行上 = 放进去,两行之间 = 排在那里)、检查。
  * 一课一起存:改了就现查(同 cotutor textbook check),有要改的不让存;规则出的那一课存的时候整课写进 vault,问一次。
+ * 练习册(左边课本下面那一组;ZN.src = 'workbook')只看不改:块是排版脚本写的,这里改了脚本一重跑就没了。页是那一册的 PNG,没有候选那一层、
+ * 没有加一块、拉手、存、还原;右边的字段只读,底下「复制这一句」(册名、题、小题)给家长补上要改成什么,贴给编程助手(docs/dev/练习册.md)。
  */
 import type { PermilleBox, RegionKind, Zone, ZoneKind, ZonePage, ZoneRegion, ZoneWriter } from '../../schema/index.ts';
 
@@ -21,11 +23,12 @@ declare const state: { tab: string };
 type Box = [number, number, number, number];
 interface ZnLessonRow { title: string; key: string; depth: number; leaf: boolean; printed: [number, number]; pages: [number, number]; which: 'vault' | 'rules' | 'mixed'; by?: ZoneWriter; at?: string }
 interface ZnBook { file: string; sha: string; layout: string; pages: number; vaultPages: number; problems: string[]; lessons: ZnLessonRow[] }
-interface ZnList { books: ZnBook[]; unreadable: string[]; stale: { sha: string; title: string | null; pages: number }[] }
+interface ZnWbRow { name: string; title?: string; subject?: string; pages: number; questions: number; at?: string; why?: string }
+interface ZnList { books: ZnBook[]; unreadable: string[]; stale: { sha: string; title: string | null; pages: number }[]; workbooks?: ZnWbRow[] }
 interface ZnLine { id: string; text: string; box: Box; chrome?: true; ch?: [number, number][] }
 interface ZnCell { id: string; kind: string; box: Box; ch?: string; m?: string; row?: number; col?: number; table?: string }
 interface ZnPage { n: number; printed: number | null; w: number; h: number; zones: ZonePage; cand: { lines: ZnLine[]; cells: ZnCell[]; tables: { id: string; box: Box }[] }; by?: ZoneWriter; at?: string }
-interface ZnLesson { file: string; title: string; sha: string; layout: string; lessons: { title: string; pages: [number, number] }[]; which: 'vault' | 'rules' | 'mixed'; version: string; pages: ZnPage[] }
+interface ZnLesson { kind?: 'workbook'; file: string; title: string; sha: string; layout: string; lessons: { title: string; pages: [number, number] }[]; which: 'vault' | 'rules' | 'mixed' | 'workbook'; version: string; pages: ZnPage[]; check?: { problems: string[]; notes: string[] }; says?: number; at?: string }
 type ZnSel = { kind: 'zone' | 'region'; id: string } | null;
 interface ZnHit { x: number; y: number; tint: Box | null; tiers: { title: string; detail: string; win: boolean }[]; says: { label: string; say: string }[] }
 interface ZnDrag { mode: 'move' | 'size' | 'add' | 'click'; x0: number; y0: number; box0: Box; edges: string; moved: boolean; snap: string | null }
@@ -39,6 +42,8 @@ const ZN_SNAP_PX = 6;
 
 const ZN = {
   list: null as ZnList | null,
+  /** 看的是课本的一课还是一册练习册(只看) */
+  src: 'book' as 'book' | 'workbook',
   book: '',
   key: '',
   data: null as ZnLesson | null,
@@ -89,6 +94,10 @@ const znDirtyPages = (): number[] => [...ZN.work].filter(([n, zp]) => JSON.strin
 const znDirty = (): boolean => ZN.undo.length > 0 && znDirtyPages().length > 0;
 const znLessonTitle = (): string => (ZN.data ? ZN.data.lessons.map((l) => '《' + l.title + '》').join('') : '');
 const znWhen = (iso?: string): string => (iso ? iso.slice(5, 10) + ' ' + iso.slice(11, 16) : '');
+/** 看的是练习册:只看不改 */
+const znWb = (): boolean => ZN.src === 'workbook';
+/** 练习册的册名带书名号(册名自己带了的不再加) */
+const znWbTitle = (): string => { const t = ZN.data?.title ?? ZN.book; return /^《.*》/.test(t) ? t : '《' + t + '》'; };
 
 // ——— 页上的东西 ———
 
@@ -372,7 +381,7 @@ async function znSay(text: string, btn: HTMLElement): Promise<void> {
   ZN.audio?.pause();
   btn.setAttribute('disabled', '');
   try {
-    const r = await fetch('/api/dev/zones/say', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ b: ZN.book, text }), cache: 'no-store' });
+    const r = await fetch('/api/dev/zones/say', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(znWb() ? { w: ZN.book, text } : { b: ZN.book, text }), cache: 'no-store' });
     if (!r.ok) { const j = await r.json().catch(() => null); throw new Error((j && j.message) || 'HTTP ' + r.status); }
     ZN.audio = new Audio(URL.createObjectURL(await r.blob()));
     void ZN.audio.play();
@@ -463,7 +472,7 @@ function znPaintOverlay(): void {
   if (ZN.ghost) out.push(h('div', { style: znPx(ZN.ghost) + 'border:1.5px dashed var(--faint);border-radius:3px' }));
   if (ZN.newBox) out.push(h('div', { style: znPx(ZN.newBox) + 'border:2px dashed rgb(' + blue + ');background:rgba(' + blue + ',.06)' }));
   const obj = f?.zone ?? f?.region;
-  if (obj) {
+  if (obj && !znWb()) {
     const b = obj.box, mx = (b[0] + b[2]) / 2, my = (b[1] + b[3]) / 2;
     for (const [x, y] of [[b[0], b[1]], [mx, b[1]], [b[2], b[1]], [b[2], my], [b[2], b[3]], [mx, b[3]], [b[0], b[3]], [b[0], my]]) out.push(h('div', { class: 'zn-hd', style: 'left:' + x / 10 + '%;top:' + y / 10 + '%' }));
   }
@@ -505,17 +514,21 @@ function znPaintBar(): void {
 function znPaintLeft(): void {
   const left = ZN.el.left, list = ZN.list;
   if (!left || !list) return;
-  const book = list.books.find((b) => b.file === ZN.book);
+  const wbMode = znWb();
+  const book = wbMode ? undefined : list.books.find((b) => b.file === ZN.book);
   const parts: HTMLElement[] = [];
-  const sel = h('select', { id: 'zn-book', 'aria-label': '课本', on: { change: (e: Event) => { void znPick((e.target as HTMLSelectElement).value, ''); } } },
-    ...list.books.map((b) => h('option', { value: b.file, selected: b.file === ZN.book }, b.file.replace(/\.pdf$/i, ''))));
-  const head = h('div', { class: 'zn-card' }, h('label', { class: 'zn-lab', for: 'zn-book' }, '课本'), sel,
-    book ? h('span', { class: 'num', style: 'font-size:11.5px;color:var(--faint)' }, '指纹 ' + book.sha.slice(0, 8) + (book.vaultPages ? ' · vault 里改过 ' + book.vaultPages + ' 页' : '')) : null);
-  for (const s of list.stale) head.append(h('div', { class: 'zn-warn' }, '这本课本换过,以前改的分块用不上了(' + (s.title ? '《' + s.title + '》' : '') + s.pages + ' 页)',
-    h('button', { type: 'button', class: 'btn small danger', on: { click: () => { void ask('删掉旧的分块?', ['vault 的 教材/.zones/' + s.sha + '/ 里 ' + s.pages + ' 页:是换掉的那个课本 PDF 的,现在哪本课本都用不上。这里删了找不回;vault 有备份的从备份里拿。'], '删掉', '不删').then(async (ok) => { if (!ok) return; await api('DELETE', '/api/dev/zones/stale?sha=' + s.sha); await znLoadList(); znPaintLeft(); }); } } }, '删掉旧的')));
-  for (const f of list.unreadable) head.append(h('div', { class: 'zn-warn' }, '《' + f + '》读不出来'));
-  for (const pr of book?.problems ?? []) head.append(h('div', { class: 'zn-warn' }, pr));
-  parts.push(head);
+  if (list.books.length) {
+    const sel = h('select', { id: 'zn-book', 'aria-label': '课本', on: { change: (e: Event) => { const v = (e.target as HTMLSelectElement).value; if (v) void znPick(v, ''); } } },
+      ...(wbMode ? [h('option', { value: '', selected: true }, '(在看练习册)')] : []),
+      ...list.books.map((b) => h('option', { value: b.file, selected: !wbMode && b.file === ZN.book }, b.file.replace(/\.pdf$/i, ''))));
+    const head = h('div', { class: 'zn-card' }, h('label', { class: 'zn-lab', for: 'zn-book' }, '课本'), sel,
+      book ? h('span', { class: 'num', style: 'font-size:11.5px;color:var(--faint)' }, '指纹 ' + book.sha.slice(0, 8) + (book.vaultPages ? ' · vault 里改过 ' + book.vaultPages + ' 页' : '')) : null);
+    for (const s of list.stale) head.append(h('div', { class: 'zn-warn' }, '这本课本换过,以前改的分块用不上了(' + (s.title ? '《' + s.title + '》' : '') + s.pages + ' 页)',
+      h('button', { type: 'button', class: 'btn small danger', on: { click: () => { void ask('删掉旧的分块?', ['vault 的 教材/.zones/' + s.sha + '/ 里 ' + s.pages + ' 页:是换掉的那个课本 PDF 的,现在哪本课本都用不上。这里删了找不回;vault 有备份的从备份里拿。'], '删掉', '不删').then(async (ok) => { if (!ok) return; await api('DELETE', '/api/dev/zones/stale?sha=' + s.sha); await znLoadList(); znPaintLeft(); }); } } }, '删掉旧的')));
+    for (const f of list.unreadable) head.append(h('div', { class: 'zn-warn' }, '《' + f + '》读不出来'));
+    for (const pr of book?.problems ?? []) head.append(h('div', { class: 'zn-warn' }, pr));
+    parts.push(head);
+  }
   if (book) {
     const tree = h('div', { class: 'zn-card zn-tree-l' });
     const cur = book.lessons.find((l) => l.key === ZN.key);
@@ -535,19 +548,42 @@ function znPaintLeft(): void {
     });
     parts.push(tree);
   }
+  // 练习册:练习册/ 下每一册;读不出来的也列,说为什么(点不开)
+  const wbs = list.workbooks ?? [];
+  if (wbs.length) {
+    const card = h('div', { class: 'zn-card zn-tree-l' }, h('span', { class: 'zn-uh in', style: 'cursor:default' }, '⌄ 练习册'));
+    for (const w of wbs) {
+      const on = wbMode && w.name === ZN.book;
+      const meta = w.why ? h('span', { class: 'st err' }, '读不出来') : h('span', { class: 'st' }, '排版脚本' + (w.at ? ' ' + w.at.slice(5, 10) : ''));
+      const row = h('button', { type: 'button', class: 'zn-ls' + (on ? ' on' : ''), title: w.why ?? (w.title ?? w.name), on: { click: () => { if (!w.why) void znPickWorkbook(w.name); } } },
+        h('b', { style: w.why ? 'color:var(--faint)' : '' }, w.name), h('span', {}, h('span', { class: 'num' }, w.why ? '' : w.pages + ' 页 · ' + w.questions + ' 题'), meta));
+      if (w.why) row.setAttribute('aria-disabled', 'true');
+      card.append(row);
+      if (w.why) card.append(h('div', { class: 'zn-warn', style: 'margin:0 0 4px 8px' }, w.why));
+    }
+    parts.push(card);
+  }
   if (ZN.data) {
     const dirty = new Set(znDirtyPages());
     const grid = h('div', { class: 'zn-thumbs' });
     for (const p of ZN.data.pages) {
-      const tk = ZN.book + '|' + p.n;
-      let cv = ZN.thumbs.get(tk);
-      if (!cv) { cv = h('canvas', { 'aria-hidden': 'true' }) as HTMLCanvasElement; ZN.thumbs.set(tk, cv); void znDraw(cv, p.n, 36); }
-      grid.append(h('button', { type: 'button', class: 'zn-th' + (p.n === ZN.n ? ' on' : ''), title: 'PDF 第 ' + p.n + ' 页' + (p.printed ? '(印的 ' + p.printed + ')' : ''), on: { click: () => znGo(p.n) } }, cv, h('small', {}, String(p.n)), dirty.has(p.n) ? h('span', { class: 'dot' }) : null));
+      let pic: HTMLElement;
+      if (wbMode) pic = h('img', { alt: '', src: '/api/kid/workbook/image?w=' + encodeURIComponent(ZN.book) + '&p=' + p.n, loading: 'lazy' });
+      else {
+        const tk = ZN.book + '|' + p.n;
+        let cv = ZN.thumbs.get(tk);
+        if (!cv) { cv = h('canvas', { 'aria-hidden': 'true' }) as HTMLCanvasElement; ZN.thumbs.set(tk, cv); void znDraw(cv, p.n, 36); }
+        pic = cv;
+      }
+      grid.append(h('button', { type: 'button', class: 'zn-th' + (p.n === ZN.n ? ' on' : ''), title: wbMode ? '第 ' + p.n + ' 页' : 'PDF 第 ' + p.n + ' 页' + (p.printed ? '(印的 ' + p.printed + ')' : ''), on: { click: () => znGo(p.n) } }, pic, h('small', {}, String(p.n)), dirty.has(p.n) ? h('span', { class: 'dot' }) : null));
     }
-    parts.push(h('div', { class: 'zn-card' }, h('span', { class: 'zn-lab' }, '这一课的页'), grid));
-    const restore = h('button', { type: 'button', class: 'btn small danger', style: 'align-self:flex-start', on: { click: znRestore } }, '这一课还原成规则出的…');
-    if (ZN.data.which === 'rules') { restore.setAttribute('disabled', ''); restore.title = '这一课用的就是规则出的'; }
-    parts.push(restore);
+    parts.push(h('div', { class: 'zn-card' }, h('span', { class: 'zn-lab' }, wbMode ? '这一册的页' : '这一课的页'), grid));
+    if (wbMode) parts.push(h('p', { class: 'zn-lab', style: 'padding:0 4px;line-height:1.55' }, '练习册是排版脚本出的,这里只看。要改,复制一句给编程助手,它改脚本重跑。'));
+    else {
+      const restore = h('button', { type: 'button', class: 'btn small danger', style: 'align-self:flex-start', on: { click: znRestore } }, '这一课还原成规则出的…');
+      if (ZN.data.which === 'rules') { restore.setAttribute('disabled', ''); restore.title = '这一课用的就是规则出的'; }
+      parts.push(restore);
+    }
   }
   left.replaceChildren(...parts);
 }
@@ -558,7 +594,8 @@ function znPaintTool(): void {
   const seg = h('div', { class: 'seg', role: 'tablist' },
     h('button', { type: 'button', role: 'tab', class: ZN.mode === 'pick' ? 'on' : '', 'aria-selected': String(ZN.mode === 'pick'), on: { click: () => { ZN.mode = 'pick'; ZN.hit = null; znPaint(); } } }, '选块'),
     h('button', { type: 'button', role: 'tab', class: ZN.mode === 'kid' ? 'on' : '', 'aria-selected': String(ZN.mode === 'kid'), on: { click: () => { ZN.mode = 'kid'; ZN.adding = false; ZN.pop = null; znPaint(); } } }, '当孩子点'));
-  const lay = ([['zones', '块', 'z'], ['regions', '作答区', 'r'], ['cand', '候选', 'c'], ['rows', '字行', 'w']] as const).map(([k, t, c]) => {
+  const layDefs = znWb() ? ([['zones', '块', 'z'], ['regions', '作答区', 'r'], ['rows', '字行', 'w']] as const) : ([['zones', '块', 'z'], ['regions', '作答区', 'r'], ['cand', '候选', 'c'], ['rows', '字行', 'w']] as const);
+  const lay = layDefs.map(([k, t, c]) => {
     const on = ZN.layers[k];
     const b = h('button', { type: 'button', class: 'zn-tg ' + c + (on ? ' on' : ''), 'aria-pressed': String(on), on: { click: () => { ZN.layers[k] = !on; znPaint(); } } }, h('i'), t);
     if (ZN.mode === 'kid') b.setAttribute('disabled', '');
@@ -569,9 +606,9 @@ function znPaintTool(): void {
   const next = h('button', { type: 'button', class: 'btn small', 'aria-label': '下一页', on: { click: () => znGo(ZN.data!.pages[k + 1].n) } }, '›');
   if (k <= 0) prev.setAttribute('disabled', '');
   if (k >= ZN.data.pages.length - 1) next.setAttribute('disabled', '');
-  const src = ZN.data.which === 'rules' ? h('span', { class: 'st' }, '规则出的') : h('span', { class: 'st info' }, (p.by ? ZN_WHO[p.by] : '改好的') + (p.at ? ' ' + znWhen(p.at) : ''));
+  const src = znWb() ? h('span', { class: 'st' }, '排版脚本出的') : ZN.data.which === 'rules' ? h('span', { class: 'st' }, '规则出的') : h('span', { class: 'st info' }, (p.by ? ZN_WHO[p.by] : '改好的') + (p.at ? ' ' + znWhen(p.at) : ''));
   tool.replaceChildren(...[seg,
-    ZN.mode === 'pick' ? h('button', { type: 'button', class: 'btn small' + (ZN.adding ? ' soft' : ''), 'aria-pressed': String(ZN.adding), title: '在页上画一个框,落进框住它的最里面那块', on: { click: () => { ZN.adding = !ZN.adding; ZN.pop = null; znPaintTool(); znPaintOverlay(); } } }, ZN.adding ? '在页上画框…' : '+ 加一块') : null,
+    ZN.mode === 'pick' && !znWb() ? h('button', { type: 'button', class: 'btn small' + (ZN.adding ? ' soft' : ''), 'aria-pressed': String(ZN.adding), title: '在页上画一个框,落进框住它的最里面那块', on: { click: () => { ZN.adding = !ZN.adding; ZN.pop = null; znPaintTool(); znPaintOverlay(); } } }, ZN.adding ? '在页上画框…' : '+ 加一块') : null,
     h('div', { style: 'display:flex;flex-wrap:wrap;gap:2px' }, ...lay),
     h('div', { class: 'right' }, prev, h('span', { style: 'font-size:13px;padding:0 4px' }, '第 ' + p.n + ' 页' + (p.printed ? ' · 印 ' + p.printed : '')), next, src)].filter((x): x is HTMLElement => x !== null));
 }
@@ -655,6 +692,62 @@ function znRegionForm(r: ZoneRegion, f: NonNullable<ReturnType<typeof znFind>>):
   ];
 }
 
+// ——— 练习册:只看 ———
+
+/** 一块、一个作答区在这一册里怎么叫:外面几层的叫法连着它自己的(「第 6 题的2×6」「第 6 题的2×6的得数」) */
+function znPath(f: NonNullable<ReturnType<typeof znFind>>): string {
+  return [...f.chain.map((z) => z.label), (f.zone ?? f.region)!.label].join('的');
+}
+
+/** 「要改?」:练习册由排版脚本写,这里不改;复制一句给编程助手,家长补上要改成什么 */
+function znAskAgent(f: NonNullable<ReturnType<typeof znFind>>): HTMLElement {
+  const line = '练习册' + znWbTitle() + znPath(f) + ':';
+  return h('div', { class: 'zn-sec zn-ask' },
+    h('span', { style: 'font-size:13px' }, h('b', {}, '要改?'), h('span', { class: 'zn-lab' }, '练习册由排版脚本写,这里改了,脚本一重跑就没了。说给编程助手:')),
+    h('div', { class: 'zn-quote' }, line, h('span', { style: 'color:var(--faint)' }, '(这里写要改成什么)')),
+    h('button', { type: 'button', class: 'btn small soft', style: 'align-self:flex-start', on: { click: (e: Event) => copy(line, e.currentTarget as HTMLElement) } }, '复制这一句'));
+}
+
+const znDl = (rows: [string, unknown][]): HTMLElement => h('dl', { class: 'zn-dl' }, ...rows.flatMap(([k, v]) => [h('dt', {}, k), h('dd', {}, v)]));
+
+function znZoneView(z: Zone, f: NonNullable<ReturnType<typeof znFind>>): HTMLElement[] {
+  // 没写念法的:孩子点它念外面最近一层写了念法的(舞台照框住那一点的最小的有念法的块)
+  const up = [...f.chain].reverse().find((y) => y.say);
+  const sayText = z.say ?? up?.say;
+  const sayBtn = sayText ? h('button', { type: 'button', class: 'btn small', style: 'align-self:flex-start', on: { click: (e: Event) => { void znSay(sayText, e.currentTarget as HTMLElement); } } }, z.say ? '▶ 念一遍' : '▶ 念外一层') : null;
+  const out: HTMLElement[] = [h('div', { class: 'zn-sec' },
+    znDl([['种类', ZN_KIND[z.kind]], ['叫法', z.label], ['念法', z.say ?? h('span', { class: 'zn-lab' }, up ? '没写 · 孩子点它念外一层「' + up.say + '」' : '没写 · 孩子点它不念')], ['id', h('span', { class: 'num' }, z.id)], ['框', h('span', { class: 'num' }, z.box.map((v) => Math.round(v)).join(' '))]]),
+    sayBtn)];
+  if (z.regions?.length) out.push(h('div', { class: 'zn-sec' }, h('span', { class: 'zn-lab' }, '作答区 ' + z.regions.length + ' 个'),
+    ...z.regions.map((r) => h('button', { type: 'button', class: 'zn-reg', on: { click: () => { ZN.sel = { kind: 'region', id: r.id }; znPaint(); } } }, h('i'), r.label, h('span', { class: 'st' }, ZN_RKIND[r.kind]), h('span', { class: 'num' }, r.id)))));
+  // 给老师的:小题常只写了答案,练什么、怎么引写在外面那道题上,一起摆出来
+  const host = [...f.chain].reverse().find((y) => y.teacher?.goal);
+  const t = z.teacher ?? {};
+  const name = (id: string): string => z.regions?.find((r) => r.id === id)?.label ?? id;
+  const thing = (id: string): string => z.objects?.find((o) => o.id === id)?.label ?? id;
+  const rows: [string, unknown][] = [];
+  if (t.goal) rows.push(['练什么', t.goal]); else if (host) rows.push(['练什么', h('span', {}, host.teacher!.goal!, h('span', { class: 'zn-lab' }, '(' + host.label + '的)'))]);
+  if (t.hint) rows.push(['卡住了', t.hint]); else if (!t.goal && host?.teacher?.hint) rows.push(['卡住了', h('span', {}, host.teacher.hint, h('span', { class: 'zn-lab' }, '(' + host.label + '的)'))]);
+  for (const a of t.answers ?? []) rows.push(['答案', h('span', {}, a.at.map(name).join('、') + ':', h('b', {}, [...(a.ok ? [a.ok.join(' 或 ')] : []), ...(a.links ? [a.links.map(([l, r]) => thing(l) + '—' + thing(r)).join('、')] : []), ...(a.note ? [a.note] : [])].join(';')))]);
+  if (t.note) rows.push(['备注', t.note]);
+  if (rows.length) out.push(h('div', { class: 'zn-sec' }, h('span', { class: 'zn-lab' }, '给老师的 · 不给孩子'), znDl(rows)));
+  out.push(znAskAgent(f));
+  out.push(h('div', { class: 'zn-sec', style: 'flex-direction:row' },
+    h('button', { type: 'button', class: 'btn small', disabled: !f.host, on: { click: () => { if (f.host) { ZN.sel = { kind: 'zone', id: f.host.id }; znPaint(); } } } }, '往外一层')));
+  return out;
+}
+
+function znRegionView(r: ZoneRegion, f: NonNullable<ReturnType<typeof znFind>>): HTMLElement[] {
+  const ans = (f.host?.teacher?.answers ?? []).filter((a) => a.at.includes(r.id));
+  return [
+    h('div', { class: 'zn-sec' }, znDl([['种类', ZN_RKIND[r.kind]], ['名字', r.label], ['id', h('span', { class: 'num' }, r.id)], ['框', h('span', { class: 'num' }, r.box.map((v) => Math.round(v)).join(' '))],
+      ...ans.map((a): [string, unknown] => ['答案', h('b', {}, [...(a.ok ? [a.ok.join(' 或 ')] : []), ...(a.note ? [a.note] : [])].join(';') || '连线')])])),
+    znAskAgent(f),
+    h('div', { class: 'zn-sec', style: 'flex-direction:row' },
+      h('button', { type: 'button', class: 'btn small', disabled: !f.host, on: { click: () => { if (f.host) { ZN.sel = { kind: 'zone', id: f.host.id }; znPaint(); } } } }, '往外一层')),
+  ];
+}
+
 function znTree(): HTMLElement {
   const zp = znWork()!;
   const box = h('div', { style: 'display:flex;flex-direction:column' });
@@ -663,7 +756,7 @@ function znTree(): HTMLElement {
     const regs = z.regions?.length ?? 0;
     const meta = [z.say ? '念' : '', regs ? regs + ' 格' : '', z.teacher ? '给老师' : ''].filter(Boolean).join(' · ');
     const on = ZN.sel?.kind === 'zone' && ZN.sel.id === z.id;
-    const row = h('div', { class: 'zn-tr' + (on ? ' on' : ''), draggable: 'true', style: 'padding-left:' + (8 + d * 16) + 'px', title: '拖到一行上 = 放进去,拖到两行之间 = 排在那里',
+    const row = h('div', { class: 'zn-tr' + (on ? ' on' : ''), draggable: znWb() ? 'false' : 'true', style: 'padding-left:' + (8 + d * 16) + 'px', title: znWb() ? '' : '拖到一行上 = 放进去,拖到两行之间 = 排在那里',
       on: {
         click: () => { ZN.sel = { kind: 'zone', id: z.id }; ZN.pop = null; znPaint(); },
         mouseenter: () => { ZN.hover = z.id; znPaintOverlay(); },
@@ -697,13 +790,23 @@ function znTree(): HTMLElement {
 function znPaintTree(): void {
   const el = ZN.el.tree;
   if (!el || !znWork()) return;
-  el.replaceChildren(h('h3', { style: 'padding:0 8px' }, '这一页的块', h('small', {}, '拖一行换层级')), znTree());
+  el.replaceChildren(h('h3', { style: 'padding:0 8px' }, '这一页的块', h('small', {}, znWb() ? '悬停一行,页上那块亮' : '拖一行换层级')), znTree());
 }
 
 function znPaintCheck(): void {
   const el = ZN.el.check, d = ZN.data;
   if (!el || !d) return;
   const c = ZN.check, p = znPage();
+  if (znWb()) {
+    const wc = d.check ?? { problems: [], notes: [] };
+    el.replaceChildren(
+      h('span', { style: 'display:flex;align-items:center;gap:8px;font-size:13px' }, h('span', { class: 'st ' + (wc.problems.length ? 'err' : 'ok') }, '检查'), wc.problems.length ? wc.problems.length + ' 条要改' : '这一册没有要改的'),
+      ...wc.problems.slice(0, 30).map((t) => h('div', { class: 'zn-prob' }, t)),
+      ...wc.notes.slice(0, 10).map((t) => h('div', { class: 'zn-note' }, '提醒:' + t)),
+      h('span', { class: 'zn-lab' }, '同 cotutor workbook check · ' + d.pages.length + ' 页 · ' + d.pages.reduce((n, x) => n + x.zones.zones.length, 0) + ' 题 · ' + (d.says ?? 0) + ' 块写了念法'),
+      h('span', { class: 'num', style: 'font-size:11.5px;color:var(--faint)' }, '练习册/' + ZN.book + '/workbook.json' + (d.at ? ' · ' + znWhen(d.at) : '')));
+    return;
+  }
   el.replaceChildren(
     h('span', { style: 'display:flex;align-items:center;gap:8px;font-size:13px' }, h('span', { class: 'st ' + (!c ? '' : c.problems.length ? 'err' : 'ok') }, '检查'), !c ? '在查……' : c.problems.length ? c.problems.length + ' 条要改' : '这一课没有要改的'),
     ...(c?.problems ?? []).slice(0, 30).map((t) => h('div', { class: 'zn-prob' }, t)),
@@ -734,13 +837,21 @@ function znPaintSide(): void {
     const crumbs: unknown[] = [];
     for (const z of f.chain) crumbs.push(h('button', { type: 'button', on: { click: () => { ZN.sel = { kind: 'zone', id: z.id }; znPaint(); } } }, z.label), h('i', {}, '›'));
     crumbs.push(h('b', {}, (f.zone ?? f.region)!.label));
-    form.append(h('div', { class: 'zn-sec' }, h('div', { class: 'zn-crumb' }, ...crumbs)), ...(f.zone ? znZoneForm(f.zone, f) : znRegionForm(f.region!, f)));
+    form.append(h('div', { class: 'zn-sec' }, h('div', { class: 'zn-crumb' }, ...crumbs)), ...(znWb() ? (f.zone ? znZoneView(f.zone, f) : znRegionView(f.region!, f)) : f.zone ? znZoneForm(f.zone, f) : znRegionForm(f.region!, f)));
   }
   const tree = h('div', { class: 'zn-sec', style: 'padding-left:8px;padding-right:8px' });
   const check = h('div', { class: 'zn-sec' });
   ZN.el.form = form; ZN.el.tree = tree; ZN.el.check = check;
   znPaintTree();
   znPaintCheck();
+  if (znWb()) {
+    side.replaceChildren(form, tree, check, h('div', { class: 'zn-sec', style: 'gap:6px' }, h('span', { class: 'zn-lab' }, '页上的颜色'),
+      h('span', { class: 'zn-legend' }, h('i', { style: 'border:1.5px solid var(--info)' }), '块:题实线、小题虚线'),
+      h('span', { class: 'zn-legend' }, h('i', { style: 'border:1.5px solid var(--accent);border-radius:2px' }), '作答区:写、圈、画、连'),
+      h('span', { class: 'zn-legend' }, h('i', { style: 'background:rgba(138,135,129,.16);border-bottom:1px solid rgba(138,135,129,.55);border-radius:0' }), '文字层的行'),
+      h('span', { class: 'zn-lab', style: 'line-height:1.6' }, '没有「候选」:练习册的框是排版时记下的,本来就准。单击落到最里面,同一处再点往外一层;Esc 回外一层')));
+    return;
+  }
   side.replaceChildren(form, tree, check, h('div', { class: 'zn-sec', style: 'gap:6px' }, h('span', { class: 'zn-lab' }, '页上的颜色'),
     h('span', { class: 'zn-legend' }, h('i', { style: 'border:1.5px solid var(--info)' }), '块(最外一层实线,里面一层虚线)'),
     h('span', { class: 'zn-legend' }, h('i', { style: 'border:1.5px solid var(--accent);border-radius:2px' }), '作答区:写、圈、连、打勾'),
@@ -760,6 +871,11 @@ function znPaintPage(): void {
   ZN.W = W;
   if (page.dataset.key === key) return;
   page.dataset.key = key;
+  if (znWb()) {
+    const img = h('img', { alt: '', src: '/api/kid/workbook/image?w=' + encodeURIComponent(ZN.book) + '&p=' + p.n });
+    page.replaceChildren(img, ZN.el.ov!);
+    return;
+  }
   const cv = h('canvas', { 'aria-hidden': 'true' }) as HTMLCanvasElement;
   const msg = h('p', { class: 'zn-msg' }, '在画页……');
   page.replaceChildren(cv, msg, ZN.el.ov!);
@@ -774,7 +890,7 @@ function znPaint(): void {
   znPaintPage();
   znPaintOverlay();
   znPaintSide();
-  const q = '#zones?b=' + encodeURIComponent(ZN.book) + '&l=' + encodeURIComponent(ZN.key) + '&p=' + ZN.n;
+  const q = znWb() ? '#zones?w=' + encodeURIComponent(ZN.book) + '&p=' + ZN.n : '#zones?b=' + encodeURIComponent(ZN.book) + '&l=' + encodeURIComponent(ZN.key) + '&p=' + ZN.n;
   if (state.tab === 'zones' && location.hash !== q) history.replaceState(null, '', q);
 }
 
@@ -797,6 +913,7 @@ function znBindOverlay(ov: HTMLElement): void {
     const [x, y] = znPoint(e);
     if (ZN.mode === 'kid') { znKidHit(x, y); return; }
     ov.setPointerCapture(e.pointerId);
+    if (znWb()) { ZN.drag = { mode: 'click', x0: x, y0: y, box0: [x, y, x, y], edges: '', moved: false, snap: null }; return; }
     if (ZN.adding) { ZN.drag = { mode: 'add', x0: x, y0: y, box0: [x, y, x, y], edges: '', moved: false, snap: null }; return; }
     const f = znFind(ZN.sel), obj = f?.zone ?? f?.region;
     if (obj) {
@@ -841,7 +958,7 @@ function znBindOverlay(ov: HTMLElement): void {
       if (b && (b[2] - b[0]) * ZN.W / 1000 > 6 && (b[3] - b[1]) * znH() / 1000 > 6) znAdd(b); else znPaint();
       return;
     }
-    if (!d.moved) { znClick(x, y); return; }
+    if (!d.moved || znWb()) { if (!d.moved || d.mode === 'click') znClick(x, y); return; }
     znChanged();
   };
   ov.addEventListener('pointerup', end);
@@ -873,8 +990,8 @@ async function znLoadList(): Promise<void> {
 
 async function znOpen(book: string, key: string, n?: number): Promise<void> {
   const d: ZnLesson = await api('GET', '/api/dev/zones/lesson?b=' + encodeURIComponent(book) + '&l=' + encodeURIComponent(key));
-  const keepSel = ZN.book === book && ZN.key === key ? ZN.sel : null;
-  ZN.book = book; ZN.key = key; ZN.data = d;
+  const keepSel = ZN.src === 'book' && ZN.book === book && ZN.key === key ? ZN.sel : null;
+  ZN.src = 'book'; ZN.book = book; ZN.key = key; ZN.data = d;
   ZN.work = new Map(d.pages.map((p) => [p.n, JSON.parse(JSON.stringify(p.zones)) as ZonePage]));
   ZN.orig = new Map(d.pages.map((p) => [p.n, JSON.stringify(p.zones)]));
   ZN.undo = []; ZN.check = null; ZN.hit = null; ZN.pop = null; ZN.adding = false; ZN.guide = []; ZN.ghost = null;
@@ -884,13 +1001,31 @@ async function znOpen(book: string, key: string, n?: number): Promise<void> {
   void znRunCheck();
 }
 
+/** 打开一册练习册(只看):同一课的样子,没有撤销、检查照服务端给的那份(同 cotutor workbook check) */
+async function znOpenWorkbook(name: string, n?: number): Promise<void> {
+  const d: ZnLesson = await api('GET', '/api/dev/zones/workbook?w=' + encodeURIComponent(name));
+  const keepSel = ZN.src === 'workbook' && ZN.book === name ? ZN.sel : null;
+  ZN.src = 'workbook'; ZN.book = name; ZN.key = ''; ZN.data = d;
+  ZN.work = new Map(d.pages.map((p) => [p.n, p.zones]));
+  ZN.orig = new Map(d.pages.map((p) => [p.n, JSON.stringify(p.zones)]));
+  ZN.undo = []; ZN.check = null; ZN.hit = null; ZN.pop = null; ZN.adding = false; ZN.guide = []; ZN.ghost = null;
+  ZN.n = n && d.pages.some((p) => p.n === n) ? n : d.pages[0].n;
+  ZN.sel = keepSel && znFind(keepSel) ? keepSel : null;
+  znPaint();
+}
+
+async function znPickWorkbook(name: string): Promise<void> {
+  if (znDirty() && !(await ask(znLessonTitle() + '还有 ' + ZN.undo.length + ' 处没存', ['换过去就丢掉这些改动。'], '丢掉,换过去', '留下'))) { znPaintLeft(); return; }
+  try { await znOpenWorkbook(name); } catch (e) { alert('读不出这一册:' + (e as Error).message); }
+}
+
 /** 换一课、换一本:没存的问一次 */
 async function znPick(book: string, key: string): Promise<void> {
   if (znDirty() && !(await ask(znLessonTitle() + '还有 ' + ZN.undo.length + ' 处没存', ['换过去就丢掉这些改动。'], '丢掉,换过去', '留下'))) { znPaintLeft(); return; }
   const b = ZN.list?.books.find((x) => x.file === book);
   if (!b) return;
   const want = key || (b.lessons.find((l) => l.leaf && l.which !== 'rules') ?? b.lessons.find((l) => l.leaf))?.key || '';
-  if (!want) { ZN.book = book; ZN.data = null; znShell(); return; }
+  if (!want) { ZN.src = 'book'; ZN.book = book; ZN.data = null; znShell(); return; }
   try { await znOpen(book, want); } catch (e) { alert('读不出这一课:' + (e as Error).message); }
 }
 
@@ -938,12 +1073,17 @@ async function znRestore(): Promise<void> {
 function znShell(): void {
   const main = $('#zones');
   if (!main) return;
-  const head = h('header', { class: 'ph' }, h('h1', {}, '分块'), h('span', { class: 'sub' }, '课本页上的块、能写的格、点了念什么、给老师的话'));
-  if (!ZN.list?.books.length) {
-    main.replaceChildren(h('div', { class: 'wrap zn-wrap' }, head, h('p', { class: 'note' }, ZN.list ? 'vault 的 教材/ 里还没有课本 PDF。' : '在读……')));
+  const head = h('header', { class: 'ph' }, h('h1', {}, '分块'), h('span', { class: 'sub' }, '课本、练习册页上的块、能写的格、点了念什么、给老师的话'));
+  if (!ZN.list?.books.length && !ZN.list?.workbooks?.length) {
+    main.replaceChildren(h('div', { class: 'wrap zn-wrap' }, head, h('p', { class: 'note' }, ZN.list ? 'vault 的 教材/ 里还没有课本 PDF,练习册/ 里也还没有练习册。' : '在读……')));
     return;
   }
-  const cp = h('button', { type: 'button', class: 'btn soft', title: '贴进编程助手(Codex 这类),它照 cotutor-textbook 技能改这一课', on: { click: (e: Event) => { const l = ZN.list?.books.find((b) => b.file === ZN.book)?.lessons.find((x) => x.key === ZN.key); copy('把课本《' + ZN.book.replace(/\.pdf$/i, '') + '》里' + (l ? '《' + l.title + '》' : '') + '的分块改好(用 cotutor-textbook 技能)', e.currentTarget as HTMLElement); } } }, '复制给编程助手的一句');
+  // 课本:让编程助手照 cotutor-textbook 改这一课;练习册:照 cotutor-workbook 改这一册的排版脚本重跑
+  const cp = h('button', { type: 'button', class: 'btn soft', title: '贴进编程助手(Codex 这类)', on: { click: (e: Event) => {
+    if (znWb()) { copy('练习册' + znWbTitle() + '(练习册/' + ZN.book + '/)要改:(这里写要改什么)。改排版脚本重跑,再 cotutor workbook check(用 cotutor-workbook 技能)', e.currentTarget as HTMLElement); return; }
+    const l = ZN.list?.books.find((b) => b.file === ZN.book)?.lessons.find((x) => x.key === ZN.key);
+    copy('把课本《' + ZN.book.replace(/\.pdf$/i, '') + '》里' + (l ? '《' + l.title + '》' : '') + '的分块改好(用 cotutor-textbook 技能)', e.currentTarget as HTMLElement);
+  } } }, '复制给编程助手的一句');
   head.append(h('div', { class: 'right' }, cp));
   const bar = h('div', { class: 'zn-bar', hidden: true });
   const left = h('section', { class: 'zn-left' });
@@ -955,7 +1095,7 @@ function znShell(): void {
   const side = h('section', { class: 'zn-side' });
   ZN.el = { left, tool, page, ov, side, bar, mid };
   main.replaceChildren(h('div', { class: 'wrap zn-wrap' }, head, bar, h('div', { class: 'zn' }, left, mid, side)));
-  if (!ZN.data) { znPaintLeft(); side.replaceChildren(h('div', { class: 'zn-sec' }, h('p', { class: 'note' }, '左边挑一课。'))); }
+  if (!ZN.data) { znPaintLeft(); side.replaceChildren(h('div', { class: 'zn-sec' }, h('p', { class: 'note' }, '左边挑一课或一册练习册。'))); }
 }
 
 /** dev-page 的 showTab 切到「分块」时调(export 只为过 noUnusedLocals,内联时剥掉) */
@@ -968,13 +1108,16 @@ export async function renderZones(): Promise<void> {
   if (ZN.data && ZN.el.ov?.isConnected) { znPaint(); return; }
   znShell();
   if (ZN.data) { znPaint(); return; }
-  // #zones?b=<册>&l=<课>&p=<页>;没有就开第一本里改过的第一课
+  // #zones?b=<册>&l=<课>&p=<页>(练习册 #zones?w=<名>&p=<页>);没有就开第一本里改过的第一课,没有课本就开第一册练习册
   const q = new URLSearchParams(location.hash.split('?')[1] ?? '');
+  const wbs = (ZN.list!.workbooks ?? []).filter((w) => !w.why);
+  const wantWb = wbs.find((w) => w.name === q.get('w')) ?? (ZN.list!.books.length ? undefined : wbs[0]);
+  if (wantWb) { try { await znOpenWorkbook(wantWb.name, Number(q.get('p')) || undefined); } catch (e) { alert('读不出这一册:' + (e as Error).message); } return; }
   const books = ZN.list!.books;
   const book = books.find((b) => b.file === q.get('b')) ?? books[0];
   if (!book) return;
   const l = book.lessons.find((x) => x.key === q.get('l') && x.leaf) ?? book.lessons.find((x) => x.leaf && x.which !== 'rules') ?? book.lessons.find((x) => x.leaf);
-  ZN.book = book.file;
+  ZN.src = 'book'; ZN.book = book.file;
   if (!l) { znPaintLeft(); return; }
   try { await znOpen(book.file, l.key, Number(q.get('p')) || undefined); } catch (e) { alert('读不出这一课:' + (e as Error).message); }
 }
@@ -983,7 +1126,7 @@ document.addEventListener('keydown', (e) => {
   if (state.tab !== 'zones' || !ZN.data) return;
   const t = e.target as HTMLElement;
   if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return;
-  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); znUndo(); return; }
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && !znWb()) { e.preventDefault(); znUndo(); return; }
   if (e.key === 'Escape') {
     if (ZN.pop || ZN.adding) { ZN.pop = null; ZN.adding = false; znPaint(); return; }
     const f = znFind(ZN.sel);
@@ -991,7 +1134,7 @@ document.addEventListener('keydown', (e) => {
     znPaint();
     return;
   }
-  if ((e.key === 'Delete' || e.key === 'Backspace') && ZN.sel && ZN.mode === 'pick') { e.preventDefault(); znDelete(); }
+  if ((e.key === 'Delete' || e.key === 'Backspace') && ZN.sel && ZN.mode === 'pick' && !znWb()) { e.preventDefault(); znDelete(); }
 });
 window.addEventListener('resize', () => { if (state.tab === 'zones' && ZN.data) { znPaintPage(); znPaintOverlay(); } });
 window.addEventListener('beforeunload', (e) => { if (znDirty()) { e.preventDefault(); e.returnValue = ''; } });

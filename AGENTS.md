@@ -30,7 +30,7 @@
 | 动什么 | 代码主要在 | 先读 |
 | --- | --- | --- |
 | 讲稿里的动作 `[[ ]]`、一节课的状态、白纸条与上面的图形、收笔、上下文包的 `board:` | `src/board/`、`src/schema/lesson.ts`、`src/runtime/context/`、`src/runtime/live/pen.ts`、kid-page 的 `LS` | `docs/dev/一节课.md`(讲稿怎么解析也在这篇) |
-| 课本(PDF 的文字层、索引、课本页的舞台、窗图) | `src/memory/textbook-*.ts`、`src/chalk/kit/book.ts`、`src/ui/stage/book.tsx` | `docs/dev/课本.md` |
+| 课本(PDF 的文字层、索引、分块、课本页的舞台、窗图) | `src/memory/textbook-*.ts`、`src/schema/zones.ts`、`src/chalk/kit/book.ts`、`src/ui/stage/book.tsx` | `docs/dev/课本.md` |
 | 练习册(vault 的 练习册/、练习册页、能写的格子、给老师的答案) | `src/schema/workbook.ts`、`src/memory/workbook.ts`、`src/chalk/kit/workbook.ts` | `docs/dev/练习册.md` |
 | 照片页、照片上认字词、作业本(检查作业的照片按天攒、以前的记号、导出 PDF) | `src/chalk/kit/photo.ts`、`src/scenes/photo-words/`、`src/runtime/homework.ts`、`src/memory/homework.ts`、kid-page 的 `BP` | `docs/dev/照片页.md` |
 | 小课堂、课包、画面引擎 | `src/chalk/`、`src/app/cli/chalk/`、`src/ui/stage/chalk/`、`src/ui/stage/lecture.tsx` | `docs/dev/小课堂与课包.md` |

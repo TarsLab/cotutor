@@ -4,8 +4,12 @@
  *   《古诗两首》3–4 页,下面两首各一页;语文园地一 5–7 页,按栏目分(第 7 页空着);识字表在最后。
  * tests/textbook.test.ts、tests/board-page.test.ts 用。真的 PDF(pdf.js 读文字层)走 scripts/probe-book.mjs,拿家长放的教材跑
  */
+import { bookLesson, type LessonBook } from '../src/board/lesson-fit.ts';
+import { bookSlateParts } from '../src/runtime/context/board-pack.ts';
+import { zoneBlocks, type BookBlock } from '../src/chalk/index.ts';
 import { PINYIN_TONES, buildBookIndex } from '../src/memory/textbook-index.ts';
-import type { BookIndex, PdfItem, PdfPage } from '../src/schema/index.ts';
+import { ruleLessonZones, ruleZones } from '../src/memory/textbook-zones-rules.ts';
+import { pickZones, type BookIndex, type BookLayout, type BookPage, type PdfItem, type PdfPage } from '../src/schema/index.ts';
 
 const W = 520, H = 736;
 export { W, H };
@@ -86,3 +90,15 @@ export const pages: PdfPage[] = [
 
 /** 这本小书的索引(文件名「语文一年级下册.pdf」) */
 export const bookIndexOf = (): BookIndex => buildBookIndex(pages, { file: '语文一年级下册.pdf', sha: 'abc', title: '语文一年级下册' });
+
+/** 一册当课本做底(src/board/lesson-fit.ts 的 LessonBook):分块照规则出,vault 里没有改好的 */
+export const lessonBookOf = (file: string, index: BookIndex): LessonBook => ({ file, index, zones: { rules: Object.fromEntries(ruleZones(index).map((z) => [z.page, z])), vault: {} } });
+
+/** 这几页当一课:规则出分块、再读回来的块(运行时看到的就是这个) */
+export const blocksOf = (ps: readonly BookPage[], layout: BookLayout = 'prose'): BookBlock[] => zoneBlocks(ps, ruleLessonZones(ps, layout), layout);
+
+/** 给老师看的课本(board-pack 的 bookSlateParts):这一课照规则出的分块 */
+export const bookSlate = (index: BookIndex, name: string | null, last?: string | null): { show: string; text: string[] } => {
+  const at = bookLesson(index, name)!;
+  return bookSlateParts(index, at, pickZones(lessonBookOf(index.file, index).zones, at.pages.map((p) => p.n)).pages, last);
+};

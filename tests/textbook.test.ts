@@ -7,14 +7,13 @@
  * 数学(2026-11-15)用 tests/_math-book.ts 照人教版数学排的那本:目录没有点线、单元下面的小节和课题从页里读、例题、栏目和题。
  * 科学(2026-11-24)用 tests/_science-book.ts 照广东版科学排的那本:Unicode 拼音、目录的「/ 页码」和带页码的单元、栏目下面分段。
  */
-import { BOOK_MAX_PAGES, bookCut, bookFind, bookFrame, bookPages, bookPick, bookReadParts, bookReadTexts, bookRows, bookSheets, bookTarget, bookView, findLesson, lessonBlocks, lessonName, readLessonText, readSentences, readTimes } from '../src/chalk/index.ts';
+import { BOOK_MAX_PAGES, bookCut, bookFind, bookFrame, bookPages, bookPick, bookReadParts, bookReadTexts, bookRows, bookSheets, bookTarget, bookView, findLesson, lessonName, readLessonText, readSentences, readTimes } from '../src/chalk/index.ts';
 import type { BookLine, BookPage } from '../src/schema/index.ts';
 import { bookLesson, fitActs, lessonOpen, tocEntries } from '../src/board/lesson-fit.ts';
 import { lessonInit } from '../src/board/lesson.ts';
 import { buildBookIndex, decodePinyin, pageLines, printedOf } from '../src/memory/textbook-index.ts';
 import { pickBook } from '../src/memory/textbook-pdf.ts';
-import { bookSlateParts } from '../src/runtime/context/board-pack.ts';
-import { H, W, pages } from './_book.ts';
+import { H, W, blocksOf, bookSlate, lessonBookOf, pages } from './_book.ts';
 import { MW, mathIndexOf, mathPages } from './_math-book.ts';
 import { scienceIndexOf } from './_science-book.ts';
 import { check, done } from './_check.ts';
@@ -61,13 +60,13 @@ check('找一课:课名、带编号、带书名号、只写一半', findLesson(i
 // ---- 一课的结构 ----
 const lp = (t: string) => { const l = L(t)!; return ix.pages.filter((p) => p.n >= l.pages[0] && p.n <= l.pages[1]); };
 const fish = lp('小鱼吹泡泡');
-const blocks = lessonBlocks(fish);
+const blocks = blocksOf(fish);
 const paras = blocks.filter((b) => b.kind === 'para');
 check('课文按缩进分段:第 2 段跨到下一页接着(下一页第一行顶格)', paras.length === 3 && paras[1].text === '小鱼说：“泡泡圆圆的，像一个个小月亮，飞到天上去。泡泡飞呀飞，飞进了井沿边的小花园。”' && paras[1].refs.map((r) => r.n).join() === '2,2,3', JSON.stringify(paras.map((p) => p.text)));
 check('页眉不算;标题在前;正文后面隔开一截的认字栏、课后题各是一块(认字栏带读音)', blocks[0].kind === 'title' && blocks[0].text === '小鱼吹泡泡' && blocks.some((b) => b.kind === 'other' && b.text === '泡(pào)圆(yuán)像(xiàng)井(jǐng)沿(yán)') && blocks.some((b) => b.kind === 'other' && b.text.startsWith('读一读')));
-const poem = lessonBlocks(lp('静夜思'));
+const poem = blocksOf(lp('静夜思'));
 check('诗:一句一段', poem.filter((b) => b.kind === 'para').map((b) => b.text).join('|') === '床前明月光，|疑是地上霜。');
-const garden = lessonBlocks(lp('语文园地一'));
+const garden = blocksOf(lp('语文园地一'));
 check('语文园地:按栏目分(跨页的栏目也认)', garden.filter((b) => b.kind === 'section').map((b) => b.head).join() === '识字加油站,字词句运用,日积月累' && garden[0].kind === 'title' && garden.find((b) => b.head === '识字加油站')!.text.includes('小(xiǎo)鱼(yú)'));
 
 // ---- 分段的几种排法(照统编语文二上量的;直接造行,不走 PDF):字体名每页不一样、诗分节、下一页顶上是插图、认字栏那一排同字号 ----
@@ -82,7 +81,7 @@ check('语文园地:按栏目分(跨页的栏目也认)', garden.filter((b) => b
   const a = pg(1, [...head, ln('秋天到了，风姑娘给大家送信。', 86, 150, 18, 'a'), ln('她把树叶轻轻地放进小河里。', 42, 190, 18, 'a')]);
   const b = pg(2, [ln('小河把信送到了小鱼家，小鱼读了读', 86, 390, 18, 'b'), ln('树叶上的字，吐了一串泡泡。', 42, 430, 18, 'b'), ln('小松鼠捡到一片红叶，赶紧去找松果，', 86, 470, 18, 'b')]);
   const c = pg(3, [ln('把松果藏进了大树洞里。', 42, 60, 18, 'b'), ln('秋汽越温滴奔海洋', 160, 160, 18, 'b', 1.44)]);
-  const bs = lessonBlocks([a, b, c]);
+  const bs = blocksOf([a, b, c]);
   const ps = bs.filter((x) => x.kind === 'para');
   check('分段:一页上没有正文那种字体名,认这一页同字号里字最多的那种(第一页的正文不当标题)', ps[0]?.text.startsWith('秋天到了') && bs[0].kind === 'title' && bs[0].text === '树叶信 5', JSON.stringify(bs.map((x) => [x.kind, x.text])));
   check('分段:下一页顶上是插图、正文从页中间起,上面没有别的字也算接着', ps.length === 3 && ps[1].text.startsWith('小河') && ps[2].text === '小松鼠捡到一片红叶，赶紧去找松果，把松果藏进了大树洞里。', JSON.stringify(ps.map((x) => x.text)));
@@ -91,7 +90,7 @@ check('语文园地:按栏目分(跨页的栏目也认)', garden.filter((b) => b
   const verse = (y: number, t: string) => ln(t, 187, y, 18, 'p');
   const s1 = pg(1, [ln('风娃娃', 220, 60, 27.5, 't'), verse(146, '孩子如果已经长大，'), verse(186, '就得告别妈妈出发。'), verse(246, '蒲公英准备了小伞，'), verse(286, '把它送给自己的那些小娃娃。')]);
   const s2 = pg(2, [verse(107, '苍耳妈妈有个好办法，'), verse(147, '给孩子穿上小铠甲。'), verse(207, '植物妈妈的办法多，'), verse(247, '不信你就仔细观察。')]);
-  const st = lessonBlocks([s1, s2]).filter((x) => x.kind === 'para');
+  const st = blocksOf([s1, s2]).filter((x) => x.kind === 'para');
   check('分段:诗一节一节空开一点就是一段;翻页处正好换节也分开', st.map((x) => x.text).join('|') === '孩子如果已经长大，就得告别妈妈出发。|蒲公英准备了小伞，把它送给自己的那些小娃娃。|苍耳妈妈有个好办法，给孩子穿上小铠甲。|植物妈妈的办法多，不信你就仔细观察。', JSON.stringify(st.map((x) => x.text)));
 }
 
@@ -185,9 +184,9 @@ const ML = (t: string) => mx.lessons.find((l) => l.title === t);
 check('没有点线的目录:序号、单元名、页码各一段也认;没序号的是综合实践', mx.toc.join() === '1' && ML('分类与整理')?.no === '一' && ML('分类与整理')?.pages.join() === '2,3' && ML('1～6的表内乘法')?.no === '二' && ML('1～6的表内乘法')?.pages.join() === '4,7' && ML('校园小导游')?.kind === 'garden' && ML('校园小导游')?.no === null, JSON.stringify(mx.lessons));
 check('没点线的目录:一项的范围从左边的大号序号到页码;页里读出来的小节、课题不在目录上', ML('1～6的表内乘法')?.toc?.box[0] === 79 && (ML('1～6的表内乘法')?.toc?.box[2] ?? 0) > 455 && !ML('5的乘法口诀')?.toc, JSON.stringify(ML('1～6的表内乘法')?.toc));
 {
-  const t = tocEntries({ file: '数学.pdf', index: mx })!;
+  const t = tocEntries(lessonBookOf('数学.pdf', mx))!;
   check('目录上能点的几项:场景坐标、点了铺那个单元(铺不下的照最多几页)', t.page.title === '目录' && t.entries.map((e) => `${e.title}:${e.page.pages.join(',')}`).join(' ') === '分类与整理:2,3 1～6的表内乘法:4,5,6,7 校园小导游:8,9' && t.entries.every((e) => e.box[0] > 100 && e.box[2] > e.box[0]), JSON.stringify(t.entries));
-  const mb = { file: '数学.pdf', index: mx };
+  const mb = lessonBookOf('数学.pdf', mx);
   const back = lessonOpen(lessonInit(), mb, '校园小导游');
   const want = lessonOpen(lessonInit(), mb, '校园小导游', '5的乘法口诀');
   check('进门铺哪:家长填的范围那一课 → 上次翻到的那一课 → 目录(没记过、找不到的从页顶看)', back.at === '数学.pdf#校园小导游' && want.at === '数学.pdf#5的乘法口诀' && lessonOpen(lessonInit(), mb, '校园小导游', '没有这课').at === '数学.pdf#校园小导游' && lessonOpen(lessonInit(), mb).view === null && lessonOpen(lessonInit(), mb, '没有这课').at === '数学.pdf#目录' && lessonOpen(lessonInit(), mb, '没有这课').view === null, JSON.stringify([back.at, want.at]));
@@ -196,7 +195,7 @@ check('单元下面的小节、课题从页里的标题读出来:上一层是 pa
 check('图里的大字(便利店)、栏目名(练一练、你知道吗)、翻页后再印一次的综合实践名不算一课', mx.lessons.length === 7 && !mx.lessons.some((l) => ['便利店', '练一练', '你知道吗？'].includes(l.title)) && mx.lessons.filter((l) => l.title === '校园小导游').length === 1, mx.lessons.map((l) => l.title).join());
 check('找一课:课名里的数不当编号去掉(6的乘法口诀 ≠ 5的乘法口诀);小节的「1.」可写可不写', findLesson(mx.lessons, '6的乘法口诀')?.title === '6的乘法口诀' && findLesson(mx.lessons, '5的乘法口诀')?.title === '5的乘法口诀' && findLesson(mx.lessons, '乘法的初步认识')?.title === '1.乘法的初步认识' && findLesson(mx.lessons, '1.乘法的初步认识')?.title === '1.乘法的初步认识');
 const unit = bookLesson(mx, '1～6的表内乘法')!.pages;
-const mb = lessonBlocks(unit, 'math');
+const mb = blocksOf(unit, 'math');
 const kinds = mb.map((b) => (b.kind === 'example' ? `例${b.no}` : b.kind === 'problem' ? `${b.head}${b.no}` : b.kind === 'section' ? `【${b.head}】` : b.kind === 'title' ? `#${b.text}` : b.kind)).join(' ');
 check('数学一课的块:标题(单元页的序号和单元名合成一个)、例题、栏目、栏目下面的题,按页的先后', kinds === '#二 1～6的表内乘法 other #1.乘法的初步认识 例1 【你知道吗？】 #5的乘法口诀 例2 【练一练】 练一练1 练一练2 练一练3 练一练4 #6的乘法口诀 例3 例4', kinds);
 const B = (k: string, no?: number) => mb.find((b) => b.kind === k && (no === undefined || b.no === no))!;
@@ -209,11 +208,11 @@ check('看:例 2、练一练第 4 题、只写第 3 题(这一课第一个第 3 
 const lx = look('练一练')!, p4 = look('练一练第4题')!;
 check('看栏目名:连着下面的题(跨页也连上)', lx.label === '练一练' && lx.box[3] >= p4.box[3] && lx.box[1] < ms[3].top, JSON.stringify({ lx, p4 }));
 check('窗里看得见什么:例几、栏目;栏目名没露出来的说哪个栏目第几题', bookView(unit, ms, mb, [0, ms[2].top, 1000, ms[2].top + ms[2].height]) === '第 5 页:例2、练一练' && bookView(unit, ms, mb, [0, ms[3].top, 1000, ms[3].top + 300]) === '第 6 页:练一练第 3–4 题', bookView(unit, ms, mb, [0, ms[3].top, 1000, ms[3].top + 300]));
-const toc2 = bookSlateParts(mx, bookLesson(mx, null)!);
+const toc2 = bookSlate(mx, null);
 check('给老师的目录:一个单元一行,后面是小节、课题(课题带点);综合实践也一行', toc2.text.join('|') === '一 分类与整理(1)|二 1～6的表内乘法(3):1.乘法的初步认识(4)、·5的乘法口诀(5)、·6的乘法口诀(6)|校园小导游(7):认识东、南、西、北(7)', JSON.stringify(toc2.text));
-const five = bookSlateParts(mx, bookLesson(mx, '5的乘法口诀')!);
+const five = bookSlate(mx, '5的乘法口诀');
 check('给老师的一课:标题、例题、栏目、第几题', five.show === '课本《数学二年级上册》:《5的乘法口诀》第 5 页' && five.text.join('|') === '标题:5的乘法口诀|例2 5×1=5 一五得五|【练一练】|第1题 算一算，说一说口诀。|第2题 照样子连一连，再说一说。', JSON.stringify(five));
-const mbook = { file: '数学二年级上册.pdf', index: mx };
+const mbook = lessonBookOf('数学二年级上册.pdf', mx);
 const opened = lessonOpen(lessonInit(), mbook);
 const f1 = fitActs(opened, [{ name: '翻', arg: '5的乘法口诀' }, { name: '看', arg: '例 2' }], { book: mbook });
 const look1 = f1.acts[1].do as { k: string; label: string; box: number[]; rows?: number[][] } | undefined;
@@ -236,16 +235,16 @@ const sq = sx.pages[3].lines.find((l) => l.text.startsWith('从上述'));
 check('Unicode 拼音(ɡ 当 g、ɑ 当 a)配到字上,不单成一行', sq?.chars.map((c) => c.py ?? '_').join(' ') === 'cóng shàng shù xiàn xiàng zhōng _ nǐ fā xiàn le shén ma _' && !sx.pages[3].lines.some((l) => /[a-zɡɑ]/.test(l.text)), JSON.stringify(sq?.chars));
 check('目录:「/ 页码」也认;带页码的单元自己是一项、只管单元页;「第1课」是课号', SL('空气和水')?.unit === '第1单元 空气和水' && SL('空气和水')?.no === null && SL('空气和水')?.pages.join() === '2,2' && SL('认识空气')?.no === '1' && SL('认识空气')?.unit === '第1单元 空气和水' && SL('认识空气')?.pages.join() === '3,4' && SL('观察水')?.pages.join() === '5,5' && JSON.stringify(SL('认识空气')?.toc?.box.slice(0, 1)) === '[82]', JSON.stringify(sx.lessons));
 const air = bookLesson(sx, '认识空气')!.pages;
-const sb = lessonBlocks(air, 'science');
+const sb = blocksOf(air, 'science');
 check('科学的一课:栏目带序号;段号整课连着数;段记着在哪个栏目下', sb.filter((b) => b.kind === 'section').map((b) => b.head).join() === '问题与想法 1,探索与实践 1,讨论与发现 1,思考与练习' && sb.filter((b) => b.kind === 'para').map((b) => `${b.no}${b.head ?? ''}`).join() === '1,2问题与想法 1,3探索与实践 1,4探索与实践 1,5讨论与发现 1,6思考与练习', JSON.stringify(sb));
 check('科学:和正文并排的安全提示不打断这一段;跨页的栏目接着', sb.find((b) => b.no === 3)?.text === '准备一个保鲜袋，观察袋内是否有东西。' && sb.some((b) => b.kind === 'other' && b.text === '不要被牙签扎到。' && b.head === '探索与实践 1') && sb.find((b) => b.no === 5)?.refs[0].n === 4);
 const ss = bookSheets(air);
 const ex1 = bookTarget(air, ss, sb, '探索与实践1');
 check('看栏目(空格可有可无):连着这个栏目下的段、提示、表,到下一个栏目为止', ex1?.label === '探索与实践 1' && ex1.rows.length === 7 && bookTarget(air, ss, sb, '探索与实践 1')?.rows.length === 7, JSON.stringify(ex1));
 check('科学点读:标题读课名(去掉「第1课」),一段一块', bookReadTexts(air, sb).map((x) => `${x.no}:${x.sents.join('/')}`).slice(0, 2).join('|') === '0:认识空气|1:雨后的公园里，/他们在说什么？', JSON.stringify(bookReadTexts(air, sb)));
-const sp = bookSlateParts(sx, bookLesson(sx, '认识空气')!);
+const sp = bookSlate(sx, '认识空气');
 check('给老师的科学课:栏目、段、图里的字', sp.text.includes('【探索与实践 1】') && sp.text.includes('第3段 准备一个保鲜袋，观察袋内是否有东西。') && sp.text.includes('空气在哪里？'), JSON.stringify(sp));
-check('给老师的科学目录:一个单元一行,单元页也是一项', bookSlateParts(sx, bookLesson(sx, null)!).text.join('|') === '第1单元 空气和水:空气和水(1)、1 认识空气(2)、2 观察水(4)', JSON.stringify(bookSlateParts(sx, bookLesson(sx, null)!).text));
+check('给老师的科学目录:一个单元一行,单元页也是一项', bookSlate(sx, null).text.join('|') === '第1单元 空气和水:空气和水(1)、1 认识空气(2)、2 观察水(4)', JSON.stringify(bookSlate(sx, null).text));
 
 // ---- 挑这学期的那一册 ----
 const names = ['语文二年级上册.pdf', '语文二年级下册.pdf'];

@@ -8,7 +8,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { bookIndexOf } from './_book.ts';
+import { bookIndexOf, bookSlate, lessonBookOf } from './_book.ts';
 import { mathIndexOf } from './_math-book.ts';
 import { check, done } from './_check.ts';
 import { kidSend } from './_kid-send.ts';
@@ -21,7 +21,7 @@ writeKeys(home, { payg: 'sk-t' });
 delete process.env.COTUTOR_WORKSPACE;
 
 const { bookLesson, fitSection, lessonOpen } = await import('../src/board/lesson-fit.ts');
-const { bookSlateParts, lessonSlateBits, slateOf } = await import('../src/runtime/context/board-pack.ts');
+const { lessonSlateBits, slateOf } = await import('../src/runtime/context/board-pack.ts');
 const { renderContextPack } = await import('../src/runtime/context/context-pack.ts');
 const { parseActivity, checkActivity } = await import('../src/runtime/activity.ts');
 const { readBoard } = await import('../src/runtime/journal/board-log.ts');
@@ -36,7 +36,7 @@ const ix = bookIndexOf();
 
 // ---- 铺着页的一节:讲稿里的动作落到页上(纯函数) ----
 {
-  const b = { file: '语文一年级下册.pdf', index: ix };
+  const b = lessonBookOf('语文一年级下册.pdf', ix);
   const raw = { section: { lines: [{ text: '我们来预习。', ask: false, acts: [{ name: '翻', arg: '小鱼吹泡泡' }, { name: '看', arg: '第 1 段' }] }, { text: '再看第二段。', ask: false, acts: [{ name: '看', arg: '第 2 段' }, { name: '圈', arg: '井沿、没有这个词' }] }] } as BoardSection };
   const fit = fitSection(raw.section, lessonOpen(lessonInit(), b), { book: b });
   check('落到页上:翻到这一课、看换成框;圈找得到的那一处,找不到的记一句', fit.section.lines[0].acts?.[0].do?.k === '翻' && (fit.section.lines[0].acts[1].do as { label: string }).label === '第1段' && (fit.section.lines[1].acts?.[1].do as { spots: unknown[] }).spots.length === 1 && fit.why.length === 1 && fit.why[0].includes('没有这个词'), JSON.stringify([fit.section, fit.why]));
@@ -45,11 +45,11 @@ const ix = bookIndexOf();
 
 // ---- board: 里的课本 ----
 {
-  const fish = bookSlateParts(ix, bookLesson(ix, '小鱼吹泡泡')!);
+  const fish = bookSlate(ix, '小鱼吹泡泡');
   check('一课:底是册名、课名、印的页码;全文一段一行,换页插一行,认字栏带读音', fish.show === '课本《语文一年级下册》:《小鱼吹泡泡》第 1–2 页' && fish.text[0] === '第1段 小鱼在水里吹泡泡。' && fish.text.includes('—— 第 2 页 ——') && fish.text.some((t) => t.startsWith('泡(pào)')), JSON.stringify(fish));
-  const toc = bookSlateParts(ix, bookLesson(ix, null)!);
+  const toc = bookSlate(ix, null);
   check('目录:一单元一行,课名后面是印的页码;下面的一首带点', toc.show.includes('目录') && toc.text[0] === '第一单元·阅读:1 小鱼吹泡泡(1)、2 古诗两首(3)、·静夜思(3)、·春晓(4)、语文园地一(5)' && toc.text[1] === '附录:识字表(8)', JSON.stringify(toc.text));
-  const garden = bookSlateParts(ix, bookLesson(ix, '语文园地一')!);
+  const garden = bookSlate(ix, '语文园地一');
   check('语文园地:一个栏目一行', garden.text.filter((t) => t.startsWith('【')).length === 3 && garden.text.some((t) => t.startsWith('【日积月累】')), JSON.stringify(garden.text));
   const T = Date.parse('2026-11-14T10:00:00Z');
   const at = (s: number): string => new Date(T - s * 1000).toISOString();
@@ -235,7 +235,7 @@ const ix = bookIndexOf();
   const base1 = (await route('GET', `/api/kid/textbook/base?tutor=${T}`, ctx)).json as { lesson: Lesson; toc: Toc };
   const fish = base1.toc.entries.find((e) => e.title === '小鱼吹泡泡');
   check('目录上能点的几项:印在哪一行(场景坐标)、点了铺哪一页;缩进的那首也能点', base1.toc.page.title === '目录' && base1.toc.entries.map((e) => e.title).join() === '小鱼吹泡泡,古诗两首,静夜思,春晓,语文园地一,识字表' && fish?.page.pages.join() === '2,3' && base1.toc.entries.find((e) => e.title === '静夜思')?.page.pages.join() === '4', JSON.stringify(base1.toc));
-  const tocAt = lessonOpen(lessonInit(), { file: '语文一年级下册.pdf', index: ix }, '没有这一课');
+  const tocAt = lessonOpen(lessonInit(), lessonBookOf('语文一年级下册.pdf', ix), '没有这一课');
   check('老师翻到过《小鱼吹泡泡》:这本书记着上次到这(直接铺它);记着的那一课找不到才铺目录,窗停在它那一行', lessonPage(base1.lesson)?.title === '小鱼吹泡泡' && lessonPage(tocAt)?.title === '目录' && JSON.parse(readFileSync(join(root, '.cotutor', 'book-last.json'), 'utf8'))['语文一年级下册.pdf']?.title === '小鱼吹泡泡', JSON.stringify(base1.lesson.view));
   const toBack = await ctx.runner.boardEvent(T, date, { k: 'open', thread, base, title: '目录' });
   const lBack = ((await route('GET', `/api/kid/lesson?tutor=${T}&date=${date}&thread=${thread}`, ctx)).json as { lesson: Lesson }).lesson;
@@ -272,7 +272,7 @@ const ix = bookIndexOf();
   await wait();
   const pr5 = promptOf(String(fifth.json.job));
   check('他下一次开口:老师看到底是这一课、孩子做的是自己点过来的', pr5.includes('底: "课本《语文一年级下册》:《古诗两首》') && pr5.includes('自己在目录上点了《古诗两首》,翻到了这一课'), pr5.slice(pr5.indexOf('board:'), pr5.indexOf('board:') + 400));
-  check('给老师的目录:说一句上次翻到哪一课', bookSlateParts(ix, bookLesson(ix, null)!, '古诗两首').show === '课本《语文一年级下册》:目录(还没翻到哪一课;上次翻到《古诗两首》)');
+  check('给老师的目录:说一句上次翻到哪一课', bookSlate(ix, null, '古诗两首').show === '课本《语文一年级下册》:目录(还没翻到哪一课;上次翻到《古诗两首》)');
   const backSlate = slateOf({ page: { id: tocId, show: '目录' }, others: [], events: [{ at: '2026-11-14T02:00:00.000Z', k: 'open', text: '目录', base: tocId }], lesson: { ops: [], covers: { 遮: [], 盖: [] }, revealed: [] }, now: Date.parse('2026-11-14T02:00:05.000Z') });
   check('孩子自己按「目录」回去的:孩子做的里说一句', backSlate.did.includes('自己按「目录」翻回了目录'), JSON.stringify(backSlate.did));
   check('课名不是字的 open:收不下', (await kidSend(ctx, T, { text: '', open: 5, thread })).status === 400);

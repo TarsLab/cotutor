@@ -4,10 +4,10 @@ import { lessonInit, lessonPage, lessonStep, lessonStrip } from '../src/board/le
 import { parseBoard } from '../src/board/parse.ts';
 import type { Lesson, LineAct } from '../src/schema/index.ts';
 import { mathIndexOf } from './_math-book.ts';
-import { bookIndexOf } from './_book.ts';
+import { bookIndexOf, lessonBookOf } from './_book.ts';
 import { check, done } from './_check.ts';
 
-const book = { file: '数学二年级上册.pdf', index: mathIndexOf() };
+const book = lessonBookOf('数学二年级上册.pdf', mathIndexOf());
 const src = { book };
 const A = (name: LineAct['name'], arg = ''): LineAct => ({ name, arg });
 
@@ -22,7 +22,7 @@ check('还没有页:先铺目录;有页就不动', opened.at === '数学二年�
 
 // ——— 圈、划、加点(语文:字头上印着拼音) ———
 {
-  const zh = { file: '语文一年级下册.pdf', index: bookIndexOf() };
+  const zh = lessonBookOf('语文一年级下册.pdf', bookIndexOf());
   const at = lessonStep(lessonInit(), { t: 'act', act: { k: '翻', page: bookPageOf(zh, '小鱼吹泡泡')! } });
   const r = fitActs(at, [A('圈', '小鸟'), A('加点', '小鸟'), A('划', '泡泡圆圆的，像一个个小月亮'), A('圈', '飞呀')], { book: zh });
   const [ring, dot, hua, plain] = r.acts;

@@ -26,7 +26,7 @@
  * 记号的样子(docs/dev/一节课.md 的四条原则):老师的线朱橙、孩子的蓝,都正片叠底(记号不盖字:黑字叠上任何颜色还是黑的);遮、盖是故意挡住的,不透明。
  * 圈、划、加点照 markFresh 分新的(实色)和旧的(淡),收掉的淡出;在页上的记号不重画(圈的一笔画出来只放一次)。交给老师的窗图只画新的。
  * 孩子落一笔、擦掉都告诉页面(stroke / wipe),页面照 lessonStep 改状态、报给服务端,再把新的状态发回来。
- * 课本上的田字格(索引认的,BookPage.cells):点空格、描红格开写字格(./cell-pad.tsx),贴着那一格、页挪了跟着走;放好了告诉页面(cell),
+ * 课本上的田字格(这一课分块里能写的作答区,规则照索引认的格出;练习册照 BookPage.cells):点空格、描红格开写字格(./cell-pad.tsx),贴着那一格、页挪了跟着走;放好了告诉页面(cell),
  * 字照格里的坐标缩进那一格(铅笔色,.bk-cells),写字格挪到同一排下一个空格,没有了就收。范字格照常点字看笔顺。写了没放好时点页上别处、落笔不收它。
  * 能写的格平时不画;鼠标、悬着的笔移上去浅浅铺一层学科色,手指按住一会儿(TOC_PRESS_MS,刚滚起来的不算)深一点(同目录;.bk-cell-hint)。
  * 点读(语文课文,页面给了 read):标题、段首缩进的那两格(bookReadParts:连着头上的拼音)能点,平时不画,也不画出这块范围;鼠标、悬着的笔移上去只出一个淡淡的描边播放钮
@@ -40,10 +40,10 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type * as Pdfjs from 'pdfjs-dist';
 import { openPdf } from './pdf.ts';
-import { BOOK_ASPECT, BOOK_TOC, BOOK_W, KID_INK, KID_INK_WIDTH, bookCellsOf, bookFrame, bookPick, bookReadParts, bookRows, bookSheets, lessonBlocks, photoBookPage, turnedSkeletons, type BookSheet, type ChalkSkeleton, type ReadPart, type SceneCell, type PhotoLine, type PhotoWord } from '../../chalk/index.ts';
+import { BOOK_ASPECT, BOOK_TOC, BOOK_W, KID_INK, KID_INK_WIDTH, bookCellsOf, bookFrame, bookPick, bookReadParts, bookRows, bookSheets, photoBookPage, turnedSkeletons, zoneBlocks, type BookSheet, type ChalkSkeleton, type ReadPart, type SceneCell, type PhotoLine, type PhotoWord } from '../../chalk/index.ts';
 import { PHOTO_GAPS, lessonPage, lessonStrip, markFresh, photoDay, photoGaps, photoSheetBox, weekOf } from '../../board/lesson.ts';
 import { stripLayout, type StripSlot } from '../../board/strip.ts';
-import { CELL_UNIT, LESSON_INK_POINTS, PEN_ASKS, type BookPage, type Lesson, type LessonPage } from '../../schema/index.ts';
+import { CELL_UNIT, LESSON_INK_POINTS, PEN_ASKS, type BookPage, type Lesson, type LessonPage, type ZonePage } from '../../schema/index.ts';
 import { CellPad, WRITE_INK, WRITE_WIDTH } from './cell-pad.tsx';
 
 /** 页面经它叫舞台:「给老师看」(先交窗里的图)、导一张小图(话题的预览图) */
@@ -193,6 +193,8 @@ interface Geo {
   /** 先画的那张已经画好的页(交窗里的图要等窗里的页都画好) */
   drawn: Set<number>;
   lines: BookPage[];
+  /** 课本这一课挑好的分块(孩子端那份;/api/kid/textbook/lines 一起给的):能写的格、点读的段照它 */
+  zones?: ZonePage[];
   /** 字行拉完了(课本拉到了、照片认完了;白纸本来就没有):这时还找不到字行的「看」整块铺底 */
   linesDone: boolean;
   /** 作业本:分割线、最后那张白纸 */
@@ -479,7 +481,7 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
   /** 这一课几页上的田字格(场景坐标);文字层还没拉下来是空的 */
   const cellsHere = (): SceneCell[] => {
     const g = geo.current, p = lessonPage(latest.current);
-    return g && (p?.kind === 'book' || p?.kind === 'workbook') ? bookCellsOf(g.lines, g.sheets) : [];
+    return g && (p?.kind === 'book' || p?.kind === 'workbook') ? bookCellsOf(g.lines, g.sheets, p.kind === 'book' ? (g.zones ?? []) : undefined) : [];
   };
   /** 孩子在格里写的字:格里的坐标(长边 = CELL_UNIT)照格的框缩放 */
   const cellPaths = (c: SceneCell, strokes: [number, number][][]): [number, number][][] => {
@@ -1009,21 +1011,23 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
       // 点字要的行和字:课本照 PDF 的文字层,照片照认出来的(认完以前一直是空的,等一会儿再拉)
       if (p.kind === 'book') {
         const r = await fetch(`/api/kid/textbook/lines?b=${encodeURIComponent(p.src)}&p=${p.pages[0]}-${p.pages[p.pages.length - 1]}`, { cache: 'no-store' }).catch(() => null);
-        const j = r?.ok ? ((await r.json()) as { pages?: BookPage[] }) : null;
+        const j = r?.ok ? ((await r.json()) as { pages?: BookPage[]; zones?: ZonePage[] }) : null;
         if (cancelled || geo.current?.key !== geoKey) return;
         if (Array.isArray(j?.pages)) geo.current.lines = j!.pages!;
+        if (Array.isArray(j?.zones)) geo.current.zones = j!.zones!;
         geo.current.linesDone = true;
         // 点读的几块:同服务端合成时一样的行、一样的分法(bookReadTexts),第几块第几句对得上
-        readParts.current = p.layout !== 'math' && p.title !== BOOK_TOC ? bookReadParts(geo.current.lines, geo.current.sheets, lessonBlocks(geo.current.lines, p.layout)) : [];
+        readParts.current = p.layout !== 'math' && p.title !== BOOK_TOC ? bookReadParts(geo.current.lines, geo.current.sheets, zoneBlocks(geo.current.lines, geo.current.zones ?? [], p.layout)) : [];
         paintCells();
         paintLook(false);
         paintRead();
       } else if (p.kind === 'workbook') {
         // 练习册:行、题框、能写的格子都是排版时记下的,拉一次就全了
         const r = await fetch(`/api/kid/workbook/lines?w=${encodeURIComponent(p.src)}`, { cache: 'no-store' }).catch(() => null);
-        const j = r?.ok ? ((await r.json()) as { pages?: BookPage[] }) : null;
+        const j = r?.ok ? ((await r.json()) as { pages?: BookPage[]; zones?: ZonePage[] }) : null;
         if (cancelled || geo.current?.key !== geoKey) return;
         if (Array.isArray(j?.pages)) geo.current.lines = j!.pages!;
+        if (Array.isArray(j?.zones)) geo.current.zones = j!.zones!;
         geo.current.linesDone = true;
         paintCells();
         paintLook(false);

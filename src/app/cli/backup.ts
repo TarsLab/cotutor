@@ -6,7 +6,7 @@
  * 也不备份能重新生成的(视频课 mp4、评测 evals、配音缓存)。保住的是文字记录、账本、照片、activity、配置。
  *
  * 没变的文件和上一份硬链接,不占第二份地方:每天一份也几乎不涨。一份里的文件不再改,所以硬链接是安全的;恢复时一律拷出去,不链回 workspace。
- * vault 在 workspace 外面(Obsidian)的,只拷 md 到 _vault/,恢复时不动它:那是家长的,要不要拿回来家长定。macOS 上后台进程读不了「文稿」时记一笔,不算失败。
+ * vault 在 workspace 外面(Obsidian)的,只拷 md(外加课本改好的分块 教材/.zones/)到 _vault/,恢复时不动它:那是家长的,要不要拿回来家长定。macOS 上后台进程读不了「文稿」时记一笔,不算失败。
  */
 import { copyFile, link, lstat, mkdir, readFile, readdir, rename, rm, stat, statfs, utimes, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
@@ -20,6 +20,8 @@ const TOP_SKIP = new Set(['.git', '.claude', '.sandbox', 'evals', 'node_modules'
 /** .cotutor 里能重新生成的缓存;别的(设备表、孩子端流水、出厂 hash)留着 */
 const COTUTOR_SKIP = new Set(['qwen', 'live-preview', 'qr', 'board', 'textbooks']);
 const SKIP_EXT = /\.(wav|mp4|tmp)$/i;
+/** vault 里除了 .md 只带课本改好的分块(教材/.zones/<指纹>/,src/memory/textbook-zones.ts):编程助手改一课要花钱花时间 */
+const ZONE_FILE = /(?:^|\/)\.zones\/[0-9a-f]{16}\/(?:p\d{3,4}|book)\.json$/;
 const AUDIO = /\.wav$/i;
 const VAULT_MAX_FILES = 5000;
 const KEEP: Record<BackupWhy, number> = { daily: 14, upgrade: 5, manual: 5, restore: 5 };
@@ -151,7 +153,7 @@ export async function makeBackup(t: BackupTarget, o: BackupOptions): Promise<Bac
       try {
         let n = 0;
         for await (const f of walk(vault, vault)) {
-          if (!f.rel.endsWith('.md') || f.rel.split('/').some((p) => p.startsWith('.'))) continue;
+          if (!(ZONE_FILE.test(f.rel) || (f.rel.endsWith('.md') && !f.rel.split('/').some((p) => p.startsWith('.'))))) continue;
           if (++n > VAULT_MAX_FILES) break;
           meta.newBytes += await place(f.path, f.st, join(tmp, VAULT_DIR, ...f.rel.split('/')), prevDir && join(prevDir, VAULT_DIR, ...f.rel.split('/')));
           meta.files++;

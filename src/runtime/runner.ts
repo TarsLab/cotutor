@@ -16,7 +16,7 @@ import { dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { buildContextPack } from './context/context-pack.ts';
 import { addMessage, applyRun, jobId, sameRuntime, sessionFor } from './journal/conversation.ts';
 import { localDate, localMinute } from '../shared/time.ts';
-import { conversationFiles, spokeIn, threads } from '../schema/index.ts';
+import { conversationFiles, pickZones, spokeIn, threads } from '../schema/index.ts';
 import { bookkeepingPrompt, kidQuestions, textbookHeadings } from '../memory/diary.ts';
 import { actsGuide } from '../board/cards/docs.ts';
 import { activityBase, parseActivity, renderTutorSection } from './activity.ts';
@@ -57,6 +57,7 @@ import { dayTitle, lessonDone, lessonPage, lessonSection, lessonStep, photoDay, 
 import { readLesson, updateLesson } from './journal/lesson-store.ts';
 import { BOOK_TOC, bookView, photoBookPage, photoText, pickable, workbookInk, workbookPage, workbookPageId, workbookText, type PhotoText } from '../chalk/index.ts';
 import { bookIndex, listBooks, pickBook } from '../memory/textbook-pdf.ts';
+import { bookZones } from '../memory/textbook-zones.ts';
 
 /** 课本做底的 activity:家长在按钮上填的这个参数说的是哪一课,进门直接铺它(出厂的课本叫「范围」) */
 const ENTER_RANGE = '范围';
@@ -517,7 +518,9 @@ export class Runner {
     if (!name) return { book: null, problem: `教材文件夹里没有${subject || '这一科'}的课本 PDF` };
     const index = await bookIndex(ws.paths.textbooks, join(ws.root, BOOK_CACHE), name).catch((e: unknown) => { void e; return null; });
     if (!index) return { book: null, problem: `课本《${name}》读不出来` };
-    return { book: { file: name, index }, ...(index.problems.length ? { problem: `课本《${name}》:${index.problems.join(';')}` } : {}) };
+    const zones = await bookZones(ws.paths.textbooks, join(ws.root, BOOK_CACHE), index);
+    const problems = [...index.problems, ...zones.problems];
+    return { book: { file: name, index, zones }, ...(problems.length ? { problem: `课本《${name}》:${problems.join(';')}` } : {}) };
   }
 
   /** 照片页上每张认出的字(还没认、没认成的没有);running = 还在认的那几张 */
@@ -627,7 +630,7 @@ export class Runner {
     let show = '还没有页';
     if (page?.kind === 'book') {
       const at = x.src.book && page.src === x.src.book.file ? bookLesson(x.src.book.index, page.title) : null;
-      const parts = at && x.src.book ? bookSlateParts(x.src.book.index, at, page.title === BOOK_TOC ? await bookLast(ws, x.src.book.file) : null) : null;
+      const parts = at && x.src.book ? bookSlateParts(x.src.book.index, at, pickZones(x.src.book.zones, at.pages.map((p) => p.n)).pages, page.title === BOOK_TOC ? await bookLast(ws, x.src.book.file) : null) : null;
       show = parts?.show ?? `课本《${page.src}》读不出来`;
       if (parts && !told.has(page.id)) notes.push({ id: page.id, name: page.title === BOOK_TOC ? '目录' : `《${page.title}》`, text: clipNote(parts.text) });
     } else if (page?.kind === 'photo' && page.day) {

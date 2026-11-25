@@ -102,16 +102,20 @@ if (process.platform !== 'win32' && process.getuid?.() !== 0) {
   check('~/cotutor/.backups 不会被当成一个孩子', homeWorkspaces(join(home, 'cotutor')).every((p) => !p.includes('.backups')), homeWorkspaces(join(home, 'cotutor')).join());
 }
 
-// ---- 外面的 vault:只拷 md;读不了不拦 ----
+// ---- 外面的 vault:只拷 md(和课本改好的分块);读不了不拦 ----
 {
   const vault = join(home, 'vault');
   put(join(vault, '孩子.md'), '档案');
   put(join(vault, '日记', '2026-11-01.md'), '日记');
   put(join(vault, '附件', 'big.png'), 'x'.repeat(1000));
   put(join(vault, '.obsidian', 'app.md'), '设置');
+  put(join(vault, '教材', '.zones', '3f9a1c0d2b7e4a61', 'p078.json'), '{}');
+  put(join(vault, '教材', '.zones', '3f9a1c0d2b7e4a61', 'book.json'), '{}');
+  put(join(vault, '教材', '.zones', '3f9a1c0d2b7e4a61', 'p078.json.123.tmp'), '{}');
   const m = await b.makeBackup({ root, vault }, opts('manual', '2026-11-04T03:00:00'));
   const d = join(dir, m.name);
   check('vault 在外面:md 进 _vault,附件和隐藏目录不进', m.vault === 'copied' && has('_vault/孩子.md', d) && has('_vault/日记/2026-11-01.md', d) && !has('_vault/附件/big.png', d) && !has('_vault/.obsidian/app.md', d), JSON.stringify(m));
+  check('课本改好的分块(教材/.zones/<指纹>/)进 _vault,写到一半的临时文件不进', has('_vault/教材/.zones/3f9a1c0d2b7e4a61/p078.json', d) && has('_vault/教材/.zones/3f9a1c0d2b7e4a61/book.json', d) && !has('_vault/教材/.zones/3f9a1c0d2b7e4a61/p078.json.123.tmp', d));
   const gone = await b.makeBackup({ root, vault: join(home, 'no-such-vault') }, opts('manual', '2026-11-04T04:00:00'));
   check('vault 读不了(macOS 不让后台进程读文稿、vault 不在了):这一份照样成,记一笔', gone.vault === 'unreadable' && has('cotutor.json', join(dir, gone.name)));
   const inside = await b.makeBackup({ root, vault: root }, opts('manual', '2026-11-04T05:00:00'));

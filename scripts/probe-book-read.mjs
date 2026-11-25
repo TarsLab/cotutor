@@ -43,7 +43,9 @@ const { startFakeTeacher } = await import(join(repo, 'tests', '_fake-teacher.ts'
 const { readBoard } = await import(join(repo, 'src', 'runtime', 'journal', 'board-log.ts'));
 const { bookIndex } = await import(join(repo, 'src', 'memory', 'textbook-pdf.ts'));
 const { bookLesson } = await import(join(repo, 'src', 'board', 'lesson-fit.ts'));
-const { bookCut, bookReadParts, bookSheets, lessonBlocks } = await import(join(repo, 'src', 'chalk', 'index.ts'));
+const { bookCut, bookReadParts, bookSheets, zoneBlocks } = await import(join(repo, 'src', 'chalk', 'index.ts'));
+const { bookZones } = await import(join(repo, 'src', 'memory', 'textbook-zones.ts'));
+const { pickZones } = await import(join(repo, 'src', 'schema', 'index.ts'));
 const { startFakeTts } = await import(join(repo, 'tests', '_fake-tts.ts'));
 
 const fake = await startFakeRealtime();
@@ -154,7 +156,8 @@ try {
   const ix = await bookIndex(wsx.paths.textbooks, join(tmp, 'cache'), name);
   const at = bookLesson(ix, '坐井观天');
   const sheets = bookSheets(at.pages, undefined, bookCut(ix.pages));
-  const parts = bookReadParts(at.pages, sheets, lessonBlocks(at.pages, ix.layout));
+  const zones = await bookZones(wsx.paths.textbooks, join(tmp, 'cache'), ix);
+  const parts = bookReadParts(at.pages, sheets, zoneBlocks(at.pages, pickZones(zones, at.pages.map((p) => p.n)).pages, ix.layout));
   const k6 = parts.findIndex((p) => p.no === 6), k7 = parts.findIndex((p) => p.no === 7);
   const cam = await camera();
   const scr = (p) => ({ x: cam.left + cam.tx + (p.hit[0] + p.hit[2]) / 2 * cam.s, y: cam.top + cam.ty + p.dot[1] * cam.s });

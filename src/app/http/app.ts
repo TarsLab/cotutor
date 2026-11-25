@@ -19,7 +19,7 @@ import { homeworkPast, homeworkPdf, homeworkPdfName, homeworkSubject } from '../
 import { kidConversation, startedThreads, parentConversation, type KidMessage, type KidTodayThread, type ParentMessage } from '../../runtime/kid-view.ts';
 import { previewOf, writePreview } from '../../runtime/journal/preview.ts';
 import { parseEvents } from '../../runtime/journal/events.ts';
-import { type Lesson, type RunEvent } from '../../schema/index.ts';
+import { pickZones, zonesKidPage, type Lesson, type RunEvent } from '../../schema/index.ts';
 import { NEUTRAL_COLOR, SUBJECT_COLORS, TUTOR_PALETTE, tutorColors } from '../../ui/shared/tutor-color.ts';
 import { boardMarkOf, type BoardMarkId } from '../../ui/kid/board-mark.ts';
 import { buildReel, playRecordOk, reelHolds, reelMissRuns, type PlayRecord, type Reel, type ReelCall } from '../../ui/kid/reel.ts';
@@ -63,14 +63,15 @@ import { kidWords, readWords } from '../../scenes/photo-words/store.ts';
 import { imageSize } from '../../shared/jpeg.ts';
 import { listTextbookPages, textbookPageFile } from '../../memory/textbook-pages.ts';
 import { bookFile, bookIndex, listBooks, pickBook } from '../../memory/textbook-pdf.ts';
+import { bookZones } from '../../memory/textbook-zones.ts';
 import { readWorkbook, workbookImageFile } from '../../memory/workbook.ts';
 import { readCover, saveCover } from '../../memory/textbook-cover.ts';
 import { homeworkFile } from '../../memory/homework.ts';
-import { lessonOpen, tocEntries } from '../../board/lesson-fit.ts';
+import { lessonOpen, tocEntries, type LessonBook } from '../../board/lesson-fit.ts';
 import { lastSpot } from '../../runtime/journal/book-last.ts';
 import { lessonInit, lessonPage, lessonStep } from '../../board/lesson.ts';
 import { readLesson } from '../../runtime/journal/lesson-store.ts';
-import { BOOK_TOC, bookPages, bookReadTexts, lessonBlocks, readLessonText, readTimes, workbookBookPage, workbookPage } from '../../chalk/index.ts';
+import { BOOK_TOC, bookPages, bookReadTexts, readLessonText, readTimes, workbookBookPage, workbookPage, zoneBlocks } from '../../chalk/index.ts';
 import { synthesizeTimed } from '../../media/tts.ts';
 import type { Look } from '../../scenes/look.ts';
 import { IndexError, capturePathOk, deleteThread, listDates, rateThread, readErrLog, readIndex, readTranscript, undoVaultWrite, writeCapture, type VaultWrite } from '../../runtime/journal/store.ts';
@@ -379,14 +380,22 @@ export async function parentReel(ctx: AppContext, tutor: string, date: string, t
   return { tutor, date, thread, reel, messages: day.messages.filter((m) => m.thread === thread), kid: kid.messages.filter((m) => m.thread === thread), device, face, live, realtime: mine.some((m) => m.live) };
 }
 
+/** 一册课本:索引和分块(src/memory/textbook-zones.ts;规则出的第一次用到时出);读不出 = null */
+async function bookOpen(ws: Workspace, name: string): Promise<LessonBook | null> {
+  const cache = join(ws.root, '.cotutor', 'textbooks');
+  const index = await bookIndex(ws.paths.textbooks, cache, name).catch(() => null);
+  if (!index) return null;
+  const zones = await bookZones(ws.paths.textbooks, cache, index).catch((e: unknown) => { console.error(`课本《${name}》的分块读不出:${e instanceof Error ? e.message : String(e)}`); return null; });
+  return zones ? { file: name, index, zones } : null;
+}
+
 /**
  * 课本做底:这本书的目录当一页(一节课还没开始时孩子端先铺它,窗停在上次翻到的那一课那一行),和目录上能点的那几项(tocEntries:印在哪一行、点了铺哪一页;
  * 孩子端点了就自己先翻过去、在一课里按「目录」回来,不等服务端)。读不出、没有目录 → null
  */
 async function bookBase(ws: Workspace, name: string): Promise<{ lesson: Lesson; toc: ReturnType<typeof tocEntries> } | null> {
-  const index = await bookIndex(ws.paths.textbooks, join(ws.root, '.cotutor', 'textbooks'), name).catch(() => null);
-  if (!index) return null;
-  const book = { file: name, index };
+  const book = await bookOpen(ws, name);
+  if (!book) return null;
   const l = lessonOpen(lessonInit(), book, await lastSpot(ws, name));
   return l.at ? { lesson: l, toc: tocEntries(book) } : null;
 }
@@ -969,12 +978,12 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       const l = await readLesson(ws, tutor, date, thread);
       return { status: 200, json: { lesson: l.at ? l : null } };
     }
+    // 一课几页的文字层和这一课挑好的分块(孩子端的那份:块的框与种类、能写的格;给老师的、答案不下发)。页上的格照分块给,索引里的 cells 不下发
     if (p === '/api/kid/textbook/lines' && method === 'GET') {
-      const name = url.searchParams.get('b') ?? '';
       const want = bookPages(url.searchParams.get('p') ?? '');
-      const ix = want.length ? await bookIndex(ws.paths.textbooks, join(ws.root, '.cotutor', 'textbooks'), name).catch(() => null) : null;
-      if (!ix) return { status: 404, json: { error: 'not_found' } };
-      return { status: 200, json: { pages: ix.pages.filter((x) => want.includes(x.n)) } };
+      const book = want.length ? await bookOpen(ws, url.searchParams.get('b') ?? '') : null;
+      if (!book) return { status: 404, json: { error: 'not_found' } };
+      return { status: 200, json: { pages: book.index.pages.filter((x) => want.includes(x.n)).map(({ cells: _c, ...pg }) => pg), zones: pickZones(book.zones, want).pages.map(zonesKidPage) } };
     }
     // 点读课文(语文课本的一课,docs/dev/课本.md):这一课整篇一次合成(块和句照 bookReadTexts 分,舞台照同一份行摆钮),用这位老师「点读的声音」,
     // 带每个字的时间(有缓存,再读不花钱);回 {times[k][s]: 第 k 块第 s 句从第几毫秒起, end},加 audio=1 回那份声音(同一份缓存,能分段取)。
@@ -984,10 +993,10 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       const voice = ws.config.tutors[tutor] ? cardVoice(ws.config.tutors, tutor) : undefined;
       const want = bookPages(q.get('p') ?? '');
       if (!voice || !want.length) return { status: 404, json: { error: 'not_found' } };
-      const ix = await bookIndex(ws.paths.textbooks, join(ws.root, '.cotutor', 'textbooks'), q.get('b') ?? '').catch(() => null);
-      if (!ix || ix.layout === 'math') return { status: 404, json: { error: 'not_found' } };
-      const pages = ix.pages.filter((x) => want.includes(x.n));
-      const texts = bookReadTexts(pages, lessonBlocks(pages, ix.layout));
+      const book = await bookOpen(ws, q.get('b') ?? '');
+      if (!book || book.index.layout === 'math') return { status: 404, json: { error: 'not_found' } };
+      const pages = book.index.pages.filter((x) => want.includes(x.n));
+      const texts = bookReadTexts(pages, zoneBlocks(pages, pickZones(book.zones, want).pages, book.index.layout));
       if (!texts.length) return { status: 404, json: { error: 'not_found' } };
       const text = readLessonText(texts);
       const r = await synthesizeTimed({ text, voice }, { cacheDir: ws.dirs.tts, env: process.env });

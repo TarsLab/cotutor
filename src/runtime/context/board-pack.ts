@@ -10,10 +10,10 @@
  *     最近点的 30 秒内点的最后一项(孩子说「这个」时指它)
  *     孩子在看 上一轮以后窗最后停下的地方(他自己挪的,或你让他看的那一块移完);附了那一块的图就注一句
  */
-import { BOOK_TOC, lessonBlocks } from '../../chalk/index.ts';
+import { BOOK_TOC, zoneBlocks } from '../../chalk/index.ts';
 import { lessonPage, lessonStrip } from '../../board/lesson.ts';
 import { stripRead } from '../../board/strip.ts';
-import { PHOTO_PAGE, type BoardEvent, type BookIndex, type BookPage, type ContextPack, type Lesson, type MarkName, type StripItem } from '../../schema/index.ts';
+import { PHOTO_PAGE, type BoardEvent, type BookIndex, type BookPage, type ContextPack, type ZonePage, type Lesson, type MarkName, type StripItem } from '../../schema/index.ts';
 
 /** 「最近点的」多久以内算(孩子说「这个」指它);起点,试用后调 */
 export const RECENT_PICK_MS = 30_000;
@@ -153,9 +153,9 @@ export function clipNote(text: readonly string[], max = PAGE_NOTE_MAX): string[]
  * 数学 = 标题(「标题:6的乘法口诀」)、例题(「例4 ……」)、栏目(「【练一练】」)和下面的题(「第3题 ……」);图上的东西读不到,只有字。
  * 科学 = 栏目(「【探索与实践 1】」)、段(段号整课连着数)、图里和表里的字。
  * 目录 = 一单元一行,课名后面是印的页码(老师照孩子说的课写「课: 坐井观天」);数学一个单元一行,后面是它下面的小节、课题(课题前带点)。
- * last = 这本书上次翻到的那一课(src/runtime/journal/book-last.ts),目录的那一句里说一下。
+ * zones = 这一课挑好的分块(schema 的 pickZones);last = 这本书上次翻到的那一课(src/runtime/journal/book-last.ts),目录的那一句里说一下。
  */
-export function bookSlateParts(index: BookIndex, at: { title: string; pages: readonly BookPage[] }, last?: string | null): { show: string; text: string[] } {
+export function bookSlateParts(index: BookIndex, at: { title: string; pages: readonly BookPage[] }, zones: readonly ZonePage[], last?: string | null): { show: string; text: string[] } {
   if (at.title === BOOK_TOC) {
     const show = `课本《${index.title}》:目录(还没翻到哪一课${last ? `;上次翻到《${last}》` : ''})`;
     if (index.layout === 'math') {
@@ -180,7 +180,7 @@ export function bookSlateParts(index: BookIndex, at: { title: string; pages: rea
   const math = index.layout === 'math';
   const text: string[] = [];
   let page: number | null = null;
-  for (const b of lessonBlocks(at.pages, index.layout)) {
+  for (const b of zoneBlocks(at.pages, zones, index.layout)) {
     const n = b.refs[0]?.n ?? null;
     const pr = at.pages.find((p) => p.n === n)?.printed ?? null;
     if (n !== page && page !== null && pr !== null) text.push(`—— 第 ${pr} 页 ——`);

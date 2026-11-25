@@ -3,7 +3,7 @@
  *  - 翻 课名 / 翻 目录:照课本目录找到这一课铺哪几页;翻 白纸:加一张白纸页(有了就回到它);翻 作业(今天):回到孩子拍的照片页(作业本);
  *    翻 小课堂:回到那堂课;翻 练习册(或册名):回到铺过的那一册。
  *    作业本是一整本连着滚的一页(老的在上):在作业本上「翻 11月20日」「翻 今天」就是窗移到那一天(落成「看」);在别的页上翻回作业本
- *  - 看 第 3 题 / 例 2 / 原话…:照这一页分好的块找到那一块的框(src/chalk/kit/book.ts 的 bookTarget);照片页还认「第 2 张」「第 2 张第 3 题」,练习册「第 2 页」「第 2 页第 3 题」;
+ *  - 看 第 3 题 / 例 2 / 原话…:照这一页的分块(课本是这一课挑好的分块文件,src/schema/zones.ts)找到那一块的框(src/chalk/kit/book.ts 的 bookTarget);照片页还认「第 2 张」「第 2 张第 3 题」,练习册「第 2 页」「第 2 页第 3 题」;
  *    作业本上「第 2 张」是今天的第 2 张,以前那天的写「11月20日第 2 张」「11月20日第 2 张第 3 题」,「11月20日」是那一天的第一张
  *  - 看 0:19–0:30 / 0:19 / 课里的一句原话(小课堂页):放那一段,对齐到句(src/board/lecture.ts 的 lectureRange);只写起点放到那一句的末尾
  *  - 圈、划、加点、遮、盖 字词:照字找到框;先在「看」着的那一块里找(找不到的那一处不做)。
@@ -14,8 +14,8 @@
  * 练习册是 workbook.json 里排版时记下的行和题(src/chalk/kit/workbook.ts);小课堂是每一句的起点与原话;白纸没有。
  * 一节里的动作照先后一个一个落(先翻再看,看的是新的那一页),落不了的记一句给家长(why),动作本身留在讲稿上、不带 do。
  */
-import { BOOK_MAX_PAGES, BOOK_TOC, bookCut, bookFind, bookSheets, bookSpot, bookTarget, bookView, findLesson, lessonBlocks, lessonName, photoBookPage, workbookBookPage, type BookBlock, type BookSheet, type PhotoText } from '../chalk/index.ts';
-import { LECTURE_PAGE, LOOK_ROWS_MAX, PHOTO_PAGE, WHITE_PAGE, type BoardSection, type BookIndex, type BookPage, type Box, type Lesson, type LessonAct, type LineAct, type PageSource, type Workbook } from '../schema/index.ts';
+import { BOOK_MAX_PAGES, BOOK_TOC, bookCut, bookFind, bookSheets, bookSpot, bookTarget, bookView, findLesson, lessonName, photoBookPage, workbookBookPage, zoneBlocks, type BookBlock, type BookSheet, type PhotoText } from '../chalk/index.ts';
+import { LECTURE_PAGE, pickZones, LOOK_ROWS_MAX, PHOTO_PAGE, WHITE_PAGE, type BoardSection, type BookIndex, type BookPage, type BookZones, type Box, type Lesson, type LessonAct, type LineAct, type PageSource, type Workbook } from '../schema/index.ts';
 import { actParts } from './acts.ts';
 import { clockLabel, lectureRange, parseClock, type LectureClock } from './lecture.ts';
 import { dayTitle, lessonPage, lessonStep, photoDay, photoGaps } from './lesson.ts';
@@ -27,8 +27,8 @@ export function bookLesson(index: BookIndex, name: string | null): { title: stri
   return l ? { title: lessonName(index.lessons, l), pages: index.pages.filter((p) => p.n >= l.pages[0] && p.n <= l.pages[1]).slice(0, BOOK_MAX_PAGES) } : null;
 }
 
-/** 课本做底:这一册的文件名与索引 */
-export interface LessonBook { file: string; index: BookIndex }
+/** 课本做底:这一册的文件名、索引与分块(规则出的、vault 里改好的;src/memory/textbook-zones.ts) */
+export interface LessonBook { file: string; index: BookIndex; zones: BookZones }
 
 /** 页的文字层从哪来:这一科的课本(没有课本的 activity 是 null)、照片页上每张认出的字(照片的路径 → 认出的;还没认出来的没有) */
 export interface LessonSource {
@@ -74,7 +74,7 @@ export function pageText(p: PageSource, src: LessonSource): { pages: BookPage[];
   if (p.kind === 'book') {
     if (!src.book || p.src !== src.book.file) return { pages: [], sheets: [], blocks: [] };
     const pages = src.book.index.pages.filter((x) => p.pages.includes(x.n));
-    return { pages, sheets: bookSheets(pages, undefined, p.cut), blocks: lessonBlocks(pages, p.layout) };
+    return { pages, sheets: bookSheets(pages, undefined, p.cut), blocks: zoneBlocks(pages, pickZones(src.book.zones, p.pages).pages, p.layout) };
   }
   if (p.kind === 'photo') {
     const layers = p.photos.map((ph, i) => photoBookPage(i + 1, ph, src.photos?.[ph.src] ?? null));

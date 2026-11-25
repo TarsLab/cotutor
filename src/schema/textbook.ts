@@ -107,7 +107,7 @@ export interface BookLesson {
 export const BOOK_INDEX_VERSION = 6;
 
 /**
- * 一册怎么分块(src/chalk/kit/book.ts 的 lessonBlocks):prose = 课文(自然段、语文园地的栏目);
+ * 一册怎么分块(出分块的规则 src/memory/textbook-zones-rules.ts):prose = 课文(自然段、语文园地的栏目);
  * math = 数学课本(例题、做一做 / 练一练这些栏目和下面的题);science = 科学课本(问题与想法、探索与实践这些栏目,栏目下面分段)。
  * 照文件名定:带「数学」的是 math,带「科学」的是 science
  */
@@ -161,4 +161,28 @@ export function mathHeading(l: BookLine, pageW: number, body: number): 'section'
   if (l.z >= 1.2 * body && /^\d{1,2}[.．]\S/.test(t)) return 'section';
   if (l.z >= 1.1 * body && l.z < 1.25 * body && l.x1 < 0.3 * pageW) return 'topic';
   return null;
+}
+
+// ——— 页眉页脚、带读音的字(出分块的规则 src/memory/textbook-zones-rules.ts 与读分块的 src/chalk/kit/book.ts 都用) ———
+
+/** 页脚:页码;和页码同一条基线的小字(数学的页脚是「16 1～6的表内乘法」、偶数页另起的单元名) */
+function bookFooter(p: BookPage, l: BookLine): boolean {
+  if (l.y1 <= p.h - 70) return false;
+  if (/^\d{1,3}$/.test(l.text)) return true;
+  if (p.printed === null || l.z > 12.5) return false;
+  const no = String(p.printed);
+  return p.lines.some((o) => o.y1 > p.h - 70 && Math.abs(o.y1 - l.y1) < 2 && o.text.startsWith(no));
+}
+
+/**
+ * 页眉(单元名)、页脚(页码、「仅供个人学习使用」)不算正文。
+ * 页顶的数只在它就是这一页的页码时算页眉:数学的题号常印在页顶(第 5 题从这一页开头)
+ */
+export const bookChrome = (p: BookPage, l: BookLine): boolean => (l.y1 < 45 && (/单元/.test(l.text) || (p.printed !== null && l.text === String(p.printed)))) || bookFooter(p, l) || /仅供个人学习使用/.test(l.text);
+
+/** 一行短的、几乎每个字都带拼音的(认字栏、识字加油站的词):给老师看时带上读音「观(guān)沿(yán)」;别的只给字 */
+export function withPinyin(l: BookLine): string {
+  const han = l.chars.filter((c) => /\p{Script=Han}/u.test(c.c));
+  if (l.chars.length > 14 || !han.length || han.filter((c) => c.py).length < han.length * 0.8) return l.text;
+  return l.chars.map((c) => (c.py ? `${c.c}(${c.py})` : c.c)).join('');
 }

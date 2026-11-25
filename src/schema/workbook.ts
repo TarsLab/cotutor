@@ -20,83 +20,21 @@
  * 读进来先过 `WorkbookSchema`(形状),再过 `workbookProblems`(题号、id、框、引用对不对得上)。
  */
 import { z } from 'zod';
+import { AnswerSchema, PermilleBoxSchema, PermillePointSchema, RegionObjectSchema, RegionSchema, TeacherSchema, regionId as id, regionProblems, type Answer, type PermilleBox, type PermillePoint, type Region, type RegionObject, type TeacherNote } from './regions.ts';
 
-const permille = z.number().min(0).max(1000);
-/** 框 [左, 上, 右, 下],页图的千分比 */
-export const WorkbookBoxSchema = z.tuple([permille, permille, permille, permille]);
-/** 点 [x, y],页图的千分比 */
-export const WorkbookPointSchema = z.tuple([permille, permille]);
-export type WorkbookBox = z.infer<typeof WorkbookBoxSchema>;
-export type WorkbookPoint = z.infer<typeof WorkbookPointSchema>;
-
-/** id:字母、数字、汉字、连字符,一册里不重复(作答区和物件共用一个空间) */
-const id = z.string().regex(/^[\p{L}\p{N}][\p{L}\p{N}-]*$/u);
-
-/**
- * 作答区是哪一种,孩子在里面怎么作答、服务端怎么读他的笔:
- *   write     写:填空格、横线、田字格、四线三格。读成「这一格写了几笔」,写的是什么看那一格的图
- *   circle    圈:在 objects 里圈一个(选读音、选字母)或圈几组(每 4 个圈一组)。读成每一圈围住了哪几个
- *   draw      画:照题画几个圆、三角形、示意图。读成框里画了几个闭合的形状
- *   link      连线:左右两列的 objects 带 side,读成哪个连到了哪个
- *   underline 画线:在短文里画出一句。读成画在哪几行、哪一段字下面
- *   trace     描写:描灰色的字母,带四线和参考笔画 model
- */
-export const WORKBOOK_REGION_KINDS = ['write', 'circle', 'draw', 'link', 'underline', 'trace'] as const;
-export type WorkbookRegionKind = (typeof WORKBOOK_REGION_KINDS)[number];
-
-export const WorkbookRegionSchema = z.object({
-  id,
-  kind: z.enum(WORKBOOK_REGION_KINDS),
-  /** 给老师看的名字:「乘号左边」「第 2 小题口诀」「法的第 1 个临写格」 */
-  label: z.string().min(1),
-  box: WorkbookBoxSchema,
-  /** 田字格(一格一个字) */
-  tian: z.literal(true).optional(),
-  /** 四线三格的四条线,从上往下的 y */
-  fourLine: z.tuple([permille, permille, permille, permille]).optional(),
-  /** 照着写的字母与参考笔画(一笔一串点,照 src/chalk/glyphs/ 的笔顺):描写区必有,临写的格子可以带 */
-  model: z.object({ glyph: z.string().min(1), strokes: z.array(z.array(WorkbookPointSchema).min(2)).min(1) }).optional(),
-  /** 这一格写起来太长(编题、写话),可以说着答:老师请他说,不强求写 */
-  say: z.literal(true).optional(),
-});
-export type WorkbookRegion = z.infer<typeof WorkbookRegionSchema>;
-
-/** 题里能指的东西:一个积木、一个读音选项、短文里的一个词、连线的一个端点、只用来数的风车 */
-export const WorkbookObjectSchema = z.object({
-  id,
-  /** 是什么:「积木」「zhí」「蒲公英」「豆荚裂开，种子蹦出去」 */
-  label: z.string().min(1),
-  box: WorkbookBoxSchema,
-  /** 画出来的中心(立体积木的中心不在框的正中) */
-  center: WorkbookPointSchema,
-  /** 在这道题的哪个作答区里被圈、被连;只是图(数一数的风车)不写 */
-  region: id.optional(),
-  /** 连线的哪一头 */
-  side: z.enum(['left', 'right']).optional(),
-  /** 画面上本来就分好的组(第几盘草莓) */
-  group: z.number().int().min(1).optional(),
-});
-export type WorkbookObject = z.infer<typeof WorkbookObjectSchema>;
-
-export const WorkbookAnswerSchema = z.object({
-  /** 这条答案占的作答区,按书写顺序 */
-  at: z.array(id).min(1),
-  /** 都算对的写法;跨几格的照格子顺序连着写(「3×4=12」占乘号左、右、等号右三格) */
-  ok: z.array(z.string().min(1)).min(1).optional(),
-  /** 连线:[左端物件, 右端物件] */
-  links: z.array(z.tuple([id, id])).min(1).optional(),
-  /** 没有唯一答案时怎么看:「每个积木只圈一次,每组 4 个,圈法可以不同」 */
-  note: z.string().min(1).optional(),
-}).refine((a) => a.ok || a.links || a.note, { message: '答案要有 ok、links、note 之一' });
-export type WorkbookAnswer = z.infer<typeof WorkbookAnswerSchema>;
-
-/** 只给老师(脑)的:这道题练什么、孩子卡住怎么引、答案 */
-export const WorkbookTeacherSchema = z.object({
-  goal: z.string().min(1),
-  hint: z.string().min(1).optional(),
-  answers: z.array(WorkbookAnswerSchema),
-});
-export type WorkbookTeacher = z.infer<typeof WorkbookTeacherSchema>;
+/** 作答区、物件、答案、给老师的和课本的分块共用一套(./regions.ts);这里的名字是练习册那边一直用的 */
+export const WorkbookBoxSchema = PermilleBoxSchema;
+export const WorkbookPointSchema = PermillePointSchema;
+export type WorkbookBox = PermilleBox;
+export type WorkbookPoint = PermillePoint;
+export const WorkbookRegionSchema = RegionSchema;
+export type WorkbookRegion = Region;
+export const WorkbookObjectSchema = RegionObjectSchema;
+export type WorkbookObject = RegionObject;
+export const WorkbookAnswerSchema = AnswerSchema;
+export type WorkbookAnswer = Answer;
+export const WorkbookTeacherSchema = TeacherSchema;
+export type WorkbookTeacher = TeacherNote;
 
 export const WorkbookQuestionSchema = z.object({
   /** 题号,一册里贯穿、不重复;老师写 [[看 第 3 题]] 照它找 */
@@ -157,11 +95,6 @@ export const WorkbookSchema = z.object({
 });
 export type Workbook = z.infer<typeof WorkbookSchema>;
 
-/** 框里外:a 在 b 里面(容 slack 千分的出界,画框时的描边) */
-const within = (a: WorkbookBox, b: WorkbookBox, slack = 4): boolean =>
-  a[0] >= b[0] - slack && a[1] >= b[1] - slack && a[2] <= b[2] + slack && a[3] <= b[3] + slack;
-const inBox = ([x, y]: WorkbookPoint, b: WorkbookBox): boolean => x >= b[0] && x <= b[2] && y >= b[1] && y <= b[3];
-
 /**
  * 形状对了以后再查的:题号、id 不重复,框是正的、在题框里,物件、答案引的作答区与物件都在这道题里,
  * 连线的两头各有 side,描写区带 model。回要改的那几条(一条一句,带页和题号);空 = 能用。
@@ -170,10 +103,6 @@ export function workbookProblems(wb: Workbook): string[] {
   const out: string[] = [];
   const nos = new Set<string>();
   const ids = new Set<string>();
-  const seen = (where: string, key: string): void => {
-    if (ids.has(key)) out.push(`${where}:id「${key}」重复`);
-    ids.add(key);
-  };
   const flat = (where: string, b: WorkbookBox): void => {
     if (!(b[0] < b[2] && b[1] < b[3])) out.push(`${where}:框 [${b.join(', ')}] 不是左上到右下`);
   };
@@ -186,39 +115,7 @@ export function workbookProblems(wb: Workbook): string[] {
       if (nos.has(q.no)) out.push(`${w}:题号重复`);
       nos.add(q.no);
       flat(w, q.box);
-      const regions = new Map(q.regions.map((r) => [r.id, r]));
-      for (const r of q.regions) {
-        const at = `${w}「${r.label}」`;
-        seen(at, r.id);
-        flat(at, r.box);
-        if (!within(r.box, q.box)) out.push(`${at}:作答区出了题框`);
-        if (r.kind === 'trace' && !r.model) out.push(`${at}:描写区要带 model`);
-        if (r.model && r.kind !== 'trace' && r.kind !== 'write') out.push(`${at}:只有描写、书写的格子带 model`);
-        if (r.fourLine && !r.fourLine.every((y, i) => i === 0 || y > r.fourLine![i - 1]!)) out.push(`${at}:四线要从上往下`);
-      }
-      const objects = new Map(q.objects.map((o) => [o.id, o]));
-      for (const o of q.objects) {
-        const at = `${w}「${o.label}」`;
-        seen(at, o.id);
-        flat(at, o.box);
-        if (!inBox(o.center, o.box)) out.push(`${at}:中心不在框里`);
-        const r = o.region === undefined ? undefined : regions.get(o.region);
-        if (o.region !== undefined && !r) out.push(`${at}:作答区「${o.region}」不在这道题里`);
-        if (o.side && r?.kind !== 'link') out.push(`${at}:只有连线的端点写 side`);
-        else if (r?.kind === 'link' && !o.side) out.push(`${at}:连线的端点要写 side`);
-      }
-      for (const r of q.regions.filter((x) => x.kind === 'link')) {
-        const ends = q.objects.filter((o) => o.region === r.id);
-        if (!ends.some((o) => o.side === 'left') || !ends.some((o) => o.side === 'right')) out.push(`${w}「${r.label}」:连线区左右两头都要有端点`);
-      }
-      for (const a of q.teacher.answers) {
-        for (const rid of a.at) if (!regions.has(rid)) out.push(`${w}答案:作答区「${rid}」不在这道题里`);
-        for (const [l, r] of a.links ?? []) {
-          if (objects.get(l)?.side !== 'left') out.push(`${w}答案:「${l}」不是连线的左端`);
-          if (objects.get(r)?.side !== 'right') out.push(`${w}答案:「${r}」不是连线的右端`);
-        }
-        if (a.links && !a.at.every((rid) => regions.get(rid)?.kind === 'link')) out.push(`${w}答案:links 只挂在连线区上`);
-      }
+      out.push(...regionProblems(w, '题', q.regions, q.objects, q.teacher.answers, ids, q.box));
     }
   });
   return out;

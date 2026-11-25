@@ -15,6 +15,8 @@
  *  textbook      课本:vault 里教材 PDF 的索引(字、行、拼音、目录、页码)
  *  lesson        一节课:讲稿里的动作、一节课的状态
  *  workbook      练习册:每页的图、文字层、作答区与物件、给老师的答案
+ *  regions       作答区、物件、答案(练习册和课本的分块共用)
+ *  zones         课本的分块:一页一份,块、作答区、念法、给老师的话
  * 运行时校验用 zod,失败信息经 explainIssues 变成修复指南。
  */
 export * from './issues.ts';
@@ -38,3 +40,5 @@ export * from './board-log.ts';
 export * from './textbook.ts';
 export * from './lesson.ts';
 export * from './workbook.ts';
+export * from './regions.ts';
+export * from './zones.ts';

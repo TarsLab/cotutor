@@ -149,6 +149,8 @@ export interface BookBlock {
   teacher?: ZoneTeacher;
   /** 这一块的作答区:id 和名字(几页上的合起来) */
   regions?: { id: string; label: string }[];
+  /** 这一块里能指的东西:id 和是什么(连线的答案照它换成名字) */
+  objects?: { id: string; label: string }[];
 }
 
 const linePm = (p: BookPage, l: BookLine): Box => [(l.x1 / p.w) * 1000, (l.y1 / p.h) * 1000, (l.x2 / p.w) * 1000, (l.y2 / p.h) * 1000];
@@ -169,7 +171,7 @@ const iou = (a: Box, b: Box): number => {
  * opts(练习册用):area = 每块都带自己的框(题框住题里的图和格,「看 第 3 题」照框不照行);skip = 不归给哪块的行(练习册挑出的字词那几行,和正文重了)
  */
 export function zoneBlocks(pages: readonly BookPage[], zones: readonly ZonePage[], layout: BookLayout = 'prose', opts: { area?: boolean; skip?: (l: BookLine) => boolean } = {}): BookBlock[] {
-  interface Node { z: Zone; refs: { n: number; i: number }[]; kids: Node[]; parent: Node | null; regions: { id: string; label: string }[]; teacher?: ZoneTeacher }
+  interface Node { z: Zone; refs: { n: number; i: number }[]; kids: Node[]; parent: Node | null; regions: { id: string; label: string }[]; objects: { id: string; label: string }[]; teacher?: ZoneTeacher }
   const byId = new Map<string, Node>();
   const top: Node[] = [];
   for (const p of pages) {
@@ -181,11 +183,12 @@ export function zoneBlocks(pages: readonly BookPage[], zones: readonly ZonePage[
       for (const z of zs) {
         let node = byId.get(z.id);
         if (!node) {
-          node = { z, refs: [], kids: [], parent, regions: [] };
+          node = { z, refs: [], kids: [], parent, regions: [], objects: [] };
           byId.set(z.id, node);
           (parent ? parent.kids : top).push(node);
         }
         for (const r of z.regions ?? []) node.regions.push({ id: r.id, label: r.label });
+        for (const o of z.objects ?? []) node.objects.push({ id: o.id, label: o.label });
         node.teacher ??= z.teacher;
         if (z.rows) {
           for (const row of z.rows) {
@@ -223,7 +226,7 @@ export function zoneBlocks(pages: readonly BookPage[], zones: readonly ZonePage[
   const walk = (ns: readonly Node[]): void => {
     for (const node of ns) {
       const at = out.length;
-      const more = { ...(node.parent ? { parent: node.parent.z.label } : {}), ...(node.teacher ? { teacher: node.teacher } : {}), ...(node.regions.length ? { regions: node.regions } : {}) };
+      const more = { ...(node.parent ? { parent: node.parent.z.label } : {}), ...(node.teacher ? { teacher: node.teacher } : {}), ...(node.regions.length ? { regions: node.regions } : {}), ...(node.objects.length ? { objects: node.objects } : {}) };
       if (node.refs.length) { const area = opts.area ? firstBox(node.z) : undefined; out.push({ ...zoneBlock(node.z, node.refs.map(lineOf).filter((l): l is BookLine => Boolean(l)), node.parent?.z ?? null, layout), refs: node.refs, ...(area ? { area } : {}), ...more }); }
       else { const area = firstBox(node.z); out.push({ kind: 'group', text: '', refs: [], label: node.z.label, ...(node.parent?.z.kind === 'column' ? { head: node.parent.z.label } : {}), ...(area ? { area } : {}), ...more }); }
       walk(node.kids);
@@ -713,7 +716,7 @@ function blockSeen(pages: readonly BookPage[], sheets: readonly BookSheet[], b: 
 export const TEACHER_LINES_MAX = 1600;
 
 /**
- * 窗里那几块(boxes 是场景坐标的窗:孩子停下的地方、老师「看」的那一块)只给老师的话:练什么、卡住怎么引、答案(作答区换成名字)、怎么看。
+ * 窗里那几块(boxes 是场景坐标的窗:孩子停下的地方、老师「看」的那一块)只给老师的话:练什么、卡住怎么引、答案(作答区、连线的两头换成名字)、怎么看。
  * 一块里面的小块露出来了,这一块也算;没写 teacher 的块不说(规则出的分块都没有)。上下文包 board: 的「给老师的」,每轮照窗现算;答案只在这里,孩子端拿不到
  */
 export function bookTeacherLines(pages: readonly BookPage[], sheets: readonly BookSheet[], blocks: readonly BookBlock[], boxes: readonly Box[]): string[] {
@@ -727,7 +730,8 @@ export function bookTeacherLines(pages: readonly BookPage[], sheets: readonly Bo
     if (!seen[k] || !t || !b.label) continue;
     // 答案引的格常在小块里(例题的答案写在表格的格上)
     const name = (id: string): string => blocks.slice(k, k + 1 + (b.kids ?? 0)).flatMap((x) => x.regions ?? []).find((r) => r.id === id)?.label ?? id;
-    const answers = (t.answers ?? []).map((a) => `${a.at.map(name).join('、')}:${[...(a.ok ? [a.ok.join(' 或 ')] : []), ...(a.links ? [a.links.map(([l, r]) => `${l}—${r}`).join('、')] : []), ...(a.note ? [a.note] : [])].join(';')}`);
+    const thing = (id: string): string => b.objects?.find((o) => o.id === id)?.label ?? id;
+    const answers = (t.answers ?? []).map((a) => `${a.at.map(name).join('、')}:${[...(a.ok ? [a.ok.join(' 或 ')] : []), ...(a.links ? [a.links.map(([l, r]) => `${thing(l)}—${thing(r)}`).join('、')] : []), ...(a.note ? [a.note] : [])].join(';')}`);
     // 只有答案的小题(一个算式、一句口诀)一行说完
     const lines = !t.goal && !t.hint && !t.note
       ? [`${b.label}:答案 ${answers.join(';')}`]

@@ -108,6 +108,18 @@ put('题号重了', dup);
   check('给老师的 <page>:这一页的块,叫法和印着的字,小题缩进;没有答案、练什么', text === '第 2 题 圈出一盘草莓,再写乘法算式。 乘法算式 □ × □\n  〔写「乘」〕', text);
   const t2 = bookTeacherLines(layer.pages, sheets, layer.blocks, [[0, 1430, 1000, 2830]]).join('\n');
   check('窗在第 2 页:给老师的是第 2 题的练什么、答案(格换成名字),小题一行说完;第 1 题的不给', t2.includes('第 2 题:练 读出几个几') && t2.includes('答案 乘号左边、乘号右边:3×4 或 4×3') && t2.includes('写「乘」:答案 田字格:乘') && !t2.includes('积木'), t2);
+  // 连线的答案:两头换成东西的名字(不说 id)
+  const linked = WB();
+  const q2z = linked.pages[1]!.zones[0]!;
+  q2z.regions!.push({ id: 'q2-link', kind: 'link', label: '连线区', box: [100, 300, 900, 380] });
+  q2z.objects = [
+    { id: 'q2-l', label: '3 个 4', box: [110, 310, 160, 330], center: [135, 320], region: 'q2-link', side: 'left' },
+    { id: 'q2-r', label: '4×3', box: [800, 310, 850, 330], center: [825, 320], region: 'q2-link', side: 'right' },
+  ];
+  q2z.teacher!.answers!.push({ at: ['q2-link'], links: [['q2-l', 'q2-r']] });
+  const ll = workbookLayer(linked);
+  const tl = bookTeacherLines(ll.pages, bookSheets(ll.pages), ll.blocks, [[0, 1430, 1000, 2830]]).join('\n');
+  check('连线的答案照东西的名字说', tl.includes('答案 连线区:3 个 4—4×3'), tl);
   const names = bookRegions(layer.pages, sheets, layer.zones).map((r) => r.label);
   check('作答区的名字接上它在哪一块', names.join() === '第 1 题的积木区,第 1 题的组数,第 2 题的乘号左边,第 2 题的乘号右边,第 2 题的写「乘」的田字格', names.join());
 }

@@ -24,7 +24,14 @@ export interface PdfPage {
   cells?: PdfCell[];
   /** 页上描边的小方框(10–60pt 宽、10–30pt 高,田字格以外的):数学算式里的空(□)从这里挑(textbook-index.ts 的 blankCells) */
   boxes?: [number, number, number, number][];
+  /** 页上画的表格(src/memory/textbook-cells.ts 的 findTables):一张表一组格,r、c 是第几行第几列(从 0 起) */
+  tables?: PdfTableCell[][];
+  /** 描边、没填颜色、6–30pt 近似方的小方框:打勾的 □ 从这里挑(textbook-index.ts 的 tickCells) */
+  squares?: [number, number, number, number][];
 }
+
+/** 表格里的一格(PDF 的点,左上角起) */
+export interface PdfTableCell { r: number; c: number; box: [number, number, number, number] }
 
 /** 页上画的一个田字格(PDF 的点,左上角起):格里印的字(没有 = 空格)、那个字是不是红的(描红) */
 export interface PdfCell {
@@ -38,7 +45,8 @@ export interface PdfCell {
 
 /**
  * 一页上孩子能写的一格(docs/dev/课本.md):田字格分 model = 印着黑字的范字,trace = 印着红字让孩子描的,empty = 空着让孩子写的;
- * blank = 填空:算式里的空方框(□)、空着的括号(没有田字格的线,没有范字)。
+ * blank = 填空:算式里的空方框(□)、空着的括号(没有田字格的线,没有范字);table = 表格里没字的一格(r、c 是第几行第几列,从 0 起);
+ * tick = 打勾的小方框(没填颜色、里面没字、旁边贴着字)。
  * ch = 格里印的字;m = 这一格照着写的那个字(同一排它左边最近的范字;描红就是它自己的字;前面没有范字的空格没有)。坐标同 BookLine(PDF 的点)
  */
 export interface BookCell {
@@ -46,9 +54,13 @@ export interface BookCell {
   y1: number;
   x2: number;
   y2: number;
-  kind: 'model' | 'trace' | 'empty' | 'blank';
+  kind: 'model' | 'trace' | 'empty' | 'blank' | 'table' | 'tick';
   ch?: string;
   m?: string;
+  r?: number;
+  c?: number;
+  /** 表格的格:是这一页第几张表(从 0 起,同 BookPage.tables) */
+  t?: number;
 }
 
 /** 一个字:左右边(行的上下边就是它的上下边);py = 头上印的拼音(已解码成带调的,如 jǐng) */
@@ -82,6 +94,8 @@ export interface BookPage {
   lines: BookLine[];
   /** 页上的田字格(从上到下、从左到右);没有就不写 */
   cells?: BookCell[];
+  /** 页上的表格(外框,PDF 的点);有空格的表格才记;没有就不写 */
+  tables?: [number, number, number, number][];
 }
 
 /**
@@ -104,7 +118,7 @@ export interface BookLesson {
 }
 
 /** 索引的版本:取字、分行的规则改了就加一,旧缓存重做 */
-export const BOOK_INDEX_VERSION = 6;
+export const BOOK_INDEX_VERSION = 7;
 
 /**
  * 一册怎么分块(出分块的规则 src/memory/textbook-zones-rules.ts):prose = 课文(自然段、语文园地的栏目);

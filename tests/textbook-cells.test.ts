@@ -3,8 +3,8 @@
  * src/chalk/kit/book.ts 的 bookCellsOf 换到场景里)。路径和字是照人教统编语文二上画田字格的样子造的(39pt 见方、两条虚线中线、范字深灰、描红红),
  * 真课本的核实见 docs/dev/课本.md;pdf.js 画图指令那一层在最后一段用手写的一页 PDF 真跑。
  */
-import { findBoxes, findCells, type CellGlyph, type CellPath } from '../src/memory/textbook-cells.ts';
-import { blankCells, bookCells } from '../src/memory/textbook-index.ts';
+import { findBoxes, findCells, findTables, type CellGlyph, type CellPath } from '../src/memory/textbook-cells.ts';
+import { blankCells, bookCells, tableCells, tickCells } from '../src/memory/textbook-index.ts';
 import { bookCellsOf, bookSheets } from '../src/chalk/index.ts';
 import type { BookPage, PdfItem } from '../src/schema/index.ts';
 import { check, done } from './_check.ts';
@@ -75,6 +75,28 @@ check('没有格的页:没有', bookCellsOf([{ ...page, cells: undefined }], she
   check('「(1)」这种编号、括号挨着没空的:不算', !at(70, 335) && !at(169, 375) && blanks.length === 3, JSON.stringify(blanks));
 }
 
+// ——— 表格(横竖线拼的网格)、表格里没字的格、小方框(打勾) ———
+{
+  const h = (at: number, a: number, b: number) => ({ at, a, b });
+  // 一张 2 行 4 列的表(5 条竖线、3 条横线),外加一条不挨着的横线;第 1 行第 1 格是田字格(重了不算)
+  const H = [h(100, 40, 200), h(130, 40, 200), h(160, 40, 200), h(300, 40, 200)];
+  const V = [40, 80, 120, 160, 200].map((x) => h(x, 100, 160));
+  const tables = findTables(H, V, [[40, 100, 80, 130]]);
+  check('表格:横竖线交着的一团,四边都有线的一格一格(和田字格重了的不算)', tables.length === 1 && tables[0].length === 7 && tables[0].every((c) => c.box[2] - c.box[0] === 40 && c.box[3] - c.box[1] === 30) && !tables[0].some((c) => c.r === 0 && c.c === 0), JSON.stringify(tables));
+  check('表格:两条横线一条竖线这种(下划线、框)不算', findTables([h(10, 0, 100), h(40, 0, 100)], [h(50, 10, 40)], []).length === 0);
+  const it = (s: string, x: number, y: number, w: number): PdfItem => ({ s, f: 'g', x, y, z: 16, w });
+  // 第 2 行第 2 格印着「7」,第 2 行第 3 格是空括号(已经认成填空)
+  const items = [it('7', 95, 152, 9), it('(', 125, 152, 6), it(')', 150, 152, 6), it('是', 262, 216, 16), it('字', 248, 216, 16), it('否', 302, 216, 16), it('一排牙刷', 240, 300, 64), it('看', 230, 216, 16)];
+  const blanks = blankCells({ items, boxes: [] });
+  const tc = tableCells({ items, tables, w: 520, h: 736 }, blanks);
+  check('表格的格:没印字的才是孩子要填的,格里的空括号已经是填空不重复;记第几张表、第几行第几列', tc.tables.length === 1 && tc.cells.length === 5 && tc.cells.every((c) => c.kind === 'table' && c.t === 0) && !tc.cells.some((c) => c.r === 1 && (c.c === 1 || c.c === 2)), JSON.stringify(tc));
+  // 小方框:「是 □ 否 □」两个旁边贴着字;一个旁边没字(牙刷图里的框);一个里面有字;一个和表格的格重了
+  const squares: [number, number, number, number][] = [[280, 200, 292, 212], [320, 200, 332, 212], [400, 400, 412, 412], [248, 204, 264, 218], [82, 132, 118, 158]];
+  const ticks = tickCells({ items, squares, tables, w: 520, h: 736 }, [], 'science');
+  check('小方框(科学):里面没字、旁边贴着字、不和表格的格重的才是打勾的', ticks.length === 2 && ticks.every((c) => c.kind === 'tick') && ticks[0].x1 === 280 && ticks[1].x1 === 320, JSON.stringify(ticks));
+  check('小方框(数学、语文):当填空', tickCells({ items, squares, tables, w: 520, h: 736 }, [], 'math').every((c) => c.kind === 'blank'));
+}
+
 // ——— 走真的 pdf.js:认格子读的是 pdf.js 画图指令的内部格式(constructPath 的参数),换了版本格式一变就一格也认不出、还不报错,这里盯着 ———
 {
   const { readPdfPages } = await import('../src/memory/textbook-pdf.ts');
@@ -87,7 +109,10 @@ check('没有格的页:没有', bookCellsOf([{ ...page, cells: undefined }], she
     `${x} ${y + 19.5} m ${x + 39} ${y + 19.5} l S`,
     ...(ch ? [`${rgb} rg BT /F1 30 Tf ${x + 8} ${y + 6} Td (${ch}) Tj ET`] : []),
   ].join('\n');
-  const content = [cellOps(40, 100, 'A', '0.17 0.18 0.21'), cellOps(79, 100, 'A', '1 0.51 0.51'), cellOps(118, 100, null, '')].join('\n');
+  // 下面一张 3×3 的表(四条横线、四条竖线,描边),一个 12pt 描边的小方框,一个填了颜色的小方框(图,不算)
+  const table = ['0 0 0 RG 0.5 w []0 d', ...[10, 30, 50, 70].map((y) => `40 ${y} m 160 ${y} l S`), ...[40, 80, 120, 160].map((x) => `${x} 10 m ${x} 70 l S`)].join('\n');
+  const squares = ['40 160 12 12 re S', '0.9 0.2 0.2 rg 100 160 12 12 re B'].join('\n');
+  const content = [cellOps(40, 100, 'A', '0.17 0.18 0.21'), cellOps(79, 100, 'A', '1 0.51 0.51'), cellOps(118, 100, null, ''), table, squares].join('\n');
   const objs = [
     '<< /Type /Catalog /Pages 2 0 R >>',
     '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
@@ -103,8 +128,10 @@ check('没有格的页:没有', bookCellsOf([{ ...page, cells: undefined }], she
   const got = page?.cells ?? [];
   check('真的 pdf.js:认出三个田字格(左上角起、y 往下)', got.length === 3 && got.every((c, i) => Math.abs(c.x1 - (40 + i * 39)) < 0.5 && Math.abs(c.y1 - 61) < 0.5 && Math.abs(c.x2 - c.x1 - 39) < 0.5), JSON.stringify(got));
   check('真的 pdf.js:深灰的字是范字,红的是描红,第三格空着', got[0]?.ch === 'A' && !got[0]?.red && got[1]?.ch === 'A' && got[1]?.red === true && got[2] && !got[2].ch, JSON.stringify(got));
+  check('真的 pdf.js:描边的线拼出一张 3×3 的表', page?.tables?.length === 1 && page.tables[0].length === 9 && Math.abs(page.tables[0][0].box[0] - 40) < 0.5 && Math.abs(page.tables[0][0].box[1] - 130) < 0.5, JSON.stringify(page?.tables));
+  check('真的 pdf.js:描边的小方框收,填了颜色的不收', page?.squares?.length === 1 && Math.abs(page.squares[0][0] - 40) < 0.5 && Math.abs(page.squares[0][1] - 28) < 0.5, JSON.stringify(page?.squares));
   const [bare] = await readPdfPages(new TextEncoder().encode(pdf), { cells: false });
-  check('cells: false 不读画图的指令(科学课本):没有格子,字照读', !bare?.cells && bare?.items.length === page?.items.length, JSON.stringify(bare));
+  check('cells: false 不读画图的指令:没有格子,字照读', !bare?.cells && bare?.items.length === page?.items.length, JSON.stringify(bare));
 }
 
 done();

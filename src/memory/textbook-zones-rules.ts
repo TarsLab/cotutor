@@ -6,7 +6,8 @@
  * 按课出(ruleZones 怎么分组):数学一个单元一组,语文、科学目录上最里一层的一课一组;段号、例题号一组里连着数,跨页的同一块两页上用同一个 id。
  * 一课里的块(RuleBlock)照下面三种分法(语文 prose、数学 math、科学 science),再换成一页一份的树:栏目下面记着它的题、段(head)的成它的小块;
  * 每块记下它那几行字的框(rows,照读的先后),读回来照框对上索引里的行,和这里分的一行不差。
- * 页上画的格(索引的 BookPage.cells)成作答区,id 是它在这一页的第几格(一节课状态里 kid.cells 的键 `<页>.<第几格>` 照旧),挂在框住它中心的最里面那块上,没有就挂在页上。
+ * 页上画的格(索引的 BookPage.cells)成作答区,id 是它在这一页的第几格(一节课状态里 kid.cells 的键 `<页>.<第几格>` 照旧),挂在框住它中心的最里面那块上,没有就挂在页上;
+ * 表格成一块(kind table,不带字行),它的空格挂在它上面;打勾的小方框是 tick 作答区。语文正文后面的块写上点了念什么(say)。
  */
 import { MATH_COLUMNS, bodySize, bookChrome, mathHeading, scienceColumn, withPinyin, type BookIndex, type BookLayout, type BookLine, type BookPage, type PermilleBox, type Zone, type ZonePage, type ZoneRegion } from '../schema/index.ts';
 
@@ -47,7 +48,7 @@ function ruleLabel(b: RuleBlock): string {
 const KIND = { title: 'title', para: 'para', section: 'column', other: 'other', example: 'example', problem: 'problem' } as const;
 
 /** 一组页(一课)的块换成一页一份的树:栏目后面紧跟着、记着它(head)的题、段、别的字成它的小块 */
-function groupZones(pages: readonly BookPage[], blocks: readonly RuleBlock[], group: number): Map<number, Zone[]> {
+function groupZones(pages: readonly BookPage[], blocks: readonly RuleBlock[], group: number, layout: BookLayout): Map<number, Zone[]> {
   interface Node { b: RuleBlock; id: string; kids: Node[] }
   const top: Node[] = [];
   let col: Node | null = null;
@@ -66,28 +67,88 @@ function groupZones(pages: readonly BookPage[], blocks: readonly RuleBlock[], gr
     const kids = node.kids.map((x) => onPage(x, n)).filter((z): z is Zone => z !== null);
     const box = union([...rows, ...kids.map((z) => z.box)]);
     if (!box) return null;
-    return { id: node.id, kind: KIND[node.b.kind], label: ruleLabel(node.b), box, rows, ...(kids.length ? { children: kids } : {}) };
+    const say = layout === 'prose' && node.b.kind === 'other' ? otherSay(p, node.b.refs.filter((r) => r.n === n).map((r) => p.lines[r.i])) : '';
+    return { id: node.id, kind: KIND[node.b.kind], label: ruleLabel(node.b), box, rows, ...(say ? { say } : {}), ...(kids.length ? { children: kids } : {}) };
   };
   const out = new Map<number, Zone[]>();
   for (const p of pages) out.set(p.n, top.map((x) => onPage(x, p.n)).filter((z): z is Zone => z !== null));
   return out;
 }
 
-/** 页上画的格 → 作答区,挂在框住格子中心的最里面那块上(那块和外面几层的框撑到包住它);没有就挂在页上 */
+/**
+ * 语文正文后面的块(认字栏、课后题、语文园地的栏目里的字)点了念什么(照印的念,不念拼音):认字栏那种一个字一个字带拼音的,字和字之间顿一下;
+ * 写字栏(字都印在田字格里)、页下的注(①本文选自……,给大人看的)不念,句前的 ◇ 这类记号不念。没有汉字的不念
+ */
+function otherSay(p: BookPage, lines: readonly BookLine[]): string {
+  const inCell = (x: number, y: number): boolean => (p.cells ?? []).some((c) => c.kind !== 'table' && c.kind !== 'tick' && x > c.x1 && x < c.x2 && y > c.y1 && y < c.y2);
+  const parts = lines.flatMap((l) => {
+    const han = l.chars.filter((c) => /\p{Script=Han}/u.test(c.c));
+    if (!han.length || han.every((c) => inCell((c.x1 + c.x2) / 2, (l.y1 + l.y2) / 2)) || /^\s*[①-⑳]/.test(l.text)) return [];
+    const letters = l.chars.every((c) => /\p{Script=Han}/u.test(c.c)) && han.length >= 2 && han.filter((c) => c.py).length >= 0.8 * han.length;
+    return [letters ? han.map((c) => c.c).join('、') : l.text.replace(/[\s◇◆●○■□▲△★☆]+/g, '')];
+  });
+  return parts.join('');
+}
+
+/** 框住 (x, y) 的最里面那一串块(外到里;同一层几块都框住时取最小的) */
+function hostPath(zones: readonly Zone[], x: number, y: number): Zone[] {
+  const path: Zone[] = [];
+  let zs: readonly Zone[] = zones;
+  for (;;) {
+    const area = (b: PermilleBox): number => (b[2] - b[0]) * (b[3] - b[1]);
+    const z = zs.filter((b) => x >= b.box[0] && x <= b.box[2] && y >= b.box[1] && y <= b.box[3]).sort((a, b) => area(a.box) - area(b.box))[0];
+    if (!z) return path;
+    path.push(z);
+    zs = z.children ?? [];
+  }
+}
+
+/**
+ * 页上的表格(有空格的,索引的 BookPage.tables)成块(kind table,不带字行:表里的字照旧归原来那块,老师看的、刷的字不变),
+ * 挂在框住表格中心的最里面那块下面,叫「例 1的表格」(外面最近的例题、题、栏目、段);没有就叫「第 73 页的表格」,没有块框住就挂在页上。回第几张表 → 那一块
+ */
+function tableZones(p: BookPage, zones: Zone[]): Map<number, Zone> {
+  const out = new Map<number, Zone>();
+  const used = new Map<string, number>();
+  (p.tables ?? []).forEach((t, k) => {
+    const box = linePermille(p, { x1: t[0], y1: t[1], x2: t[2], y2: t[3] });
+    const path = hostPath(zones, (box[0] + box[2]) / 2, (box[1] + box[3]) / 2);
+    const host = path[path.length - 1];
+    // 叫法照外面最近的有名字的那块(例题、题、栏目、段);别的字、标题的叫法是开头几个字,不拿来叫
+    const named = [...path].reverse().find((z) => z.kind === 'example' || z.kind === 'problem' || z.kind === 'column' || z.kind === 'para');
+    const base = named ? `${named.label}的表格` : `第 ${p.printed ?? p.n} 页的表格`;
+    const n = (used.get(base) ?? 0) + 1;
+    used.set(base, n);
+    const z: Zone = { id: `${p.n}-表${k + 1}`, kind: 'table', label: n > 1 ? `${base} ${n}` : base, box, rows: [] };
+    if (host) { (host.children ??= []).push(z); for (const y of path) y.box = union([y.box, box])!; } else zones.push(z);
+    out.set(k, z);
+  });
+  return out;
+}
+
+/** 打勾的小方框叫什么:贴着它右边的字(「能」前面的方框),没有就左边的字 */
+function tickLabel(p: BookPage, c: { x1: number; y1: number; x2: number; y2: number }): string {
+  const w = c.x2 - c.x1, cy = (c.y1 + c.y2) / 2;
+  const row = p.lines.filter((l) => l.y1 < cy && l.y2 > cy);
+  const right = row.filter((l) => l.x1 >= c.x2 - 1 && l.x1 <= c.x2 + 3 * w).sort((a, b) => a.x1 - b.x1)[0];
+  if (right) return `「${clip(right.text, 8)}」前面的方框`;
+  const left = row.filter((l) => l.x2 <= c.x1 + 1 && l.x2 >= c.x1 - 3 * w).sort((a, b) => b.x2 - a.x2)[0];
+  return left ? `「${clip(left.text, 8)}」后面的方框` : '小方框';
+}
+
+/** 页上画的格 → 作答区,挂在框住格子中心的最里面那块上(那块和外面几层的框撑到包住它;表格的格挂在它那张表上);没有就挂在页上 */
 function cellRegions(p: BookPage, zones: Zone[]): ZoneRegion[] {
   const loose: ZoneRegion[] = [];
+  const tables = tableZones(p, zones);
   (p.cells ?? []).forEach((c, i) => {
     const box = linePermille(p, c);
-    const r: ZoneRegion = { id: String(i), kind: 'write', label: c.kind === 'blank' ? '填空' : c.kind === 'model' ? `范字「${c.ch ?? ''}」` : c.m ? `照着「${c.m}」写的格` : '田字格', box, ...(c.kind !== 'blank' ? { tian: true as const } : {}), cell: c.kind, ...(c.ch ? { ch: c.ch } : {}), ...(c.m ? { m: c.m } : {}) };
-    const cx = (box[0] + box[2]) / 2, cy = (box[1] + box[3]) / 2;
-    const path: Zone[] = [];
-    let zs: readonly Zone[] = zones;
-    for (;;) {
-      const z = zs.find((x) => cx >= x.box[0] && cx <= x.box[2] && cy >= x.box[1] && cy <= x.box[3]);
-      if (!z) break;
-      path.push(z);
-      zs = z.children ?? [];
-    }
+    const table = c.kind === 'table' && c.t !== undefined ? tables.get(c.t) : undefined;
+    const label = c.kind === 'blank' ? '填空' : c.kind === 'model' ? `范字「${c.ch ?? ''}」` : c.kind === 'table' ? `${table?.label ?? '表格'}第 ${(c.r ?? 0) + 1} 行第 ${(c.c ?? 0) + 1} 格` : c.kind === 'tick' ? tickLabel(p, c) : c.m ? `照着「${c.m}」写的格` : '田字格';
+    const r: ZoneRegion = c.kind === 'tick'
+      ? { id: String(i), kind: 'tick', label, box }
+      : { id: String(i), kind: 'write', label, box, ...(c.kind !== 'blank' && c.kind !== 'table' ? { tian: true as const } : {}), cell: c.kind, ...(c.ch ? { ch: c.ch } : {}), ...(c.m ? { m: c.m } : {}) };
+    if (table) { (table.regions ??= []).push(r); return; }
+    const path = hostPath(zones, (box[0] + box[2]) / 2, (box[1] + box[3]) / 2);
     const host = path[path.length - 1];
     if (!host) { loose.push(r); return; }
     (host.regions ??= []).push(r);
@@ -99,7 +160,7 @@ function cellRegions(p: BookPage, zones: Zone[]): ZoneRegion[] {
 /** 一组页(一课、目录)出分块:一页一份 */
 export function ruleLessonZones(pages: readonly BookPage[], layout: BookLayout): ZonePage[] {
   if (!pages.length) return [];
-  const zones = groupZones(pages, ruleBlocks(pages, layout), pages[0].n);
+  const zones = groupZones(pages, ruleBlocks(pages, layout), pages[0].n, layout);
   return pages.map((p) => {
     const zs = zones.get(p.n) ?? [];
     const loose = cellRegions(p, zs);

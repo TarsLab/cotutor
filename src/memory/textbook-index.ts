@@ -433,6 +433,54 @@ export function blankCells(p: Pick<PdfPage, 'items' | 'boxes'>): BookCell[] {
   return out;
 }
 
+/** 一个框里印着的字(段的中心落在框里;空白、标点不算) */
+const textIn = (items: readonly PdfItem[], b: readonly number[]): string =>
+  items.filter((it) => { const x = it.x + it.w / 2, y = it.y - it.z * 0.35; return x > b[0] && x < b[2] && y > b[1] && y < b[3]; }).map((it) => it.s).join('').replace(/[\s\p{P}\p{S}]/gu, '');
+const overlap = (a: readonly number[], b: readonly number[]): number => {
+  const w = Math.min(a[2], b[2]) - Math.max(a[0], b[0]), h = Math.min(a[3], b[3]) - Math.max(a[1], b[1]);
+  if (w <= 0 || h <= 0) return 0;
+  const i = w * h;
+  return i / ((a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - i);
+};
+
+/**
+ * 表格里没字的格(2026-11-25 照 scripts/probe-book-zones.mjs 核过的,人教数学二上第 78 页「拼图个数 / 拼板块数」那种):表格是画图指令里的线拼的(textbook-cells.ts 的 findTables),
+ * 格里没印字的是孩子要填的;已经认成填空的(格里的空括号)不重复。tables = 有空格的那几张表的外框,格的 t 是第几张
+ */
+export function tableCells(p: Pick<PdfPage, 'items' | 'tables' | 'w' | 'h'>, blanks: readonly BookCell[]): { cells: BookCell[]; tables: [number, number, number, number][] } {
+  const cells: BookCell[] = [], tables: [number, number, number, number][] = [];
+  const onPage = (b: readonly number[]): boolean => b[0] >= -1 && b[1] >= -1 && b[2] <= p.w + 1 && b[3] <= p.h + 1;
+  for (const t of p.tables ?? []) {
+    if (!t.every((c) => onPage(c.box))) continue;
+    const empty = t.filter((c) => !textIn(p.items, c.box) && !blanks.some((b) => { const x = (b.x1 + b.x2) / 2, y = (b.y1 + b.y2) / 2; return x > c.box[0] && x < c.box[2] && y > c.box[1] && y < c.box[3]; }));
+    if (!empty.length) continue;
+    const k = tables.push([r2(Math.min(...t.map((c) => c.box[0]))), r2(Math.min(...t.map((c) => c.box[1]))), r2(Math.max(...t.map((c) => c.box[2]))), r2(Math.max(...t.map((c) => c.box[3])))]) - 1;
+    for (const c of empty) cells.push({ x1: c.box[0], y1: c.box[1], x2: c.box[2], y2: c.box[3], kind: 'table', r: c.r, c: c.c, t: k });
+  }
+  return { cells, tables };
+}
+
+/**
+ * 打勾的小方框(同上核过):没填颜色、6–30pt 近似方的框(textbook-cells.ts 挑好的 squares),里面没字,左右一个框宽以内、和框同一高度贴着字
+ * (「□能」「比1米长□」;一排牙刷头旁边没有);和田字格、填空、表格的格重了的不算。
+ * 不是都打勾(2026-11-25 看过三本真课本的 153 个):科学的是(记录表里的「是 □ 否 □」「能 □」),当 tick;数学的多半是算式里要填的数
+ * (人教数学二上第 23 页「□×□=」「算式:□○□=□」,第 104 页钱数之间填符号),真打勾的只有第 63 页「比1米长 □」那几个,从旁边的字分不出来;
+ * 语文的是句末填标点(统编语文二上第 41 页)。数学、语文的都当填空(blank):点开写字卡,要打勾也能在卡里画
+ */
+export function tickCells(p: Pick<PdfPage, 'items' | 'squares' | 'tables' | 'w' | 'h'>, known: readonly BookCell[], layout: BookLayout): BookCell[] {
+  const out: BookCell[] = [];
+  const taken = [...known.map((c) => [c.x1, c.y1, c.x2, c.y2]), ...(p.tables ?? []).flat().map((c) => c.box)];
+  for (const q of p.squares ?? []) {
+    const w = q[2] - q[0];
+    if (q[0] < -1 || q[1] < -1 || q[2] > p.w + 1 || q[3] > p.h + 1 || textIn(p.items, q)) continue;
+    const row = p.items.filter((it) => { const cy = it.y - it.z * 0.35; return it.s.trim() !== '' && cy > q[1] && cy < q[3]; });
+    const right = row.filter((it) => it.x >= q[2] - 1 && it.x <= q[2] + w), left = row.filter((it) => it.x + it.w <= q[0] + 1 && it.x + it.w >= q[0] - w);
+    if (!(right.length || left.length) || [...taken, ...out.map((c) => [c.x1, c.y1, c.x2, c.y2])].some((b) => overlap(q, b) > 0.3)) continue;
+    out.push({ x1: q[0], y1: q[1], x2: q[2], y2: q[3], kind: layout === 'science' ? 'tick' : 'blank' });
+  }
+  return out;
+}
+
 /** 整本:每页分行、读页码、认田字格和填空,读目录,自检 */
 /** 一册怎么分块:文件名带「数学」的是 math,带「科学」的是 science */
 export const layoutOf = (title: string): BookLayout => (title.includes('数学') ? 'math' : title.includes('科学') ? 'science' : 'prose');
@@ -440,8 +488,12 @@ export const layoutOf = (title: string): BookLayout => (title.includes('数学')
 export function buildBookIndex(raw: readonly PdfPage[], meta: { file: string; sha: string; title: string }): BookIndex {
   const bad: string[] = [];
   const pages: BookPage[] = raw.map((p) => {
-    const cells = [...bookCells(p.cells ?? []), ...blankCells(p)].sort((a, b) => (Math.abs(a.y1 - b.y1) > 3 ? a.y1 - b.y1 : a.x1 - b.x1));
-    return { n: p.n, printed: printedOf(p), w: r2(p.w), h: r2(p.h), lines: pageLines(p, bad), ...(cells.length ? { cells } : {}) };
+    const blanks = blankCells(p);
+    const old = [...bookCells(p.cells ?? []), ...blanks].sort((a, b) => (Math.abs(a.y1 - b.y1) > 3 ? a.y1 - b.y1 : a.x1 - b.x1));
+    // 表格的格、小方框接在后面:田字格、填空的第几格(一节课状态里 kid.cells 的键)不变
+    const tb = tableCells(p, blanks);
+    const cells = [...old, ...tb.cells, ...tickCells(p, old, layoutOf(meta.title))];
+    return { n: p.n, printed: printedOf(p), w: r2(p.w), h: r2(p.h), lines: pageLines(p, bad), ...(cells.length ? { cells } : {}), ...(tb.tables.length ? { tables: tb.tables } : {}) };
   });
   const toc = parseToc(raw);
   const layout = layoutOf(meta.title);

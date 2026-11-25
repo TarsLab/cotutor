@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { bookCellsOf, bookSheets, zoneBlocks } from '../src/chalk/index.ts';
 import { ruleLessonZones, ruleZones } from '../src/memory/textbook-zones-rules.ts';
 import { bookZones, forgetZones, readZoneBook, ruleZonesDir, vaultZonesDir, writeZonePages } from '../src/memory/textbook-zones.ts';
-import { ZonePageSchema, pickZones, walkZones, zonePageProblems, zonesKidPage, type BookPage, type ZonePage } from '../src/schema/index.ts';
+import { ZonePageSchema, pickZones, walkZones, zonePageProblems, zonesKidPage, type BookPage, type Zone, type ZonePage } from '../src/schema/index.ts';
 import { bookIndexOf } from './_book.ts';
 import { mathIndexOf } from './_math-book.ts';
 import { scienceIndexOf } from './_science-book.ts';
@@ -69,6 +69,34 @@ const fz = ruleLessonZones(fish, 'prose');
   walkZones(zs[0].zones, (z) => { for (const r of z.regions ?? []) hosted.push(r.id); });
   check('格挂在框住它中心的那块上(范字格落在「处」那一行上),块外面的(右边的空格、下面的填空)挂在页上', hosted.join() === '0' && (zs[0].regions ?? []).map((r) => `${r.id}:${r.cell}`).join() === '1:empty,2:blank', JSON.stringify(zs[0]));
   check('挂了格的块过检查(框撑大了)', zonePageProblems(zs[0]).length === 0, zonePageProblems(zs[0]).join(';'));
+}
+
+// ---- 表格成一块(不带字行,读回来不成块),空格挂在它上面;打勾的小方框叫「旁边的字」前面的方框;语文正文后面的块写上念什么 ----
+{
+  const ln = (text: string, x: number, y: number, z = 16, py?: string): BookPage['lines'][number] => ({ text, x1: x, x2: x + Array.from(text).length * z, y1: y, y2: y + z, z, f: 'a', chars: Array.from(text).map((c, k) => ({ c, x1: x + k * z, x2: x + (k + 1) * z, ...(py ? { py } : {}) })) });
+  const p: BookPage = {
+    n: 5, printed: 4, w: 520, h: 736,
+    // 正文两行(字号 16),后面是别的:题(字号 14)、能 □ 否 □、认字栏(带拼音)、写字栏(字印在田字格里)、页下的注
+    lines: [ln('观察记录', 200, 60, 24), ln('青蛙坐在井里看天。', 60, 90), ln('小鸟飞来落在井沿。', 60, 112), ln('能否看见空气', 60, 140, 14), ln('能', 300, 140, 14), ln('否', 360, 140, 14), ln('观沿渴话', 60, 400, 20, 'guān'), ln('观', 64, 464, 30), ln('①本文选自某书。', 60, 680, 10)],
+    tables: [[60, 200, 300, 260]],
+    cells: [
+      { x1: 60, y1: 460, x2: 100, y2: 500, kind: 'model', ch: '观' },
+      { x1: 180, y1: 230, x2: 300, y2: 260, kind: 'table', r: 1, c: 1, t: 0 },
+      { x1: 342, y1: 140, x2: 354, y2: 152, kind: 'tick' },
+    ],
+  };
+  const zs = ruleLessonZones([p], 'prose')[0];
+  const all: Zone[] = [];
+  walkZones(zs.zones, (z) => { all.push(z); });
+  const table = all.find((z) => z.kind === 'table');
+  check('表格成一块:不带字行,叫「第 4 页的表格」(外面没有例题、题、栏目、段),它的空格挂在它上面叫「…第 2 行第 2 格」', !!table && table.rows?.length === 0 && table.label === '第 4 页的表格' && table.regions?.[0]?.label === '第 4 页的表格第 2 行第 2 格' && table.regions[0].kind === 'write' && table.regions[0].cell === 'table' && table.regions[0].id === '1', JSON.stringify(zs));
+  const regions: { kind: string; label: string }[] = [...(zs.regions ?? [])];
+  walkZones(zs.zones, (z) => { regions.push(...(z.regions ?? [])); });
+  check('打勾的小方框:tick 作答区,叫「否」前面的方框', regions.some((r) => r.kind === 'tick' && r.label === '「否」前面的方框'), JSON.stringify(regions));
+  const says = all.filter((z) => z.say).map((z) => z.say);
+  check('语文正文后面的块写上念什么:题照印的,认字栏一个字一个字顿开;写字栏(字印在田字格里)、页下的注不念', says.includes('能否看见空气') && says.includes('观、沿、渴、话') && !says.includes('观') && !says.some((x) => x!.includes('本文选自')), JSON.stringify(says));
+  const blocks = zoneBlocks([p], [zs], 'prose');
+  check('读回来:表格不成块,块数和字行数对得上', blocks.every((b) => b.refs.length > 0) && blocks.reduce((n, b) => n + b.refs.length, 0) === p.lines.length, JSON.stringify(blocks.map((b) => [b.kind, b.text])));
 }
 
 // ---- 孩子端那份:给老师的、答案、物件、作答区的名字不下发 ----

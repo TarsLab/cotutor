@@ -1,7 +1,7 @@
 /**
  * 课本 PDF:vault 的 `教材/` 下家长放的教材 PDF(从国家中小学智慧教育平台这类网站下的,个人学习用)。
  * 这里只读:列出这位老师学科的册子、挑这学期的那一册、读 PDF 的文字层做成索引(textbook-index.ts)存进 `.cotutor/textbooks/<指纹>.json`。
- * 索引能重新生成(不进备份);PDF 换了(指纹变了)就重做。整本 126 页读一遍约 1 秒,只在第一次用到时读。
+ * 索引能重新生成(不进备份);PDF 换了(指纹变了)就重做。整本 126 页读一遍约 2 秒,只在第一次用到时读。
  *
  * pdf.js 不是运行时依赖(装 cotutor 不多带 35 MB):打包时把它的几个压缩文件拷进 dist/stage/pdf/(scripts/build-stage.mjs),
  * 服务端和舞台用同一份;仓库里直跑时退回 node_modules 里的 pdfjs-dist(devDependencies)。
@@ -11,9 +11,9 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BOOK_INDEX_VERSION, type BookIndex, type PdfCell, type PdfItem, type PdfPage } from '../schema/index.ts';
+import { BOOK_INDEX_VERSION, type BookIndex, type PdfItem, type PdfPage } from '../schema/index.ts';
 import { opsCells } from './textbook-cells.ts';
-import { buildBookIndex, layoutOf } from './textbook-index.ts';
+import { buildBookIndex } from './textbook-index.ts';
 
 /** 册子的文件名:不带路径分隔、不以点开头、是 .pdf */
 const SAFE = /^[^/\\.][^/\\]{0,160}\.pdf$/i;
@@ -68,12 +68,13 @@ export function loadPdfjs(): Promise<Pdfjs> {
 }
 
 /**
- * 读 PDF 每一页的文字(PdfItem:基线从页顶量)和页上画的田字格、填空(./textbook-cells.ts;画图的指令读不出就当没有)。
- * cells: false 不读画图的指令:要读就得把页上的图都解一遍,广东版科学二上(163 张高清 CMYK 的 JPEG,pdf.js 在 JS 里解)文字 1.3 秒、指令 23 秒(2026-11-24 量的)
+ * 读 PDF 每一页的文字(PdfItem:基线从页顶量)和页上画的田字格、填空、表格、小方框(./textbook-cells.ts;画图的指令读不出就当没有)。
+ * 读画图的指令时不解页上的图(maxImageSize: 1,pdf.js 把图都跳过):要解的话广东版科学二上 163 张高清 CMYK 的 JPEG 读一遍 20 秒,跳过 0.5 秒,
+ * 人教数学二上 3.4 秒 → 1.3 秒(2026-11-25 量的);只要线和字,用不着图。cells: false 只读文字
  */
 export async function readPdfPages(data: Uint8Array, opts: { cells?: boolean } = {}): Promise<PdfPage[]> {
   const lib = await loadPdfjs();
-  const task = lib.getDocument({ data, disableFontFace: true, verbosity: 0 });
+  const task = lib.getDocument({ data, disableFontFace: true, verbosity: 0, maxImageSize: 1 });
   const doc = await task.promise;
   try {
     const out: PdfPage[] = [];
@@ -89,9 +90,9 @@ export async function readPdfPages(data: Uint8Array, opts: { cells?: boolean } =
         const [x, y] = vp.convertToViewportPoint(e, f);
         items.push({ s: it.str, f: it.fontName, x: Math.round(x * 100) / 100, y: Math.round(y * 100) / 100, z: Math.round(Math.hypot(a, b) * 100) / 100, w: Math.round(it.width * 100) / 100 });
       }
-      let got: { cells: PdfCell[]; boxes: [number, number, number, number][] } = { cells: [], boxes: [] };
+      let got: ReturnType<typeof opsCells> = { cells: [], boxes: [], tables: [], squares: [] };
       if (opts.cells !== false) try { got = opsCells(await page.getOperatorList({ annotationMode: 0 }), lib.OPS as unknown as Record<string, number>, vp.transform); } catch { /* 画图的指令读不出:没有格子 */ }
-      out.push({ n, w: vp.width, h: vp.height, items, ...(got.cells.length ? { cells: got.cells } : {}), ...(got.boxes.length ? { boxes: got.boxes } : {}) });
+      out.push({ n, w: vp.width, h: vp.height, items, ...(got.cells.length ? { cells: got.cells } : {}), ...(got.boxes.length ? { boxes: got.boxes } : {}), ...(got.tables.length ? { tables: got.tables } : {}), ...(got.squares.length ? { squares: got.squares } : {}) });
       page.cleanup();
     }
     return out;
@@ -121,8 +122,7 @@ export async function bookIndex(dir: string, cacheDir: string, name: string): Pr
       const old = await readFile(cache, 'utf8').then((s) => JSON.parse(s) as BookIndex).catch(() => null);
       if (old && old.v === BOOK_INDEX_VERSION && old.sha === sha) return { ...old, file: name };
       const title = name.replace(/\.pdf$/i, '');
-      // 田字格、填空只在语文、数学课本上核实过;科学的不读(读画图的指令要把图都解一遍,首次打开等太久)
-      const index = buildBookIndex(await readPdfPages(new Uint8Array(data), { cells: layoutOf(title) !== 'science' }), { file: name, sha, title });
+      const index = buildBookIndex(await readPdfPages(new Uint8Array(data)), { file: name, sha, title });
       await mkdir(cacheDir, { recursive: true });
       const tmp = `${cache}.${process.pid}.tmp`;
       await writeFile(tmp, JSON.stringify(index));

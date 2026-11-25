@@ -16,7 +16,7 @@ import { z } from 'zod';
 import { PermilleBoxSchema, RegionObjectSchema, RegionSchema, TeacherSchema, regionId, regionProblems, type PermilleBox } from './regions.ts';
 
 /** 规则出分块的版本:规则改了就加一,旧的重出(同 BOOK_INDEX_VERSION) */
-export const ZONES_RULES_VERSION = 1;
+export const ZONES_RULES_VERSION = 2;
 
 /**
  * 块是哪一种:title 课题(单元页上的大字也算)、column 栏目(日积月累、做一做、探索与实践 1)、example 例题、problem 题、sub 小题、
@@ -25,9 +25,9 @@ export const ZONES_RULES_VERSION = 1;
 export const ZONE_KINDS = ['title', 'column', 'example', 'problem', 'sub', 'group', 'para', 'table', 'figure', 'other'] as const;
 export type ZoneKind = (typeof ZONE_KINDS)[number];
 
-/** 课本页上画的格(src/schema/textbook.ts 的 BookCell):model 范字、trace 描红、empty 空格、blank 填空;ch 格里印的字,m 照着写的那个字 */
+/** 课本页上画的格(src/schema/textbook.ts 的 BookCell):model 范字、trace 描红、empty 空格、blank 填空、table 表格的空格;ch 格里印的字,m 照着写的那个字。打勾的小方框是 kind: tick,不写 cell */
 export const ZoneRegionSchema = RegionSchema.extend({
-  cell: z.enum(['model', 'trace', 'empty', 'blank']).optional(),
+  cell: z.enum(['model', 'trace', 'empty', 'blank', 'table']).optional(),
   ch: z.string().min(1).optional(),
   m: z.string().min(1).optional(),
 });

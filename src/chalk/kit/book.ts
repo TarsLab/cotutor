@@ -79,14 +79,14 @@ export const lineBox = (sh: BookSheet, l: BookLine): Box => toScene(sh, l.x1, l.
 
 /**
  * 一课几页上能写的格(场景坐标):id = <PDF 第几页>.<作答区的 id>(一节课状态里 kid.cells 的键;规则出的作答区 id 是这一页第几格,同以前);kind、ch、m 同 BookCell。
- * 课本给这一课挑好的分块(zones):格是作答区里能写的(write);练习册不给 zones,照页上的 cells(src/chalk/kit/workbook.ts 换好的)
+ * 课本给这一课挑好的分块(zones):格是作答区里能写的(write;表格的空格当填空开写字卡,打勾的小方框不开卡);练习册不给 zones,照页上的 cells(src/chalk/kit/workbook.ts 换好的)
  */
 export interface SceneCell { id: string; box: Box; kind: 'model' | 'trace' | 'empty' | 'blank'; ch?: string; m?: string }
 export function bookCellsOf(pages: readonly BookPage[], sheets: readonly BookSheet[], zones?: readonly ZonePage[]): SceneCell[] {
   return pages.flatMap((p) => {
     const sh = sheetOf(sheets, p.n);
     if (!sh) return [];
-    if (!zones) return (p.cells ?? []).map((c, i) => ({ id: `${p.n}.${i}`, box: toScene(sh, c.x1, c.y1, c.x2, c.y2), kind: c.kind, ...(c.ch ? { ch: c.ch } : {}), ...(c.m ? { m: c.m } : {}) }));
+    if (!zones) return (p.cells ?? []).flatMap((c, i): SceneCell[] => (c.kind === 'tick' ? [] : [{ id: `${p.n}.${i}`, box: toScene(sh, c.x1, c.y1, c.x2, c.y2), kind: c.kind === 'table' ? 'blank' : c.kind, ...(c.ch ? { ch: c.ch } : {}), ...(c.m ? { m: c.m } : {}) }]));
     const zp = zones.find((x) => x.page === p.n);
     if (!zp) return [];
     const rs: ZoneRegion[] = [...(zp.regions ?? [])];
@@ -94,7 +94,7 @@ export function bookCellsOf(pages: readonly BookPage[], sheets: readonly BookShe
     const writes = rs.filter((r) => r.kind === 'write');
     if (writes.every((r) => /^\d+$/.test(r.id))) writes.sort((a, b) => Number(a.id) - Number(b.id));
     const kx = p.w / 1000, ky = p.h / 1000;
-    return writes.map((r): SceneCell => ({ id: `${p.n}.${r.id}`, box: toScene(sh, r.box[0] * kx, r.box[1] * ky, r.box[2] * kx, r.box[3] * ky), kind: r.cell ?? (r.tian ? 'empty' : 'blank'), ...(r.ch ? { ch: r.ch } : {}), ...(r.m ? { m: r.m } : {}) }));
+    return writes.map((r): SceneCell => ({ id: `${p.n}.${r.id}`, box: toScene(sh, r.box[0] * kx, r.box[1] * ky, r.box[2] * kx, r.box[3] * ky), kind: r.cell && r.cell !== 'table' ? r.cell : r.tian ? 'empty' : 'blank', ...(r.ch ? { ch: r.ch } : {}), ...(r.m ? { m: r.m } : {}) }));
   });
 }
 
@@ -150,7 +150,7 @@ const iou = (a: Box, b: Box): number => {
 /**
  * 一课的块(给老师看的段、栏目、题,点读的段):照这一课挑好的分块(schema 的 pickZones)读回来。
  * 块的行:写了 rows 的照框对上这一页没被占的行里重合最多的那行(重合一半以上);没写 rows 的,框里没被占的行归框住它中心的最里面那块。
- * 跨页的同一块(两页上同一个 id)连成一块,照先出现的先后;栏目下面的小块记着栏目名(head)。
+ * 跨页的同一块(两页上同一个 id)连成一块,照先出现的先后;栏目下面的小块记着栏目名(head);一行字都没有的块(表格、插图)不成块。
  * 字照行重拼,和规则分块时一样(src/memory/textbook-zones-rules.ts):段的行直接连,别的用空格隔开,语文的栏目、别的字带读音,例题去掉开头的例题号
  */
 export function zoneBlocks(pages: readonly BookPage[], zones: readonly ZonePage[], layout: BookLayout = 'prose'): BookBlock[] {
@@ -195,8 +195,8 @@ export function zoneBlocks(pages: readonly BookPage[], zones: readonly ZonePage[
   const out: BookBlock[] = [];
   const walk = (ns: readonly Node[]): void => {
     for (const node of ns) {
-      const b = zoneBlock(node.z, node.refs.map(lineOf).filter((l): l is BookLine => Boolean(l)), node.parent?.z ?? null, layout);
-      out.push({ ...b, refs: node.refs });
+      // 没有字行的块(表格、插图)不成块:老师看的、刷的字照旧在外面那块里;它下面的小块照走
+      if (node.refs.length) out.push({ ...zoneBlock(node.z, node.refs.map(lineOf).filter((l): l is BookLine => Boolean(l)), node.parent?.z ?? null, layout), refs: node.refs });
       walk(node.kids);
     }
   };

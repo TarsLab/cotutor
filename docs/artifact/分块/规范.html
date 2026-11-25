@@ -90,7 +90,7 @@ pre.code { margin:0; background:var(--surface); border-radius:var(--r-card); box
 
 <div class="wrap">
 <header class="top">
-  <span class="crumb">docs/artifact/分块 · 2026-11-25 · 第 1 步做完,其余提议</span>
+  <span class="crumb">docs/artifact/分块 · 2026-11-25 · 第 1、2 步做完,其余提议</span>
   <h1>分块</h1>
   <p>课本页上哪一块是一道题、题里套着哪几个小题、哪一格让孩子写、点了念什么、老师怎么叫它:原来是运行时照规则从 PDF 的文字层现猜(<code>lessonBlocks</code>、<code>mathBlocks</code>、<code>scienceBlocks</code>;第 1 步已挪进 <code>src/memory/textbook-zones-rules.ts</code>,运行时只读分块文件),表格认不出、课后题不点读,换一本书就要再调。这份提议把分块挪到预处理:先由 cotutor 自己照规则出一份分块文件(不用大模型,自动跑),家长有编程助手的,再让它照学科的规范在这份上改好;运行时只读分块文件,一套逻辑。这份写文件长什么样、怎么出、孩子怎么点、老师怎么用、家长怎么看和改。</p>
   <div class="legend"><span class="st now">现状</span><span class="st new">提议</span><span class="st tbd">待定</span><span class="st ok">已定</span> 规则编号:F 分块文件、R 规则出、G 编程助手改、X 学科规范、K 孩子端、C 老师与上下文、V 工作台、M 换路、Q 待讨论</div>
@@ -271,7 +271,7 @@ pre.code { margin:0; background:var(--surface); border-radius:var(--r-card); box
     <tbody>
       <tr><td class="n">R1</td><td><b>建索引时自动出</b>(<code>bookIndex</code> 做完索引接着做),写进 <code>.cotutor/textbooks/zones/&lt;指纹&gt;/</code>。规则改了加版本号,旧的重出(同 <code>BOOK_INDEX_VERSION</code>)。家长端、孩子端都不用等:第一次进一课时那一课先出,别的在后台出完。<span class="was">做了,时机不同:第一次用到这一册(进课本、拉一课的行、点读)时整册一起出,不在 <code>bookIndex</code> 里;整册 3–18 毫秒(三本真课本),不用分先后。<code>book.json</code> 记规则和索引的版本,哪个变了重出。</span></td><td><span class="st now">现状</span></td></tr>
       <tr><td class="n">R2</td><td><b>按课出:</b>目录里的一课一课走(<code>BookIndex.lessons</code>),段号、例题号、题号一课里连着数,跨页的同一个 id(F4)。一页落在两课里(上一课的尾巴和下一课的开头)照块归课。<span class="was">做了,分组照实测改:数学一个单元一组(正文字号、跨页接着的栏目要整个单元一起看:第 26 页单看会把「做一做」下面的 1、2 认成例题);语文、科学目录上最里一层一组(一课下面的诗一首一组,各自分段、点读;不然《古诗二首》的第二首整首成了「别的字」)。一页只属于一组。</span></td><td><span class="st now">现状</span></td></tr>
-      <tr><td class="n">R3</td><td><b>出什么:</b>现在的 <code>lessonBlocks</code> / <code>mathBlocks</code> / <code>scienceBlocks</code> 出的块(段、栏目、例题、题;label 就是老师现在写的「第 3 段」「例 2」「练一练第 3 题」),<code>bookCells</code>、<code>blankCells</code> 出的格(作答区),点读的段(<code>say</code> 照 <code>bookReadTexts</code>)。没有 teacher、没有答案。换路比过一样以后(M3、M4),再加探针里核过的两样:表格里没字的格(画图指令的横竖线拼网格)、打勾的小方框(没填颜色、旁边贴着字)。<span class="was">块和格做了;<code>say</code> 还没写(点读照旧拿读回来的段走 <code>bookReadTexts</code>,第 4 步换);表格、小方框是第 2 步。</span></td><td><span class="st now">现状</span></td></tr>
+      <tr><td class="n">R3</td><td><b>出什么:</b>现在的 <code>lessonBlocks</code> / <code>mathBlocks</code> / <code>scienceBlocks</code> 出的块(段、栏目、例题、题;label 就是老师现在写的「第 3 段」「例 2」「练一练第 3 题」),<code>bookCells</code>、<code>blankCells</code> 出的格(作答区),点读的段(<code>say</code> 照 <code>bookReadTexts</code>)。没有 teacher、没有答案。换路比过一样以后(M3、M4),再加探针里核过的两样:表格里没字的格(画图指令的横竖线拼网格)、打勾的小方框(没填颜色、旁边贴着字)。<span class="was">块和格第 1 步做了;第 2 步(2026-11-25)加了表格(块,kind table,不带字行;空格挂在上面)和小方框(科学的是 tick,数学、语文的从旁边的字分不出打勾还是填数、填标点,当填空),和探针的六页一格不差;语文正文后面的块写了 <code>say</code>。课文段的点读照旧拿读回来的段走 <code>bookReadTexts</code>,第 4 步换。读画图的指令时跳过页上的图(<code>maxImageSize: 1</code>),科学课本 20 秒 → 0.5 秒,所以科学也读了。</span></td><td><span class="st now">现状</span></td></tr>
       <tr><td class="n">R4</td><td><b>规则出的永远不进 vault,</b>不覆盖编程助手和工作台写的。</td><td><span class="st now">现状</span></td></tr>
     </tbody>
   </table></div>
@@ -315,7 +315,7 @@ pre.code { margin:0; background:var(--surface); border-radius:var(--r-card); box
       <tr><td class="n">X2</td><td><b>念法(say)照印的念,</b>不加没印的话(实测 Codex 加了「括号里填什么?」)。空着的地方念「几」「什么」(Q4 已定)。课文的自然段照旧整课一次合成(<code>docs/dev/课本.md</code>)。</td><td><span class="st new">提议</span></td></tr>
       <tr><td class="n">X3</td><td><b>粒度:</b>老师会单独指、孩子会单独点的才单独一块。一道题里有(1)(2)就分小题;一排算式、一组口诀一组一块(group)、一句一个小块(sub)(Q5 已定)。插图里的单个东西不分块,要圈要数的写成 objects。</td><td><span class="st new">提议</span></td></tr>
       <tr><td class="n">X4</td><td><b>给老师的话(teacher)</b>写这一块练什么、孩子常卡在哪、怎么引、答案;不写给孩子看的评语。没把握的答案写 <code>note</code>,不硬写。</td><td><span class="st new">提议</span></td></tr>
-      <tr><td class="n">X5</td><td><b>正文之后的也要分:</b>课后题、认字栏、日积月累都是块,能点读(现在它们不点读)。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">X5</td><td><b>正文之后的也要分:</b>课后题、认字栏、日积月累都是块,能点读(现在它们不点读)。<span class="was">规则那一半做了(第 2 步):语文正文后面的块写上 <code>say</code>(认字栏一个字一个字顿开,写字栏、页下的注、句前的 ◇ 不念);孩子点了念是第 4 步。</span></td><td><span class="st new">提议</span></td></tr>
     </tbody>
   </table></div>
 </section>
@@ -429,7 +429,7 @@ pre.code { margin:0; background:var(--surface); border-radius:var(--r-card); box
     <thead><tr><th>步</th><th>做什么</th><th>碰到哪里</th></tr></thead>
     <tbody>
       <tr><td class="n">1 ✓</td><td><b>做完(2026-11-25)。</b>分块文件的形状;规则出分块(R1–R3,先只搬现在的规则);运行时改成只读分块(M1–M2);逐课比一样(M3),比过删掉运行时那条线(M4)</td><td><code>src/schema/zones.ts</code>(新)、<code>src/memory/textbook-zones.ts</code>(新,读写与挑哪份)、规则从 <code>src/chalk/kit/book.ts</code> 搬出、<code>textbook-pdf.ts</code> 建索引后出分块、<code>lesson-fit.ts</code>、<code>board-pack.ts</code>、点读</td></tr>
-      <tr><td class="n">2</td><td>规则变好:表格里没字的格、打勾的小方框(从探针搬进规则);语文课后题、认字栏能点读(X5 里规则做得到的)</td><td><code>textbook-cells.ts</code>、规则出分块那里</td></tr>
+      <tr><td class="n">2 ✓</td><td><b>做完(2026-11-25)。</b>规则变好:表格里没字的格、打勾的小方框(从探针搬进规则);语文课后题、认字栏能点读(X5 里规则做得到的)</td><td><code>textbook-cells.ts</code>、规则出分块那里</td></tr>
       <tr><td class="n">3</td><td>编程助手改:pull、check、preview、push 四个命令;技能和三科规范。拿数学二上一个单元让 Codex 改一遍,量从草稿改起要多久</td><td><code>src/app/cli/</code> 进命令表、<code>skills/cotutor-textbook/</code>(新)</td></tr>
       <tr><td class="n">4</td><td>运行时用上新字段:teacher 与答案进上下文包、笔归作答区、点读一块(C3–C4、K1–K3)</td><td><code>board-pack.ts</code>、<code>src/ui/stage/book.tsx</code>、kid-page 的 <code>RD</code>、kid 接口剥掉 teacher</td></tr>
       <tr><td class="n">5</td><td>工作台「分块」页(V,先出设计稿)</td><td><code>src/ui/dev/</code>、<code>app/http/</code> 存一页</td></tr>

@@ -34,6 +34,8 @@ export const BoardEventSchema = z.discriminatedUnion('k', [
    * from / to = 从哪一块读到哪一块(0 是标题,n 是第 n 段;诗按节读,记的是那一节第一行那段);done = 一直读到了课文最后
    */
   z.object({ at: z.string().min(1), k: z.literal('read'), base: z.string().min(1), from: z.number().int().min(0).max(999), to: z.number().int().min(0).max(999), done: z.literal(true).optional() }),
+  /** 课本做底:孩子点了分块里的一块听它的念法(点读一块,docs/dev/课本.md);text = 那一块的叫法(「二七」「练一练第 3 题」) */
+  z.object({ at: z.string().min(1), k: z.literal('hear'), base: z.string().min(1), text: z.string().min(1).max(60) }),
   /** 孩子动了手以后一直没出声,应用替他叫了一次老师(下一轮 live.app: still) */
   z.object({ at: z.string().min(1), k: z.literal('still') }),
 ]);

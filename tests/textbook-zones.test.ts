@@ -6,7 +6,7 @@
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { bookCellsOf, bookRegions, bookSheets, bookTarget, bookTeacherLines, bookZoneInk, zoneBlocks } from '../src/chalk/index.ts';
+import { bookCellsOf, bookRegions, bookSayZones, bookSheets, bookTarget, bookTeacherLines, bookZoneInk, sayZoneAt, zoneBlocks } from '../src/chalk/index.ts';
 import { ruleLessonZones, ruleZones } from '../src/memory/textbook-zones-rules.ts';
 import { bookZones, forgetZones, readZoneBook, ruleZonesDir, vaultZonesDir, writeZonePages } from '../src/memory/textbook-zones.ts';
 import { ZonePageSchema, pickBookZones, pickZones, walkZones, zonePageProblems, zonesKidPage, type BookPage, type Zone, type ZonePage } from '../src/schema/index.ts';
@@ -145,6 +145,16 @@ const fz = ruleLessonZones(fish, 'prose');
   check('孩子的笔照作答区说:格里写了几笔、圈画区圈了几圈、不在作答区里的数一句', said.join('|') === '在「第 1 题 7×2 的空」写了 1 笔(写成什么样看图)|在「第 2 题的圈」圈了 1 圈(写成什么样看图)|还有 1 笔不在作答区里(写成什么样看图)', JSON.stringify(said));
   const told = bookTeacherLines([p], sh, zoneBlocks([p], [{ ...zp, zones: [{ ...zp.zones[0], teacher: { goal: '7 的乘法', answers: [{ at: ['格甲'], ok: ['14'] }] } }, zp.zones[1]] }], 'prose'), [[0, 0, 1000, sh[0].height]]);
   check('给老师的:窗里那块练什么、答案照格子的名字', told.join('|') === '第 1 题:练 7 的乘法|  答案 第 1 题 7×2 的空:14', JSON.stringify(told));
+}
+
+// ---- 点读一块:写了念法的块在场景里的框,点一下落到框住那一点的最小的一块 ----
+{
+  const p = fish[0];
+  const zp: ZonePage = { page: p.n, zones: [{ id: 'g', kind: 'group', label: '口诀', box: [100, 100, 900, 500], say: '整组', children: [{ id: 'g-2', kind: 'sub', label: '二七', box: [120, 200, 600, 260], say: '二七,几?' }, { id: 'g-3', kind: 'sub', label: '三七', box: [120, 300, 600, 360] }] }] };
+  const sh = bookSheets([p]);
+  const zs = bookSayZones([p], sh, [zp]);
+  const y = (pm: number): number => sh[0].top + (pm / 1000) * p.h * sh[0].s;
+  check('写了念法的块才能点(没写的「三七」不算);点在小块里落到小块,点在组里别处落到整组', zs.map((z) => z.label).join() === '口诀,二七' && sayZoneAt(zs, 300, y(230))?.label === '二七' && sayZoneAt(zs, 300, y(330))?.label === '口诀' && sayZoneAt(zs, 300, y(700)) === null, JSON.stringify(zs));
 }
 
 // ---- 铺开一个单元(外面那课)时照里面的课分开挑:改好的那一课用 vault 的,别的照规则 ----

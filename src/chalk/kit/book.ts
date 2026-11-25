@@ -747,6 +747,33 @@ export function bookRegions(pages: readonly BookPage[], sheets: readonly BookShe
   });
 }
 
+/**
+ * 点读一块(docs/dev/课本.md):这一课分块里写了念法(say)的块在场景里的框,孩子单击落到框住那一点的最小的一块(舞台的 zoneAt);
+ * 跨页的一块两页上各一个框,id 一样
+ */
+export interface SayZone { id: string; label: string; box: Box }
+export function bookSayZones(pages: readonly BookPage[], sheets: readonly BookSheet[], zones: readonly ZonePage[]): SayZone[] {
+  return pages.flatMap((p) => {
+    const sh = sheetOf(sheets, p.n), zp = zones.find((x) => x.page === p.n);
+    if (!sh || !zp) return [];
+    const kx = p.w / 1000, ky = p.h / 1000;
+    const out: SayZone[] = [];
+    walkZones(zp.zones, (z) => { if (z.say) out.push({ id: z.id, label: z.label, box: toScene(sh, z.box[0] * kx, z.box[1] * ky, z.box[2] * kx, z.box[3] * ky) }); });
+    return out;
+  });
+}
+
+/** 框住 (x, y) 的块里最小的那个(最里面的小块);没有 = null */
+export function sayZoneAt(zones: readonly SayZone[], x: number, y: number): SayZone | null {
+  let best: SayZone | null = null, area = Infinity;
+  for (const z of zones) {
+    if (x < z.box[0] || x > z.box[2] || y < z.box[1] || y > z.box[3]) continue;
+    const a = (z.box[2] - z.box[0]) * (z.box[3] - z.box[1]);
+    if (a < area) { area = a; best = z; }
+  }
+  return best;
+}
+
 /** 一笔合拢了没有(圈):够大,起笔收笔挨得近(同练习册) */
 function closedStroke(pts: readonly (readonly [number, number])[]): boolean {
   const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);

@@ -183,7 +183,8 @@ const ix = bookIndexOf();
     ctx.runner.boardEvent(T, date, { k: 'read', thread, base: '语文一年级下册.pdf#目录', from: 0, to: 1 }),
   ]);
   check('点读了一回:记一笔,不念、不叫老师;号不对、不是现在这一页的不收', read1?.say === null && read1.still === false && read2?.still === false && badReads.every((x) => x === null) && (await readBoard(ws, T, date, thread)).filter((e) => e.k === 'read').length === 2, JSON.stringify([read1, read2, badReads]));
-  // 编程助手改好了这一课的分块(vault 的 教材/.zones/):第 2 段写了给老师的话,还量了一个自己起名的填空格;孩子在那一格里填了
+  // 编程助手改好了这一课的分块(vault 的 教材/.zones/):第 2 段写了给老师的话、念法,还量了一个自己起名的填空格;孩子在那一格里填了
+  let sayId = '';
   {
     const { ruleZones } = await import('../src/memory/textbook-zones-rules.ts');
     const { vaultZonesDir, writeZonePages } = await import('../src/memory/textbook-zones.ts');
@@ -192,6 +193,8 @@ const ix = bookIndexOf();
       const zp = structuredClone(rz.find((z) => z.page === n)!);
       for (const z of zp.zones) if (z.label === '第 2 段') {
         z.teacher = { goal: '读出小鱼的话', hint: '先找引号', answers: [{ at: ['泡泡格'], ok: ['月亮'] }] };
+        z.say = '小鱼说泡泡像月亮。';
+        sayId = z.id;
         if (n === 2) z.regions = [{ id: '泡泡格', kind: 'write', label: '「像一个个」后面的空', box: [z.box[0], z.box[1], z.box[0] + 20, z.box[1] + 10], src: 'measured' }];
       }
       return zp;
@@ -209,12 +212,17 @@ const ix = bookIndexOf();
   check('下一轮:填的空照分块的名字说', pr3.includes('在页上的空(方框、括号)里填了 1 处:「「像一个个」后面的空」,填的什么看图'), pr3.slice(pr3.indexOf('board:'), pr3.indexOf('board:') + 900));
   check('下一轮:窗里那一段只给老师的话(练什么、卡住怎么引、答案照格子的名字)', pr3.includes('给老师的:') && pr3.includes('- "第 2 段:练 读出小鱼的话"') && pr3.includes('卡住了:先找引号') && pr3.includes('答案 「像一个个」后面的空:月亮'), pr3.slice(pr3.indexOf('board:'), pr3.indexOf('board:') + 1200));
   check('下一轮:底是这一课,这一课的字分好段(第一次看到,给一条 <page>);他点了什么、最近点的、他在看哪里', pr3.includes('底: "课本《语文一年级下册》:《小鱼吹泡泡》第 1–2 页"') && pr3.includes('第 1 段 小鱼在水里吹泡泡。') && pr3.includes('点开看了笔顺:泡') && pr3.includes('孩子在看: "第 2 页:第 2–3 段"'), pr3.slice(pr3.indexOf('board:'), pr3.indexOf('board:') + 400));
+  // 点读一块:点了第 2 段听它的念法(声音孩子端自己放),记一笔、不叫老师;下一轮老师看到
+  const heard = await ctx.runner.boardEvent(T, date, { k: 'hear', thread, base, text: '第 2 段' });
+  const badHear = await Promise.all([ctx.runner.boardEvent(T, date, { k: 'hear', thread, base, text: '' }), ctx.runner.boardEvent(T, date, { k: 'hear', thread, base: '语文一年级下册.pdf#目录', text: '第 2 段' })]);
+  check('点读一块:记一笔,不叫老师;没叫法、不是现在这一页的不收', heard?.say === null && heard.still === false && badHear.every((x) => x === null) && (await readBoard(ws, T, date, thread)).filter((e) => e.k === 'hear').length === 1, JSON.stringify([heard, badHear]));
   now = new Date(2026, 10, 14, 10, 8);
   const fourth = await kidSend(ctx, T, { text: '不存在的课', thread });
   await wait();
   const pr4 = promptOf(String(fourth.json.job));
   const m4 = index().messages.find((m) => m.job === fourth.json.job);
   const l4 = ((await route('GET', `/api/kid/lesson?tutor=${T}&date=${date}&thread=${thread}`, ctx)).json as { lesson: Lesson }).lesson;
+  check('下一轮:孩子做的里说他点了哪一块听', pr4.includes('自己点了「第 2 段」听(点读的配音)'), pr4.slice(pr4.indexOf('board:'), pr4.indexOf('board:') + 600));
   check('再下一轮:这一课的字不重给;翻不到的课还在这一课,家长端记一行', !pr4.includes('<page ') && l4.at === '语文一年级下册.pdf#小鱼吹泡泡' && (m4?.warnings ?? []).some((w) => w.includes('坐井观天')), JSON.stringify(m4?.warnings));
   // 孩子在课本上点了、揭了、挪了:一节课的状态里也有
   check('点字、挪窗也落进一节课的状态', lessonPage(l4)!.kid.picked.join() === '泡' && JSON.stringify(l4.view) === '[0,1385,1000,1985]', JSON.stringify(l4));
@@ -246,6 +254,10 @@ const ix = bookIndexOf();
   check('点读:audio=1 给那份声音;再要不再合成', rAudio.status === 200 && rAudio.contentType === 'audio/mpeg' && readFileSync(rAudio.file!, 'utf8') === `fake-mp3:longanlingxin_v3.1:${said.text}` && rAgain.status === 200 && tts.requests.length === 1, JSON.stringify([rAudio, tts.requests.length]));
   const rBad = await Promise.all([rd('p=x'), rd('p=2-3', 'nobody'), route('GET', `/api/kid/textbook/read?tutor=${T}&b=${encodeURIComponent('没有这本.pdf')}&p=2-3`, ctx)]);
   check('点读:页写错、没有这位老师、没有这本书:404', rBad.every((r) => r.status === 404), JSON.stringify(rBad.map((r) => r.status)));
+  const sy = (z: string) => route('GET', `/api/kid/textbook/say?tutor=${T}&b=${encodeURIComponent('语文一年级下册.pdf')}&p=2-3&z=${encodeURIComponent(z)}`, ctx);
+  const n0 = tts.requests.length;
+  const [say1, say2, sNone] = [await sy(sayId), await sy(sayId), await sy('没有这块')];
+  check('点读一块:照分块的念法用点读的声音合成、回声音;再要不再合成;没有这块(或没写念法)404', say1.status === 200 && say1.contentType === 'audio/mpeg' && readFileSync(say1.file!, 'utf8') === 'fake-mp3:longanlingxin_v3.1:小鱼说泡泡像月亮。' && say2.status === 200 && tts.requests.length === n0 + 1 && sNone.status === 404, JSON.stringify([say1.status, say1.file, sNone.status, tts.requests.slice(n0)]));
   delete process.env.COTUTOR_TTS_ENDPOINT;
   await tts.close();
 

@@ -435,6 +435,14 @@ export class Runner {
       await appendBoard(ws, tutor, date, thread, { at, k: 'read', base, from: b.from, to: b.to, ...(b.done === true ? { done: true as const } : {}) });
       return { thread, say: null, still: false };
     }
+    // 点读一块:孩子点了分块里的一块听它的念法(声音孩子端自己放),记一笔,不叫老师
+    if (b.k === 'hear') {
+      if (typeof b.text !== 'string' || !b.text.trim() || b.text.length > 60) return null;
+      const cur = lessonPage(await readLesson(ws, tutor, date, thread));
+      if (!cur || cur.id !== base || cur.kind !== 'book') return null;
+      await appendBoard(ws, tutor, date, thread, { at, k: 'hear', base, text: b.text.trim() });
+      return { thread, say: null, still: false };
+    }
     if (b.k === 'turn') {
       if (typeof b.item !== 'string' || b.item.length > 60 || typeof b.deg !== 'number' || !Number.isFinite(b.deg)) return null;
       return (await step({ t: 'turn', item: b.item, deg: b.deg })) ? { thread, say: null, still: false } : null;

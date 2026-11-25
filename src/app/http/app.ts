@@ -19,7 +19,7 @@ import { homeworkPast, homeworkPdf, homeworkPdfName, homeworkSubject } from '../
 import { kidConversation, startedThreads, parentConversation, type KidMessage, type KidTodayThread, type ParentMessage } from '../../runtime/kid-view.ts';
 import { previewOf, writePreview } from '../../runtime/journal/preview.ts';
 import { parseEvents } from '../../runtime/journal/events.ts';
-import { pickBookZones, zonesKidPage, type Lesson, type RunEvent } from '../../schema/index.ts';
+import { pickBookZones, walkZones, zonesKidPage, type Lesson, type RunEvent } from '../../schema/index.ts';
 import { NEUTRAL_COLOR, SUBJECT_COLORS, TUTOR_PALETTE, tutorColors } from '../../ui/shared/tutor-color.ts';
 import { boardMarkOf, type BoardMarkId } from '../../ui/kid/board-mark.ts';
 import { buildReel, playRecordOk, reelHolds, reelMissRuns, type PlayRecord, type Reel, type ReelCall } from '../../ui/kid/reel.ts';
@@ -72,7 +72,7 @@ import { lastSpot } from '../../runtime/journal/book-last.ts';
 import { lessonInit, lessonPage, lessonStep } from '../../board/lesson.ts';
 import { readLesson } from '../../runtime/journal/lesson-store.ts';
 import { BOOK_TOC, bookPages, bookReadTexts, readLessonText, readTimes, workbookBookPage, workbookPage, zoneBlocks } from '../../chalk/index.ts';
-import { synthesizeTimed } from '../../media/tts.ts';
+import { synthesize, synthesizeTimed } from '../../media/tts.ts';
 import type { Look } from '../../scenes/look.ts';
 import { IndexError, capturePathOk, deleteThread, listDates, rateThread, readErrLog, readIndex, readTranscript, undoVaultWrite, writeCapture, type VaultWrite } from '../../runtime/journal/store.ts';
 import { memoryLineText } from '../../memory/vault-notes.ts';
@@ -1003,6 +1003,21 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       if (!r.file) { console.error(`点读:《${pages[0]?.n ?? '?'} 页起》整篇 ${text.length} 字没合成(${r.error ?? '?'})`); return { status: 404, json: { error: 'no_audio' } }; }
       if (q.get('audio') === '1') return { status: 200, file: r.file, contentType: 'audio/mpeg' };
       return { status: 200, json: readTimes(texts, r.words) };
+    }
+    // 点读一块(分块里有念法 say 的块,docs/dev/课本.md):用这位老师「点读的声音」合成那一块的念法(有缓存,同一块同一个音色只合成一次),回声音。
+    // 念法由服务端照这一课挑好的分块现取,孩子端只给块的 id;没配声音、没有这一块、合成失败 404
+    if (p === '/api/kid/textbook/say' && method === 'GET') {
+      const q = url.searchParams, tutor = q.get('tutor') ?? '', id = q.get('z') ?? '';
+      const voice = ws.config.tutors[tutor] ? cardVoice(ws.config.tutors, tutor) : undefined;
+      const want = bookPages(q.get('p') ?? '');
+      if (!voice || !want.length || !id) return { status: 404, json: { error: 'not_found' } };
+      const book = await bookOpen(ws, q.get('b') ?? '');
+      let text = '';
+      if (book) for (const zp of pickBookZones(book.index, book.zones, want).pages) walkZones(zp.zones, (z) => { if (!text && z.id === id && z.say) text = z.say; });
+      if (!text) return { status: 404, json: { error: 'not_found' } };
+      const r = await synthesize({ text, voice }, { cacheDir: ws.dirs.tts, env: process.env });
+      if (!r.file) { console.error(`点读一块:「${text}」没合成(${r.error ?? '?'})`); return { status: 404, json: { error: 'no_audio' } }; }
+      return { status: 200, file: r.file, contentType: 'audio/mpeg' };
     }
     if (p === '/api/kid/photo-words' && method === 'GET') {
       const rel = url.searchParams.get('p') ?? '';

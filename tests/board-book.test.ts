@@ -46,7 +46,7 @@ const ix = bookIndexOf();
 // ---- board: 里的课本 ----
 {
   const fish = bookSlate(ix, '小鱼吹泡泡');
-  check('一课:底是册名、课名、印的页码;全文一段一行,换页插一行,认字栏带读音', fish.show === '课本《语文一年级下册》:《小鱼吹泡泡》第 1–2 页' && fish.text[0] === '第1段 小鱼在水里吹泡泡。' && fish.text.includes('—— 第 2 页 ——') && fish.text.some((t) => t.startsWith('泡(pào)')), JSON.stringify(fish));
+  check('一课:底是册名、课名、印的页码;全文一段一行,换页插一行,认字栏带读音', fish.show === '课本《语文一年级下册》:《小鱼吹泡泡》第 1–2 页' && fish.text[0] === '第 1 段 小鱼在水里吹泡泡。' && fish.text.includes('—— 第 2 页 ——') && fish.text.some((t) => t.startsWith('泡(pào)')), JSON.stringify(fish));
   const toc = bookSlate(ix, null);
   check('目录:一单元一行,课名后面是印的页码;下面的一首带点', toc.show.includes('目录') && toc.text[0] === '第一单元·阅读:1 小鱼吹泡泡(1)、2 古诗两首(3)、·静夜思(3)、·春晓(4)、语文园地一(5)' && toc.text[1] === '附录:识字表(8)', JSON.stringify(toc.text));
   const garden = bookSlate(ix, '语文园地一');
@@ -70,7 +70,7 @@ const ix = bookIndexOf();
   const s2 = slateOf({ page: { id: key, show: fish.show }, others: [], events: [{ at: at(60), k: 'turn', job: '1000-1', told: [key] }, { at: at(50), k: 'view', text: '第 1 页', base: key }, { at: at(40), k: 'turn', job: '1000-2' }], lesson: bits, now: T });
   check('上一轮之前挪的不算「孩子在看」;只铺过这一页不写页集', s2.view === undefined && s2.pages === undefined, JSON.stringify(s2));
   const pack = renderContextPack({ at: '2026-11-14T10:00', plan: [], recent: [], slate: s1, pageNotes: [{ id: key, name: '《小鱼吹泡泡》', text: fish.text }] });
-  check('上下文包里多一行「孩子在看」;页上的字是一条 <page> 笔记', pack.includes('    孩子在看: "第 2 页:课文后面的部分"') && pack.includes(`<page id="${key}" name="《小鱼吹泡泡》">\n第1段 小鱼在水里吹泡泡。`), pack.slice(pack.indexOf('board:')));
+  check('上下文包里多一行「孩子在看」;页上的字是一条 <page> 笔记', pack.includes('    孩子在看: "第 2 页:课文后面的部分"') && pack.includes(`<page id="${key}" name="《小鱼吹泡泡》">\n第 1 段 小鱼在水里吹泡泡。`), pack.slice(pack.indexOf('board:')));
 }
 
 // ---- activity 头上的 base ----
@@ -183,13 +183,32 @@ const ix = bookIndexOf();
     ctx.runner.boardEvent(T, date, { k: 'read', thread, base: '语文一年级下册.pdf#目录', from: 0, to: 1 }),
   ]);
   check('点读了一回:记一笔,不念、不叫老师;号不对、不是现在这一页的不收', read1?.say === null && read1.still === false && read2?.still === false && badReads.every((x) => x === null) && (await readBoard(ws, T, date, thread)).filter((e) => e.k === 'read').length === 2, JSON.stringify([read1, read2, badReads]));
+  // 编程助手改好了这一课的分块(vault 的 教材/.zones/):第 2 段写了给老师的话,还量了一个自己起名的填空格;孩子在那一格里填了
+  {
+    const { ruleZones } = await import('../src/memory/textbook-zones-rules.ts');
+    const { vaultZonesDir, writeZonePages } = await import('../src/memory/textbook-zones.ts');
+    const rz = ruleZones({ ...ix, sha });
+    const edited = [2, 3].map((n) => {
+      const zp = structuredClone(rz.find((z) => z.page === n)!);
+      for (const z of zp.zones) if (z.label === '第 2 段') {
+        z.teacher = { goal: '读出小鱼的话', hint: '先找引号', answers: [{ at: ['泡泡格'], ok: ['月亮'] }] };
+        if (n === 2) z.regions = [{ id: '泡泡格', kind: 'write', label: '「像一个个」后面的空', box: [z.box[0], z.box[1], z.box[0] + 20, z.box[1] + 10], src: 'measured' }];
+      }
+      return zp;
+    });
+    await writeZonePages(vaultZonesDir(ws.paths.textbooks, sha), { title: ix.title, sha }, edited, 'agent');
+  }
+  const named = await ctx.runner.boardEvent(T, date, { k: 'cell', thread, base, id: '2.泡泡格', strokes: [[[100, 120], [880, 900]]], blank: true });
+  check('量的格(id 是编程助手起的名字)也收', named !== null && (await readBoard(ws, T, date, thread)).some((e) => e.k === 'cell' && e.id === '2.泡泡格'), JSON.stringify(named));
   now = new Date(2026, 10, 14, 10, 6, 20);
   const third = await kidSend(ctx, T, { text: '这个字怎么读', thread });
   await wait();
   const pr3 = promptOf(String(third.json.job));
   check('下一轮:孩子做的里说他点读了哪几段、在哪停的', pr3.includes('自己点了课文听(点读的配音):从标题读到第 2 段,在第 2 段停了') && pr3.includes('自己点了课文听(点读的配音):读了第 3 段,读完了全文'), pr3.slice(pr3.indexOf('board:'), pr3.indexOf('board:') + 700));
   check('下一轮:孩子做的里说他在田字格里写了几个、照着哪个字', pr3.includes('在田字格里写了 1 个字(照着「泡」写的),写成什么样看图'), pr3.slice(pr3.indexOf('board:'), pr3.indexOf('board:') + 500));
-  check('下一轮:底是这一课,这一课的字分好段(第一次看到,给一条 <page>);他点了什么、最近点的、他在看哪里', pr3.includes('底: "课本《语文一年级下册》:《小鱼吹泡泡》第 1–2 页"') && pr3.includes('第1段 小鱼在水里吹泡泡。') && pr3.includes('点开看了笔顺:泡') && pr3.includes('孩子在看: "第 2 页:第 2–3 段"'), pr3.slice(pr3.indexOf('board:'), pr3.indexOf('board:') + 400));
+  check('下一轮:填的空照分块的名字说', pr3.includes('在页上的空(方框、括号)里填了 1 处:「「像一个个」后面的空」,填的什么看图'), pr3.slice(pr3.indexOf('board:'), pr3.indexOf('board:') + 900));
+  check('下一轮:窗里那一段只给老师的话(练什么、卡住怎么引、答案照格子的名字)', pr3.includes('给老师的:') && pr3.includes('- "第 2 段:练 读出小鱼的话"') && pr3.includes('卡住了:先找引号') && pr3.includes('答案 「像一个个」后面的空:月亮'), pr3.slice(pr3.indexOf('board:'), pr3.indexOf('board:') + 1200));
+  check('下一轮:底是这一课,这一课的字分好段(第一次看到,给一条 <page>);他点了什么、最近点的、他在看哪里', pr3.includes('底: "课本《语文一年级下册》:《小鱼吹泡泡》第 1–2 页"') && pr3.includes('第 1 段 小鱼在水里吹泡泡。') && pr3.includes('点开看了笔顺:泡') && pr3.includes('孩子在看: "第 2 页:第 2–3 段"'), pr3.slice(pr3.indexOf('board:'), pr3.indexOf('board:') + 400));
   now = new Date(2026, 10, 14, 10, 8);
   const fourth = await kidSend(ctx, T, { text: '不存在的课', thread });
   await wait();

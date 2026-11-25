@@ -6,7 +6,7 @@
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { bookCellsOf, bookSheets, bookTarget, zoneBlocks } from '../src/chalk/index.ts';
+import { bookCellsOf, bookRegions, bookSheets, bookTarget, bookTeacherLines, bookZoneInk, zoneBlocks } from '../src/chalk/index.ts';
 import { ruleLessonZones, ruleZones } from '../src/memory/textbook-zones-rules.ts';
 import { bookZones, forgetZones, readZoneBook, ruleZonesDir, vaultZonesDir, writeZonePages } from '../src/memory/textbook-zones.ts';
 import { ZonePageSchema, pickBookZones, pickZones, walkZones, zonePageProblems, zonesKidPage, type BookPage, type Zone, type ZonePage } from '../src/schema/index.ts';
@@ -121,6 +121,30 @@ const fz = ruleLessonZones(fish, 'prose');
   const full: ZonePage = { page: 9, zones: [{ id: 'q', kind: 'problem', label: '练一练第 3 题', box: [10, 10, 500, 500], say: '第 3 题。', regions: [{ id: 'q-a', kind: 'write', label: '乘号左边', box: [20, 20, 60, 60] }], objects: [{ id: 'o', label: '积木', box: [100, 100, 120, 120], center: [110, 110] }], teacher: { goal: '七的乘法口诀', answers: [{ at: ['q-a'], ok: ['14'] }] } }] };
   const kid = JSON.stringify(zonesKidPage(full));
   check('孩子端:框、种类、叫法(书上的号)在;teacher、答案、物件、作答区的名字不在', kid.includes('练一练第 3 题') && kid.includes('"write"') && !kid.includes('七的乘法口诀') && !kid.includes('14') && !kid.includes('积木') && !kid.includes('乘号左边'), kid);
+}
+
+// ---- 小题同名(一课里好几处「7×2」):写「题的叫法 + 的 + 小题」找到那一处;孩子的笔照作答区说 ----
+{
+  const p = fish[0];
+  const pm = (l: BookPage['lines'][number]): [number, number, number, number] => [l.x1 / p.w * 1000, l.y1 / p.h * 1000, l.x2 / p.w * 1000, l.y2 / p.h * 1000];
+  const [a, b] = p.lines.filter((l) => l.chars.length > 3).slice(0, 2);
+  const zp: ZonePage = { page: p.n, zones: [
+    { id: 'q1', kind: 'problem', label: '第 1 题', box: [0, 0, 1000, 500], rows: [], children: [{ id: 'q1-a', kind: 'sub', label: '7×2', box: pm(a), rows: [pm(a)], regions: [{ id: '格甲', kind: 'write', label: '第 1 题 7×2 的空', box: pm(a), src: 'measured' }] }] },
+    { id: 'q2', kind: 'problem', label: '第 2 题', box: [0, 500, 1000, 1000], rows: [], children: [{ id: 'q2-a', kind: 'sub', label: '7×2', box: pm(b), rows: [pm(b)], regions: [{ id: '圈乙', kind: 'circle', label: '第 2 题的圈', box: [0, 500, 1000, 1000], src: 'measured' }] }] },
+  ] };
+  const bs = zoneBlocks([p], [zp], 'prose');
+  const sh = bookSheets([p]);
+  const first = bookTarget([p], sh, bs, '7×2'), second = bookTarget([p], sh, bs, '第 2 题的 7×2');
+  check('同名的小题:写「第 2 题的 7×2」找到第 2 题那一处,只写「7×2」是第一处', first?.label === '7×2' && second?.label === '7×2' && first.box[1] < second!.box[1], JSON.stringify([first, second]));
+  const regions = bookRegions([p], sh, [zp]);
+  const r1 = regions.find((r) => r.id === `${p.n}.格甲`)!.box, r2 = regions.find((r) => r.id === `${p.n}.圈乙`)!.box;
+  const cx = (r1[0] + r1[2]) / 2, cy = (r1[1] + r1[3]) / 2;
+  // 一笔写在格里;一圈画在第 2 题的圈画区里(合拢的);一笔画在页边上
+  const ring = Array.from({ length: 20 }, (_, k) => [500 + 60 * Math.cos((k / 19) * 2 * Math.PI), (r2[1] + r2[3]) / 2 + 60 * Math.sin((k / 19) * 2 * Math.PI)] as [number, number]);
+  const said = bookZoneInk(regions, [[[cx - 2, cy], [cx + 2, cy]], ring, [[2, 2], [4, 4]]]);
+  check('孩子的笔照作答区说:格里写了几笔、圈画区圈了几圈、不在作答区里的数一句', said.join('|') === '在「第 1 题 7×2 的空」写了 1 笔(写成什么样看图)|在「第 2 题的圈」圈了 1 圈(写成什么样看图)|还有 1 笔不在作答区里(写成什么样看图)', JSON.stringify(said));
+  const told = bookTeacherLines([p], sh, zoneBlocks([p], [{ ...zp, zones: [{ ...zp.zones[0], teacher: { goal: '7 的乘法', answers: [{ at: ['格甲'], ok: ['14'] }] } }, zp.zones[1]] }], 'prose'), [[0, 0, 1000, sh[0].height]]);
+  check('给老师的:窗里那块练什么、答案照格子的名字', told.join('|') === '第 1 题:练 7 的乘法|  答案 第 1 题 7×2 的空:14', JSON.stringify(told));
 }
 
 // ---- 铺开一个单元(外面那课)时照里面的课分开挑:改好的那一课用 vault 的,别的照规则 ----

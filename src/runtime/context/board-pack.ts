@@ -17,8 +17,11 @@ import { PHOTO_PAGE, type BoardEvent, type BookIndex, type BookPage, type Contex
 
 /** 「最近点的」多久以内算(孩子说「这个」指它);起点,试用后调 */
 export const RECENT_PICK_MS = 30_000;
-/** 一页的文字层最多多少字:一课的正文(坐井观天带认字栏、课后题约 500 字,语文园地约 900)、整册目录、一张作业照片都要给全 */
-export const PAGE_NOTE_MAX = 2400;
+/**
+ * 一页的文字层最多多少字:一课的正文(坐井观天带认字栏、课后题约 500 字,语文园地约 900)、整册目录、一张作业照片都要给全;
+ * 编程助手改过分块的数学一课一块一行(人教数学二上《7～9的乘法口诀》8 页约 4500 字,2026-11-25),一课只给一次
+ */
+export const PAGE_NOTE_MAX = 5000;
 
 /** 页的文字层的一条笔记:id 是板的日志里记「给过了」的键(课本「册子#课」、照片「作业#<路径>」),name 给老师看 */
 export interface PageNote { id: string; name: string; text: string[] }
@@ -38,6 +41,10 @@ export interface SlateInput {
   shot?: boolean;
   /** 孩子这一条带来的、板的日志里没有的(小课堂:看的情况、画的几处),接在「孩子做的」最前面 */
   did?: readonly string[];
+  /** 课本窗里那几块只给老师的话(src/chalk/kit/book.ts 的 bookTeacherLines) */
+  teacher?: readonly string[];
+  /** 课本格子(<页>.<作答区 id>)的名字:写了哪几格照名字说 */
+  cellLabels?: Readonly<Record<string, string>>;
 }
 
 const ago = (ms: number): string => `${Math.max(1, Math.round(ms / 1000))} 秒前`;
@@ -105,8 +112,10 @@ export function slateOf(x: SlateInput): NonNullable<ContextPack['slate']> {
   const cells = since.filter((e): e is BoardEvent & { k: 'cell' } => e.k === 'cell' && e.base === base);
   const wrote = cells.filter((e) => !e.clear && !e.blank), models = [...new Set(wrote.flatMap((e) => (e.text ? [e.text] : [])))];
   if (wrote.length) did.push(`在田字格里写了 ${wrote.length} 个字${models.length ? `(照着「${models.join('」「')}」写的)` : ''},写成什么样看图`);
-  const filled = cells.filter((e) => !e.clear && e.blank).length;
-  if (filled) did.push(`在页上的空(方框、括号)里填了 ${filled} 处,填的什么看图`);
+  // 填的空有名字(分块的作答区)就说填在哪几格,四格以上只数
+  const filledAt = [...new Set(cells.filter((e) => !e.clear && e.blank).map((e, k) => e.id ?? `#${k}`))];
+  const named = filledAt.map((id) => x.cellLabels?.[id]).filter((l): l is string => Boolean(l));
+  if (filledAt.length) did.push(`在页上的空(方框、括号)里填了 ${filledAt.length} 处${named.length === filledAt.length && named.length <= 4 ? `:「${named.join('」「')}」` : ''},填的什么看图`);
   if (cells.some((e) => e.clear)) did.push('擦掉了格子里写的');
   // 点读:点了标题或段首听课文(放的是录好的配音,不是你说的);一回一句,最多说最后三回
   const part = (n: number): string => (n === 0 ? '标题' : `第 ${n} 段`);
@@ -136,6 +145,7 @@ export function slateOf(x: SlateInput): NonNullable<ContextPack['slate']> {
     did,
     ...(recent ? { recent } : {}),
     ...(view ? { view } : {}),
+    ...(x.teacher?.length ? { teacher: [...x.teacher] } : {}),
   };
 }
 
@@ -149,9 +159,11 @@ export function clipNote(text: readonly string[], max = PAGE_NOTE_MAX): string[]
 
 /**
  * 课本给老师看的底与文字层:
- * 一课 = 分好的段(「第3段 小鸟回答说……」)、栏目(「【日积月累】……」)、课文后面的认字栏和课后题(带读音的写读音),换页处插一行「—— 第 55 页 ——」;
- * 数学 = 标题(「标题:6的乘法口诀」)、例题(「例4 ……」)、栏目(「【练一练】」)和下面的题(「第3题 ……」);图上的东西读不到,只有字。
- * 科学 = 栏目(「【探索与实践 1】」)、段(段号整课连着数)、图里和表里的字。
+ * 一课照分块一块一行,前面是它的叫法(老师 [[看 …]] 照它写),套在里面的小块缩进,换页处插一行「—— 第 55 页 ——」:
+ * 段(「第 3 段 小鸟回答说……」)、栏目(「【日积月累】……」)、课文后面的认字栏和课后题(带读音的写读音;叫法就是开头几个字的不重说);
+ * 数学 = 标题(「标题:6的乘法口诀」)、例题(「例 4 ……」)、栏目(「【练一练】」)和下面的题(「练一练第 3 题 ……」);没有字行的块(表格、一组口诀)只列叫法(「〔例 1 的表格〕」);图上的东西读不到,只有字。
+ * 科学 = 栏目(「【探索与实践 1】」)和下面的段(段号整课连着数)、图里和表里的字。
+ * 窗里那几块只给老师的话(答案)不在这里,在 board: 的「给老师的」(src/chalk/kit/book.ts 的 bookTeacherLines,每轮照窗现算)。
  * 目录 = 一单元一行,课名后面是印的页码(老师照孩子说的课写「课: 坐井观天」);数学一个单元一行,后面是它下面的小节、课题(课题前带点)。
  * zones = 这一课挑好的分块(schema 的 pickZones);last = 这本书上次翻到的那一课(src/runtime/journal/book-last.ts),目录的那一句里说一下。
  */
@@ -180,15 +192,25 @@ export function bookSlateParts(index: BookIndex, at: { title: string; pages: rea
   const math = index.layout === 'math';
   const text: string[] = [];
   let page: number | null = null;
-  for (const b of zoneBlocks(at.pages, zones, index.layout)) {
-    // 没有字行的块(表格、插图、一组口诀)不另列:里面的字在它的小块、外面那块里
-    if (b.kind === 'group') continue;
+  const blocks = zoneBlocks(at.pages, zones, index.layout);
+  // 套在里面的小块缩进(kids:套着几块,紧跟在后面)
+  const ends: number[] = [];
+  const flat = (t: string): string => t.replace(/[\s…]/g, '');
+  blocks.forEach((b, k) => {
+    while (ends.length && k > ends[ends.length - 1]) ends.pop();
+    const pad = '  '.repeat(ends.length);
+    if (b.kids) ends.push(k + b.kids);
+    // 没有字行的块(表格、插图、一组口诀)只列叫法:里面的字在它的小块、外面那块里
+    if (b.kind === 'group') { if (b.label) text.push(`${pad}〔${b.label}〕`); return; }
     const n = b.refs[0]?.n ?? null;
     const pr = at.pages.find((p) => p.n === n)?.printed ?? null;
     if (n !== page && page !== null && pr !== null) text.push(`—— 第 ${pr} 页 ——`);
     page = n;
-    if (b.kind === 'title') { if (math) text.push(`标题:${b.text}`); continue; }
-    text.push(b.kind === 'para' ? `第${b.no}段 ${b.text}` : b.kind === 'section' ? `【${b.head}】${b.text}` : b.kind === 'example' ? `例${b.no} ${b.text}` : b.kind === 'problem' ? `第${b.no}题 ${b.text}` : b.text);
-  }
+    if (b.kind === 'title') { if (math) text.push(`标题:${b.text}`); return; }
+    if (b.kind === 'section') { text.push(`${pad}【${b.label ?? b.head}】${b.text}`); return; }
+    // 叫法就是开头那几个字的(规则出的别的字、编程助手的「7×2」)不重说
+    const label = b.label && !flat(b.text).startsWith(flat(b.label)) ? `${b.label} ` : '';
+    text.push(`${pad}${label}${b.text}`);
+  });
   return { show: `课本《${index.title}》:《${at.title}》${range}`, text };
 }

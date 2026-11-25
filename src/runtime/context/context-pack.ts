@@ -80,6 +80,10 @@ export function renderContextPack(pack: ContextPack): string {
     }
     if (b.recent) out.push(`    最近点的: ${yamlScalar(b.recent)}`);
     if (b.view) out.push(`    孩子在看: ${yamlScalar(b.view)}`);
+    if (b.teacher?.length) {
+      out.push('    给老师的:');
+      for (const x of b.teacher) out.push(`      - ${yamlScalar(x)}`);
+    }
   }
   if (p.photos?.length) {
     out.push('  photos:');

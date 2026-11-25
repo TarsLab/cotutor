@@ -311,7 +311,7 @@ pre.code { margin:0; background:var(--surface); border-radius:var(--r-card); box
   <div class="tbl"><table>
     <thead><tr><th>编号</th><th>规则</th><th>状态</th></tr></thead>
     <tbody>
-      <tr><td class="n">X1</td><td><b>叫法照书上印的号,</b>书上没号的照从上往下数。一课里不重名。老师说什么、孩子听得懂什么就叫什么:不写「右边第 3 个算式」这种只有标的人懂的。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">X1</td><td><b>叫法照书上印的号,</b>书上没号的照从上往下数。一课里不重名。老师说什么、孩子听得懂什么就叫什么:不写「右边第 3 个算式」这种只有标的人懂的。<span class="was">改了一处(2026-11-25,Codex 试改出来的):小题只在同一道题、同一组里不重名(一课里好几处「7×2」都照印的叫),老师写「练一练第 1 题的 7×2」找得到;别的块一课里不重名。</span></td><td><span class="st new">提议</span></td></tr>
       <tr><td class="n">X2</td><td><b>念法(say)照印的念,</b>不加没印的话(实测 Codex 加了「括号里填什么?」)。空着的地方念「几」「什么」(Q4 已定)。课文的自然段照旧整课一次合成(<code>docs/dev/课本.md</code>)。</td><td><span class="st new">提议</span></td></tr>
       <tr><td class="n">X3</td><td><b>粒度:</b>老师会单独指、孩子会单独点的才单独一块。一道题里有(1)(2)就分小题;一排算式、一组口诀一组一块(group)、一句一个小块(sub)(Q5 已定)。插图里的单个东西不分块,要圈要数的写成 objects。</td><td><span class="st new">提议</span></td></tr>
       <tr><td class="n">X4</td><td><b>给老师的话(teacher)</b>写这一块练什么、孩子常卡在哪、怎么引、答案;不写给孩子看的评语。没把握的答案写 <code>note</code>,不硬写。</td><td><span class="st new">提议</span></td></tr>
@@ -342,10 +342,10 @@ pre.code { margin:0; background:var(--surface); border-radius:var(--r-card); box
   <div class="tbl"><table>
     <thead><tr><th>编号</th><th>规则</th><th>状态</th></tr></thead>
     <tbody>
-      <tr><td class="n">C1</td><td><b>上下文包的 <code>board:</code></b> 一课的块按树列一遍,带 label 和印着的字(<code>bookSlateParts</code> 改成照分块列)。</td><td><span class="st new">提议</span></td></tr>
-      <tr><td class="n">C2</td><td><b><code>[[看 …]]</code> 照 label 找</b>(「练一练第 3 题」「拼图的表格」),再照页、原话找(<code>bookTarget</code> 改成照分块)。窗移到那一块,刷的字行照块里的行。<span class="was">先做了一半(第 3 步,编程助手一改叫法就要用):固定的几种写法(第 3 段、例 2、练一练第 3 题、栏目名)照旧先认,认不出的照 label 找(不管空格);「做一做第 2 题」也找叫法以「做一做」收尾的栏目下的。上下文包照 label 列是第 4 步。</span></td><td><span class="st new">提议</span></td></tr>
-      <tr><td class="n">C3</td><td><b>窗里那几块</b>的 teacher(练什么、怎么引、答案)进 <code>&lt;page&gt;</code>;窗外的只给 label。答案只进上下文包。规则出的没有 teacher,这一项就空着。</td><td><span class="st new">提议</span></td></tr>
-      <tr><td class="n">C4</td><td><b>孩子做的:</b>落在作答区里的笔照作答区说(「拼图的表格第 2 行第 3 格写了 2 笔」「圈了 4 个」),同 <code>workbookInk</code>;写成什么样还是看窗图。点读了哪一块也说。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">C1</td><td><b>上下文包的 <code>board:</code></b> 一课的块按树列一遍,带 label 和印着的字(<code>bookSlateParts</code> 改成照分块列)。<span class="was">做了(第 4 步):一块一行,叫法在前,小块缩进,没字行的块列「〔例 1 的表格〕」;<code>&lt;page&gt;</code> 上限 2400 → 5000 字(改过的数学一课 8 页约 4500 字,一课只给一次)。</span></td><td><span class="st now">现状</span></td></tr>
+      <tr><td class="n">C2</td><td><b><code>[[看 …]]</code> 照 label 找</b>(「练一练第 3 题」「拼图的表格」),再照页、原话找(<code>bookTarget</code> 改成照分块)。窗移到那一块,刷的字行照块里的行。<span class="was">先做了一半(第 3 步,编程助手一改叫法就要用):固定的几种写法(第 3 段、例 2、练一练第 3 题、栏目名)照旧先认,认不出的照 label 找(不管空格);「做一做第 2 题」也找叫法以「做一做」收尾的栏目下的。上下文包照 label 列是第 4 步。</span><span class="was">第 3、4 步做完:固定写法先认,认不出的照 label;「看」一块连着它里面的小块;没字行的块(表格、一组口诀)照框;同名的小题写「题的叫法 + 的 + 小题」。</span></td><td><span class="st now">现状</span></td></tr>
+      <tr><td class="n">C3</td><td><b>窗里那几块</b>的 teacher(练什么、怎么引、答案)进 <code>&lt;page&gt;</code>;窗外的只给 label。答案只进上下文包。规则出的没有 teacher,这一项就空着。<span class="was">做了,放在 <code>board:</code> 的「给老师的」(每轮照窗现算,孩子停下的窗和老师「看」的那一块;小块露出来,套着它的那块也算),不进 <code>&lt;page&gt;</code>(那里一课只给一次,窗会变);答案引的格换成名字,只有答案的小题一行说完,最多 1600 字。</span></td><td><span class="st now">现状</span></td></tr>
+      <tr><td class="n">C4</td><td><b>孩子做的:</b>落在作答区里的笔照作答区说(「拼图的表格第 2 行第 3 格写了 2 笔」「圈了 4 个」),同 <code>workbookInk</code>;写成什么样还是看窗图。点读了哪一块也说。<span class="was">做了:落的笔照作答区说(写了几笔、圈了几圈、打勾的方框画了几笔,不在作答区的数一句);写字卡里填的空照名字说(板的日志的 cell 记格的 id)。点读一块等 K3。</span></td><td><span class="st now">现状</span></td></tr>
       <tr><td class="n">C5</td><td><b>窗图照旧收</b>(数学、科学收;语文写了字的收)。分块只告诉老师哪是哪,不代替看图。</td><td><span class="st now">现状</span></td></tr>
     </tbody>
   </table></div>
@@ -431,7 +431,7 @@ pre.code { margin:0; background:var(--surface); border-radius:var(--r-card); box
       <tr><td class="n">1 ✓</td><td><b>做完(2026-11-25)。</b>分块文件的形状;规则出分块(R1–R3,先只搬现在的规则);运行时改成只读分块(M1–M2);逐课比一样(M3),比过删掉运行时那条线(M4)</td><td><code>src/schema/zones.ts</code>(新)、<code>src/memory/textbook-zones.ts</code>(新,读写与挑哪份)、规则从 <code>src/chalk/kit/book.ts</code> 搬出、<code>textbook-pdf.ts</code> 建索引后出分块、<code>lesson-fit.ts</code>、<code>board-pack.ts</code>、点读</td></tr>
       <tr><td class="n">2 ✓</td><td><b>做完(2026-11-25)。</b>规则变好:表格里没字的格、打勾的小方框(从探针搬进规则);语文课后题、认字栏能点读(X5 里规则做得到的)</td><td><code>textbook-cells.ts</code>、规则出分块那里</td></tr>
       <tr><td class="n">3 ✓</td><td><b>做完(2026-11-25),Codex 改一课 8 页 10 分钟。</b>编程助手改:pull、check、preview、push 四个命令;技能和三科规范。拿数学二上一个单元让 Codex 改一遍,量从草稿改起要多久</td><td><code>src/app/cli/</code> 进命令表、<code>skills/cotutor-textbook/</code>(新)</td></tr>
-      <tr><td class="n">4</td><td>运行时用上新字段:teacher 与答案进上下文包、笔归作答区、点读一块(C3–C4、K1–K3)</td><td><code>board-pack.ts</code>、<code>src/ui/stage/book.tsx</code>、kid-page 的 <code>RD</code>、kid 接口剥掉 teacher</td></tr>
+      <tr><td class="n">4</td><td><b>老师那一半做完(2026-11-25:C1–C4);孩子那一半(K1–K3)先出设计稿。</b>运行时用上新字段:teacher 与答案进上下文包、笔归作答区、点读一块(C3–C4、K1–K3)</td><td><code>board-pack.ts</code>、<code>src/ui/stage/book.tsx</code>、kid-page 的 <code>RD</code>、kid 接口剥掉 teacher</td></tr>
       <tr><td class="n">5</td><td>工作台「分块」页(V,先出设计稿)</td><td><code>src/ui/dev/</code>、<code>app/http/</code> 存一页</td></tr>
       <tr><td class="n">6</td><td>课本的分块跑顺以后:练习册的 <code>questions</code> 换成 <code>zones</code>(Q7;共用的作答区、物件、答案第 1 步已抽出)</td><td><code>src/schema/workbook.ts</code></td></tr>
     </tbody>

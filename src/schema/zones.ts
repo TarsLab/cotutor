@@ -55,6 +55,7 @@ export interface Zone {
 
 /** 给老师的:分块里的块不一定有固定目标(规则出的没有),答案可以没有 */
 export const ZoneTeacherSchema = TeacherSchema.partial({ goal: true, answers: true }).extend({ note: z.string().min(1).optional() });
+export type ZoneTeacher = z.infer<typeof ZoneTeacherSchema>;
 
 export const ZoneSchema: z.ZodType<Zone> = z.lazy(() => z.object({
   id: regionId,

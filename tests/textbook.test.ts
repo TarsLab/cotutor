@@ -211,7 +211,7 @@ check('窗里看得见什么:例几、栏目;栏目名没露出来的说哪个�
 const toc2 = bookSlate(mx, null);
 check('给老师的目录:一个单元一行,后面是小节、课题(课题带点);综合实践也一行', toc2.text.join('|') === '一 分类与整理(1)|二 1～6的表内乘法(3):1.乘法的初步认识(4)、·5的乘法口诀(5)、·6的乘法口诀(6)|校园小导游(7):认识东、南、西、北(7)', JSON.stringify(toc2.text));
 const five = bookSlate(mx, '5的乘法口诀');
-check('给老师的一课:标题、例题、栏目、第几题', five.show === '课本《数学二年级上册》:《5的乘法口诀》第 5 页' && five.text.join('|') === '标题:5的乘法口诀|例2 5×1=5 一五得五|【练一练】|第1题 算一算，说一说口诀。|第2题 照样子连一连，再说一说。', JSON.stringify(five));
+check('给老师的一课:标题、例题、栏目、下面的题照叫法缩进', five.show === '课本《数学二年级上册》:《5的乘法口诀》第 5 页' && five.text.join('|') === '标题:5的乘法口诀|例 2 5×1=5 一五得五|【练一练】|  练一练第 1 题 算一算，说一说口诀。|  练一练第 2 题 照样子连一连，再说一说。', JSON.stringify(five));
 const mbook = lessonBookOf('数学二年级上册.pdf', mx);
 const opened = lessonOpen(lessonInit(), mbook);
 const f1 = fitActs(opened, [{ name: '翻', arg: '5的乘法口诀' }, { name: '看', arg: '例 2' }], { book: mbook });
@@ -243,7 +243,7 @@ const ex1 = bookTarget(air, ss, sb, '探索与实践1');
 check('看栏目(空格可有可无):连着这个栏目下的段、提示、表,到下一个栏目为止', ex1?.label === '探索与实践 1' && ex1.rows.length === 7 && bookTarget(air, ss, sb, '探索与实践 1')?.rows.length === 7, JSON.stringify(ex1));
 check('科学点读:标题读课名(去掉「第1课」),一段一块', bookReadTexts(air, sb).map((x) => `${x.no}:${x.sents.join('/')}`).slice(0, 2).join('|') === '0:认识空气|1:雨后的公园里，/他们在说什么？', JSON.stringify(bookReadTexts(air, sb)));
 const sp = bookSlate(sx, '认识空气');
-check('给老师的科学课:栏目、段、图里的字', sp.text.includes('【探索与实践 1】') && sp.text.includes('第3段 准备一个保鲜袋，观察袋内是否有东西。') && sp.text.includes('空气在哪里？'), JSON.stringify(sp));
+check('给老师的科学课:栏目、段、图里的字', sp.text.includes('【探索与实践 1】') && sp.text.includes('  第 3 段 准备一个保鲜袋，观察袋内是否有东西。') && sp.text.includes('空气在哪里？'), JSON.stringify(sp));
 check('给老师的科学目录:一个单元一行,单元页也是一项', bookSlate(sx, null).text.join('|') === '第1单元 空气和水:空气和水(1)、1 认识空气(2)、2 观察水(4)', JSON.stringify(bookSlate(sx, null).text));
 
 // ---- 挑这学期的那一册 ----

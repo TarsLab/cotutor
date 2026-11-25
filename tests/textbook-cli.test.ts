@@ -103,6 +103,20 @@ const has = async (s: string): Promise<boolean> => (await checkZoneDir(ws, dir))
   const pushed = await pushZoneDir(ws, dir);
   check('push:有要改的不写 vault', pushed.wrote === 0 && !existsSync(vaultZonesDir(ws.paths.textbooks, sha)));
 }
+{
+  // 小题只在同一道题里不重名:两道题下面各有一个「7×2」不说;同一道题下面两个才说
+  const z = structuredClone(draft);
+  const host = z.zones.find((x) => x.kind === 'para')!;
+  const row = host.rows![0];
+  const sub = (id: string): Zone => ({ id, kind: 'sub', label: '7×2', box: row, rows: [] });
+  z.zones.push({ id: 'qa', kind: 'problem', label: '甲题', box: row, rows: [], children: [sub('qa-1')] }, { id: 'qb', kind: 'problem', label: '乙题', box: row, rows: [], children: [sub('qb-1')] });
+  write(z);
+  check('check:两道题下面各有一个同名的小题,不说', !(await has('7×2')));
+  z.zones[z.zones.length - 1].children!.push(sub('qb-2'));
+  write(z);
+  check('check:同一道题下面两个同名的小题,说', await has('下面有 2 个小题都叫「7×2」'));
+  write(draft);
+}
 const p3 = readFileSync(join(dir, 'p003.json'), 'utf8');
 writeFileSync(join(dir, 'p003.json'), '{"page": 3, "zones": [{"id": "x"}]}');
 check('check:形状不对的页把出错的字段列出来', (await checkZoneDir(ws, dir)).problems.some((p) => p.startsWith('第 3 页:zones.0')));

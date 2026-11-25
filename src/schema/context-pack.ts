@@ -62,7 +62,8 @@ export const ContextPackSchema = z.object({
   /**
    * 一节课(铺着页的 activity):页此刻的样子,每一轮都带(应用写的;src/runtime/context/board-pack.ts)。
    * base 现在铺的那一页 · pages 这节课还铺过哪些页 · drawn 你在页上画着的 · ops 现在开放给孩子的 · did 孩子从上一轮到现在做的(合并过)·
-   * recent 他最近点的那一项(30 秒内,孩子说「这个」时指它)· view 孩子现在看着哪里(上一轮以后窗停下的地方;附了那一块的图就注一句、图随这一轮附上)。
+   * recent 他最近点的那一项(30 秒内,孩子说「这个」时指它)· view 孩子现在看着哪里(上一轮以后窗停下的地方;附了那一块的图就注一句、图随这一轮附上)·
+ * teacher 课本窗里那几块只给老师的话(练什么、卡住怎么引、答案)。
    * 页上印的字不在这里,在 pageNotes(第一次看到那一页时给一次)
    */
   slate: z
@@ -74,6 +75,8 @@ export const ContextPackSchema = z.object({
       did: z.array(z.string()).default([]),
       recent: z.string().optional(),
       view: z.string().optional(),
+      /** 课本窗里那几块只给你的话:练什么、卡住怎么引、答案(编程助手、家长写进分块的;没写的块不说) */
+      teacher: z.array(z.string()).optional(),
     })
     .optional(),
   /**

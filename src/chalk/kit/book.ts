@@ -9,7 +9,7 @@
  * 老师的动作落到页上在 src/board/lesson-fit.ts;这里只有课本的几何。
  */
 
-import { bookChrome, walkZones, withPinyin, type BookLayout, type BookLesson, type BookLine, type BookPage, type Zone, type ZonePage, type ZoneRegion } from '../../schema/index.ts';
+import { bookChrome, walkZones, withPinyin, type BookLayout, type BookLesson, type BookLine, type BookPage, type Zone, type ZonePage, type ZoneRegion, type ZoneTeacher } from '../../schema/index.ts';
 
 /** 一页的宽(场景坐标) */
 export const BOOK_W = 1000;
@@ -141,6 +141,12 @@ export interface BookBlock {
   label?: string;
   /** 套在它里面的块有几个(分块读回来的,照先后紧跟在它后面):「看」一块连着它里面的 */
   kids?: number;
+  /** 套着它的那一块的叫法:一课里好几处「7×2」,老师写「练一练第 1 题的 7×2」 */
+  parent?: string;
+  /** 只给老师的话(分块的 teacher:练什么、卡住怎么引、答案);答案引的作答区照 regions 换成名字 */
+  teacher?: ZoneTeacher;
+  /** 这一块的作答区:id 和名字(几页上的合起来) */
+  regions?: { id: string; label: string }[];
 }
 
 const linePm = (p: BookPage, l: BookLine): Box => [(l.x1 / p.w) * 1000, (l.y1 / p.h) * 1000, (l.x2 / p.w) * 1000, (l.y2 / p.h) * 1000];
@@ -160,7 +166,7 @@ const iou = (a: Box, b: Box): number => {
  * 字照行重拼,和规则分块时一样(src/memory/textbook-zones-rules.ts):段的行直接连,别的用空格隔开,语文的栏目、别的字带读音,例题去掉开头的例题号
  */
 export function zoneBlocks(pages: readonly BookPage[], zones: readonly ZonePage[], layout: BookLayout = 'prose'): BookBlock[] {
-  interface Node { z: Zone; refs: { n: number; i: number }[]; kids: Node[]; parent: Node | null }
+  interface Node { z: Zone; refs: { n: number; i: number }[]; kids: Node[]; parent: Node | null; regions: { id: string; label: string }[]; teacher?: ZoneTeacher }
   const byId = new Map<string, Node>();
   const top: Node[] = [];
   for (const p of pages) {
@@ -172,10 +178,12 @@ export function zoneBlocks(pages: readonly BookPage[], zones: readonly ZonePage[
       for (const z of zs) {
         let node = byId.get(z.id);
         if (!node) {
-          node = { z, refs: [], kids: [], parent };
+          node = { z, refs: [], kids: [], parent, regions: [] };
           byId.set(z.id, node);
           (parent ? parent.kids : top).push(node);
         }
+        for (const r of z.regions ?? []) node.regions.push({ id: r.id, label: r.label });
+        node.teacher ??= z.teacher;
         if (z.rows) {
           for (const row of z.rows) {
             let best = -1, score = 0.5;
@@ -212,8 +220,9 @@ export function zoneBlocks(pages: readonly BookPage[], zones: readonly ZonePage[
   const walk = (ns: readonly Node[]): void => {
     for (const node of ns) {
       const at = out.length;
-      if (node.refs.length) out.push({ ...zoneBlock(node.z, node.refs.map(lineOf).filter((l): l is BookLine => Boolean(l)), node.parent?.z ?? null, layout), refs: node.refs });
-      else { const area = firstBox(node.z); out.push({ kind: 'group', text: '', refs: [], label: node.z.label, ...(node.parent?.z.kind === 'column' ? { head: node.parent.z.label } : {}), ...(area ? { area } : {}) }); }
+      const more = { ...(node.parent ? { parent: node.parent.z.label } : {}), ...(node.teacher ? { teacher: node.teacher } : {}), ...(node.regions.length ? { regions: node.regions } : {}) };
+      if (node.refs.length) out.push({ ...zoneBlock(node.z, node.refs.map(lineOf).filter((l): l is BookLine => Boolean(l)), node.parent?.z ?? null, layout), refs: node.refs, ...more });
+      else { const area = firstBox(node.z); out.push({ kind: 'group', text: '', refs: [], label: node.z.label, ...(node.parent?.z.kind === 'column' ? { head: node.parent.z.label } : {}), ...(area ? { area } : {}), ...more }); }
       walk(node.kids);
       if (out.length - at > 1) out[at].kids = out.length - at - 1;
     }
@@ -553,7 +562,10 @@ export function bookTarget(pages: readonly BookPage[], sheets: readonly BookShee
   }
   // 分块里的叫法一字不差(不管空格;编程助手改的「例 1 的做一做第 2 题」):栏目连着下面的小块(同下面认栏目名)
   const nq = q.replace(/\s/g, '');
-  const byLabel = nq ? blocks.findIndex((x) => x.label !== undefined && x.label.replace(/\s/g, '') === nq) : -1;
+  const flat = (t: string): string => t.replace(/\s/g, '');
+  // 「练一练第 1 题的 7×2」:套着它的那块的叫法 + 它的叫法(小题只在同一道题里不重名)
+  let byLabel = nq ? blocks.findIndex((x) => x.label !== undefined && x.parent !== undefined && [flat(x.parent + x.label), flat(`${x.parent}的${x.label}`)].includes(nq)) : -1;
+  if (byLabel < 0 && nq) byLabel = blocks.findIndex((x) => x.label !== undefined && flat(x.label) === nq);
   if (byLabel >= 0) {
     const got = blocksBox(pages, sheets, subtree(blocks, byLabel));
     if (got) return { label: blocks[byLabel].label!, ...got };
@@ -677,6 +689,92 @@ export function bookView(pages: readonly BookPage[], sheets: readonly BookSheet[
   const others = blocks.filter((b) => b.kind === 'other' && seen(b.refs)).length;
   const parts = [paras.length ? `第 ${paras.length > 1 ? `${paras[0]}–${paras[paras.length - 1]}` : paras[0]} 段` : '', secs.join('、'), others && !paras.length && !secs.length ? '课文后面的部分' : ''].filter(Boolean);
   return [where, parts.join(',')].filter(Boolean).join(':') || '空白处';
+}
+
+// ——— 给老师的:窗里那几块的话、孩子落的笔归到作答区 ———
+
+/** 一块露出来没有:它的字行露出一半以上,或没有字行的(表格、插图)框露出一半以上 */
+function blockSeen(pages: readonly BookPage[], sheets: readonly BookSheet[], b: BookBlock, box: Box): boolean {
+  const half = (r: Box): boolean => {
+    const w = Math.max(0, Math.min(r[2], box[2]) - Math.max(r[0], box[0])), h = Math.max(0, Math.min(r[3], box[3]) - Math.max(r[1], box[1]));
+    return w * h >= 0.5 * (r[2] - r[0]) * (r[3] - r[1]) && r[2] > r[0];
+  };
+  if (b.refs.some((r) => { const p = pages.find((x) => x.n === r.n), sh = sheetOf(sheets, r.n), l = p?.lines[r.i]; return Boolean(p && sh && l && half(lineBox(sh, l))); })) return true;
+  const a = !b.refs.length && b.area ? blockBox(pages, sheets, b) : null;
+  return Boolean(a && half(a));
+}
+
+/** 给老师的话最多多少字:窗里一般三五道题 */
+export const TEACHER_LINES_MAX = 1600;
+
+/**
+ * 窗里那几块(boxes 是场景坐标的窗:孩子停下的地方、老师「看」的那一块)只给老师的话:练什么、卡住怎么引、答案(作答区换成名字)、怎么看。
+ * 一块里面的小块露出来了,这一块也算;没写 teacher 的块不说(规则出的分块都没有)。上下文包 board: 的「给老师的」,每轮照窗现算;答案只在这里,孩子端拿不到
+ */
+export function bookTeacherLines(pages: readonly BookPage[], sheets: readonly BookSheet[], blocks: readonly BookBlock[], boxes: readonly Box[]): string[] {
+  const seen = blocks.map((b) => boxes.some((box) => blockSeen(pages, sheets, b, box)));
+  // 小块露出来了,套着它的那几块也算露出来
+  for (let k = blocks.length - 1; k >= 0; k--) if (!seen[k] && blocks[k].kids) seen[k] = seen.slice(k + 1, k + 1 + blocks[k].kids!).some(Boolean);
+  const out: string[] = [];
+  let size = 0;
+  for (let k = 0; k < blocks.length; k++) {
+    const b = blocks[k], t = b.teacher;
+    if (!seen[k] || !t || !b.label) continue;
+    // 答案引的格常在小块里(例题的答案写在表格的格上)
+    const name = (id: string): string => blocks.slice(k, k + 1 + (b.kids ?? 0)).flatMap((x) => x.regions ?? []).find((r) => r.id === id)?.label ?? id;
+    const answers = (t.answers ?? []).map((a) => `${a.at.map(name).join('、')}:${[...(a.ok ? [a.ok.join(' 或 ')] : []), ...(a.links ? [a.links.map(([l, r]) => `${l}—${r}`).join('、')] : []), ...(a.note ? [a.note] : [])].join(';')}`);
+    // 只有答案的小题(一个算式、一句口诀)一行说完
+    const lines = !t.goal && !t.hint && !t.note
+      ? [`${b.label}:答案 ${answers.join(';')}`]
+      : [`${b.label}${t.goal ? `:练 ${t.goal}` : ''}`, ...(t.hint ? [`  卡住了:${t.hint}`] : []), ...answers.map((a) => `  答案 ${a}`), ...(t.note ? [`  ${t.note}`] : [])];
+    const n = lines.reduce((m, x) => m + x.length + 1, 0);
+    if (size + n > TEACHER_LINES_MAX) { out.push('…(窗里还有,孩子挪到那里再给)'); break; }
+    out.push(...lines);
+    size += n;
+  }
+  return out;
+}
+
+/** 这一课分块里的作答区在场景里:id = <PDF 页>.<作答区 id>(同 bookCellsOf),名字、种类、框 */
+export function bookRegions(pages: readonly BookPage[], sheets: readonly BookSheet[], zones: readonly ZonePage[]): { id: string; label: string; kind: ZoneRegion['kind']; box: Box }[] {
+  return pages.flatMap((p) => {
+    const sh = sheetOf(sheets, p.n), zp = zones.find((x) => x.page === p.n);
+    if (!sh || !zp) return [];
+    const rs: ZoneRegion[] = [...(zp.regions ?? [])];
+    walkZones(zp.zones, (z) => { rs.push(...(z.regions ?? [])); });
+    const kx = p.w / 1000, ky = p.h / 1000;
+    return rs.map((r) => ({ id: `${p.n}.${r.id}`, label: r.label, kind: r.kind, box: toScene(sh, r.box[0] * kx, r.box[1] * ky, r.box[2] * kx, r.box[3] * ky) }));
+  });
+}
+
+/** 一笔合拢了没有(圈):够大,起笔收笔挨得近(同练习册) */
+function closedStroke(pts: readonly (readonly [number, number])[]): boolean {
+  const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+  const w = Math.max(...xs) - Math.min(...xs), h = Math.max(...ys) - Math.min(...ys);
+  const [x1, y1] = pts[0], [x2, y2] = pts[pts.length - 1];
+  return Math.min(w, h) >= 12 && Math.hypot(x2 - x1, y2 - y1) <= Math.min(Math.max(w, h) * 0.15, 40);
+}
+
+/**
+ * 孩子在课本页上落的笔(场景坐标)照分块的作答区说成几句:一笔七成五以上的点落在哪个作答区里(几个都框住取最小的)就归它;
+ * 写的「写了几笔」、打勾的「画了几笔」、圈的「圈了几圈」;没落在哪个作答区的数一句。写成什么样还是看窗图。最多 8 句
+ */
+export function bookZoneInk(regions: readonly { label: string; kind: ZoneRegion['kind']; box: Box }[], ink: readonly (readonly (readonly [number, number])[])[]): string[] {
+  const got = new Map<string, { label: string; kind: ZoneRegion['kind']; strokes: number; rings: number }>();
+  let loose = 0;
+  const area = (b: Box): number => (b[2] - b[0]) * (b[3] - b[1]);
+  for (const st of ink) {
+    if (!st.length) continue;
+    const hit = regions.filter((r) => st.filter((p) => p[0] >= r.box[0] && p[0] <= r.box[2] && p[1] >= r.box[1] && p[1] <= r.box[3]).length / st.length >= 0.75).sort((a, b) => area(a.box) - area(b.box))[0];
+    if (!hit) { loose++; continue; }
+    const g = got.get(hit.label) ?? { label: hit.label, kind: hit.kind, strokes: 0, rings: 0 };
+    got.set(hit.label, g);
+    g.strokes++;
+    if (hit.kind === 'circle' && closedStroke(st)) g.rings++;
+  }
+  const out = [...got.values()].map((g) => (g.kind === 'circle' && g.rings ? `在「${g.label}」圈了 ${g.rings} 圈${g.strokes > g.rings ? `,还有 ${g.strokes - g.rings} 笔没合拢` : ''}` : g.kind === 'tick' ? `在「${g.label}」画了 ${g.strokes} 笔(打勾的方框)` : `在「${g.label}」写了 ${g.strokes} 笔`));
+  if (out.length && loose) out.push(`还有 ${loose} 笔不在作答区里`);
+  return out.slice(0, 8).map((x) => `${x}(写成什么样看图)`);
 }
 
 /** 「59-60」「59」→ [59, 60] */

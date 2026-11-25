@@ -55,7 +55,7 @@ import { bookLast, lastSpot, rememberBook } from './journal/book-last.ts';
 import { homeworkBookPage, keepPhotos } from './homework.ts';
 import { dayTitle, lessonDone, lessonPage, lessonSection, lessonStep, photoDay, photoSheetBox } from '../board/lesson.ts';
 import { readLesson, updateLesson } from './journal/lesson-store.ts';
-import { BOOK_TOC, bookView, photoBookPage, photoText, pickable, workbookInk, workbookPage, workbookPageId, workbookText, type PhotoText } from '../chalk/index.ts';
+import { BOOK_TOC, bookRegions, bookTeacherLines, bookView, bookZoneInk, photoBookPage, photoText, pickable, workbookInk, workbookPage, workbookPageId, workbookText, type PhotoText } from '../chalk/index.ts';
 import { bookIndex, listBooks, pickBook } from '../memory/textbook-pdf.ts';
 import { bookZones } from '../memory/textbook-zones.ts';
 
@@ -145,6 +145,8 @@ export type { PackReport } from '../memory/context.ts';
 
 /** 课本索引的缓存(相对 workspace 根;能重新生成,不进备份) */
 const BOOK_CACHE = '.cotutor/textbooks';
+/** 课本格子的 id:<PDF 页>.<作答区 id>(规则出的是第几格;编程助手量的起了名字,字母、数字、汉字、连字符,同分块) */
+const CELL_ID = /^\d{1,4}\.[\p{L}\p{N}][\p{L}\p{N}-]{0,40}$/u;
 /** 课本上揭开的(盖住的算式)最多几个字:同 [[盖 …]] 一处的上限 */
 const BOOK_MARK_CHARS = 12;
 /** 窗里的图(舞台导的 jpeg,长边 1024)base64 最多多长:够一张清楚的图,挡住塞进来的大文件 */
@@ -452,11 +454,11 @@ export class Runner {
     if (b.k === 'cell') {
       const strokes = Array.isArray(b.strokes) ? b.strokes : null;
       const pt = (p: unknown): boolean => Array.isArray(p) && p.length === 2 && p.every((n) => typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= CELL_UNIT);
-      if (typeof b.id !== 'string' || !/^\d{1,4}\.\d{1,4}$/.test(b.id) || !strokes || strokes.length > LESSON_CELL_STROKES || !strokes.every((st) => Array.isArray(st) && st.length > 0 && st.length <= LESSON_INK_POINTS && st.every(pt))) return null;
+      if (typeof b.id !== 'string' || !CELL_ID.test(b.id) || !strokes || strokes.length > LESSON_CELL_STROKES || !strokes.every((st) => Array.isArray(st) && st.length > 0 && st.length <= LESSON_INK_POINTS && st.every(pt))) return null;
       const after = await step({ t: 'cell', id: b.id, strokes: strokes as [number, number][][] });
       if (!after) return null;
       const model = typeof b.text === 'string' && b.text.length <= 4 && b.text.trim() ? b.text.trim() : undefined;
-      await appendBoard(ws, tutor, date, thread, { at, k: 'cell', base, ...(model ? { text: model } : {}), ...(b.blank === true ? { blank: true as const } : {}), ...(strokes.length ? {} : { clear: true as const }) });
+      await appendBoard(ws, tutor, date, thread, { at, k: 'cell', base, id: b.id, ...(model ? { text: model } : {}), ...(b.blank === true ? { blank: true as const } : {}), ...(strokes.length ? {} : { clear: true as const }) });
       const asked = strokes.length > 0 && (lessonPage(after)?.open ?? []).some((o) => PEN_ASKS.includes(o));
       return { thread, say: null, still: false, ...(asked ? { asked: true as const } : {}) };
     }
@@ -627,12 +629,26 @@ export class Runner {
     const notes: PageNote[] = [];
     /** 练习册上孩子用笔圈、画的,照作答区说成几句(上一轮以后落过笔才说) */
     let inked: string[] = [];
+    /** 课本窗里那几块只给老师的话(分块的 teacher),每轮照窗现算 */
+    let teacher: string[] = [];
+    /** 课本格子的名字(分块的作答区):孩子在格里写了哪几格,照名字说 */
+    let cellLabels: Record<string, string> | undefined;
     let show = '还没有页';
     if (page?.kind === 'book') {
       const at = x.src.book && page.src === x.src.book.file ? bookLesson(x.src.book.index, page.title) : null;
       const parts = at && x.src.book ? bookSlateParts(x.src.book.index, at, pickBookZones(x.src.book.index, x.src.book.zones, at.pages.map((p) => p.n)).pages, page.title === BOOK_TOC ? await bookLast(ws, x.src.book.file) : null) : null;
       show = parts?.show ?? `课本《${page.src}》读不出来`;
       if (parts && !told.has(page.id)) notes.push({ id: page.id, name: page.title === BOOK_TOC ? '目录' : `《${page.title}》`, text: clipNote(parts.text) });
+      if (at && x.src.book && page.title !== BOOK_TOC) {
+        const t = pageText(page, x.src);
+        const regions = bookRegions(t.pages, t.sheets, pickBookZones(x.src.book.index, x.src.book.zones, page.pages).pages);
+        const boxes = [x.lesson.view, x.lesson.look?.box].filter((b): b is Box => Boolean(b));
+        teacher = boxes.length ? bookTeacherLines(t.pages, t.sheets, t.blocks, boxes) : [];
+        cellLabels = Object.fromEntries(regions.map((r) => [r.id, r.label]));
+        let last = 0;
+        events.forEach((e, i) => { if (e.k === 'turn') last = i + 1; });
+        if (events.slice(last).some((e) => e.k === 'ink' && e.base === page.id)) inked = bookZoneInk(regions, page.kid.ink);
+      }
     } else if (page?.kind === 'photo' && page.day) {
       // 作业本:一整本连着滚(老的在上);今天拍的几张、以前那几天、孩子在看哪儿。字只给今天的和孩子眼前那几张
       const labels = homeworkLabels(page);
@@ -693,7 +709,7 @@ export class Runner {
     const fresh = page ? events.slice(from).some((e) => e.k === 'shot' && e.base === page.id) : false;
     const shot = fresh ? await rename(files.shot(thread), files.shot(job)).then(() => files.shot(job), () => undefined) : undefined;
     const did = [...(opts.did ?? []), ...inked];
-    const slate = slateOf({ page: { id: page?.id ?? '#', show }, others, events, lesson: lessonSlateBits(x.lesson), now: now.getTime(), ...(shot ? { shot: true } : {}), ...(did.length ? { did } : {}) });
+    const slate = slateOf({ page: { id: page?.id ?? '#', show }, others, events, lesson: lessonSlateBits(x.lesson), now: now.getTime(), ...(shot ? { shot: true } : {}), ...(did.length ? { did } : {}), ...(teacher.length ? { teacher } : {}), ...(cellLabels ? { cellLabels } : {}) });
     return { slate, notes, told: notes.map((n) => n.id), ...(shot ? { shot } : {}) };
   }
 

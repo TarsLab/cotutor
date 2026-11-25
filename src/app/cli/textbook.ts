@@ -249,11 +249,19 @@ export async function checkZoneDir(ws: Workspace, dir: string): Promise<ZoneDirC
     out.problems.push(...pp.problems);
     out.notes.push(...pp.notes);
   }
-  // 一课里叫法不重名(跨页的同一块 id 一样不算):老师 [[看 …]] 照叫法找
+  // 一课里叫法不重名(跨页的同一块 id 一样不算):老师 [[看 …]] 照叫法找。小题(sub)只在同一道题、同一组里不重名:
+  // 一课里好几处「7×2」,老师写「练一练第 1 题的 7×2」找得到(src/chalk/kit/book.ts 的 bookTarget)
   for (const l of got.meta.lessons) {
     const names = new Map<string, Set<string>>();
-    for (const [n, zp] of parsed) if (n >= l.pages[0] && n <= l.pages[1]) walkZones(zp.zones, (z) => { names.set(z.label, (names.get(z.label) ?? new Set()).add(z.id)); });
-    for (const [label, ids] of names) if (ids.size > 1) out.problems.push(`《${l.title}》里有 ${ids.size} 块都叫「${label}」(${[...ids].join('、')}):老师说「看 ${label}」会找错,改成书上的号或从上往下数`);
+    for (const [n, zp] of parsed) if (n >= l.pages[0] && n <= l.pages[1]) walkZones(zp.zones, (z, _d, parent) => {
+      const key = z.kind === 'sub' ? `${parent?.id ?? ''}\u0000${z.label}` : z.label;
+      names.set(key, (names.get(key) ?? new Set()).add(z.id));
+    });
+    for (const [key, ids] of names) {
+      if (ids.size < 2) continue;
+      const [owner, label] = key.includes('\u0000') ? key.split('\u0000') : ['', key];
+      out.problems.push(owner ? `《${l.title}》里同一块(${owner})下面有 ${ids.size} 个小题都叫「${label}」(${[...ids].join('、')}):同一道题里的小题不重名` : `《${l.title}》里有 ${ids.size} 块都叫「${label}」(${[...ids].join('、')}):老师说「看 ${label}」会找错,改成书上的号或从上往下数`);
+    }
   }
   return { ...out, parsed, meta: got.meta, bookOf: got.book };
 }

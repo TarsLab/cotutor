@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 课本页的热区谁标得准:同一页课本图,交给几种跑法各标一遍(行框、嵌套的块、孩子要动手的地方),框和 PDF 里量出来的比。不进产品。
+ * 课本页的分块谁标得准(设计稿 docs/artifact/分块/):同一页课本图,交给几种跑法各标一遍(行框、嵌套的块、孩子要动手的地方),框和 PDF 里量出来的比。不进产品。
  * 起因(2026-11-25):想把课本的识别从规则(src/chalk/kit/book.ts 的 mathBlocks 这些)换成技能 + 脚本 + 大模型标注,
  * 要知道看图的模型给的框准不准、技能该建议家长用哪个编程助手。Claude Code 不比(它不出图,出练习册要出图);
  * Qwen Code 试过一页(数学二上 78 页,2026-11-25):框和 Codex 一样准,可一页 16 分钟(Codex 3–4 分钟),不比了。
@@ -458,9 +458,9 @@ function report(pages, rows) {
     return { runner, ok: `${rs.length}/${all.length}`, sec: r1(mean(all.map((r) => r.ms / 1000))), lines: pct(lh, lt), lineIou: r2(mean(rs.map((r) => r.score.lines.iou).filter((v) => v !== null))), lineEdge: r1(median(rs.map((r) => r.score.lines.edge).filter((v) => v !== null))), cells: pct(ch, ct), cellIou: r2(mean(rs.map((r) => r.score.cells.iou).filter((v) => v !== null))), cellOff: r1(median(rs.map((r) => r.score.cells.off).filter((v) => v !== null))), extra: add((s) => s.cells.extra) };
   };
   const sums = only.map(sum);
-  const html = `<!doctype html><meta charset=utf-8><title>课本热区对比</title>
+  const html = `<!doctype html><meta charset=utf-8><title>课本分块对比</title>
 <style>body{font:14px/1.5 -apple-system,"PingFang SC",sans-serif;margin:16px;color:#222;background:#fff}table{border-collapse:collapse}td,th{border:1px solid #ccc;padding:6px;vertical-align:top}img{width:420px;display:block}.bad{color:#b00}small{color:#666}</style>
-<h1>课本热区对比</h1>
+<h1>课本分块对比</h1>
 <p>蓝 = 行框;红紫粉棕 = 块(外到里);橙 = 要动手的地方。标准答案图:蓝 = 文字层的行,灰 = 表格的格,绿 = 能写的格。偏 = 行框四条边最大偏差的中位数,千分点。</p>
 <table><tr><th>跑法</th><th>成了</th><th>平均秒</th><th>行召回</th><th>行 IoU</th><th>行偏‰</th><th>格召回</th><th>格 IoU</th><th>格中心偏‰</th><th>多标</th></tr>
 ${sums.map((s) => `<tr><td>${s.runner}</td><td>${s.ok}</td><td>${s.sec ?? '—'}</td><td>${s.lines}</td><td>${s.lineIou ?? '—'}</td><td>${s.lineEdge ?? '—'}</td><td>${s.cells}</td><td>${s.cellIou ?? '—'}</td><td>${s.cellOff ?? '—'}</td><td>${s.extra}</td></tr>`).join('\n')}</table>

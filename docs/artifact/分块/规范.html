@@ -1,0 +1,433 @@
+<title>分块</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<!-- 协议类设计稿:分块(课本页上的块、作答区、念法预处理成文件:规则自动出、编程助手改、工作台看和改;运行时只读分块,孩子怎么点,老师怎么用)。怎么提议、什么时候搬进 docs/dev/ 见上一层的 README.md -->
+<style>
+/* 版式:工作台「纸面控制台」的色板(src/ui/dev/dev-theme.ts),单栏长页 + 顶上一条目录;同「书架」「册与开场」「页上记号」 */
+:root {
+  --ground:#F5F3EE; --surface:#FFFFFF; --surface-2:#FAF9F6; --sunk:#EDEAE3;
+  --line:#E5E1D8; --line-soft:#EFECE6;
+  --ink:#2B2B2B; --ink-2:#4A4740; --muted:#6B675F; --faint:#8A8781;
+  --accent:#B4531F; --accent-soft:#F7E8DE;
+  --ok:#1F7A44; --ok-soft:#E5F4EA;
+  --warn:#8A5A12; --warn-soft:#F9F1DE;
+  --info:#2F5E9E; --info-soft:#E9F1FB;
+  --paper:#FFFFFF; --zh:#C43C74; --ma:#2F7FC1; --kid:#2F6FD6;
+  --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif;
+  --mono:"SF Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --kai:"Kaiti SC","STKaiti","KaiTi","BiauKai","Songti SC",serif;
+  --r-card:18px; --r-item:12px; --r-tag:6px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --ground:#1C1B19; --surface:#262522; --surface-2:#2B2A27; --sunk:#33312D; --line:#3D3A35; --line-soft:#34322E;
+  --ink:#ECE8E1; --ink-2:#CFCAC0; --muted:#A39E94; --faint:#8C877D;
+  --accent:#E58A55; --accent-soft:#3A2A20; --ok:#6CC58F; --ok-soft:#1F3328; --warn:#E0B060; --warn-soft:#3A3020; --info:#8AB4EE; --info-soft:#22303F;
+  --paper:#F4F1EA; --zh:#E36A9C; --ma:#6AAAE0; --kid:#6F9BEA; color-scheme:dark; } }
+:root[data-theme="dark"] {
+  --ground:#1C1B19; --surface:#262522; --surface-2:#2B2A27; --sunk:#33312D; --line:#3D3A35; --line-soft:#34322E;
+  --ink:#ECE8E1; --ink-2:#CFCAC0; --muted:#A39E94; --faint:#8C877D;
+  --accent:#E58A55; --accent-soft:#3A2A20; --ok:#6CC58F; --ok-soft:#1F3328; --warn:#E0B060; --warn-soft:#3A3020; --info:#8AB4EE; --info-soft:#22303F;
+  --paper:#F4F1EA; --zh:#E36A9C; --ma:#6AAAE0; --kid:#6F9BEA; color-scheme:dark; }
+* { box-sizing:border-box; }
+html { background:var(--ground); }
+body { margin:0; background:var(--ground); color:var(--ink); font:15px/1.65 var(--sans); }
+.wrap { max-width:1080px; margin:0 auto; padding-block:28px 72px; padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); }
+header.top { display:flex; flex-direction:column; gap:10px; padding-bottom:18px; }
+header.top .crumb { font:500 12px/1 var(--mono); color:var(--faint); letter-spacing:.04em; }
+h1 { margin:0; font-size:30px; font-weight:700; text-wrap:balance; }
+header.top p { margin:0; max-width:68ch; color:var(--ink-2); }
+.legend { display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center; font-size:13px; color:var(--muted); }
+nav.toc { position:sticky; top:env(safe-area-inset-top, 0px); z-index:5; background:var(--ground); border-bottom:1px solid var(--line); margin:0 calc(-1 * max(16px, env(safe-area-inset-left, 0px))); padding:0 max(16px, env(safe-area-inset-left, 0px)); }
+nav.toc .row { display:flex; gap:4px; overflow-x:auto; padding:8px 0; scrollbar-width:none; }
+nav.toc a { flex:none; padding:6px 12px; border-radius:8px; color:var(--ink-2); font-size:13.5px; text-decoration:none; }
+nav.toc a:hover, nav.toc a:focus-visible { background:var(--sunk); color:var(--ink); outline:none; }
+nav.toc a b { font:600 11.5px/1 var(--mono); color:var(--faint); margin-right:5px; }
+body::before { content:""; position:fixed; inset:0 0 auto; height:env(safe-area-inset-top, 0px); z-index:10; background:var(--ground); }
+section { padding-top:44px; scroll-margin-top:56px; }
+section > h2 { margin:0 0 6px; font-size:21px; font-weight:700; display:flex; align-items:baseline; gap:10px; text-wrap:balance; }
+section > h2 .id { font:600 13px/1 var(--mono); color:var(--accent); }
+section > .lead { margin:0 0 18px; max-width:72ch; color:var(--ink-2); }
+h3 { margin:26px 0 10px; font-size:16px; font-weight:650; }
+p { margin:0 0 10px; }
+code { font:500 12.5px/1.4 var(--mono); background:var(--sunk); border-radius:5px; padding:1px 5px; color:var(--ink-2); }
+.st { display:inline-flex; align-items:center; font:600 11.5px/19px var(--sans); border-radius:var(--r-tag); padding:0 7px; white-space:nowrap; vertical-align:1px; }
+.st.now { background:var(--sunk); color:var(--muted); }
+.st.new { background:var(--accent-soft); color:var(--accent); }
+.st.tbd { background:var(--warn-soft); color:var(--warn); }
+.st.ok { background:var(--ok-soft); color:var(--ok); }
+.card { background:var(--surface); border-radius:var(--r-card); box-shadow:0 0 0 1px var(--line); padding:18px; min-width:0; }
+.grid2 { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap:16px; }
+.cap { font-size:13px; color:var(--muted); margin-top:10px; }
+.decided { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap:12px; }
+.decided div { background:var(--surface); border-radius:var(--r-item); box-shadow:0 0 0 1px var(--line); padding:12px 14px; font-size:13.5px; color:var(--ink-2); }
+.decided b { display:block; color:var(--ink); font-size:14.5px; margin-bottom:2px; }
+.tbl { overflow-x:auto; background:var(--surface); border-radius:var(--r-card); box-shadow:0 0 0 1px var(--line); }
+table { border-collapse:collapse; width:100%; font-size:13.5px; min-width:760px; }
+th, td { text-align:left; vertical-align:top; padding:10px 14px; border-bottom:1px solid var(--line-soft); }
+th { font-size:12px; font-weight:600; color:var(--muted); background:var(--surface-2); white-space:nowrap; }
+tr:last-child td { border-bottom:0; }
+td.n { font:600 12px/1.5 var(--mono); color:var(--accent); white-space:nowrap; }
+td .was { display:block; margin-top:4px; font-size:12.5px; color:var(--muted); }
+.flow { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap:16px; }
+.flow ol { margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:8px; }
+.flow li { display:grid; grid-template-columns:64px 1fr; gap:10px; font-size:13.5px; color:var(--ink-2); }
+.flow li .who { font:600 12px/22px var(--mono); color:var(--faint); }
+.flow li.t .who { color:var(--accent); }
+.flow li.k .who { color:var(--kid); }
+.flow li.quiet { color:var(--muted); }
+.flow h4 { margin:0 0 12px; font-size:15px; display:flex; gap:8px; align-items:center; }
+.svgbox { background:var(--sunk); border-radius:var(--r-item); padding:14px; overflow-x:auto; }
+.svgbox svg { display:block; width:100%; min-width:520px; height:auto; }
+.qs { display:flex; flex-direction:column; gap:12px; }
+.q { background:var(--surface); border-radius:var(--r-card); box-shadow:0 0 0 1px var(--line); padding:16px 18px; }
+.q h4 { margin:0 0 6px; font-size:15.5px; }
+.q h4 .rid { font:600 12px/1 var(--mono); color:var(--warn); margin-right:8px; }
+.q ul { margin:6px 0 0; padding-left:20px; font-size:13.5px; color:var(--ink-2); }
+.q li.rec::marker { color:var(--accent); }
+.q li.rec b { color:var(--accent); }
+pre.code { margin:0; background:var(--surface); border-radius:var(--r-card); box-shadow:0 0 0 1px var(--line); padding:16px 18px; font:12.5px/1.55 var(--mono); color:var(--ink-2); overflow-x:auto; white-space:pre; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior:auto !important; } }
+</style>
+
+<div class="wrap">
+<header class="top">
+  <span class="crumb">docs/artifact/分块 · 2026-11-25 · 提议</span>
+  <h1>分块</h1>
+  <p>课本页上哪一块是一道题、题里套着哪几个小题、哪一格让孩子写、点了念什么、老师怎么叫它:现在是运行时照规则从 PDF 的文字层现猜(<code>src/chalk/kit/book.ts</code> 的 <code>lessonBlocks</code>、<code>mathBlocks</code>、<code>scienceBlocks</code>),表格认不出、课后题不点读,换一本书就要再调。这份提议把分块挪到预处理:先由 cotutor 自己照规则出一份分块文件(不用大模型,自动跑),家长有编程助手的,再让它照学科的规范在这份上改好;运行时只读分块文件,一套逻辑。这份写文件长什么样、怎么出、孩子怎么点、老师怎么用、家长怎么看和改。</p>
+  <div class="legend"><span class="st now">现状</span><span class="st new">提议</span><span class="st tbd">待定</span><span class="st ok">已定</span> 规则编号:F 分块文件、R 规则出、G 编程助手改、X 学科规范、K 孩子端、C 老师与上下文、V 工作台、M 换路、Q 待讨论</div>
+  <p class="cap">词:<b>分块</b>(<code>zones</code>)是一页分好的整份,<b>块</b>(<code>zone</code>)是其中一块(题、小题、表格、段……),块里孩子写、圈、打勾的地方照旧叫<b>作答区</b>(<code>region</code>),见 <code>docs/词表.md</code>。实测的探针:<code>scripts/probe-book-zones.mjs</code>(结论在文件末尾)。相关的设计稿:<a href="../书架/规范.html">书架</a>、<a href="../页上记号/规范.html">页上记号</a>。</p>
+</header>
+
+<nav class="toc"><div class="row">
+  <a href="#decided"><b>0</b>已定的</a>
+  <a href="#data"><b>D</b>实测</a>
+  <a href="#file"><b>F</b>分块文件</a>
+  <a href="#rules"><b>R</b>规则出</a>
+  <a href="#agent"><b>G</b>编程助手改</a>
+  <a href="#spec"><b>X</b>学科规范</a>
+  <a href="#kid"><b>K</b>孩子端</a>
+  <a href="#ctx"><b>C</b>老师与上下文</a>
+  <a href="#view"><b>V</b>工作台</a>
+  <a href="#move"><b>M</b>换路</a>
+  <a href="#q"><b>Q</b>待讨论</a>
+  <a href="#plan"><b>→</b>先后与影响面</a>
+</div></nav>
+
+<section id="decided">
+  <h2><span class="id">0</span>已定的</h2>
+  <p class="lead">2026-11-25 定下的,下面的规则照这些写。</p>
+  <div class="decided">
+    <div><b>分块是预处理,运行时只读文件</b>规则从运行时挪进预处理,不用大模型也照样出一份分块文件;编程助手改过的是同一种文件。运行时只有一套逻辑(原 Q3)。</div>
+    <div><b>框不让模型估</b>框从 PDF 量(文字层的行、画图指令里的格),PDF 里没有的由编程助手写脚本量图。不拿看图模型直接回的坐标(D)。</div>
+    <div><b>建议家长用 Codex</b>Codex 能写脚本量图,也能出图(练习册要出图)。Claude Code 不出图,不建议;Qwen Code 框一样准但一页 16 分钟,不建议。</div>
+    <div><b>一块能套小块</b>例题里套着插图、表格、几道小题;点的时候落到最里面那一块。</div>
+    <div><b>放哪</b>规则出的在 <code>.cotutor/textbooks/zones/&lt;指纹&gt;/</code>(能重做);编程助手、工作台写的在 vault 的 <code>教材/.zones/&lt;指纹&gt;/</code>(重做要花钱花时间,要备份)。一页一份 JSON(原 Q1)。</div>
+    <div><b>家长不碰文件</b>在工作台的「分块」页看和改;文件只由规则、编程助手(经 <code>cotutor textbook push</code>)、工作台三方写。</div>
+    <div><b>叫「分块」</b>英文 <code>zones</code>;文件名、目录名用英文。不叫热区(只说了能点,和作答区混)、不叫 annotation(pdf.js 的批注)、不叫 layout(<code>BookLayout</code> 占了)。</div>
+  </div>
+</section>
+
+<section id="data">
+  <h2><span class="id">D</span>实测</h2>
+  <p class="lead">2026-11-25,人教数学二上 PDF 第 13、44、78 页,人教统编语文二上第 22、31 页,广东版科学二上第 20 页。能写的格的标准答案从 PDF 量:田字格、填空、表格里没字的格、打勾的小方框,一共 131 格。</p>
+  <div class="tbl"><table>
+    <thead><tr><th>跑法</th><th>能写的格</th><th>框的重合(IoU)</th><th>格的中心偏</th><th>多标</th><th>行框四边偏(中位)</th><th>一页</th></tr></thead>
+    <tbody>
+      <tr><td class="n">Codex</td><td><b>131/131</b></td><td><b>0.92</b></td><td><b>0.3‰</b></td><td>4</td><td>4‰</td><td>平均 214 秒</td></tr>
+      <tr><td class="n">qwen3.8-max 直接看图</td><td>104/131</td><td>0.58</td><td>8‰</td><td>30</td><td>5.7‰</td><td>平均 311 秒</td></tr>
+      <tr><td class="n">Qwen Code(只跑第 78 页)</td><td>27/27</td><td>0.87</td><td>0.8‰</td><td>0</td><td>4‰</td><td>950 秒</td></tr>
+    </tbody>
+  </table></div>
+  <p class="cap">Codex 每页都写 Python 量图,所以准。qwen 直接看图的框偏松,语文第 22 页整页的坐标缩进了上半页(27 格只中 3 格),回的东西里看不出错了。两家都把页顶社标、页底水印当成了正文。Codex 标得细:数学一页 40–60 块,每个算式一块;同一页上「7×2 的算式」「右边第 3 个算式」叫法不一,点读的念法自己加了「括号里填什么?」。所以 X(学科规范)要写清叫法、粒度、念法。探针里拼表格、认打勾方框的办法没用大模型,可以直接进规则(R3)。</p>
+</section>
+
+<section id="file">
+  <h2><span class="id">F</span>分块文件</h2>
+  <p class="lead">一页一份 JSON,和练习册用同一套作答区、物件、答案的写法(<code>src/schema/workbook.ts</code>)。孩子端只拿框和能做什么,答案、给老师的话只进上下文包。</p>
+
+  <div class="svgbox" role="img" aria-label="数学课本一页的分块:例 1 是一块,里面套着插图、表格、算式、口诀四块;表格第二行的六格、算式的方框、口诀的括号是能写的作答区">
+    <svg viewBox="0 0 760 330" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,PingFang SC,sans-serif" font-size="12.5">
+      <rect x="150" y="10" width="300" height="312" rx="6" fill="#FFFFFF" stroke="#E5E1D8"/>
+      <rect x="170" y="24" width="200" height="16" rx="3" fill="#E9F1FB"/><text x="176" y="36" fill="#2F5E9E" font-size="11">课题(title)</text>
+      <rect x="166" y="52" width="270" height="258" rx="5" fill="none" stroke="#d62728" stroke-width="2.5"/>
+      <text x="172" y="68" fill="#d62728" font-weight="600">例 1(example)</text>
+      <rect x="182" y="76" width="236" height="62" rx="4" fill="#FBF6EA" stroke="#9467bd" stroke-width="1.6"/><text x="190" y="112" fill="#9467bd">插图(figure)</text>
+      <rect x="182" y="146" width="236" height="44" rx="3" fill="none" stroke="#9467bd" stroke-width="1.6"/>
+      <line x1="182" y1="168" x2="418" y2="168" stroke="#bbb"/>
+      <g stroke="#bbb"><line x1="236" y1="146" x2="236" y2="190"/><line x1="266" y1="146" x2="266" y2="190"/><line x1="296" y1="146" x2="296" y2="190"/><line x1="326" y1="146" x2="326" y2="190"/><line x1="356" y1="146" x2="356" y2="190"/><line x1="386" y1="146" x2="386" y2="190"/></g>
+      <g fill="#FCE3D0" stroke="#ff7f0e" stroke-width="1.6"><rect x="267" y="170" width="28" height="18"/><rect x="297" y="170" width="28" height="18"/><rect x="327" y="170" width="28" height="18"/><rect x="357" y="170" width="28" height="18"/><rect x="387" y="170" width="29" height="18"/></g>
+      <text x="188" y="162" fill="#4A4740" font-size="10.5">拼图个数</text><text x="188" y="184" fill="#4A4740" font-size="10.5">拼板块数</text>
+      <rect x="182" y="200" width="140" height="100" rx="4" fill="none" stroke="#9467bd" stroke-width="1.6"/><text x="188" y="216" fill="#9467bd">算式</text>
+      <g fill="#4A4740" font-size="11"><text x="190" y="240">7×2=</text><text x="190" y="266">7×3=</text><text x="190" y="292">7×4=</text></g>
+      <g fill="#FCE3D0" stroke="#ff7f0e" stroke-width="1.6"><rect x="224" y="229" width="30" height="15"/><rect x="224" y="255" width="30" height="15"/><rect x="224" y="281" width="30" height="15"/></g>
+      <g fill="none" stroke="#e377c2" stroke-dasharray="3 2"><rect x="186" y="226" width="72" height="21"/></g>
+      <rect x="330" y="200" width="96" height="100" rx="4" fill="none" stroke="#9467bd" stroke-width="1.6"/><text x="336" y="216" fill="#9467bd">口诀</text>
+      <g fill="#4A4740" font-size="11"><text x="338" y="240">二七(</text><text x="338" y="266">三七(</text><text x="414" y="240">)</text><text x="414" y="266">)</text></g>
+      <g fill="#FCE3D0" stroke="#ff7f0e" stroke-width="1.6"><rect x="372" y="229" width="40" height="15"/><rect x="372" y="255" width="40" height="15"/></g>
+      <g font-size="12" fill="#4A4740">
+        <text x="474" y="70" fill="#d62728" font-weight="600">块(zone)</text>
+        <text x="474" y="90">例题、题、小题、表格、插图……</text>
+        <text x="474" y="108">一块能套小块(children)</text>
+        <text x="474" y="126">label:老师怎么叫它</text>
+        <text x="474" y="144">say:点它念什么</text>
+        <text x="474" y="176" fill="#ff7f0e" font-weight="600">作答区(region)</text>
+        <text x="474" y="196">孩子在哪写、圈、打勾</text>
+        <text x="474" y="214">框从 PDF 量来的格上取</text>
+        <text x="474" y="232">答案挂在这里,只给老师</text>
+        <text x="474" y="264" fill="#e377c2" font-weight="600">小题(sub,虚线)</text>
+        <text x="474" y="284">一个算式、一句口诀</text>
+        <text x="474" y="302">粒度照学科规范(X、Q5)</text>
+      </g>
+    </svg>
+  </div>
+  <p class="cap">示意,不是截图。原型是人教数学二上第 73 页(PDF 第 78 页)。</p>
+
+  <h3>放在哪</h3>
+  <pre class="code">教材/
+  数学二年级上册-人教版.pdf        家长放的,名字不动
+  .zones/                         点开头:Obsidian 里不显示,备份照样带上
+    3f9a1c0d2b7e4a61/             PDF 的指纹(sha1 前 16 位,同索引)
+      book.json                   册名、规范的版本、每页最后是谁写的(agent / workbench)、什么时候
+      p078.json                   PDF 第 78 页(不是印的页码,印的是 73)
+      p079.json
+
+.cotutor/textbooks/zones/3f9a1c0d2b7e4a61/   规则出的,同样的样子(book.json 里写 rules 和规则的版本)</pre>
+
+  <h3>规则</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>编号</th><th>规则</th><th>状态</th></tr></thead>
+    <tbody>
+      <tr><td class="n">F1</td><td><b>一页一份</b> <code>p&lt;PDF 页,补成三位&gt;.json</code>,外加一份 <code>book.json</code>。按指纹分目录,不按册名:路径里没有中文;家长给 PDF 改名照样找得到;换了一版 PDF 指纹不同,旧的自然不用。不用 JSONL、不用一册一个大文件:改一页只写那一页,编程助手和工作台同时写也各写各的,写坏了只坏一页;写的时候先写临时文件再改名(同索引)。</td><td><span class="st ok">已定</span></td></tr>
+      <tr><td class="n">F2</td><td><b>形状:</b><code>zones</code> 是一棵树。一块 = <code>id</code>、<code>kind</code>(title 课题、column 栏目、example 例题、problem 题、sub 小题、group 一组算式或口诀、para 自然段、table 表格、figure 插图、other)、<code>label</code>、<code>box</code>,可选 <code>say</code>、<code>regions</code>(作答区)、<code>objects</code>(能圈、能连的东西)、<code>teacher</code>(练什么、卡住怎么引)、<code>children</code>。作答区、物件、答案照练习册的写法(<code>WorkbookRegionSchema</code> 这几个,抽成两边共用),多一种 <code>tick</code>(打勾)。形状进 <code>src/schema/zones.ts</code>,zod,先过形状再过一遍关系(同 <code>workbookProblems</code>)。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">F3</td><td><b>坐标</b>是这一页的千分比 <code>[左, 上, 右, 下]</code>,x 按页宽、y 按页高(同练习册)。读进来换成 PDF 的点,和 <code>BookPage</code> 一套。不存行号、格号:取字的规则一改(<code>BOOK_INDEX_VERSION</code> 加一)号就全错位,框不会。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">F4</td><td><b>跨页:</b>一段、一道题跨两页,两页上各一块,用同一个 <code>id</code>;读回来照 id 连成一块。段号、题号是一课里数的,所以分块按课出(R2)。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">F5</td><td><b>框从哪来:</b>能写的格吸到 PDF 量出来的候选上(重合 0.5 以上就换成候选的框),吸不上的(横线、圈画区、插图)用编程助手量的,记 <code>src: "measured"</code>。字和行不进分块文件,照旧从文字层的索引来(点字、点读的句框、刷字行都照它)。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">F6</td><td><b>不标的:</b>页眉的社标、页脚的「仅供个人学习使用」、页码。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">F7</td><td><b>孩子端只拿</b>块的框、kind、能不能点读、作答区的框和种类;<code>label</code>、<code>teacher</code>、答案不下发(同练习册,测试盯着)。</td><td><span class="st new">提议</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>样例(第 78 页的一截)</h3>
+  <pre class="code">{
+  "page": 78,
+  "zones": [
+    { "id": "例1", "kind": "example", "label": "例 1", "box": [102, 319, 905, 912],
+      "say": "例 1。前面学习了 1 到 6 的乘法口诀,请你试着编出 7 的乘法口诀。",
+      "teacher": { "goal": "照拼图数一数,编出 7 的乘法口诀" },
+      "children": [
+        { "id": "例1-表", "kind": "table", "label": "拼图的表格", "box": [193, 540, 905, 598],
+          "say": "拼图个数,1、2、3、4、5、6、7。拼板块数,7。",
+          "regions": [
+            { "id": "例1-表-2", "kind": "write", "label": "表格第 2 行第 3 格", "box": [433, 570, 509, 596] },
+            …
+          ],
+          "teacher": { "goal": "几个拼图就是几个 7", "answers": [ { "at": ["例1-表-2"], "ok": ["14"] }, … ] } },
+        { "id": "例1-口诀", "kind": "group", "label": "7 的乘法口诀", "box": [660, 611, 905, 912],
+          "children": [
+            { "id": "例1-口诀-2", "kind": "sub", "label": "二七", "box": [683, 669, 883, 690], "say": "二七,几?",
+              "regions": [ { "id": "例1-口诀-2-空", "kind": "write", "label": "二七的括号", "box": [767, 670, 874, 689] } ],
+              "teacher": { "goal": "二七十四", "answers": [ { "at": ["例1-口诀-2-空"], "ok": ["十四"] } ] } }
+          ] }
+      ] }
+  ]
+}</pre>
+</section>
+
+<section id="rules">
+  <h2><span class="id">R</span>规则出</h2>
+  <p class="lead">不用大模型、家长什么都不做:有课本就有分块。现在运行时那套规则原样搬过来,输出换成分块文件。</p>
+
+  <div class="svgbox" role="img" aria-label="三方写分块:建索引时规则自动出到 .cotutor 里;编程助手 pull、改、check 与 preview、push 进 vault;工作台改了也存进 vault。运行时一课一课挑用哪一份,只读分块文件">
+    <svg viewBox="0 0 760 250" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,PingFang SC,sans-serif" font-size="12.5">
+      <rect x="10" y="100" width="110" height="50" rx="8" fill="#FFFFFF" stroke="#E5E1D8"/>
+      <text x="65" y="122" text-anchor="middle" fill="#2B2B2B" font-weight="600">课本 PDF</text><text x="65" y="140" text-anchor="middle" fill="#6B675F" font-size="11.5">教材/</text>
+      <rect x="170" y="18" width="190" height="54" rx="8" fill="#FFFFFF" stroke="#E5E1D8"/>
+      <text x="265" y="40" text-anchor="middle" fill="#2B2B2B" font-weight="600">规则(建索引时自动)</text><text x="265" y="58" text-anchor="middle" fill="#6B675F" font-size="11.5">不用大模型</text>
+      <rect x="170" y="98" width="190" height="54" rx="8" fill="#F7E8DE" stroke="#B4531F"/>
+      <text x="265" y="120" text-anchor="middle" fill="#B4531F" font-weight="600">编程助手(Codex)</text><text x="265" y="138" text-anchor="middle" fill="#6B675F" font-size="11.5">pull → 改 → push</text>
+      <rect x="170" y="178" width="190" height="54" rx="8" fill="#FFFFFF" stroke="#E5E1D8"/>
+      <text x="265" y="200" text-anchor="middle" fill="#2B2B2B" font-weight="600">工作台「分块」页</text><text x="265" y="218" text-anchor="middle" fill="#6B675F" font-size="11.5">家长看、拖框、改叫法</text>
+      <g stroke="#8A8781" stroke-width="1.4" fill="none"><path d="M120 125 C145 125 145 45 170 45"/><path d="M120 125 H170"/></g>
+      <rect x="410" y="18" width="200" height="54" rx="8" fill="#FFFFFF" stroke="#E5E1D8"/>
+      <text x="510" y="40" text-anchor="middle" fill="#2B2B2B" font-weight="600">.cotutor/textbooks/zones/</text><text x="510" y="58" text-anchor="middle" fill="#6B675F" font-size="11.5">规则出的,能重做</text>
+      <rect x="410" y="128" width="200" height="54" rx="8" fill="#FFFFFF" stroke="#E5E1D8"/>
+      <text x="510" y="150" text-anchor="middle" fill="#2B2B2B" font-weight="600">教材/.zones/</text><text x="510" y="168" text-anchor="middle" fill="#6B675F" font-size="11.5">vault,备份</text>
+      <g stroke="#8A8781" stroke-width="1.4" fill="none"><path d="M360 45 H410"/><path d="M360 125 C385 125 385 155 410 155"/><path d="M360 205 C385 205 385 155 410 155"/><path d="M360 45 C380 45 380 112 360 116" stroke-dasharray="3 3"/></g>
+      <text x="386" y="92" fill="#8A8781" font-size="11">草稿</text>
+      <rect x="650" y="80" width="100" height="54" rx="8" fill="#FFFFFF" stroke="#E5E1D8"/>
+      <text x="700" y="102" text-anchor="middle" fill="#2B2B2B" font-weight="600">运行时</text><text x="700" y="120" text-anchor="middle" fill="#6B675F" font-size="11.5">一课挑一份</text>
+      <g stroke="#8A8781" stroke-width="1.4" fill="none"><path d="M610 45 C630 45 630 107 650 107"/><path d="M610 155 C630 155 630 107 650 107"/></g>
+    </svg>
+  </div>
+
+  <h3>规则</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>编号</th><th>规则</th><th>状态</th></tr></thead>
+    <tbody>
+      <tr><td class="n">R1</td><td><b>建索引时自动出</b>(<code>bookIndex</code> 做完索引接着做),写进 <code>.cotutor/textbooks/zones/&lt;指纹&gt;/</code>。规则改了加版本号,旧的重出(同 <code>BOOK_INDEX_VERSION</code>)。家长端、孩子端都不用等:第一次进一课时那一课先出,别的在后台出完。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">R2</td><td><b>按课出:</b>目录里的一课一课走(<code>BookIndex.lessons</code>),段号、例题号、题号一课里连着数,跨页的同一个 id(F4)。一页落在两课里(上一课的尾巴和下一课的开头)照块归课。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">R3</td><td><b>出什么:</b>现在的 <code>lessonBlocks</code> / <code>mathBlocks</code> / <code>scienceBlocks</code> 出的块(段、栏目、例题、题;label 就是老师现在写的「第 3 段」「例 2」「练一练第 3 题」),<code>bookCells</code>、<code>blankCells</code> 出的格(作答区),点读的段(<code>say</code> 照 <code>bookReadTexts</code>)。没有 teacher、没有答案。换路比过一样以后(M3、M4),再加探针里核过的两样:表格里没字的格(画图指令的横竖线拼网格)、打勾的小方框(没填颜色、旁边贴着字)。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">R4</td><td><b>规则出的永远不进 vault,</b>不覆盖编程助手和工作台写的。</td><td><span class="st new">提议</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="agent">
+  <h2><span class="id">G</span>编程助手改</h2>
+  <p class="lead">有编程助手额度的家长,在 workspace 根说「把数学课本第五单元的分块改好」。同练习册:技能给编程助手,命令给它取、查、看、存。它从规则出的那份改起,不从零写。</p>
+  <div class="tbl"><table>
+    <thead><tr><th>编号</th><th>规则</th><th>状态</th></tr></thead>
+    <tbody>
+      <tr><td class="n">G1</td><td><b>技能 <code>cotutor-textbook</code></b>(<code>skills/</code>,机器件,同 cotutor-workbook):铁律、一页怎么改、三科的规范(X,<code>references/&lt;科&gt;.md</code>)、分块文件的字段和一份完整的样例(过形状和检查,测试盯着,同练习册的 <code>格式.md</code>)、命令参考(由命令表生成)。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">G2</td><td><b><code>cotutor textbook pull &lt;册&gt; --pages 76-83 --out &lt;目录&gt;</code></b>:每页出页图(200dpi)、候选(文字层的行、田字格、填空、表格的格、小方框,一样一个编号,千分比的框)、这一页现在用的分块(vault 有就是 vault 的,没有就是规则出的)当草稿。按课取:给的页落在哪几课,就把那几课的页都取全。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">G3</td><td><b>编程助手改:</b>看页图、读候选,照学科规范补块(表格、课后题)、改叫法、写念法和给老师的话、写答案;能写的格引候选的编号,别的框写脚本量。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">G4</td><td><b><code>cotutor textbook check &lt;目录&gt;</code></b> 一次列全要改的:形状、id 重复、小块出了大块、能写的格没吸上候选、候选里的空格没人认领(漏了)、和别的块叠得太多、标了页眉页脚、label 在一课里重名(老师 <code>[[看 …]]</code> 会找错)、答案引的作答区不在。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">G5</td><td><b><code>cotutor textbook preview &lt;目录&gt;</code></b> 把分块叠在页图上出 PNG(块一层一色、作答区橙、没人认领的候选红),编程助手自己看图改。这是质量的来源。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">G6</td><td><b><code>cotutor textbook push &lt;目录&gt;</code></b>:check 干净才写进 vault 的 <code>教材/.zones/&lt;指纹&gt;/</code>,一课的页一起写(M2),<code>book.json</code> 记 <code>agent</code>。编程助手不直接写 vault。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">G7</td><td><b>先说多久:</b>一共几页、大概多久(Codex 一页 3–4 分钟,一课 4–8 页;从草稿改起应该更快,做了再量),家长点头再开始。不改 <code>agents/</code>、<code>cotutor.json</code>,课本 PDF 不改。</td><td><span class="st new">提议</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="spec">
+  <h2><span class="id">X</span>学科规范</h2>
+  <p class="lead">这一科的页上会有哪些块、孩子在每种块里做什么、老师和孩子怎么叫它、点了念什么。写在技能的 <code>references/&lt;科&gt;.md</code> 里给编程助手看;规则出的 label、kind 也照它(R3)。文件的形状三科一样(F2)。</p>
+
+  <div class="tbl"><table>
+    <thead><tr><th>科</th><th>块</th><th>孩子做什么(作答区)</th><th>叫法(label)</th></tr></thead>
+    <tbody>
+      <tr><td class="n">数学</td><td>课题、例题、做一做 / 练一练 / 整理和复习(栏目)、题、小题、表格、插图、你知道吗</td><td>表格空格、算式方框、括号填数(write);圈一圈(circle + objects);连一连(link);画一画(draw);对的打勾(tick)</td><td>照书上的号:「例 1」「做一做第 2 题」「练一练第 3 题第(1)小题」「第 5 题的表格」;一课里不重名</td></tr>
+      <tr><td class="n">语文</td><td>课题、自然段、诗的一节、识字(认字栏、写字的田字格)、课后题、语文园地的栏目(识字加油站、字词句运用、日积月累……)、插图</td><td>田字格写字(write + tian)、括号填词(write)、朗读(read)、照样子说(say: true)、连线(link)</td><td>「第 3 自然段」「课后第 2 题」「日积月累」「写字:处」;课后题书上没号,照从上往下数</td></tr>
+      <tr><td class="n">科学</td><td>栏目(问题与想法、探索与实践 1、讨论与发现、思考与练习)、段、记录表、安全提示、插图</td><td>记录表打勾(tick)、记录表填字(write)、思考与练习的小方框(tick)</td><td>「探索与实践 1」「记录表」「思考与练习第 2 题」</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>规则</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>编号</th><th>规则</th><th>状态</th></tr></thead>
+    <tbody>
+      <tr><td class="n">X1</td><td><b>叫法照书上印的号,</b>书上没号的照从上往下数。一课里不重名。老师说什么、孩子听得懂什么就叫什么:不写「右边第 3 个算式」这种只有标的人懂的。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">X2</td><td><b>念法(say)照印的念,</b>不加没印的话(实测 Codex 加了「括号里填什么?」)。空着的地方怎么念待定(Q4)。课文的自然段照旧整课一次合成(<code>docs/dev/课本.md</code>)。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">X3</td><td><b>粒度:</b>老师会单独指、孩子会单独点的才单独一块。一道题里有(1)(2)就分小题;一排算式、一组口诀算一块还是一句一块待定(Q5)。插图里的单个东西不分块,要圈要数的写成 objects。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">X4</td><td><b>给老师的话(teacher)</b>写这一块练什么、孩子常卡在哪、怎么引、答案;不写给孩子看的评语。没把握的答案写 <code>note</code>,不硬写。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">X5</td><td><b>正文之后的也要分:</b>课后题、认字栏、日积月累都是块,能点读(现在它们不点读)。</td><td><span class="st new">提议</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="kid">
+  <h2><span class="id">K</span>孩子端</h2>
+  <p class="lead">孩子不知道有分块。点到哪,就回应哪里;不画范围、不闪(同目录页)。</p>
+  <div class="tbl"><table>
+    <thead><tr><th>编号</th><th>规则</th><th>状态</th></tr></thead>
+    <tbody>
+      <tr><td class="n">K1</td><td><b>单击落到最里面那个能做事的:</b>先作答区(写的开写字格卡,同现在 <code>cell-pad.tsx</code>;打勾的见 Q6),再语文的字(点字,现状),再有 say 的块(点读这一块)。都不是就不理。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">K2</td><td><b>按下去才有回应:</b>手指按住 80ms 还没滚、鼠标或悬着的笔移上去,那一块浅浅铺一层学科色;松手停一下再做事。<span class="was">现状:目录页的项、能写的格就是这样。</span></td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">K3</td><td><b>点读一块:</b>念 say,正在念的块铺一层学科色(同课文点读的句框),念完淡掉。谁出声照 <code>liveStep</code> 的 <code>reading</code>:孩子开口、嘴出声就停。合成照块缓存,同一块同一个音色只合成一次。记进板的日志,下一轮「孩子做的」:「自己点了练一练第 3 题听」。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">K4</td><td><b>双击</b>放大缩小(页宽 / 两倍),落在能点的块上也一样,不另做。</td><td><span class="st now">现状</span></td></tr>
+      <tr><td class="n">K5</td><td><b>不用长按:</b>iPad Safari 长按会出选择、放大镜;和按住 80ms 的提示、开始滚动抢手势;孩子也想不到长按。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">K6</td><td><b>Apple Pencil 照旧写画,</b>不点块;落在作答区里的笔归到那一格(C4)。</td><td><span class="st new">提议</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="ctx">
+  <h2><span class="id">C</span>老师与上下文</h2>
+  <p class="lead">老师看不见图,分块让他知道页上有什么、孩子在哪写了什么。照练习册那条线走(<code>workbookText</code>、<code>workbookInk</code>)。</p>
+  <div class="tbl"><table>
+    <thead><tr><th>编号</th><th>规则</th><th>状态</th></tr></thead>
+    <tbody>
+      <tr><td class="n">C1</td><td><b>上下文包的 <code>board:</code></b> 一课的块按树列一遍,带 label 和印着的字(<code>bookSlateParts</code> 改成照分块列)。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">C2</td><td><b><code>[[看 …]]</code> 照 label 找</b>(「练一练第 3 题」「拼图的表格」),再照页、原话找(<code>bookTarget</code> 改成照分块)。窗移到那一块,刷的字行照块里的行。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">C3</td><td><b>窗里那几块</b>的 teacher(练什么、怎么引、答案)进 <code>&lt;page&gt;</code>;窗外的只给 label。答案只进上下文包。规则出的没有 teacher,这一项就空着。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">C4</td><td><b>孩子做的:</b>落在作答区里的笔照作答区说(「拼图的表格第 2 行第 3 格写了 2 笔」「圈了 4 个」),同 <code>workbookInk</code>;写成什么样还是看窗图。点读了哪一块也说。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">C5</td><td><b>窗图照旧收</b>(数学、科学收;语文写了字的收)。分块只告诉老师哪是哪,不代替看图。</td><td><span class="st now">现状</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="view">
+  <h2><span class="id">V</span>工作台「分块」页</h2>
+  <p class="lead">家长在这里看和改,不碰文件。工作台本来就是给有技术背景的家长和开发者的(README)。</p>
+  <div class="tbl"><table>
+    <thead><tr><th>编号</th><th>规则</th><th>状态</th></tr></thead>
+    <tbody>
+      <tr><td class="n">V1</td><td><b>看:</b>挑一册、一课、一页,页图上叠分块;一层一层开关(块、作答区、候选、文字层的行);点一块看它的 label、say、teacher、答案;「当孩子点」照 K1 走一遍,看落到哪一块、会做什么。每课标着用的是哪一份:规则出的、编程助手改的、工作台改过的。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">V2</td><td><b>改:</b>拖框、拉边(吸到候选和文字层的行上);改 kind、label、say;把一块拖进另一块当小块、拖出来;加一块、删一块。存进 vault 的 <code>教材/.zones/</code>,存之前过 check(同 G4),有问题列出来不存;<code>book.json</code> 记 <code>workbench</code>。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">V3</td><td><b>改规则出的那一课:</b>改一页,这一课别的页把规则出的一起抄进 vault,一课凑齐(M2),不然改的这页用不上。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">V4</td><td><b>还原:</b>一课「还原成规则出的」,删掉 vault 里这一课的页。问一次。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">V5</td><td><b>先出设计稿</b>(Design 画布)再写代码:嵌套的框怎么画得清、怎么选中被套在里面的小块。</td><td><span class="st new">提议</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="move">
+  <h2><span class="id">M</span>换路</h2>
+  <p class="lead">从「运行时现猜」换到「运行时只读分块」,规则搬家不改规矩,先证明换完一样。</p>
+  <div class="tbl"><table>
+    <thead><tr><th>编号</th><th>规则</th><th>状态</th></tr></thead>
+    <tbody>
+      <tr><td class="n">M1</td><td><b>运行时只读分块:</b>找框(看)、能写的格、点读、上下文包、孩子做的都照分块文件;运行时不再调 <code>lessonBlocks</code> 这些。字、拼音、点字照旧读文字层的索引。</td><td><span class="st ok">已定</span></td></tr>
+      <tr><td class="n">M2</td><td><b>一课挑一份:</b>这一课的页在 vault 里都有就用 vault 的,不然用规则出的。一课里不混(一半有题号一半没有,老师会糊涂);push、工作台存的时候一课凑齐(G6、V3)。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">M3</td><td><b>换路前逐课比:</b>三本真课本(人教语文、数学二上,广东版科学二上)每一课,规则出的分块读回成块,和现在 <code>lessonBlocks</code> 的结果一处不差;能写的格、点读的段也比。测试的书(<code>tests/_book.ts</code> 这些)进测试比。比过了才换。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">M4</td><td><b>换完删干净:</b>运行时那条线删掉;规则只在出分块的地方(<code>src/memory/textbook-zones-rules.ts</code> 这类)。表格、小方框这些新本事加在规则里,换路以后再加(先比一样,再变好)。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">M5</td><td><b>PDF 指纹对不上</b>(家长换了课本文件):vault 里旧的分块不用,规则照新的出;工作台、doctor 说一句「这本课本换过,以前改的分块用不上了」。</td><td><span class="st new">提议</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="q">
+  <h2><span class="id">Q</span>待讨论</h2>
+  <div class="qs">
+    <div class="q"><h4><span class="rid">Q1</span>分块文件放哪 <span class="st ok">已定</span></h4>
+      <ul><li>规则出的在 <code>.cotutor/textbooks/zones/</code>,编程助手、工作台写的在 vault 的 <code>教材/.zones/</code>(F1、0)。</li></ul></div>
+    <div class="q"><h4><span class="rid">Q2</span>改好的分块能不能给别的家庭用</h4>
+      <ul>
+        <li class="rec"><b>推荐:先不共享。</b>分块里有课文原话和题面,仓库和 npm 包不放教材。</li>
+        <li>共享:同一个 PDF 指纹的分块放进年级包,别家装上就有。省下每家几小时,要先想清版权。</li>
+      </ul></div>
+    <div class="q"><h4><span class="rid">Q3</span>没有大模型的书怎么办 <span class="st ok">已定</span></h4>
+      <ul><li>规则照样出分块,运行时只读分块,一套逻辑(R、M1)。</li></ul></div>
+    <div class="q"><h4><span class="rid">Q4</span>题目里空着的地方怎么念</h4>
+      <ul>
+        <li class="rec"><b>推荐 A:念「几」或「什么」</b>(「二七,几」「一(什么)鱼塘」)。孩子听得出这里要填。</li>
+        <li>B:停一下不念。像课本录音,但孩子不一定听得出。</li>
+        <li>C:念「括号」。照字面,难听。</li>
+      </ul></div>
+    <div class="q"><h4><span class="rid">Q5</span>一排算式、一组口诀分多细</h4>
+      <ul>
+        <li class="rec"><b>推荐:一组一块,一句一个小块。</b>老师会说「看 7 的乘法口诀」,也会说「二七是多少」;小块不占地方,孩子点一句念一句。</li>
+        <li>只到组:块少、文件小,但点读一点念一整组。</li>
+      </ul></div>
+    <div class="q"><h4><span class="rid">Q6</span>打勾的格,点一下要不要直接落一个勾</h4>
+      <ul>
+        <li class="rec"><b>推荐:不落。</b>照旧用笔画勾;手指点只回应(铺色)。和别的格一个规矩。</li>
+        <li>落:手指点一下画一个勾,再点去掉。快,但和写字格的「点开一张卡」不一样。</li>
+      </ul></div>
+    <div class="q"><h4><span class="rid">Q7</span>练习册要不要换成同一个格式</h4>
+      <ul>
+        <li class="rec"><b>推荐:先抽出共用的作答区、物件、答案,题照旧。</b>课本的分块跑顺了再把 <code>workbook.json</code> 的 <code>questions</code> 换成 <code>zones</code>,一套检查、一个工作台页。</li>
+        <li>现在就合:改动大,练习册已经在用。</li>
+      </ul></div>
+    <div class="q"><h4><span class="rid">Q8</span>家长从哪让编程助手改</h4>
+      <ul>
+        <li class="rec"><b>推荐 A:编程助手里说一句</b>(同练习册)。家长装 cotutor 时已经有编程助手。</li>
+        <li>B:工作台一个按钮,服务端起 <code>codex exec</code> 在后台改,工作台看进度。省事,但服务端要管 Codex 的登录和额度。</li>
+      </ul></div>
+  </div>
+</section>
+
+<section id="plan">
+  <h2><span class="id">→</span>先后与影响面</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>步</th><th>做什么</th><th>碰到哪里</th></tr></thead>
+    <tbody>
+      <tr><td class="n">1</td><td>分块文件的形状;规则出分块(R1–R3,先只搬现在的规则);运行时改成只读分块(M1–M2);逐课比一样(M3),比过删掉运行时那条线(M4)</td><td><code>src/schema/zones.ts</code>(新)、<code>src/memory/textbook-zones.ts</code>(新,读写与挑哪份)、规则从 <code>src/chalk/kit/book.ts</code> 搬出、<code>textbook-pdf.ts</code> 建索引后出分块、<code>lesson-fit.ts</code>、<code>board-pack.ts</code>、点读</td></tr>
+      <tr><td class="n">2</td><td>规则变好:表格里没字的格、打勾的小方框(从探针搬进规则);语文课后题、认字栏能点读(X5 里规则做得到的)</td><td><code>textbook-cells.ts</code>、规则出分块那里</td></tr>
+      <tr><td class="n">3</td><td>编程助手改:pull、check、preview、push 四个命令;技能和三科规范。拿数学二上一个单元让 Codex 改一遍,量从草稿改起要多久</td><td><code>src/app/cli/</code> 进命令表、<code>skills/cotutor-textbook/</code>(新)</td></tr>
+      <tr><td class="n">4</td><td>运行时用上新字段:teacher 与答案进上下文包、笔归作答区、点读一块(C3–C4、K1–K3)</td><td><code>board-pack.ts</code>、<code>src/ui/stage/book.tsx</code>、kid-page 的 <code>RD</code>、kid 接口剥掉 teacher</td></tr>
+      <tr><td class="n">5</td><td>工作台「分块」页(V,先出设计稿)</td><td><code>src/ui/dev/</code>、<code>app/http/</code> 存一页</td></tr>
+      <tr><td class="n">6</td><td>定 Q7 以后:练习册换成分块</td><td><code>src/schema/workbook.ts</code></td></tr>
+    </tbody>
+  </table></div>
+</section>
+</div>

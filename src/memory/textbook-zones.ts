@@ -3,10 +3,10 @@
  *   规则出的  `<workspace>/.cotutor/textbooks/zones/<指纹>/`:建索引后接着出(./textbook-zones-rules.ts),规则或索引的版本变了重出;能重做,不进备份
  *   改好的    `<vault>/教材/.zones/<指纹>/`:编程助手(cotutor textbook push)、工作台写的;点开头,Obsidian 里不显示,备份照样带上
  * 一页一份 `p078.json` 外加 `book.json`(每页最后是谁写的);写的时候先写临时文件再改名,写坏了只坏一页。读不过形状的那一页当没有(给家长端报一行)。
- * 运行时一课挑一份(schema 的 pickZones):这一课的页在 vault 里都有就用 vault 的,不然用规则出的。
+ * 运行时一课挑一份(schema 的 pickZones):这一课的页在 vault 里都有就用 vault 的,不然用规则出的。工作台「还原成规则出的」删掉 vault 里那一课的页(removeZonePages)。
  * 规则出一整册约几十毫秒(人教数学二上 126 页),第一次用到这一册时出完,不分先后。
  */
-import { mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rename, rm, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { BOOK_INDEX_VERSION, ZONES_RULES_VERSION, ZoneBookSchema, ZonePageSchema, zoneFile, zoneKey, type BookIndex, type BookZones, type ZoneBook, type ZonePage, type ZoneWriter } from '../schema/index.ts';
 import { ruleZones } from './textbook-zones-rules.ts';
@@ -61,6 +61,32 @@ export async function writeZonePages(dir: string, book: { title: string; sha: st
     meta.pages[zoneKey(p.page)] = { by, at };
   }
   await writeAtomic(join(dir, BOOK), `${JSON.stringify(meta, null, 1)}\n`);
+}
+
+/** 删掉几页(工作台「还原成规则出的」):页的文件和 book.json 里那几页的记录;一页都不剩就删掉整个目录。回删了几页 */
+export async function removeZonePages(dir: string, pages: readonly number[]): Promise<number> {
+  const meta = await readZoneBook(dir);
+  let gone = 0;
+  for (const n of pages) if (await unlink(join(dir, zoneFile(n))).then(() => true, () => false)) gone++;
+  const left = (await readdir(dir).catch(() => [] as string[])).filter((f) => /^p\d{3,4}\.json$/.test(f));
+  if (!left.length) { await rm(dir, { recursive: true, force: true }); return gone; }
+  if (meta) {
+    for (const n of pages) delete meta.pages[zoneKey(n)];
+    await writeAtomic(join(dir, BOOK), `${JSON.stringify(meta, null, 1)}\n`);
+  }
+  return gone;
+}
+
+/** vault 的 教材/.zones/ 下每个指纹的目录:册名(book.json 记的)、几页;家长换了课本 PDF,旧指纹的就用不上了(工作台说一句) */
+export async function vaultZoneDirs(textbooksDir: string): Promise<{ sha: string; title: string | null; pages: number }[]> {
+  const root = join(textbooksDir, '.zones');
+  const out: { sha: string; title: string | null; pages: number }[] = [];
+  for (const sha of (await readdir(root).catch(() => [] as string[])).filter((x) => /^[0-9a-f]{16}$/.test(x)).sort()) {
+    const dir = join(root, sha);
+    const pages = (await readdir(dir).catch(() => [] as string[])).filter((f) => /^p\d{3,4}\.json$/.test(f)).length;
+    out.push({ sha, title: (await readZoneBook(dir))?.title ?? null, pages });
+  }
+  return out;
 }
 
 const ruled = new Map<string, Promise<Record<number, ZonePage>>>();

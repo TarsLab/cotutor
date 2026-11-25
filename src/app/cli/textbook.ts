@@ -27,9 +27,9 @@ const CACHE = join('.cotutor', 'textbooks');
 const WORK = join('.cotutor', 'zones-work');
 const PULL = 'pull.json';
 /** 候选和作答区、字行算对上:重合(交 / 并)到这么多 */
-const SNAP = 0.5;
+export const SNAP = 0.5;
 
-interface Book { file: string; index: BookIndex; zones: BookZones }
+export interface Book { file: string; index: BookIndex; zones: BookZones }
 
 /** 取出来的那一份记着什么 */
 export interface PullMeta { file: string; sha: string; title: string; layout: BookIndex['layout']; lessons: { title: string; pages: [number, number] }[]; pages: number[] }
@@ -43,12 +43,20 @@ export interface Candidates {
   tables: { id: string; box: PermilleBox }[];
 }
 
-const iou = (a: readonly number[], b: readonly number[]): number => {
+export const iou = (a: readonly number[], b: readonly number[]): number => {
   const w = Math.min(a[2], b[2]) - Math.max(a[0], b[0]), h = Math.min(a[3], b[3]) - Math.max(a[1], b[1]);
   if (w <= 0 || h <= 0) return a.every((v, k) => Math.abs(v - b[k]) <= 0.2) ? 1 : 0;
   const i = w * h;
   return i / ((a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - i);
 };
+
+/** 一册,照文件名(教材/ 里列得出的那个名字);没有、读不出 = null。工作台的分块页也用(src/app/http/dev-zones.ts) */
+export async function loadBook(ws: Workspace, file: string): Promise<Book | null> {
+  if (!(await listBooks(ws.paths.textbooks, null)).includes(file)) return null;
+  const cache = join(ws.root, CACHE);
+  const index = await bookIndex(ws.paths.textbooks, cache, file);
+  return index ? { file, index, zones: await bookZones(ws.paths.textbooks, cache, index) } : null;
+}
 
 /** 一册:名字是文件名或文件名里的一段(「数学」「语文二年级上册」);对不上、对上好几本都说清楚 */
 async function openBook(ws: Workspace, name: string): Promise<Book> {
@@ -56,14 +64,13 @@ async function openBook(ws: Workspace, name: string): Promise<Book> {
   if (!names.length) throw new UsageError(`${redactHome(ws.paths.textbooks)} 里没有课本 PDF`);
   const hit = names.includes(name) ? [name] : names.filter((n) => n.includes(name));
   if (hit.length !== 1) throw new UsageError(hit.length ? `「${name}」对上好几本:${hit.join('、')},写全一点` : `教材里没有名字带「${name}」的课本(有:${names.join('、')})`);
-  const cache = join(ws.root, CACHE);
-  const index = await bookIndex(ws.paths.textbooks, cache, hit[0]);
-  if (!index) throw new UsageError(`课本《${hit[0]}》读不出来`);
-  return { file: hit[0], index, zones: await bookZones(ws.paths.textbooks, cache, index) };
+  const b = await loadBook(ws, hit[0]);
+  if (!b) throw new UsageError(`课本《${hit[0]}》读不出来`);
+  return b;
 }
 
 /** 页 n 落在目录上最里一层的哪一课(页码范围最小的那个);目录页、封面这种不在课里的 = null */
-function leafOf(index: BookIndex, n: number): BookLesson | null {
+export function leafOf(index: BookIndex, n: number): BookLesson | null {
   return index.lessons.filter((l) => n >= l.pages[0] && n <= l.pages[1]).sort((a, b) => a.pages[1] - a.pages[0] - (b.pages[1] - b.pages[0]))[0] ?? null;
 }
 
@@ -93,7 +100,18 @@ export function candidatesOf(p: BookPage): Candidates {
 }
 
 /** 孩子要动手的候选(范字不算:那是照着写的字) */
-const WRITABLE = new Set(['trace', 'empty', 'blank', 'table', 'tick']);
+export const WRITABLE = new Set(['trace', 'empty', 'blank', 'table', 'tick']);
+
+/** 草稿:一课挑一份(同运行时);不在课里的页单页挑 */
+export function lessonDraft(b: Book, got: { lessons: { pages: [number, number] }[]; pages: number[] }): Map<number, ZonePage> {
+  const draft = new Map<number, ZonePage>();
+  for (const l of got.lessons) {
+    const ns = got.pages.filter((n) => n >= l.pages[0] && n <= l.pages[1]);
+    for (const z of pickZones(b.zones, ns).pages) draft.set(z.page, z);
+  }
+  for (const n of got.pages) if (!draft.has(n)) { const z = pickZones(b.zones, [n]).pages[0]; if (z) draft.set(n, z); }
+  return draft;
+}
 
 /** 页图:200dpi、照 PDF 的裁切框(和索引的坐标一套);先 pdftoppm,再 PyMuPDF;都没有回 false */
 function renderPage(pdf: string, n: number, png: string): boolean {
@@ -155,13 +173,7 @@ export async function pullCommand(ws: Workspace, name: string, opts: { pages?: s
   if (!old && (await readdir(dir).catch(() => [] as string[])).length) throw new UsageError(`${redactHome(dir)} 不是空的,换个 --out`);
   await mkdir(dir, { recursive: true });
   const meta: PullMeta = { file: b.file, sha: b.index.sha, title: b.index.title, layout: b.index.layout, lessons: got.lessons, pages: got.pages };
-  // 草稿:一课挑一份(同运行时);不在课里的页单页挑
-  const draft = new Map<number, ZonePage>();
-  for (const l of got.lessons) {
-    const ns = got.pages.filter((n) => n >= l.pages[0] && n <= l.pages[1]);
-    for (const z of pickZones(b.zones, ns).pages) draft.set(z.page, z);
-  }
-  for (const n of got.pages) if (!draft.has(n)) { const z = pickZones(b.zones, [n]).pages[0]; if (z) draft.set(n, z); }
+  const draft = lessonDraft(b, got);
   const pdf = await bookFile(ws.paths.textbooks, b.file);
   let images = 0, noImages = false;
   for (const n of got.pages) {
@@ -233,6 +245,17 @@ export async function checkZoneDir(ws: Workspace, dir: string): Promise<ZoneDirC
   const got = await readDir(ws, dir);
   if (typeof got === 'string') return { ...out, problems: [got] };
   out.book = got.meta.file;
+  const r = checkZonePages(got.book, got.meta.lessons, got.pages);
+  return { ...out, ...r, parsed: r.parsed, meta: got.meta, bookOf: got.book };
+}
+
+/**
+ * 几课的分块一起查(pull 出来的目录、工作台改的一课都走这里):每页先过形状,再查关系、对着这一页的候选和文字层查,最后一课里叫法不重名。
+ * raw = 页号 → 读进来的样子(还没过形状;读不出的写 {__bad: 原因})
+ */
+export function checkZonePages(book: Book, lessons: readonly { title: string; pages: [number, number] }[], raw: ReadonlyMap<number, unknown>): { pages: number; zones: number; regions: number; problems: string[]; notes: string[]; parsed: Map<number, ZonePage> } {
+  const out = { pages: 0, zones: 0, regions: 0, problems: [] as string[], notes: [] as string[] };
+  const got = { book, meta: { lessons }, pages: raw };
   const parsed = new Map<number, ZonePage>();
   for (const [n, raw] of got.pages) {
     const at = `第 ${n} 页`;
@@ -245,7 +268,9 @@ export async function checkZoneDir(ws: Workspace, dir: string): Promise<ZoneDirC
     out.regions += r.data.regions?.length ?? 0;
     walkZones(r.data.zones, (z) => { out.zones++; out.regions += z.regions?.length ?? 0; });
     out.problems.push(...zonePageProblems(r.data));
-    const pp = pageProblems(r.data, got.book.index.pages.find((p) => p.n === n)!, `${at}`);
+    const pg = got.book.index.pages.find((p) => p.n === n);
+    if (!pg) { out.problems.push(`${at}:《${got.book.file}》没有这一页`); continue; }
+    const pp = pageProblems(r.data, pg, `${at}`);
     out.problems.push(...pp.problems);
     out.notes.push(...pp.notes);
   }
@@ -263,7 +288,7 @@ export async function checkZoneDir(ws: Workspace, dir: string): Promise<ZoneDirC
       out.problems.push(owner ? `《${l.title}》里同一块(${owner})下面有 ${ids.size} 个小题都叫「${label}」(${[...ids].join('、')}):同一道题里的小题不重名` : `《${l.title}》里有 ${ids.size} 块都叫「${label}」(${[...ids].join('、')}):老师说「看 ${label}」会找错,改成书上的号或从上往下数`);
     }
   }
-  return { ...out, parsed, meta: got.meta, bookOf: got.book };
+  return { ...out, parsed };
 }
 
 // ——— preview ———
@@ -305,7 +330,7 @@ export async function previewZoneDir(ws: Workspace, dir: string): Promise<{ file
 // ——— push ———
 
 /** 吸到候选上:作答区的 id 是候选编号的换成候选的框,字行换成重合最多的那一行的框 */
-function snap(zp: ZonePage, p: BookPage): ZonePage {
+export function snapZonePage(zp: ZonePage, p: BookPage): ZonePage {
   const cand = candidatesOf(p);
   const cells = new Map(cand.cells.map((c) => [c.id, c]));
   const region = (r: ZoneRegion): ZoneRegion => { const c = cells.get(r.id); return c && iou(c.box, r.box) >= SNAP ? { ...r, box: c.box } : r; };
@@ -324,7 +349,7 @@ export async function pushZoneDir(ws: Workspace, dir: string, now = new Date()):
   const missing = c.meta.pages.filter((n) => !c.parsed!.has(n));
   if (missing.length) return { check: { ...c, problems: [`第 ${missing.join('、')} 页没有分块文件:一课的页要一起写`] }, wrote: 0, lessons: [] };
   const to = vaultZonesDir(ws.paths.textbooks, c.meta.sha);
-  const pages = c.meta.pages.map((n) => snap(c.parsed!.get(n)!, c.bookOf!.index.pages.find((p) => p.n === n)!));
+  const pages = c.meta.pages.map((n) => snapZonePage(c.parsed!.get(n)!, c.bookOf!.index.pages.find((p) => p.n === n)!));
   await writeZonePages(to, { title: c.meta.title, sha: c.meta.sha }, pages, 'agent', now);
   return { check: c, wrote: pages.length, to, lessons: c.meta.lessons.map((l) => l.title) };
 }

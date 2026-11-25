@@ -49,6 +49,7 @@ import { photosOf } from '../../runtime/kid-input.ts';
 import { DEV_PAGE } from '../../ui/dev/dev-page.ts';
 import { devOverview } from './dev-overview.ts';
 import { ActivityConflict, checkDevActivity, findDevActivity, listDevActivities, readDevActivity, restoreDevActivity, saveDevActivity } from './dev-activities.ts';
+import { ZonesConflict, checkDevZoneLesson, devZoneLesson, dropStaleZones, listDevZones, readDevZoneLesson, restoreDevZoneLesson, saveDevZoneLesson, sayDevZone } from './dev-zones.ts';
 import { doctorWorkspace } from '../cli/doctor.ts';
 import { VOICE_GALLERY_PAGE } from '../../ui/dev/voice-gallery-page.ts';
 import { BusyError, Runner } from '../../runtime/runner.ts';
@@ -658,6 +659,33 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         }
       }
       if (sub === '/restore' && method === 'POST') return { status: 200, json: await restoreDevActivity(ws, tutor, name) };
+      return { status: 405, json: { error: 'method_not_allowed' } };
+    }
+    // 工作台「分块」页(src/app/http/dev-zones.ts):课本一课的分块看、查、存、还原;一课一起存,带读进来时的 version,对不上 409
+    if (p === '/api/dev/zones' && method === 'GET') return { status: 200, json: await listDevZones(ws) };
+    if (p === '/api/dev/zones/stale' && method === 'DELETE') return (await dropStaleZones(ws, url.searchParams.get('sha') ?? '')) ? { status: 200, json: { ok: true } } : { status: 404, json: { error: 'not_found' } };
+    if (p === '/api/dev/zones/say' && method === 'POST') {
+      if (!isObj(body) || typeof body.b !== 'string' || typeof body.text !== 'string' || !body.text.trim() || body.text.length > 400) return { status: 400, json: { error: 'bad_request', message: '要 {b, text}' } };
+      const r = await sayDevZone(ws, body.b, body.text.trim());
+      return 'file' in r ? { status: 200, file: r.file, contentType: 'audio/mpeg' } : { status: 404, json: { error: 'no_audio', message: r.error } };
+    }
+    if (p === '/api/dev/zones/lesson' || p === '/api/dev/zones/check') {
+      const src = method === 'GET' || method === 'DELETE' ? { b: url.searchParams.get('b'), l: url.searchParams.get('l') } : isObj(body) ? body : {};
+      if (typeof src.b !== 'string' || typeof src.l !== 'string') return { status: 400, json: { error: 'bad_request', message: '要 b(册名)和 l(课)' } };
+      const ref = await devZoneLesson(ws, src.b, src.l);
+      if (!ref) return { status: 404, json: { error: 'no_such_lesson' } };
+      if (p === '/api/dev/zones/check' && method === 'POST') return { status: 200, json: checkDevZoneLesson(ref, isObj(body) ? body.pages : null) };
+      if (p === '/api/dev/zones/lesson' && method === 'GET') return { status: 200, json: await readDevZoneLesson(ws, ref) };
+      if (p === '/api/dev/zones/lesson' && method === 'DELETE') return { status: 200, json: await restoreDevZoneLesson(ws, ref) };
+      if (p === '/api/dev/zones/lesson' && method === 'PUT') {
+        if (!isObj(body) || typeof body.version !== 'string') return { status: 400, json: { error: 'bad_request', message: '要 {b, l, version, pages}' } };
+        try {
+          return { status: 200, json: await saveDevZoneLesson(ws, ref, body.version, body.pages) };
+        } catch (err) {
+          if (err instanceof ZonesConflict) return { status: 409, json: { error: 'conflict', message: err.message } };
+          throw err;
+        }
+      }
       return { status: 405, json: { error: 'method_not_allowed' } };
     }
     if (p === '/api/workspace' && method === 'GET') return { status: 200, json: workspaceReport(ws) };

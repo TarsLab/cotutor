@@ -274,7 +274,7 @@ export const COMMANDS: readonly CommandSpec[] = [
     subs: ['check', 'glyph'], subRequired: true, maxArgs: 2, workspace: true, sandbox: true, json: ['check'],
     notes: [
       '练习册放在 vault 的 练习册/<名>/(cotutor.json 的 paths.workbooks 能改),<名> 是文件夹名',
-      'check 不花钱:不给名字查每一册;列出全部要改的(形状、题号与 id、框、答案引用、页图在不在、宽高与 sha256),都对了退出码 0',
+      'check 不花钱:不给名字查每一册;列出全部要改的(形状、块与 id、叫法重名、框、答案引用、页图在不在、宽高与 sha256),都对了退出码 0',
       'glyph 打印这几个字母的笔顺(JSON):x 高 = 1、基线 0、向下为正,guides 是四线三格的四条线;描写区的 model.strokes 照它换到页上',
     ],
     examples: ['cotutor workbook check', 'cotutor workbook check 表内乘法一', 'cotutor workbook glyph Aa'],

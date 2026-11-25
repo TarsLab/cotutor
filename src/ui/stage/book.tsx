@@ -26,9 +26,9 @@
  * 记号的样子(docs/dev/一节课.md 的四条原则):老师的线朱橙、孩子的蓝,都正片叠底(记号不盖字:黑字叠上任何颜色还是黑的);遮、盖是故意挡住的,不透明。
  * 圈、划、加点照 markFresh 分新的(实色)和旧的(淡),收掉的淡出;在页上的记号不重画(圈的一笔画出来只放一次)。交给老师的窗图只画新的。
  * 孩子落一笔、擦掉都告诉页面(stroke / wipe),页面照 lessonStep 改状态、报给服务端,再把新的状态发回来。
- * 课本上的田字格(这一课分块里能写的作答区,规则照索引认的格出;练习册照 BookPage.cells):点空格、描红格开写字格(./cell-pad.tsx),贴着那一格、页挪了跟着走;放好了告诉页面(cell),
+ * 课本、练习册上的格(分块里能写的作答区;课本的规则照索引认的格出,练习册的是排版时记下的):点空格、描红格开写字格(./cell-pad.tsx),贴着那一格、页挪了跟着走;放好了告诉页面(cell),
  * 字照格里的坐标缩进那一格(铅笔色,.bk-cells),写字格挪到同一排下一个空格,没有了就收。范字格照常点字看笔顺。写了没放好时点页上别处、落笔不收它。
- * 点读一块(分块里写了念法 say 的块,课本的一课都有,数学、科学也是;设计稿 https://claude.ai/artifact/CHC2ikn5Dy1FggG8wF1WqW):单击落到框住那一点的最小的一块
+ * 点读一块(分块里写了念法 say 的块,课本的一课、练习册都有,数学、科学也是;设计稿 https://claude.ai/artifact/CHC2ikn5Dy1FggG8wF1WqW):单击落到框住那一点的最小的一块
  * (能写的格、语文能点的字先;笔不点块),告诉页面(hear);不画范围,手指按住一会儿、鼠标或悬着的笔移上去浅浅铺一层学科色(.bk-zone-hint),
  * 页面念的时候(read.zone)那一块铺一层学科色(同课文点读的句框),念完淡掉。
  * 能写的格平时不画;鼠标、悬着的笔移上去浅浅铺一层学科色,手指按住一会儿(TOC_PRESS_MS,刚滚起来的不算)深一点(同目录;.bk-cell-hint)。
@@ -405,8 +405,8 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
   /** 点读:页面给了 read、语文课本的一课(不是目录) */
   const readOn = !readonly && Boolean(read) && page?.kind === 'book' && page.layout !== 'math' && page.title !== BOOK_TOC;
   const readNow = useRef<{ on: boolean; read: { k: number; s?: number; mode: string; invite?: boolean; zone?: string } | null; hear: boolean }>({ on: false, read: null, hear: false });
-  /** 点读一块:页面给了 read、课本的一课(不是目录;数学、科学也有),分块里写了念法的块能点 */
-  const hearOn = !readonly && Boolean(read) && page?.kind === 'book' && page.title !== BOOK_TOC;
+  /** 点读一块:页面给了 read、课本的一课(不是目录;数学、科学也有)或练习册,分块里写了念法的块能点 */
+  const hearOn = !readonly && Boolean(read) && ((page?.kind === 'book' && page.title !== BOOK_TOC) || page?.kind === 'workbook');
   readNow.current = { on: readOn, read: read ?? null, hear: hearOn };
   /** 这一课写了念法的块(场景坐标;分块拉下来才有) */
   const sayZones = useRef<SayZone[]>([]);
@@ -490,7 +490,7 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
   /** 这一课几页上的田字格(场景坐标);文字层还没拉下来是空的 */
   const cellsHere = (): SceneCell[] => {
     const g = geo.current, p = lessonPage(latest.current);
-    return g && (p?.kind === 'book' || p?.kind === 'workbook') ? bookCellsOf(g.lines, g.sheets, p.kind === 'book' ? (g.zones ?? []) : undefined) : [];
+    return g && (p?.kind === 'book' || p?.kind === 'workbook') ? bookCellsOf(g.lines, g.sheets, g.zones ?? []) : [];
   };
   /** 孩子在格里写的字:格里的坐标(长边 = CELL_UNIT)照格的框缩放 */
   const cellPaths = (c: SceneCell, strokes: [number, number][][]): [number, number][][] => {
@@ -1032,15 +1032,17 @@ export const BookStage = forwardRef<BookStageHandle, BookStageProps>(function Bo
         paintLook(false);
         paintRead();
       } else if (p.kind === 'workbook') {
-        // 练习册:行、题框、能写的格子都是排版时记下的,拉一次就全了
+        // 练习册:行、块、能写的格子都是排版时记下的,拉一次就全了
         const r = await fetch(`/api/kid/workbook/lines?w=${encodeURIComponent(p.src)}`, { cache: 'no-store' }).catch(() => null);
         const j = r?.ok ? ((await r.json()) as { pages?: BookPage[]; zones?: ZonePage[] }) : null;
         if (cancelled || geo.current?.key !== geoKey) return;
         if (Array.isArray(j?.pages)) geo.current.lines = j!.pages!;
         if (Array.isArray(j?.zones)) geo.current.zones = j!.zones!;
         geo.current.linesDone = true;
+        sayZones.current = bookSayZones(geo.current.lines, geo.current.sheets, geo.current.zones ?? []);
         paintCells();
         paintLook(false);
+        paintRead();
       } else if (p.kind === 'photo') {
         // 认出的字:作业本只等今天拍的(以前的照片到了窗附近再拉一次,drawNear),别的照片页等全部
         const want = p.photos.flatMap((ph, i) => (!p.day || photoDay(ph, p.day) === p.day ? [i] : []));

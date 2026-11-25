@@ -72,7 +72,7 @@ import { lessonOpen, tocEntries, type LessonBook } from '../../board/lesson-fit.
 import { lastSpot } from '../../runtime/journal/book-last.ts';
 import { lessonInit, lessonPage, lessonStep } from '../../board/lesson.ts';
 import { readLesson } from '../../runtime/journal/lesson-store.ts';
-import { BOOK_TOC, bookPages, bookReadTexts, readLessonText, readTimes, workbookBookPage, workbookPage, zoneBlocks } from '../../chalk/index.ts';
+import { BOOK_TOC, bookPages, bookReadTexts, readLessonText, readTimes, workbookLayer, workbookPage, zoneBlocks } from '../../chalk/index.ts';
 import { synthesize, synthesizeTimed } from '../../media/tts.ts';
 import type { Look } from '../../scenes/look.ts';
 import { IndexError, capturePathOk, deleteThread, listDates, rateThread, readErrLog, readIndex, readTranscript, undoVaultWrite, writeCapture, type VaultWrite } from '../../runtime/journal/store.ts';
@@ -936,8 +936,9 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       const base = name ? await bookBase(ws, name) : null;
       return { status: 200, json: { lesson: base?.lesson ?? null, toc: base?.toc ?? null } };
     }
-    // 练习册(base: workbook;w = 练习册/ 下那一册的文件夹名):铺成一节课的开头(孩子端点了按钮就先铺,不等老师)、第 n 页的图、几页的行和能写的格子。
-    // 只给孩子端看得到的:作答区、物件、给老师的答案都不下发(src/schema/workbook.ts)
+    // 练习册(base: workbook;w = 练习册/ 下那一册的文件夹名):铺成一节课的开头(孩子端点了按钮就先铺,不等老师)、第 n 页的图、几页的行和分块(能写的格、点读的块照它)、
+    // 点读一块(z = 块的 id,同课本的 /api/kid/textbook/say:用这位老师点读的声音合成那一块的 say,有缓存)。
+    // 只给孩子端看得到的:作答区的名字、物件、给老师的答案都不下发(src/schema/workbook.ts 的 workbookKidPage、zonesKidPage)
     if (p.startsWith('/api/kid/workbook/') && method === 'GET') {
       const name = url.searchParams.get('w') ?? '';
       const got = await readWorkbook(ws.paths.workbooks, name);
@@ -951,7 +952,17 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         const file = await workbookImageFile(ws.paths.workbooks, name, got.wb, Number(url.searchParams.get('p')));
         return file ? { status: 200, file, contentType: 'image/png' } : { status: 404, json: { error: 'not_found' } };
       }
-      if (p === '/api/kid/workbook/lines') return { status: 200, json: { pages: got.wb.pages.map((pg, i) => workbookBookPage(i + 1, pg).page) } };
+      if (p === '/api/kid/workbook/lines') { const layer = workbookLayer(got.wb); return { status: 200, json: { pages: layer.pages, zones: layer.zones.map(zonesKidPage) } }; }
+      if (p === '/api/kid/workbook/say') {
+        const tutor = url.searchParams.get('tutor') ?? '', id = url.searchParams.get('z') ?? '';
+        const voice = ws.config.tutors[tutor] ? cardVoice(ws.config.tutors, tutor) : undefined;
+        let text = '';
+        for (const zp of workbookLayer(got.wb).zones) walkZones(zp.zones, (z) => { if (!text && z.id === id && z.say) text = z.say; });
+        if (!voice || !text) return { status: 404, json: { error: 'not_found' } };
+        const r = await synthesize({ text, voice }, { cacheDir: ws.dirs.tts, env: process.env });
+        if (!r.file) { console.error(`点读一块(练习册):「${text}」没合成(${r.error ?? '?'})`); return { status: 404, json: { error: 'no_audio' } }; }
+        return { status: 200, file: r.file, contentType: 'audio/mpeg' };
+      }
       return { status: 404, json: { error: 'not_found' } };
     }
     // 作业本(base: homework,检查作业;src/runtime/homework.ts):

@@ -14,7 +14,7 @@
  * 练习册是 workbook.json 里排版时记下的行和题(src/chalk/kit/workbook.ts);小课堂是每一句的起点与原话;白纸没有。
  * 一节里的动作照先后一个一个落(先翻再看,看的是新的那一页),落不了的记一句给家长(why),动作本身留在讲稿上、不带 do。
  */
-import { BOOK_MAX_PAGES, BOOK_TOC, bookCut, bookFind, bookSheets, bookSpot, bookTarget, bookView, findLesson, lessonName, photoBookPage, workbookBookPage, zoneBlocks, type BookBlock, type BookSheet, type PhotoText } from '../chalk/index.ts';
+import { BOOK_MAX_PAGES, BOOK_TOC, bookCut, bookFind, bookSheets, bookSpot, bookTarget, bookView, findLesson, lessonName, photoBookPage, workbookLayer, zoneBlocks, type BookBlock, type BookSheet, type PhotoText } from '../chalk/index.ts';
 import { LECTURE_PAGE, pickBookZones, LOOK_ROWS_MAX, PHOTO_PAGE, WHITE_PAGE, type BoardSection, type BookIndex, type BookPage, type BookZones, type Box, type Lesson, type LessonAct, type LineAct, type PageSource, type Workbook } from '../schema/index.ts';
 import { actParts } from './acts.ts';
 import { clockLabel, lectureRange, parseClock, type LectureClock } from './lecture.ts';
@@ -84,9 +84,8 @@ export function pageText(p: PageSource, src: LessonSource): { pages: BookPage[];
   if (p.kind === 'workbook') {
     const wb = src.workbooks?.[p.src];
     if (!wb) return { pages: [], sheets: [], blocks: [] };
-    const layers = wb.pages.map((pg, i) => workbookBookPage(i + 1, pg));
-    const pages = layers.map((x) => x.page);
-    return { pages, sheets: bookSheets(pages), blocks: layers.flatMap((x) => x.blocks) };
+    const { pages, blocks } = workbookLayer(wb);
+    return { pages, sheets: bookSheets(pages), blocks };
   }
   return { pages: [], sheets: [], blocks: [] };
 }

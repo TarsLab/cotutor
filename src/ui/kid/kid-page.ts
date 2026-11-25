@@ -2885,11 +2885,16 @@ __REEL_DOCK_JS__
     if (was) setTimeout(() => { if (LV.model.status === 'reading') liveDispatch({ type: 'readStop' }); }, 0);
   };
   // ---- 点读一块(分块里写了念法 say 的块,docs/dev/课本.md;设计稿 https://claude.ai/artifact/CHC2ikn5Dy1FggG8wF1WqW):舞台报 hear(块的 id、叫法),
-  //      孩子端用共享的 Audio 放 /api/kid/textbook/say(服务端照分块现取念法、用这位老师点读的声音合成,有缓存);念的时候舞台给那一块铺色(readView 的 zone),
+  //      孩子端用共享的 Audio 放 /api/kid/textbook/say、练习册的 /api/kid/workbook/say(服务端照分块现取念法、用这位老师点读的声音合成,有缓存);念的时候舞台给那一块铺色(readView 的 zone),
   //      再点同一块停,点别的块换过去;谁让谁同课文点读(liveStep 的 reading)。点了就记一笔(下一轮老师在「孩子做的」里看到),不叫老师 ----
-  /** 这一页能不能点读一块:实时老师页、这位老师有点读的声音、课本的一课(不是目录;数学、科学也行) */
-  const hearOk = () => { const p = LS.on && LS.l ? lessonPage(LS.l) : null; return Boolean(LV.on && !S.readonly && !REEL && S.tutor && S.tutor.hasVoice && p && p.kind === 'book' && p.title !== '目录'); };
-  const hearUrl = (id) => { const p = lessonPage(LS.l); return new URL('/api/kid/textbook/say?tutor=' + encodeURIComponent(S.tutor.name) + '&b=' + encodeURIComponent(p.src) + '&p=' + p.pages[0] + '-' + p.pages[p.pages.length - 1] + '&z=' + encodeURIComponent(id), location.href).href; };
+  /** 这一页能不能点读一块:实时老师页、这位老师有点读的声音、课本的一课(不是目录;数学、科学也行)或练习册 */
+  const hearOk = () => { const p = LS.on && LS.l ? lessonPage(LS.l) : null; return Boolean(LV.on && !S.readonly && !REEL && S.tutor && S.tutor.hasVoice && p && ((p.kind === 'book' && p.title !== '目录') || p.kind === 'workbook')); };
+  const hearUrl = (id) => {
+    const p = lessonPage(LS.l), t = encodeURIComponent(S.tutor.name), z = encodeURIComponent(id);
+    const u = p.kind === 'workbook' ? '/api/kid/workbook/say?tutor=' + t + '&w=' + encodeURIComponent(p.src) + '&z=' + z
+      : '/api/kid/textbook/say?tutor=' + t + '&b=' + encodeURIComponent(p.src) + '&p=' + p.pages[0] + '-' + p.pages[p.pages.length - 1] + '&z=' + z;
+    return new URL(u, location.href).href;
+  };
   const hearMode = (m) => { if (ZR.mode === m) return; ZR.mode = m; lsShow(); };
   const hearEnd = () => { ZR.id = ''; ZR.label = ''; ZR.mode = ''; lsShow(); };
   /** 放这一块(playRead 转过来的) */

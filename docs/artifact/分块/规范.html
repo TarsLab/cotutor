@@ -90,7 +90,7 @@ pre.code { margin:0; background:var(--surface); border-radius:var(--r-card); box
 
 <div class="wrap">
 <header class="top">
-  <span class="crumb">docs/artifact/分块 · 2026-11-25 · 第 1–5 步做完,其余提议</span>
+  <span class="crumb">docs/artifact/分块 · 2026-11-25 · 第 1–6 步做完,其余提议</span>
   <h1>分块</h1>
   <p>课本页上哪一块是一道题、题里套着哪几个小题、哪一格让孩子写、点了念什么、老师怎么叫它:原来是运行时照规则从 PDF 的文字层现猜(<code>lessonBlocks</code>、<code>mathBlocks</code>、<code>scienceBlocks</code>;第 1 步已挪进 <code>src/memory/textbook-zones-rules.ts</code>,运行时只读分块文件),表格认不出、课后题不点读,换一本书就要再调。这份提议把分块挪到预处理:先由 cotutor 自己照规则出一份分块文件(不用大模型,自动跑),家长有编程助手的,再让它照学科的规范在这份上改好;运行时只读分块文件,一套逻辑。这份写文件长什么样、怎么出、孩子怎么点、老师怎么用、家长怎么看和改。</p>
   <div class="legend"><span class="st now">现状</span><span class="st new">提议</span><span class="st tbd">待定</span><span class="st ok">已定</span> 规则编号:F 分块文件、R 规则出、G 编程助手改、X 学科规范、K 孩子端、C 老师与上下文、V 工作台、M 换路、Q 待讨论</div>
@@ -127,7 +127,7 @@ pre.code { margin:0; background:var(--surface); border-radius:var(--r-card); box
     <div><b>空着的念「几」「什么」</b>「二七,几」「一(什么)鱼塘」,孩子听得出这里要填(原 Q4)。</div>
     <div><b>一组一块,一句一个小块</b>一排算式、一组口诀是 group,一句一个 sub(原 Q5)。</div>
     <div><b>打勾的格不落勾</b>照旧用笔画勾,手指点只回应(铺色),和别的格一个规矩(原 Q6)。</div>
-    <div><b>练习册先抽共用的</b>作答区、物件、答案、给老师的抽成两边共用(<code>src/schema/regions.ts</code>,已做),题照旧;课本的分块跑顺了再把 <code>questions</code> 换成 <code>zones</code>(原 Q7)。</div>
+    <div><b>练习册和课本一种写法</b>先抽出共用的作答区、物件、答案、给老师的(<code>src/schema/regions.ts</code>);课本的分块跑顺了,练习册一页的 <code>questions</code> 换成 <code>zones</code>(第 6 步,2026-11-25 做了),运行时走同一套(原 Q7)。</div>
     <div><b>家长在编程助手里说一句</b>同练习册;工作台不起 <code>codex exec</code>(原 Q8)。</div>
     <div><b>工作台里选中套在里面的块</b>单击落最里面,同一处再点往外一层,Esc 回外一层;面包屑、右边的树也能选(原 Q9)。</div>
     <div><b>一课一起存</b>检查一课一起查,规则出的那一课整课写进 vault(原 Q10)。</div>
@@ -457,7 +457,7 @@ pre.code { margin:0; background:var(--surface); border-radius:var(--r-card); box
       <tr><td class="n">3 ✓</td><td><b>做完(2026-11-25),Codex 改一课 8 页 10 分钟。</b>编程助手改:pull、check、preview、push 四个命令;技能和三科规范。拿数学二上一个单元让 Codex 改一遍,量从草稿改起要多久</td><td><code>src/app/cli/</code> 进命令表、<code>skills/cotutor-textbook/</code>(新)</td></tr>
       <tr><td class="n">4 ✓</td><td><b>做完(2026-11-25):老师那一半 C1–C4,孩子那一半 K1–K3(设计稿选了不出钮)。</b>运行时用上新字段:teacher 与答案进上下文包、笔归作答区、点读一块(C3–C4、K1–K3)</td><td><code>board-pack.ts</code>、<code>src/ui/stage/book.tsx</code>、kid-page 的 <code>RD</code>、kid 接口剥掉 teacher</td></tr>
       <tr><td class="n">5 ✓</td><td><b>做完(2026-11-25,设计稿 https://claude.ai/artifact/Xvt6t4pp1xkLJ6VA6GBnkR,Q9–Q12 照推荐的)。</b>工作台「分块」页(V1–V5)</td><td><code>src/app/http/dev-zones.ts</code>、<code>src/ui/dev/zones-tab.ts</code>、<code>zones-editor.ts</code>;查的那一段从 <code>cotutor textbook check</code> 抽成 <code>checkZonePages</code> 两边用</td></tr>
-      <tr><td class="n">6</td><td>课本的分块跑顺以后:练习册的 <code>questions</code> 换成 <code>zones</code>(Q7;共用的作答区、物件、答案第 1 步已抽出)</td><td><code>src/schema/workbook.ts</code></td></tr>
+      <tr><td class="n">6 ✓</td><td><b>做完(2026-11-25)。</b>练习册的 <code>questions</code> 换成 <code>zones</code>(Q7):<code>workbook.json</code> 版本 2,一道题一块(<code>problem</code>,叫「第 3 题」),小题套在里面,块不写 rows(行是这一页的 <code>lines</code>);每页照 <code>zonePageProblems</code> 查,叫法一册里不重名。运行时和课本一套:找框、能写的格、点读一块(写了 say 的题,孩子点了听题)、给老师的照窗给(&lt;page&gt; 只列块)、笔归作答区(练习册那份数圈住几个、画了几个形状的并进 <code>bookZoneInk</code>,课本也用上;作答区的名字接上它在哪一块)。孩子还没挪过窗,给老师的当他在看第一页(课本也是)。工作台的「分块」页还不认练习册(练习册的块由排版脚本写)</td><td><code>src/schema/workbook.ts</code>、<code>src/chalk/kit/workbook.ts</code>(<code>workbookLayer</code>)、<code>src/chalk/kit/book.ts</code>、runner、<code>/api/kid/workbook/lines</code>、<code>/api/kid/workbook/say</code>、舞台与 kid-page 的点读、技能 cotutor-workbook 的格式.md</td></tr>
     </tbody>
   </table></div>
 </section>

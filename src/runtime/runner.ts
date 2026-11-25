@@ -55,7 +55,7 @@ import { bookLast, lastSpot, rememberBook } from './journal/book-last.ts';
 import { homeworkBookPage, keepPhotos } from './homework.ts';
 import { dayTitle, lessonDone, lessonPage, lessonSection, lessonStep, photoDay, photoSheetBox } from '../board/lesson.ts';
 import { readLesson, updateLesson } from './journal/lesson-store.ts';
-import { BOOK_TOC, bookRegions, bookTeacherLines, bookView, bookZoneInk, photoBookPage, photoText, pickable, workbookInk, workbookPage, workbookPageId, workbookText, type PhotoText } from '../chalk/index.ts';
+import { BOOK_TOC, bookRegions, bookTeacherLines, bookView, bookZoneInk, bookSheets, photoBookPage, photoText, pickable, workbookLayer, workbookPage, workbookPageId, workbookText, type PhotoText } from '../chalk/index.ts';
 import { bookIndex, listBooks, pickBook } from '../memory/textbook-pdf.ts';
 import { bookZones } from '../memory/textbook-zones.ts';
 
@@ -149,6 +149,8 @@ const BOOK_CACHE = '.cotutor/textbooks';
 const CELL_ID = /^\d{1,4}\.[\p{L}\p{N}][\p{L}\p{N}-]{0,40}$/u;
 /** 课本上揭开的(盖住的算式)最多几个字:同 [[盖 …]] 一处的上限 */
 const BOOK_MARK_CHARS = 12;
+/** 孩子还没挪过窗(舞台挪停了才报 view):当他在看第一页,给老师的照它给 */
+const firstSheet = (sheets: readonly { top: number; height: number }[]): Box | null => (sheets[0] ? [0, sheets[0].top, 1000, sheets[0].top + sheets[0].height] : null);
 /** 窗里的图(舞台导的 jpeg,长边 1024)base64 最多多长:够一张清楚的图,挡住塞进来的大文件 */
 export const BOOK_SHOT_B64_MAX = 700_000;
 /** 舞台交来的图(data:image/jpeg;base64,…)→ 字节;不是 jpeg、太大回 null */
@@ -635,11 +637,11 @@ export class Runner {
     const page = lessonPage(x.lesson);
     const told = new Set(opts.compact ? [] : events.flatMap((e) => (e.k === 'turn' && e.told ? (Array.isArray(e.told) ? e.told : [e.told]) : [])));
     const notes: PageNote[] = [];
-    /** 练习册上孩子用笔圈、画的,照作答区说成几句(上一轮以后落过笔才说) */
+    /** 课本、练习册上孩子用笔写、圈、画的,照作答区说成几句(上一轮以后落过笔才说) */
     let inked: string[] = [];
-    /** 课本窗里那几块只给老师的话(分块的 teacher),每轮照窗现算 */
+    /** 课本、练习册窗里那几块只给老师的话(分块的 teacher),每轮照窗现算 */
     let teacher: string[] = [];
-    /** 课本格子的名字(分块的作答区):孩子在格里写了哪几格,照名字说 */
+    /** 课本、练习册格子的名字(分块的作答区):孩子在格里写了哪几格,照名字说 */
     let cellLabels: Record<string, string> | undefined;
     let show = '还没有页';
     if (page?.kind === 'book') {
@@ -650,7 +652,7 @@ export class Runner {
       if (at && x.src.book && page.title !== BOOK_TOC) {
         const t = pageText(page, x.src);
         const regions = bookRegions(t.pages, t.sheets, pickBookZones(x.src.book.index, x.src.book.zones, page.pages).pages);
-        const boxes = [x.lesson.view, x.lesson.look?.box].filter((b): b is Box => Boolean(b));
+        const boxes = [x.lesson.view ?? firstSheet(t.sheets), x.lesson.look?.box].filter((b): b is Box => Boolean(b));
         teacher = boxes.length ? bookTeacherLines(t.pages, t.sheets, t.blocks, boxes) : [];
         cellLabels = Object.fromEntries(regions.map((r) => [r.id, r.label]));
         let last = 0;
@@ -696,13 +698,21 @@ export class Runner {
       const wb = x.src.workbooks?.[page.src];
       const n = page.sheets.length;
       show = wb ? `练习册《${page.title}》${n} 页(从上往下连着;看一道写 [[看 第 3 题]],题号一册里贯穿)` : `练习册《${page.title}》读不出来了`;
-      wb?.pages.forEach((pg, i) => {
-        const id = `${page.id}#${i + 1}`;
-        if (!told.has(id)) notes.push({ id, name: `《${page.title}》第${i + 1}页`, text: clipNote(workbookText(pg)) });
-      });
-      let last = 0;
-      events.forEach((e, i) => { if (e.k === 'turn') last = i + 1; });
-      if (wb && events.slice(last).some((e) => e.k === 'ink' && e.base === page.id)) inked = workbookInk(wb, page.sheets, page.kid.ink);
+      if (wb) {
+        const layer = workbookLayer(wb);
+        layer.pages.forEach((pg) => {
+          const id = `${page.id}#${pg.n}`;
+          if (!told.has(id)) notes.push({ id, name: `《${page.title}》第${pg.n}页`, text: clipNote(workbookText(layer.blocks, pg.n)) });
+        });
+        const sheets = bookSheets(layer.pages);
+        const regions = bookRegions(layer.pages, sheets, layer.zones);
+        const boxes = [x.lesson.view ?? firstSheet(sheets), x.lesson.look?.box].filter((b): b is Box => Boolean(b));
+        teacher = boxes.length ? bookTeacherLines(layer.pages, sheets, layer.blocks, boxes) : [];
+        cellLabels = Object.fromEntries(regions.map((r) => [r.id, r.label]));
+        let last = 0;
+        events.forEach((e, i) => { if (e.k === 'turn') last = i + 1; });
+        if (events.slice(last).some((e) => e.k === 'ink' && e.base === page.id)) inked = bookZoneInk(regions, page.kid.ink);
+      }
     } else if (page?.kind === 'white') show = '白纸(老师摆、写的都在上面)';
     else if (page?.kind === 'lecture') {
       const c = x.src.lecture && x.src.lecture.bundle === page.bundle ? x.src.lecture.clock : null;

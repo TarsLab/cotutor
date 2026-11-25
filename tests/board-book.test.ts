@@ -209,7 +209,7 @@ const ix = bookIndexOf();
   const pr3 = promptOf(String(third.json.job));
   check('下一轮:孩子做的里说他点读了哪几段、在哪停的', pr3.includes('自己点了课文听(点读的配音):从标题读到第 2 段,在第 2 段停了') && pr3.includes('自己点了课文听(点读的配音):读了第 3 段,读完了全文'), pr3.slice(pr3.indexOf('board:'), pr3.indexOf('board:') + 700));
   check('下一轮:孩子做的里说他在田字格里写了几个、照着哪个字', pr3.includes('在田字格里写了 1 个字(照着「泡」写的),写成什么样看图'), pr3.slice(pr3.indexOf('board:'), pr3.indexOf('board:') + 500));
-  check('下一轮:填的空照分块的名字说', pr3.includes('在页上的空(方框、括号)里填了 1 处:「「像一个个」后面的空」,填的什么看图'), pr3.slice(pr3.indexOf('board:'), pr3.indexOf('board:') + 900));
+  check('下一轮:填的空照分块的名字说', pr3.includes('在页上的空(方框、括号)里填了 1 处:「第 2 段的「像一个个」后面的空」,填的什么看图'), pr3.slice(pr3.indexOf('board:'), pr3.indexOf('board:') + 900));
   check('下一轮:窗里那一段只给老师的话(练什么、卡住怎么引、答案照格子的名字)', pr3.includes('给老师的:') && pr3.includes('- "第 2 段:练 读出小鱼的话"') && pr3.includes('卡住了:先找引号') && pr3.includes('答案 「像一个个」后面的空:月亮'), pr3.slice(pr3.indexOf('board:'), pr3.indexOf('board:') + 1200));
   check('下一轮:底是这一课,这一课的字分好段(第一次看到,给一条 <page>);他点了什么、最近点的、他在看哪里', pr3.includes('底: "课本《语文一年级下册》:《小鱼吹泡泡》第 1–2 页"') && pr3.includes('第 1 段 小鱼在水里吹泡泡。') && pr3.includes('点开看了笔顺:泡') && pr3.includes('孩子在看: "第 2 页:第 2–3 段"'), pr3.slice(pr3.indexOf('board:'), pr3.indexOf('board:') + 400));
   // 点读一块:点了第 2 段听它的念法(声音孩子端自己放),记一笔、不叫老师;下一轮老师看到

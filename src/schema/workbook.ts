@@ -7,53 +7,53 @@
  * 坐标:每页自己的千分比,框 `[左, 上, 右, 下]`、点 `[x, y]`,x 按页图的宽、y 按页图的高(都是 0–1000,不是正方形的)。
  * 几页连成一条铺时,换算到舞台坐标由铺的那层做(每页的纵向偏移),这里不管。
  *
+ * 一页的题和课本的一页一样是分块(`zones`,./zones.ts):一道题一块(kind problem,label「第 3 题」),题里的小题、一组算式套在里面;
+ * 块里孩子写、圈、连的地方是作答区,能指的东西是物件,只给老师的练什么、答案挂在块的 teacher 上(./regions.ts),所以运行时和课本走同一套:
+ * 看、能写的格、点读一块(写了 say 的)、给老师的、笔归作答区(src/chalk/kit/workbook.ts 换好交给 src/chalk/kit/book.ts)。
+ * 和课本的分块不同的:字和行不从 PDF 来,一页自己带文字层 `lines`(块不写 rows,框里的行归框住它的最里面那块);格就是作答区本身(不带 cell、src)。
+ *
  * 一页分三层,下发的只有第一层:
- *   孩子端   页图、文字层 `lines`、能点能圈的字词 `terms`(照片页认字的 `.words.json` 由它们生成)
- *   服务端   每道题的作答区 `regions` 与区里的东西 `objects`:孩子落的笔照它们归到哪一格、圈住了哪几个,换成给老师的句子
- *   老师     每道题的 `teacher`:目标、提示、答案(进上下文包,只给脑)
- * 物件也不下发:圈画区里的 `objects` 常常就是答案的位置。
+ *   孩子端   页图、文字层 `lines`、能点能圈的字词 `terms`;块的框、kind、label、say,作答区的框和种类(zonesKidPage)
+ *   服务端   作答区的名字与区里的东西 `objects`:孩子落的笔照它们归到哪一格、圈住了哪几个,换成给老师的句子
+ *   老师     块的 `teacher`:练什么、卡住怎么引、答案(上下文包的「给老师的」,只给脑)
+ * 物件也不下发:圈画区里的 `objects` 常常就是答案的位置。答案只给老师参考,孩子端永远不判对错。
  *
- * 答案挂在作答区上(`at` 列这一条答案占的区,按书写的顺序):一个词写在两个田字格里、一个算式跨三格、一句话跨两行,都是一条。
- * `ok` 是几种都算对的写法(每种是 `at` 那几格连起来写的样子);连线用 `links`;没有固定答案的(编题、写话、圈法不唯一)用 `note` 写怎么看。
- * 答案只给老师参考,孩子端永远不判对错。
- *
- * 读进来先过 `WorkbookSchema`(形状),再过 `workbookProblems`(题号、id、框、引用对不对得上)。
+ * 读进来先过 `WorkbookSchema`(形状),再过 `workbookProblems`(每页的块和作答区对不对得上、叫法不重名、题写了练什么)。
  */
 import { z } from 'zod';
-import { AnswerSchema, PermilleBoxSchema, PermillePointSchema, RegionObjectSchema, RegionSchema, TeacherSchema, regionId as id, regionProblems, type Answer, type PermilleBox, type PermillePoint, type Region, type RegionObject, type TeacherNote } from './regions.ts';
+import { PermilleBoxSchema, RegionObjectSchema, RegionSchema, regionId, type Region, type RegionObject } from './regions.ts';
+import { ZONE_KINDS, ZoneTeacherSchema, walkZones, zonePageProblems, zonesKidPage, type ZoneKind, type ZonePage, type ZoneTeacher } from './zones.ts';
 
-/** 作答区、物件、答案、给老师的和课本的分块共用一套(./regions.ts);这里的名字是练习册那边一直用的 */
-export const WorkbookBoxSchema = PermilleBoxSchema;
-export const WorkbookPointSchema = PermillePointSchema;
-export type WorkbookBox = PermilleBox;
-export type WorkbookPoint = PermillePoint;
-export const WorkbookRegionSchema = RegionSchema;
-export type WorkbookRegion = Region;
-export const WorkbookObjectSchema = RegionObjectSchema;
-export type WorkbookObject = RegionObject;
-export const WorkbookAnswerSchema = AnswerSchema;
-export type WorkbookAnswer = Answer;
-export const WorkbookTeacherSchema = TeacherSchema;
-export type WorkbookTeacher = TeacherNote;
-
-export const WorkbookQuestionSchema = z.object({
-  /** 题号,一册里贯穿、不重复;老师写 [[看 第 3 题]] 照它找 */
-  no: z.string().regex(/^\d+$/),
-  box: WorkbookBoxSchema,
-  /** 题面,几行的连起来、中英两行的都写:「每个风车有 4 片叶片。5 个这样的风车一共有多少片叶片？」 */
-  prompt: z.string().min(1),
-  regions: z.array(WorkbookRegionSchema).min(1),
-  objects: z.array(WorkbookObjectSchema),
-  teacher: WorkbookTeacherSchema,
-});
-export type WorkbookQuestion = z.infer<typeof WorkbookQuestionSchema>;
+/** 练习册的一块:同课本的块(./zones.ts 的 Zone),不写 rows(字行就是这一页的 lines),作答区不带课本格子的 cell、src */
+export interface WorkbookZone {
+  id: string;
+  kind: ZoneKind;
+  label: string;
+  box: z.infer<typeof PermilleBoxSchema>;
+  say?: string;
+  regions?: Region[];
+  objects?: RegionObject[];
+  teacher?: ZoneTeacher;
+  children?: WorkbookZone[];
+}
+export const WorkbookZoneSchema: z.ZodType<WorkbookZone> = z.lazy(() => z.object({
+  id: regionId,
+  kind: z.enum(ZONE_KINDS),
+  label: z.string().min(1),
+  box: PermilleBoxSchema,
+  say: z.string().min(1).optional(),
+  regions: z.array(RegionSchema).optional(),
+  objects: z.array(RegionObjectSchema).optional(),
+  teacher: ZoneTeacherSchema.optional(),
+  children: z.array(WorkbookZoneSchema).optional(),
+}));
 
 /** 文字层的一行:印的字照原样,点字和老师的「看」照它 */
-export const WorkbookLineSchema = z.object({ text: z.string().min(1), box: WorkbookBoxSchema });
+export const WorkbookLineSchema = z.object({ text: z.string().min(1), box: PermilleBoxSchema });
 /** 老师能圈、孩子能点的字词;char、word 点了弹田字格或念,other 只给老师圈 */
 export const WorkbookTermSchema = z.object({
   text: z.string().min(1),
-  box: WorkbookBoxSchema,
+  box: PermilleBoxSchema,
   kind: z.enum(['char', 'word', 'other']),
   /** 老师怎么念(和字面不同时才写) */
   say: z.string().min(1).optional(),
@@ -69,13 +69,14 @@ export const WorkbookPageSchema = z.object({
   }),
   lines: z.array(WorkbookLineSchema),
   terms: z.array(WorkbookTermSchema),
-  questions: z.array(WorkbookQuestionSchema).min(1),
+  /** 这一页的块:一道题一块,题里的小题套在里面(./zones.ts 的写法) */
+  zones: z.array(WorkbookZoneSchema).min(1),
 });
 export type WorkbookPage = z.infer<typeof WorkbookPageSchema>;
 
 export const WorkbookSchema = z.object({
-  version: z.literal(1),
-  id,
+  version: z.literal(2),
+  id: regionId,
   title: z.string().min(1),
   subject: z.enum(['语文', '数学', '英语']),
   grade: z.number().int().min(1).max(6),
@@ -95,33 +96,40 @@ export const WorkbookSchema = z.object({
 });
 export type Workbook = z.infer<typeof WorkbookSchema>;
 
+/** 第 n 页(从 1 起)当课本的一页分块(./zones.ts 的 ZonePage):page 就是第几页 */
+export const workbookZonePage = (page: Pick<WorkbookPage, 'zones'>, n: number): ZonePage => ({ page: n, zones: page.zones });
+
 /**
- * 形状对了以后再查的:题号、id 不重复,框是正的、在题框里,物件、答案引的作答区与物件都在这道题里,
- * 连线的两头各有 side,描写区带 model。回要改的那几条(一条一句,带页和题号);空 = 能用。
+ * 形状对了以后再查的:每页照课本的分块查(./zones.ts 的 zonePageProblems:id 不重复、框是正的、小块在大块里、作答区和物件、答案的引用),
+ * 叫法一册里不重名(老师 [[看 第 3 题]] 照它找;小题只在同一道题、同一组里不重名,同课本),题(kind problem)写了练什么。
+ * 回要改的那几条(一条一句,带第几页);空 = 能用
  */
 export function workbookProblems(wb: Workbook): string[] {
   const out: string[] = [];
-  const nos = new Set<string>();
-  const ids = new Set<string>();
-  const flat = (where: string, b: WorkbookBox): void => {
-    if (!(b[0] < b[2] && b[1] < b[3])) out.push(`${where}:框 [${b.join(', ')}] 不是左上到右下`);
+  const flat = (where: string, b: readonly number[]): void => {
+    if (!(b[0]! < b[2]! && b[1]! < b[3]!)) out.push(`${where}:框 [${b.join(', ')}] 不是左上到右下`);
   };
+  const names = new Map<string, Set<string>>();
   wb.pages.forEach((page, pi) => {
     const p = `第 ${pi + 1} 页`;
     for (const l of page.lines) flat(`${p}「${l.text}」`, l.box);
     for (const t of page.terms) flat(`${p}「${t.text}」`, t.box);
-    for (const q of page.questions) {
-      const w = `${p}第 ${q.no} 题`;
-      if (nos.has(q.no)) out.push(`${w}:题号重复`);
-      nos.add(q.no);
-      flat(w, q.box);
-      out.push(...regionProblems(w, '题', q.regions, q.objects, q.teacher.answers, ids, q.box));
-    }
+    out.push(...zonePageProblems(workbookZonePage(page, pi + 1)));
+    walkZones(page.zones, (z, _d, parent) => {
+      if (z.kind === 'problem' && !parent && !z.teacher?.goal) out.push(`${p}「${z.label}」:题要写 teacher.goal(这道题练什么)`);
+      const key = z.kind === 'sub' ? `${parent?.id ?? ''}\u0000${z.label}` : z.label;
+      names.set(key, (names.get(key) ?? new Set()).add(z.id));
+    });
   });
+  for (const [key, ids] of names) {
+    if (ids.size < 2) continue;
+    const [owner, label] = key.includes('\u0000') ? key.split('\u0000') : ['', key];
+    out.push(owner ? `同一块(${owner})下面有 ${ids.size} 个小题都叫「${label}」(${[...ids].join('、')}):同一道题里的小题不重名` : `有 ${ids.size} 块都叫「${label}」(${[...ids].join('、')}):老师说「看 ${label}」会找错,题号一册里连着编`);
+  }
   return out;
 }
 
-/** 给孩子端的一页:页图和文字层;作答区、物件、老师的都不下发 */
-export function workbookKidPage(page: WorkbookPage): Pick<WorkbookPage, 'image' | 'lines' | 'terms'> {
-  return { image: page.image, lines: page.lines, terms: page.terms };
+/** 给孩子端的一页:页图、文字层,块的框、kind、label、say 与作答区的框和种类(同课本的 zonesKidPage);作答区的名字、物件、老师的都不下发 */
+export function workbookKidPage(page: WorkbookPage, n: number): Pick<WorkbookPage, 'image' | 'lines' | 'terms'> & { zones: ZonePage } {
+  return { image: page.image, lines: page.lines, terms: page.terms, zones: zonesKidPage(workbookZonePage(page, n)) };
 }

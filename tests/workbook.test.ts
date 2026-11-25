@@ -1,5 +1,5 @@
 /**
- * 练习册(src/schema/workbook.ts):一份小册子过形状与检查;各种写错报到页和题;下发给孩子端的一页不带作答区和答案。
+ * 练习册(src/schema/workbook.ts):一份小册子过形状与检查(每页照课本的分块查,叫法一册里不重名,题写了练什么);各种写错报到页和块;下发给孩子端的一页不带作答区的名字和答案。
  * 出练习册的技能(skills/cotutor-workbook/references/格式.md):里面那份例子能用,schema 的每个字段都讲到;
  * cotutor workbook check 一次列全(形状、检查、页图的宽高与 sha256),glyph 给字母的笔顺。
  */
@@ -8,20 +8,20 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { z } from 'zod';
-import { WorkbookSchema, workbookKidPage, workbookProblems, type Workbook } from '../src/schema/index.ts';
+import { WorkbookSchema, workbookKidPage, workbookProblems, type Answer, type Region, type RegionObject, type Workbook, type WorkbookZone } from '../src/schema/index.ts';
 import { PACKAGE_SKILLS_DIR } from '../src/app/cli/skills.ts';
 import { checkWorkbook, checkWorkbooks, glyphData } from '../src/app/cli/workbook.ts';
 import { check, done } from './_check.ts';
 
 const sample = (): Workbook => ({
-  version: 1, id: '表内乘法一', title: '表内乘法（一）练习册', subject: '数学', grade: 2, term: '上',
+  version: 2, id: '表内乘法一', title: '表内乘法（一）练习册', subject: '数学', grade: 2, term: '上',
   source: { edition: '人教版小学数学二年级上册', unit: '表内乘法（一）', printed: [48, 53] },
   pages: [{
     image: { file: '01.png', w: 2600, h: 3678, sha256: 'a'.repeat(64) },
     lines: [{ text: '圈出一盘草莓，再填一填。', box: [146, 130, 480, 150] }],
     terms: [{ text: '一盘', box: [230, 130, 280, 150], kind: 'other' }],
-    questions: [{
-      no: '1', box: [86, 120, 914, 343], prompt: '圈出一盘草莓，再填一填。',
+    zones: [{
+      id: 'q1', kind: 'problem', label: '第 1 题', box: [86, 120, 914, 343], say: '圈出一盘草莓,再填一填。',
       regions: [
         { id: 'q1-circle', kind: 'circle', label: '四盘草莓', box: [145, 164, 893, 248] },
         { id: 'q1-a', kind: 'write', label: '乘号左边', box: [270, 300, 320, 330] },
@@ -49,23 +49,31 @@ const after = (edit: (wb: Workbook) => void): string[] => {
   edit(wb);
   return workbookProblems(wb);
 };
-const q = (wb: Workbook) => wb.pages[0]!.questions[0]!;
+/** 第 1 页的第 1 题(样本里作答区、物件、答案都写了) */
+const q = (wb: Workbook) => wb.pages[0]!.zones[0]! as WorkbookZone & { regions: Region[]; objects: RegionObject[]; teacher: { goal?: string; answers: Answer[] } };
 
 // ——— 形状 ———
 check('框出了 0–1000:形状不过', !WorkbookSchema.safeParse({ ...good, pages: [{ ...good.pages[0], lines: [{ text: '字', box: [0, 0, 1200, 10] }] }] }).success);
 check('答案没有 ok、links、note:形状不过', !WorkbookSchema.safeParse((() => { const wb = sample(); (q(wb).teacher.answers[0] as Record<string, unknown>).note = undefined; return wb; })()).success);
-check('题号不是数字:形状不过', !WorkbookSchema.safeParse((() => { const wb = sample(); q(wb).no = '一'; return wb; })()).success);
+check('块的 kind 不认:形状不过', !WorkbookSchema.safeParse((() => { const wb = sample(); (q(wb) as { kind: string }).kind = '题'; return wb; })()).success);
+check('一页没有块:形状不过', !WorkbookSchema.safeParse({ ...good, pages: [{ ...good.pages[0], zones: [] }] }).success);
 
 // ——— 检查 ———
-const has = (issues: string[], word: string): boolean => issues.some((s) => s.includes('第 1 页第 1 题') && s.includes(word));
-check('作答区出了题框', has(after((wb) => { q(wb).regions[1]!.box = [270, 300, 320, 400]; }), '出了题框'));
+const has = (issues: string[], word: string): boolean => issues.some((s) => s.includes('第 1 页「第 1 题」') && s.includes(word));
+check('作答区出了块的框', has(after((wb) => { q(wb).regions[1]!.box = [270, 300, 320, 400]; }), '出了块框'));
 check('框左右倒了', has(after((wb) => { q(wb).regions[1]!.box = [320, 300, 270, 330]; }), '不是左上到右下'));
 check('id 重复', has(after((wb) => { q(wb).regions[2]!.id = 'q1-a'; }), '重复'));
-check('题号重复', after((wb) => { wb.pages.push({ ...structuredClone(wb.pages[0]!), questions: [{ ...structuredClone(q(wb)), regions: [], objects: [], teacher: { goal: '目标', answers: [] } }] }); }).some((s) => s.includes('第 2 页第 1 题') && s.includes('题号重复')));
+check('两页上的题都叫「第 1 题」', after((wb) => { wb.pages.push({ ...structuredClone(wb.pages[0]!), zones: [{ ...structuredClone(q(wb)), id: 'q2', regions: [], objects: [], teacher: { goal: '目标', answers: [] } }] }); }).some((s) => s.includes('2 块都叫「第 1 题」')));
+check('同一道题里两个小题同名;不同题里同名的小题可以', (() => {
+  const two = (a: string, b: string) => after((wb) => { q(wb).children = [{ id: 's1', kind: 'sub', label: a, box: [90, 300, 200, 340] }, { id: 's2', kind: 'sub', label: b, box: [300, 300, 400, 340] }]; });
+  return two('3×4', '3×4').some((s) => s.includes('小题都叫「3×4」')) && two('3×4', '4×3').length === 0;
+})());
+check('题没写练什么', has(after((wb) => { delete (q(wb).teacher as { goal?: string }).goal; }), 'teacher.goal'));
+check('小块出了题框', has(after((wb) => { q(wb).children = [{ id: 's1', kind: 'sub', label: '3×4', box: [90, 300, 950, 340] }]; }).map((s) => s.replace('「3×4」', '「第 1 题」')), '出了「第 1 题」的框'));
 check('物件的中心不在框里', has(after((wb) => { q(wb).objects[0]!.center = [100, 100]; }), '中心不在框里'));
-check('物件指了没有的作答区', has(after((wb) => { q(wb).objects[0]!.region = 'q9-x'; }), '不在这道题里'));
+check('物件指了没有的作答区', has(after((wb) => { q(wb).objects[0]!.region = 'q9-x'; }), '不在这一块里'));
 check('只是图的物件可以不指作答区', after((wb) => { delete q(wb).objects[0]!.region; }).length === 0);
-check('答案指了没有的作答区', has(after((wb) => { q(wb).teacher.answers[1]!.at = ['q1-a', 'q1-c']; }), '「q1-c」不在这道题里'));
+check('答案指了没有的作答区', has(after((wb) => { q(wb).teacher.answers[1]!.at = ['q1-a', 'q1-c']; }), '「q1-c」不在这一块里'));
 check('描写区没带 model', has(after((wb) => { q(wb).regions[1]!.kind = 'trace'; }), '要带 model'));
 check('画图区带 model', has(after((wb) => { q(wb).regions[0]!.model = { glyph: 'A', strokes: [[[1, 1], [2, 2]]] }; }), '只有描写、书写'));
 check('四线不是从上往下', has(after((wb) => { q(wb).regions[1]!.fourLine = [310, 305, 320, 325]; }), '四线'));
@@ -87,8 +95,8 @@ check('不是连线区的物件写了 side', has(after((wb) => { q(wb).objects[0
 check('links 挂在非连线区上', has(after((wb) => { linked(wb); q(wb).teacher.answers[2]!.at = ['q1-a']; }), 'links 只挂在连线区上'));
 
 // ——— 下发 ———
-const kid = workbookKidPage(good.pages[0]!);
-check('孩子端的一页:只有图和文字层', Object.keys(kid).sort().join() === 'image,lines,terms' && !JSON.stringify(kid).includes('3×4'), JSON.stringify(kid));
+const kid = workbookKidPage(good.pages[0]!, 1);
+check('孩子端的一页:图、文字层、块(框、念法)与作答区的框;作答区的名字、物件、答案、练什么都不下发', Object.keys(kid).sort().join() === 'image,lines,terms,zones' && kid.zones.zones[0]?.say === '圈出一盘草莓,再填一填。' && kid.zones.zones[0]?.regions?.length === 3 && !/3×4|乘号左边|草莓\"|从图里读出/.test(JSON.stringify(kid.zones)), JSON.stringify(kid.zones));
 
 // ——— 出练习册的技能:格式.md ———
 const formatDoc = readFileSync(join(PACKAGE_SKILLS_DIR, 'cotutor-workbook', 'references', '格式.md'), 'utf8');
@@ -96,13 +104,15 @@ const example = JSON.parse(/```json\n([\s\S]*?)\n```/.exec(formatDoc)?.[1] ?? 'n
 const exParsed = WorkbookSchema.safeParse(example);
 check('格式.md 的例子过形状', exParsed.success, JSON.stringify(exParsed.error?.issues));
 check('格式.md 的例子过检查', exParsed.success && workbookProblems(exParsed.data).length === 0, exParsed.success ? workbookProblems(exParsed.data).join('\n') : '');
-check('格式.md 的例子每种作答区之外也有物件、连线、田字格、说着答', /"kind": "circle"/.test(formatDoc) && /"side": "left"/.test(formatDoc) && /"tian": true/.test(formatDoc) && /"say": true/.test(formatDoc));
+check('格式.md 的例子每种作答区之外也有物件、连线、田字格、说着答、小题、念法', /"kind": "circle"/.test(formatDoc) && /"side": "left"/.test(formatDoc) && /"tian": true/.test(formatDoc) && /"say": true/.test(formatDoc) && /"kind": "sub"/.test(formatDoc) && /"say": "/.test(formatDoc));
 /** schema 里出现的每个字段名(对象一层层往下走) */
+const seen = new Set<z.ZodType>();
 const fieldNames = (s: z.ZodType, out = new Set<string>()): Set<string> => {
   if (s instanceof z.ZodObject) for (const [k, v] of Object.entries(s.shape as Record<string, z.ZodType>)) { out.add(k); fieldNames(v, out); }
   else if (s instanceof z.ZodOptional || s instanceof z.ZodNullable) fieldNames(s.unwrap() as z.ZodType, out);
   else if (s instanceof z.ZodArray) fieldNames(s.element as z.ZodType, out);
   else if (s instanceof z.ZodTuple) for (const x of s.def.items) fieldNames(x as z.ZodType, out);
+  else if (s instanceof z.ZodLazy && !seen.has(s)) { seen.add(s); fieldNames(s.def.getter() as z.ZodType, out); }
   return out;
 };
 const fields = [...fieldNames(WorkbookSchema)];
@@ -130,7 +140,7 @@ const put = (name: string, wb: unknown, images: Record<string, Buffer>): void =>
   ok.pages[0]!.image.sha256 = sha(img);
   put('好的', ok, { '01.png': img });
   const r = await checkWorkbook(books, '好的');
-  check('check:例子配上对的图,没有要改的;打印版不在只提醒', r.problems.length === 0 && r.title === ok.title && r.pages === 1 && r.questions === 4 && r.notes.some((n) => n.includes('打印版')), JSON.stringify(r));
+  check('check:例子配上对的图,没有要改的;打印版不在只提醒', r.problems.length === 0 && r.title === ok.title && r.pages === 1 && r.questions === 4 && r.says > 0 && r.notes.some((n) => n.includes('打印版')), JSON.stringify(r));
 
   put('图不对', ok, { '01.png': png(2000, 3678) });
   const bad = await checkWorkbook(books, '图不对');
@@ -140,15 +150,15 @@ const put = (name: string, wb: unknown, images: Record<string, Buffer>): void =>
   check('check:图不在', (await checkWorkbook(books, '没有图')).problems.some((p) => p.includes('01.png 不在')));
 
   const shape = structuredClone(ok);
-  shape.pages[0]!.questions[0]!.box[2] = 1200;
-  shape.pages[0]!.questions[1]!.no = '二';
+  shape.pages[0]!.zones[0]!.box[2] = 1200;
+  (shape.pages[0]!.zones[1] as { kind: string }).kind = '题';
   put('形状', shape, { '01.png': img });
   const sp = (await checkWorkbook(books, '形状')).problems;
-  check('check:形状不对的一次列全(不只第一条),页从 1 数', sp.length === 2 && sp.every((p) => p.startsWith('第 1 页 questions.')), JSON.stringify(sp));
+  check('check:形状不对的一次列全(不只第一条),页从 1 数', sp.length === 2 && sp.every((p) => p.startsWith('第 1 页 zones.')), JSON.stringify(sp));
 
   const logic = structuredClone(ok);
-  logic.pages[0]!.questions[0]!.regions[1]!.id = 'q1-1';
-  logic.pages[0]!.questions[2]!.teacher.answers[0]!.at = ['q3-没有'];
+  logic.pages[0]!.zones[1]!.regions![0]!.id = 'q1-1';
+  logic.pages[0]!.zones[2]!.teacher!.answers![0]!.at = ['q3-没有'];
   put('检查', logic, { '01.png': img });
   const lp = (await checkWorkbook(books, '检查')).problems;
   check('check:workbookProblems 的也一次列全', lp.some((p) => p.includes('重复')) && lp.some((p) => p.includes('q3-没有')), JSON.stringify(lp));

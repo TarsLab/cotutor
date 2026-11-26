@@ -99,8 +99,8 @@ function otherSay(p: BookPage, lines: readonly BookLine[]): string {
   return parts.join('');
 }
 
-/** 注释的叫法:注①、注② */
-const noteLabel = (t: string): string => `注${/[①-⑳]/.exec(t)?.[0] ?? ''}`;
+/** 注释的叫法:注号接开头几个字(「注①:本文选自」;一课里常有好几个注①,光写注号会重名),同技能 cotutor-textbook 的规范 */
+const noteLabel = (t: string): string => { const m = /([①-⑳])\s*(.*)$/.exec(t.trim()); return `注${m?.[1] ?? ''}:${clip((m?.[2] ?? t).replace(/\s+/g, ''), 5).replace(/…$/, '')}`; };
 
 /** 句前的记号,不念 */
 const MARKS = /[◇◆●○■□▲△★☆]/;

@@ -19,7 +19,7 @@ import type { BookIndex } from './textbook.ts';
 import { PermilleBoxSchema, RegionObjectSchema, RegionSchema, TeacherSchema, regionProblems, type PermilleBox } from './regions.ts';
 
 /** 规则出分块的版本:规则改了就加一,旧的重出(同 BOOK_INDEX_VERSION) */
-export const ZONES_RULES_VERSION = 3;
+export const ZONES_RULES_VERSION = 4;
 
 /** 分块文件的协议版本:课本的一页、book.json 都写着(练习册的分块跟着 workbook.json,不写) */
 export const ZONE_FORMAT = 3;

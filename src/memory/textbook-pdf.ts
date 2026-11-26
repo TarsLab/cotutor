@@ -70,28 +70,39 @@ export function loadPdfjs(): Promise<Pdfjs> {
 /**
  * 读 PDF 每一页的文字(PdfItem:基线从页顶量)和页上画的田字格、填空、表格、小方框(./textbook-cells.ts;画图的指令读不出就当没有)。
  * 读画图的指令时不解页上的图(maxImageSize: 1,pdf.js 把图都跳过):要解的话广东版科学二上 163 张高清 CMYK 的 JPEG 读一遍 20 秒,跳过 0.5 秒,
- * 人教数学二上 3.4 秒 → 1.3 秒(2026-11-25 量的);只要线和字,用不着图。cells: false 只读文字
+ * 人教数学二上 3.4 秒 → 1.3 秒(2026-11-25 量的);只要线和字,用不着图。cells: false 只读文字(字体就只有 pdf.js 的编号)
  */
 export async function readPdfPages(data: Uint8Array, opts: { cells?: boolean } = {}): Promise<PdfPage[]> {
   const lib = await loadPdfjs();
-  const task = lib.getDocument({ data, disableFontFace: true, verbosity: 0, maxImageSize: 1 });
+  // fontExtraProperties:字体对象带上真名(FZKTRJK--GBK1-0),不然只有 pdf.js 一页一页起的编号(g_d0_f17,同一种字换一页换个名)
+  const task = lib.getDocument({ data, disableFontFace: true, verbosity: 0, maxImageSize: 1, fontExtraProperties: true });
   const doc = await task.promise;
   try {
     const out: PdfPage[] = [];
     for (let n = 1; n <= doc.numPages; n++) {
       const page = await doc.getPage(n);
       const vp = page.getViewport({ scale: 1 });
+      // 先读画图的指令:字体是这时候载进 commonObjs 的,后面取文字才认得出真名
+      let got: ReturnType<typeof opsCells> = { cells: [], boxes: [], tables: [], squares: [] };
+      if (opts.cells !== false) try { got = opsCells(await page.getOperatorList({ annotationMode: 0 }), lib.OPS as unknown as Record<string, number>, vp.transform); } catch { /* 画图的指令读不出:没有格子 */ }
       const tc = await page.getTextContent();
+      const fonts = new Map<string, string>();
+      const font = (id: string): string => {
+        if (!fonts.has(id)) {
+          let name = id;
+          try { if (page.commonObjs.has(id)) name = String((page.commonObjs.get(id) as { name?: string }).name || id).replace(/^[A-Z]{6}\+/, ''); } catch { /* 没载进来:用编号 */ }
+          fonts.set(id, name);
+        }
+        return fonts.get(id)!;
+      };
       const items: PdfItem[] = [];
       for (const it of tc.items) {
         if (!('str' in it) || !it.str.trim()) continue;
         const [a, b, , , e, f] = it.transform as number[];
         // 换到页面左上角起的坐标要经视口:页面框的原点不一定是 (0,0)(人教的 PDF 是 (8.5, 8.5),只用页高翻 y 时字的框整体偏右上 8.5pt)
         const [x, y] = vp.convertToViewportPoint(e, f);
-        items.push({ s: it.str, f: it.fontName, x: Math.round(x * 100) / 100, y: Math.round(y * 100) / 100, z: Math.round(Math.hypot(a, b) * 100) / 100, w: Math.round(it.width * 100) / 100 });
+        items.push({ s: it.str, f: font(it.fontName), x: Math.round(x * 100) / 100, y: Math.round(y * 100) / 100, z: Math.round(Math.hypot(a, b) * 100) / 100, w: Math.round(it.width * 100) / 100 });
       }
-      let got: ReturnType<typeof opsCells> = { cells: [], boxes: [], tables: [], squares: [] };
-      if (opts.cells !== false) try { got = opsCells(await page.getOperatorList({ annotationMode: 0 }), lib.OPS as unknown as Record<string, number>, vp.transform); } catch { /* 画图的指令读不出:没有格子 */ }
       out.push({ n, w: vp.width, h: vp.height, items, ...(got.cells.length ? { cells: got.cells } : {}), ...(got.boxes.length ? { boxes: got.boxes } : {}), ...(got.tables.length ? { tables: got.tables } : {}), ...(got.squares.length ? { squares: got.squares } : {}) });
       page.cleanup();
     }

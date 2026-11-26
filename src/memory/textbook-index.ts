@@ -6,6 +6,8 @@
  *  - 拼音比字小(字号不到字的 0.75),印在字的正上方:配给下面中心对得上的那个汉字。
  *  - 同一基线、同一字号、挨着的字是一行;隔开两个字宽以上的另起一行(两栏、词语表一个词一个)。
  *  - 页码印在页脚(离页底 70pt 以内的 1–3 位数,字号不大)。
+ *  - 着重号(「注意加点的词」)是一种叫 KentenGeneric 的字体,3.5 号,文字层里是字符「3」:不成行,记到正上方那个字上(dot)。
+ *  - 一行里字和字之间空开一个字宽以上(「灌溉田地  发动机器」,正文的字距不到半个字宽)记在后一个字上(sp)。
  *  - 目录不认出版社(parseToc):一行末尾是页码、前面是课名,中间有点线或空开一大截的就是一项;每一项记下它印在目录页的哪一行(孩子点它翻过去)。
  *    统编语文是两栏带点线(「11 坐井观天……54」),◎ 开头的是语文园地这类,没编号、比编号缩进的是上一课下面的一首(古诗二首 → 登鹳雀楼)。
  * 2026-11-15 照人教版数学二年级上册(同一个网站)加的:
@@ -36,6 +38,13 @@ const ALL_CAPS = /^[A-Z]{2,}$/;
 /** 一个音节大致的样子(用来自检解码对不对,不求全) */
 const SYLLABLE = new RegExp(`^(zh|ch|sh|[bpmfdtnlgkhjqxrzcsyw])?[aeiouü${TONED}]{1,3}(ng|n|r)?r?$`);
 const HAN = /\p{Script=Han}/u;
+/** 着重号的字体(人教的 PDF 叫 KentenGeneric:日文「圏点」) */
+const KENTEN = /kenten/i;
+/** 两个字之间空出几个字号算隔开(sp):正文的字距 0.2 左右、认字栏 0.5,隔开的词 1.7–2 */
+const SPACE = 0.9;
+/** 空着的括号「一(  )鱼塘」里的空是给孩子填的,不算隔开 */
+const OPEN = /[（(［\[【〔]/;
+const CLOSE = /[）)］\]】〕]/;
 
 /** 一段拼音字体的字 → 带调的拼音;有表里没有的大写字母回 null */
 export function decodePinyin(s: string): string | null {
@@ -83,7 +92,8 @@ export function pageLines(page: PdfPage, bad: string[] = []): BookLine[] {
   const med = hanZ.length ? hanZ[Math.floor(hanZ.length / 2)] : 12;
   const isPy = (i: PdfItem): boolean => RAW_PINYIN.test(i.s.trim()) && !ALL_CAPS.test(i.s.trim()) && i.z < 0.75 * Math.max(med, i.z * 1.4);
   const pys = items.filter(isPy);
-  const glyphs = items.filter((i) => !isPy(i)).flatMap(splitItem).sort((a, b) => a.y - b.y || a.x1 - b.x1);
+  const dots = items.filter((i) => KENTEN.test(i.f)).flatMap(splitItem);
+  const glyphs = items.filter((i) => !isPy(i) && !KENTEN.test(i.f)).flatMap(splitItem).sort((a, b) => a.y - b.y || a.x1 - b.x1);
   // 先归条带:基线差不到字号的 0.35、字号差不到三成(目录的点线比字高几个点,也归进来);
   // 条带里从左到右排,隔开两个字宽以上的切开另成一行
   const bands: { y: number; z: number; g: Glyph[] }[] = [];
@@ -114,9 +124,19 @@ export function pageLines(page: PdfPage, bad: string[] = []): BookLine[] {
       y2: r2(y + 0.12 * z),
       z,
       f: gs[0].f,
-      chars: gs.map((g): BookChar => ({ c: g.c, x1: r2(g.x1), x2: r2(g.x2) })),
+      chars: gs.map((g, k): BookChar => ({ c: g.c, x1: r2(g.x1), x2: r2(g.x2), ...(k && g.x1 - gs[k - 1].x2 >= SPACE * z && !OPEN.test(gs[k - 1].c) && !CLOSE.test(g.c) ? { sp: true as const } : {}) })),
     };
   });
+  // 着重号:基线在字的基线下面一个字号以内,中心对得上
+  for (const d of dots) {
+    const cx = (d.x1 + d.x2) / 2;
+    for (const l of lines) {
+      const dy = d.y - (l.y2 - 0.12 * l.z);
+      if (dy <= 0 || dy > l.z) continue;
+      const ch = l.chars.find((c) => HAN.test(c.c) && Math.abs((c.x1 + c.x2) / 2 - cx) < 0.6 * l.z);
+      if (ch) { ch.dot = true; break; }
+    }
+  }
   // 拼音:字的正上方,中心对得上(差不到字号的 0.6),基线在字的基线上面两个字号以内
   for (const p of pys) {
     const raw = p.s.trim();

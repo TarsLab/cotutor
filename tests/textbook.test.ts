@@ -8,7 +8,7 @@
  * 科学(2026-11-24)用 tests/_science-book.ts 照广东版科学排的那本:Unicode 拼音、目录的「/ 页码」和带页码的单元、栏目下面分段。
  */
 import { BOOK_MAX_PAGES, bookCut, bookFind, bookFrame, bookPages, bookPick, bookReadParts, bookReadTexts, bookRows, bookSheets, bookTarget, bookView, findLesson, lessonName, readLessonText, readSentences, readTimes } from '../src/chalk/index.ts';
-import type { BookLine, BookPage } from '../src/schema/index.ts';
+import { spacedText, withPinyin, type BookLine, type BookPage } from '../src/schema/index.ts';
 import { bookLesson, fitActs, lessonOpen, tocEntries } from '../src/board/lesson-fit.ts';
 import { lessonInit } from '../src/board/lesson.ts';
 import { buildBookIndex, decodePinyin, pageLines, printedOf } from '../src/memory/textbook-index.ts';
@@ -27,6 +27,15 @@ check('拼音配给下面中心对得上的那个字;标点不配', first?.chars
 check('拼音不单成一行;页眉、标题各是一行', !p2.some((l) => /[a-z]/.test(l.text)) && p2[0].text === '第一单元·阅读' && p2.some((l) => l.text === '小鱼吹泡泡' && l.chars[0].py === 'xiǎo'));
 const split = pageLines({ n: 1, w: W, h: H, items: [{ s: '。 小', f: 'body', x: 100, y: 100, z: 18, w: 39 }] });
 check('几个字一段的(「。 小」):照字宽拆开,空格占剩下的', split[0]?.text === '。小' && Math.abs(split[0].chars[1].x1 - 121) < 0.5, JSON.stringify(split));
+// 着重号(人教的 KentenGeneric,3.5 号的「3」,印在字下面)、一行里隔开的词(「灌溉田地  发动机器」)
+const dotted = pageLines({ n: 1, w: W, h: H, items: [
+  { s: '披着衣裳', f: 'FZKTRJK--GBK1-0', x: 100, y: 200, z: 16, w: 64 },
+  { s: '鼓着眼睛', f: 'FZKTRJK--GBK1-0', x: 196, y: 200, z: 16, w: 64 },
+  { s: '3', f: 'KentenGeneric', x: 106, y: 207, z: 3.5, w: 2 },
+  { s: '3', f: 'KentenGeneric', x: 202, y: 207, z: 3.5, w: 2 },
+] });
+check('着重号不成行,记到正上方那个字上', dotted.length === 1 && dotted[0].text === '披着衣裳鼓着眼睛' && dotted[0].chars.filter((c) => c.dot).map((c) => c.c).join('') === '披鼓', JSON.stringify(dotted));
+check('一行里空开一个字宽以上的记在后一个字上;spacedText 留空格、念的时候换顿号', dotted[0]?.chars.filter((c) => c.sp).map((c) => c.c).join('') === '鼓' && spacedText(dotted[0]) === '披着衣裳 鼓着眼睛' && spacedText(dotted[0], '、') === '披着衣裳、鼓着眼睛' && withPinyin(dotted[0]) === '披着衣裳 鼓着眼睛');
 
 // ---- 目录与页码 ----
 const ix = buildBookIndex(pages, { file: '语文一年级下册.pdf', sha: 'abc', title: '语文一年级下册' });

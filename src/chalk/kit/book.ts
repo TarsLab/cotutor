@@ -9,7 +9,7 @@
  * 老师的动作落到页上在 src/board/lesson-fit.ts;这里只有课本的几何。
  */
 
-import { bookChrome, walkZones, withPinyin, type BookLayout, type BookLesson, type BookLine, type BookPage, type Zone, type ZonePage, type ZoneRegion, type ZoneTeacher } from '../../schema/index.ts';
+import { bookChrome, spacedText, walkZones, withPinyin, type BookLayout, type BookLesson, type BookLine, type BookPage, type Zone, type ZonePage, type ZoneRegion, type ZoneTeacher } from '../../schema/index.ts';
 import { insidePolygon } from '../geometry.ts';
 
 /** 一页的宽(场景坐标) */
@@ -245,8 +245,8 @@ function zoneBlock(z: Zone, lines: readonly BookLine[], parent: Zone | null, lay
 function zoneKind(z: Zone, lines: readonly BookLine[], parent: Zone | null, layout: BookLayout): Omit<BookBlock, 'refs'> {
   const num = (re: RegExp): number | undefined => { const m = re.exec(z.label.replace(/\s/g, '')); return m ? Number(m[1]) : undefined; };
   const col = parent?.kind === 'column' ? parent.label : undefined;
-  const join = (ls: readonly BookLine[], f: (l: BookLine) => string = (l) => l.text): string => ls.map(f).filter(Boolean).join(' ');
-  const voiced = (l: BookLine): string => (layout === 'prose' ? withPinyin(l) : l.text);
+  const join = (ls: readonly BookLine[], f: (l: BookLine) => string = (l) => spacedText(l)): string => ls.map(f).filter(Boolean).join(' ');
+  const voiced = (l: BookLine): string => (layout === 'prose' ? withPinyin(l) : spacedText(l));
   if (z.kind === 'para') {
     const no = num(/第(\d+)(?:自然)?段/);
     return { kind: 'para', ...(no !== undefined ? { no } : {}), ...(col ? { head: col } : {}), text: lines.map((l) => l.text).join('') };
@@ -255,8 +255,8 @@ function zoneKind(z: Zone, lines: readonly BookLine[], parent: Zone | null, layo
   if (z.kind === 'column') return { kind: 'section', head: z.label, text: join(lines.slice(1), voiced) };
   if (z.kind === 'example') {
     const no = num(/例(\d+)/);
-    const first = lines[0] ? lines[0].chars.slice(String(no ?? '').length).map((c) => c.c).join('') : '';
-    return { kind: 'example', ...(no !== undefined ? { no } : {}), text: [first, ...lines.slice(1).map((l) => l.text)].filter(Boolean).join(' ') };
+    const first = lines[0] ? spacedText({ chars: lines[0].chars.slice(String(no ?? '').length) }) : '';
+    return { kind: 'example', ...(no !== undefined ? { no } : {}), text: [first, ...lines.slice(1).map((l) => spacedText(l))].filter(Boolean).join(' ') };
   }
   if (z.kind === 'problem') {
     const m = /^(.*?)第(\d+)题$/.exec(z.label.replace(/\s/g, ''));

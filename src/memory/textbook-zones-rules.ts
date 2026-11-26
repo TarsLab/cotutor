@@ -9,7 +9,7 @@
  * 页上画的格(索引的 BookPage.cells)成作答区,id 是它在这一页的第几格(一节课状态里 kid.cells 的键 `<页>.<第几格>` 照旧),挂在框住它中心的最里面那块上,没有就挂在页上;
  * 表格成一块(kind table,不带字行),它的空格挂在它上面;打勾的小方框是 tick 作答区。语文正文后面的块写上点了念什么(say)。
  */
-import { MATH_COLUMNS, bodySize, bookChrome, mathHeading, scienceColumn, withPinyin, type BookIndex, type BookLayout, type BookLine, type BookPage, type PermilleBox, type Zone, type ZonePage, type ZoneRegion } from '../schema/index.ts';
+import { MATH_COLUMNS, bodySize, bookChrome, mathHeading, scienceColumn, spacedText, withPinyin, type BookIndex, type BookLayout, type BookLine, type BookPage, type PermilleBox, type Zone, type ZonePage, type ZoneRegion } from '../schema/index.ts';
 
 /**
  * 一课里的一块:标题、一段(no 从 1 起)、一个栏目(head)、别的(认字栏、写字栏、课后题、注释)。
@@ -85,10 +85,14 @@ function otherSay(p: BookPage, lines: readonly BookLine[]): string {
     const han = l.chars.filter((c) => /\p{Script=Han}/u.test(c.c));
     if (!han.length || han.every((c) => inCell((c.x1 + c.x2) / 2, (l.y1 + l.y2) / 2)) || /^\s*[①-⑳]/.test(l.text)) return [];
     const letters = l.chars.every((c) => /\p{Script=Han}/u.test(c.c)) && han.length >= 2 && han.filter((c) => c.py).length >= 0.8 * han.length;
-    return [letters ? han.map((c) => c.c).join('、') : l.text.replace(/[\s◇◆●○■□▲△★☆]+/g, '')];
+    // 隔开的词(「灌溉田地  发动机器」)中间顿一下
+    return [letters ? han.map((c) => c.c).join('、') : spacedText({ chars: l.chars.filter((c) => !MARKS.test(c.c)) }, '、').replace(/\s+/g, '')];
   });
   return parts.join('');
 }
+
+/** 句前的记号,不念 */
+const MARKS = /[◇◆●○■□▲△★☆]/;
 
 /** 框住 (x, y) 的最里面那一串块(外到里;同一层几块都框住时取最小的) */
 function hostPath(zones: readonly Zone[], x: number, y: number): Zone[] {
@@ -245,7 +249,7 @@ export function ruleBlocks(pages: readonly BookPage[], layout: BookLayout = 'pro
   const weight = new Map<string, number>();
   for (const x of all) if (x.l.chars.length >= 6) weight.set(`${x.l.f}|${x.l.z}`, (weight.get(`${x.l.f}|${x.l.z}`) ?? 0) + x.l.chars.length);
   const key = [...weight].sort((a, b) => b[1] - a[1])[0]?.[0];
-  // 同一册里字体的名字每页可以不一样(统编语文二上《寒号鸟》第一页 f31、后面 f17):一页上压根没有那种字体,就认这一页同字号里字最多的那种
+  // 字体记的是真名,整册一样;读不到真名的 PDF 只有 pdf.js 一页一页起的编号(统编语文二上《寒号鸟》第一页 f31、后面 f17):一页上压根没有那种字体,就认这一页同字号里字最多的那种
   const keyZ = key ? Number(key.slice(key.lastIndexOf('|') + 1)) : NaN;
   const keyF = key ? key.slice(0, key.lastIndexOf('|')) : '';
   const pageFont = new Map<BookPage, string>();

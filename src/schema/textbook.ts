@@ -5,7 +5,7 @@
  * 坐标:PDF 的点(pt),原点在页的左上角,y 往下长。PdfItem 的 y 是这一段字的基线。
  */
 
-/** pdf.js 取出来的一段字(一个 text item):s 原文,f 字体,x 左边,y 基线(从页顶量),z 字号,w 宽 */
+/** pdf.js 取出来的一段字(一个 text item):s 原文,f 字体的真名(读不到是 pdf.js 的编号),x 左边,y 基线(从页顶量),z 字号,w 宽 */
 export interface PdfItem {
   s: string;
   f: string;
@@ -63,15 +63,20 @@ export interface BookCell {
   t?: number;
 }
 
-/** 一个字:左右边(行的上下边就是它的上下边);py = 头上印的拼音(已解码成带调的,如 jǐng) */
+/**
+ * 一个字:左右边(行的上下边就是它的上下边);py = 头上印的拼音(已解码成带调的,如 jǐng);
+ * dot = 字下面加了着重号(「读一读,注意加点的词」);sp = 和前一个字之间空开一个字宽以上(「灌溉田地  发动机器」,一行里隔开的词)
+ */
 export interface BookChar {
   c: string;
   x1: number;
   x2: number;
   py?: string;
+  dot?: true;
+  sp?: true;
 }
 
-/** 一行:同一基线、同一字号连着的字。y1、y2 是字的上下边(不含拼音);f 字体(PDF 内部的名字,只在这本书里有意义) */
+/** 一行:同一基线、同一字号连着的字。y1、y2 是字的上下边(不含拼音);f 字体的真名(去掉子集前缀的 FZKTRJK--GBK1-0,整册一样;读不到时是 pdf.js 的页内编号);text 不带空格(隔开的地方看字的 sp,spacedText) */
 export interface BookLine {
   text: string;
   x1: number;
@@ -118,7 +123,7 @@ export interface BookLesson {
 }
 
 /** 索引的版本:取字、分行的规则改了就加一,旧缓存重做 */
-export const BOOK_INDEX_VERSION = 8;
+export const BOOK_INDEX_VERSION = 9;
 
 /**
  * 一册怎么分块(出分块的规则 src/memory/textbook-zones-rules.ts):prose = 课文(自然段、语文园地的栏目);
@@ -194,9 +199,14 @@ function bookFooter(p: BookPage, l: BookLine): boolean {
  */
 export const bookChrome = (p: BookPage, l: BookLine): boolean => (l.y1 < 45 && (/单元/.test(l.text) || (p.printed !== null && l.text === String(p.printed)))) || bookFooter(p, l) || /仅供个人学习使用/.test(l.text);
 
-/** 一行短的、几乎每个字都带拼音的(认字栏、识字加油站的词):给老师看时带上读音「观(guān)沿(yán)」;别的只给字 */
+/** 一行的字,隔开的地方(字的 sp)留一个空格:「灌溉田地 发动机器」;sep 换掉空格(念的时候用顿号) */
+export function spacedText(l: Pick<BookLine, 'chars'>, sep = ' ', f: (c: BookChar) => string = (c) => c.c): string {
+  return l.chars.map((c, k) => (k && c.sp ? sep : '') + f(c)).join('');
+}
+
+/** 一行短的、几乎每个字都带拼音的(认字栏、识字加油站的词):给老师看时带上读音「观(guān)沿(yán)」;别的只给字(隔开的地方留空格) */
 export function withPinyin(l: BookLine): string {
   const han = l.chars.filter((c) => /\p{Script=Han}/u.test(c.c));
-  if (l.chars.length > 14 || !han.length || han.filter((c) => c.py).length < han.length * 0.8) return l.text;
-  return l.chars.map((c) => (c.py ? `${c.c}(${c.py})` : c.c)).join('');
+  if (l.chars.length > 14 || !han.length || han.filter((c) => c.py).length < han.length * 0.8) return spacedText(l);
+  return spacedText(l, ' ', (c) => (c.py ? `${c.c}(${c.py})` : c.c));
 }

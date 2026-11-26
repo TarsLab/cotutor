@@ -117,7 +117,7 @@ check('没有格的页:没有', bookCellsOf([{ ...page, cells: undefined }], she
     '<< /Type /Catalog /Pages 2 0 R >>',
     '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
     '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
-    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /ABCDEF+Helvetica >>',
     `<< /Length ${content.length} >>\nstream\n${content}\nendstream`,
   ];
   let pdf = '%PDF-1.4\n';
@@ -130,6 +130,7 @@ check('没有格的页:没有', bookCellsOf([{ ...page, cells: undefined }], she
   check('真的 pdf.js:深灰的字是范字,红的是描红,第三格空着', got[0]?.ch === 'A' && !got[0]?.red && got[1]?.ch === 'A' && got[1]?.red === true && got[2] && !got[2].ch, JSON.stringify(got));
   check('真的 pdf.js:描边的线拼出一张 3×3 的表', page?.tables?.length === 1 && page.tables[0].length === 9 && Math.abs(page.tables[0][0].box[0] - 40) < 0.5 && Math.abs(page.tables[0][0].box[1] - 130) < 0.5, JSON.stringify(page?.tables));
   check('真的 pdf.js:描边的小方框收,填了颜色的不收', page?.squares?.length === 1 && Math.abs(page.squares[0][0] - 40) < 0.5 && Math.abs(page.squares[0][1] - 28) < 0.5, JSON.stringify(page?.squares));
+  check('真的 pdf.js:字体记真名,去掉子集前缀(不是 pdf.js 的 g_d0_f1)', page?.items.length > 0 && page.items.every((i) => i.f === 'Helvetica'), JSON.stringify(page?.items.map((i) => i.f)));
   const [bare] = await readPdfPages(new TextEncoder().encode(pdf), { cells: false });
   check('cells: false 不读画图的指令:没有格子,字照读', !bare?.cells && bare?.items.length === page?.items.length, JSON.stringify(bare));
 }

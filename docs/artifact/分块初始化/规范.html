@@ -1,0 +1,571 @@
+<title>分块初始化</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<!-- 协议类设计稿:一本新课本 PDF 交给编程助手(Codex)整册出分块。怎么提议、什么时候搬进 docs/dev/ 见上一层的 README.md -->
+<style>
+/* 版式:工作台「纸面控制台」的色板(src/ui/dev/dev-theme.ts),单栏长页 + 顶上一条目录;同「册与开场」那份 */
+:root {
+  --ground:#F5F3EE; --surface:#FFFFFF; --surface-2:#FAF9F6; --sunk:#EDEAE3;
+  --line:#E5E1D8; --line-soft:#EFECE6;
+  --ink:#2B2B2B; --ink-2:#4A4740; --muted:#6B675F; --faint:#8A8781;
+  --accent:#B4531F; --accent-soft:#F7E8DE;
+  --ok:#1F7A44; --ok-soft:#E5F4EA;
+  --warn:#8A5A12; --warn-soft:#F9F1DE;
+  --info:#2F5E9E; --info-soft:#E9F1FB;
+  --zh:#C43C74; --ma:#2F7FC1;
+  --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif;
+  --mono:"SF Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --r-card:18px; --r-item:12px; --r-tag:6px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --ground:#1C1B19; --surface:#262522; --surface-2:#2B2A27; --sunk:#33312D; --line:#3D3A35; --line-soft:#34322E;
+  --ink:#ECE8E1; --ink-2:#CFCAC0; --muted:#A39E94; --faint:#8C877D;
+  --accent:#E58A55; --accent-soft:#3A2A20; --ok:#6CC58F; --ok-soft:#1F3328; --warn:#E0B060; --warn-soft:#3A3020; --info:#8AB4EE; --info-soft:#22303F;
+  --zh:#E36A9C; --ma:#6AAAE0; color-scheme:dark; } }
+:root[data-theme="dark"] {
+  --ground:#1C1B19; --surface:#262522; --surface-2:#2B2A27; --sunk:#33312D; --line:#3D3A35; --line-soft:#34322E;
+  --ink:#ECE8E1; --ink-2:#CFCAC0; --muted:#A39E94; --faint:#8C877D;
+  --accent:#E58A55; --accent-soft:#3A2A20; --ok:#6CC58F; --ok-soft:#1F3328; --warn:#E0B060; --warn-soft:#3A3020; --info:#8AB4EE; --info-soft:#22303F;
+  --zh:#E36A9C; --ma:#6AAAE0; color-scheme:dark; }
+* { box-sizing:border-box; }
+html { background:var(--ground); }
+body { margin:0; background:var(--ground); color:var(--ink); font:15px/1.65 var(--sans); }
+.wrap { max-width:1080px; margin:0 auto; padding-block:28px 72px; padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); }
+header.top { display:flex; flex-direction:column; gap:10px; padding-bottom:18px; }
+header.top .crumb { font:500 12px/1 var(--mono); color:var(--faint); letter-spacing:.04em; }
+h1 { margin:0; font-size:30px; font-weight:700; text-wrap:balance; }
+header.top p { margin:0; max-width:70ch; color:var(--ink-2); }
+.legend { display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center; font-size:13px; color:var(--muted); }
+nav.toc { position:sticky; top:env(safe-area-inset-top, 0px); z-index:5; background:var(--ground); border-bottom:1px solid var(--line); margin:0 calc(-1 * max(16px, env(safe-area-inset-left, 0px))); padding:0 max(16px, env(safe-area-inset-left, 0px)); }
+nav.toc .row { display:flex; gap:4px; overflow-x:auto; padding:8px 0; scrollbar-width:none; }
+nav.toc a { flex:none; padding:6px 12px; border-radius:8px; color:var(--ink-2); font-size:13.5px; text-decoration:none; }
+nav.toc a:hover, nav.toc a:focus-visible { background:var(--sunk); color:var(--ink); outline:none; }
+nav.toc a b { font:600 11.5px/1 var(--mono); color:var(--faint); margin-right:5px; }
+body::before { content:""; position:fixed; inset:0 0 auto; height:env(safe-area-inset-top, 0px); z-index:10; background:var(--ground); }
+section { padding-top:44px; scroll-margin-top:56px; }
+section > h2 { margin:0 0 6px; font-size:21px; font-weight:700; display:flex; align-items:baseline; gap:10px; text-wrap:balance; }
+section > h2 .id { font:600 13px/1 var(--mono); color:var(--accent); }
+section > .lead { margin:0 0 18px; max-width:72ch; color:var(--ink-2); }
+h3 { margin:26px 0 10px; font-size:16px; font-weight:650; }
+p { margin:0 0 10px; }
+code { font:500 12.5px/1.4 var(--mono); background:var(--sunk); border-radius:5px; padding:1px 5px; color:var(--ink-2); }
+.st { display:inline-flex; align-items:center; font:600 11.5px/19px var(--sans); border-radius:var(--r-tag); padding:0 7px; white-space:nowrap; vertical-align:1px; }
+.st.now { background:var(--sunk); color:var(--muted); }
+.st.new { background:var(--accent-soft); color:var(--accent); }
+.st.tbd { background:var(--warn-soft); color:var(--warn); }
+.st.ok { background:var(--ok-soft); color:var(--ok); }
+.st.bug { background:var(--info-soft); color:var(--info); }
+.card { background:var(--surface); border-radius:var(--r-card); box-shadow:0 0 0 1px var(--line); padding:18px; min-width:0; }
+.grid2 { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap:16px; }
+.cap { font-size:13px; color:var(--muted); margin-top:10px; }
+.decided { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap:12px; }
+.decided div { background:var(--surface); border-radius:var(--r-item); box-shadow:0 0 0 1px var(--line); padding:12px 14px; font-size:13.5px; color:var(--ink-2); }
+.decided b { display:block; color:var(--ink); font-size:14.5px; margin-bottom:2px; }
+.tbl { overflow-x:auto; background:var(--surface); border-radius:var(--r-card); box-shadow:0 0 0 1px var(--line); }
+table { border-collapse:collapse; width:100%; font-size:13.5px; min-width:760px; }
+table.narrow { min-width:560px; }
+th, td { text-align:left; vertical-align:top; padding:10px 14px; border-bottom:1px solid var(--line-soft); }
+th { font-size:12px; font-weight:600; color:var(--muted); background:var(--surface-2); white-space:nowrap; }
+tr:last-child td { border-bottom:0; }
+td.n { font:600 12px/1.5 var(--mono); color:var(--accent); white-space:nowrap; }
+td .was { display:block; margin-top:4px; font-size:12.5px; color:var(--muted); }
+td.num { font-variant-numeric:tabular-nums; font-family:var(--mono); font-size:12.5px; white-space:nowrap; }
+pre { margin:0; background:var(--sunk); border-radius:var(--r-item); padding:14px 16px; overflow-x:auto; font:500 12.5px/1.6 var(--mono); color:var(--ink-2); font-variant-numeric:tabular-nums; }
+pre .c { color:var(--faint); }
+pre .h { color:var(--accent); font-weight:600; }
+pre .k { color:var(--info); }
+.flow ol { margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:8px; }
+.flow li { display:grid; grid-template-columns:76px 1fr; gap:10px; font-size:13.5px; color:var(--ink-2); }
+.flow li .who { font:600 12px/22px var(--mono); color:var(--faint); }
+.flow li.m .who { color:var(--accent); }
+.flow li.c .who { color:var(--info); }
+.flow h4 { margin:0 0 12px; font-size:15px; display:flex; gap:8px; align-items:center; }
+.tree { font:500 13px/1.75 var(--sans); color:var(--ink-2); margin:0; padding:0; list-style:none; }
+.tree ul { list-style:none; margin:0; padding-left:22px; border-left:1px dashed var(--line); }
+.tree .i { font:600 11.5px/1 var(--mono); color:var(--accent); margin-right:6px; }
+.tree .k { font:600 11px/1 var(--mono); color:var(--info); background:var(--info-soft); border-radius:4px; padding:2px 5px; margin-right:6px; }
+.tree .q { color:var(--muted); }
+.qs { display:flex; flex-direction:column; gap:12px; }
+.q { background:var(--surface); border-radius:var(--r-card); box-shadow:0 0 0 1px var(--line); padding:16px 18px; }
+.q h4 { margin:0 0 6px; font-size:15.5px; }
+.q h4 .rid { font:600 12px/1 var(--mono); color:var(--warn); margin-right:8px; }
+.q p { font-size:13.5px; color:var(--ink-2); }
+.q ul { margin:6px 0 0; padding-left:20px; font-size:13.5px; color:var(--ink-2); }
+.q li.rec::marker { color:var(--accent); }
+.q li.rec b { color:var(--accent); }
+ol.plan { margin:0; padding-left:22px; display:flex; flex-direction:column; gap:8px; font-size:14px; color:var(--ink-2); }
+ol.plan b { color:var(--ink); }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior:auto !important; } }
+</style>
+
+<div class="wrap">
+<header class="top">
+  <span class="crumb">docs/artifact/分块初始化 · 2026-11-26 · Q1–Q9 已定,在做</span>
+  <h1>分块初始化</h1>
+  <p>家长放进来一本新课本 PDF,交给编程助手(通常是 Codex)从头到尾出整册的分块:一页一份 JSON,孩子点哪块念哪块、老师说「看这里」找得到。以后要改,家长在工作台上改。这份写编程助手读什么、写什么、怎么分,以及 id、页码、协议怎么定。</p>
+  <p>技能 cotutor-textbook 现在做的是另一件事:在规则出的草稿上一课一课修,先问家长再动手。这里提议把它改成整册初始化。</p>
+  <div class="legend"><span class="st now">现状</span><span class="st new">提议</span><span class="st tbd">待定</span><span class="st ok">已定</span><span class="st bug">要先修</span> 编号:A 流程、D 页面数据、F 读 PDF、P 协议、K 怎么分、S 技能、Q 待讨论</div>
+</header>
+
+<nav class="toc"><div class="row">
+  <a href="#decided"><b>0</b>已定的</a>
+  <a href="#now"><b>·</b>现在差在哪</a>
+  <a href="#flow"><b>A</b>流程</a>
+  <a href="#data"><b>D</b>页面数据</a>
+  <a href="#pdf"><b>F</b>读 PDF</a>
+  <a href="#proto"><b>P</b>协议</a>
+  <a href="#kid"><b>K</b>怎么分</a>
+  <a href="#skill"><b>S</b>技能</a>
+  <a href="#q"><b>Q</b>待讨论</a>
+  <a href="#plan"><b>→</b>先后与影响面</a>
+</div></nav>
+
+<section id="decided">
+  <h2><span class="id">0</span>已定的</h2>
+  <p class="lead">2026-11-26 家长审技能时说的(原话在 <code>docs/wip/分块的使用反馈.md</code>),下面照这些写。</p>
+  <div class="decided">
+    <div><b>输入 PDF,输出分块</b>一本学科 PDF 进去,整册一页一份分块 JSON 出来。</div>
+    <div><b>初始化是主路</b>技能管从头出。修改在工作台上调。</div>
+    <div><b>给别的模型调</b>技能的读者是编程助手,家长多半用 Codex。</div>
+    <div><b>id 照印的页码</b>不照 PDF 的第几页。页码重复要警告;封面、封底这类页做标记、另外处理。</div>
+    <div><b>孩子的角度</b>块是孩子会点、会问的东西。粒度不用太细。</div>
+    <div><b>习题 = 标题 + 内容</b>「读一读,记一记。」这种指令句是题的标题,下面是内容。</div>
+    <div><b>记字号</b>字号(和字体)不同多半是种类不同,记下来给模型和检查用。</div>
+    <div><b>和上一页的关系</b>一页第一块要看是不是接着上一页。</div>
+    <div><b>叫法</b>照书上的号;没号的从上往下数。</div>
+    <div><b>Q1–Q9 定了</b>Q9 选 B:初始化不写答案、不写给老师的话;别的照推荐。</div>
+  </div>
+</section>
+
+<section id="now">
+  <h2><span class="id">·</span>现在差在哪</h2>
+  <p class="lead">拿 ray 那三本(人教统编语文二上、人教数学二上、广东版科学二上)规则出的分块对着页看。</p>
+  <div class="tbl"><table>
+    <thead><tr><th>看到的</th><th>为什么</th><th>这份里管它的</th></tr></thead>
+    <tbody>
+      <tr><td>数学印的第 1 页(PDF 第 6 页)只有两块:课题和一整块「例 1」</td><td>规则只认例几、做一做、练一练这些栏目,题里的几问、人物说的话不拆</td><td>K3</td></tr>
+      <tr><td>语文印的第 4 页有 4 块都叫「3」</td><td>那是「注意加点的词」的着重号:3.5 号的 <code>KentenGeneric</code> 字体,文字层里是字符「3」,被当成一行字</td><td>F1</td></tr>
+      <tr><td>「灌溉田地发动机器淹没庄稼冲毁房屋」连成一串</td><td>拼行时没把大字距当空格</td><td>F2</td></tr>
+      <tr><td>印的第 12 页《梅花》没有块</td><td>规则出了「日积月累」这一栏,没往里拆</td><td>K2</td></tr>
+      <tr><td>「① 本文选自……」成了一块 <code>other</code></td><td>没有「注释」这一种</td><td>P8</td></tr>
+      <tr><td>块 id 是 <code>6-19</code>(这一课从 PDF 第 6 页起、第 19 块)</td><td>id 照课和 PDF 页起,孩子、家长、模型都对不上书</td><td>P4</td></tr>
+      <tr><td>索引 <code>dd7a…json</code> 一个文件 1 MB,开发者也读不下去</td><td>它是运行时的缓存(每个字的坐标,给点字、拼音、点读),不是给人看的,但技能逼着模型从这类坐标里抄框</td><td>D、P6</td></tr>
+      <tr><td>技能第一步「跟家长说清多久,家长点头再动手」</td><td>按「家长对话、修一课」写的,不是给另一个模型一口气跑完的</td><td>S</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="flow">
+  <h2><span class="id">A</span>流程</h2>
+  <p class="lead">cotutor 只做量得准的事:读文字层、量格子、出页图、检查、存。哪几行是一块、是什么、叫什么,由模型看图看字定。</p>
+
+  <div class="grid2 flow">
+    <div class="card">
+      <h4><span class="st now">现状</span>改一课</h4>
+      <ol>
+        <li class="c"><span class="who">cotutor</span><span>第一次用到这一册时,规则整册出一份(<code>.cotutor/textbooks/zones/</code>)</span></li>
+        <li class="m"><span class="who">模型</span><span>和家长说要改哪几课、多久,等点头</span></li>
+        <li class="c"><span class="who">cotutor</span><span><code>pull --lesson</code>:草稿 + 候选(千分比的框)+ 页图</span></li>
+        <li class="m"><span class="who">模型</span><span>在草稿上改,从候选里抄框</span></li>
+        <li class="c"><span class="who">cotutor</span><span><code>check</code> → <code>preview</code> → <code>push</code> 进 vault</span></li>
+      </ol>
+    </div>
+    <div class="card">
+      <h4><span class="st new">提议</span>整册初始化</h4>
+      <ol>
+        <li class="c"><span class="who">cotutor</span><span><code>prep</code>:整册的 <code>book.md</code>,每页一份页面数据 + 页图(D)</span></li>
+        <li class="m"><span class="who">模型</span><span>先定整册:每页是什么页、页名、样式表各是什么(A2)</span></li>
+        <li class="m"><span class="who">模型</span><span>一课一课写分块,字行写行号,不抄坐标(P6)</span></li>
+        <li class="c"><span class="who">cotutor</span><span>一课写完就 <code>check</code> → <code>preview</code> → <code>push</code>,孩子马上能用;进度记下</span></li>
+        <li class="m"><span class="who">模型</span><span>全册完了交一份报告</span></li>
+      </ol>
+    </div>
+  </div>
+
+  <h3>规则</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>编号</th><th>规则</th><th></th></tr></thead>
+    <tbody>
+      <tr><td class="n">A1</td><td><code>cotutor textbook prep &lt;册名或 PDF&gt;</code> 出工作目录 <code>.cotutor/zones-work/&lt;册名&gt;/</code>:<code>book.md</code>、每页 <code>&lt;页名&gt;.md</code>(页面数据)与 <code>&lt;页名&gt;.png</code>(页图)、<code>progress.json</code>。重跑不动已写的分块,只补缺的。<span class="was">替掉现在的 <code>pull</code>。</span></td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">A2</td><td>模型先过整册:照 <code>book.md</code> 和页图核对每页的种类与页名(D1),给样式表的每一种写上用途(「宋 16 = 习题的指令」),写进工作目录的 <code>book.json</code>。后面每页照这张表认种类。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">A3</td><td>一课一课做(目录上最里一层;目录、封面这些页自己一组)。一课里先读这几页的页面数据和页图,再写 <code>&lt;页名&gt;.json</code>。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">A4</td><td>一课写完:<code>check</code> 干净、<code>preview</code> 看过,<code>push --lesson</code> 进 vault。<code>progress.json</code> 记哪课做完了。断了重跑 <code>prep</code> 再接着做没做完的课。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">A5</td><td>不对话也能跑:<code>codex exec --cd &lt;workspace&gt; "用 cotutor-textbook 把 教材/数学二年级上册-人教版.pdf 分块"</code>。技能里不留「等家长点头」。要装东西(poppler)才停下说。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">A6</td><td>报告:做了哪几课几页、用了多久、check 结果、写成备注的没把握的地方、页码警告。</td><td><span class="st new">提议</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="data">
+  <h2><span class="id">D</span>页面数据</h2>
+  <p class="lead">模型读的东西:一册一份 <code>book.md</code>,一页一份 <code>&lt;页名&gt;.md</code>。里面就是你说的那几样:页码、纵坐标、字号(和字体)、离上一行多远。都是 cotutor 从文字层量的,模型不用自己猜。</p>
+
+  <h3>D1 · 页码对照与页名</h3>
+  <p>页名就是印的页码。没印页码的页照它是什么页起名。三本书都核过:印的页码没有重复;没页码的语文、数学是前 5 页和最后几页,科学还有单元页。</p>
+  <pre><span class="c"># book.md(节选,科学二上)</span>
+<span class="h">## 页</span>
+PDF   页名      种类     说明
+1     封面      封面
+2     扉页      扉页
+3     版权      版权
+4     目录-1    目录
+5     目录-2    目录
+6     1         单元页   <span class="k">页上没印,照第 7 页的 2 往前推</span>
+7     2         正文     第1课 认识空气
+…
+22    17        单元页   <span class="k">推出来的</span>
+70    后记      后记
+<span class="h">## 警告</span>
+（无）  <span class="c"># 页码重复、往回走、跳号写在这里,模型在报告里转述</span></pre>
+  <div class="tbl" style="margin-top:12px"><table>
+    <thead><tr><th>编号</th><th>规则</th><th></th></tr></thead>
+    <tbody>
+      <tr><td class="n">D1.1</td><td>页名 = 印的页码(<code>4</code>)。读不到页码但前后两页连得上的,往前或往后推,标「推出来的」(科学的单元页)。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">D1.2</td><td>没页码的页照种类起名:<code>封面</code> <code>扉页</code> <code>版权</code> <code>目录-1</code> <code>后记</code> <code>封底</code>,同一种第二页加 <code>-2</code>;认不出的叫 <code>无页码-3</code>(这本书第 3 张没页码的页)。种类由 prep 先猜,模型在 A2 改。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">D1.3</td><td>印的页码重复、往回走、跳号都列进「警告」,check 和报告都说;重复的第二页页名加 <code>′</code>(<code>12′</code>),不挡用。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">D1.4</td><td>封面、扉页、版权、后记、封底只记种类、不分块(<code>zones: []</code>)。目录照现在点目录那套(<code>tocEntries</code>)。</td><td><span class="st new">提议</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>D2 · 样式表</h3>
+  <p>一种样式 = 字体 × 字号。只看字号不够:语文印的第 4 页,习题的指令和下面的词都是 16 号,一个宋体、一个楷体。文字层里的字体名 <code>g_d0_f10</code> 是一页一页起的编号,同一种宋体 16 号在别的页叫 <code>f33</code>、<code>f104</code>、<code>f151</code>、<code>f163</code>。PDF 里存着真字体名(去掉 6 个字母的子集前缀就稳定了),下表是整册数出来的。</p>
+  <div class="grid2">
+    <div class="tbl"><table class="narrow">
+      <thead><tr><th>语文二上的样式</th><th>字数</th><th>页</th><th>例子</th><th>模型写的用途</th></tr></thead>
+      <tbody>
+        <tr><td>楷 18</td><td class="num">9878</td><td class="num">92</td><td>池塘里有一群小蝌蚪</td><td>课文正文</td></tr>
+        <tr><td>楷 16</td><td class="num">4289</td><td class="num">58</td><td>披着碧绿的衣裳</td><td>习题内容</td></tr>
+        <tr><td>宋 16</td><td class="num">2340</td><td class="num">48</td><td>分角色朗读课文。</td><td>习题指令</td></tr>
+        <tr><td>仿 10.5</td><td class="num">1925</td><td class="num">60</td><td>① 本文作者… / 我发现这些加点</td><td>注释、泡泡</td></tr>
+        <tr><td>黑 16</td><td class="num">173</td><td class="num">27</td><td>识字加油站</td><td>园地栏目名</td></tr>
+        <tr><td>楷 27.5</td><td class="num">111</td><td class="num">27</td><td>小蝌蚪</td><td>课题</td></tr>
+        <tr><td>楷 24</td><td class="num">74</td><td class="num">17</td><td>梅花</td><td>诗题</td></tr>
+        <tr><td>着重号 3.5</td><td class="num">130</td><td class="num">14</td><td>3</td><td>加点(F1)</td></tr>
+        <tr><td>拼音 10</td><td class="num">19136</td><td class="num">93</td><td>—</td><td>注音</td></tr>
+      </tbody>
+    </table></div>
+    <div class="tbl"><table class="narrow">
+      <thead><tr><th>数学二上的样式</th><th>字数</th><th>页</th><th>例子</th><th>模型写的用途</th></tr></thead>
+      <tbody>
+        <tr><td>楷 16</td><td class="num">8991</td><td class="num">98</td><td>把下面的气球分类。</td><td>题、问</td></tr>
+        <tr><td>楷 12</td><td class="num">3606</td><td class="num">78</td><td>我按形状分。</td><td>人物的话、图里的字</td></tr>
+        <tr><td>楷 14</td><td class="num">805</td><td class="num">26</td><td>类别</td><td>表头</td></tr>
+        <tr><td>准圆 18</td><td class="num">223</td><td class="num">38</td><td>分类与整理</td><td>课题</td></tr>
+        <tr><td>准圆 14</td><td class="num">161</td><td class="num">40</td><td>做一做</td><td>栏目名</td></tr>
+        <tr><td>数字粗 14</td><td class="num">—</td><td class="num">—</td><td>1</td><td>例题号</td></tr>
+        <tr><td>数字 10.5</td><td class="num">207</td><td class="num">101</td><td>55</td><td>页码</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+  <p class="cap">字体简称:楷 = FZKTRJK/FZKTK,宋 = FZSSK,仿 = FZFSK,黑 = FZHTK,准圆 = FZZHUNYSK,拼音 = HanyuXi-JZ,着重号 = KentenGeneric。用 pdf.js 开 <code>fontExtraProperties</code> 读的,2026-11-26 实测。prep 出简称,原名附在 book.md 里。</p>
+
+  <h3>D3 · 一页的页面数据</h3>
+  <p>一行一条:行号、离页顶多远、缩进、样式、离上一行的空、字。下面是语文印的第 4 页(PDF 第 9 页)按提议出的样子,数是实测的。</p>
+  <pre><span class="c"># 4.md</span>
+<span class="h">页 4</span> · PDF 第 9 页 · 正文 · 课:1 小蝌蚪找妈妈(印的 2–4)
+上一页最后一行:楷 28「成 成」(写字栏的格里)  <span class="k">不是正文,这一页从新的一块起</span>
+<span class="c"># 单位都是 pt,离页顶从裁掉水印后的页顶算;空 = 这一行顶 − 上一行底,负的是并排</span>
+行    离顶  缩进  样式      空    字
+L0     49   65   宋 16      —    分角色朗读课文。
+L1     90   65   宋 16     25    小蝌蚪是怎样长成青蛙的？按顺序把下面的图片连起
+L2    120   65   宋 16     14    来，再讲一讲小蝌蚪找妈妈的故事。
+      <span class="c">── 空 249:图 I0 [60,140 → 455,365]</span>
+L3    385   65   宋 16    249    读一读，注意加点的词。
+L4    421   65   楷 16     20    披〈着〉碧绿的衣裳 ␣ 鼓〈着〉大大的眼睛      <span class="k">两截:L4.1 L4.2</span>
+L5    444  348   仿 10.5   —     我发现这些加点 / 的词是表示动作的。     <span class="k">右边并排</span>
+L6    451   65   楷 16      9    露〈着〉雪白的肚皮 ␣ 甩〈着〉长长的尾巴
+L7    498   65   宋 16     31    读一读，记一记。
+L8    531   65   楷 16     17    脑袋 ␣ 口袋 ␣ 袋子 ␣ 袋鼠
+L9    561   65   楷 16     14    快活 ␣ 生活 ␣ 活动 ␣ 活力
+L10   591   65   楷 16     14    欢迎 ␣ 迎接 ␣ 迎风 ␣ 迎面
+<span class="c"># 注音:L4 碧 bì 裳 shang;L8 鼠 shǔ;L10 接 jiē</span>
+<span class="h">能写的格</span>  （无）
+<span class="h">表格</span>      （无）</pre>
+  <div class="tbl" style="margin-top:12px"><table>
+    <thead><tr><th>编号</th><th>规则</th><th></th></tr></thead>
+    <tbody>
+      <tr><td class="n">D3.1</td><td>纵坐标、缩进、字号、空都用 pt。和字号同一个单位,空 25 对 16 号字就是一行半,模型一眼能比。页眉的水印和页底那行裁掉以后从顶算(同 <code>bookCut</code>)。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">D3.2</td><td>页头写「上一页最后一行」:样式、字、收没收句(句号、问号、叹号、引号收尾)。模型判断这一页第一块是不是接着上一页(P5)。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">D3.3</td><td>一行里空出一个字宽以上写 <code>␣</code>,隔开的每一截有自己的号(<code>L4.1</code>),一截能单独成块。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">D3.4</td><td>加点的字用 〈〉 括起来(F1)。注音不进字里,单列一行「注音」,点读和念法照旧从索引取。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">D3.5</td><td>并排的小字(泡泡、图里的字)单独一行,标「并排」,不打断旁边那一列的空。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">D3.6</td><td>页上的图只记位置(画图指令里图的变换矩阵,不解图),写成空里的一行「图 I0」。模型认插图块不用自己量。</td><td><span class="st tbd">待核实</span></td></tr>
+      <tr><td class="n">D3.7</td><td>能写的格、表格、小方框照现在的候选列(<code>C0…</code>、<code>T0…</code>),写成一张表,不再另出 <code>candidates.json</code>。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">D3.8</td><td>同一份数据也写一份 <code>&lt;页名&gt;.data.json</code>,模型写脚本量图时直接读。</td><td><span class="st new">提议</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>D4 · 索引不算协议</h3>
+  <p><code>.cotutor/textbooks/&lt;指纹&gt;.json</code> 照旧是运行时的缓存:每个字的框给点字、拼音、点读用,一整册一个文件,读得快。它不给人看、不给模型看,格式随索引版本变,谁也不该依赖。模型要的东西都在页面数据里,一页一份。<span class="st new">提议</span></p>
+</section>
+
+<section id="pdf">
+  <h2><span class="id">F</span>读 PDF 要先修的</h2>
+  <p class="lead">这三件和走不走新流程无关,规则出的那份也受益。改了索引版本加一,规则整册重出。</p>
+  <div class="tbl"><table>
+    <thead><tr><th>编号</th><th>改什么</th><th></th></tr></thead>
+    <tbody>
+      <tr><td class="n">F1</td><td>着重号:字体 <code>KentenGeneric</code> 的字不成行,记到正上方那个字上(字带 <code>dot</code>)。语文二上 14 页 130 个。老师从此知道「注意加点的词」点的是哪几个字。<span class="was">现在是一行一个「3」,规则把它当成一块(印的第 4 页 4 块都叫「3」)。</span></td><td><span class="st bug">要先修</span></td></tr>
+      <tr><td class="n">F2</td><td>空格:一行里两个字之间空出一个字宽以上,拼字时留一个空格;念法(<code>say</code>)里换成顿号。<span class="was">「灌溉田地发动机器淹没庄稼冲毁房屋」→「灌溉田地 发动机器 淹没庄稼 冲毁房屋」。</span></td><td><span class="st bug">要先修</span></td></tr>
+      <tr><td class="n">F3</td><td>字体记真名(去掉子集前缀),不记 pdf.js 的页内编号。<span class="was">现在 <code>f</code> 是 <code>g_d0_f17</code>,换一页同一种字就换名字;规则分自然段时为这个绕了一圈(「一页上压根没有那种字体名,认同字号里字最多的」)。</span></td><td><span class="st bug">要先修</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="proto">
+  <h2><span class="id">P</span>协议</h2>
+  <p class="lead">要有协议,而且只有一份:分块文件。规则、编程助手、工作台三方写,运行时、工作台、check 三方读。形状照旧在 <code>src/schema/zones.ts</code>,这次补上版本、页名、id 规则和给模型的文档。</p>
+
+  <div class="grid2">
+    <div class="card">
+      <h4 style="margin:0 0 10px;font-size:15px"><span class="st new">提议</span> 模型写的(工作目录里的 4.json)</h4>
+<pre>{
+  "v": 3,
+  "page": "4",
+  "kind": "正文",
+  "zones": [
+    { "id": "4-1", "kind": "problem",
+      "label": "课后第 1 题", "rows": ["L0"] },
+    { "id": "4-2", "kind": "problem",
+      "label": "课后第 2 题", "rows": ["L1", "L2"],
+      "children": [
+        { "id": "4-2.1", "kind": "figure",
+          "label": "四张图", "image": "I0",
+          "regions": [ <span class="c">… 连线 …</span> ] } ] },
+    { "id": "4-3", "kind": "problem",
+      "label": "课后第 3 题", "rows": ["L3"],
+      "children": [
+        { "id": "4-3.1", "kind": "group", "label": "加点的词",
+          "rows": ["L4", "L6"] },
+        { "id": "4-3.2", "kind": "bubble", "label": "泡泡",
+          "rows": ["L5"] } ] },
+    { "id": "4-4", "kind": "problem",
+      "label": "课后第 4 题", "rows": ["L7"],
+      "children": [
+        { "id": "4-4.1", "kind": "group", "label": "第 1 行",
+          "rows": ["L8"] },
+        <span class="c">… 一行一块(Q7),4-4.2、4-4.3 …</span> ] }
+  ]
+}</pre>
+    </div>
+    <div class="card">
+      <h4 style="margin:0 0 10px;font-size:15px"><span class="st new">提议</span> push 以后存进 vault 的</h4>
+<pre>{
+  "v": 3,
+  "page": "4",
+  "pdf": 9,
+  "kind": "正文",
+  "zones": [
+    { "id": "4-1", "kind": "problem",
+      "label": "课后第 1 题",
+      "style": "宋 16",
+      "box": [125, 68.8, 370.4, 90.5],
+      "rows": [[125, 68.8, 370.4, 90.5]],
+      "say": "分角色朗读课文。" },
+    <span class="c">…</span>
+  ]
+}</pre>
+      <p class="cap">行号换成千分比的框(和现在一样存框不存行号:取字的规则一改,行号就错位);<code>box</code> 照行和小块撑出来;<code>style</code> 取这一块字最多的样式;<code>say</code> 没写的,照印的字补上(习题念指令句)。</p>
+    </div>
+  </div>
+
+  <h3>规则</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>编号</th><th>规则</th><th></th></tr></thead>
+    <tbody>
+      <tr><td class="n">P1</td><td>分块文件带版本 <code>v</code>。这次是 3;旧的(没写 <code>v</code>、照 PDF 页起名的)读进来就丢,规则重出,vault 里改过的在 doctor 说一句。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">P2</td><td>一页一份,文件名照页名:<code>004.json</code>(补成三位,好排序)、<code>封面.json</code>、<code>目录-1.json</code>。页头 <code>page</code>(页名)、<code>pdf</code>(PDF 第几页,push 时写)、<code>kind</code>(页的种类)。<code>book.json</code> 记页名和 PDF 页的对照、样式表。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">P3</td><td>页的种类:封面、扉页、版权、目录、单元页、正文、附录(识字表、写字表、词语表)、后记、封底、空白。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">P4</td><td>块的 id = <code>&lt;页名&gt;-&lt;第几块&gt;</code>,一页里最外一层从上往下数;小块 <code>&lt;外面那块&gt;.&lt;第几&gt;</code>(<code>4-3.2</code>)。作答区 <code>&lt;页名&gt;-格&lt;第几&gt;</code>(这一页第几个候选的格)。整册不重,孩子写过的字直接照作答区 id 存。工作台加一块给下一个没用过的号,不重排。<span class="was">现在是 <code>6-19</code>:课从 PDF 第 6 页起、第 19 块;作答区照 <code>&lt;PDF 页&gt;.&lt;id&gt;</code> 存。</span></td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">P5</td><td>接着上一页的:这一页第一块写 <code>"cont": "3-5"</code>(上一页那块的 id),叫法和种类跟它一样,读回来连成一块。<span class="was">现在两页上用同一个 id。</span></td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">P6</td><td>模型写的字行是行号(<code>L4</code>、一截 <code>L4.1</code>),不抄坐标;check 认行号,push 换成框。文字层没有的(插图、横线、圈画区)才写框:插图写 <code>image: "I0"</code>,别的照旧量页图、写 <code>src: "measured"</code>。「框不估」从此由格式管着。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">P7</td><td>块记 <code>style</code>(push 时算)。check 照样式表提醒对不上的:「宋 16 是习题指令,这块是 para」。工作台的字行那层也显示样式。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">P8</td><td>种类加两种:<code>note</code> 注释(页下注、题注,「① 本文选自……」),孩子点了不念,老师知道;<code>bubble</code> 泡泡(学习伙伴的话、数学里人物说的话),点了念。<code>other</code> 留着兜底,check 数一数,一课超过 3 块提醒。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">P9</td><td>习题(<code>problem</code>)的 <code>rows</code> 只放标题,也就是指令句;内容是它的小块,不用细分的一个 <code>group</code> 装下。点标题念指令,老师「看课后第 3 题」连着内容一起看。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">P10</td><td>叫法:书上印了号的照号(「例 1」「练一练第 3 题」);没号的从上往下数(「课后第 2 题」「第 3 段」);栏目照印的名字;注释「注①」。一课里不重名;小块只在同一块里不重名。</td><td><span class="st now">现状</span>+<span class="st new">注释</span></td></tr>
+      <tr><td class="n">P11</td><td>给模型的协议文档:技能的 <code>references/格式.md</code> 写每个字段、每种块、id、例子;另生成一份 JSON Schema(zod 4 的 <code>z.toJSONSchema</code>,<code>pnpm run gen:skills</code> 出),模型能自己校验。</td><td><span class="st new">提议</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="kid">
+  <h2><span class="id">K</span>从孩子的角度怎么分</h2>
+  <p class="lead">一块 = 孩子会单独点着说「念给我听」、或老师会说「看这里」的东西。分到这里就停。</p>
+
+  <h3>K1 · 粒度</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>编号</th><th>规则</th><th></th></tr></thead>
+    <tbody>
+      <tr><td class="n">K1.1</td><td>不再往下拆的:孩子不会单独点的(一行里并排的几个短语、一个词)、拆了老师也不会单独叫的。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">K1.2</td><td>要拆的:一题里有几问的,一问一块(数学最常见);一首诗一句一块(孩子跟着读);诗、泡泡、注释各自一块,不混进旁边的题。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">K1.3</td><td>空出一大截(1.5 行以上)多半换了内容;样式变了多半换了种类;两条都没有的,多半还是同一块。模型照 D3 的「空」和「样式」两列定,拿不准再看图。</td><td><span class="st new">提议</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>K2 · 语文</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>页上的</th><th>种类</th><th>叫法</th><th>点了</th></tr></thead>
+    <tbody>
+      <tr><td>课题(连课号)</td><td><code>title</code></td><td>课名</td><td>点读那套</td></tr>
+      <tr><td>自然段;诗一节</td><td><code>para</code></td><td>「第 3 段」「第 2 节」</td><td>点读那套</td></tr>
+      <tr><td>认字栏、写字栏</td><td><code>group</code></td><td>「认字」「写字」</td><td>认字一个字一个字念</td></tr>
+      <tr><td>课后题、园地里的题</td><td><code>problem</code> + 内容</td><td>「课后第 2 题」</td><td>标题念指令,内容念内容</td></tr>
+      <tr><td>园地的栏目(识字加油站、日积月累……)</td><td><code>column</code></td><td>印的名字</td><td>不念,点到里面的块</td></tr>
+      <tr><td>栏目里的诗(《梅花》)</td><td><code>group</code>:诗题 <code>title</code> + 一句一块 <code>para</code></td><td>「《梅花》」「第 2 句」</td><td>念整首 / 念这一句</td></tr>
+      <tr><td>泡泡</td><td><code>bubble</code></td><td>「泡泡」</td><td>念</td></tr>
+      <tr><td>页下注、题注</td><td><code>note</code></td><td>「注①」</td><td>不念</td></tr>
+      <tr><td>插图</td><td><code>figure</code></td><td>「四张图」</td><td>不念;只在题要看图时加</td></tr>
+    </tbody>
+  </table></div>
+  <div class="grid2" style="margin-top:16px">
+    <div class="card">
+      <h4 style="margin:0 0 10px;font-size:15px">印的第 7 页(PDF 第 12 页)</h4>
+      <ul class="tree">
+        <li><span class="i">7-1</span><span class="k">group</span>认字 <span class="q">汽、越、温……</span></li>
+        <li><span class="i">7-2</span><span class="k">group</span>写字 <span class="q">16 个格</span></li>
+        <li><span class="i">7-3</span><span class="k">problem</span>课后第 1 题 <span class="q">朗读课文。说说……</span></li>
+        <li><span class="i">7-4</span><span class="k">problem</span>课后第 2 题 <span class="q">读一读,比一比……</span>
+          <ul><li><span class="i">7-4.1</span><span class="k">group</span>句子 <span class="q">◇ 三句,加点的字记着</span></li></ul></li>
+        <li><span class="i">7-5</span><span class="k">problem</span>课后第 3 题 <span class="q">读一读,记一记。</span>
+          <ul><li><span class="i">7-5.1</span><span class="k">group</span>词语 <span class="q">灌溉田地、发动机器、淹没庄稼、冲毁房屋</span></li></ul></li>
+        <li><span class="i">7-6</span><span class="k">note</span>注① <span class="q">本册教科书在非全文注音时……</span></li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4 style="margin:0 0 10px;font-size:15px">印的第 12 页(PDF 第 17 页)</h4>
+      <ul class="tree">
+        <li><span class="i">12-1</span><span class="k">column</span>字词句运用 <span class="q">cont:接着印的第 11 页那一栏</span>
+          <ul><li><span class="i">12-1.1</span><span class="k">group</span>句子 <span class="q">◇ 平常我在池子里睡觉……</span></li></ul></li>
+        <li><span class="i">12-2</span><span class="k">column</span>书写提示
+          <ul><li><span class="i">12-2.1</span><span class="k">group</span>写字 <span class="q">海、作、都、别</span></li>
+          <li><span class="i">12-2.2</span><span class="k">bubble</span>泡泡 <span class="q">有的字左边窄……</span></li>
+          <li><span class="i">12-2.3</span><span class="k">bubble</span>泡泡 <span class="q">写字时要保持……</span></li></ul></li>
+        <li><span class="i">12-3</span><span class="k">column</span>日积月累
+          <ul><li><span class="i">12-3.1</span><span class="k">group</span>《梅花》
+            <ul><li><span class="i">12-3.1.1</span><span class="k">title</span>梅花 [宋] 王安石</li>
+            <li><span class="i">12-3.1.2</span><span class="k">para</span>第 1 句 <span class="q">墙角数枝梅,</span></li>
+            <li><span class="q">…… 一句一块,共 4 句</span></li></ul></li></ul></li>
+      </ul>
+    </div>
+  </div>
+  <p class="cap">「① 本文选自……」这种在出版上叫脚注(页下注);注在课题上、说明出处的又叫题注。这里都归 <code>note</code>。</p>
+
+  <h3>K3 · 数学</h3>
+  <div class="grid2">
+    <div class="card">
+      <h4 style="margin:0 0 10px;font-size:15px">印的第 1 页(PDF 第 6 页)</h4>
+      <ul class="tree">
+        <li><span class="i">1-1</span><span class="k">title</span>一 分类与整理</li>
+        <li><span class="i">1-2</span><span class="k">example</span>例 1 <span class="q">把下面的气球分类。</span>
+          <ul><li><span class="i">1-2.1</span><span class="k">figure</span>气球</li>
+          <li><span class="i">1-2.2</span><span class="k">bubble</span>「我按形状分。」</li>
+          <li><span class="i">1-2.3</span><span class="k">bubble</span>「我按颜色分。」</li>
+          <li><span class="i">1-2.4</span><span class="k">sub</span>第 1 问 <span class="q">按形状分类,每种气球各有几个?将结果表示出来。</span>
+            <ul><li><span class="i">1-2.4.1</span><span class="k">bubble</span>「我先分再数。」</li>
+            <li><span class="i">1-2.4.2</span><span class="k">bubble</span>「我边数边画。」</li>
+            <li><span class="i">1-2.4.3</span><span class="k">figure</span>分好的气球 <span class="q">3 个、4 个、5 个</span></li>
+            <li><span class="i">1-2.4.4</span><span class="k">figure</span>画圈表示 <span class="q">一列一种</span></li>
+            <li><span class="i">1-2.4.5</span><span class="k">bubble</span>「我这样表示分的结果。」</li></ul></li>
+          <li><span class="i">1-2.5</span><span class="k">sub</span>第 2 问 <span class="q">哪种气球最多?哪种最少?</span></li>
+          <li><span class="i">1-2.6</span><span class="k">sub</span>第 3 问 <span class="q">按颜色分,你是怎样表示分的结果的?</span></li></ul></li>
+      </ul>
+      <p class="cap">现在规则只出 1-1 和一整块 1-2。</p>
+    </div>
+    <div class="card">
+      <h4 style="margin:0 0 10px;font-size:15px">数学的几条</h4>
+      <ul style="margin:0;padding-left:20px;font-size:13.5px;color:var(--ink-2);display:flex;flex-direction:column;gap:6px">
+        <li>例题、做一做、练一练的号照印的;一题里几问照「第几问」从上往下数,印了(1)(2)的照印的。</li>
+        <li>人物说的话都是泡泡,挂在它说的那一问下面;说在两问中间的挂前一问。</li>
+        <li>图里的数(「3 个」)不成块,算在那张图里。</li>
+        <li>一排算式、一组口诀一组一块(现在的规范照旧)。</li>
+        <li>初始化不写答案和给老师的话(Q9),老师照题面现算。</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>K4 · 科学</h3>
+  <p>栏目(问题与想法 1、探索与实践 1……)、段、记录表、安全提示照现在的规范,泡泡和注释同语文。这次没逐页核,拿 Codex 试跑一单元再补。<span class="st tbd">待核实</span></p>
+</section>
+
+<section id="skill">
+  <h2><span class="id">S</span>技能 cotutor-textbook</h2>
+  <p class="lead">读者换成另一个模型,事情换成整册初始化。修改那半交给工作台。</p>
+  <div class="tbl"><table>
+    <thead><tr><th>编号</th><th>规则</th><th></th></tr></thead>
+    <tbody>
+      <tr><td class="n">S1</td><td>描述改成「给一本课本 PDF 出整册分块」。家长说「把新放进来的数学课本分块」、或者用 <code>codex exec</code> 直接叫,都走它。改一课的说法(「第 3 题叫错了」)指到工作台。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">S2</td><td>步骤照 A1–A6:prep → 过整册 → 一课一课写、check、preview、push → 报告。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">S3</td><td>铁律留:框不估(P6 之后就是「字行写行号」)、不直接写 vault、叫法照印的号、念法照印的念、不写答案和给老师的话(Q9)、不改 PDF 和 cotutor.json、装东西先停下说。</td><td><span class="st now">现状</span></td></tr>
+      <tr><td class="n">S4</td><td>删掉:「先说多久,家长点头再动手」、「改一课」那节、<code>pull</code> 命令(<code>prep</code> 顶上;要重做一课 <code>prep --lesson</code>)。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">S5</td><td>三科的规范(<code>references/语文.md</code> 等)照 K 重写:从孩子会点什么起,每科配一页的样例(树 + JSON)。</td><td><span class="st new">提议</span></td></tr>
+      <tr><td class="n">S6</td><td>工作目录不清:<code>progress.json</code> 和页面数据留着,下次重跑、查问题都要。推荐 Codex 的那句照旧(实测它量格子比直接看图准)。</td><td><span class="st new">提议</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="q">
+  <h2><span class="id">Q</span>待讨论</h2>
+  <div class="qs">
+    <div class="q"><h4><span class="rid">Q1</span>规则还留不留</h4>
+      <p>点读、「看」、给老师的页都照分块走,一本书没分块就什么都没有。</p>
+      <ul>
+        <li class="rec"><b>A 留着兜底(定了)</b>:没装编程助手的家、模型还没跑完的课照规则那份用。规则改出新协议(页名、id、cont、样式),F1–F3 修好。</li>
+        <li>B 删掉:没分块的书只铺页、能点读课文,别的等模型跑完。少一套要维护的,但新书放进来第一天什么都点不了。</li>
+      </ul></div>
+    <div class="q"><h4><span class="rid">Q2</span>模型从页面数据从头分,还是在规则那份上改</h4>
+      <p>11-25 实测:从规则草稿改一页 1 分多钟,从头标 3–4 分钟;但那时从头标要自己量框。改成写行号以后,从头分应该快很多。规则的错会把模型带偏(这次的「3」、例 1 一整块)。</p>
+      <ul>
+        <li class="rec"><b>A 从头分,规则那份不给模型看(定了)</b>。先拿《小蝌蚪找妈妈》(印的 1–4)和《分类与整理》两种各跑一遍,比时间和出入再定。</li>
+        <li>B 在规则那份上改:快,但带偏。</li>
+      </ul></div>
+    <div class="q"><h4><span class="rid">Q3</span>模型出的存哪</h4>
+      <ul>
+        <li class="rec"><b>A vault 的 <code>教材/.zones/&lt;指纹&gt;/</code>(定了)</b>:一整册要花一两个小时和不少 token,进备份;格式和 <code>.cotutor/textbooks/zones/</code> 一样。</li>
+        <li>B <code>.cotutor/textbooks/zones/</code>:和规则出的放一起,不备份,机器坏了要重跑。</li>
+      </ul></div>
+    <div class="q"><h4><span class="rid">Q4</span>作答区换 id,孩子以前写的字对不上</h4>
+      <ul>
+        <li class="rec"><b>A 不迁移(定了)</b>:照「历史不迁移」,旧的写过的字不显示。现在写过字的只有试用。</li>
+        <li>B 一次性对一遍:PDF 页 + 第几格 → 页名 + 第几格,能一一对上。</li>
+      </ul></div>
+    <div class="q"><h4><span class="rid">Q5</span>谁叫编程助手</h4>
+      <ul>
+        <li class="rec"><b>A 先只有技能和命令(定了)</b>:家长或替家长装的 agent 叫 Codex。doctor 看到 vault 里有没分块的课本时说一句怎么叫。</li>
+        <li>B 家长端放一个「分块」按钮,cotutor 自己起 <code>codex exec</code>:要管 Codex 装没装、登没登录、跑多久、花多少钱,放到以后。</li>
+      </ul></div>
+    <div class="q"><h4><span class="rid">Q6</span>页名和文件名</h4>
+      <ul>
+        <li class="rec"><b>A 文件 <code>004.json</code>,id 里写 <code>4-3</code>(定了)</b>:文件好排序,id 和书上一样。</li>
+        <li>B 文件也叫 <code>4.json</code>:更像书,排序要靠 book.json。</li>
+      </ul></div>
+    <div class="q"><h4><span class="rid">Q7</span>一组词拆到哪</h4>
+      <p>「读一读,记一记」三行,一行是一个字族(袋、活、迎)。</p>
+      <ul>
+        <li class="rec"><b>A 一行有自己意思的拆到行,并排的几个短语不拆(定了)</b>:袋那一行、活那一行各一块;「披着碧绿的衣裳 鼓着大大的眼睛」一块。</li>
+        <li>B 都不拆:内容一个 group,最粗。</li>
+      </ul></div>
+    <div class="q"><h4><span class="rid">Q8</span>习题的标题放哪</h4>
+      <ul>
+        <li class="rec"><b>A <code>problem</code> 的 rows 只放指令句,内容是小块(定了,P9)</b>:形状不变,只是规范。</li>
+        <li>B 加一个字段 <code>head</code> 放指令句,rows 放全部:多一个字段,运行时要认。</li>
+      </ul></div>
+    <div class="q"><h4><span class="rid">Q9</span>初始化时写不写给老师的话和答案</h4>
+      <ul>
+        <li>A 数学写答案,语文、科学只写开放题的备注。</li>
+        <li class="rec"><b>B 都不写(定了)</b>:分块只管块,不写 <code>teacher</code>;老师照题面现算。</li>
+      </ul></div>
+  </div>
+</section>
+
+<section id="plan">
+  <h2><span class="id">→</span>先后与影响面</h2>
+  <ol class="plan">
+    <li><b>F1–F3 读 PDF</b>:<code>src/memory/textbook-index.ts</code>、<code>textbook-pdf.ts</code>(字体真名、着重号、空格),索引版本 +1,规则重出。先过 <code>tests/textbook.test.ts</code>、<code>textbook-cells.test.ts</code>;拿三本真书逐课比改前改后。</li>
+    <li><b>P 协议 v3</b>:<code>src/schema/zones.ts</code>(v、页名、种类、cont、style、note、bubble、行号)、<code>src/memory/textbook-zones.ts</code>(读写、旧的读进来就丢)、<code>textbook-zones-rules.ts</code>(出新 id)、<code>src/chalk/kit/book.ts</code> 的 <code>zoneBlocks</code>(cont 连块)、作答区的键(runner 的 <code>CELL_ID</code>、<code>bookCellsOf</code>)、JSON Schema 生成。</li>
+    <li><b>D prep</b>:<code>src/app/cli/textbook.ts</code> 加 <code>prep</code>、去 <code>pull</code>;check 认行号、页名、样式;push 换框、写 <code>pdf</code> 和 <code>style</code>;<code>src/app/cli/commands.ts</code> 进表,过 <code>tests/textbook-cli.test.ts</code>、<code>main.test.ts</code>。</li>
+    <li><b>S 技能</b>:<code>skills/cotutor-textbook/</code> 重写,<code>tests/textbook-skill.test.ts</code> 跟着改,<code>pnpm run gen:skills</code>。</li>
+    <li><b>试跑</b>:Codex 跑语文第一单元、数学第一单元,记时间、出入,回头核 Q2、Q7,补 K4。</li>
+    <li><b>工作台跟上</b>:页名、新 id、cont、样式那层(<code>src/app/http/dev-zones.ts</code>、<code>src/ui/dev/zones-*.ts</code>),过 <code>tests/dev-zones.test.ts</code> 和 <code>probe-dev-zones.mjs</code>。</li>
+    <li><b>收尾</b>:定了的搬进 <code>docs/dev/课本.md</code>,这份删掉。</li>
+  </ol>
+</section>
+</div>

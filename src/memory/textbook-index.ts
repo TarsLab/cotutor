@@ -508,6 +508,41 @@ export function tickCells(p: Pick<PdfPage, 'items' | 'squares' | 'tables' | 'w' 
   return out;
 }
 
+/**
+ * 算式等号后面留出的空白(人教数学二上第 24 页「2×2=  3×1=」一排口算,等号后面不画框、不印括号,直接空着让孩子写):
+ * 一段字以 = 收尾,同一条基线上右边空出一个半字号以上(下一段字、页边),那里又没有已经认出的格,就在等号右边放一格填空,
+ * 宽到下一段字前面、最多三个半字号(够写两三位数),高同括号里的空。印了答案的(「5×1=5」)等号后面紧挨着字,不算;
+ * 等号后面紧挨着画了东西的(图「16÷4= 🌸」、画好的框,页的 marks、boxes、squares)不算;隔开一点的(说话气泡)截到它前面,还够写一个数就留。
+ * 接在别的格后面编号:前面的格的第几格(作答区的 id、一节课状态里 kid.cells 的键)不变
+ */
+export function equalsCells(p: Pick<PdfPage, 'items' | 'w' | 'marks' | 'boxes' | 'squares'>, known: readonly BookCell[]): BookCell[] {
+  const drawn = [...(p.marks ?? []), ...(p.boxes ?? []), ...(p.squares ?? [])];
+  const out: BookCell[] = [];
+  for (const it of p.items) {
+    if (!/[=＝]\s*$/.test(it.s)) continue;
+    const end = it.x + it.w, z = it.z;
+    const next = p.items.filter((o) => o !== it && Math.abs(o.y - it.y) < z * 0.5 && o.x > end - 1 && o.s.trim()).sort((a, c) => a.x - c.x)[0];
+    const room = (next ? next.x : p.w - 30) - end;
+    if (room < z * 1.5) continue;
+    const box = [end + z * 0.2, it.y - z * 0.9, end + Math.min(room - z * 0.3, z * 3.5), it.y + z * 0.2];
+    // 画了的东西挡在这一行:连等号一起盖住的是底板(印的第 23 页第 3 题那条黄底),不算;紧挨着等号的是图(「16÷4= 🌸」)或画好的框,不是空白;
+    // 隔开一点的(旁边的说话气泡)把格子截到它前面
+    const ex = end - z * 0.3, ey = it.y - z * 0.35;
+    let blocked = false;
+    for (const d of drawn) {
+      if (ex > d[0] && ex < d[2] && ey > d[1] && ey < d[3]) continue;
+      const h = Math.min(box[3], d[3]) - Math.max(box[1], d[1]);
+      if (h < (box[3] - box[1]) * 0.3 || d[2] <= box[0] || d[0] >= box[2]) continue;
+      if (d[0] <= box[0] + z * 0.5) { blocked = true; break; }
+      box[2] = Math.min(box[2], d[0] - 1);
+    }
+    if (blocked || box[2] - box[0] < z * 1.2) continue;
+    if ([...known, ...out].some((c) => c.x1 < box[2] && c.x2 > box[0] && c.y1 < box[3] && c.y2 > box[1])) continue;
+    out.push({ x1: r2(box[0]), y1: r2(box[1]), x2: r2(box[2]), y2: r2(box[3]), kind: 'blank' });
+  }
+  return out;
+}
+
 /** 整本:每页分行、读页码、认田字格和填空,读目录,自检 */
 /** 一册怎么分块:文件名带「数学」的是 math,带「科学」的是 science */
 export const layoutOf = (title: string): BookLayout => (title.includes('数学') ? 'math' : title.includes('科学') ? 'science' : 'prose');
@@ -519,7 +554,8 @@ export function buildBookIndex(raw: readonly PdfPage[], meta: { file: string; sh
     const old = [...bookCells(p.cells ?? []), ...blanks].sort((a, b) => (Math.abs(a.y1 - b.y1) > 3 ? a.y1 - b.y1 : a.x1 - b.x1));
     // 表格的格、小方框接在后面:田字格、填空的第几格(一节课状态里 kid.cells 的键)不变
     const tb = tableCells(p, blanks);
-    const cells = [...old, ...tb.cells, ...tickCells(p, old, layoutOf(meta.title))];
+    const ticked = [...old, ...tb.cells, ...tickCells(p, old, layoutOf(meta.title))];
+    const cells = [...ticked, ...equalsCells(p, ticked)];
     return { n: p.n, printed: printedOf(p), w: r2(p.w), h: r2(p.h), lines: pageLines(p, bad), ...(cells.length ? { cells } : {}), ...(tb.tables.length ? { tables: tb.tables } : {}) };
   });
   const toc = parseToc(raw);

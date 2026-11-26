@@ -6,7 +6,7 @@
 import { existsSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { bookCellsOf, bookRegions, bookSayZones, bookSheets, bookTarget, bookTeacherLines, bookZoneInk, sayZoneAt, zoneBlocks } from '../src/chalk/index.ts';
+import { bookCellsOf, bookReadTexts, bookRegions, bookSayZones, bookSheets, bookTarget, bookTeacherLines, bookZoneInk, sayZoneAt, zoneBlocks } from '../src/chalk/index.ts';
 import { bookPageNames } from '../src/memory/textbook-page-names.ts';
 import { ruleLessonZones, ruleZones } from '../src/memory/textbook-zones-rules.ts';
 import { bookZones, forgetZones, readZoneBook, ruleZonesDir, vaultZonesDir, writeZonePages } from '../src/memory/textbook-zones.ts';
@@ -53,6 +53,9 @@ const fz = ruleLessonZones(fish, 'prose');
   check('跨页的一段:下一页那一截 cont 指着上一页那块', para2.length === 2 && para2[0].id !== para2[1].id && para2[1].cont === para2[0].id && para2[0].id.startsWith('1-') && para2[1].id.startsWith('2-'), JSON.stringify(para2.map((z) => [z.id, z.cont])));
   const back = zoneBlocks(fish, two, 'prose').filter((b) => b.kind === 'para');
   check('读回来:cont 连成一段', back.length === 3 && back[1].refs.map((r) => r.n).join() === '2,2,3', JSON.stringify(back.map((b) => b.refs)));
+  // 舞台照孩子端那份摆点读的钮,服务端照全的那份合成声音:两边分的块和截要一样,不然页面不出声
+  const cut = (zps: ZonePage[]): string => JSON.stringify(bookReadTexts(fish, zoneBlocks(fish, zps, 'prose')));
+  check('孩子端那份:跨页的段照样连着,点读分的块和截同服务端', cut(two.map(zonesKidPage)) === cut(two), cut(two.map(zonesKidPage)));
   const sci = ruleZones(scienceIndexOf());
   check('样式:规则出的块记字最多的样式(字体 × 字号)', zs.some((z) => z.zones.some((y) => y.style && / \d/.test(y.style))) && sci.length > 0);
 }

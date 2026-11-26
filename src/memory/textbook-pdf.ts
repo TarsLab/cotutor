@@ -83,7 +83,7 @@ export async function readPdfPages(data: Uint8Array, opts: { cells?: boolean } =
       const page = await doc.getPage(n);
       const vp = page.getViewport({ scale: 1 });
       // 先读画图的指令:字体是这时候载进 commonObjs 的,后面取文字才认得出真名
-      let got: ReturnType<typeof opsCells> = { cells: [], boxes: [], tables: [], squares: [] };
+      let got: ReturnType<typeof opsCells> = { cells: [], boxes: [], tables: [], squares: [], marks: [] };
       if (opts.cells !== false) try { got = opsCells(await page.getOperatorList({ annotationMode: 0 }), lib.OPS as unknown as Record<string, number>, vp.transform); } catch { /* 画图的指令读不出:没有格子 */ }
       const tc = await page.getTextContent();
       const fonts = new Map<string, string>();
@@ -103,7 +103,7 @@ export async function readPdfPages(data: Uint8Array, opts: { cells?: boolean } =
         const [x, y] = vp.convertToViewportPoint(e, f);
         items.push({ s: it.str, f: font(it.fontName), x: Math.round(x * 100) / 100, y: Math.round(y * 100) / 100, z: Math.round(Math.hypot(a, b) * 100) / 100, w: Math.round(it.width * 100) / 100 });
       }
-      out.push({ n, w: vp.width, h: vp.height, items, ...(got.cells.length ? { cells: got.cells } : {}), ...(got.boxes.length ? { boxes: got.boxes } : {}), ...(got.tables.length ? { tables: got.tables } : {}), ...(got.squares.length ? { squares: got.squares } : {}) });
+      out.push({ n, w: vp.width, h: vp.height, items, ...(got.cells.length ? { cells: got.cells } : {}), ...(got.boxes.length ? { boxes: got.boxes } : {}), ...(got.tables.length ? { tables: got.tables } : {}), ...(got.squares.length ? { squares: got.squares } : {}), ...(got.marks.length ? { marks: got.marks } : {}) });
       page.cleanup();
     }
     return out;

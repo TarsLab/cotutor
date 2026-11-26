@@ -4,7 +4,7 @@
  * 真课本的核实见 docs/dev/课本.md;pdf.js 画图指令那一层在最后一段用手写的一页 PDF 真跑。
  */
 import { findBoxes, findCells, findTables, type CellGlyph, type CellPath } from '../src/memory/textbook-cells.ts';
-import { blankCells, bookCells, tableCells, tickCells } from '../src/memory/textbook-index.ts';
+import { blankCells, bookCells, equalsCells, tableCells, tickCells } from '../src/memory/textbook-index.ts';
 import { bookCellsOf, bookSheets } from '../src/chalk/index.ts';
 import type { BookPage, PdfItem } from '../src/schema/index.ts';
 import { check, done } from './_check.ts';
@@ -97,6 +97,22 @@ check('没有格的页:没有', bookCellsOf([{ ...page, cells: undefined }], she
   check('小方框(数学、语文):当填空', tickCells({ items, squares, tables, w: 520, h: 736 }, [], 'math').every((c) => c.kind === 'blank'));
 }
 
+// ——— 算式等号后面留出的空白(人教数学二上第 24 页一排口算) ———
+{
+  const it = (s: string, x: number, y = 300): PdfItem => ({ s, f: 'num', x, y, z: 16, w: s.length * 8 });
+  const row = [it('2×2=', 80), it('3×1=', 180), it('5×1=5', 280), it('4×3=', 380)];
+  const got = equalsCells({ items: row, w: 520 }, []);
+  check('等号后面空着:放一格填空,宽到下一段字前面、最多三个半字号;印了答案的不算', got.length === 3 && got.every((c) => c.kind === 'blank') && Math.abs(got[0].x1 - (112 + 3.2)) < 0.1 && got[0].x2 <= 180 && got[2].x2 - got[2].x1 <= 16 * 3.5, JSON.stringify(got));
+  check('等号后面已经认出格的(方框、括号)不重复', equalsCells({ items: row, w: 520 }, [{ x1: 113, y1: 285, x2: 150, y2: 303, kind: 'blank' }]).length === 2);
+  const flower: [number, number, number, number] = [114, 284, 132, 304];
+  check('等号后面紧挨着画了东西(「16÷4= 🌸」):不是空白', !equalsCells({ items: row, w: 520, marks: [flower] }, []).some((c) => c.x1 < 120));
+  const board: [number, number, number, number] = [70, 280, 175, 310];
+  check('连等号一起盖住的是底板,照样放格', equalsCells({ items: row, w: 520, marks: [board] }, []).some((c) => c.x1 < 120));
+  const bubble: [number, number, number, number] = [150, 280, 175, 310];
+  const cut = equalsCells({ items: row, w: 520, marks: [bubble] }, []).find((c) => c.x1 < 120);
+  check('隔开一点的(说话气泡):截到它前面', cut !== undefined && cut.x2 <= 149, JSON.stringify(cut));
+}
+
 // ——— 走真的 pdf.js:认格子读的是 pdf.js 画图指令的内部格式(constructPath 的参数),换了版本格式一变就一格也认不出、还不报错,这里盯着 ———
 {
   const { readPdfPages } = await import('../src/memory/textbook-pdf.ts');
@@ -130,6 +146,7 @@ check('没有格的页:没有', bookCellsOf([{ ...page, cells: undefined }], she
   check('真的 pdf.js:深灰的字是范字,红的是描红,第三格空着', got[0]?.ch === 'A' && !got[0]?.red && got[1]?.ch === 'A' && got[1]?.red === true && got[2] && !got[2].ch, JSON.stringify(got));
   check('真的 pdf.js:描边的线拼出一张 3×3 的表', page?.tables?.length === 1 && page.tables[0].length === 9 && Math.abs(page.tables[0][0].box[0] - 40) < 0.5 && Math.abs(page.tables[0][0].box[1] - 130) < 0.5, JSON.stringify(page?.tables));
   check('真的 pdf.js:描边的小方框收,填了颜色的不收', page?.squares?.length === 1 && Math.abs(page.squares[0][0] - 40) < 0.5 && Math.abs(page.squares[0][1] - 28) < 0.5, JSON.stringify(page?.squares));
+  check('真的 pdf.js:填了颜色的小方框记成画了东西的地方(marks)', (page?.marks ?? []).some((m) => Math.abs(m[0] - 100) < 0.5 && Math.abs(m[2] - 112) < 0.5), JSON.stringify(page?.marks));
   check('真的 pdf.js:字体记真名,去掉子集前缀(不是 pdf.js 的 g_d0_f1)', page?.items.length > 0 && page.items.every((i) => i.f === 'Helvetica'), JSON.stringify(page?.items.map((i) => i.f)));
   const [bare] = await readPdfPages(new TextEncoder().encode(pdf), { cells: false });
   check('cells: false 不读画图的指令:没有格子,字照读', !bare?.cells && bare?.items.length === page?.items.length, JSON.stringify(bare));

@@ -12,7 +12,8 @@
  * 一块能套小块(`children`),孩子点的时候落到最里面那一块;作答区、物件、答案照练习册的写法(./regions.ts)。
  * id 整册不重:块 `<页名>-<第几块>`(一页里最外一层从上往下数),小块 `<外面那块>.<第几>`(`4-3.2`),作答区 `<页名>-格<第几>`(这一页第几个候选的格)。
  * 一段、一道题跨两页:下一页那一截写 `cont: <上一页那块的 id>`,读回来连成一块(段号、题号是一课里数的)。旧版(没写 v、照 PDF 页起名的 p078.json)读进来就丢。
- * 孩子端只拿块的框、kind、label(书上印的号)、rows、作答区的框和种类;teacher、物件、答案不下发(zonesKidPage)。
+ * 孩子端只拿块的框、kind、label(书上印的号)、cont、rows、念法、作答区的框和种类;teacher、物件、答案不下发(zonesKidPage)。
+ * cont 少不得:舞台照下发的这份把课分成点读的几块,和服务端分得不一样(跨页的段断成两块),页面对不上就不出声。
  */
 import { z } from 'zod';
 import type { BookIndex } from './textbook.ts';
@@ -168,12 +169,12 @@ export function zonePageProblems(p: ZonePage): string[] {
   return out;
 }
 
-/** 给孩子端的一页:块的框、kind、label、rows,作答区的框和种类(格子的字照旧给,舞台开写字卡要);teacher、物件、答案、say 以外的都不下发 */
+/** 给孩子端的一页:块的框、kind、label、cont、rows、say,作答区的框和种类(格子的字照旧给,舞台开写字卡要);teacher、物件、答案不下发 */
 export function zonesKidPage(p: ZonePage): ZonePage {
   const region = (r: ZoneRegion): ZoneRegion => ({ id: r.id, kind: r.kind, label: '格', box: r.box, ...(r.tian ? { tian: true as const } : {}), ...(r.cell ? { cell: r.cell } : {}), ...(r.ch ? { ch: r.ch } : {}), ...(r.m ? { m: r.m } : {}) });
   const zone = (z: Zone): Zone => ({
     id: z.id, kind: z.kind, label: z.label, box: z.box,
-    ...(z.rows ? { rows: z.rows } : {}), ...(z.say ? { say: z.say } : {}),
+    ...(z.cont ? { cont: z.cont } : {}), ...(z.rows ? { rows: z.rows } : {}), ...(z.say ? { say: z.say } : {}),
     ...(z.regions?.length ? { regions: z.regions.map(region) } : {}),
     ...(z.children?.length ? { children: z.children.map(zone) } : {}),
   });

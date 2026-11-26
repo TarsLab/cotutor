@@ -126,6 +126,10 @@ export function findTables(H: readonly Rule[], V: readonly Rule[], avoid: readon
 }
 
 const mul = (a: Mat, b: readonly number[]): Mat => [a[0] * b[0] + a[2] * b[1], a[1] * b[0] + a[3] * b[1], a[0] * b[2] + a[2] * b[3], a[1] * b[2] + a[3] * b[3], a[0] * b[4] + a[2] * b[5] + a[4], a[1] * b[4] + a[3] * b[5] + a[5]];
+/** 很浅的填色(三个颜色都在 0xD0 以上):题的底板、说话气泡的底色,不是图 */
+const pale = (hex: string): boolean => { const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex); return !!m && [m[1], m[2], m[3]].every((x) => parseInt(x, 16) >= 0xd0); };
+/** 页上画了东西的小地方最大多大(pt):再大的是底色、整幅插图的框,不拿来挡等号后面的空白 */
+const MARK_MAX = 120;
 const at = (m: Mat, x: number, y: number): [number, number] => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]];
 const hexOf = (a: readonly unknown[]): string => (typeof a[0] === 'string' ? a[0] : `#${a.slice(0, 3).map((v) => Math.round(Number(v)).toString(16).padStart(2, '0')).join('')}`);
 
@@ -133,7 +137,7 @@ const hexOf = (a: readonly unknown[]): string => (typeof a[0] === 'string' ? a[0
  * pdf.js 一页的操作表(getOperatorList 的 fnArray、argsArray)走一遍,收描边的路径、实线、填色的块和画出来的字;view = 视口的变换(左上角起)。
  * 回田字格、别的小方框(填空从这里挑)、表格的格、没填颜色的方框(打勾的从这里挑)
  */
-export function opsCells(ops: { fnArray: ArrayLike<number>; argsArray: readonly unknown[] }, OPS: Readonly<Record<string, number>>, view: readonly number[]): { cells: PdfCell[]; boxes: [number, number, number, number][]; tables: PdfTableCell[][]; squares: Box[] } {
+export function opsCells(ops: { fnArray: ArrayLike<number>; argsArray: readonly unknown[] }, OPS: Readonly<Record<string, number>>, view: readonly number[]): { cells: PdfCell[]; boxes: [number, number, number, number][]; tables: PdfTableCell[][]; squares: Box[]; marks: Box[] } {
   interface G { ctm: Mat; fill: string; dash: boolean }
   let g: G = { ctm: [...view] as Mat, fill: '#000000', dash: false };
   const stack: G[] = [];
@@ -143,7 +147,9 @@ export function opsCells(ops: { fnArray: ArrayLike<number>; argsArray: readonly 
   // 表格的线:描了边的(连带填色又描边的)每一段直线;填出来的细长矩形也是线
   const lineOps = new Set([OPS.stroke, OPS.closeStroke, OPS.fillStroke, OPS.eoFillStroke, OPS.closeFillStroke, OPS.closeEOFillStroke]);
   const fills = new Set([OPS.fill, OPS.eoFill]);
-  const H: Rule[] = [], V: Rule[] = [], quads: Box[] = [], painted: Box[] = [];
+  const H: Rule[] = [], V: Rule[] = [], quads: Box[] = [], painted: Box[] = [], marks: Box[] = [];
+  // 页上画了东西的小地方(图标、小插图、画的框):表单对象的外框(图片都包在表单里,读 PDF 时不解图,外框还在)、填了色或描了边的小图形
+  const mark = (b: Box): void => { const w = b[2] - b[0], h = b[3] - b[1]; if (w > 3 && h > 3 && w < MARK_MAX && h < MARK_MAX) marks.push([r2(b[0]), r2(b[1]), r2(b[2]), r2(b[3])]); };
   const seg = (p: [number, number], q: [number, number]): void => {
     if (Math.abs(p[1] - q[1]) < 0.6 && Math.abs(p[0] - q[0]) > 6) H.push({ at: (p[1] + q[1]) / 2, a: Math.min(p[0], q[0]), b: Math.max(p[0], q[0]) });
     else if (Math.abs(p[0] - q[0]) < 0.6 && Math.abs(p[1] - q[1]) > 6) V.push({ at: (p[0] + q[0]) / 2, a: Math.min(p[1], q[1]), b: Math.max(p[1], q[1]) });
@@ -153,7 +159,13 @@ export function opsCells(ops: { fnArray: ArrayLike<number>; argsArray: readonly 
     if (f === OPS.save) stack.push({ ...g });
     else if (f === OPS.restore) g = stack.pop() ?? g;
     else if (f === OPS.transform) g = { ...g, ctm: mul(g.ctm, a as number[]) };
-    else if (f === OPS.paintFormXObjectBegin) { stack.push({ ...g }); const m = a[0] as ArrayLike<number> | null; if (m && m.length === 6) g = { ...g, ctm: mul(g.ctm, Array.from(m)) }; }
+    else if (f === OPS.paintFormXObjectBegin) {
+      stack.push({ ...g });
+      const m = a[0] as ArrayLike<number> | null;
+      if (m && m.length === 6) g = { ...g, ctm: mul(g.ctm, Array.from(m)) };
+      const bb = a[1] as ArrayLike<number> | null;
+      if (bb && bb.length === 4) { const c = [at(g.ctm, bb[0], bb[1]), at(g.ctm, bb[2], bb[3])]; mark([Math.min(c[0][0], c[1][0]), Math.min(c[0][1], c[1][1]), Math.max(c[0][0], c[1][0]), Math.max(c[0][1], c[1][1])]); }
+    }
     else if (f === OPS.paintFormXObjectEnd) g = stack.pop() ?? g;
     else if (f === OPS.setFillRGBColor) g = { ...g, fill: hexOf(a) };
     else if (f === OPS.setDash) g = { ...g, dash: Array.isArray(a[0]) && (a[0] as unknown[]).length > 0 };
@@ -193,7 +205,8 @@ export function opsCells(ops: { fnArray: ArrayLike<number>; argsArray: readonly 
         paths.push({ box: [Math.min(...sx), Math.min(...sy), Math.max(...sx), Math.max(...sy)], quad, dashed: g.dash });
       }
       if (isLine && !g.dash && quad) quads.push(box);
-      if (isFill && pts.length >= 3 && !/^#f[0-9a-f]f[0-9a-f]f[0-9a-f]$/i.test(g.fill)) painted.push(box);
+      if (isFill && pts.length >= 3 && !/^#f[0-9a-f]f[0-9a-f]f[0-9a-f]$/i.test(g.fill)) { painted.push(box); if (!pale(g.fill)) mark(box); }
+      else if (isLine && pts.length >= 3) mark(box);
       if (fills.has(op) && pts.length >= 4) {
         if (box[3] - box[1] < 1.6 && box[2] - box[0] > 6) H.push({ at: (box[1] + box[3]) / 2, a: box[0], b: box[2] });
         else if (box[2] - box[0] < 1.6 && box[3] - box[1] > 6) V.push({ at: (box[0] + box[2]) / 2, a: box[1], b: box[3] });
@@ -210,5 +223,5 @@ export function opsCells(ops: { fnArray: ArrayLike<number>; argsArray: readonly 
     if (painted.some((b) => iou(q, b) > 0.8) || squares.some((b) => iou(q, b) > 0.8)) continue;
     squares.push([r2(q[0]), r2(q[1]), r2(q[2]), r2(q[3])]);
   }
-  return { cells, boxes: findBoxes(paths, cells), tables: findTables(mergeRules(H), mergeRules(V), tian), squares };
+  return { cells, boxes: findBoxes(paths, cells), tables: findTables(mergeRules(H), mergeRules(V), tian), squares, marks };
 }

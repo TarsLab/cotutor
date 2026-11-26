@@ -28,6 +28,8 @@ export interface PdfPage {
   tables?: PdfTableCell[][];
   /** 描边、没填颜色、6–30pt 近似方的小方框:打勾的 □ 从这里挑(textbook-index.ts 的 tickCells) */
   squares?: [number, number, number, number][];
+  /** 页上画了东西的小地方(120pt 以内的图标、小插图、画的框;src/memory/textbook-cells.ts):算式等号后面这里画了东西就不是留给孩子写的空白 */
+  marks?: [number, number, number, number][];
 }
 
 /** 表格里的一格(PDF 的点,左上角起) */
@@ -123,7 +125,7 @@ export interface BookLesson {
 }
 
 /** 索引的版本:取字、分行的规则改了就加一,旧缓存重做 */
-export const BOOK_INDEX_VERSION = 10;
+export const BOOK_INDEX_VERSION = 11;
 
 /**
  * 一册怎么分块(出分块的规则 src/memory/textbook-zones-rules.ts):prose = 课文(自然段、语文园地的栏目);

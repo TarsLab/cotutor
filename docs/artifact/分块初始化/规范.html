@@ -99,7 +99,7 @@ ol.plan b { color:var(--ink); }
 
 <div class="wrap">
 <header class="top">
-  <span class="crumb">docs/artifact/分块初始化 · 2026-11-26 · Q1–Q9 已定,在做</span>
+  <span class="crumb">docs/artifact/分块初始化 · 2026-11-26 · 做到第四步,下一步拿 Codex 试跑</span>
   <h1>分块初始化</h1>
   <p>家长放进来一本新课本 PDF,交给编程助手(通常是 Codex)从头到尾出整册的分块:一页一份 JSON,孩子点哪块念哪块、老师说「看这里」找得到。以后要改,家长在工作台上改。这份写编程助手读什么、写什么、怎么分,以及 id、页码、协议怎么定。</p>
   <p>技能 cotutor-textbook 现在做的是另一件事:在规则出的草稿上一课一课修,先问家长再动手。这里提议把它改成整册初始化。</p>
@@ -559,13 +559,24 @@ L10   591   65   楷 16     14    欢迎 ␣ 迎接 ␣ 迎风 ␣ 迎面
 <section id="plan">
   <h2><span class="id">→</span>先后与影响面</h2>
   <ol class="plan">
-    <li><b>F1–F3 读 PDF</b>:<code>src/memory/textbook-index.ts</code>、<code>textbook-pdf.ts</code>(字体真名、着重号、空格),索引版本 +1,规则重出。先过 <code>tests/textbook.test.ts</code>、<code>textbook-cells.test.ts</code>;拿三本真书逐课比改前改后。</li>
-    <li><b>P 协议 v3</b>:<code>src/schema/zones.ts</code>(v、页名、种类、cont、style、note、bubble、行号)、<code>src/memory/textbook-zones.ts</code>(读写、旧的读进来就丢)、<code>textbook-zones-rules.ts</code>(出新 id)、<code>src/chalk/kit/book.ts</code> 的 <code>zoneBlocks</code>(cont 连块)、作答区的键(runner 的 <code>CELL_ID</code>、<code>bookCellsOf</code>)、JSON Schema 生成。</li>
-    <li><b>D prep</b>:<code>src/app/cli/textbook.ts</code> 加 <code>prep</code>、去 <code>pull</code>;check 认行号、页名、样式;push 换框、写 <code>pdf</code> 和 <code>style</code>;<code>src/app/cli/commands.ts</code> 进表,过 <code>tests/textbook-cli.test.ts</code>、<code>main.test.ts</code>。</li>
-    <li><b>S 技能</b>:<code>skills/cotutor-textbook/</code> 重写,<code>tests/textbook-skill.test.ts</code> 跟着改,<code>pnpm run gen:skills</code>。</li>
-    <li><b>试跑</b>:Codex 跑语文第一单元、数学第一单元,记时间、出入,回头核 Q2、Q7,补 K4。</li>
-    <li><b>工作台跟上</b>:页名、新 id、cont、样式那层(<code>src/app/http/dev-zones.ts</code>、<code>src/ui/dev/zones-*.ts</code>),过 <code>tests/dev-zones.test.ts</code> 和 <code>probe-dev-zones.mjs</code>。</li>
-    <li><b>收尾</b>:定了的搬进 <code>docs/dev/课本.md</code>,这份删掉。</li>
+    <li><span class="st ok">做了</span> <b>F1–F3 读 PDF</b>:字体真名、着重号、空格;一行的字体取汉字最多的那种(「1 把下面的气球分类。」开头的题号是西文字体)。索引版本 10。</li>
+    <li><span class="st ok">做了</span> <b>P 协议 v3</b>:页名(<code>src/memory/textbook-page-names.ts</code>)、id、<code>cont</code>、<code>style</code>、<code>note</code>、<code>bubble</code>、旧版读进来就丢、规则照新协议出、<code>zoneBlocks</code> 照 cont 连块、JSON Schema(技能的 <code>references/分块.schema.json</code>)。</li>
+    <li><span class="st ok">做了</span> <b>D prep</b>:<code>prep</code> 顶掉 <code>pull</code>;check 认行号、一截、页名、cont、有字的行要有块认领;push 一课一课写、换框、记样式和样式表、记进度。</li>
+    <li><span class="st ok">做了</span> <b>S 技能</b>:整册初始化,三科规范从孩子的角度重写,不写答案。</li>
+    <li><span class="st tbd">没做</span> <b>试跑</b>:Codex 跑语文第一单元、数学第一单元,记时间、出入,回头核 Q2、Q7,补 K4。</li>
+    <li><span class="st ok">做了一半</span> <b>工作台</b>:页名、新块的 id 照页名起头、课的列表写印的页码;<code>cont</code>、样式那层还没显示。</li>
+    <li><b>收尾</b>:定了的已搬进 <code>docs/dev/课本.md</code>;试跑和工作台做完,这份删掉。</li>
   </ol>
+  <h3>和上面提议不一样的地方</h3>
+  <ul style="font-size:14px;color:var(--ink-2);padding-left:20px;display:flex;flex-direction:column;gap:6px;margin:0">
+    <li>P2:分块文件里 <code>page</code> 还是 PDF 第几页(练习册也用这个字段,运行时照它挑),页名另写 <code>name</code>;不另写 <code>pdf</code>。<code>book.json</code> 记每页的 <code>pdf</code>。</li>
+    <li>D1.2:页名和种类由 cotutor 定,编程助手不改(check 盯着),觉得不对写进报告。</li>
+    <li>D1.3:印重了的页码叫 <code>4之2</code>,不用 <code>′</code>(作答区的键只认字母、数字、汉字)。</li>
+    <li>D3.6:图的位置(<code>I0</code>)没做,插图的框还是编程助手量。</li>
+    <li>D3.7:能写的格的 id 直接是作答区的 id(<code>4-格3</code>),不另起 <code>C0</code>。</li>
+    <li>P4:一节课状态里格子的键还是 <code>&lt;PDF 页&gt;.&lt;作答区 id&gt;</code>(运行时内部用,不算协议)。</li>
+    <li>P6:草稿里块的 <code>box</code> 也能不写,照字行、小块、作答区撑出来。</li>
+    <li>P7:样式记了,「样式和种类对不上」的提醒没做(样式表的用途是编程助手写的话,机器比不了)。</li>
+  </ul>
 </section>
 </div>

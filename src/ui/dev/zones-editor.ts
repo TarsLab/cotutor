@@ -27,13 +27,13 @@ interface ZnWbRow { name: string; title?: string; subject?: string; pages: numbe
 interface ZnList { books: ZnBook[]; unreadable: string[]; stale: { sha: string; title: string | null; pages: number }[]; workbooks?: ZnWbRow[] }
 interface ZnLine { id: string; text: string; box: Box; chrome?: true; ch?: [number, number][] }
 interface ZnCell { id: string; kind: string; box: Box; ch?: string; m?: string; row?: number; col?: number; table?: string }
-interface ZnPage { n: number; printed: number | null; w: number; h: number; zones: ZonePage; cand: { lines: ZnLine[]; cells: ZnCell[]; tables: { id: string; box: Box }[] }; by?: ZoneWriter; at?: string }
+interface ZnPage { n: number; name: string; printed: number | null; w: number; h: number; zones: ZonePage; cand: { lines: ZnLine[]; cells: ZnCell[]; tables: { id: string; box: Box }[] }; by?: ZoneWriter; at?: string }
 interface ZnLesson { kind?: 'workbook'; file: string; title: string; sha: string; layout: string; lessons: { title: string; pages: [number, number] }[]; which: 'vault' | 'rules' | 'mixed' | 'workbook'; version: string; pages: ZnPage[]; check?: { problems: string[]; notes: string[] }; says?: number; at?: string }
 type ZnSel = { kind: 'zone' | 'region'; id: string } | null;
 interface ZnHit { x: number; y: number; tint: Box | null; tiers: { title: string; detail: string; win: boolean }[]; says: { label: string; say: string }[] }
 interface ZnDrag { mode: 'move' | 'size' | 'add' | 'click'; x0: number; y0: number; box0: Box; edges: string; moved: boolean; snap: string | null }
 
-const ZN_KIND: Record<ZoneKind, string> = { title: '课题', column: '栏目', example: '例题', problem: '题', sub: '小题', group: '一组', para: '自然段', table: '表格', figure: '插图', other: '别的字' };
+const ZN_KIND: Record<ZoneKind, string> = { title: '课题', column: '栏目', example: '例题', problem: '题', sub: '小题', group: '一组', para: '自然段', table: '表格', figure: '插图', note: '注释', bubble: '泡泡', other: '别的字' };
 const ZN_RKIND: Record<RegionKind, string> = { write: '写', circle: '圈', draw: '画', link: '连线', underline: '画线', trace: '描写', tick: '打勾' };
 const ZN_WHO: Record<ZoneWriter, string> = { rules: '规则出的', agent: '编程助手', workbench: '工作台' };
 const ZN_WRITABLE = new Set(['trace', 'empty', 'blank', 'table', 'tick']);
@@ -185,8 +185,10 @@ async function znRunCheck(): Promise<void> {
   znPaintCheck();
 }
 
-function znNewId(stem: string): string {
+/** 新块的 id:照页名起头(协议:`<页名>-<第几>`),接着这一页没用过的号 */
+function znNewId(): string {
   const zp = znWork();
+  const stem = zp?.name ?? String(zp?.page ?? '块');
   const used = new Set<string>();
   if (zp) { znWalk(zp.zones, (z) => { used.add(z.id); for (const r of z.regions ?? []) used.add(r.id); }); for (const r of zp.regions ?? []) used.add(r.id); }
   for (let k = 1; ; k++) if (!used.has(stem + '-' + k)) return stem + '-' + k;
@@ -544,7 +546,7 @@ function znPaintLeft(): void {
       }
       const tag = l.which === 'rules' ? h('span', { class: 'st' }, '规则') : h('span', { class: 'st info' }, (l.by ? ZN_WHO[l.by] : 'vault') + (l.at ? ' ' + l.at.slice(5, 10) : ''));
       tree.append(h('button', { type: 'button', class: 'zn-ls' + (l.key === ZN.key ? ' on' : ''), style: 'margin-left:' + l.depth * 10 + 'px;width:calc(100% - ' + l.depth * 10 + 'px)', on: { click: () => { void znPick(ZN.book, l.key); } } },
-        h('b', {}, l.title), h('span', {}, h('span', { class: 'num' }, 'p' + l.pages[0] + '–' + l.pages[1]), tag)));
+        h('b', {}, l.title), h('span', {}, h('span', { class: 'num', title: 'PDF 第 ' + l.pages[0] + '–' + l.pages[1] + ' 页' }, '页 ' + l.printed[0] + (l.printed[1] !== l.printed[0] ? '–' + l.printed[1] : '')), tag)));
     });
     parts.push(tree);
   }
@@ -575,7 +577,7 @@ function znPaintLeft(): void {
         if (!cv) { cv = h('canvas', { 'aria-hidden': 'true' }) as HTMLCanvasElement; ZN.thumbs.set(tk, cv); void znDraw(cv, p.n, 36); }
         pic = cv;
       }
-      grid.append(h('button', { type: 'button', class: 'zn-th' + (p.n === ZN.n ? ' on' : ''), title: wbMode ? '第 ' + p.n + ' 页' : 'PDF 第 ' + p.n + ' 页' + (p.printed ? '(印的 ' + p.printed + ')' : ''), on: { click: () => znGo(p.n) } }, pic, h('small', {}, String(p.n)), dirty.has(p.n) ? h('span', { class: 'dot' }) : null));
+      grid.append(h('button', { type: 'button', class: 'zn-th' + (p.n === ZN.n ? ' on' : ''), title: wbMode ? '第 ' + p.n + ' 页' : '页 ' + p.name + '(PDF 第 ' + p.n + ' 页)', on: { click: () => znGo(p.n) } }, pic, h('small', {}, wbMode ? String(p.n) : p.name), dirty.has(p.n) ? h('span', { class: 'dot' }) : null));
     }
     parts.push(h('div', { class: 'zn-card' }, h('span', { class: 'zn-lab' }, wbMode ? '这一册的页' : '这一课的页'), grid));
     if (wbMode) parts.push(h('p', { class: 'zn-lab', style: 'padding:0 4px;line-height:1.55' }, '练习册是排版脚本出的,这里只看。要改,复制一句给编程助手,它改脚本重跑。'));
@@ -610,7 +612,7 @@ function znPaintTool(): void {
   tool.replaceChildren(...[seg,
     ZN.mode === 'pick' && !znWb() ? h('button', { type: 'button', class: 'btn small' + (ZN.adding ? ' soft' : ''), 'aria-pressed': String(ZN.adding), title: '在页上画一个框,落进框住它的最里面那块', on: { click: () => { ZN.adding = !ZN.adding; ZN.pop = null; znPaintTool(); znPaintOverlay(); } } }, ZN.adding ? '在页上画框…' : '+ 加一块') : null,
     h('div', { style: 'display:flex;flex-wrap:wrap;gap:2px' }, ...lay),
-    h('div', { class: 'right' }, prev, h('span', { style: 'font-size:13px;padding:0 4px' }, '第 ' + p.n + ' 页' + (p.printed ? ' · 印 ' + p.printed : '')), next, src)].filter((x): x is HTMLElement => x !== null));
+    h('div', { class: 'right' }, prev, h('span', { style: 'font-size:13px;padding:0 4px' }, znWb() ? '第 ' + p.n + ' 页' : '页 ' + p.name + ' · PDF ' + p.n), next, src)].filter((x): x is HTMLElement => x !== null));
 }
 
 /** 改一个字段:第一下记一份撤销,之后同一个框里接着改不再记 */
@@ -975,7 +977,7 @@ function znAdd(b: Box): void {
   for (const zz of ZN.work.values()) znWalk(zz.zones, (z) => names.add(z.label));
   let k = 1;
   while (names.has('新的一块 ' + k)) k++;
-  const z: Zone = { id: znNewId('块'), kind: 'other', label: '新的一块 ' + k, box: b };
+  const z: Zone = { id: znNewId(), kind: 'other', label: '新的一块 ' + k, box: b };
   if (host) (host.children ??= []).push(z); else zp.zones.push(z);
   ZN.sel = { kind: 'zone', id: z.id };
   znChanged();

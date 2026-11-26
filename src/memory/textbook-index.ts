@@ -116,6 +116,10 @@ export function pageLines(page: PdfPage, bad: string[] = []): BookLine[] {
     const ys = (gs.some((g) => HAN.test(g.c)) ? gs.filter((g) => HAN.test(g.c)) : gs).map((g) => g.y).sort((a, b) => a - b);
     const y = ys[Math.floor(ys.length / 2)];
     const z = Math.max(...gs.map((g) => g.z));
+    // 这一行的字体:汉字最多的那种(「1 把下面的气球分类。」开头的题号是西文字体);没有汉字取字最多的
+    const fw = new Map<string, number>();
+    for (const g of gs) fw.set(g.f, (fw.get(g.f) ?? 0) + (HAN.test(g.c) ? 1 : 0.01));
+    const f = [...fw].sort((a, b) => b[1] - a[1])[0][0];
     return {
       text: gs.map((g) => g.c).join(''),
       x1: r2(gs[0].x1),
@@ -123,7 +127,7 @@ export function pageLines(page: PdfPage, bad: string[] = []): BookLine[] {
       y1: r2(y - 0.88 * z),
       y2: r2(y + 0.12 * z),
       z,
-      f: gs[0].f,
+      f,
       chars: gs.map((g, k): BookChar => ({ c: g.c, x1: r2(g.x1), x2: r2(g.x2), ...(k && g.x1 - gs[k - 1].x2 >= SPACE * z && !OPEN.test(gs[k - 1].c) && !CLOSE.test(g.c) ? { sp: true as const } : {}) })),
     };
   });

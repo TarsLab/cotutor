@@ -79,7 +79,7 @@ const toScene = (sh: BookSheet, x1: number, y1: number, x2: number, y2: number):
 export const lineBox = (sh: BookSheet, l: BookLine): Box => toScene(sh, l.x1, l.y1, l.x2, l.y2);
 
 /**
- * 一课几页上能写的格(场景坐标):id = <PDF 第几页>.<作答区的 id>(一节课状态里 kid.cells 的键;规则出的作答区 id 是这一页第几格,同以前);kind、ch、m 同 BookCell(练习册照着写的字母是 model.glyph)。
+ * 一课几页上能写的格(场景坐标):id = <PDF 第几页>.<作答区的 id>(一节课状态里 kid.cells 的键;课本的作答区 id 是「4-格3」,换协议前写的字对不上就不显示);kind、ch、m 同 BookCell(练习册照着写的字母是 model.glyph)。
  * 课本给这一课挑好的分块、练习册给它每页的块(src/chalk/kit/workbook.ts 的 workbookZones):格是作答区里能写的(write;表格的空格当填空开写字卡,打勾的小方框不开卡);
  * 不给 zones 的照页上规则认的 cells(只有比规则出的格和分块的格时用)
  */
@@ -94,7 +94,9 @@ export function bookCellsOf(pages: readonly BookPage[], sheets: readonly BookShe
     const rs: ZoneRegion[] = [...(zp.regions ?? [])];
     walkZones(zp.zones, (z) => { rs.push(...(z.regions ?? [])); });
     const writes = rs.filter((r) => r.kind === 'write');
-    if (writes.every((r) => /^\d+$/.test(r.id))) writes.sort((a, b) => Number(a.id) - Number(b.id));
+    // 照这一页的第几格排(作答区 id 是「4-格3」、练习册的是「3」):写字卡挪到下一格照这个先后
+    const nth = (id: string): number => Number(/(?:^|格)(\d+)$/.exec(id)?.[1] ?? NaN);
+    if (writes.every((r) => !Number.isNaN(nth(r.id)))) writes.sort((a, b) => nth(a.id) - nth(b.id));
     const kx = p.w / 1000, ky = p.h / 1000;
     return writes.map((r): SceneCell => ({ id: `${p.n}.${r.id}`, box: toScene(sh, r.box[0] * kx, r.box[1] * ky, r.box[2] * kx, r.box[3] * ky), kind: r.cell && r.cell !== 'table' ? r.cell : r.tian ? 'empty' : 'blank', ...(r.ch ? { ch: r.ch } : {}), ...(r.m ?? r.model?.glyph ? { m: r.m ?? r.model!.glyph } : {}) }));
   });
@@ -165,7 +167,7 @@ const iou = (a: Box, b: Box): number => {
 /**
  * 一课的块(给老师看的段、栏目、题,点读的段):照这一课挑好的分块(schema 的 pickZones)读回来。
  * 块的行:写了 rows 的照框对上这一页没被占的行里重合最多的那行(重合一半以上);没写 rows 的,框里没被占的行归框住它中心的最里面那块。
- * 跨页的同一块(两页上同一个 id)连成一块,照先出现的先后;栏目下面的小块记着栏目名(head);一行字都没有的块(表格、插图、一组口诀)成 group 块,只带叫法和框;
+ * 跨页的同一块(下一页那一截写 cont;练习册的两页上同一个 id)连成一块,照先出现的先后;栏目下面的小块记着栏目名(head);一行字都没有的块(表格、插图、一组口诀)成 group 块,只带叫法和框;
  * 小块照先后紧跟在它外面那块后面,kids 是有几个。
  * 字照行重拼,和规则分块时一样(src/memory/textbook-zones-rules.ts):段的行直接连,别的用空格隔开,语文的栏目、别的字带读音,例题去掉开头的例题号。
  * opts(练习册用):area = 每块都带自己的框(题框住题里的图和格,「看 第 3 题」照框不照行);skip = 不归给哪块的行(练习册挑出的字词那几行,和正文重了)
@@ -181,12 +183,13 @@ export function zoneBlocks(pages: readonly BookPage[], zones: readonly ZonePage[
     const loose: { node: Node; z: Zone; depth: number }[] = [];
     const visit = (zs: readonly Zone[], parent: Node | null, depth: number): void => {
       for (const z of zs) {
-        let node = byId.get(z.id);
+        // 接着上一页的那一截(cont)连到那一块上;练习册跨页的同一题两页上用同一个 id,也连
+        let node = byId.get(z.cont ?? z.id) ?? byId.get(z.id);
         if (!node) {
           node = { z, refs: [], kids: [], parent, regions: [], objects: [] };
-          byId.set(z.id, node);
           (parent ? parent.kids : top).push(node);
         }
+        byId.set(z.id, node);
         for (const r of z.regions ?? []) node.regions.push({ id: r.id, label: r.label });
         for (const o of z.objects ?? []) node.objects.push({ id: o.id, label: o.label });
         node.teacher ??= z.teacher;

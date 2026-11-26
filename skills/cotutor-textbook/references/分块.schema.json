@@ -1,0 +1,648 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "type": "object",
+ "properties": {
+  "v": {
+   "type": "number",
+   "const": 3
+  },
+  "page": {
+   "type": "integer",
+   "minimum": 1,
+   "maximum": 9007199254740991
+  },
+  "name": {
+   "type": "string",
+   "pattern": "^[\\p{L}\\p{N}][\\p{L}\\p{N}-]*$"
+  },
+  "kind": {
+   "type": "string",
+   "enum": [
+    "封面",
+    "扉页",
+    "版权",
+    "目录",
+    "单元页",
+    "正文",
+    "附录",
+    "后记",
+    "封底",
+    "空白"
+   ]
+  },
+  "zones": {
+   "type": "array",
+   "items": {
+    "$ref": "#/$defs/__schema0"
+   }
+  },
+  "regions": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string",
+      "pattern": "^[\\p{L}\\p{N}][\\p{L}\\p{N}-]*$"
+     },
+     "kind": {
+      "type": "string",
+      "enum": [
+       "write",
+       "circle",
+       "draw",
+       "link",
+       "underline",
+       "trace",
+       "tick"
+      ]
+     },
+     "label": {
+      "type": "string",
+      "minLength": 1
+     },
+     "box": {
+      "type": "array",
+      "prefixItems": [
+       {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1000
+       },
+       {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1000
+       },
+       {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1000
+       },
+       {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1000
+       }
+      ],
+      "items": false,
+      "minItems": 4,
+      "maxItems": 4
+     },
+     "tian": {
+      "type": "boolean",
+      "const": true
+     },
+     "fourLine": {
+      "type": "array",
+      "prefixItems": [
+       {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1000
+       },
+       {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1000
+       },
+       {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1000
+       },
+       {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1000
+       }
+      ],
+      "items": false,
+      "minItems": 4,
+      "maxItems": 4
+     },
+     "model": {
+      "type": "object",
+      "properties": {
+       "glyph": {
+        "type": "string",
+        "minLength": 1
+       },
+       "strokes": {
+        "minItems": 1,
+        "type": "array",
+        "items": {
+         "minItems": 2,
+         "type": "array",
+         "items": {
+          "type": "array",
+          "prefixItems": [
+           {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1000
+           },
+           {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1000
+           }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+         }
+        }
+       }
+      },
+      "required": [
+       "glyph",
+       "strokes"
+      ]
+     },
+     "say": {
+      "type": "boolean",
+      "const": true
+     },
+     "cell": {
+      "type": "string",
+      "enum": [
+       "model",
+       "trace",
+       "empty",
+       "blank",
+       "table"
+      ]
+     },
+     "ch": {
+      "type": "string",
+      "minLength": 1
+     },
+     "m": {
+      "type": "string",
+      "minLength": 1
+     },
+     "src": {
+      "type": "string",
+      "const": "measured"
+     }
+    },
+    "required": [
+     "id",
+     "kind",
+     "label",
+     "box"
+    ]
+   }
+  },
+  "ignore": {
+   "type": "array",
+   "items": {
+    "type": "string",
+    "minLength": 1
+   }
+  }
+ },
+ "required": [
+  "v",
+  "page",
+  "name",
+  "kind",
+  "zones"
+ ],
+ "$defs": {
+  "__schema0": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string",
+     "pattern": "^[\\p{L}\\p{N}][\\p{L}\\p{N}.-]*$"
+    },
+    "kind": {
+     "type": "string",
+     "enum": [
+      "title",
+      "column",
+      "example",
+      "problem",
+      "sub",
+      "group",
+      "para",
+      "table",
+      "figure",
+      "note",
+      "bubble",
+      "other"
+     ]
+    },
+    "label": {
+     "type": "string",
+     "minLength": 1
+    },
+    "box": {
+     "type": "array",
+     "prefixItems": [
+      {
+       "type": "number",
+       "minimum": 0,
+       "maximum": 1000
+      },
+      {
+       "type": "number",
+       "minimum": 0,
+       "maximum": 1000
+      },
+      {
+       "type": "number",
+       "minimum": 0,
+       "maximum": 1000
+      },
+      {
+       "type": "number",
+       "minimum": 0,
+       "maximum": 1000
+      }
+     ],
+     "items": false,
+     "minItems": 4,
+     "maxItems": 4
+    },
+    "cont": {
+     "type": "string",
+     "pattern": "^[\\p{L}\\p{N}][\\p{L}\\p{N}.-]*$"
+    },
+    "style": {
+     "type": "string",
+     "minLength": 1
+    },
+    "rows": {
+     "type": "array",
+     "items": {
+      "anyOf": [
+       {
+        "type": "array",
+        "prefixItems": [
+         {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+         },
+         {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+         },
+         {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+         },
+         {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+         }
+        ],
+        "items": false,
+        "minItems": 4,
+        "maxItems": 4
+       },
+       {
+        "type": "string",
+        "pattern": "^L(\\d+)(?:\\.(\\d+))?$"
+       }
+      ]
+     }
+    },
+    "say": {
+     "type": "string",
+     "minLength": 1
+    },
+    "regions": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "id": {
+        "type": "string",
+        "pattern": "^[\\p{L}\\p{N}][\\p{L}\\p{N}-]*$"
+       },
+       "kind": {
+        "type": "string",
+        "enum": [
+         "write",
+         "circle",
+         "draw",
+         "link",
+         "underline",
+         "trace",
+         "tick"
+        ]
+       },
+       "label": {
+        "type": "string",
+        "minLength": 1
+       },
+       "box": {
+        "type": "array",
+        "prefixItems": [
+         {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+         },
+         {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+         },
+         {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+         },
+         {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+         }
+        ],
+        "items": false,
+        "minItems": 4,
+        "maxItems": 4
+       },
+       "tian": {
+        "type": "boolean",
+        "const": true
+       },
+       "fourLine": {
+        "type": "array",
+        "prefixItems": [
+         {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+         },
+         {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+         },
+         {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+         },
+         {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+         }
+        ],
+        "items": false,
+        "minItems": 4,
+        "maxItems": 4
+       },
+       "model": {
+        "type": "object",
+        "properties": {
+         "glyph": {
+          "type": "string",
+          "minLength": 1
+         },
+         "strokes": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+           "minItems": 2,
+           "type": "array",
+           "items": {
+            "type": "array",
+            "prefixItems": [
+             {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1000
+             },
+             {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1000
+             }
+            ],
+            "items": false,
+            "minItems": 2,
+            "maxItems": 2
+           }
+          }
+         }
+        },
+        "required": [
+         "glyph",
+         "strokes"
+        ]
+       },
+       "say": {
+        "type": "boolean",
+        "const": true
+       },
+       "cell": {
+        "type": "string",
+        "enum": [
+         "model",
+         "trace",
+         "empty",
+         "blank",
+         "table"
+        ]
+       },
+       "ch": {
+        "type": "string",
+        "minLength": 1
+       },
+       "m": {
+        "type": "string",
+        "minLength": 1
+       },
+       "src": {
+        "type": "string",
+        "const": "measured"
+       }
+      },
+      "required": [
+       "id",
+       "kind",
+       "label",
+       "box"
+      ]
+     }
+    },
+    "objects": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "id": {
+        "type": "string",
+        "pattern": "^[\\p{L}\\p{N}][\\p{L}\\p{N}-]*$"
+       },
+       "label": {
+        "type": "string",
+        "minLength": 1
+       },
+       "box": {
+        "type": "array",
+        "prefixItems": [
+         {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+         },
+         {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+         },
+         {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+         },
+         {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+         }
+        ],
+        "items": false,
+        "minItems": 4,
+        "maxItems": 4
+       },
+       "center": {
+        "type": "array",
+        "prefixItems": [
+         {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+         },
+         {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+         }
+        ],
+        "items": false,
+        "minItems": 2,
+        "maxItems": 2
+       },
+       "region": {
+        "type": "string",
+        "pattern": "^[\\p{L}\\p{N}][\\p{L}\\p{N}-]*$"
+       },
+       "side": {
+        "type": "string",
+        "enum": [
+         "left",
+         "right"
+        ]
+       },
+       "group": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 9007199254740991
+       }
+      },
+      "required": [
+       "id",
+       "label",
+       "box",
+       "center"
+      ]
+     }
+    },
+    "teacher": {
+     "type": "object",
+     "properties": {
+      "goal": {
+       "type": "string",
+       "minLength": 1
+      },
+      "hint": {
+       "type": "string",
+       "minLength": 1
+      },
+      "answers": {
+       "type": "array",
+       "items": {
+        "type": "object",
+        "properties": {
+         "at": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+           "type": "string",
+           "pattern": "^[\\p{L}\\p{N}][\\p{L}\\p{N}-]*$"
+          }
+         },
+         "ok": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+           "type": "string",
+           "minLength": 1
+          }
+         },
+         "links": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+           "type": "array",
+           "prefixItems": [
+            {
+             "type": "string",
+             "pattern": "^[\\p{L}\\p{N}][\\p{L}\\p{N}-]*$"
+            },
+            {
+             "type": "string",
+             "pattern": "^[\\p{L}\\p{N}][\\p{L}\\p{N}-]*$"
+            }
+           ],
+           "items": false,
+           "minItems": 2,
+           "maxItems": 2
+          }
+         },
+         "note": {
+          "type": "string",
+          "minLength": 1
+         }
+        },
+        "required": [
+         "at"
+        ]
+       }
+      },
+      "note": {
+       "type": "string",
+       "minLength": 1
+      }
+     }
+    },
+    "children": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/__schema0"
+     }
+    }
+   },
+   "required": [
+    "id",
+    "kind",
+    "label"
+   ]
+  }
+ },
+ "title": "cotutor 课本分块的一页(草稿)",
+ "description": "协议版本 3;字段讲解在同目录的 格式.md"
+}

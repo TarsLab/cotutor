@@ -3,13 +3,14 @@
  * 书是 tests/_book.ts、tests/_math-book.ts、tests/_science-book.ts 造的;读回来的块一课一课对得上的那些断言在 tests/textbook.test.ts(它的块都是规则出了再读回来的)。
  * 真课本逐课比规则出的读回来和以前运行时现分的一处不差(2026-11-25)记在 docs/dev/课本.md。
  */
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { bookCellsOf, bookRegions, bookSayZones, bookSheets, bookTarget, bookTeacherLines, bookZoneInk, sayZoneAt, zoneBlocks } from '../src/chalk/index.ts';
+import { bookPageNames } from '../src/memory/textbook-page-names.ts';
 import { ruleLessonZones, ruleZones } from '../src/memory/textbook-zones-rules.ts';
 import { bookZones, forgetZones, readZoneBook, ruleZonesDir, vaultZonesDir, writeZonePages } from '../src/memory/textbook-zones.ts';
-import { ZonePageSchema, pickBookZones, pickZones, walkZones, zonePageProblems, zonesKidPage, type BookPage, type Zone, type ZonePage } from '../src/schema/index.ts';
+import { ZonePageSchema, pickBookZones, zoneFile, pickZones, walkZones, zonePageProblems, zonesKidPage, type BookPage, type Zone, type ZonePage } from '../src/schema/index.ts';
 import { bookIndexOf } from './_book.ts';
 import { mathIndexOf } from './_math-book.ts';
 import { scienceIndexOf } from './_science-book.ts';
@@ -33,6 +34,27 @@ const fz = ruleLessonZones(fish, 'prose');
   check('跨页的一段:两页上各一块、同一个 id;叫法照书上的号(第 2 段)', para2.length === 2 && para2[0].id === para2[1].id && para2.every((z) => z.kind === 'para' && z.rows!.length > 0), JSON.stringify(ids));
   const back = zoneBlocks(fish, fz, 'prose').filter((b) => b.kind === 'para');
   check('读回来:跨页那段连成一段,行照先后', back.length === 3 && back[1].refs.map((r) => r.n).join() === '2,2,3', JSON.stringify(back));
+}
+
+// ---- 协议 3:页名、id 照页名起头、跨页写 cont、不是正文的页不分块 ----
+{
+  const zs = ruleZones(ix);
+  const named = bookPageNames(ix);
+  check('页名:印的页码;目录页叫「目录-1」', named.pages[0].name === '目录-1' && named.pages[0].kind === '目录' && named.pages[1].name === '1' && named.pages[1].kind === '正文' && named.warnings.length === 0, JSON.stringify(named));
+  check('每页写着协议版本、页名、种类;目录页不分块', zs.every((z) => z.v === 3 && z.name === named.pages.find((x) => x.n === z.page)!.name && z.kind) && zs[0].zones.length === 0);
+  const bad: string[] = [];
+  for (const zp of zs) walkZones(zp.zones, (z, _d, parent) => {
+    if (!z.id.startsWith(`${zp.name}-`) || (parent && !z.id.startsWith(`${parent.id}.`))) bad.push(z.id);
+    for (const r of z.regions ?? []) if (!/^.+-格\d+$/.test(r.id) || !r.id.startsWith(`${zp.name}-`)) bad.push(r.id);
+  });
+  check('id:块「<页名>-<第几>」,小块「<外面那块>.<第几>」,作答区「<页名>-格<第几>」', bad.length === 0, bad.join(' '));
+  const two = zs.filter((z) => fish.some((p) => p.n === z.page));
+  const para2 = two.flatMap((p) => p.zones.filter((z) => z.label === '第 2 段'));
+  check('跨页的一段:下一页那一截 cont 指着上一页那块', para2.length === 2 && para2[0].id !== para2[1].id && para2[1].cont === para2[0].id && para2[0].id.startsWith('1-') && para2[1].id.startsWith('2-'), JSON.stringify(para2.map((z) => [z.id, z.cont])));
+  const back = zoneBlocks(fish, two, 'prose').filter((b) => b.kind === 'para');
+  check('读回来:cont 连成一段', back.length === 3 && back[1].refs.map((r) => r.n).join() === '2,2,3', JSON.stringify(back.map((b) => b.refs)));
+  const sci = ruleZones(scienceIndexOf());
+  check('样式:规则出的块记字最多的样式(字体 × 字号)', zs.some((z) => z.zones.some((y) => y.style && / \d/.test(y.style))) && sci.length > 0);
 }
 
 // ---- 数学:栏目下面的题成它的小块;读回来题记着栏目 ----
@@ -184,10 +206,14 @@ const fz = ruleLessonZones(fish, 'prose');
   await writeZonePages(vaultZonesDir(books, index.sha), index, edited.slice(1), 'workbench');
   const z3 = await bookZones(books, cache, index);
   const vmeta = await readZoneBook(vaultZonesDir(books, index.sha));
-  check('vault 里这一课的页齐了:用 vault 的;book.json 记每页谁写的', pickZones(z3, ns).which === 'vault' && pickZones(z3, ns).pages[0].zones.some((z) => z.say === '改过的念法') && vmeta?.pages[`p00${ns[0]}`]?.by === 'agent' && vmeta?.pages[`p00${ns[1]}`]?.by === 'workbench' && !vmeta.rules, JSON.stringify(vmeta));
-  writeFileSync(join(vaultZonesDir(books, index.sha), `p00${ns[0]}.json`), '{"page": "坏了"}');
+  check('vault 里这一课的页齐了:用 vault 的;book.json 记每页谁写的', pickZones(z3, ns).which === 'vault' && pickZones(z3, ns).pages[0].zones.some((z) => z.say === '改过的念法') && vmeta?.pages[z1.rules[ns[0]].name!]?.by === 'agent' && vmeta?.pages[z1.rules[ns[0]].name!]?.pdf === ns[0] && vmeta?.pages[z1.rules[ns[1]].name!]?.by === 'workbench' && !vmeta.rules, JSON.stringify(vmeta));
+  check('文件名照页名:印的页码补成三位', existsSync(join(vaultZonesDir(books, index.sha), zoneFile(z1.rules[ns[0]].name!))) && zoneFile('4') === '004.json' && zoneFile('12之2') === '012之2.json' && zoneFile('目录-1') === '目录-1.json');
+  writeFileSync(join(vaultZonesDir(books, index.sha), zoneFile(z1.rules[ns[0]].name!)), '{"v": 3, "page": "坏了"}');
   const z4 = await bookZones(books, cache, index);
-  check('vault 里读不出的一页:当没有,这一课退回规则出的,报一行', pickZones(z4, ns).which === 'rules' && z4.problems.length === 1 && z4.problems[0].includes('.zones'), JSON.stringify(z4.problems));
+  check('vault 里读不出的一页:当没有,这一课退回规则出的,报一行', pickZones(z4, ns).which === 'rules' && z4.problems.length === 1 && z4.problems[0].includes('读不出来'), JSON.stringify(z4.problems));
+  writeFileSync(join(vaultZonesDir(books, index.sha), 'p099.json'), '{"page": 99, "zones": []}');
+  const z5 = await bookZones(books, cache, index);
+  check('旧版的分块(没写协议版本的 p099.json):读进来就丢,报一行', z5.problems.some((x) => x.includes('旧版') && x.includes('p099.json')) && !z5.vault[99], JSON.stringify(z5.problems));
 }
 
 done();

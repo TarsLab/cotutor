@@ -3,13 +3,16 @@
  * 建索引后接着出(src/memory/textbook-zones.ts 的 ruleZones),存 `.cotutor/textbooks/zones/<指纹>/`,规则改了加 ZONES_RULES_VERSION 重出。
  * 运行时不调这里:读分块文件(src/chalk/kit/book.ts 的 zoneBlocks)。
  *
- * 按课出(ruleZones 怎么分组):数学一个单元一组,语文、科学目录上最里一层的一课一组;段号、例题号一组里连着数,跨页的同一块两页上用同一个 id。
+ * 按课出(ruleZones 怎么分组):数学一个单元一组,语文、科学目录上最里一层的一课一组;段号、例题号一组里连着数。
+ * 最后照协议版本 3 起 id(页名照 ./textbook-page-names.ts):块 `<页名>-<第几块>`、小块 `<外面那块>.<第几>`、作答区 `<页名>-格<这一页第几格>`;
+ * 跨页的同一块,下一页那一截写 cont。封面、目录这些不是正文的页不分块。
  * 一课里的块(RuleBlock)照下面三种分法(语文 prose、数学 math、科学 science),再换成一页一份的树:栏目下面记着它的题、段(head)的成它的小块;
  * 每块记下它那几行字的框(rows,照读的先后),读回来照框对上索引里的行,和这里分的一行不差。
- * 页上画的格(索引的 BookPage.cells)成作答区,id 是它在这一页的第几格(一节课状态里 kid.cells 的键 `<页>.<第几格>` 照旧),挂在框住它中心的最里面那块上,没有就挂在页上;
+ * 页上画的格(索引的 BookPage.cells)成作答区,id 里是它在这一页的第几格(和 cotutor textbook prep 给的候选编号一样),挂在框住它中心的最里面那块上,没有就挂在页上;
  * 表格成一块(kind table,不带字行),它的空格挂在它上面;打勾的小方框是 tick 作答区。语文正文后面的块写上点了念什么(say)。
  */
-import { MATH_COLUMNS, bodySize, bookChrome, mathHeading, scienceColumn, spacedText, withPinyin, type BookIndex, type BookLayout, type BookLine, type BookPage, type PermilleBox, type Zone, type ZonePage, type ZoneRegion } from '../schema/index.ts';
+import { bookPageNames } from './textbook-page-names.ts';
+import { ZONE_FORMAT, MATH_COLUMNS, bodySize, bookChrome, mathHeading, scienceColumn, spacedText, styleOf, walkZones, withPinyin, type BookIndex, type BookLayout, type BookLine, type BookPage, type PermilleBox, type Zone, type ZonePage, type ZoneRegion } from '../schema/index.ts';
 
 /**
  * 一课里的一块:标题、一段(no 从 1 起)、一个栏目(head)、别的(认字栏、写字栏、课后题、注释)。
@@ -46,6 +49,8 @@ function ruleLabel(b: RuleBlock): string {
 }
 
 const KIND = { title: 'title', para: 'para', section: 'column', other: 'other', example: 'example', problem: 'problem' } as const;
+/** 页下的注(「① 本文选自……」)、题注:注释,点了不念;正文里单独一个「②」是注的标号,不算 */
+const NOTE = /^\s*[①-⑳]\s*\S/;
 
 /** 一组页(一课)的块换成一页一份的树:栏目后面紧跟着、记着它(head)的题、段、别的字成它的小块 */
 function groupZones(pages: readonly BookPage[], blocks: readonly RuleBlock[], group: number, layout: BookLayout): Map<number, Zone[]> {
@@ -63,12 +68,15 @@ function groupZones(pages: readonly BookPage[], blocks: readonly RuleBlock[], gr
   // 一块在第 n 页上的那一截:它在这页的行、这页上有它的小块;都没有 = null
   const onPage = (node: Node, n: number): Zone | null => {
     const p = byN.get(n)!;
-    const rows = node.b.refs.filter((r) => r.n === n).map((r) => linePermille(p, p.lines[r.i]));
+    const mine = node.b.refs.filter((r) => r.n === n).map((r) => p.lines[r.i]);
+    const rows = mine.map((l) => linePermille(p, l));
     const kids = node.kids.map((x) => onPage(x, n)).filter((z): z is Zone => z !== null);
     const box = union([...rows, ...kids.map((z) => z.box)]);
     if (!box) return null;
     const say = layout === 'prose' && node.b.kind === 'other' ? otherSay(p, node.b.refs.filter((r) => r.n === n).map((r) => p.lines[r.i])) : '';
-    return { id: node.id, kind: KIND[node.b.kind], label: ruleLabel(node.b), box, rows, ...(say ? { say } : {}), ...(kids.length ? { children: kids } : {}) };
+    const style = styleOf(mine);
+    const kind = node.b.kind === 'other' && mine[0] && NOTE.test(mine[0].text) ? 'note' : KIND[node.b.kind];
+    return { id: node.id, kind, label: kind === 'note' ? noteLabel(mine[0].text) : ruleLabel(node.b), box, ...(style ? { style } : {}), rows, ...(say ? { say } : {}), ...(kids.length ? { children: kids } : {}) };
   };
   const out = new Map<number, Zone[]>();
   for (const p of pages) out.set(p.n, top.map((x) => onPage(x, p.n)).filter((z): z is Zone => z !== null));
@@ -90,6 +98,9 @@ function otherSay(p: BookPage, lines: readonly BookLine[]): string {
   });
   return parts.join('');
 }
+
+/** 注释的叫法:注①、注② */
+const noteLabel = (t: string): string => `注${/[①-⑳]/.exec(t)?.[0] ?? ''}`;
 
 /** 句前的记号,不念 */
 const MARKS = /[◇◆●○■□▲△★☆]/;
@@ -211,7 +222,30 @@ export function ruleZones(index: BookIndex): ZonePage[] {
       from = k;
     }
   }
-  return index.pages.map((p) => out.get(p.n) ?? { page: p.n, zones: [] });
+  return renameZones(index, index.pages.map((p) => out.get(p.n) ?? { page: p.n, zones: [] }));
+}
+
+/** 照页名起 id、写 cont、页名和种类(见文件头);分块时的 id(`<组>-<第几>`、`<页>-表<第几>`、作答区是第几格)只在这里换掉 */
+function renameZones(index: BookIndex, pages: ZonePage[]): ZonePage[] {
+  const names = new Map(bookPageNames(index).pages.map((x) => [x.n, x]));
+  const last = new Map<string, Zone>();
+  return pages.map((zp) => {
+    const nm = names.get(zp.page)!;
+    const head = { v: ZONE_FORMAT as typeof ZONE_FORMAT, page: zp.page, name: nm.name, kind: nm.kind };
+    if (nm.kind !== '正文' && nm.kind !== '单元页' && nm.kind !== '附录') return { ...head, zones: [] };
+    const region = (r: ZoneRegion): ZoneRegion => ({ ...r, id: `${nm.name}-格${r.id}` });
+    const seen = new Map<Zone, string>();
+    const visit = (zs: readonly Zone[], stem: string, sep: string): Zone[] => zs.map((z, k) => {
+      const id = `${stem}${sep}${k + 1}`;
+      const prev = last.get(z.id);
+      const out: Zone = { ...z, id, ...(prev ? { cont: prev.id } : {}), ...(z.regions ? { regions: z.regions.map(region) } : {}), ...(z.children ? { children: visit(z.children, id, '.') } : {}) };
+      seen.set(out, z.id);
+      return out;
+    });
+    const zones = visit(zp.zones, nm.name, '-');
+    walkZones(zones, (z) => { last.set(seen.get(z)!, z); });
+    return { ...head, zones, ...(zp.regions ? { regions: zp.regions.map(region) } : {}) };
+  });
 }
 
 // ——— 一课的结构(三种分法) ———

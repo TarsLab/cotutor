@@ -4,7 +4,7 @@
  *                                         vault 练习册/ 下每一册(几页几题,workbook.json 什么时候写的;读不出来的带一句为什么,同 cotutor workbook check 的第一条)
  *   GET    /api/dev/zones/workbook?w      一册练习册,同一课的样子(每页的分块、文字层的行,语文、英语的行带每个字的左右),外加 check(同 cotutor workbook check);
  *                                         练习册只看不改:块是排版脚本写的,这里改了脚本一重跑就没了,要改复制一句给编程助手(docs/dev/练习册.md)
- *   GET    /api/dev/zones/lesson?b&l      一课(l = 「课名@PDF 头一页」,目录上最里一层;给的课里的页落在别的课里的,那几课一起带上,同 pull)
+ *   GET    /api/dev/zones/lesson?b&l      一课(l = 「课名@PDF 头一页」,目录上最里一层;给的课里的页落在别的课里的,那几课一起带上,同 wholeLessons)
  *                                         每页挑好的分块(全的,给老师的、答案都在)、候选(文字层的行、能写的格、表格;语文带每个字的左右,当孩子点用)
  *                                         和 version(vault 里这几页现在的样子;存的时候带回来,对不上 409)
  *   POST   /api/dev/zones/check {b,l,pages}          边改边查,同 cotutor textbook check(checkZonePages),不落盘
@@ -25,7 +25,7 @@ import { workbookLayer } from '../../chalk/index.ts';
 import { listBooks } from '../../memory/textbook-pdf.ts';
 import { bookZones, readZoneBook, removeZonePages, vaultZoneDirs, vaultZonesDir, writeZonePages } from '../../memory/textbook-zones.ts';
 import { synthesize } from '../../media/tts.ts';
-import { canonicalSubject, cardVoice, pickBookZones, workbookZonePage, zoneFile, zoneKey, type BookLesson, type Workspace, type ZonePage, type ZoneWriter } from '../../schema/index.ts';
+import { ZONE_FORMAT, canonicalSubject, cardVoice, pickBookZones, workbookZonePage, zoneFile, type BookLesson, type Workspace, type ZonePage, type ZoneWriter } from '../../schema/index.ts';
 
 export interface DevZoneLessonRow {
   title: string;
@@ -57,9 +57,9 @@ const lessonKey = (l: BookLesson): string => `${l.title}@${l.pages[0]}`;
 const rangeOf = (r: readonly [number, number]): number[] => Array.from({ length: r[1] - r[0] + 1 }, (_, k) => r[0] + k);
 
 /** 一课的页(在这本 PDF 里的)最后是谁存的:vault 的 book.json 里最晚的那条 */
-function lastWriter(meta: Awaited<ReturnType<typeof readZoneBook>>, pages: readonly number[]): { by: ZoneWriter; at: string } | null {
+function lastWriter(book: Book, meta: Awaited<ReturnType<typeof readZoneBook>>, pages: readonly number[]): { by: ZoneWriter; at: string } | null {
   let best: { by: ZoneWriter; at: string } | null = null;
-  for (const n of pages) { const w = meta?.pages[zoneKey(n)]; if (w && (!best || w.at > best.at)) best = w; }
+  for (const n of pages) { const w = meta?.pages[book.names.get(n)?.name ?? '']; if (w && (!best || w.at > best.at)) best = w; }
   return best;
 }
 
@@ -92,7 +92,7 @@ export async function listDevZones(ws: Workspace): Promise<{ books: DevZoneBook[
       lessons: all.map((l) => {
         const ns = rangeOf(l.pages).filter((n) => b.index.pages.some((p) => p.n === n));
         const which = pickBookZones(b.index, b.zones, ns).which;
-        const w = which === 'rules' ? null : lastWriter(meta, ns);
+        const w = which === 'rules' ? null : lastWriter(b, meta, ns);
         return { title: l.title, key: lessonKey(l), depth: depth(l), leaf: !all.some((x) => x.parent === l.title), printed: [l.from, l.to] as [number, number], pages: l.pages, which, ...(w ? { by: w.by, at: w.at } : {}) };
       }),
     });
@@ -104,7 +104,7 @@ export async function listDevZones(ws: Workspace): Promise<{ books: DevZoneBook[
 
 interface LessonRef { book: Book; lessons: { title: string; pages: [number, number] }[]; pages: number[] }
 
-/** 册名 + 课的 key → 这一课(连着页落在一起的几课,同 pull 的 wholeLessons);认不出 = null */
+/** 册名 + 课的 key → 这一课(连着页落在一起的几课,wholeLessons);认不出 = null */
 export async function devZoneLesson(ws: Workspace, file: string, key: string): Promise<LessonRef | null> {
   const book = await loadBook(ws, file).catch(() => null);
   const l = book?.index.lessons.find((x) => lessonKey(x) === key);
@@ -117,12 +117,14 @@ export async function devZoneLesson(ws: Workspace, file: string, key: string): P
 async function vaultVersion(ws: Workspace, ref: LessonRef): Promise<string> {
   const dir = vaultZonesDir(ws.paths.textbooks, ref.book.index.sha);
   const h = createHash('sha1');
-  for (const n of ref.pages) h.update(`${n}:${await readFile(join(dir, zoneFile(n)), 'utf8').catch(() => '-')}\n`);
+  for (const n of ref.pages) h.update(`${n}:${await readFile(join(dir, zoneFile(ref.book.names.get(n)!.name)), 'utf8').catch(() => '-')}\n`);
   return h.digest('hex').slice(0, 16);
 }
 
 export interface DevZonePage {
   n: number;
+  /** 页名(印的页码,或封面、目录-1 这种);练习册是第几页 */
+  name: string;
   printed: number | null;
   w: number;
   h: number;
@@ -140,12 +142,13 @@ export async function readDevZoneLesson(ws: Workspace, ref: LessonRef): Promise<
   const which = pickBookZones(book.index, book.zones, ref.pages).which;
   const pages = ref.pages.map((n): DevZonePage => {
     const p = book.index.pages.find((x) => x.n === n)!;
-    const cand = candidatesOf(p);
+    const nm = book.names.get(n)!;
+    const cand = candidatesOf(p, nm.name);
     const lines = book.index.layout === 'prose'
       ? cand.lines.map((l, i) => ({ ...l, ch: p.lines[i].chars.filter((c) => /\p{Script=Han}/u.test(c.c)).map((c): [number, number] => [Math.round((c.x1 / p.w) * 10000) / 10, Math.round((c.x2 / p.w) * 10000) / 10]) }))
       : cand.lines;
-    const w = book.zones.vault[n] ? meta?.pages[zoneKey(n)] : undefined;
-    return { n, printed: p.printed, w: p.w, h: p.h, zones: draft.get(n) ?? { page: n, zones: [] }, cand: { ...cand, lines }, ...(w ? { by: w.by, at: w.at } : {}) };
+    const w = book.zones.vault[n] ? meta?.pages[nm.name] : undefined;
+    return { n, name: nm.name, printed: p.printed, w: p.w, h: p.h, zones: draft.get(n) ?? { v: ZONE_FORMAT, page: n, name: nm.name, kind: nm.kind, zones: [] }, cand: { ...cand, lines }, ...(w ? { by: w.by, at: w.at } : {}) };
   });
   return { file: book.file, title: book.index.title, sha: book.index.sha, layout: book.index.layout, lessons: ref.lessons, which, version: await vaultVersion(ws, ref), pages };
 }
@@ -168,7 +171,7 @@ export async function readDevWorkbook(ws: Workspace, name: string): Promise<{ ki
       const ch = cs.flatMap((x, j): [number, number][] => (/\p{Script=Han}/u.test(x) ? [[r1(l.box[0] + j * w), r1(l.box[0] + (j + 1) * w)]] : []));
       return { id: `L${k + 1}`, text: l.text, box: l.box, ...(prose ? { ch } : {}) };
     });
-    return { n: i + 1, printed: null, w: layer.pages[i]!.w, h: layer.pages[i]!.h, zones: workbookZonePage(pg, i + 1), cand: { page: i + 1, printed: null, lines, cells: [], tables: [] } };
+    return { n: i + 1, name: String(i + 1), printed: null, w: layer.pages[i]!.w, h: layer.pages[i]!.h, zones: workbookZonePage(pg, i + 1), cand: { page: i + 1, name: String(i + 1), printed: null, lines, cells: [], tables: [] } };
   });
   const at = (await stat(join(ws.paths.workbooks, name, WORKBOOK_FILE)).catch(() => null))?.mtime.toISOString();
   return { kind: 'workbook', file: name, title: wb.title, subject: wb.subject, layout: prose ? 'prose' : 'math', lessons: [], which: 'workbook', version: '', sha: '', pages, check: { problems: c.problems, notes: c.notes }, says: c.says, ...(at ? { at } : {}) };

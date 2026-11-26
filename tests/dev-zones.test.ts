@@ -38,7 +38,7 @@ writeFileSync(join(root, '.cotutor', 'textbooks', `${sha}.json`), JSON.stringify
 
 interface Row { title: string; key: string; leaf: boolean; which: string; by?: string; pages: number[]; depth: number }
 interface List { books: { file: string; sha: string; lessons: Row[] }[]; stale: { sha: string; title: string | null; pages: number }[]; unreadable: string[] }
-interface Lesson { which: string; version: string; layout: string; lessons: { title: string }[]; pages: { n: number; zones: ZonePage; cand: { lines: { id: string; ch?: number[][] }[]; cells: { id: string; kind: string }[] }; by?: string }[] }
+interface Lesson { which: string; version: string; layout: string; lessons: { title: string }[]; pages: { n: number; name: string; zones: ZonePage; cand: { lines: { id: string; ch?: number[][] }[]; cells: { id: string; kind: string }[] }; by?: string }[] }
 const get = async <T>(p: string): Promise<{ status: number; json: T }> => { const r = await route('GET', p, ctx); return { status: r.status, json: r.json as T }; };
 
 // ---- 列 ----
@@ -50,7 +50,7 @@ check('列:没有旧分块、没有读不出的', list.stale.length === 0 && lis
 // ---- 读一课 ----
 const L = '/api/dev/zones/lesson?b=' + encodeURIComponent(FILE) + '&l=' + encodeURIComponent('小鱼吹泡泡@2');
 const one = (await get<Lesson>(L)).json;
-check('读一课:2–3 页、规则出的分块、候选(能写的格编号同作答区 id)', one.which === 'rules' && one.pages.map((p) => p.n).join() === '2,3' && one.pages[0].cand.cells.map((c) => c.id + ':' + c.kind).join() === '0:blank,1:empty' && one.pages[0].zones.zones.length > 0, JSON.stringify(one.pages.map((p) => p.n)));
+check('读一课:2–3 页、规则出的分块、候选(能写的格编号同作答区 id)', one.which === 'rules' && one.pages.map((p) => p.n).join() === '2,3' && one.pages.map((p) => p.name).join() === '1,2' && one.pages[0].cand.cells.map((c) => c.id + ':' + c.kind).join() === '1-格0:blank,1-格1:empty' && one.pages[0].zones.zones.length > 0, JSON.stringify(one.pages.map((p) => [p.n, p.name, p.cand.cells.map((c) => c.id)])));
 check('读一课:语文的行带每个字的左右(当孩子点认字)', one.layout === 'prose' && one.pages[0].cand.lines.some((l) => (l.ch?.length ?? 0) > 1));
 check('认不出的课 404', (await get('/api/dev/zones/lesson?b=' + encodeURIComponent(FILE) + '&l=没有这课@9')).status === 404 && (await get('/api/dev/zones/lesson?b=../x.pdf&l=小鱼吹泡泡@2')).status === 404);
 
@@ -77,8 +77,8 @@ walkZones(mine[0].zones, (z) => { if (!said && z.kind === 'para') { z.say = '小
 const ok = (await route('PUT', '/api/dev/zones/lesson', ctx, { ...body(mine), version: one.version })).json as { ok: boolean; wrote: number; problems: string[] };
 const vdir = vaultZonesDir(ws.paths.textbooks, sha);
 const meta = await readZoneBook(vdir);
-check('存:没改的第 3 页也照规则出的抄进去,一课凑齐;book.json 记工作台', ok.ok && ok.wrote === 2 && existsSync(join(vdir, 'p002.json')) && existsSync(join(vdir, 'p003.json')) && meta?.pages.p002?.by === 'workbench' && meta?.pages.p003?.by === 'workbench', JSON.stringify(ok));
-const saved = JSON.parse(readFileSync(join(vdir, 'p002.json'), 'utf8')) as ZonePage;
+check('存:没改的第 3 页也照规则出的抄进去,一课凑齐;book.json 记工作台', ok.ok && ok.wrote === 2 && existsSync(join(vdir, '001.json')) && existsSync(join(vdir, '002.json')) && meta?.pages['1']?.by === 'workbench' && meta?.pages['1']?.pdf === 2 && meta?.pages['2']?.by === 'workbench', JSON.stringify(ok));
+const saved = JSON.parse(readFileSync(join(vdir, '001.json'), 'utf8')) as ZonePage;
 let got = '';
 walkZones(saved.zones, (z) => { if (z.id === said) got = (z.say ?? '') + '|' + (z.teacher?.goal ?? ''); });
 check('存:念法、给老师的写进去了', got === '小鱼吹泡泡。|读通第 1 段', got);
@@ -95,7 +95,7 @@ check('存:拿新的 version 能接着存', again.ok);
 // ---- 还原成规则出的 ----
 const del = (await route('DELETE', L, ctx)).json as { removed: number };
 const back = (await get<Lesson>(L)).json;
-check('还原:删掉 vault 里这一课的两页,回到规则出的', del.removed === 2 && back.which === 'rules' && !existsSync(join(vdir, 'p002.json')), JSON.stringify(del));
+check('还原:删掉 vault 里这一课的两页,回到规则出的', del.removed === 2 && back.which === 'rules' && !existsSync(join(vdir, '001.json')), JSON.stringify(del));
 
 // ---- 课本换过:旧指纹的分块 ----
 const old = vaultZonesDir(ws.paths.textbooks, 'abcdef0123456789');

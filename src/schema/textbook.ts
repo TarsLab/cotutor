@@ -123,7 +123,7 @@ export interface BookLesson {
 }
 
 /** 索引的版本:取字、分行的规则改了就加一,旧缓存重做 */
-export const BOOK_INDEX_VERSION = 9;
+export const BOOK_INDEX_VERSION = 10;
 
 /**
  * 一册怎么分块(出分块的规则 src/memory/textbook-zones-rules.ts):prose = 课文(自然段、语文园地的栏目);
@@ -209,4 +209,30 @@ export function withPinyin(l: BookLine): string {
   const han = l.chars.filter((c) => /\p{Script=Han}/u.test(c.c));
   if (l.chars.length > 14 || !han.length || han.filter((c) => c.py).length < han.length * 0.8) return spacedText(l);
   return spacedText(l, ' ', (c) => (c.py ? `${c.c}(${c.py})` : c.c));
+}
+
+/**
+ * 字体的简称(给人和编程助手看的样式「宋 16」):方正的几种常见字体照字体名的头认,别的去掉「--GBK1-0」这种编码尾巴。
+ * 2026-11-26 数过人教语文、数学二上和广东版科学二上用到的
+ */
+const FONT_SHORT: [RegExp, string][] = [
+  [/^FZKT/, '楷'], [/^FZSS|^FZS3|^FZSY/, '宋'], [/^FZFS/, '仿'], [/^FZHT|^FZH(EI)?/, '黑'], [/^FZZHUNY/, '准圆'], [/^FZZY/, '中圆'], [/^FZCY/, '粗圆'],
+  [/^FZXH/, '细黑'], [/^FZLTH/, '兰亭黑'], [/^HanyuXi|pinyin/i, '拼音'], [/kenten/i, '着重号'],
+];
+/** 数字、运算符、页码用的西文字体:不分是哪一家,只分粗细 */
+const LATIN = /^(KannadaSangam|KhmerSangam|Univers|CenturyGothic|Helvetica|Futura|Arial|Times)/;
+export function fontShort(f: string): string {
+  for (const [re, s] of FONT_SHORT) if (re.test(f)) return s;
+  if (LATIN.test(f)) return /bold/i.test(f) ? '西文粗' : '西文';
+  return f.replace(/--GBK?1?-?\d*$|--GB1-0$/, '').replace(/-(Regular|Medium)$/, '');
+}
+
+/** 一行的样式:字体简称 × 字号(「楷 18」) */
+export const lineStyle = (l: Pick<BookLine, 'f' | 'z'>): string => `${fontShort(l.f)} ${Math.round(l.z * 2) / 2}`;
+
+/** 几行里字最多的样式;没有字 = undefined */
+export function styleOf(lines: readonly Pick<BookLine, 'f' | 'z' | 'chars'>[]): string | undefined {
+  const w = new Map<string, number>();
+  for (const l of lines) w.set(lineStyle(l), (w.get(lineStyle(l)) ?? 0) + l.chars.length);
+  return [...w].sort((a, b) => b[1] - a[1])[0]?.[0];
 }

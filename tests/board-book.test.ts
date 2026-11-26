@@ -174,9 +174,9 @@ const ix = bookIndexOf();
   const cellLog = (await readBoard(ws, T, date, thread)).filter((e) => e.k === 'cell');
   check('田字格里写好了:状态里这一格两笔,日志记照着哪个字写的;老师请着用笔(上一轮请了圈)就替他交', cell?.say === null && cell.asked === true && lessonPage(lCell)!.kid.cells?.['2.0']?.length === 2 && cellLog.length === 1 && cellLog[0].k === 'cell' && cellLog[0].text === '泡', JSON.stringify([cell, lessonPage(lCell)!.kid.cells, cellLog]));
   check('田字格:id 不对、坐标出格、笔画不是数组都不收', badCells.every((x) => x === null), JSON.stringify(badCells));
-  // 点读了两回:从标题读到第 2 段停了;第 3 段读到了最后。不叫老师,下一轮老师在「孩子做的」里看到
+  // 点读了两回:从标题读到第 2 段停了;第 3 段 0.75 倍速读到了最后。不叫老师,下一轮老师在「孩子做的」里看到
   const read1 = await ctx.runner.boardEvent(T, date, { k: 'read', thread, base, from: 0, to: 2 });
-  const read2 = await ctx.runner.boardEvent(T, date, { k: 'read', thread, base, from: 3, to: 3, done: true });
+  const read2 = await ctx.runner.boardEvent(T, date, { k: 'read', thread, base, from: 3, to: 3, done: true, rate: 0.75 });
   const badReads = await Promise.all([
     ctx.runner.boardEvent(T, date, { k: 'read', thread, base, from: -1, to: 2 }),
     ctx.runner.boardEvent(T, date, { k: 'read', thread, base, from: 0, to: 1.5 }),
@@ -207,7 +207,7 @@ const ix = bookIndexOf();
   const third = await kidSend(ctx, T, { text: '这个字怎么读', thread });
   await wait();
   const pr3 = promptOf(String(third.json.job));
-  check('下一轮:孩子做的里说他点读了哪几段、在哪停的', pr3.includes('自己点了课文听(点读的配音):从标题读到第 2 段,在第 2 段停了') && pr3.includes('自己点了课文听(点读的配音):读了第 3 段,读完了全文'), pr3.slice(pr3.indexOf('board:'), pr3.indexOf('board:') + 700));
+  check('下一轮:孩子做的里说他点读了哪几段、在哪停的', pr3.includes('自己点了课文听(点读的配音):从标题读到第 2 段,在第 2 段停了') && pr3.includes('自己点了课文听(点读的配音,0.75 倍速):读了第 3 段,读完了全文'), pr3.slice(pr3.indexOf('board:'), pr3.indexOf('board:') + 700));
   check('下一轮:孩子做的里说他在田字格里写了几个、照着哪个字', pr3.includes('在田字格里写了 1 个字(照着「泡」写的),写成什么样看图'), pr3.slice(pr3.indexOf('board:'), pr3.indexOf('board:') + 500));
   check('下一轮:填的空照分块的名字说', pr3.includes('在页上的空(方框、括号)里填了 1 处:「第 2 段的「像一个个」后面的空」,填的什么看图'), pr3.slice(pr3.indexOf('board:'), pr3.indexOf('board:') + 900));
   check('下一轮:窗里那一段只给老师的话(练什么、卡住怎么引、答案照格子的名字)', pr3.includes('给老师的:') && pr3.includes('- "第 2 段:练 读出小鱼的话"') && pr3.includes('卡住了:先找引号') && pr3.includes('答案 「像一个个」后面的空:月亮'), pr3.slice(pr3.indexOf('board:'), pr3.indexOf('board:') + 1200));

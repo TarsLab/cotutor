@@ -367,6 +367,26 @@ ${BACK_TINT_CSS}
   #stage.bp.bk #cv-hold .vb-side { height:22px; }
   #stage.bp.bk #cv-hold .vb-big { gap:3px; font-size:13px; }
   #stage.bp.bk #cv-hold .vb-big .vb-ic svg { width:14px; height:14px; }
+  /* 老师的签不挡字:进页照常,5 秒后或按过一次(先到哪个算哪个)只剩淡淡的头像,底、边、影、字都透明,能按的范围不变;
+     按着、刚按了一下出提示(.lit)整张回来,松手再淡。一次进这一页淡一次(CV.ghostT;设计稿 https://claude.ai/artifact/RPqnrMdNvmqjvD14ES1nS5 的 V4) */
+  #stage.bp.bk #cv-hold .vb-av, #stage.bp.bk #cv-hold .vb-side { transition:opacity .15s; }
+  #stage.bp.bk #cv-hold.ghost:not(.lit) { background:transparent; border-color:transparent; box-shadow:none; transition:background-color .6s, border-color .6s, box-shadow .6s; }
+  #stage.bp.bk #cv-hold.ghost:not(.lit) .vb-av { opacity:.3; transition:opacity .6s; }
+  #stage.bp.bk #cv-hold.ghost:not(.lit) .vb-side { opacity:0; transition:opacity .6s; }
+  /* 点读的倍速:左下角页边里一颗小钮(和老师的签同一边),只写现在的倍速,1× 灰字细边、别的学科色;点读在读、转圈、暂停时露,停下淡掉。
+     点它从签那边淡出一层纸色(同 B 站的倍速,页不压暗):四档一档一整行,现在这档学科色;点一档换好收起,点那层外面只收起 */
+  #cv-rate, #cv-rates, #cv-rates-x { display:none; }
+  body.live #stage.cv.bp.bk #cv-rate { display:block; position:absolute; z-index:3; left:calc(env(safe-area-inset-left) + 10px); bottom:calc(env(safe-area-inset-bottom) + 24px); width:68px; height:48px; padding:0; border:0; border-radius:24px; background:#fff; box-shadow:inset 0 0 0 1px #e2dfd6, 0 4px 14px #46371e24; font:inherit; font-size:17px; font-weight:700; color:#4f4b45; cursor:pointer; opacity:0; pointer-events:none; transition:opacity .35s; -webkit-tap-highlight-color:transparent; }
+  body.live.hand-left #stage.cv.bp.bk #cv-rate { left:auto; right:calc(env(safe-area-inset-right) + 10px); }
+  body.live #stage.cv.bp.bk #cv-rate.on { opacity:1; pointer-events:auto; }
+  body.live #stage.cv.bp.bk #cv-rate.odd { color:var(--bk, var(--accent)); box-shadow:inset 0 0 0 2px var(--bk, var(--accent)), 0 4px 14px #46371e24; }
+  body.live #stage.cv.bp.bk #cv-rates-x:not([hidden]) { display:block; position:absolute; inset:0; z-index:5; padding:0; border:0; background:transparent; cursor:default; }
+  body.live #stage.cv.bp.bk #cv-rates:not([hidden]) { display:flex; position:absolute; z-index:6; left:0; top:0; bottom:0; width:360px; box-sizing:border-box; padding:0 140px 0 calc(env(safe-area-inset-left) + 12px); flex-direction:column; justify-content:center; background:linear-gradient(to right, #fffdf8f8 0%, #fffdf8f0 55%, #fffdf800 100%); animation:cv-rates-in .22s ease; }
+  body.live.hand-left #stage.cv.bp.bk #cv-rates:not([hidden]) { left:auto; right:0; padding:0 calc(env(safe-area-inset-right) + 12px) 0 140px; background:linear-gradient(to left, #fffdf8f8 0%, #fffdf8f0 55%, #fffdf800 100%); }
+  #cv-rates button { flex:none; width:100%; height:min(112px, 22vh); padding:0; border:0; border-radius:20px; background:transparent; font:inherit; font-size:30px; font-weight:500; color:var(--ink); cursor:pointer; -webkit-tap-highlight-color:transparent; }
+  #cv-rates button:active { background:color-mix(in srgb, var(--bk, var(--accent)) 14%, transparent); }
+  #cv-rates button.on { color:var(--bk, var(--accent)); font-weight:700; }
+  @keyframes cv-rates-in { from { opacity:0; } to { opacity:1; } }
   #stage.cv.bp.bk #cv-cap { top:auto; bottom:calc(env(safe-area-inset-bottom) + 20px); padding:12px 22px; border-radius:18px; background:#2b2b2beb; color:#fff; }
   #st-x.st-back { display:flex; align-items:center; gap:2px; width:auto; height:48px; padding:0 4px 0 8px; border-radius:24px; background:#fffffff0; border:1px solid var(--line); box-shadow:0 4px 16px #46371e2e; color:var(--ink); }
   #st-x.st-back .bk-ic { width:24px; height:24px; color:var(--dim); display:grid; place-items:center; }
@@ -684,7 +704,7 @@ __VOICE_CSS__
     <div id="wrap">
       <div id="bmark" hidden></div>
       <div id="board"></div>
-      <div id="stage"><div class="top"><span id="st-nav"><button type="button" id="st-prev" hidden></button><span class="ttl" id="st-ttl"></span><button type="button" id="st-next" hidden></button></span><button type="button" id="st-toc" hidden></button><span id="st-bp"><button type="button" id="st-tb" hidden></button><button type="button" id="st-cam"></button><button type="button" id="st-alb"></button></span><button id="st-x" type="button"></button></div><iframe id="st-frame" hidden title="stage"></iframe><div id="st-pick" hidden></div><div id="st-act" hidden><span class="note" id="st-note"></span><button id="st-go" type="button">给老师看</button></div><button id="cv-hold" class="vb-mini" type="button"></button><button id="cv-type" type="button"><span class="ic"></span>打字</button><div id="cv-cap"></div></div>
+      <div id="stage"><div class="top"><span id="st-nav"><button type="button" id="st-prev" hidden></button><span class="ttl" id="st-ttl"></span><button type="button" id="st-next" hidden></button></span><button type="button" id="st-toc" hidden></button><span id="st-bp"><button type="button" id="st-tb" hidden></button><button type="button" id="st-cam"></button><button type="button" id="st-alb"></button></span><button id="st-x" type="button"></button></div><iframe id="st-frame" hidden title="stage"></iframe><div id="st-pick" hidden></div><div id="st-act" hidden><span class="note" id="st-note"></span><button id="st-go" type="button">给老师看</button></div><button id="cv-hold" class="vb-mini" type="button"></button><button id="cv-rate" type="button" aria-label="读得快慢" aria-expanded="false" tabindex="-1">1×</button><button id="cv-rates-x" type="button" aria-label="收起" hidden></button><div id="cv-rates" role="menu" aria-label="读得快慢" hidden></div><button id="cv-type" type="button"><span class="ic"></span>打字</button><div id="cv-cap"></div></div>
       <div id="st-dim"></div>
     </div>
     <div id="lv"><div id="lv-av"></div><div id="lv-kid"></div><div id="lv-cap"><div class="lv-prev"></div><div class="lv-cur"></div></div><div id="lv-ask"><b></b><small></small></div><div id="lv-acts"></div><button id="lv-replay" type="button" hidden><span class="ic"></span><span class="tx"></span></button><button id="lv-hold" type="button"></button><div id="lv-tools"><button type="button" id="lv-cam"><span class="ic"></span>拍照</button><button type="button" id="lv-album"><span class="ic"></span>相册</button><button type="button" id="lv-type"><span class="ic"></span>打字</button></div></div>
@@ -1493,6 +1513,7 @@ ${HOME_TILES_JS}
     // 翻走了:这一页的点读作废
     if ((RD.at && RD.at !== LS.l.at) || (ZR.at && ZR.at !== LS.l.at)) readForget();
     const read = readView();
+    rateUi();
     const key = JSON.stringify(LS.l) + (tocOn ? '|toc' : '') + '|' + JSON.stringify(read) + '|' + (nb.next ? nb.next.title : '') + '|' + (past ? Object.keys(past).length : '') + '|' + (go ? go.n : '');
     renderGo();
     if (key === LS.key) return;
@@ -1508,6 +1529,7 @@ ${HOME_TILES_JS}
     $('#st-ttl').classList.remove('open');
     $('#stage').classList.add('cv', 'bp', 'bk', 'on');
     $('#stage').classList.toggle('ph', BP.base === 'photo');
+    cvGhost(false); CV.ghostT = setTimeout(() => cvGhost(true), CV_GHOST_MS);
     frame.hidden = false; frame.src = stageUrl(S.stage.id);
     LS.key = '';
     renderGo();
@@ -1811,12 +1833,17 @@ __WORD_DRAW_JS__
 
   // ---- 舞台:一节课的页(舞台包画),点字弹的格子浮在页上 ----
   // ---- 铺满的舞台(一节课的页):「给老师看」轻点只交窗里的图、按住说 = 图和这句话一起给脑;嘴说的话浮在页底 ----
-  const CV = { capT: 0, give: null };
+  /** ghostT = 进页后几秒把老师的签淡下去(CV_GHOST_MS;按过一次就直接淡) */
+  const CV = { capT: 0, give: null, ghostT: 0 };
+  const CV_GHOST_MS = 5000;
+  /** 老师的签淡下去(on)/ 回到照常:样子在 CSS 的 #cv-hold.ghost;按着、出提示时 .lit 让它整张回来(voiceSync) */
+  const cvGhost = (on) => { clearTimeout(CV.ghostT); CV.ghostT = 0; $('#cv-hold').classList.toggle('ghost', on); };
   /** 舞台关了:等着的交图作废,浮着的字幕收起 */
   const stageClosed = () => {
     if (CV.give) { const g = CV.give; CV.give = null; g(null); }
     clearTimeout(CV.capT); CV.capT = 0; $('#cv-cap').classList.remove('on');
     $('#stage').classList.remove('cv'); $('#st-go').classList.remove('holding');
+    cvGhost(false); rateClose();
   };
   /** 铺满的舞台上嘴说的话:页底浮一条,说完 4 秒淡掉 */
   const cvCap = () => {
@@ -2692,6 +2719,7 @@ __REEL_DOCK_JS__
     if (VB.side !== side) { VB.side = side; VB.btn.side(side); }
     const v = voiceView(voiceNow());
     VB.btn.set(v);
+    $('#cv-hold').classList.toggle('lit', LV.model.status === 'holding' || Boolean(VB.hint));
     voiceFace($('#lv-av'), v.face);
     clearTimeout(VB.silentT);
     if (v.key === 'hold') { const left = VOICE_SILENT_MS - (Date.now() - Math.max(VB.loudAt, LV.holdAt)); if (left > 0) VB.silentT = setTimeout(voiceSync, left + 30); }
@@ -2770,7 +2798,11 @@ __REEL_DOCK_JS__
   const READ_FADE_MS = 5000, READ_TICK_MS = 100, READ_LEAD_MS = 120;
   /** at = 这几块属于哪一页;k / s = 第几块第几句;mode = 钮的样子(playing 暂停钮、loading 转圈、paused 播放钮、rest 淡掉了);from = 这一回从哪一块读起;
    *  times = 这一页整篇的声音里第 k 块第 s 句从第几毫秒起(拿到才有);req = 第几回要(停了、翻走了,晚到的作废) */
-  const RD = { at: '', nos: [], parts: [], k: -1, s: 0, mode: '', from: -1, times: null, req: 0, fadeT: 0, tick: 0 };
+  const RD = { at: '', nos: [], parts: [], k: -1, s: 0, mode: '', from: -1, times: null, req: 0, fadeT: 0, tick: 0, rate: 1 };
+  /** 倍速(rate):左下角那颗钮选,不记住——换一课、翻走回到 1×(readForget、readTap 换了页);放慢不改音高(浏览器的 preservesPitch 缺省开着),底色照放到第几秒走自己对得上 */
+  const READ_RATES = [1.25, 1, 0.75, 0.5];
+  /** 把倍速放到共享的 Audio 上(换 src 会回到 defaultPlaybackRate,两个都设);点读一块、别的声音放之前设回 1 */
+  const readRate = (r) => { try { audioEl.defaultPlaybackRate = r; audioEl.playbackRate = r; } catch {} };
   /** 点读一块(下面 hearTap):id / label = 在念哪一块;at = 它属于哪一页;mode = loading 在等合成 / playing 在念;req = 第几回(停了、换了,晚到的作废) */
   const ZR = { id: '', label: '', at: '', mode: '', req: 0 };
   /** 这一页能不能点读:实时老师页、这位老师有点读的声音、语文课本的一课(不是目录) */
@@ -2782,7 +2814,7 @@ __REEL_DOCK_JS__
     const from = RD.nos[RD.from], to = RD.nos[Math.max(0, Math.min(RD.k, RD.nos.length - 1))];
     const ok = RD.from >= 0 && S.thread && LS.l && RD.at === LS.l.at && from !== undefined && to !== undefined;
     RD.from = -1;
-    if (ok) lvSend({ t: 'board', body: { k: 'read', thread: S.thread, base: RD.at, from, to, ...(done ? { done: true } : {}) } });
+    if (ok) lvSend({ t: 'board', body: { k: 'read', thread: S.thread, base: RD.at, from, to, ...(done ? { done: true } : {}), ...(RD.rate !== 1 ? { rate: RD.rate } : {}) } });
   };
   /** 整篇每句的时间:有了直接给;没有叫服务端合成(第一次要等整篇);块数、句数对不上 = 读不了 */
   const readLoad = async () => {
@@ -2797,7 +2829,7 @@ __REEL_DOCK_JS__
   /** 放到第几秒 → 在读哪一块哪一句(只往后走:从一块起读时先放的那一点不算回到上一句) */
   const readTick = () => {
     if (LV.model.status !== 'reading' || !RD.times || RD.k < 0) return;
-    const t = audioEl.currentTime * 1000 + READ_LEAD_MS;
+    const t = audioEl.currentTime * 1000 + READ_LEAD_MS * RD.rate;
     let k = RD.k, s = RD.s;
     RD.times.forEach((x, kk) => x.forEach((ms, ss) => { if (ms <= t && (kk > k || (kk === k && ss > s))) { k = kk; s = ss; } }));
     if (k !== RD.k || s !== RD.s) { RD.k = k; RD.s = s; lsShow(); }
@@ -2821,12 +2853,14 @@ __REEL_DOCK_JS__
   };
   /** 从第 RD.k 块起放(整篇的声音已经在 Audio 上就直接跳过去) */
   const readFrom = () => {
-    const a = audioEl, src = readUrl(true), sec = Math.max(0, (RD.times[RD.k][0] - READ_LEAD_MS) / 1000);
+    const a = audioEl, src = readUrl(true), sec = Math.max(0, (RD.times[RD.k][0] - READ_LEAD_MS * RD.rate) / 1000);
+    readRate(RD.rate);
     a.onended = () => readDone();
     a.onerror = () => readFail();
     a.onplaying = () => readMode('playing');
     if (a.src.split('#')[0] === src && a.readyState > 0) a.currentTime = sec;
     else a.src = src + '#t=' + sec.toFixed(2);
+    readRate(RD.rate);
     const pr = a.play(); if (pr && pr.catch) pr.catch((e) => { if (!(e && e.name === 'AbortError')) readFail(); });
     readQuiet(); RD.tick = setInterval(readTick, READ_TICK_MS);
   };
@@ -2839,6 +2873,7 @@ __REEL_DOCK_JS__
     const a = audioEl;
     if ((RD.mode === 'paused' || RD.mode === 'rest') && RD.times && a.src.split('#')[0] === readUrl(true) && a.currentTime > 0 && !a.ended) {
       readMode('playing');
+      readRate(RD.rate);
       a.onended = () => readDone(); a.onerror = () => readFail(); a.onplaying = null;
       const pr = a.play(); if (pr && pr.catch) pr.catch(() => readFail());
       readQuiet(); RD.tick = setInterval(readTick, READ_TICK_MS);
@@ -2867,7 +2902,7 @@ __REEL_DOCK_JS__
   const readTap = (m) => {
     if (!readOk() || !Array.isArray(m.parts) || !Array.isArray(m.nos) || m.parts.length !== m.nos.length || typeof m.k !== 'number' || !(m.k >= 0 && m.k < m.parts.length)) return;
     unlock();
-    if (RD.at !== LS.l.at || RD.parts.join() !== m.parts.join()) { RD.at = LS.l.at; RD.parts = m.parts.slice(); RD.nos = m.nos.slice(); RD.k = -1; RD.s = 0; RD.mode = ''; RD.from = -1; RD.times = null; }
+    if (RD.at !== LS.l.at || RD.parts.join() !== m.parts.join()) { RD.at = LS.l.at; RD.parts = m.parts.slice(); RD.nos = m.nos.slice(); RD.k = -1; RD.s = 0; RD.mode = ''; RD.from = -1; RD.times = null; RD.rate = 1; }
     // 在念分块里的一块:换成读课文
     if (ZR.id) { ZR.req++; hearEnd(); }
     const reading = LV.model.status === 'reading';
@@ -2881,7 +2916,7 @@ __REEL_DOCK_JS__
   const readForget = () => {
     const was = LV.model.status === 'reading';
     ZR.req++; ZR.id = ''; ZR.label = ''; ZR.at = ''; ZR.mode = '';
-    clearTimeout(RD.fadeT); readQuiet(); RD.req++; RD.at = ''; RD.k = -1; RD.s = 0; RD.mode = ''; RD.from = -1; RD.times = null;
+    clearTimeout(RD.fadeT); readQuiet(); RD.req++; RD.at = ''; RD.k = -1; RD.s = 0; RD.mode = ''; RD.from = -1; RD.times = null; RD.rate = 1; rateClose();
     if (was) setTimeout(() => { if (LV.model.status === 'reading') liveDispatch({ type: 'readStop' }); }, 0);
   };
   // ---- 点读一块(分块里写了念法 say 的块,docs/dev/课本.md;设计稿 https://claude.ai/artifact/CHC2ikn5Dy1FggG8wF1WqW):舞台报 hear(块的 id、叫法),
@@ -2904,6 +2939,7 @@ __REEL_DOCK_JS__
     hearMode('loading');
     a.onended = end; a.onerror = end;
     a.onplaying = () => { if (req === ZR.req) hearMode('playing'); };
+    readRate(1);
     a.src = hearUrl(ZR.id);
     const pr = a.play(); if (pr && pr.catch) pr.catch((e) => { if (!(e && e.name === 'AbortError')) end(); });
   };
@@ -2918,6 +2954,32 @@ __REEL_DOCK_JS__
     if (S.thread && m.label.trim()) lvSend({ t: 'board', body: { k: 'hear', thread: S.thread, base: LS.l.at, text: m.label.trim().slice(0, 60) } });
     liveDispatch({ type: 'read' });
   };
+  /** 倍速钮露不露:在读课文这一课(转圈、在读、暂停;停下淡掉的 rest 不露);不露了侧板也收 */
+  const rateUi = () => {
+    const show = readOk() && !ZR.id && RD.at === LS.l.at && RD.k >= 0 && (RD.mode === 'loading' || RD.mode === 'playing' || RD.mode === 'paused');
+    const b = $('#cv-rate'), tx = RD.rate + '×';
+    b.classList.toggle('on', show); b.tabIndex = show ? 0 : -1;
+    b.classList.toggle('odd', RD.rate !== 1);
+    if (b.textContent !== tx) b.textContent = tx;
+    b.setAttribute('aria-label', '读得快慢,现在 ' + tx);
+    if (!show) rateClose();
+  };
+  const rateClose = () => { $('#cv-rates').hidden = true; $('#cv-rates-x').hidden = true; $('#cv-rate').setAttribute('aria-expanded', 'false'); };
+  const rateOpen = () => {
+    const box = $('#cv-rates');
+    box.innerHTML = READ_RATES.map((r) => '<button type="button" role="menuitemradio" data-r="' + r + '" aria-checked="' + (r === RD.rate) + '"' + (r === RD.rate ? ' class="on"' : '') + '>' + r + '×</button>').join('');
+    box.hidden = false; $('#cv-rates-x').hidden = false; $('#cv-rate').setAttribute('aria-expanded', 'true');
+  };
+  $('#cv-rate').addEventListener('click', () => { if ($('#cv-rates').hidden) rateOpen(); else rateClose(); });
+  $('#cv-rates-x').addEventListener('click', rateClose);
+  // 选一档:换好、收起;在读的立刻变快慢,接着读不重来(暂停着的,接着读时用上)
+  $('#cv-rates').addEventListener('click', (e) => {
+    const t = e.target.closest('button[data-r]');
+    if (!t) return;
+    const r = Number(t.dataset.r);
+    if (READ_RATES.includes(r)) { RD.rate = r; if (LV.model.status === 'reading' && !ZR.id) readRate(r); }
+    rateClose(); rateUi();
+  });
   /** 发给舞台的点读:null = 这一页不点读;k = -1 没在读,s = 第几截(舞台铺那一截;一截是一个停顿);invite = 进了这一课还没点过读(RD.at 点了才记上、翻走就清掉),标题前的钮先摆着;
    *  zone = 在念分块里的哪一块(舞台铺它) */
   const readView = () => {
@@ -3327,6 +3389,8 @@ __REEL_DOCK_JS__
   bindHold($('#lv-hold'), 120, holdTap);
   // 板铺满时那颗小头像:同左栏那颗(同一组按钮,字一样;口语课、看图说话铺着照片时只露这颗,关麦也在这)
   bindHold($('#cv-hold'), 80, holdTap);
+  // 按过一次签,孩子知道它在哪了:不等 5 秒,直接淡(按着时 .lit 让它整张在)
+  $('#cv-hold').addEventListener('pointerdown', () => { if ($('#stage').classList.contains('bk')) cvGhost(true); });
   /**
    * 「给老师看」(板):轻点 = 只交板;按住说(满 300 毫秒,比头像长一点,免得点一下成了按住)= 板和这句话一起给老师。
    * 嘴没连上、一直听、老师在想、板上没画:只能点(点了照旧交)

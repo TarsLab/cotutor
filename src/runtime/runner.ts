@@ -376,7 +376,7 @@ export class Runner {
    *  - 点字 {k:'pick', text}:回这个字词的念法(照片上认字时模型写好的「傍,傍晚的傍」,嘴照念;没有就念它自己);揭开 {k:'reveal', text}:嘴不念
    *  - 自己翻页 {k:'open', title}:目录上点了一课(title 是目录上那一项,tocEntries),在一课里按「目录」回去(title = 目录,窗停在刚才那一课那一行),或翻到上一课、下一课(目录上的另一项)。
    *    照这本书的目录翻过去、记进板的日志;点的是一课就记下这本书翻到哪了(book-last)。不叫老师:下一轮「孩子做的」说他自己翻到了哪
-   *  - 点读了一回 {k:'read', from, to, done?}(课本上点了标题或段首,孩子端放的配音;读到停下才报):记一笔,不叫老师
+   *  - 点读了一回 {k:'read', from, to, done?, rate?}(rate = 不是 1× 的倍速)(课本上点了标题或段首,孩子端放的配音;读到停下才报):记一笔,不叫老师
    *  作业本是连着滚的一整本:孩子滚到哪天、在目录上点了哪天都是挪窗(view),窗停下来说成「11月20日第 1 张:第 3 题」
    * 话题不是今天的一节课、东西不对:回 null,什么都不记
    */
@@ -434,7 +434,8 @@ export class Runner {
       if (!int(b.from) || !int(b.to)) return null;
       const cur = lessonPage(await readLesson(ws, tutor, date, thread));
       if (!cur || cur.id !== base || cur.kind !== 'book') return null;
-      await appendBoard(ws, tutor, date, thread, { at, k: 'read', base, from: b.from, to: b.to, ...(b.done === true ? { done: true as const } : {}) });
+      const rate = b.rate === 0.5 || b.rate === 0.75 || b.rate === 1.25 ? b.rate : undefined;
+      await appendBoard(ws, tutor, date, thread, { at, k: 'read', base, from: b.from, to: b.to, ...(b.done === true ? { done: true as const } : {}), ...(rate ? { rate } : {}) });
       return { thread, say: null, still: false };
     }
     // 点读一块:孩子点了分块里的一块听它的念法(声音孩子端自己放),记一笔,不叫老师

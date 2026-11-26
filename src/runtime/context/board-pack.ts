@@ -123,7 +123,7 @@ export function slateOf(x: SlateInput): NonNullable<ContextPack['slate']> {
   // 点读一块:点了哪几块听(照先后,同一块只说一次,最多说最后五块)
   const heard = [...new Set(since.filter((e): e is BoardEvent & { k: 'hear' } => e.k === 'hear' && e.base === base).map((e) => e.text))].slice(-5);
   if (heard.length) did.push(`自己点了「${heard.join('」「')}」听(点读的配音)`);
-  for (const e of reads.slice(-3)) did.push(`自己点了课文听(点读的配音):${e.from === e.to ? `读了${part(e.from)}` : `从${part(e.from)}读到${part(e.to)}`}${e.done ? ',读完了全文' : `,在${part(e.to)}停了`}`);
+  for (const e of reads.slice(-3)) did.push(`自己点了课文听(点读的配音${e.rate ? `,${e.rate} 倍速` : ''}):${e.from === e.to ? `读了${part(e.from)}` : `从${part(e.from)}读到${part(e.to)}`}${e.done ? ',读完了全文' : `,在${part(e.to)}停了`}`);
   // 白纸条上的图形:画法照几何算的大概(状态,不是这一轮才做的;以图为准)
   if (x.lesson.strip) did.push(...x.lesson.strip);
   // 遮了拼音的、盖住印好的字的:揭了哪些、没揭哪些(这一页上揭过的都算)

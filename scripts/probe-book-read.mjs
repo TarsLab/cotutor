@@ -7,8 +7,10 @@
  *  二、鼠标移到第 6 段段首的空白:浅浅出一个描边的播放钮;移开就收。
  *  三、点它:钮变成暂停的样子(合成慢时先转圈),假配音收到整篇(一次,SSE 带字的时间);标题前的钮收起;正在读的那一截(停顿处切)铺一层学科色(.bk-say),页上不刷黄;换到第二截框跟着挪。
  *  四、第 6 段读完:同一份声音接着放,钮挪到第 7 段。
- *  五、点第 7 段的钮:暂停(钮变回播放的样子);报 {k:'read', from: 6, to: 7};服务端记进板的日志。
- *  六、孩子再说一句:那一轮的上下文包「孩子做的」里有「自己点了课文听」。
+ *  三之二、读的时候左下角露倍速钮(1×);点开淡出一层,选 0.75×:声音立刻放慢、钮写 0.75×、层收起。
+ *  五、点第 7 段的钮:暂停(钮变回播放的样子);报 {k:'read', from: 6, to: 7, rate: 0.75};服务端记进板的日志。
+ *  六、孩子再说一句:那一轮的上下文包「孩子做的」里有「自己点了课文听(点读的配音,0.75 倍速)」。
+ *  老师的签:按过一次(孩子说话)就淡成只剩头像(底、字透明)。
  * iPad 横屏各截一张。
  * 用法:node scripts/probe-book-read.mjs --pdf <语文课本 PDF> [--out <截图目录>]
  */
@@ -151,6 +153,9 @@ try {
   ok('孩子说「我要预习坐井观天」:收下了', await say('我要预习坐井观天'));
   const landed = await until(`(() => { const d = ${STAGE}; return d && document.querySelector('#st-ttl').textContent === '坐井观天' && d.querySelector('.bk-board')?.dataset.phase === 'ready'; })()`, 25000);
   ok('翻到《坐井观天》', Boolean(landed));
+  await sleep(800);
+  const ghost = await evaluate(`(() => { const b = document.querySelector('#cv-hold'); const side = b.querySelector('.vb-side'); return { ghost: b.classList.contains('ghost'), lit: b.classList.contains('lit'), bg: getComputedStyle(b).backgroundColor, side: side ? +getComputedStyle(side).opacity : null, w: b.getBoundingClientRect().width }; })()`);
+  ok('按过一次签:淡成只剩头像(底透明、字透明),能按的宽度不变', ghost.ghost && !ghost.lit && ghost.bg === 'rgba(0, 0, 0, 0)' && ghost.side === 0 && ghost.w > 80, JSON.stringify(ghost));
   await idle();
   await sleep(2500);
   const ix = await bookIndex(wsx.paths.textbooks, join(tmp, 'cache'), name);
@@ -195,6 +200,22 @@ try {
   }
   console.log('  ', await shot('2-在读.png'));
 
+  // 三之二、倍速:左下角的钮,点开选 0.75×
+  const rb = await center('#cv-rate.on');
+  ok('读的时候左下角露倍速钮,写 1×', Boolean(rb) && rb.x < 120 && (await evaluate(`document.querySelector('#cv-rate').textContent`)) === '1×', JSON.stringify(rb));
+  await tapAt(rb.x, rb.y);
+  await sleep(300);
+  const opts = await evaluate(`[...document.querySelectorAll('#cv-rates:not([hidden]) button')].map((b) => b.textContent + (b.classList.contains('on') ? '*' : ''))`);
+  ok('点开:四档,1× 是现在这档', opts.join() === '1.25×,1×*,0.75×,0.5×', JSON.stringify(opts));
+  console.log('  ', await shot('2b-倍速.png'));
+  const o75 = await center('#cv-rates button[data-r="0.75"]');
+  await tapAt(o75.x, o75.y);
+  await sleep(300);
+  const r75 = await evaluate(`(() => ({ tx: document.querySelector('#cv-rate').textContent, odd: document.querySelector('#cv-rate').classList.contains('odd'), closed: document.querySelector('#cv-rates').hidden }))()`);
+  ok('选 0.75×:钮写 0.75×、学科色,层收起', r75.tx === '0.75×' && r75.odd && r75.closed, JSON.stringify(r75));
+  const still = await btn();
+  ok('换档不停:还在读', still.some((b) => b.mode === 'playing'), JSON.stringify(still));
+
   // 四、读完第 6 段:同一份声音接着放,钮挪到第 7 段
   const moved = await until(`(() => { const d = ${STAGE}; const g = d && d.querySelector('.bk-read-btn:not(.bk-gone)'); const c = g && g.querySelector('circle'); return g && g.dataset.mode === 'playing' && Math.abs(+c.getAttribute('cy') - ${parts[k7].dot[1]}) < 1 ? true : null; })()`, 30000);
   ok('第 6 段读完:接着读第 7 段,钮挪过去;不再合成', Boolean(moved) && tts.requests.length === n0 + 1);
@@ -202,13 +223,15 @@ try {
 
   // 五、点第 7 段的钮:暂停,报 read
   const nf = frames.length;
-  const c2 = await camera();
+  // 读到窗外挪了窗:等它停稳再量(慢放时挪窗正好落在这一会儿)
+  let c2 = await camera();
+  for (let i = 0; i < 20; i++) { await sleep(300); const c = await camera(); if (c.ty === c2.ty && c.tx === c2.tx) break; c2 = c; }
   const z7 = { x: c2.left + c2.tx + (parts[k7].hit[0] + parts[k7].hit[2]) / 2 * c2.s, y: c2.top + c2.ty + parts[k7].dot[1] * c2.s };
   await tapAt(z7.x, z7.y);
   await sleep(700);
   const ps = await btn();
   const rf = frames.slice(nf).find((f) => f.t === 'board' && f.body?.k === 'read');
-  ok('点在读的那段:暂停,钮变回播放的样子;报 read 从第 6 段到第 7 段', ps.length === 1 && ps[0].mode === 'paused' && rf?.body?.from === 6 && rf.body.to === 7 && !rf.body.done, JSON.stringify({ ps, rf }));
+  ok('点在读的那段:暂停,钮变回播放的样子;报 read 从第 6 段到第 7 段、0.75 倍速', ps.length === 1 && ps[0].mode === 'paused' && rf?.body?.from === 6 && rf.body.to === 7 && !rf.body.done && rf.body.rate === 0.75, JSON.stringify({ ps, rf }));
   const lp = await lit();
   ok('暂停:那一截的底色淡一半、留着', lp.length === 1 && lp[0].soft && lp[0].say.startsWith(`${k7}.`), JSON.stringify(lp));
   console.log('  ', await shot('4-暂停.png'));
@@ -224,7 +247,7 @@ try {
   const last = (await day()).messages.slice(-1)[0];
   const run = JSON.parse(readFileSync(join(wsRoot, 'conversations', T, `${(await day()).date}.${last.job}.run.json`), 'utf8'));
   const pr = run.prompt.slice(run.prompt.indexOf('  board:'), run.prompt.indexOf('  board:') + 2500);
-  ok('下一轮的上下文包:孩子做的里有点读', pr.includes('自己点了课文听(点读的配音):从第 6 段读到第 7 段,在第 7 段停了'), pr);
+  ok('下一轮的上下文包:孩子做的里有点读', pr.includes('自己点了课文听(点读的配音,0.75 倍速):从第 6 段读到第 7 段,在第 7 段停了'), pr);
   ok('页面没有脚本报错', errors.length === 0, errors.slice(0, 3).join(' | '));
   console.log(`\n截图在 ${shots}`);
   ws.close();

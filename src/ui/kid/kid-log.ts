@@ -9,12 +9,13 @@
  * 麦克风权限变了、kidLog.blocked('autoplay')(老师的声音被浏览器拦了,一次打开只记一次)各记一行 perm。
  * 连接(7.3):kidLog.offline(on) 心跳断了 / 又通了,通了那一下记 net offline 与断了多久;kidLog.live(opened, ms) 实时老师的连接不是孩子自己收的、自己关了。
  * 同一次打开里同一条报错只报一次、最多 20 条(防一个死循环写满文件,是护栏不是限额);只收脚本错,图片、声音读不出不收。
+ * 点读课文的声音不对劲(kidLog.read:提前读完、进度不动,kid-page 的 readOdd)记一行 read,一次打开最多 20 条。
  * 用在首页 / 老师页(kid-page.ts,各种模式都带)、听写(中、英)、口语课;tests/kid-log.test.ts 盯着这几页都带它。
  * 脚本是 ES5、没有反斜杠与反引号(插进各页的模板字符串)。
  */
 export const KID_LOG_JS = `
   var kidLog = (function () {
-    var sent = {}, n = 0, page = '', mode = 'kid', v = '', ctx = null, fgSince = 0, blocked = {}, offSince = 0;
+    var sent = {}, n = 0, page = '', mode = 'kid', v = '', ctx = null, fgSince = 0, blocked = {}, offSince = 0, reads = 0;
     var cut = function (s, k) { s = String(s == null ? '' : s); return s.length > k ? s.slice(0, k) : s; };
     var post = function (row) { try { fetch('/api/kid/log', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(row), keepalive: true, credentials: 'same-origin' }).catch(function () {}); } catch (e) {} };
     var report = function (msg, where, stack) {
@@ -52,6 +53,13 @@ export const KID_LOG_JS = `
       live: function (opened, ms) {
         if (mode !== 'kid') return;
         post({ k: 'net', page: page, what: 'live', opened: Boolean(opened), ms: Math.round(ms || 0) });
+      },
+      read: function (what, info) {
+        if (mode !== 'kid' || reads >= 20) return;
+        reads++;
+        var row = { k: 'read', page: page, v: v, what: what };
+        for (var key in info) row[key] = info[key];
+        post(row);
       },
       blocked: function (what) {
         if (mode !== 'kid' || blocked[what]) return;

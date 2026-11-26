@@ -10,6 +10,8 @@
  *  三之二、读的时候左下角露倍速钮(1×);点开淡出一层,选 0.75×:声音立刻放慢、钮写 0.75×、层收起。
  *  五、点第 7 段的钮:暂停(钮变回播放的样子);报 {k:'read', from: 6, to: 7, rate: 0.75};服务端记进板的日志。
  *  六、孩子再说一句:那一轮的上下文包「孩子做的」里有「自己点了课文听(点读的配音,0.75 倍速)」。
+ *  七、从最后一段读到课文最后,再点它:重装这一课的声音、从头读这一段,底色照样一截一截走;正常读不记流水。
+ *  八、把页面看到的播放进度冻住(假装播放器进度乱了):流水记一行 stall,放完记一行 early(.cotutor/kid-log/)。
  *  老师的签:按过一次(孩子说话)就淡成只剩头像(底、字透明)。
  * iPad 横屏各截一张。
  * 用法:node scripts/probe-book-read.mjs --pdf <语文课本 PDF> [--out <截图目录>]
@@ -248,6 +250,54 @@ try {
   const run = JSON.parse(readFileSync(join(wsRoot, 'conversations', T, `${(await day()).date}.${last.job}.run.json`), 'utf8'));
   const pr = run.prompt.slice(run.prompt.indexOf('  board:'), run.prompt.indexOf('  board:') + 2500);
   ok('下一轮的上下文包:孩子做的里有点读', pr.includes('自己点了课文听(点读的配音,0.75 倍速):从第 6 段读到第 7 段,在第 7 段停了'), pr);
+  // 七、读到最后再点:重装、底色照走
+  await sleep(1500);
+  const last7 = parts.length - 1;
+  /** 读到窗外会挪窗:等停稳了量第 k 块段首在屏幕上哪 */
+  const tapPart = async (k) => {
+    for (let i = 0; i < 3; i++) {
+      let c = await camera();
+      for (let j = 0; j < 20; j++) { await sleep(300); const n = await camera(); if (n.ty === c.ty && n.tx === c.tx) break; c = n; }
+      const y = c.top + c.ty + parts[k].dot[1] * c.s, x = c.left + c.tx + (parts[k].hit[0] + parts[k].hit[2]) / 2 * c.s;
+      if (y > c.top + 80 && y < c.top + c.h - 60) { await tapAt(x, y); return true; }
+      // 不在窗里:滚过去
+      await send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: c.left + c.w / 2, y: c.top + c.h / 2, deltaX: 0, deltaY: y - (c.top + c.h / 2) });
+    }
+    return false;
+  };
+  const says = () => stageEval(`(d) => d.querySelector('.bk-say g:not(.bk-gone)')?.dataset.say ?? null`);
+  /** 读这一块时底色走过哪几截,读完(底色收了)为止 */
+  const follow = async () => {
+    const seen = [];
+    for (let t = 0; t < 60000; t += 100) {
+      const x = await says();
+      if (x && seen.at(-1) !== x) seen.push(x);
+      if (!x && seen.length) break;
+      await sleep(100);
+    }
+    return seen;
+  };
+  const every = parts[last7].sents.map((_, s) => `${last7}.${s}`).join();
+  ok('最后一段段首点得到', await tapPart(last7));
+  const f1 = await follow();
+  // 上一回停在这一段的话从停的那一截接着读
+  ok('读最后一段到课文最后:底色一截一截走', f1.length > 1 && every.endsWith(f1.join()), JSON.stringify({ f1, every }));
+  await sleep(1000);
+  await tapPart(last7);
+  const f2 = await follow();
+  ok('读完再点这一段:从这一段第一截起,底色照样走', f2.join() === every, JSON.stringify({ f2, every }));
+  const flows = () => { try { return readFileSync(join(wsRoot, '.cotutor', 'kid-log', `${new Date().toLocaleDateString('sv')}.jsonl`), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((r) => r.k === 'read'); } catch { return []; } };
+  ok('正常读不记流水', flows().length === 0, JSON.stringify(flows()));
+
+  // 八、进度冻住
+  await evaluate(`(() => { const d = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'currentTime'); window.__ct = d; Object.defineProperty(HTMLMediaElement.prototype, 'currentTime', { configurable: true, get() { return 0.5; }, set(v) { d.set.call(this, v); } }); })()`);
+  await sleep(1000);
+  await tapPart(0);
+  const rows = await (async () => { for (let t = 0; t < 60000; t += 300) { const r = flows(); if (r.some((x) => x.what === 'early')) return r; await sleep(300); } return flows(); })();
+  await evaluate(`Object.defineProperty(HTMLMediaElement.prototype, 'currentTime', window.__ct)`);
+  const st = rows.find((r) => r.what === 'stall'), early = rows.find((r) => r.what === 'early');
+  ok('进度冻住:记一行 stall、放完记一行 early,带哪一课、看到第几秒', rows.length === 2 && st?.seen === 0.5 && early?.seen === 0.5 && early.end > 3 && early.base.includes('#坐井观天') && early.tutor === T && Boolean(early.thread), JSON.stringify(rows));
+
   ok('页面没有脚本报错', errors.length === 0, errors.slice(0, 3).join(' | '));
   console.log(`\n截图在 ${shots}`);
   ws.close();

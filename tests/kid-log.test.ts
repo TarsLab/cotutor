@@ -125,6 +125,17 @@ check('KID_LOG_JS 能插进模板字符串(没有反斜杠、反引号)', !/[\\`
   const np = run();
   np.log.start({ page: 'kid', mode: 'preview' }); np.log.offline(true); np.log.offline(false); np.log.live(false, 0);
   check('预览、家长端不记连接', np.posts.length === 0);
+  // 点读的声音不对劲:带页面给的那几样;一次打开最多 20 条
+  const rd = run();
+  rd.log.start({ page: 'kid', mode: 'kid', v: 'abc' });
+  const had = rd.posts.length;
+  rd.log.read('stall', { block: 1, pos: 2.31 });
+  const one = rd.posts[had];
+  for (let i = 0; i < 30; i++) rd.log.read('early', {});
+  check('点读不对劲记一行 read,带版本和页面给的;最多 20 条', one.k === 'read' && one.what === 'stall' && one.v === 'abc' && one.block === 1 && one.pos === 2.31 && rd.posts.length - had === 20, JSON.stringify(one));
+  const rp = run();
+  rp.log.start({ page: 'kid', mode: 'reel' }); rp.log.read('stall', {});
+  check('录像里不记点读', rp.posts.length === 0);
 }
 
 // ---- 各页都带 ----
@@ -172,6 +183,11 @@ const netOk = await Promise.all([{ k: 'net', page: 'kid', what: 'offline', ms: 1
 const netBad = await Promise.all([{ k: 'net', what: 'wifi', ms: 1 }, { k: 'net', what: 'offline' }, { k: 'net', what: 'offline', ms: -1 }].map((b) => route('POST', '/api/kid/log', ctx, b)));
 check('连接:断线、实时收下;不认得的、没有毫秒、负的 400', netOk.every((r) => r.status === 200) && netBad.every((r) => r.status === 400), netBad.map((r) => r.status).join());
 check('前台一笔收下;0、超过 6 小时、不是数的 400', fgOk.status === 200 && (await readKidLog(ctx.ws, ['2026-10-22'])).some((l) => l.k === 'fg' && l.ms === 90_000) && fgBad.every((r) => r.status === 400), fgBad.map((r) => r.status).join());
+
+const readOk = await route('POST', '/api/kid/log', ctx, { k: 'read', page: 'kid', v: 'abc', what: 'early', tutor: 'chinese-tutor', thread: '2118-1', base: '语文.pdf#朱德的扁担', block: 1, line: 0, pos: 66.9, seen: 2.31, end: 66, dur: null, ready: 4, paused: true, rate: 0.75 }, 'local', { device: id });
+const readBad = await route('POST', '/api/kid/log', ctx, { k: 'read', what: 'slow' });
+const readRow = (await readKidLog(ctx.ws, ['2026-10-22'])).find((l) => l.k === 'read');
+check('点读不对劲收下一行(没有的数记 0);不认得的 400', readOk.status === 200 && readBad.status === 400 && readRow?.k === 'read' && readRow.what === 'early' && readRow.seen === 2.31 && readRow.dur === 0 && readRow.base === '语文.pdf#朱德的扁担', JSON.stringify(readRow));
 
 const capsOpen = await route('POST', '/api/kid/log', ctx, { ...openBody, caps: { mic: 'granted', gum: true, sr: false } }, 'local', { device: id });
 check('打开带 caps:设备表记最近的;老页面带的 sr 不收', capsOpen.status === 200 && JSON.stringify((await readDevices(ctx.ws))[id].caps) === '{"mic":"granted","gum":true}');

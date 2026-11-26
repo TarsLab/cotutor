@@ -346,20 +346,32 @@ export const readLessonText = (texts: readonly ReadText[]): string => texts.map(
 /**
  * 整篇的声音里每一句从第几毫秒起(times[k][s]):把合成回来的字(一个字一条,标点粘在后一个字前面)连成一串,
  * 句里的字(不算标点、空白)照先后一个一个对上去,句的起点 = 对上的第一个字的起点;一个字都没对上的句照前一句。
+ * 句子开头的字对不上时(页上印「1928年」,合成回来是「一九二八年」),起点往前取到对上的那个字之前最近的停顿后的第一个字,
+ * 没有停顿就取上一句对完的下一个字——不然从这一句起读会跳过开头的数。
  * end = 最后一个字读完
  */
 export function readTimes(texts: readonly ReadText[], words: readonly { text: string; begin_time: number; end_time: number }[]): { times: number[][]; end: number } {
-  const chars: { c: string; t: number }[] = [];
-  for (const w of words) for (const c of Array.from(w.text)) if (!PUNCT.test(c)) chars.push({ c, t: w.begin_time });
+  // pause = 这个字前面粘着标点:一个停顿后的第一个字
+  const chars: { c: string; t: number; pause: boolean }[] = [];
+  let pause = false;
+  for (const w of words) for (const c of Array.from(w.text)) {
+    if (PUNCT.test(c)) { pause = true; continue; }
+    chars.push({ c, t: w.begin_time, pause });
+    pause = false;
+  }
   let at = 0, prev = 0;
   const times = texts.map((x) => x.sents.map((sent) => {
-    let start: number | null = null;
+    let start: number | null = null, missed = false;
     for (const c of Array.from(sent)) {
       if (PUNCT.test(c)) continue;
       let j = at;
       while (j < chars.length && j < at + SAY_LOOK && chars[j].c !== c) j++;
-      if (j >= chars.length || chars[j].c !== c) continue;
-      if (start === null) start = chars[j].t;
+      if (j >= chars.length || chars[j].c !== c) { if (start === null) missed = true; continue; }
+      if (start === null) {
+        let from = j;
+        if (missed) while (from > at && !chars[from].pause) from--;
+        start = chars[from].t;
+      }
       at = j + 1;
     }
     prev = start ?? prev;

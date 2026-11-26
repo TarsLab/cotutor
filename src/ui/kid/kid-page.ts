@@ -2796,9 +2796,12 @@ __REEL_DOCK_JS__
   //      暂停停在那一秒,再点那一块的钮接着读;点别的块跳到那一块;停下 READ_FADE_MS 钮淡掉(再点还是接着读)。
   //      读到哪停的报给服务端记一笔(下一轮老师在「孩子做的」里看到)。谁让谁在 liveStep(reading);这里只取、放,告诉舞台钮在哪一块、什么样(lsShow 的 read) ----
   const READ_FADE_MS = 5000, READ_TICK_MS = 100, READ_LEAD_MS = 120;
+  /** 记流水的两条线:在读、放到第几秒这么久没变 = 进度不动;报读完时看到的进度离课文最后一个字还差这么多秒 = 提前读完 */
+  const READ_STALL_MS = 3000, READ_EARLY_S = 2;
   /** at = 这几块属于哪一页;k / s = 第几块第几句;mode = 钮的样子(playing 暂停钮、loading 转圈、paused 播放钮、rest 淡掉了);from = 这一回从哪一块读起;
-   *  times = 这一页整篇的声音里第 k 块第 s 句从第几毫秒起(拿到才有);req = 第几回要(停了、翻走了,晚到的作废) */
-  const RD = { at: '', nos: [], parts: [], k: -1, s: 0, mode: '', from: -1, times: null, req: 0, fadeT: 0, tick: 0, rate: 1 };
+   *  times = 这一页整篇的声音里第 k 块第 s 句从第几毫秒起(拿到才有),end = 最后一个字读完是第几秒;req = 第几回要(停了、翻走了,晚到的作废);
+   *  seen = 上一次看到放到第几秒,moved = 它上一次变是什么时刻,stalled = 这一回不动记过了 */
+  const RD = { at: '', nos: [], parts: [], k: -1, s: 0, mode: '', from: -1, times: null, end: 0, req: 0, fadeT: 0, tick: 0, rate: 1, seen: 0, moved: 0, stalled: false };
   /** 倍速(rate):左下角那颗钮选,不记住——换一课、翻走回到 1×(readForget、readTap 换了页);放慢不改音高(浏览器的 preservesPitch 缺省开着),底色照放到第几秒走自己对得上 */
   const READ_RATES = [1.25, 1, 0.75, 0.5];
   /** 把倍速放到共享的 Audio 上(换 src 会回到 defaultPlaybackRate,两个都设);点读一块、别的声音放之前设回 1 */
@@ -2824,21 +2827,33 @@ __REEL_DOCK_JS__
     const t = j && Array.isArray(j.times) ? j.times : null;
     if (!t || t.length !== RD.parts.length || t.some((x, k) => !Array.isArray(x) || x.length !== RD.parts[k])) return false;
     RD.times = t;
+    RD.end = (Number(j.end) || 0) / 1000;
     return true;
+  };
+  /** 声音不对劲,记一笔流水(孩子端什么也不显示):early = 离读完还远就报读完了,stall = 在读、进度不动(底色跟着进度走,也就停住了) */
+  const readOdd = (what) => {
+    const a = audioEl;
+    kidLog.read(what, { tutor: S.tutor ? S.tutor.name : '', thread: S.thread || '', base: RD.at, block: RD.nos[RD.k], line: RD.s, pos: a.currentTime, seen: RD.seen, end: RD.end, dur: a.duration, ready: a.readyState, paused: a.paused, rate: RD.rate });
   };
   /** 放到第几秒 → 在读哪一块哪一句(只往后走:从一块起读时先放的那一点不算回到上一句) */
   const readTick = () => {
     if (LV.model.status !== 'reading' || !RD.times || RD.k < 0) return;
-    const t = audioEl.currentTime * 1000 + READ_LEAD_MS * RD.rate;
+    const pos = audioEl.currentTime;
+    if (pos !== RD.seen) { RD.seen = pos; RD.moved = Date.now(); RD.stalled = false; }
+    else if (!RD.stalled && Date.now() - RD.moved >= READ_STALL_MS) { RD.stalled = true; readOdd('stall'); }
+    const t = pos * 1000 + READ_LEAD_MS * RD.rate;
     let k = RD.k, s = RD.s;
     RD.times.forEach((x, kk) => x.forEach((ms, ss) => { if (ms <= t && (kk > k || (kk === k && ss > s))) { k = kk; s = ss; } }));
     if (k !== RD.k || s !== RD.s) { RD.k = k; RD.s = s; lsShow(); }
   };
   const readQuiet = () => { clearInterval(RD.tick); RD.tick = 0; };
+  /** 从第 sec 秒起看着放到哪了 */
+  const readWatch = (sec) => { readQuiet(); RD.seen = sec; RD.moved = Date.now(); RD.stalled = false; RD.tick = setInterval(readTick, READ_TICK_MS); };
   /** 读到课文最后 */
   const readDone = () => {
     readQuiet();
     if (LV.model.status !== 'reading' || RD.k < 0) return;
+    if (RD.end - RD.seen > READ_EARLY_S) readOdd('early');
     readReport(true);
     RD.k = -1; RD.s = 0; readMode('');
     liveDispatch({ type: 'readEnded' });
@@ -2851,18 +2866,19 @@ __REEL_DOCK_JS__
     RD.k = -1; RD.s = 0; readMode('');
     liveDispatch({ type: 'readEnded' });
   };
-  /** 从第 RD.k 块起放(整篇的声音已经在 Audio 上就直接跳过去) */
+  /** 从第 RD.k 块起放。每回都重装(Audio 上已经是这一课的声音也重装,声音在浏览器缓存里),不在原来那个播放上跳:
+   *  2026-11-26 iPad(Safari 27.2)整篇读完后点段首、跳回去放,几秒就报读完、之后几回底色停在第一截(推断是播放进度乱了,电脑上没复现);
+   *  2026-11-27 Mac 的 WKWebView 实测:放着的时候直接跳不再发 playing,钮会一直转圈 */
   const readFrom = () => {
     const a = audioEl, src = readUrl(true), sec = Math.max(0, (RD.times[RD.k][0] - READ_LEAD_MS * RD.rate) / 1000);
     readRate(RD.rate);
     a.onended = () => readDone();
     a.onerror = () => readFail();
     a.onplaying = () => readMode('playing');
-    if (a.src.split('#')[0] === src && a.readyState > 0) a.currentTime = sec;
-    else a.src = src + '#t=' + sec.toFixed(2);
+    a.src = src + '#t=' + sec.toFixed(2);
     readRate(RD.rate);
     const pr = a.play(); if (pr && pr.catch) pr.catch((e) => { if (!(e && e.name === 'AbortError')) readFail(); });
-    readQuiet(); RD.tick = setInterval(readTick, READ_TICK_MS);
+    readWatch(sec);
   };
   /** playRead:点读一块的念那一块;暂停在这一课的就从那一秒接着读,不然从 RD.k 那一块起读 */
   const readPlay = () => {
@@ -2876,7 +2892,7 @@ __REEL_DOCK_JS__
       readRate(RD.rate);
       a.onended = () => readDone(); a.onerror = () => readFail(); a.onplaying = null;
       const pr = a.play(); if (pr && pr.catch) pr.catch(() => readFail());
-      readQuiet(); RD.tick = setInterval(readTick, READ_TICK_MS);
+      readWatch(a.currentTime);
       return;
     }
     const req = ++RD.req, at = RD.at;
@@ -2902,7 +2918,7 @@ __REEL_DOCK_JS__
   const readTap = (m) => {
     if (!readOk() || !Array.isArray(m.parts) || !Array.isArray(m.nos) || m.parts.length !== m.nos.length || typeof m.k !== 'number' || !(m.k >= 0 && m.k < m.parts.length)) return;
     unlock();
-    if (RD.at !== LS.l.at || RD.parts.join() !== m.parts.join()) { RD.at = LS.l.at; RD.parts = m.parts.slice(); RD.nos = m.nos.slice(); RD.k = -1; RD.s = 0; RD.mode = ''; RD.from = -1; RD.times = null; RD.rate = 1; }
+    if (RD.at !== LS.l.at || RD.parts.join() !== m.parts.join()) { RD.at = LS.l.at; RD.parts = m.parts.slice(); RD.nos = m.nos.slice(); RD.k = -1; RD.s = 0; RD.mode = ''; RD.from = -1; RD.times = null; RD.end = 0; RD.rate = 1; }
     // 在念分块里的一块:换成读课文
     if (ZR.id) { ZR.req++; hearEnd(); }
     const reading = LV.model.status === 'reading';

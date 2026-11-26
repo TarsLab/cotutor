@@ -1,7 +1,8 @@
 /**
  * 孩子端的流水,服务端这一半:孩子端各页往服务端记的事,一件一行,按天存 .cotutor/kid-log/<日期>.jsonl。
  * 页面那段脚本(KID_LOG_JS)在 src/ui/kid/kid-log.ts。
- * 这期两件:open = 孩子端模式下打开一次(带认设备要的浏览器信息,登记进设备表 .cotutor/devices.json);error = 页面脚本出错(各种模式都记)。
+ * 记什么见下面的 KidLogRow:打开(带认设备要的浏览器信息,登记进设备表 .cotutor/devices.json)、在前台多久、权限、连接、点读的声音不对劲,
+ * 这几样只在孩子端模式记;页面脚本出错各种模式都记。
  * 设备是服务端种的 cookie(cotutor_kid,src/schema/kid-device.ts);消息上的 deviceId 也由服务端从 cookie 取,不靠页面带。
  * 孩子端照旧什么都不显示;删话题不动流水。
  */
@@ -31,6 +32,9 @@ export type KidLogRow =
   /** 连接(7.3):offline = 心跳断了多久(通了才报);live = 实时老师的连接自己关了,opened false = 没连上,true = 连上 ms 毫秒后断了 */
   | { k: 'net'; page: string; what: 'offline'; ms: number }
   | { k: 'net'; page: string; what: 'live'; opened: boolean; ms: number }
+  /** 点读课文的声音不对劲:early = 离读完还远就报读完了,stall = 在读、进度不动。block = 第几段(标题 0),line = 那一段第几截;
+   *  pos = 播放器报的第几秒,seen = 页面上一次看到的,end = 课文最后一个字读完,dur = 播放器报的总长(不知道记 0);ready = readyState */
+  | { k: 'read'; page: string; v: string; what: 'early' | 'stall'; tutor: string; thread: string; base: string; block: number; line: number; pos: number; seen: number; end: number; dur: number; ready: number; paused: boolean; rate: number }
   | { k: 'error'; page: string; mode: string; v: string; msg: string; where: string; stack: string; ua: string; ctx: Record<string, unknown> | null };
 /** 服务端那时跑的是哪份代码(打开那行补) */
 export interface KidLogSrv {
@@ -82,6 +86,7 @@ export function parseKidLog(body: unknown): KidLogRow | null {
   if (b.k === 'perm') return b.what === 'mic' || b.what === 'autoplay' ? { k: 'perm', page: str(b.page, 40), what: b.what, state: b.what === 'mic' ? micState(b.state) : 'blocked' } : null;
   // 一笔最多算 6 小时(页面每 5 分钟记一笔,长了是钟跳了)
   if (b.k === 'fg') return typeof b.ms === 'number' && b.ms > 0 && b.ms <= 6 * 3600_000 ? { k: 'fg', page: str(b.page, 40), ms: Math.round(b.ms) } : null;
+  if (b.k === 'read') return b.what === 'early' || b.what === 'stall' ? { k: 'read', page: str(b.page, 40), v: str(b.v, 40), what: b.what, tutor: str(b.tutor, 60), thread: str(b.thread, 60), base: str(b.base, 300), block: num(b.block), line: num(b.line), pos: num(b.pos), seen: num(b.seen), end: num(b.end), dur: num(b.dur), ready: num(b.ready), paused: b.paused === true, rate: num(b.rate) } : null;
   if (b.k === 'error') {
     const ctx = b.ctx && typeof b.ctx === 'object' && !Array.isArray(b.ctx) ? (b.ctx as Record<string, unknown>) : null;
     return { k: 'error', page: str(b.page, 40), mode: str(b.mode, 20), v: str(b.v, 40), msg: str(b.msg, 300), where: str(b.where, 40), stack: str(b.stack, 1500), ua: str(b.ua, 400), ctx };

@@ -133,6 +133,15 @@ check('点读:语文园地(按栏目分)不点读', bookReadTexts(lp('语文园�
   check('点读整篇的时间:后面没对上的句照前一句(不往回走)', short.times.flat().every((t, i, a) => i === 0 || t >= a[i - 1]), JSON.stringify(short));
 }
 {
+  // 页上印阿拉伯数字,合成回来的是汉字(百炼照读法给字):开头对不上的那一截从读出这个数的第一个字起
+  const timed = (list: string[]) => list.map((text, i) => ({ text, begin_time: i * 100, end_time: i * 100 + 100 }));
+  const say = (...sents: string[][]) => sents.map((x, no) => ({ no, sents: x, line: { n: 1, i: 0 }, rows: [] }));
+  const a = readTimes(say(['朱德的扁担'], ['1928年，', '朱德同志。']), timed(['朱', '德', '的', '扁', '担', '。一', '九', '二', '八', '年', '，朱', '德', '同', '志', '。']));
+  check('点读整篇的时间:一截开头是数字,从读这个数的第一个字起(不从「年」起)', a.times[1][0] === 500 && a.times[1][1] === 1000, JSON.stringify(a));
+  const b = readTimes(say(['生于28。', '9岁。']), timed(['生', '于', '二', '十', '八', '。九', '岁', '。']));
+  check('点读整篇的时间:上一截结尾、这一截开头都是数字,从停顿后的第一个字起', b.times[0][0] === 0 && b.times[0][1] === 500, JSON.stringify(b));
+}
+{
   const sh = bookSheets(fish, undefined, bookCut(ix.pages));
   const parts = bookReadParts(fish, sh, blocks);
   const p1 = parts.find((x) => x.no === 1)!, line1 = fish[0].lines.find((l) => l.text === '小鱼在水里吹泡泡。')!;

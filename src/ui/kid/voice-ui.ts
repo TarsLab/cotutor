@@ -24,9 +24,9 @@ export const VOICE_CSS = `
   .vb-sign:where(.ghost:not(.lit):not(.vb-invite):not(:active)) .vb-side, .vb-sign:has(.vb-talk) .vb-side { opacity:0; }
   .vb-sign:where(.ghost:not(.lit):not(.vb-invite):not(:active)) .vb-av, .vb-sign .vb-talk { opacity:.3; }
   .vb-sign:has(.vb-flag:not([hidden])) .vb-av { opacity:.75; }
-  .vb .vb-listen .ring circle { stroke:#257c91; stroke-width:8; }
+  .vb .vb-listen .ring circle { stroke-width:8; }
   .vb-dim .face { filter:grayscale(.85); }
-  .vb-think .ring { color:#8b522a; scale:1.16; filter:drop-shadow(0 0 1px #fff9e7); transform-origin:center; animation:vb-wait-turn 2.4s linear 2s infinite; }
+  .vb-think .ring { scale:1.16; filter:drop-shadow(0 0 1px #fff9e7); transform-origin:center; animation:vb-wait-turn 2.4s linear 2s infinite; }
   .vb-think .ring circle { stroke-width:8; }
   .vb-wait .vb-big { font-size:19px; line-height:1.25; color:#643816; text-shadow:0 0 3px white,0 0 5px white,1px 1px 1px white; }
   .vb-photo .vb-av::after { content:""; position:absolute; right:-1px; bottom:0; width:19px; height:13px; background:#fff8eb; border:2px solid #744622; border-radius:75% 20%; transform:rotate(35deg); }

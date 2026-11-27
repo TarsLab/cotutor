@@ -1,6 +1,7 @@
 /** 工作台的交互样张。场景只提供通话状态；工作台和孩子端用同一颗老师签和同一张纸的位移场。 */
 import { readFileSync } from 'node:fs';
 import { inlineScript } from '../shared/inline-lib.ts';
+import { SUBJECT_COLORS } from '../shared/tutor-color.ts';
 import { DEV_CSS } from './dev-theme.ts';
 import { VOICE_CSS, VOICE_JS } from '../kid/voice-ui.ts';
 import { faviconLinks } from '../shared/favicon.ts';
@@ -61,7 +62,7 @@ function preview() {
   const s = VOICE_SCENES[Number(scene.value)];
   byId('note').textContent = s.note;
   button.side(byId('mirror').checked ? 'right' : 'left');
-  av.style.color = s.tutor === 'english' ? '#367969' : '#a84d69';
+  av.style.color = s.tutor === 'english' ? '${SUBJECT_COLORS.英语}' : '${SUBJECT_COLORS.语文}';
   av.querySelector('img').src = portraits[s.tutor];
   teacher.classList.remove('ghost');
   ghostTimer = setTimeout(() => teacher.classList.add('ghost'), 5000);

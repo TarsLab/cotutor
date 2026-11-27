@@ -4,7 +4,7 @@
  */
 import { paperRaster } from './paper-raster.ts';
 
-const paperWidth = 560, paperHeight = 320, paperOrigin = 230, paperSlope = 278;
+const paperWidth = 560, paperHeight = 320, paperOrigin = 230;
 let paperSequence = 0;
 
 function paperSmooth(t: number) {
@@ -22,10 +22,10 @@ function paperSurface(right: boolean) {
   const stride = paperWidth + 2, heights = new Float32Array(stride * (paperHeight + 2));
   for (let x = -1; x <= paperWidth; x++) {
     const column = right ? paperWidth - 1 - x : x;
-    const t = (column - paperOrigin) / paperSlope;
-    const profile = t < 0 ? -.96 * paperSmooth(1 + t / .65)
-      : t > 1 ? .76 * paperSmooth((paperWidth - 1 - column) / (paperWidth - 1 - paperOrigin - paperSlope))
-      : -.96 + 1.72 * paperSmooth(t + .17 * Math.sin(Math.PI * t));
+    // 页中宽峰和周围平纸在同一高度。只把指下的谷底压低，坡度在接近峰顶时渐渐归零。
+    const t = Math.abs(column - paperOrigin) / (paperWidth - 1 - paperOrigin);
+    const rise = paperSmooth((t - .08) / .87);
+    const profile = -.96 * (1 - rise) ** 1.5;
     const band = 64 + 34 * paperSmooth(t);
     for (let row = -1; row <= paperHeight; row++) {
       const y = row - paperHeight / 2;

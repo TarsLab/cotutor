@@ -31,9 +31,9 @@ try {
       }
       return rows;
     });
-    const readRows = async (fraction) => {
+    const readRows = async (columns) => {
       const png = await page.screenshot({ clip: bounds });
-      return page.evaluate(async ({ rows, png, fraction }) => {
+      return page.evaluate(async ({ rows, png, columns }) => {
         const img = new Image();
         img.src = 'data:image/png;base64,' + png;
         await img.decode();
@@ -41,38 +41,53 @@ try {
         canvas.width = img.width; canvas.height = img.height;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0);
-        const strip = ctx.getImageData(Math.floor(img.width * fraction), 0, 1, img.height).data;
-        return rows.map(row => {
-          const ys = [];
-          for (let y = row - 22; y <= row + 10; y++) if (strip[4 * y] < 128) ys.push(y);
-          if (!ys.length) throw Error('找不到第 ' + row + ' 行标线');
-          return (ys[0] + ys.at(-1)) / 2;
+        return columns.map(fraction => {
+          const strip = ctx.getImageData(Math.floor(img.width * fraction), 0, 1, img.height).data;
+          return rows.map(row => {
+            const ys = [];
+            for (let y = row - 10; y <= row + 24; y++) if (strip[4 * y] < 128) ys.push(y);
+            if (!ys.length) throw Error('找不到第 ' + row + ' 行标线');
+            return (ys[0] + ys.at(-1)) / 2;
+          });
         });
-      }, { rows, png: png.toString('base64'), fraction });
+      }, { rows, png: png.toString('base64'), columns });
     };
     for (const right of [false, true]) {
       await page.locator('#mirror').setChecked(right);
-      const ridge = right ? .57 : .43, outside = right ? .47 : .53;
-      const flat = await readRows(ridge), otherHalf = await readRows(outside);
       const face = await avatar.boundingBox(), cx = face.x + face.width / 2;
+      const origin = (cx - bounds.x) / bounds.width;
+      const columns = [.20, .45, .70, .85, 1, 1.15].map(t => origin + (.5 - origin) * t);
+      const flat = await readRows(columns);
       let previous;
       for (const fraction of [.18, .82]) {
         await page.mouse.move(face.x + face.width * fraction, face.y + face.height * fraction);
         await page.mouse.down();
         await page.waitForTimeout(180); // 等长按进入说话态。
-        const shift = (await readRows(ridge)).map((y, i) => y - flat[i]);
-        assert(shift.slice(1, 4).every(d => d <= -4), '压痕内三条线都应上移: ' + shift);
-        // SVG 按目标像素反查位移；同样远的两行上移后，分别远离、接近峰顶。
-        assert(Math.min(-shift[1], -shift[3]) >= .65 * Math.max(-shift[1], -shift[3]), '上下两侧都应有同量级的弯曲: ' + shift);
-        assert(shift[0] === 0 && shift[4] === 0, '上下超过四分之一页高应平整: ' + shift);
-        assert.deepEqual(await readRows(outside), otherHalf, '中线以外的半页应平整');
+        const bent = await readRows(columns);
+        const shift = bent.map((column, x) => column.map((y, i) => y - flat[x][i]));
+        const [near, slope, shoulder, crest, middle, beyond] = shift.map(column => column[2]);
+        assert(near > slope && slope > shoulder && shoulder >= crest && near >= 12, '从谷底向峰顶逐渐回升: ' + shift);
+        assert(shift[0][1] >= 3 && shift[0][3] >= 3, '指下的上下两侧都应下沉: ' + shift[0]);
+        assert(Math.abs(crest) <= 1 && middle === 0 && beyond === 0, '页中线附近应宽平: ' + shift);
+        assert(shift.every(col => col[0] === 0 && col[4] === 0), '竖向半页以外应平整');
         assert.equal((await page.locator('#teacher').innerText()).trim(), '松手发送');
         if (previous) assert.deepEqual(shift, previous, '按头像上下缘的谷底位置应一致');
         previous = shift;
         await page.mouse.move(cx, face.y - 120);
         await page.mouse.up();
-        assert.deepEqual(await readRows(ridge), flat, '松手后每条线都要回到原位');
+        assert.deepEqual(await readRows(columns), flat, '松手后每条线都要回到原位');
       }
+    }
+    const scene = page.locator('#scene');
+    for (const name of ['按着在说', '老师在想', '在看你的图片', '孩子在说']) {
+      const option = scene.locator('option').filter({ hasText: name }).first();
+      await scene.selectOption(await option.getAttribute('value'));
+      const themed = await avatar.evaluate(el => {
+        const face = el.querySelector('.av'), ring = face.querySelector('.ring circle');
+        face.style.color = '#6845ad';
+        return getComputedStyle(ring).stroke === getComputedStyle(face).color;
+      });
+      assert(themed, name + '的 C 环应跟随老师的自定义色');
     }
     console.log(viewport.width + '×' + viewport.height + ' 左右手、上下两侧位移通过');
     await page.close();

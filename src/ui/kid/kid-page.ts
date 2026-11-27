@@ -704,7 +704,7 @@ __VOICE_CSS__
     <div id="wrap">
       <div id="bmark" hidden></div>
       <div id="board"></div>
-      <div id="stage"><div class="top"><span id="st-nav"><button type="button" id="st-prev" hidden></button><span class="ttl" id="st-ttl"></span><button type="button" id="st-next" hidden></button></span><button type="button" id="st-toc" hidden></button><span id="st-bp"><button type="button" id="st-tb" hidden></button><button type="button" id="st-cam"></button><button type="button" id="st-alb"></button></span><button id="st-x" type="button"></button></div><iframe id="st-frame" hidden title="stage"></iframe><div id="st-pick" hidden></div><div id="st-act" hidden><span class="note" id="st-note"></span><button id="st-go" type="button">给老师看</button></div><button id="cv-hold" class="vb-mini" type="button"></button><button id="cv-rate" type="button" aria-label="读得快慢" aria-expanded="false" tabindex="-1">1×</button><button id="cv-rates-x" type="button" aria-label="收起" hidden></button><div id="cv-rates" role="menu" aria-label="读得快慢" hidden></div><button id="cv-type" type="button"><span class="ic"></span>打字</button><div id="cv-cap"></div></div>
+      <div id="stage"><div class="top"><span id="st-nav"><button type="button" id="st-prev" hidden></button><span class="ttl" id="st-ttl"></span><button type="button" id="st-next" hidden></button></span><button type="button" id="st-toc" hidden></button><span id="st-bp"><button type="button" id="st-tb" hidden></button><button type="button" id="st-cam"></button><button type="button" id="st-alb"></button></span><button id="st-x" type="button"></button></div><div id="st-pick" hidden></div><div id="st-act" hidden><span class="note" id="st-note"></span><button id="st-go" type="button">给老师看</button></div><button id="cv-hold" class="vb-mini" type="button"></button><button id="cv-rate" type="button" aria-label="读得快慢" aria-expanded="false" tabindex="-1">1×</button><button id="cv-rates-x" type="button" aria-label="收起" hidden></button><div id="cv-rates" role="menu" aria-label="读得快慢" hidden></div><button id="cv-type" type="button"><span class="ic"></span>打字</button><div id="cv-cap"></div></div>
       <div id="st-dim"></div>
     </div>
     <div id="lv"><div id="lv-av"></div><div id="lv-kid"></div><div id="lv-cap"><div class="lv-prev"></div><div class="lv-cur"></div></div><div id="lv-ask"><b></b><small></small></div><div id="lv-acts"></div><button id="lv-replay" type="button" hidden><span class="ic"></span><span class="tx"></span></button><button id="lv-hold" type="button"></button><div id="lv-tools"><button type="button" id="lv-cam"><span class="ic"></span>拍照</button><button type="button" id="lv-album"><span class="ic"></span>相册</button><button type="button" id="lv-type"><span class="ic"></span>打字</button></div></div>
@@ -1193,6 +1193,8 @@ ${HOME_TILES_JS}
   };
 
   // ---- 老师页 ----
+  // 每次从首页打开都是独立的一次访问,即使还是同一位老师。退出后,上次的进门、铺页和轮询结果都作废。
+  let tutorVisit = 0;
   /**
    * intent(首页的按钮定的):new = 按钮开的新话题(activity、方砖、小课堂);thread = 今天的那个话题(首页「今天」);today = 今天的当前话题(调试入口 ?tutor=)。
    * via = 哪个按钮(下一条消息带上);send = 打开就发出去的字(老师先说的 activity:按钮上的字);enter = 孩子先说:进门(服务端记下、铺好页,不叫老师)
@@ -1200,7 +1202,9 @@ ${HOME_TILES_JS}
   const openTutor = (t, intent) => {
     unlock();
     intent = intent || { kind: 'today' };
-    S.tutor = t; S.sections = []; S.played = new Set(); dispatch({ type: 'reset' }); S.pending = false; S.stage = null; S.partial = null; $('#stage').classList.remove('on', 'cv');
+    const visit = ++tutorVisit;
+    if (S.stage) closeStage();
+    S.tutor = t; S.day = null; S.sections = []; S.played = new Set(); dispatch({ type: 'reset' }); S.pending = false; S.partial = null;
     S.thread = intent.kind === 'thread' ? intent.thread : null; S.threadAt = null; S.hist = null; S.readonly = false; S.newThread = intent.kind === 'new';
     S.via = intent.via || null; S.lecture = intent.lecture ? { ...intent.lecture, watch: null, sent: false, marks: [], done: [], log: [] } : null;
     BP.on = Boolean(intent.base); BP.base = intent.base || null; BP.label = intent.label || ''; BP.toc = null; BP.workbook = intent.workbook || null; BP.start = intent.start || null; BP.past = null; BP.dayView = ''; BP.go = null; S.door = null; lsReset();
@@ -1218,7 +1222,10 @@ ${HOME_TILES_JS}
     else if (BP.base === 'photo') $('#board').append(bpStartBoard());
     $('#tutor').classList.add('on'); pageTheme(false);
     setBar('idle');
-    loadDay(true).then(() => { if (intent.send) send(intent.send); else if (intent.enter) bpEnter(0); });
+    loadDay(true).then(() => {
+      if (visit !== tutorVisit) return;
+      if (intent.send) send(intent.send); else if (intent.enter) bpEnter(0);
+    });
     viewKey = ''; viewNote();
   };
   /** 空板挂上老师要说的(开场那句 big、下面一行 small、选择 acts:{cls, icon, k 上面的小字, s 大字, sub 下面的小字, tm 时刻, id, go}) */
@@ -1240,12 +1247,12 @@ ${HOME_TILES_JS}
   };
   /** 这位老师学科的课本页(vault 里教材旁边的图):有就在拍照屏和页的顶栏多一颗「选课本页」 */
   const bpBooks = () => {
-    const name = S.tutor && S.tutor.name;
+    const name = S.tutor && S.tutor.name, visit = tutorVisit;
     BP.books = [];
     $('#st-tb').hidden = true;
     if (!name) return;
     api('GET', '/api/kid/textbook-pages?tutor=' + encodeURIComponent(name)).then((j) => {
-      if (!S.tutor || S.tutor.name !== name || !j || !Array.isArray(j.books) || !j.books.length) return;
+      if (visit !== tutorVisit || !j || !Array.isArray(j.books) || !j.books.length) return;
       BP.books = j.books;
       $('#st-tb').hidden = false;
       const blank = $('#board .bp-start');
@@ -1281,16 +1288,16 @@ ${HOME_TILES_JS}
    * 进门(孩子先说):服务端记一条「进门」、铺好页,回话题 id;之后孩子说的、拍的、按「给老师看」都接着这个话题,第一条才叫老师。
    * 老师还在回上一条(409)隔一会儿再进;进门回来之前孩子已经开口开了话题的,就用那个(进门那个没开口,下次进门扫掉)
    */
-  const bpEnter = (tries) => {
+  const bpEnter = (tries, visit = tutorVisit) => {
     const t = S.tutor;
-    if (!t || !S.newThread || !S.via) return;
+    if (visit !== tutorVisit || !t || !S.newThread || !S.via) return;
     api('POST', '/api/kid/enter?tutor=' + encodeURIComponent(t.name), { via: S.via, device: S.device }).then((j) => {
-      if (S.tutor !== t || !S.newThread || !j || !j.thread) return;
+      if (visit !== tutorVisit || !S.newThread || !j || !j.thread) return;
       S.thread = j.thread; S.door = j.thread; S.newThread = false; S.via = null;
       // 课本、练习册、作业本照服务端铺的;用白纸的已经铺上了
       if (BP.on && BP.base !== 'photo') bpOpenLesson(true);
       loadDay(false);
-    }, (e) => { if (S.tutor === t && e && e.status === 409 && tries < 30) setTimeout(() => bpEnter(tries + 1), 1000); });
+    }, (e) => { if (visit === tutorVisit && e && e.status === 409 && tries < 30) setTimeout(() => bpEnter(tries + 1, visit), 1000); });
   };
   /** 点回首页:这次进的门孩子没开口,就不存(服务端只删只进了门的话题) */
   const bpLeave = () => {
@@ -1374,11 +1381,11 @@ ${HOME_TILES_JS}
     if (BP.past) return BP.past === 1 ? null : BP.past;
     if (!S.thread || !S.tutor || !S.day || !S.day.date) return null;
     BP.past = 1;
-    const name = S.tutor.name;
+    const visit = tutorVisit, name = S.tutor.name;
     api('GET', '/api/kid/homework/past?tutor=' + encodeURIComponent(name) + '&thread=' + encodeURIComponent(S.thread) + '&date=' + encodeURIComponent(S.day.date)).then((j) => {
-      if (!S.tutor || S.tutor.name !== name) return;
+      if (visit !== tutorVisit) return;
       BP.past = (j && j.past) || {}; LS.key = ''; lsShow();
-    }, () => { BP.past = null; });
+    }, () => { if (visit === tutorVisit) BP.past = null; });
     return null;
   };
   /** 进一节课:回到的(有话题)照服务端记的;新开的课本铺目录,作业本铺整本,作业照片等孩子拍(拍照屏)。
@@ -1388,16 +1395,18 @@ ${HOME_TILES_JS}
   const bpOpenLesson = (opened) => {
     const name = S.tutor && S.tutor.name;
     if (!name || LS.asking) return;
+    const visit = tutorVisit;
     LS.asking = true;
     const q = S.thread && S.day && S.day.date ? '/api/kid/lesson?tutor=' + encodeURIComponent(name) + '&date=' + encodeURIComponent(S.day.date) + '&thread=' + encodeURIComponent(S.thread) : null;
     const early = Boolean(opened) || ((q || BP.base === 'textbook' || (BP.base === 'workbook' && BP.workbook)) && !S.stage);
     if (early && !S.stage) lsOpenStage();
     const open = (l) => {
+      if (visit !== tutorVisit) return;
       LS.asking = false;
-      if (!S.tutor || S.tutor.name !== name || !BP.on) return;
+      if (!BP.on) return;
       if (l) { lcAdopt(l); lsStart(l); } else if (early && S.stage && S.stage.lesson && !LS.on) closeStage();
     };
-    const base = BP.base === 'textbook' ? api('GET', '/api/kid/textbook/base?tutor=' + encodeURIComponent(name)).then((j) => { if (S.tutor && S.tutor.name === name) BP.toc = (j && j.toc) || null; return j; }, () => null)
+    const base = BP.base === 'textbook' ? api('GET', '/api/kid/textbook/base?tutor=' + encodeURIComponent(name)).then((j) => { if (visit === tutorVisit) BP.toc = (j && j.toc) || null; return j; }, () => null)
       : BP.base === 'workbook' && BP.workbook ? api('GET', '/api/kid/workbook/base?tutor=' + encodeURIComponent(name) + '&w=' + encodeURIComponent(BP.workbook)).catch(() => null)
       : Promise.resolve(null);
     const toc = () => base.then((j) => open(j && j.lesson));
@@ -1530,9 +1539,10 @@ ${HOME_TILES_JS}
     $('#stage').classList.add('cv', 'bp', 'bk', 'on');
     $('#stage').classList.toggle('ph', BP.base === 'photo');
     cvGhost(false); CV.ghostT = setTimeout(() => cvGhost(true), CV_GHOST_MS);
-    frame.hidden = false; frame.src = stageUrl(S.stage.id);
+    frame = h('iframe', { id: 'st-frame', title: 'stage', src: stageUrl(S.stage.id) });
+    $('#stage .top').after(frame);
     LS.key = '';
-    renderGo();
+    rateUi(); renderGo();
   };
   /** 进一节课:回到的(有话题)照服务端记的,新开的铺目录(课本)、照片页或白纸(作业);没有课本就空着,老师会说 */
   const lsStart = (l, jobs) => {
@@ -1663,7 +1673,17 @@ ${HOME_TILES_JS}
   new MutationObserver(openSync).observe($('#board'), { childList: true });
   /** 浏览器的主题色跟着这一页的底色:首页桌面色,老师页纸色 */
   const pageTheme = (home) => { const m = document.querySelector('meta[name="theme-color"]'); if (m) m.content = home ? '#ebe4d4' : '#faf9f4'; };
-  const closeTutor = () => { bpLeave(); clearTimeout(PV.timer); liveDispatch({ type: 'reset' }); liveClose(); S.lecture = null; reelStop(); clearTimeout(S.pollTimer); dispatch({ type: 'halt' }); psClose(); S.tutor = null; S.via = null;  S.ask = null; BP.on = false; BP.base = null; BP.toc = null; BP.past = null; BP.dayView = ''; BP.go = null; $('#hwk').classList.remove('on'); lsReset(); $('#tutor').classList.remove('on'); pageTheme(true); document.body.classList.remove('pending', 'speaking'); S.homeDraw = true; loadHome(); };
+  const closeTutor = () => {
+    tutorVisit++; bpLeave(); clearTimeout(PV.timer);
+    liveDispatch({ type: 'reset' }); liveClose(); S.lecture = null; reelStop();
+    if (S.stage) closeStage();
+    clearTimeout(S.pollTimer); dispatch({ type: 'halt' }); psClose();
+    S.tutor = null; S.via = null; S.ask = null;
+    BP.on = false; BP.base = null; BP.toc = null; BP.past = null; BP.dayView = ''; BP.go = null;
+    $('#hwk').classList.remove('on'); lsReset();
+    $('#tutor').classList.remove('on'); pageTheme(true); document.body.classList.remove('pending', 'speaking');
+    S.homeDraw = true; loadHome();
+  };
   $('#back').addEventListener('click', closeTutor);
   $('#back-ic').innerHTML = ICON.back;
 
@@ -1916,8 +1936,8 @@ __WORD_DRAW_JS__
     if (at) pickPlace(at);
   };
   const STAGE_SOURCE = 'cotutor-stage';
-  const frame = $('#st-frame');
-  const postStage = (m) => { try { frame.contentWindow.postMessage({ source: STAGE_SOURCE, ...m }, '*'); } catch {} };
+  let frame = null;
+  const postStage = (m) => { try { frame?.contentWindow?.postMessage({ source: STAGE_SOURCE, ...m }, '*'); } catch {} };
   // ---- 话题的预览图(首页「今天」那一格):板停下来一会儿问舞台要一张小图(peek)交给服务端,只留最新一张。
   //      页刚铺上等它画完再要;孩子动了手停下来就要。录像、只读、家长预览不交;话题还没有 id(第一条还没回)先等 ----
   const PV = { timer: 0, last: '', tries: 0 };
@@ -1941,10 +1961,18 @@ __WORD_DRAW_JS__
   /** 舞台包说话(只有一节课的页):lsStageMsg 管 */
   window.addEventListener('message', (e) => {
     const m = e.data;
-    if (!m || m.source !== STAGE_SOURCE || !S.stage || !S.stage.lesson) return;
+    if (!frame || e.source !== frame.contentWindow || !m || m.source !== STAGE_SOURCE || !S.stage || !S.stage.lesson) return;
     lsStageMsg(m);
   });
-  const closeStage = () => { S.stage = null; pickHide(); frame.src = 'about:blank'; stageClosed(); $('#stage').classList.remove('on', 'bp'); renderSubtitle(); };
+  const closeStage = () => {
+    S.stage = null; pickHide(true);
+    frame.remove(); frame = null;
+    stageClosed();
+    $('#stage').classList.remove('on', 'bp', 'bk', 'ph', 'hw', 'lcp');
+    $('#st-ttl').textContent = ''; $('#st-nav').classList.remove('on');
+    $('#st-toc').hidden = $('#st-prev').hidden = $('#st-next').hidden = true;
+    renderSubtitle();
+  };
   $('#st-x').innerHTML = ICON.close;
   // 孩子关:一节课里是回首页
   const closeByKid = () => { if (BP.on && !S.readonly) { closeTutor(); return; } closeStage(); };
@@ -2072,8 +2100,10 @@ __WORD_DRAW_JS__
 
   const loadDay = async (silent) => {
     if (!S.tutor || S.reel) return;
+    const visit = tutorVisit;
     try {
       const d = await api('GET', CONV + S.tutor.name + '/' + (S.hist || 'today'));
+      if (visit !== tutorVisit) return;
       setOffline(false);
       S.day = d;
       // 话题:没选过就是当前(末条所在)的;板上只铺这个话题的节。新话题空白态什么都不铺,发出第一句才有话题
@@ -2116,6 +2146,7 @@ __WORD_DRAW_JS__
       clearTimeout(S.pollTimer);
       if (stillPending) S.pollTimer = setTimeout(() => loadDay(false), 1000);
     } catch (e) {
+      if (visit !== tutorVisit) return;
       if (e && e.status === 404) return closeTutor();
       setOffline(true);
     }

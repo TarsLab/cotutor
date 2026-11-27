@@ -14,8 +14,9 @@
  *  九、按下窗里的一项:按着的那一行深一点;松手翻到那一课、报 {k:'open'},不叫老师(下一轮「孩子做的」带上)。
  *  十、顶栏课名两边的一对箭头:点「›」翻到下一课、「‹」翻回来,报 {k:'open'},不叫老师。
  *  十一、滚到这一课最后一页下面:一行「下一课 …」,点了翻过去。
+ * 给 --math-pdf 时也验从语文课本回首页再进数学课本:压住舞台和进门请求,等候时只露数学的框架,放行后铺数学课本。
  * iPad 横屏各截一张。
- * 用法:node scripts/probe-book-page.mjs --pdf <课本 PDF> [--out <截图目录>]
+ * 用法:node scripts/probe-book-page.mjs --pdf <课本 PDF> [--math-pdf <数学课本 PDF>] [--out <截图目录>]
  */
 import { probeDir, spawn } from './_guard.mjs';
 import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
@@ -28,6 +29,7 @@ const repo = fileURLToPath(new URL('..', import.meta.url));
 const args = process.argv.slice(2);
 const opt = (k) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : undefined; };
 const pdf = opt('--pdf');
+const mathPdf = opt('--math-pdf');
 if (!pdf) { console.error('要 --pdf <课本 PDF>'); process.exit(2); }
 const chrome = process.env.CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const cdp = 9359;
@@ -66,10 +68,17 @@ const wsx = loadWorkspace(wsRoot);
 mkdirSync(wsx.paths.textbooks, { recursive: true });
 const name = basename(pdf);
 symlinkSync(resolve(pdf), join(wsx.paths.textbooks, name));
+if (mathPdf) symlinkSync(resolve(mathPdf), join(wsx.paths.textbooks, basename(mathPdf)));
 const ctx = createContext(wsx);
 await ctx.reload();
 const upgrade = makeLiveUpgrade({ endpoint: fake.endpoint });
-const server = createServer(createHandler(ctx));
+const handle = createHandler(ctx);
+let switchGate = null;
+const server = createServer(async (req, res) => {
+  const path = req.url.split('?')[0];
+  if (switchGate && (path === '/stage/' || path === '/api/kid/enter')) await switchGate;
+  await handle(req, res);
+});
 server.on('upgrade', (req, socket, head) => { void upgrade(req, socket, head, ctx).then((took) => { if (!took) socket.destroy(); }); });
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const base = `http://127.0.0.1:${server.address().port}`;
@@ -210,7 +219,7 @@ try {
   const last = (await day()).messages.slice(-1)[0];
   const run = JSON.parse(readFileSync(join(wsRoot, 'conversations', T, `${(await day()).date}.${last.job}.run.json`), 'utf8'));
   const pr = run.prompt.slice(run.prompt.indexOf('  board:'), run.prompt.indexOf('  board:') + 2000);
-  ok('下一轮的上下文包:底是这一课、全文分好段、点了「朋」、孩子在看', pr.includes('《坐井观天》第 54–55 页') && pr.includes('第1段 青蛙坐在井里') && pr.includes('朋') && pr.includes('孩子在看:'), pr);
+  ok('下一轮的上下文包:底是这一课、全文分好段、点了「朋」、孩子在看', pr.includes('《坐井观天》第 54–55 页') && /第\s*1\s*段 青蛙坐在井里/.test(pr) && pr.includes('朋') && pr.includes('孩子在看:'), pr);
   // 六、笔画一道:「擦掉」贴着屏幕边冒出来(课本铺满屏宽,没有工具那一栏),「给老师看」这才出现;擦掉了两颗都收起
   for (let i = 0; i < 60 && (await day()).messages.some((m) => m.result === 'running'); i++) await sleep(250);
   await sleep(1500);
@@ -329,6 +338,35 @@ try {
     await tapAt(row.x, row.y);
     const rowWent = await until(`document.querySelector('#st-ttl').textContent === ${JSON.stringify(nav1.ttl)}`, 10000);
     ok('点那一行:翻到下一课,报 open', Boolean(rowWent) && frames.slice(nRow).some((f) => f.t === 'board' && f.body?.k === 'open' && f.body.title === nav1.ttl));
+  }
+  if (mathPdf) {
+    const tap = async (sel) => {
+      const pos = await center(sel);
+      await tapAt(pos.x, pos.y);
+    };
+    const book = '.pc.front[data-tutor="math-tutor"] .bt-tile[data-tile="textbook"]';
+    await tap('#st-x');
+    await tap('.tab[data-tutor="math-tutor"]');
+    await until('Boolean(document.querySelector(' + JSON.stringify(book) + '))');
+    await sleep(500); // 等首页翻到数学那一章
+    let release;
+    switchGate = new Promise((r) => { release = r; });
+    try {
+      await tap(book);
+      const shell = await until(`document.querySelector('#stage.on #st-x')?.textContent.includes('数')`);
+      const waiting = await evaluate(`({
+        pages: document.querySelector('#st-frame')?.contentDocument?.querySelectorAll('.bk-page').length,
+        title: document.querySelector('#st-ttl').textContent, toc: !document.querySelector('#st-toc').hidden,
+        nav: document.querySelector('#st-nav').classList.contains('on'), pick: !document.querySelector('#st-pick').hidden
+      })`);
+      ok('数学课本还在加载:有数学返回钮,没有语文的页、课名、目录或点字卡', shell && !waiting.pages && !waiting.title && !waiting.toc && !waiting.nav && !waiting.pick, JSON.stringify(waiting));
+    } finally { switchGate = null; release(); }
+    const mathReady = await until(`(() => {
+      const d = ${STAGE};
+      return d?.querySelector('.bk-board')?.dataset.phase === 'ready' && d.querySelectorAll('.bk-page').length &&
+        d.defaultView.performance.getEntriesByType('resource').some((e) => decodeURIComponent(e.name).includes(${JSON.stringify(basename(mathPdf))}));
+    })()`, 30000);
+    ok('放行后舞台画出数学课本', Boolean(mathReady));
   }
   ok('页面没有脚本报错', errors.length === 0, errors.slice(0, 3).join(' | '));
   console.log(`\n截图在 ${shots}`);

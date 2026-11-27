@@ -1,10 +1,10 @@
 /**
- * 全屏课页和工作台样张共用的压纸效果。位移图描述从按钮中心的谷底到页中线的峰顶，
+ * 全屏课页和工作台样张共用的压纸效果。位移图描述从按钮中心的谷底到页中线附近的峰顶，
  * 随高度移动纸上的字；光影只取坡度。课本窗按这张位移图逐块重绘，工作台样张使用同图的 SVG 滤镜。
  */
 import { paperRaster } from './paper-raster.ts';
 
-const paperWidth = 560, paperHeight = 320, paperOrigin = 115, paperSlope = 175;
+const paperWidth = 560, paperHeight = 320, paperOrigin = 230, paperSlope = 278;
 let paperSequence = 0;
 
 function paperSmooth(t: number) {
@@ -21,9 +21,10 @@ function paperSurface(right: boolean) {
   // 多算一圈高度，求坡度时直接取相邻点。
   const stride = paperWidth + 2, heights = new Float32Array(stride * (paperHeight + 2));
   for (let x = -1; x <= paperWidth; x++) {
-    const t = ((right ? paperWidth - 1 - x : x) - paperOrigin) / paperSlope;
+    const column = right ? paperWidth - 1 - x : x;
+    const t = (column - paperOrigin) / paperSlope;
     const profile = t < 0 ? -.96 * paperSmooth(1 + t / .65)
-      : t > 1 ? .76 * (1 - paperSmooth((t - 1) / 1.35))
+      : t > 1 ? .76 * paperSmooth((paperWidth - 1 - column) / (paperWidth - 1 - paperOrigin - paperSlope))
       : -.96 + 1.72 * paperSmooth(t + .17 * Math.sin(Math.PI * t));
     const band = 64 + 34 * paperSmooth(t);
     for (let row = -1; row <= paperHeight; row++) {
@@ -89,11 +90,12 @@ export function paperPress(page: HTMLElement) {
     const x = (face.left + face.width / 2 - bounds.left) * w / bounds.width;
     const y = (face.top + face.height / 2 - bounds.top) * h / bounds.height;
     const right = x > w / 2;
-    const scale = Math.max(1, Math.abs(w / 2 - x)) / paperSlope;
-    // 纹理的分辨率固定；把两侧的缓坡按当前页高投影，上下四分之一页仍有可见的位移。
-    const extent = h * 1.2;
+    // 谷底对准按钮中心，向内的一端在页宽中线回平。上下两端各离谷底四分之一页高。
+    const origin = paperOrigin + .5;
+    const scale = Math.max(1, Math.abs(w / 2 - x)) / (paperWidth - origin);
+    const extent = h / 2;
     active = filters[Number(right)];
-    const left = x - (right ? paperWidth - paperOrigin : paperOrigin) * scale;
+    const left = x - (right ? paperWidth - origin : origin) * scale;
     const top = y - extent / 2;
     projection = { left, top, width: paperWidth * scale, extent };
     for (const [attr, value] of Object.entries({ x: left, y: top, width: paperWidth * scale, height: extent })) active.map.setAttribute(attr, String(value));
@@ -117,7 +119,7 @@ export function paperPress(page: HTMLElement) {
   const capture = () => {
     raster?.dispose();
     const doc = iframe?.contentDocument;
-    raster = doc ? paperRaster(doc, () => render(depth)) : null;
+    raster = doc ? paperRaster(doc, projection, () => render(depth)) : null;
   };
   const onLoad = () => {
     if ((goal || depth) && place()) { capture(); render(depth); }

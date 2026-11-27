@@ -14,7 +14,8 @@ check('每一格的名字不重', new Set(VOICE_SCENES.map((s) => s.group + s.na
 const V = (p: Partial<VoiceIn>) => voiceView(voiceIn(p));
 
 check('老师说话可以打断，头像处于讲解态', V({ status:'mouth' }).face === 'talk' && V({ status:'mouth' }).press === 'hold');
-check('按着时提示松手发送', V({ status:'holding', holdAudio:true }).big === '松手发送');
+const holding = V({ status: 'holding', holdAudio: true });
+check('按住只显示「松手发送」，滑到取消区才显示「松手取消」', holding.big === '松手发送' && !holding.small && V({ status: 'holding', cancel: true }).big === '松手取消');
 check('直接说时保留开麦标记', V({ open:true, hearing:true }).mic === '开');
 check('重放、小课堂头像静止', ['replay','lecture'].every(status => V({ status:status as VoiceIn['status'] }).face === 'still'));
 check('看图途中关麦，等待和开麦入口都在', V({ open:true, pending:true, photo:true, muted:true }).photo && V({ open:true, pending:true, photo:true, muted:true }).mic === '关');
@@ -24,7 +25,7 @@ check('嘴在说时脑还在写:照「老师在说」(嘴的声音优先)', V({ 
 
 // 按着没声音:3 秒后给出文字提示
 check('按着没声音不满 3 秒:还是「按着在说」', V({ status: 'holding', holdAudio: true, silentMs: VOICE_SILENT_MS - 1 }).key === 'hold');
-check('按着没声音满 3 秒:提示「我还没听到声音」', (() => { const v = V({ status: 'holding', holdAudio: true, silentMs: VOICE_SILENT_MS }); return v.big === '我还没听到声音'; })());
+check('按着没声音满 3 秒:提示「没听见」', (() => { const v = V({ status: 'holding', holdAudio: true, silentMs: VOICE_SILENT_MS }); return v.big === '没听见'; })());
 check('上滑优先于没声音', V({ status: 'holding', holdAudio: true, silentMs: 9999, cancel: true }).key === 'cancel');
 
 // 接不接按
@@ -36,7 +37,7 @@ check('一直听时点一下没按住的提示不出(点一下就是开关麦)',
 // 提示:晃一下;平时不晃
 check('提示都晃一下', (['busy', 'connecting', 'unclear', 'tap'] as const).every((h) => V({ hint: h, pending: h === 'busy' }).shake));
 check('没提示时不晃', VOICE_SCENES.filter((s) => !s.input.hint).every((s) => !V(s.input).shake));
-check('老师在想时按了:提示压过「老师在想」', V({ pending: true, hint: 'busy' }).small === '等老师一下');
+check('忙时轻点仍只显示「老师在想」', V({ pending: true, hint: 'busy' }).big === '老师在想' && !V({ pending: true, hint: 'busy' }).small);
 
 // 穷举:每种状态 × 开关组合都给得出一种样子,不抛
 const statuses: VoiceIn['status'][] = ['quiet', 'holding', 'mouth', 'lecture', 'replay'];

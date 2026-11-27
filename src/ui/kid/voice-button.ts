@@ -32,7 +32,7 @@ export function voiceButton(el: HTMLButtonElement) {
       voiceFace(av, v.face);
       big.textContent = v.big;
       small.textContent = v.small;
-      small.hidden = !v.small;
+      small.hidden = !v.small || el.classList.contains('vb-sign');
       flag.hidden = !v.mic;
       flag.textContent = v.mic;
       el.classList.toggle('vb-wait', v.face === 'think');

@@ -34,7 +34,7 @@ ${VOICE_CSS}
 </style></head><body><h1>老师签</h1>
 <form onsubmit="return false"><label>通话状态 <select id="scene"></select></label><label><input type="checkbox" id="mirror">头像在右侧</label><button type="button" id="again">重看此状态</button></form>
 <div id="sample"><article id="paper"><small>语文　／　读一读</small><h2>溪边的柳树</h2><p>风从水面走过，柳条低下了头。<br>柳梢点着水，溪水画了一个圆。</p><p>读一读，找出写柳条动作的词。</p></article><button type="button" class="vb-sign" id="teacher"></button><div id="caption" hidden>柳条碰到水时，你看见了什么？</div></div>
-<p id="note"></p><p>按住头像试试压纸，往上滑可以取消。</p><script>
+<p id="note"></p><p>按住头像试试压纸。</p><script>
 (() => {
 ${inlineScript(new URL('../kid/voice-view.ts', import.meta.url))}
 ${inlineScript(new URL('./voice-scenes.ts', import.meta.url))}

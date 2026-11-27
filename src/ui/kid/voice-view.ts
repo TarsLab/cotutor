@@ -40,7 +40,7 @@ export interface VoiceView {
   press: VoicePress;
 }
 
-/** 按着多久没声音,小字换成「我还没听到声音」(麦克风坏了也看得出) */
+/** 按着多久没声音,提示换成「没听见」(麦克风坏了也看得出) */
 export const VOICE_SILENT_MS = 3000;
 
 export function voiceIn(p: Partial<VoiceIn> = {}): VoiceIn {
@@ -56,8 +56,8 @@ export function voiceView(i: VoiceIn): VoiceView {
   if (i.status === 'holding') {
     if (i.cancel) return voiceLook('cancel', '松手取消');
     if (!i.holdAudio) return voiceLook('hold-wait', '正在开麦', { face: 'listen' });
-    if (i.silentMs >= VOICE_SILENT_MS) return voiceLook('hold-silent', '我还没听到声音', { face: 'listen' });
-    return voiceLook('hold', '松手发送', { face: 'listen', small: '往上滑取消' });
+    if (i.silentMs >= VOICE_SILENT_MS) return voiceLook('hold-silent', '没听见', { face: 'listen' });
+    return voiceLook('hold', '松手发送', { face: 'listen' });
   }
   const mic = i.open ? i.muted ? '关' : '开' : '';
   const action: Partial<VoiceView> = i.open ? { mic, small: i.muted ? '点一下开麦' : '点一下关麦', press: 'toggle' } : {};
@@ -67,12 +67,12 @@ export function voiceView(i: VoiceIn): VoiceView {
   if (i.pending) {
     const busy = i.hint === 'busy' && !i.open;
     const key = busy ? 'busy' : (i.open ? 'open-' : '') + (i.photo ? 'photo' : 'think');
-    return voiceLook(key, i.photo ? '正在看图' : '老师在想', { press: 'hint', ...action, photo: i.photo, face: 'think', shake: busy, ...(busy ? { small: '等老师一下' } : {}) });
+    return voiceLook(key, i.photo ? '正在看图' : '老师在想', { press: 'hint', ...action, photo: i.photo, face: 'think', shake: busy });
   }
   if (i.open && i.muted) return voiceLook('muted', '麦关了', { ...action, face: 'dim' });
   if (i.turn) return voiceLook(i.open ? 'turn' : 'turn-hold', '轮到你说', { small: '按住说话', ...action, breathe: true });
   if (i.open) return voiceLook('open', '直接说', action);
-  if (i.hint === 'unclear') return voiceLook('unclear', '再按住说一次', { shake: true });
-  if (i.hint === 'tap') return voiceLook('tap', '按住不放，说完松手', { shake: true });
+  if (i.hint === 'unclear') return voiceLook('unclear', '再说一次', { shake: true });
+  if (i.hint === 'tap') return voiceLook('tap', '按住说话', { shake: true });
   return voiceLook(i.status === 'quiet' ? 'idle' : i.status, '按住说话');
 }

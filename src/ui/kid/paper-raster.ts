@@ -2,12 +2,15 @@
  * 把课本窗里已经画好的页、高清局部和笔迹合成一张临时画布。按住期间只重画这张图，
  * 稳定后停笔；翻页、松手都能直接回到原先的课本。坐标以窗为准，和课本自己的缩放无关。
  */
-export function paperRaster(doc: Document, redraw: () => void) {
+export function paperRaster(doc: Document, region: { left: number; top: number; width: number; extent: number }, redraw: () => void) {
   const view = doc.querySelector<HTMLElement>('.bk-view');
   const ink = view?.querySelector<SVGSVGElement>('.bk-svg');
   if (!view || !ink || !ink.viewBox.baseVal.width) return null;
-  const bounds = view.getBoundingClientRect(), sheet = ink.getBoundingClientRect();
-  if (!bounds.width || !bounds.height || !sheet.width) return null;
+  const viewport = view.getBoundingClientRect(), sheet = ink.getBoundingClientRect();
+  const left = Math.max(viewport.left, region.left), top = Math.max(viewport.top, region.top);
+  const right = Math.min(viewport.right, region.left + region.width), bottom = Math.min(viewport.bottom, region.top + region.extent);
+  if (right <= left || bottom <= top || !sheet.width) return null;
+  const bounds = new DOMRect(left, top, right - left, bottom - top);
   const source = doc.createElement('canvas'), result = doc.createElement('canvas');
   // 只留窗内的像素。按住时仍可读清小字，同时控制高倍屏的临时画布内存。
   const ratio = Math.min(doc.defaultView!.devicePixelRatio, Math.sqrt(2_500_000 / (bounds.width * bounds.height)));

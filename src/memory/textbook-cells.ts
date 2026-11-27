@@ -9,9 +9,10 @@
  * 表格(2026-11-25 照 scripts/probe-book-zones.mjs 核过的搬来):实线的横线、竖线段(描边的,和细长的填充矩形)互相交着的一团,三条横线以上、三条竖线以上
  *  (或两条横线、四条竖线以上的一排)是表格;四边都有线的才算一格,合并的格不认,和田字格重了的不算。格里有没有字由建索引那层看文字层(textbook-index.ts)。
  * 小方框(打勾的 □):描边的闭合四点框、6–30pt、近似方的,填了颜色的(七巧板这种图)不算;里面没字、旁边贴着字的才是,也由建索引那层挑。
+ * 算式里的小圆:人教数学二上用四段三次贝塞尔曲线描一圈,四个端点落在外框四边的中点(2026-11-27)。
  * pdf.js 6 的 constructPath 参数是 [画法, [路径数据], 外框];路径数据里 0 起点、1 直线、2 三次曲线、3 二次曲线、4 闭合。
  */
-import type { PdfCell, PdfTableCell } from '../schema/index.ts';
+import type { PdfCell, PdfPage, PdfTableCell } from '../schema/index.ts';
 
 type Box = [number, number, number, number];
 type Mat = [number, number, number, number, number, number];
@@ -126,6 +127,24 @@ export function findTables(H: readonly Rule[], V: readonly Rule[], avoid: readon
 }
 
 const mul = (a: Mat, b: readonly number[]): Mat => [a[0] * b[0] + a[2] * b[1], a[1] * b[0] + a[3] * b[1], a[0] * b[2] + a[2] * b[3], a[1] * b[2] + a[3] * b[3], a[0] * b[4] + a[2] * b[5] + a[4], a[1] * b[4] + a[3] * b[5] + a[5]];
+const near = (a: readonly number[], b: readonly number[]): boolean => Math.hypot(a[0] - b[0], a[1] - b[1]) < 1;
+
+/** 数框有时比正方形宽(人教数学二上 PDF 第 50 页)。四角在外框的四个顶点。 */
+function smallRectangle(points: [number, number][], [x1, y1, x2, y2]: Box): boolean {
+  const w = x2 - x1, h = y2 - y1;
+  return w >= 10 && w <= 60 && h >= 10 && h <= 30
+    && [[x1, y1], [x2, y1], [x1, y2], [x2, y2]].every((corner) => points.some((p) => near(corner, p)));
+}
+
+/** 四段曲线首尾相接、四个端点在上、右、下、左,外框 10–30pt 见方 */
+function smallCircle(points: [number, number][], box: Box): boolean {
+  const [x1, y1, x2, y2] = box, w = x2 - x1, h = y2 - y1;
+  if (Math.min(w, h) < 10 || Math.max(w, h) > 30 || Math.abs(w - h) > 1.5) return false;
+  if (!near(points[0], points[4])) return false;
+  const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
+  return [[cx, y1], [cx, y2], [x1, cy], [x2, cy]].every((mid) => points.some((p) => near(mid, p)));
+}
+
 /** 很浅的填色(三个颜色都在 0xD0 以上):题的底板、说话气泡的底色,不是图 */
 const pale = (hex: string): boolean => { const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex); return !!m && [m[1], m[2], m[3]].every((x) => parseInt(x, 16) >= 0xd0); };
 /** 页上画了东西的小地方最大多大(pt):再大的是底色、整幅插图的框,不拿来挡等号后面的空白 */
@@ -135,9 +154,9 @@ const hexOf = (a: readonly unknown[]): string => (typeof a[0] === 'string' ? a[0
 
 /**
  * pdf.js 一页的操作表(getOperatorList 的 fnArray、argsArray)走一遍,收描边的路径、实线、填色的块和画出来的字;view = 视口的变换(左上角起)。
- * 回田字格、别的小方框(填空从这里挑)、表格的格、没填颜色的方框(打勾的从这里挑)
+ * 回田字格、填空的框、表格、没填颜色的小方框与小圆、挡住等号后面空白的图形
  */
-export function opsCells(ops: { fnArray: ArrayLike<number>; argsArray: readonly unknown[] }, OPS: Readonly<Record<string, number>>, view: readonly number[]): { cells: PdfCell[]; boxes: [number, number, number, number][]; tables: PdfTableCell[][]; squares: Box[]; marks: Box[] } {
+export function opsCells(ops: { fnArray: ArrayLike<number>; argsArray: readonly unknown[] }, OPS: Readonly<Record<string, number>>, view: readonly number[]): { cells: PdfCell[]; boxes: [number, number, number, number][]; tables: PdfTableCell[][]; squares: Box[]; formulaShapes: NonNullable<PdfPage['formulaShapes']>; marks: Box[] } {
   interface G { ctm: Mat; fill: string; dash: boolean }
   let g: G = { ctm: [...view] as Mat, fill: '#000000', dash: false };
   const stack: G[] = [];
@@ -148,6 +167,7 @@ export function opsCells(ops: { fnArray: ArrayLike<number>; argsArray: readonly 
   const lineOps = new Set([OPS.stroke, OPS.closeStroke, OPS.fillStroke, OPS.eoFillStroke, OPS.closeFillStroke, OPS.closeEOFillStroke]);
   const fills = new Set([OPS.fill, OPS.eoFill]);
   const H: Rule[] = [], V: Rule[] = [], quads: Box[] = [], painted: Box[] = [], marks: Box[] = [];
+  const formulaPaths: NonNullable<PdfPage['formulaShapes']> = [];
   // 页上画了东西的小地方(图标、小插图、画的框):表单对象的外框(图片都包在表单里,读 PDF 时不解图,外框还在)、填了色或描了边的小图形
   const mark = (b: Box): void => { const w = b[2] - b[0], h = b[3] - b[1]; if (w > 3 && h > 3 && w < MARK_MAX && h < MARK_MAX) marks.push([r2(b[0]), r2(b[1]), r2(b[2]), r2(b[3])]); };
   const seg = (p: [number, number], q: [number, number]): void => {
@@ -205,6 +225,12 @@ export function opsCells(ops: { fnArray: ArrayLike<number>; argsArray: readonly 
         paths.push({ box: [Math.min(...sx), Math.min(...sy), Math.max(...sx), Math.max(...sy)], quad, dashed: g.dash });
       }
       if (isLine && !g.dash && quad) quads.push(box);
+      if (isLine && !g.dash && (stroke.has(op) || g.fill.toLowerCase() === '#ffffff')) {
+        if (/^022224?$/.test(code) && smallCircle(pts, box)) formulaPaths.push({ symbol: '○', box });
+        if (quad && (code.endsWith('4') || op !== OPS.stroke || near(pts[0], pts[pts.length - 1])) && smallRectangle(pts, box)) {
+          formulaPaths.push({ symbol: '□', box });
+        }
+      }
       if (isFill && pts.length >= 3 && !/^#f[0-9a-f]f[0-9a-f]f[0-9a-f]$/i.test(g.fill)) { painted.push(box); if (!pale(g.fill)) mark(box); }
       else if (isLine && pts.length >= 3) mark(box);
       if (fills.has(op) && pts.length >= 4) {
@@ -223,5 +249,10 @@ export function opsCells(ops: { fnArray: ArrayLike<number>; argsArray: readonly 
     if (painted.some((b) => iou(q, b) > 0.8) || squares.some((b) => iou(q, b) > 0.8)) continue;
     squares.push([r2(q[0]), r2(q[1]), r2(q[2]), r2(q[3])]);
   }
-  return { cells, boxes: findBoxes(paths, cells), tables: findTables(mergeRules(H), mergeRules(V), tian), squares, marks };
+  const formulaShapes: NonNullable<PdfPage['formulaShapes']> = [];
+  for (const { symbol, box } of formulaPaths) {
+    if (painted.some((b) => iou(box, b) > 0.8) || formulaShapes.some((s) => iou(box, s.box) > 0.8)) continue;
+    formulaShapes.push({ symbol, box: [r2(box[0]), r2(box[1]), r2(box[2]), r2(box[3])] });
+  }
+  return { cells, boxes: findBoxes(paths, cells), tables: findTables(mergeRules(H), mergeRules(V), tian), squares, formulaShapes, marks };
 }

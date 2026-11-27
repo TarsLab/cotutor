@@ -4,9 +4,9 @@
  * 真课本的核实见 docs/dev/课本.md;pdf.js 画图指令那一层在最后一段用手写的一页 PDF 真跑。
  */
 import { findBoxes, findCells, findTables, type CellGlyph, type CellPath } from '../src/memory/textbook-cells.ts';
-import { blankCells, bookCells, equalsCells, tableCells, tickCells } from '../src/memory/textbook-index.ts';
+import { blankCells, bookCells, buildBookIndex, equalsCells, formulaCells, tableCells, tickCells } from '../src/memory/textbook-index.ts';
 import { bookCellsOf, bookSheets } from '../src/chalk/index.ts';
-import type { BookPage, PdfItem } from '../src/schema/index.ts';
+import type { BookPage, Box, PdfItem, PdfPage } from '../src/schema/index.ts';
 import { check, done } from './_check.ts';
 
 const S = 39.3;
@@ -113,6 +113,31 @@ check('没有格的页:没有', bookCellsOf([{ ...page, cells: undefined }], she
   check('隔开一点的(说话气泡):截到它前面', cut !== undefined && cut.x2 <= 149, JSON.stringify(cut));
 }
 
+// 一串画的格用已经认出的最后一个方框接到等号;第二行是数字夹着要填符号的圆。
+{
+  const box = (x: number, y = 40): Box => [x, y, x + 16, y + 16];
+  const it = (s: string, x: number, y = 54): PdfItem => ({ s, f: 'num', x, y, z: 16, w: s.length * 9 });
+  const page: PdfPage = { n: 1, w: 480, h: 350, items: [it('=', 140), it('12', 44, 94), it('3＝4', 86, 94)],
+    boxes: [box(120), box(152)], formulaShapes: [
+      ...[box(40), box(80), box(120), box(152)].map((box) => ({ symbol: '□' as const, box })),
+      ...[box(60), box(100), box(65, 80)].map((box) => ({ symbol: '○' as const, box })),
+    ] };
+  const wide: PdfPage = { ...page, boxes: [], items: [it('=', 155)], formulaShapes: [
+    { symbol: '□', box: [40, 40, 80, 56] }, { symbol: '○', box: box(85) }, { symbol: '□', box: [110, 40, 150, 56] }, { symbol: '□', box: [167, 40, 204, 56] },
+  ] };
+  check('宽数框也能拼成算式,保留它的原框', formulaCells(wide, []).map((c) => c.x2 - c.x1).join() === '40,16,40,37');
+  const old = blankCells(page);
+  const more = formulaCells(page, old);
+  check('□○□○□=□ 与 12○3＝4:补方框和符号圈,都能开填空写字卡;已有算式格只参与连串', old.length === 2 && more.map((c) => c.x1).join() === '40,60,80,100,65' && more.every((c) => c.kind === 'blank'), JSON.stringify(more));
+  const indexed = buildBookIndex([page], { title: '数学', file: 'test.pdf', sha: 'test' }).pages[0].cells;
+  check('新格都排在旧编号后面', JSON.stringify(indexed) === JSON.stringify([...old, ...more]));
+  const circle = box(65, 80);
+  const isolated: PdfPage = { ...page, boxes: [], formulaShapes: [{ symbol: '○', box: circle }], items: [it('12', 44, 94), it('3', 86, 94)] };
+  check('没有等号、等号隔栏或另起一行,都不把图里的圆当格', [[], [it('=4', 180, 94)], [it('=4', 98, 114)]].every((extra) => !formulaCells({ ...isolated, items: [...isolated.items, ...extra] }, []).length));
+  check('圆里印了符号或在表格里,不重复收', !formulaCells({ ...isolated, items: [...isolated.items, it('=4', 98, 94), it('×', 68, 94)] }, []).length
+    && !formulaCells({ ...isolated, items: [...isolated.items, it('=4', 98, 94)], tables: [[{ r: 0, c: 0, box: circle }]] }, []).length);
+}
+
 // ——— 走真的 pdf.js:认格子读的是 pdf.js 画图指令的内部格式(constructPath 的参数),换了版本格式一变就一格也认不出、还不报错,这里盯着 ———
 {
   const { readPdfPages } = await import('../src/memory/textbook-pdf.ts');
@@ -128,7 +153,11 @@ check('没有格的页:没有', bookCellsOf([{ ...page, cells: undefined }], she
   // 下面一张 3×3 的表(四条横线、四条竖线,描边),一个 12pt 描边的小方框,一个填了颜色的小方框(图,不算)
   const table = ['0 0 0 RG 0.5 w []0 d', ...[10, 30, 50, 70].map((y) => `40 ${y} m 160 ${y} l S`), ...[40, 80, 120, 160].map((x) => `${x} 10 m ${x} 70 l S`)].join('\n');
   const squares = ['40 160 12 12 re S', '0.9 0.2 0.2 rg 100 160 12 12 re B'].join('\n');
-  const content = [cellOps(40, 100, 'A', '0.17 0.18 0.21'), cellOps(79, 100, 'A', '1 0.51 0.51'), cellOps(118, 100, null, ''), table, squares].join('\n');
+  // 小圆由四段贝塞尔描边,重复描边、实心、虚线、椭圆和只画半圈的都不能多出格。
+  const ring = '0 8 m 4.4 8 8 4.4 8 0 c 8 -4.4 4.4 -8 0 -8 c -4.4 -8 -8 -4.4 -8 0 c -8 4.4 -4.4 8 0 8 c h';
+  const circles = [`q 1 0 0 1 20 100 cm ${ring} S ${ring} S Q`, `q 1 0 0 1 20 140 cm ${ring} B Q`,
+    `q [2] 0 d 1 0 0 1 20 160 cm ${ring} S Q`, `q 2 0 0 1 60 180 cm ${ring} S Q`, '10 40 m 10 48 26 48 26 40 c S'].join('\n');
+  const content = [cellOps(40, 100, 'A', '0.17 0.18 0.21'), cellOps(79, 100, 'A', '1 0.51 0.51'), cellOps(118, 100, null, ''), table, squares, circles].join('\n');
   const objs = [
     '<< /Type /Catalog /Pages 2 0 R >>',
     '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
@@ -146,6 +175,7 @@ check('没有格的页:没有', bookCellsOf([{ ...page, cells: undefined }], she
   check('真的 pdf.js:深灰的字是范字,红的是描红,第三格空着', got[0]?.ch === 'A' && !got[0]?.red && got[1]?.ch === 'A' && got[1]?.red === true && got[2] && !got[2].ch, JSON.stringify(got));
   check('真的 pdf.js:描边的线拼出一张 3×3 的表', page?.tables?.length === 1 && page.tables[0].length === 9 && Math.abs(page.tables[0][0].box[0] - 40) < 0.5 && Math.abs(page.tables[0][0].box[1] - 130) < 0.5, JSON.stringify(page?.tables));
   check('真的 pdf.js:描边的小方框收,填了颜色的不收', page?.squares?.length === 1 && Math.abs(page.squares[0][0] - 40) < 0.5 && Math.abs(page.squares[0][1] - 28) < 0.5, JSON.stringify(page?.squares));
+  check('真的 pdf.js:只收一个描边的小圆,坐标照视口', JSON.stringify(page.formulaShapes?.filter((s) => s.symbol === '○').map((s) => s.box)) === '[[12,92,28,108]]', JSON.stringify(page.formulaShapes));
   check('真的 pdf.js:填了颜色的小方框记成画了东西的地方(marks)', (page?.marks ?? []).some((m) => Math.abs(m[0] - 100) < 0.5 && Math.abs(m[2] - 112) < 0.5), JSON.stringify(page?.marks));
   check('真的 pdf.js:字体记真名,去掉子集前缀(不是 pdf.js 的 g_d0_f1)', page?.items.length > 0 && page.items.every((i) => i.f === 'Helvetica'), JSON.stringify(page?.items.map((i) => i.f)));
   const [bare] = await readPdfPages(new TextEncoder().encode(pdf), { cells: false });

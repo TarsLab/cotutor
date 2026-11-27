@@ -19,7 +19,7 @@
  *  - 拼音是标准 Unicode,一个音节一段,只是 g 印成 ɡ、轻声的 a 印成 ɑ。
  *  - 目录是「第1单元 空气和水 / 1」「第1课 认识空气 / 2」:页码前一道斜杠,单元也带页码(单元页),课号写成「第1课」。
  */
-import { BOOK_INDEX_VERSION, bodySize, mathHeading, type BookCell, type BookChar, type BookIndex, type PdfCell, type BookLayout, type BookLesson, type BookLine, type BookPage, type PdfItem, type PdfPage } from '../schema/index.ts';
+import { BOOK_INDEX_VERSION, bodySize, mathHeading, type Box, type BookCell, type BookChar, type BookIndex, type PdfCell, type BookLayout, type BookLesson, type BookLine, type BookPage, type PdfItem, type PdfPage } from '../schema/index.ts';
 
 /** 自造拼音字体的大写字母 → 带调的韵母 */
 export const PINYIN_TONES: Readonly<Record<string, string>> = {
@@ -543,6 +543,47 @@ export function equalsCells(p: Pick<PdfPage, 'items' | 'w' | 'marks' | 'boxes' |
   return out;
 }
 
+/**
+ * 同一行的「□○□○□=□」「3○3=6」:等号把相邻的数字、运算符和画的格串成算式。方框填数、圆圈填符号,都开写字卡。
+ * 已经有编号的格也参与拼算式,只把还没编号的格接在后面。表格、印着字的形状不参与。
+ */
+export function formulaCells(p: PdfPage, known: readonly BookCell[]): BookCell[] {
+  if (!p.formulaShapes?.length) return [];
+  const glyphs = p.items.flatMap(splitItem);
+  interface Token { c: string; x1: number; x2: number; cy: number; z: number; box?: Box }
+  const tokens: Token[] = glyphs.map((g) => ({ c: g.c, x1: g.x1, x2: g.x2, cy: g.y - 0.35 * g.z, z: g.z }));
+  const equals = tokens.filter((t) => t.z > 0 && /[=＝]/.test(t.c));
+  if (!equals.length) return [];
+  const tables = (p.tables ?? []).flat();
+  for (const { symbol, box } of p.formulaShapes) {
+    const [x1, y1, x2, y2] = box;
+    if (x1 < 0 || y1 < 0 || x2 > p.w || y2 > p.h || tables.some((cell) => overlap(box, cell.box) > 0.3)) continue;
+    if (glyphs.some((g) => { const x = (g.x1 + g.x2) / 2, y = g.y - 0.35 * g.z; return x > x1 && x < x2 && y > y1 && y < y2; })) continue;
+    tokens.push({ c: symbol, x1, x2, cy: (y1 + y2) / 2, z: y2 - y1, box });
+  }
+  if (tokens.length === glyphs.length) return [];
+  tokens.sort((a, b) => a.x1 - b.x1);
+  const found = new Set<Box>();
+  for (const eq of equals) {
+    const row = tokens.filter((t) => Math.abs(t.cy - eq.cy) < eq.z * 0.3);
+    const at = row.indexOf(eq);
+    let first = at, last = at;
+    while (first > 0 && row[first].x1 - row[first - 1].x2 < eq.z * 0.75) first--;
+    while (last + 1 < row.length && row[last + 1].x1 - row[last].x2 < eq.z * 0.75) last++;
+    // 每个 token 对应一个字符,非算式的字作分隔。只收等号两侧能按「数、符号、数」读通的部分。
+    const symbols = row.slice(first, last + 1).map((t) => t.c.length === 1 ? t.c : ' ').join('');
+    const pivot = at - first;
+    const left = /(?:[0-9０-９]+|□)(?:[○×÷+＋−－-](?:[0-9０-９]+|□))*$/.exec(symbols.slice(0, pivot));
+    const right = /^(?:[0-9０-９]+|□)(?:[○×÷+＋−－-](?:[0-9０-９]+|□))*/.exec(symbols.slice(pivot + 1));
+    if (!left || !/[○×÷+＋−－-]/.test(left[0] + (right?.[0] ?? ''))) continue;
+    for (const t of row.slice(at - left[0].length, at + 1 + (right?.[0].length ?? 0))) if (t.box) found.add(t.box);
+  }
+  const taken = known.map((c) => [c.x1, c.y1, c.x2, c.y2]);
+  return [...found].filter((b) => !taken.some((k) => overlap(k, b) > 0.3))
+    .sort((a, b) => a[1] - b[1] || a[0] - b[0])
+    .map(([x1, y1, x2, y2]) => ({ x1, y1, x2, y2, kind: 'blank' }));
+}
+
 /** 整本:每页分行、读页码、认田字格和填空,读目录,自检 */
 /** 一册怎么分块:文件名带「数学」的是 math,带「科学」的是 science */
 export const layoutOf = (title: string): BookLayout => (title.includes('数学') ? 'math' : title.includes('科学') ? 'science' : 'prose');
@@ -555,7 +596,8 @@ export function buildBookIndex(raw: readonly PdfPage[], meta: { file: string; sh
     // 表格的格、小方框接在后面:田字格、填空的第几格(一节课状态里 kid.cells 的键)不变
     const tb = tableCells(p, blanks);
     const ticked = [...old, ...tb.cells, ...tickCells(p, old, layoutOf(meta.title))];
-    const cells = [...ticked, ...equalsCells(p, ticked)];
+    const numbered = [...ticked, ...equalsCells(p, ticked)];
+    const cells = [...numbered, ...formulaCells(p, numbered)];
     return { n: p.n, printed: printedOf(p), w: r2(p.w), h: r2(p.h), lines: pageLines(p, bad), ...(cells.length ? { cells } : {}), ...(tb.tables.length ? { tables: tb.tables } : {}) };
   });
   const toc = parseToc(raw);

@@ -2,6 +2,8 @@
 import { inlineScript } from '../shared/inline-lib.ts';
 
 export const VOICE_CSS = `
+  /* WebKit 在独立合成层中以纸面左上角为位移图原点；页在屏幕中段时，上下坡才与头像对齐。 */
+  .paper-folded { transform:translateZ(0); }
   .paper-light { position:absolute; z-index:1; pointer-events:none; max-width:none; user-select:none; }
   .vb { position:relative; display:flex; align-items:center; justify-content:center; gap:12px; box-sizing:border-box; width:312px; height:120px; padding:8px 12px; background:transparent; border:0; color:#3e3932; font:inherit; touch-action:none; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
   .vb-right { flex-direction:row-reverse; }
@@ -15,7 +17,8 @@ export const VOICE_CSS = `
   .vb .vb-flag { position:absolute; right:0; bottom:1px; background:#fff; color:#435747; border:1px solid #8b998a; border-radius:5px; padding:0 3px; font:700 11px/1.4 sans-serif; }
   .vb [hidden] { display:none; }
   .vb-sign { width:88px; height:124px; flex-flow:column; gap:4px; padding:0 4px; border-radius:18px; }
-  .vb-sign .vb-side { max-width:100%; }
+  .vb-sign .vb-av { position:absolute; top:14px; left:50%; translate:-50% 0; }
+  .vb-sign .vb-side { position:absolute; top:84px; left:4px; right:4px; }
   .vb-sign .vb-big { font-size:13px; }
   .vb-sign .vb-small { font-size:11px; }
   .vb-sign .vb-av, .vb-sign .vb-side { transition:opacity .6s; }

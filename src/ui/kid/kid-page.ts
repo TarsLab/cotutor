@@ -808,8 +808,7 @@ ${BOARD_MARK_JS}
   const lessonPaper = () => CV.paper ??= paperPress($('#st-frame'));
   const pressAtAvatar = () => {
     if (!S.stage?.lesson) return;
-    const r = $('#cv-hold .vb-av').getBoundingClientRect();
-    lessonPaper().start(r.left + r.width / 2, r.top + r.height / 2);
+    lessonPaper().start($('#cv-hold .vb-av'));
   };
   const VB = { hint: '', hintT: 0, loudAt: 0, photo: false, silentT: 0, side: 'left', reelHold: null, reelSpeak: false };
 
@@ -3316,10 +3315,10 @@ __REEL_DOCK_JS__
       if (LV.model.open) await trialOpen(v.chunks); else await trialHold(v.chunks);
     } finally { TV.feeding = false; }
   };
-  /** 共用按住手势。纸从触点开始变形；声音仍按各入口自己的长按门限开始。 */
+  /** 共用按住手势。压头像时，谷底固定在头像中央；声音仍按各入口自己的长按门限开始。 */
   const bindHold = (el, cancelPx, onTap, give = false) => {
     let handledAt = -Infinity;
-    const begin = (id, x, y) => {
+    const begin = (id, y) => {
       if (press || LV.letGo || S.bar === 'typing') return;
       if (give && (el.disabled || !penInk() || !LV.on || !LV.ready || LV.model.open || document.body.classList.contains('pending'))) return;
       unlock();
@@ -3328,7 +3327,7 @@ __REEL_DOCK_JS__
       if (document.body.classList.contains('pending') && !(LV.on && LV.model.open)) { busyHint(); return; }
       if (LV.on && LV.audio) LV.audio.wake().catch(() => {});
       const paper = (give || el.id === 'cv-hold') && S.stage?.lesson ? lessonPaper() : null;
-      paper?.start(x, y);
+      paper?.start(give ? el : $('#cv-hold .vb-av'));
       const gesture = { id, el, y, paper, give, held: false, live: false, cancelled: false, timer: 0 };
       press = gesture;
       gesture.timer = setTimeout(() => {
@@ -3347,7 +3346,7 @@ __REEL_DOCK_JS__
     };
     el.addEventListener('pointerdown', e => {
       if (!e.isPrimary || e.button !== 0) return;
-      if (begin(e.pointerId, e.clientX, e.clientY)) {
+      if (begin(e.pointerId, e.clientY)) {
         e.preventDefault();
         el.setPointerCapture(e.pointerId);
       }
@@ -3374,7 +3373,7 @@ __REEL_DOCK_JS__
         e.preventDefault();
         if (e.repeat) return;
         const r = el.getBoundingClientRect();
-        begin('keyboard', r.left + r.width / 2, r.top + r.height / 2);
+        begin('keyboard', r.top + r.height / 2);
       });
       el.addEventListener('keyup', e => {
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); finish('keyboard', false, false); }

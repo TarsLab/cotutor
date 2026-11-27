@@ -1,5 +1,5 @@
 /**
- * 全屏课页和工作台样张共用的压纸效果。位移图描述从指尖的谷底到页中线的峰顶，
+ * 全屏课页和工作台样张共用的压纸效果。位移图描述从按钮中心的谷底到页中线的峰顶，
  * 随高度移动纸上的字；光影只取坡度。每个方向的 SVG 滤镜使用固定纹理，换手时切换滤镜。
  */
 const paperWidth = 560, paperHeight = 320, paperOrigin = 115, paperSlope = 175;
@@ -75,21 +75,30 @@ export function paperPress(page: HTMLElement) {
     return { id: filter.id, map, shift: filter.querySelector('feDisplacementMap')!, light: texture.light };
   });
   let active = filters[0], depth = 0, goal = 0, height = 0, frame = 0;
-  let xFraction = 0, yFraction = 0;
+  let anchor: HTMLElement | undefined;
   const place = () => {
+    if (!anchor) return;
+    const bounds = page.getBoundingClientRect(), face = anchor.getBoundingClientRect();
+    if (!bounds.width || !bounds.height || !face.width || !face.height) return;
     const w = page.clientWidth, h = page.clientHeight;
-    const right = xFraction > .5, x = xFraction * w, y = yFraction * h;
+    const x = (face.left + face.width / 2 - bounds.left) * w / bounds.width;
+    const y = (face.top + face.height / 2 - bounds.top) * h / bounds.height;
+    const right = x > w / 2;
     const scale = Math.max(1, Math.abs(w / 2 - x)) / paperSlope;
+    // 纹理的分辨率固定；把两侧的缓坡按当前页高投影，上下四分之一页仍有可见的位移。
+    const extent = h * 1.2;
     active = filters[Number(right)];
     const left = x - (right ? paperWidth - paperOrigin : paperOrigin) * scale;
-    const top = y - paperHeight / 2;
-    for (const [attr, value] of Object.entries({ x: left, y: top, width: paperWidth * scale, height: paperHeight })) active.map.setAttribute(attr, String(value));
+    const top = y - extent / 2;
+    for (const [attr, value] of Object.entries({ x: left, y: top, width: paperWidth * scale, height: extent })) active.map.setAttribute(attr, String(value));
     if (light.src !== active.light) light.src = active.light;
-    Object.assign(light.style, { left: page.offsetLeft + left + 'px', top: page.offsetTop + top + 'px', width: paperWidth * scale + 'px', height: paperHeight + 'px' });
+    Object.assign(light.style, { left: page.offsetLeft + left + 'px', top: page.offsetTop + top + 'px', width: paperWidth * scale + 'px', height: extent + 'px' });
     height = Math.max(9, Math.min(22, w * .042));
+    return true;
   };
   const render = (value: number) => {
     depth = value;
+    page.classList.toggle('paper-folded', value > 0);
     page.style.filter = value ? 'url(#' + active.id + ')' : '';
     active.shift.setAttribute('scale', String(2 * height * value));
     light.hidden = !value;
@@ -115,12 +124,9 @@ export function paperPress(page: HTMLElement) {
   const motionChanged = () => { cancelAnimationFrame(frame); render(goal); };
   motion.addEventListener('change', motionChanged);
   return {
-    start(x: number, y: number) {
-      const r = page.getBoundingClientRect();
-      if (!r.width || !r.height) return;
-      xFraction = (x - r.left) / r.width;
-      yFraction = (y - r.top) / r.height;
-      place();
+    start(element: HTMLElement) {
+      anchor = element;
+      if (!place()) return;
       set(true);
       render(depth);
     },
@@ -129,6 +135,7 @@ export function paperPress(page: HTMLElement) {
       cancelAnimationFrame(frame);
       resize.disconnect();
       motion.removeEventListener('change', motionChanged);
+      page.classList.remove('paper-folded');
       page.style.filter = '';
       svg.remove(); light.remove();
     },

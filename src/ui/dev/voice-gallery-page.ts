@@ -21,6 +21,7 @@ select,form button { font:inherit; padding:6px; }
 #sample { position:relative; height:clamp(370px,65vh,720px); overflow:hidden; border:1px solid #cec7ba; border-radius:12px; background:#fbf8ef; }
 #paper { position:absolute; inset:0; overflow:hidden; padding:7% 10%; color:#473e31; background:repeating-linear-gradient(transparent 0 35px,#c8baa633 35px 36px),#fbf8ef; font:clamp(16px,2vw,24px)/1.95 "Songti SC",serif; }
 #paper h2 { margin:8px 0 22px; font-size:1.6em; }
+#paper p:last-child { margin-top:clamp(1em,9vh,5em); }
 #sample button { position:absolute; z-index:2; left:0; top:50%; translate:0 -50%; }
 #sample button.vb-right { left:auto; right:0; }
 .av { position:relative; display:grid; place-items:center; }
@@ -66,7 +67,7 @@ function preview() {
   ghostTimer = setTimeout(() => teacher.classList.add('ghost'), 5000);
   display(s.input);
   if (s.input.status === 'holding' && !s.input.cancel) {
-    const r = av.getBoundingClientRect(); paper.start(r.left + r.width / 2, r.top + r.height / 2);
+    paper.start(av);
   } else paper.set(false);
 }
 teacher.onpointerdown = e => {
@@ -76,7 +77,7 @@ teacher.onpointerdown = e => {
   clearTimeout(timer);
   teacher.setPointerCapture(e.pointerId);
   finger = { id:e.pointerId, y:e.clientY, input, started:0, cancel:false };
-  paper.start(e.clientX,e.clientY);
+  paper.start(av);
   teacher.classList.add('ghost');
   if (!input.open) timer = setTimeout(() => {
     finger.started = performance.now(); display({status:'holding', holdAudio:true});

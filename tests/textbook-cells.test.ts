@@ -4,7 +4,7 @@
  * 真课本的核实见 docs/dev/课本.md;pdf.js 画图指令那一层在最后一段用手写的一页 PDF 真跑。
  */
 import { findBoxes, findCells, findTables, type CellGlyph, type CellPath } from '../src/memory/textbook-cells.ts';
-import { blankCells, bookCells, buildBookIndex, equalsCells, formulaCells, tableCells, tickCells } from '../src/memory/textbook-index.ts';
+import { blankCells, bookCells, buildBookIndex, equalsCells, formulaCells, tableCells, tickCells, underlineCells } from '../src/memory/textbook-index.ts';
 import { bookCellsOf, bookSheets } from '../src/chalk/index.ts';
 import type { BookPage, Box, PdfItem, PdfPage } from '../src/schema/index.ts';
 import { check, done } from './_check.ts';
@@ -138,6 +138,26 @@ check('没有格的页:没有', bookCellsOf([{ ...page, cells: undefined }], she
     && !formulaCells({ ...isolated, items: [...isolated.items, it('=4', 98, 94)], tables: [[{ r: 0, c: 0, box: circle }]] }, []).length);
 }
 
+// 口诀表里同一格的前空、后空各占一格;只有一条横线的空表格早已有编号。
+{
+  const items: PdfItem[] = [
+    { s: '写出算式', f: 'g', x: 20, y: 30, z: 16, w: 64 },
+    { s: '五', f: 'g', x: 64, y: 148, z: 12, w: 12 },
+    { s: '解', f: 'g', x: 40, y: 98, z: 16, w: 16 },
+  ];
+  const page: PdfPage = { n: 1, w: 260, h: 300, items, tables: [[
+    { r: 0, c: 0, box: [40, 133, 110, 156] }, { r: 0, c: 1, box: [110, 133, 180, 156] },
+  ]], writingLines: [
+    { x1: 20, x2: 120, y: 70 }, { x1: 20, x2: 120, y: 100 }, { x1: 52, x2: 64, y: 149 },
+    { x1: 76, x2: 100, y: 149 }, { x1: 117, x2: 172, y: 149 }, { x1: 20, x2: 80, y: 290 },
+  ] };
+  const old = tableCells(page, []).cells;
+  const cells = underlineCells(page, old);
+  check('算式长线、口诀前后短线取一个字号高,已印字的线、空表格与远处的线不收',
+    cells.map((c) => [c.x1, c.y1, c.y2].join()).join('|') === '20,54,70|52,137,149|76,137,149', JSON.stringify(cells));
+  check('实线与已有作答区重叠时保留旧格', underlineCells(page, [...old, cells[0]]).length === 2);
+}
+
 // ——— 走真的 pdf.js:认格子读的是 pdf.js 画图指令的内部格式(constructPath 的参数),换了版本格式一变就一格也认不出、还不报错,这里盯着 ———
 {
   const { readPdfPages } = await import('../src/memory/textbook-pdf.ts');
@@ -157,7 +177,10 @@ check('没有格的页:没有', bookCellsOf([{ ...page, cells: undefined }], she
   const ring = '0 8 m 4.4 8 8 4.4 8 0 c 8 -4.4 4.4 -8 0 -8 c -4.4 -8 -8 -4.4 -8 0 c -8 4.4 -4.4 8 0 8 c h';
   const circles = [`q 1 0 0 1 20 100 cm ${ring} S ${ring} S Q`, `q 1 0 0 1 20 140 cm ${ring} B Q`,
     `q [2] 0 d 1 0 0 1 20 160 cm ${ring} S Q`, `q 2 0 0 1 60 180 cm ${ring} S Q`, '10 40 m 10 48 26 48 26 40 c S'].join('\n');
-  const content = [cellOps(40, 100, 'A', '0.17 0.18 0.21'), cellOps(79, 100, 'A', '1 0.51 0.51'), cellOps(118, 100, null, ''), table, squares, circles].join('\n');
+  const lines = ['0 0 0 RG 0 0 0 rg 0.5 w 10 92 m 75 92 l S 10 88 65 1 re f',
+    'q [2] 0 d 10 88 m 75 88 l S Q', 'q 0.4 0.8 1 RG 10 86 m 75 86 l S Q',
+    '10 80 m 75 80 l S 52 80 m 52 84 l S', 'q 4 w 10 77 m 75 77 l S Q'].join('\n');
+  const content = [cellOps(40, 100, 'A', '0.17 0.18 0.21'), cellOps(79, 100, 'A', '1 0.51 0.51'), cellOps(118, 100, null, ''), table, squares, circles, lines].join('\n');
   const objs = [
     '<< /Type /Catalog /Pages 2 0 R >>',
     '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
@@ -170,6 +193,8 @@ check('没有格的页:没有', bookCellsOf([{ ...page, cells: undefined }], she
   const xref = pdf.length;
   pdf += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n${offsets.map((n) => `${String(n).padStart(10, '0')} 00000 n \n`).join('')}trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
   const [page] = await readPdfPages(new TextEncoder().encode(pdf));
+  check('真的 pdf.js:只收独立细描边与细长填色横条,排掉虚线、浅色、粗线、有刻度的轴和表边',
+    page.writingLines?.map((l) => [l.x1, l.x2, l.y].join()).join('|') === '10,75,108|10,75,111.5', JSON.stringify(page.writingLines));
   const got = page?.cells ?? [];
   check('真的 pdf.js:认出三个田字格(左上角起、y 往下)', got.length === 3 && got.every((c, i) => Math.abs(c.x1 - (40 + i * 39)) < 0.5 && Math.abs(c.y1 - 61) < 0.5 && Math.abs(c.x2 - c.x1 - 39) < 0.5), JSON.stringify(got));
   check('真的 pdf.js:深灰的字是范字,红的是描红,第三格空着', got[0]?.ch === 'A' && !got[0]?.red && got[1]?.ch === 'A' && got[1]?.red === true && got[2] && !got[2].ch, JSON.stringify(got));

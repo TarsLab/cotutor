@@ -30,6 +30,8 @@ export interface PdfPage {
   squares?: [number, number, number, number][];
   /** 实线描边、没涂色的数框和符号圈:和文字拼得成算式的才是作答区 */
   formulaShapes?: { symbol: '□' | '○'; box: [number, number, number, number] }[];
+  /** 独立的深色细实线,已排除与竖线相交的表边、刻度;x1、x2 是两端横坐标,y 是线离页顶的距离 */
+  writingLines?: { x1: number; x2: number; y: number }[];
   /** 页上画了东西的小地方(120pt 以内的图标、小插图、画的框;src/memory/textbook-cells.ts):算式等号后面这里画了东西就不是留给孩子写的空白 */
   marks?: [number, number, number, number][];
 }
@@ -49,7 +51,7 @@ export interface PdfCell {
 
 /**
  * 一页上孩子能写的一格(docs/dev/课本.md):田字格分 model = 印着黑字的范字,trace = 印着红字让孩子描的,empty = 空着让孩子写的;
- * blank = 填空:算式里的空方框(□)、空着的括号(没有田字格的线,没有范字);table = 表格里没字的一格(r、c 是第几行第几列,从 0 起);
+ * blank = 填空:算式里的数框和符号圈、空着的括号、等号后的空白与答题横线;table = 表格里没字的一格(r、c 是第几行第几列,从 0 起);
  * tick = 打勾的小方框(没填颜色、里面没字、旁边贴着字)。
  * ch = 格里印的字;m = 这一格照着写的那个字(同一排它左边最近的范字;描红就是它自己的字;前面没有范字的空格没有)。坐标同 BookLine(PDF 的点)
  */
@@ -127,7 +129,7 @@ export interface BookLesson {
 }
 
 /** 索引的版本:取字、分行的规则改了就加一,旧缓存重做 */
-export const BOOK_INDEX_VERSION = 12;
+export const BOOK_INDEX_VERSION = 13;
 
 /**
  * 一册怎么分块(出分块的规则 src/memory/textbook-zones-rules.ts):prose = 课文(自然段、语文园地的栏目);

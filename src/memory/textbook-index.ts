@@ -584,6 +584,38 @@ export function formulaCells(p: PdfPage, known: readonly BookCell[]): BookCell[]
     .map(([x1, y1, x2, y2]) => ({ x1, y1, x2, y2, kind: 'blank' }));
 }
 
+/** 题干下留整行写算式,或在表格已印的字旁补空。框高取题干或相邻字的字号;空表格沿用整格的编号。 */
+export function underlineCells(p: PdfPage, known: readonly BookCell[]): BookCell[] {
+  if (!p.writingLines?.length) return [];
+  const glyphs = p.items.flatMap(splitItem);
+  const cues = p.items.filter((i) => /算式|列式|计算/.test(i.s)).sort((a, b) => b.y - a.y);
+  const labels = p.items.filter((i) => /(?:口诀|算式)[：:]\s*$/.test(i.s));
+  const operators = glyphs.filter((g) => /[=＝×÷+＋−－-]/.test(g.c));
+  const tables = (p.tables ?? []).flat();
+  const out: BookCell[] = [];
+  for (const { x1, x2, y } of p.writingLines) {
+    const table = tables.find(({ box: b }) => x1 > b[0] && x2 < b[2] && y > b[1] && y < b[3]);
+    const near = table && glyphs.find((g) => g.x1 >= table.box[0] - 1 && g.x2 <= table.box[2] + 1
+      && Math.abs(g.y - y) < 3 && (Math.abs(g.x2 - x1) < 3 || Math.abs(g.x1 - x2) < 3));
+    let z = near?.z;
+    if (!table && x2 - x1 >= 40) {
+      const label = labels.find((i) => Math.abs(i.y - y) < 3 && Math.abs(i.x + i.w - x1) < i.z);
+      const cue = cues.find((i) => i.y <= y && y - i.y <= 10 * i.z);
+      // 并排看图列式:有的栏印了「□+□=□」,另一栏只印答题横线。
+      const row = operators.filter((g) => Math.abs(g.y - y) < 3);
+      const equationSize = row.some((g) => /[=＝]/.test(g.c)) ? row.find((g) => /[×÷+＋−－-]/.test(g.c))?.z : undefined;
+      z = label?.z ?? cue?.z ?? equationSize;
+    }
+    if (!z || x1 < 0 || x2 > p.w || y - z < 0 || y > p.h) continue;
+    // 全角冒号的字框会伸进横线几 pt;看字的中部是否挡住落笔处。
+    if (glyphs.some((g) => g.x1 + 0.2 * (g.x2 - g.x1) < x2 && g.x2 - 0.2 * (g.x2 - g.x1) > x1
+      && g.y - 0.35 * g.z > y - z && g.y - 0.35 * g.z < y)) continue;
+    if (known.some((c) => c.x1 < x2 - 1 && c.x2 > x1 + 1 && c.y1 < y - 1 && c.y2 > y - z + 1)) continue;
+    out.push({ x1, x2, y1: r2(y - z), y2: y, kind: 'blank' });
+  }
+  return out.sort((a, b) => a.y2 - b.y2 || a.x1 - b.x1);
+}
+
 /** 整本:每页分行、读页码、认田字格和填空,读目录,自检 */
 /** 一册怎么分块:文件名带「数学」的是 math,带「科学」的是 science */
 export const layoutOf = (title: string): BookLayout => (title.includes('数学') ? 'math' : title.includes('科学') ? 'science' : 'prose');
@@ -597,7 +629,8 @@ export function buildBookIndex(raw: readonly PdfPage[], meta: { file: string; sh
     const tb = tableCells(p, blanks);
     const ticked = [...old, ...tb.cells, ...tickCells(p, old, layoutOf(meta.title))];
     const numbered = [...ticked, ...equalsCells(p, ticked)];
-    const cells = [...numbered, ...formulaCells(p, numbered)];
+    const formulas = [...numbered, ...formulaCells(p, numbered)];
+    const cells = [...formulas, ...underlineCells(p, formulas)];
     return { n: p.n, printed: printedOf(p), w: r2(p.w), h: r2(p.h), lines: pageLines(p, bad), ...(cells.length ? { cells } : {}), ...(tb.tables.length ? { tables: tb.tables } : {}) };
   });
   const toc = parseToc(raw);

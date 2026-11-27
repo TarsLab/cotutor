@@ -154,11 +154,11 @@ const hexOf = (a: readonly unknown[]): string => (typeof a[0] === 'string' ? a[0
 
 /**
  * pdf.js 一页的操作表(getOperatorList 的 fnArray、argsArray)走一遍,收描边的路径、实线、填色的块和画出来的字;view = 视口的变换(左上角起)。
- * 回田字格、填空的框、表格、没填颜色的小方框与小圆、挡住等号后面空白的图形
+ * 回田字格、填空的框、表格、没填颜色的小方框与小圆、独立横线、挡住等号后面空白的图形
  */
-export function opsCells(ops: { fnArray: ArrayLike<number>; argsArray: readonly unknown[] }, OPS: Readonly<Record<string, number>>, view: readonly number[]): { cells: PdfCell[]; boxes: [number, number, number, number][]; tables: PdfTableCell[][]; squares: Box[]; formulaShapes: NonNullable<PdfPage['formulaShapes']>; marks: Box[] } {
-  interface G { ctm: Mat; fill: string; dash: boolean }
-  let g: G = { ctm: [...view] as Mat, fill: '#000000', dash: false };
+export function opsCells(ops: { fnArray: ArrayLike<number>; argsArray: readonly unknown[] }, OPS: Readonly<Record<string, number>>, view: readonly number[]): { cells: PdfCell[]; boxes: [number, number, number, number][]; tables: PdfTableCell[][]; squares: Box[]; formulaShapes: NonNullable<PdfPage['formulaShapes']>; writingLines: NonNullable<PdfPage['writingLines']>; marks: Box[] } {
+  interface G { ctm: Mat; fill: string; ink: string; width: number; dash: boolean }
+  let g: G = { ctm: [...view] as Mat, fill: '#000000', ink: '#000000', width: 1, dash: false };
   const stack: G[] = [];
   let tlm: Mat = [1, 0, 0, 1, 0, 0], tm: Mat = tlm, fs = 0;
   const paths: CellPath[] = [], glyphs: CellGlyph[] = [];
@@ -167,12 +167,17 @@ export function opsCells(ops: { fnArray: ArrayLike<number>; argsArray: readonly 
   const lineOps = new Set([OPS.stroke, OPS.closeStroke, OPS.fillStroke, OPS.eoFillStroke, OPS.closeFillStroke, OPS.closeEOFillStroke]);
   const fills = new Set([OPS.fill, OPS.eoFill]);
   const H: Rule[] = [], V: Rule[] = [], quads: Box[] = [], painted: Box[] = [], marks: Box[] = [];
+  const underlines: Rule[] = [], ticks: Rule[] = [];
   const formulaPaths: NonNullable<PdfPage['formulaShapes']> = [];
   // 页上画了东西的小地方(图标、小插图、画的框):表单对象的外框(图片都包在表单里,读 PDF 时不解图,外框还在)、填了色或描了边的小图形
   const mark = (b: Box): void => { const w = b[2] - b[0], h = b[3] - b[1]; if (w > 3 && h > 3 && w < MARK_MAX && h < MARK_MAX) marks.push([r2(b[0]), r2(b[1]), r2(b[2]), r2(b[3])]); };
   const seg = (p: [number, number], q: [number, number]): void => {
-    if (Math.abs(p[1] - q[1]) < 0.6 && Math.abs(p[0] - q[0]) > 6) H.push({ at: (p[1] + q[1]) / 2, a: Math.min(p[0], q[0]), b: Math.max(p[0], q[0]) });
-    else if (Math.abs(p[0] - q[0]) < 0.6 && Math.abs(p[1] - q[1]) > 6) V.push({ at: (p[0] + q[0]) / 2, a: Math.min(p[1], q[1]), b: Math.max(p[1], q[1]) });
+    const dx = Math.abs(p[0] - q[0]), dy = Math.abs(p[1] - q[1]);
+    if (dy < 0.6 && dx > 6) H.push({ at: (p[1] + q[1]) / 2, a: Math.min(p[0], q[0]), b: Math.max(p[0], q[0]) });
+    else if (dx < 0.6 && dy > 2) {
+      const verticals = dy > 6 ? V : ticks;
+      verticals.push({ at: (p[0] + q[0]) / 2, a: Math.min(p[1], q[1]), b: Math.max(p[1], q[1]) });
+    }
   };
   for (let i = 0; i < ops.fnArray.length; i++) {
     const f = ops.fnArray[i], a = (ops.argsArray[i] ?? []) as unknown[];
@@ -188,6 +193,8 @@ export function opsCells(ops: { fnArray: ArrayLike<number>; argsArray: readonly 
     }
     else if (f === OPS.paintFormXObjectEnd) g = stack.pop() ?? g;
     else if (f === OPS.setFillRGBColor) g = { ...g, fill: hexOf(a) };
+    else if (f === OPS.setStrokeRGBColor) g = { ...g, ink: hexOf(a) };
+    else if (f === OPS.setLineWidth) g = { ...g, width: Number(a[0]) };
     else if (f === OPS.setDash) g = { ...g, dash: Array.isArray(a[0]) && (a[0] as unknown[]).length > 0 };
     else if (f === OPS.setFont) fs = Number(a[1]) || 0;
     else if (f === OPS.beginText) { tlm = [1, 0, 0, 1, 0, 0]; tm = tlm; }
@@ -219,6 +226,21 @@ export function opsCells(ops: { fnArray: ArrayLike<number>; argsArray: readonly 
       const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
       const box: Box = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
       const quad = /^0111(1|4|14)?$/.test(code);
+      const width = box[2] - box[0], height = box[3] - box[1];
+      const thinStroke = stroke.has(op) && code === '01' && !g.dash && height < 0.6
+        && g.width * Math.hypot(g.ctm[1], g.ctm[3]) <= 1.6;
+      const thinFill = fills.has(op) && quad && height > 0 && height <= 1.6
+        && pts.every(([x, y]) => (Math.abs(x - box[0]) < 0.1 || Math.abs(x - box[2]) < 0.1)
+          && (Math.abs(y - box[1]) < 0.1 || Math.abs(y - box[3]) < 0.1));
+      if ((thinStroke || thinFill) && width >= 10 && width <= 200) {
+        const rgb = (thinStroke ? g.ink : g.fill).slice(1).match(/../g)?.map((n) => parseInt(n, 16));
+        if (rgb && Math.max(...rgb) < 170 && Math.max(...rgb) - Math.min(...rgb) < 45) {
+          const y = (box[1] + box[3]) / 2;
+          if (!underlines.some((h) => Math.abs(h.at - y) < 0.8 && Math.abs(h.a - box[0]) < 0.8 && Math.abs(h.b - box[2]) < 0.8)) {
+            underlines.push({ a: box[0], b: box[2], at: y });
+          }
+        }
+      }
       // 田字格、填空的小方框只看单纯描边的、只算直线的点(同 2026-11-22 核实的那样)
       if (stroke.has(op) && straight.length) {
         const sx = straight.map((p) => p[0]), sy = straight.map((p) => p[1]);
@@ -235,7 +257,10 @@ export function opsCells(ops: { fnArray: ArrayLike<number>; argsArray: readonly 
       else if (isLine && pts.length >= 3) mark(box);
       if (fills.has(op) && pts.length >= 4) {
         if (box[3] - box[1] < 1.6 && box[2] - box[0] > 6) H.push({ at: (box[1] + box[3]) / 2, a: box[0], b: box[2] });
-        else if (box[2] - box[0] < 1.6 && box[3] - box[1] > 6) V.push({ at: (box[0] + box[2]) / 2, a: box[1], b: box[3] });
+        else if (box[2] - box[0] < 1.6 && height > 2) {
+          const verticals = height > 6 ? V : ticks;
+          verticals.push({ at: (box[0] + box[2]) / 2, a: box[1], b: box[3] });
+        }
       }
     }
   }
@@ -254,5 +279,9 @@ export function opsCells(ops: { fnArray: ArrayLike<number>; argsArray: readonly 
     if (painted.some((b) => iou(box, b) > 0.8) || formulaShapes.some((s) => iou(box, s.box) > 0.8)) continue;
     formulaShapes.push({ symbol, box: [r2(box[0]), r2(box[1]), r2(box[2]), r2(box[3])] });
   }
-  return { cells, boxes: findBoxes(paths, cells), tables: findTables(mergeRules(H), mergeRules(V), tian), squares, formulaShapes, marks };
+  const verticals = [...V, ...ticks];
+  const writingLines = underlines
+    .filter((h) => !verticals.some((v) => v.at >= h.a - 1 && v.at <= h.b + 1 && h.at >= v.a - 1 && h.at <= v.b + 1))
+    .map((h) => ({ x1: r2(h.a), x2: r2(h.b), y: r2(h.at) }));
+  return { cells, writingLines, boxes: findBoxes(paths, cells), tables: findTables(mergeRules(H), mergeRules(V), tian), squares, formulaShapes, marks };
 }

@@ -23,6 +23,7 @@ import { createServer } from 'node:http';
 import { basename, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { QUIET_ARGS } from './_quiet.mjs';
+import { decodePng } from '../src/ui/shared/png.ts';
 
 const repo = fileURLToPath(new URL('..', import.meta.url));
 const args = process.argv.slice(2);
@@ -173,6 +174,30 @@ try {
   const p6 = bookFind(at.pages, sheets, '青蛙笑了');
   ok('老师的动作落下:翻到这一课(两页),「井沿」圈上了,窗里是第 6 段', Boolean(landed) && (await bookState()).pages === 2 && p6 && v[1] <= p6[1] && v[3] >= p6[3], JSON.stringify({ st: await bookState(), v: v.map(Math.round), p6 }));
   console.log('  ', await shot('2-坐井观天.png'));
+  // 截页中线附近的课文。深色笔画像素移动才算压下，轻微光影、头像状态字都不能让它通过。
+  const clip = { x: Math.round(cam.left + cam.w * .32), y: Math.round(cam.top + cam.h * .25),
+    width: Math.round(cam.w * .36), height: Math.round(cam.h * .5), scale: 1 };
+  const printed = async () => {
+    const { result: { data } } = await send('Page.captureScreenshot', { format: 'png', clip });
+    return decodePng(Buffer.from(data, 'base64')).px;
+  };
+  const inkChanges = (a, b) => {
+    let count = 0;
+    for (let i = 0; i < a.length; i += 3) if (a[i] < 110 && b[i] > 170) count++;
+    return count;
+  };
+  const sign = await center('#cv-hold .vb-av');
+  const flat = await printed();
+  await mouse('mousePressed', sign.x, sign.y);
+  await sleep(350);
+  const bent = await printed();
+  await mouse('mouseMoved', sign.x, sign.y - 120);
+  await sleep(350);
+  const released = await printed();
+  await mouse('mouseReleased', sign.x, sign.y - 120);
+  const movedInk = inkChanges(flat, bent), leftover = inkChanges(flat, released);
+  ok('按住时课文笔画移位，上滑取消后回到原位', movedInk > 100 && leftover < movedInk * .03, JSON.stringify({ movedInk, leftover }));
+
 
   // 三、点一个字
   // 窗里的那个「朋」(第一个「朋」在第 4 段,不在窗里)
@@ -330,15 +355,6 @@ try {
     const rowWent = await until(`document.querySelector('#st-ttl').textContent === ${JSON.stringify(nav1.ttl)}`, 10000);
     ok('点那一行:翻到下一课,报 open', Boolean(rowWent) && frames.slice(nRow).some((f) => f.t === 'board' && f.body?.k === 'open' && f.body.title === nav1.ttl));
   }
-  // 真实课本也通过同一个老师签压纸；手指上滑取消后回平，不交新的一轮。
-  const sign = await center('#cv-hold');
-  await mouse('mousePressed', sign.x, sign.y);
-  const folded = await until("!!document.querySelector('#st-frame').style.filter", 500);
-  await sleep(200);
-  await mouse('mouseMoved', sign.x, sign.y - 100);
-  const flat = await until("!document.querySelector('#st-frame').style.filter", 800);
-  await mouse('mouseReleased', sign.x, sign.y - 100);
-  ok('按住课本上的头像纸面下陷，上滑取消后回平', folded && flat);
   ok('页面没有脚本报错', errors.length === 0, errors.slice(0, 3).join(' | '));
   console.log(`\n截图在 ${shots}`);
   ws.close();

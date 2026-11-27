@@ -1,7 +1,9 @@
 /**
  * 全屏课页和工作台样张共用的压纸效果。位移图描述从按钮中心的谷底到页中线的峰顶，
- * 随高度移动纸上的字；光影只取坡度。每个方向的 SVG 滤镜使用固定纹理，换手时切换滤镜。
+ * 随高度移动纸上的字；光影只取坡度。课本窗按这张位移图逐块重绘，工作台样张使用同图的 SVG 滤镜。
  */
+import { paperRaster } from './paper-raster.ts';
+
 const paperWidth = 560, paperHeight = 320, paperOrigin = 115, paperSlope = 175;
 let paperSequence = 0;
 
@@ -45,7 +47,7 @@ function paperSurface(right: boolean) {
   }
   m.putImageData(offset, 0, 0);
   l.putImageData(shade, 0, 0);
-  return { map: map.toDataURL(), light: light.toDataURL() };
+  return { map: map.toDataURL(), light: light.toDataURL(), pixels: offset };
 }
 
 let paperTextures: ReturnType<typeof paperSurface>[] | undefined;
@@ -63,6 +65,7 @@ export function paperPress(page: HTMLElement) {
   light.className = 'paper-light';
   light.hidden = true;
   page.after(svg, light);
+  const iframe = page instanceof HTMLIFrameElement ? page : null;
   const filters = paperTextures.map((texture, index) => {
     const filter = document.createElementNS(svg.namespaceURI!, 'filter');
     filter.id = id + '-' + index;
@@ -72,10 +75,12 @@ export function paperPress(page: HTMLElement) {
     svg.append(filter);
     const map = filter.querySelector('feImage')!;
     map.setAttribute('href', texture.map);
-    return { id: filter.id, map, shift: filter.querySelector('feDisplacementMap')!, light: texture.light };
+    return { id: filter.id, map, shift: filter.querySelector('feDisplacementMap')!, light: texture.light, pixels: texture.pixels };
   });
   let active = filters[0], depth = 0, goal = 0, height = 0, frame = 0;
   let anchor: HTMLElement | undefined;
+  let raster: ReturnType<typeof paperRaster> = null;
+  let projection = { left: 0, top: 0, width: 0, extent: 0 };
   const place = () => {
     if (!anchor) return;
     const bounds = page.getBoundingClientRect(), face = anchor.getBoundingClientRect();
@@ -90,6 +95,7 @@ export function paperPress(page: HTMLElement) {
     active = filters[Number(right)];
     const left = x - (right ? paperWidth - paperOrigin : paperOrigin) * scale;
     const top = y - extent / 2;
+    projection = { left, top, width: paperWidth * scale, extent };
     for (const [attr, value] of Object.entries({ x: left, y: top, width: paperWidth * scale, height: extent })) active.map.setAttribute(attr, String(value));
     if (light.src !== active.light) light.src = active.light;
     Object.assign(light.style, { left: page.offsetLeft + left + 'px', top: page.offsetTop + top + 'px', width: paperWidth * scale + 'px', height: extent + 'px' });
@@ -98,18 +104,32 @@ export function paperPress(page: HTMLElement) {
   };
   const render = (value: number) => {
     depth = value;
-    page.classList.toggle('paper-folded', value > 0);
-    page.style.filter = value ? 'url(#' + active.id + ')' : '';
+    page.classList.toggle('paper-folded', value > 0 && !raster);
+    page.style.filter = value && !raster ? 'url(#' + active.id + ')' : '';
     active.shift.setAttribute('scale', String(2 * height * value));
+    if (raster) {
+      if (value) raster.draw(value, height, projection.left, projection.top, projection.width, projection.extent, active.pixels);
+      else { raster.dispose(); raster = null; }
+    }
     light.hidden = !value;
     light.style.opacity = String(value);
   };
+  const capture = () => {
+    raster?.dispose();
+    const doc = iframe?.contentDocument;
+    raster = doc ? paperRaster(doc, () => render(depth)) : null;
+  };
+  const onLoad = () => {
+    if ((goal || depth) && place()) { capture(); render(depth); }
+  };
+  iframe?.addEventListener('load', onLoad);
   const motion = matchMedia('(prefers-reduced-motion: reduce)');
   const set = (down: boolean) => {
     const next = Number(down);
     if (goal === next) return;
     goal = next;
     cancelAnimationFrame(frame);
+    if (down && !raster) capture();
     if (motion.matches) { render(goal); return; }
     const from = depth, start = performance.now(), duration = down ? 120 : 200;
     const tick = (now: number) => {
@@ -119,7 +139,7 @@ export function paperPress(page: HTMLElement) {
     };
     tick(start + 1);
   };
-  const resize = new ResizeObserver(() => { if (depth || goal) { place(); render(depth); } });
+  const resize = new ResizeObserver(() => { if ((depth || goal) && place()) { capture(); render(depth); } });
   resize.observe(page);
   const motionChanged = () => { cancelAnimationFrame(frame); render(goal); };
   motion.addEventListener('change', motionChanged);
@@ -135,8 +155,10 @@ export function paperPress(page: HTMLElement) {
       cancelAnimationFrame(frame);
       resize.disconnect();
       motion.removeEventListener('change', motionChanged);
+      raster?.dispose();
+      iframe?.removeEventListener('load', onLoad);
       page.classList.remove('paper-folded');
-      page.style.filter = '';
+      page.style.removeProperty('filter');
       svg.remove(); light.remove();
     },
     reset() { cancelAnimationFrame(frame); goal = 0; render(0); },

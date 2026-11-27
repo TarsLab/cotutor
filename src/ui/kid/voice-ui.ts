@@ -44,4 +44,4 @@ export const VOICE_CSS = `
     .vb-sign .vb-av,.vb-sign .vb-side { transition:none; }
   }`;
 
-export const VOICE_JS = inlineScript(new URL('./voice-button.ts', import.meta.url)) + '\n' + inlineScript(new URL('./paper-press.ts', import.meta.url));
+export const VOICE_JS = inlineScript(new URL('./voice-button.ts', import.meta.url)) + '\n' + inlineScript(new URL('./paper-raster.ts', import.meta.url)) + '\n' + inlineScript(new URL('./paper-press.ts', import.meta.url));

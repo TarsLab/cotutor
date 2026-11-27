@@ -1,6 +1,6 @@
 /**
  * 工作台 /dev(给有技术背景的家长与开发者;不懂技术的家长日常用家长端 /parent):
- * 六个标签(概览 / 对话 / 老师团 / activity / 分块 / 设置;分块那页的样式与脚本在 ./zones-tab.ts、./zones-editor.ts)和按钮样张的链接(/dev/voice)+「看原文」抽屉,零依赖内联脚本,只走 /api/*。
+ * 六个标签(概览 / 对话 / 老师团 / activity / 分块 / 设置;分块那页的样式与脚本在 ./zones-tab.ts、./zones-editor.ts)和老师签样张的链接(/dev/voice)+「看原文」抽屉,零依赖内联脚本,只走 /api/*。
  * 对话里一轮 = 一块(问句 → 讲稿与动作 → 埋点 → 孩子看到 → 通知块),讲稿一句一行、动作写在句末;
  * 顶栏与输入框各自钉死(grid-rows auto/1fr/auto + min-height:0,不再硬算 100vh - 47px:顶栏一换行就错位,composer 被顶出视口);
  * 老师团一位一行、政策折叠、改过的才亮;设置分路径 / 服务 / 配音三块,配音能当场试一句。
@@ -548,7 +548,7 @@ ${BRAND_CSS}
     <a href="#activity" data-tab="activity" title="孩子从首页一个按钮进去的一种做法:看、改、检查、看老师收到什么"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5h8.5L19 8v12.5H6z"/><path d="M14 3.5V8h5M9.5 12.5h6M9.5 16h4"/></svg>activity<span class="badge err" id="act-bad" hidden></span></a>
     <a href="#zones" data-tab="zones" title="课本页上的块、能写的格、点了念什么、给老师的话:看、改、存进 vault"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3.5h14v17H5z"/><path d="M8 7h8v5H8zM10 9.5h4"/><path d="M8 15h8" stroke-dasharray="2 2"/></svg>分块</a>
     <span class="grp">工具</span>
-    <a href="/dev/voice" target="_blank" title="老师页那颗「头像 + 按住说话」的每一种样子(声音是模拟的);调动画时看这一页"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="12" r="4.5"/><path d="M15 9.5a4 4 0 0 1 0 5M18 7a7.5 7.5 0 0 1 0 10"/></svg>按钮样张<span class="out">↗</span></a>
+    <a href="/dev/voice" target="_blank" title="预览课页压纸、老师讲解与等待状态"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="12" r="4.5"/><path d="M15 9.5a4 4 0 0 1 0 5M18 7a7.5 7.5 0 0 1 0 10"/></svg>老师签样张<span class="out">↗</span></a>
     <span class="grp">去看</span>
     <a href="/" target="_blank" title="孩子端:孩子在 iPad 上看到的"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2.5"/><path d="M10.5 18h3"/></svg>孩子端<span class="out">↗</span></a>
     <a href="/parent" target="_blank" title="家长端:日常看孩子的记录、看录像、打星、删话题、记账;iPad 上扫码进的就是它"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"/><path d="M9 10h6M9 14h4"/></svg>家长端<span class="out">↗</span></a>

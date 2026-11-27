@@ -310,14 +310,8 @@ ${BACK_TINT_CSS}
   /* 竖屏、手机:输入条平时在板下面,舞台铺满会盖住它;试用里打字时它浮到舞台上面(平板横屏本来就这样,见「平板横屏」) */
   body.trial.live.typing #bar { position:fixed; left:0; right:0; bottom:var(--kb, 0px); z-index:25; background:#faf9f4f5; }
   /* 老师是左边中间浮着的一张卡——大头像,底下一行跟着左栏那颗变(按住说话 / 在听…);左手的在右边。原来是左下 64px 的小圆,孩子按不准 */
-  body.live #stage.cv.bp #cv-hold { left:calc(env(safe-area-inset-left) + 16px); right:auto; top:50%; bottom:auto; translate:0 -50%; width:136px; height:auto; padding:14px 8px 12px; flex-direction:column; gap:8px; border-radius:30px; box-shadow:0 8px 28px #46371e33; }
-  body.live.hand-left #stage.cv.bp #cv-hold { left:auto; right:calc(env(safe-area-inset-right) + 16px); }
-  #stage.bp #cv-hold .vb-av { width:104px; height:104px; --vb-h1:-4px; --vb-h2:-12px; }
-  #stage.bp #cv-hold .vb-av > .av { width:88px; height:88px; font-size:40px; }
-  #stage.bp #cv-hold .vb-side { display:block; align-self:stretch; height:24px; }
-  #stage.bp #cv-hold .vb-big { justify-content:center; gap:4px; font-size:16px; font-weight:700; white-space:nowrap; }
-  #stage.bp #cv-hold .vb-big .vb-ic svg { width:18px; height:18px; }
-  #stage.bp #cv-hold .vb-small { display:none; }
+  body.live #stage.cv.bp #cv-hold { left:env(safe-area-inset-left); right:auto; top:50%; bottom:auto; translate:0 -50%; }
+  body.live.hand-left #stage.cv.bp #cv-hold { left:auto; right:env(safe-area-inset-right); }
   #stage.cv #cv-cap { display:block !important; position:absolute; z-index:2; top:calc(env(safe-area-inset-top) + 68px); left:50%; translate:-50% 0; width:max-content; max-width:min(720px, calc(100% - 200px)); box-sizing:border-box; padding:10px 18px; border-radius:16px; background:#fffffff2; box-shadow:0 4px 18px #0000001f; font-size:20px; line-height:1.45; font-weight:600; color:var(--ink); opacity:0; pointer-events:none; transition:opacity .3s; }
   #stage.cv #cv-cap.on { opacity:1; }
   /* 板是页面;顶栏多两颗换底的钮(拍照、相册),左上的 × 是回首页 */
@@ -358,21 +352,6 @@ ${BACK_TINT_CSS}
   #stage.cv.bp.bk.lcp #cv-cap { bottom:calc(env(safe-area-inset-bottom) + 132px); }
   #stage.bp #st-go.holding { background:#3d7fd9; }
   #stage.bp #st-note:not(:empty) { flex:none; padding:6px 12px; border-radius:14px; background:#fffffff0; }
-  /* 课本做底:课本铺满屏宽,老师贴着屏幕边(一张只有外侧圆角的签),落在课本自己的页边里、不压正文;「擦掉」在舞台里、贴在它正下方(stage.css 的 .bk-wipe)。
-     老师说的话是底下一条字幕,不压在正文头上 */
-  body.live #stage.cv.bp.bk #cv-hold { left:0; width:88px; padding:12px 0 22px; gap:12px; border-left:0; border-radius:0 24px 24px 0; }
-  body.live.hand-left #stage.cv.bp.bk #cv-hold { left:auto; right:0; border-left:1.5px solid #e2dfd6; border-right:0; border-radius:24px 0 0 24px; }
-  #stage.bp.bk #cv-hold .vb-av { width:68px; height:68px; --vb-h1:-3px; --vb-h2:-8px; }
-  #stage.bp.bk #cv-hold .vb-av > .av { width:60px; height:60px; font-size:28px; }
-  #stage.bp.bk #cv-hold .vb-side { height:22px; }
-  #stage.bp.bk #cv-hold .vb-big { gap:3px; font-size:13px; }
-  #stage.bp.bk #cv-hold .vb-big .vb-ic svg { width:14px; height:14px; }
-  /* 老师的签不挡字:进页照常,5 秒后或按过一次(先到哪个算哪个)只剩淡淡的头像,底、边、影、字都透明,能按的范围不变;
-     按着、刚按了一下出提示(.lit)整张回来,松手再淡。一次进这一页淡一次(CV.ghostT;设计稿 https://claude.ai/artifact/RPqnrMdNvmqjvD14ES1nS5 的 V4) */
-  #stage.bp.bk #cv-hold .vb-av, #stage.bp.bk #cv-hold .vb-side { transition:opacity .15s; }
-  #stage.bp.bk #cv-hold.ghost:not(.lit) { background:transparent; border-color:transparent; box-shadow:none; transition:background-color .6s, border-color .6s, box-shadow .6s; }
-  #stage.bp.bk #cv-hold.ghost:not(.lit) .vb-av { opacity:.3; transition:opacity .6s; }
-  #stage.bp.bk #cv-hold.ghost:not(.lit) .vb-side { opacity:0; transition:opacity .6s; }
   /* 点读的倍速:左下角页边里一颗小钮(和老师的签同一边),只写现在的倍速,1× 灰字细边、别的学科色;点读在读、转圈、暂停时露,停下淡掉。
      点它从签那边淡出一层纸色(同 B 站的倍速,页不压暗):四档一档一整行,现在这档学科色;点一档换好收起,点那层外面只收起 */
   #cv-rate, #cv-rates, #cv-rates-x { display:none; }
@@ -471,16 +450,6 @@ __BRAND_CSS__
   body.pending #pill { opacity:.45; }
   /* 老师在想时中间那段照旧接按(按了说「老师在想,等一下再说」,busyHint),相机、加号不接 */
   body.pending #pill > :not(#mid) { pointer-events:none; }
-  #hold { position:absolute; left:0; right:0; bottom:0; height:300px; background:linear-gradient(180deg,#3b82e800 0%,#3b82e8cc 45%,#2f6fd6 100%); display:none; flex-direction:column; align-items:center; justify-content:flex-end; gap:22px; padding-bottom:calc(env(safe-area-inset-bottom) + 70px); color:#fff; pointer-events:none; z-index:20; }
-  #hold.on { display:flex; }
-  #hold .w { display:flex; align-items:center; gap:3px; height:28px; }
-  #hold .t { max-width:min(640px, 88%); font-size:20px; line-height:1.45; text-align:center; text-shadow:0 1px 2px #0003; }
-  #hold .t:empty { display:none; }
-  #hold.real .w i { animation:none; }
-  #hold.wait .w { opacity:.3; }
-  #hold.wait .w i { animation-play-state:paused; }
-  #hold .w i { width:3px; border-radius:2px; background:#ffffffdd; animation:wave .8s ease-in-out infinite alternate; }
-  @keyframes wave { from { transform:scaleY(.4); } to { transform:scaleY(1); } }
   #sheet { position:absolute; inset:0; display:none; z-index:30; }
   #sheet.on { display:block; }
   #sheet .dimmer { position:absolute; inset:0; background:#00000033; }
@@ -584,7 +553,7 @@ __VOICE_CSS__
   #lv-av { position:relative; flex:0 0 auto; width:44px; height:44px; }
   /* 请他说([[请 说 …]])的那句念完,那句锚着的卡一圈慢慢呼吸的光 = 轮到你;孩子开口光变实 */
   #lv-av .av { width:100%; height:100%; font-size:20px; }
-  /* 手机字幕行那颗头像的动作(在说 / 在听 / 在想)同按钮里那颗,走 voice-ui.ts 的 voiceFace(.vb-halo 是外圈) */
+  /* 手机字幕行那颗头像的动作(在说 / 在听 / 在想)同按钮里那颗,走 voice-ui.ts 的 voiceFace */
   #lv-cap { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
   #lv-cap .lv-prev { display:none; }
   #lv-cap .lv-cur { font-size:18px; line-height:1.45; font-weight:600; color:var(--ink); display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
@@ -678,8 +647,6 @@ __VOICE_CSS__
     body.live #bar { display:none; }
     body.live.typing #bar { display:block; position:fixed; left:0; right:0; bottom:var(--kb, 0px); z-index:25; max-width:none; padding:10px calc(env(safe-area-inset-right) + 40px) 10px calc(env(safe-area-inset-left) + 40px); background:#faf9f4f5; }
     body.live #cam, body.live #plus, body.live #lv-mic { display:none !important; }
-    /* 按着时按钮自己变蓝(voice-view 的 hold),不再盖一块 #hold 上去 */
-    body.live #hold { display:none !important; }
     /* 按住说话在右边(cotutor.json 的 kid.hand: left,家长端设置页切):白纸挪到右边、板在左边、按钮里头像在右头;回首页、「更多」的位置同右手(回首页浮在板的左上) */
     body.live.hand-left #board { padding-left:calc(env(safe-area-inset-left) + 48px); padding-right:calc(env(safe-area-inset-right) + 400px); }
     body.live.hand-left #stage { left:calc(env(safe-area-inset-left) + 16px); right:calc(env(safe-area-inset-right) + 376px); }
@@ -704,7 +671,7 @@ __VOICE_CSS__
     <div id="wrap">
       <div id="bmark" hidden></div>
       <div id="board"></div>
-      <div id="stage"><div class="top"><span id="st-nav"><button type="button" id="st-prev" hidden></button><span class="ttl" id="st-ttl"></span><button type="button" id="st-next" hidden></button></span><button type="button" id="st-toc" hidden></button><span id="st-bp"><button type="button" id="st-tb" hidden></button><button type="button" id="st-cam"></button><button type="button" id="st-alb"></button></span><button id="st-x" type="button"></button></div><div id="st-pick" hidden></div><div id="st-act" hidden><span class="note" id="st-note"></span><button id="st-go" type="button">给老师看</button></div><button id="cv-hold" class="vb-mini" type="button"></button><button id="cv-rate" type="button" aria-label="读得快慢" aria-expanded="false" tabindex="-1">1×</button><button id="cv-rates-x" type="button" aria-label="收起" hidden></button><div id="cv-rates" role="menu" aria-label="读得快慢" hidden></div><button id="cv-type" type="button"><span class="ic"></span>打字</button><div id="cv-cap"></div></div>
+      <div id="stage"><div class="top"><span id="st-nav"><button type="button" id="st-prev" hidden></button><span class="ttl" id="st-ttl"></span><button type="button" id="st-next" hidden></button></span><button type="button" id="st-toc" hidden></button><span id="st-bp"><button type="button" id="st-tb" hidden></button><button type="button" id="st-cam"></button><button type="button" id="st-alb"></button></span><button id="st-x" type="button"></button></div><div id="st-pick" hidden></div><div id="st-act" hidden><span class="note" id="st-note"></span><button id="st-go" type="button">给老师看</button></div><button id="cv-hold" class="vb-sign" type="button"></button><button id="cv-rate" type="button" aria-label="读得快慢" aria-expanded="false" tabindex="-1">1×</button><button id="cv-rates-x" type="button" aria-label="收起" hidden></button><div id="cv-rates" role="menu" aria-label="读得快慢" hidden></div><button id="cv-type" type="button"><span class="ic"></span>打字</button><div id="cv-cap"></div></div>
       <div id="st-dim"></div>
     </div>
     <div id="lv"><div id="lv-av"></div><div id="lv-kid"></div><div id="lv-cap"><div class="lv-prev"></div><div class="lv-cur"></div></div><div id="lv-ask"><b></b><small></small></div><div id="lv-acts"></div><button id="lv-replay" type="button" hidden><span class="ic"></span><span class="tx"></span></button><button id="lv-hold" type="button"></button><div id="lv-tools"><button type="button" id="lv-cam"><span class="ic"></span>拍照</button><button type="button" id="lv-album"><span class="ic"></span>相册</button><button type="button" id="lv-type"><span class="ic"></span>打字</button></div></div>
@@ -718,7 +685,6 @@ __VOICE_CSS__
       </div>
     </div>
     __REEL_DOCK_HTML__
-    <div id="hold"><div class="t"></div><span>松手发送,上移取消</span><div class="w"></div></div>
   </div>
   <div id="sheet"><div class="dimmer"></div><div class="panel"><div class="grab"></div><div class="opts">
     <label><span class="ic" id="ic-album"></span>相册<input type="file" accept="image/*" multiple></label>
@@ -833,15 +799,18 @@ ${BOARD_MARK_JS}
   // model = liveStep 的状态(只在 liveDispatch 里写);cap = 字幕(上一句、在说的、被打断的那句);heard = 每一轮(job)念到第几句
   /** 试用:打的字配成声音正推着(feeding:麦克风那路不推);wait = 推的这会儿等服务端的哪条消息(liveMsg 先给它看) */
   const TV = { feeding: false, wait: null };
-  const LV = { on: false, ready: false, ws: null, audio: null, model: initialLive(), cap: { prev: '', cur: '', cut: '', catching: false }, heard: new Map(), jobs: new Set(), drain: 0, was: 'quiet', holdAt: 0, diag: null, queued: null, playLine: null, endLine: null, gateOn: false, retries: 0, retryTimer: 0 };
-  /** 按住说话那颗按钮(平板横屏左栏;头像 + 声音):样子是 voice-view.ts 的 voiceView 给的、画法在 voice-ui.ts,
-   *  这里只在一处(voiceSync)把状态凑好交过去、把音量喂进去。hint = 刚才那一下的提示(留 2 秒);photo = 这一轮发的是照片;loudAt = 按着时最近一次有声音;
+  const LV = { on: false, ready: false, ws: null, audio: null, model: initialLive(), cap: { prev: '', cur: '', cut: '', catching: false }, heard: new Map(), jobs: new Set(), drain: 0, holdAt: 0, diag: null, queued: null, playLine: null, endLine: null, gateOn: false, retries: 0, retryTimer: 0 };
+  /** 按住说话的老师签:样子是 voice-view.ts 的 voiceView 给的、画法在 voice-ui.ts,
+   *  这里只在一处(voiceSync)把按住、开麦、播放和等待状态交给老师签。hint = 刚才那一下的提示(留 2 秒);photo = 这一轮发的是照片;loudAt = 按着时最近一次有声音;
    *  reelHold / reelSpeak = 录像里孩子的屏幕这一刻(按着没有、嘴在不在出声) */
   /** 两颗按住说话的按钮一起变:左栏那颗、板铺满时工具列底下那颗小的;探针、录像读的是大的那颗 */
-  const vbPair = (a, b) => ({ el: a.el, set: (v) => { a.set(v); b.set(v); }, shake: () => { a.shake(); b.shake(); }, nod: () => { a.nod(); b.nod(); }, avatar: (n) => { a.avatar(n); b.avatar(n.cloneNode(true)); }, side: (x) => { a.side(x); b.side(x); }, color: (c) => { a.color(c); b.color(c); }, level: (w, v) => { a.level(w, v); b.level(w, v); }, tutorSource: (fn) => { a.tutorSource(fn); b.tutorSource(fn); }, drawn: a.drawn });
-  const VB = { btn: vbPair(voiceButton($('#lv-hold'), { side: 'left' }), voiceButton($('#cv-hold'), { side: 'left' })), hint: '', hintT: 0, loudAt: 0, photo: false, silentT: 0, side: 'left', reelHold: null, reelSpeak: false };
-  VB.btn.tutorSource(() => (LV.audio && LV.audio.outLevel ? LV.audio.outLevel() : 0));
-  $('#lv-av').classList.add('vb-halo');
+  const voiceButtons = [voiceButton($('#lv-hold')), voiceButton($('#cv-hold'))];
+  const lessonPaper = () => CV.paper ??= paperPress($('#st-frame'));
+  const pressAtAvatar = () => {
+    if (!S.stage?.lesson) return;
+    lessonPaper().start($('#cv-hold .vb-av'));
+  };
+  const VB = { hint: '', hintT: 0, loudAt: 0, photo: false, silentT: 0, side: 'left', reelHold: null, reelSpeak: false };
 
   // ---- 声音:共享 Audio,首个手势解锁(iOS);不用浏览器合成声(老师配了音色,机械声孩子不习惯) ----
   // 录像里孩子的屏幕在家长页的 iframe 里:用家长页那个 Audio(家长点「看录像」时在手势里解锁过),声音才放得出来
@@ -1538,6 +1507,7 @@ ${HOME_TILES_JS}
     $('#st-ttl').classList.remove('open');
     $('#stage').classList.add('cv', 'bp', 'bk', 'on');
     $('#stage').classList.toggle('ph', BP.base === 'photo');
+    requestAnimationFrame(() => { if (S.stage?.lesson) lessonPaper(); });
     cvGhost(false); CV.ghostT = setTimeout(() => cvGhost(true), CV_GHOST_MS);
     frame = h('iframe', { id: 'st-frame', title: 'stage', src: stageUrl(S.stage.id) });
     $('#stage .top').after(frame);
@@ -1820,7 +1790,6 @@ __WORD_DRAW_JS__
   /** 老师还在写:有句就出节(讲稿嘴在念),转成 S.sections 里的一节(partial),之后每次 poll 把 lines 换成最新的;写完了 finalizeLive 换成正式的一节 */
   const avListen = () => document.body.classList.toggle('listening', S.bar === 'holding' || (LV.on && LV.model.open && LV.model.hearing));
   /** 实时:老师说完这一轮点一下头——按钮里那颗、手机那颗(动作在 voice-ui.ts) */
-  const liveNod = () => { VB.btn.nod(); const a = $('#lv-av'); a.classList.remove('vb-nod'); void a.offsetWidth; a.classList.add('vb-nod'); setTimeout(() => a.classList.remove('vb-nod'), 950); };
   const renderLive = (e) => {
     if (!S.partial || S.partial.job !== e.job) { if (S.partial) S.partial.el.remove(); const idx = S.sections.length; S.partial = { job: e.job, idx, live: false, el: renderSection(e, idx) }; $('#board').append(S.partial.el); }
     const P = S.partial, idx = P.idx;
@@ -1854,7 +1823,7 @@ __WORD_DRAW_JS__
   // ---- 舞台:一节课的页(舞台包画),点字弹的格子浮在页上 ----
   // ---- 铺满的舞台(一节课的页):「给老师看」轻点只交窗里的图、按住说 = 图和这句话一起给脑;嘴说的话浮在页底 ----
   /** ghostT = 进页后几秒把老师的签淡下去(CV_GHOST_MS;按过一次就直接淡) */
-  const CV = { capT: 0, give: null, ghostT: 0 };
+  const CV = { paper: null, capT: 0, give: null, ghostT: 0 };
   const CV_GHOST_MS = 5000;
   /** 老师的签淡下去(on)/ 回到照常:样子在 CSS 的 #cv-hold.ghost;按着、出提示时 .lit 让它整张回来(voiceSync) */
   const cvGhost = (on) => { clearTimeout(CV.ghostT); CV.ghostT = 0; $('#cv-hold').classList.toggle('ghost', on); };
@@ -1863,6 +1832,11 @@ __WORD_DRAW_JS__
     if (CV.give) { const g = CV.give; CV.give = null; g(null); }
     clearTimeout(CV.capT); CV.capT = 0; $('#cv-cap').classList.remove('on');
     $('#stage').classList.remove('cv'); $('#st-go').classList.remove('holding');
+    if (press?.paper) {
+      const p = press; press = null; clearTimeout(p.timer);
+      if (p.held && LV.on) liveRelease(true, true);
+    }
+    CV.paper?.dispose(); CV.paper = null;
     cvGhost(false); rateClose();
   };
   /** 铺满的舞台上嘴说的话:页底浮一条,说完 4 秒淡掉 */
@@ -2006,11 +1980,9 @@ __WORD_DRAW_JS__
     document.body.classList.toggle('pending', S.pending && !(LV.on && LV.model.status === 'mouth'));
     // 老师等着孩子答
     document.body.classList.toggle('waiting', ps.status === 'waiting' && !S.pending);
-    // 头像跟着嘴(实时是 liveStep 的状态,录像是这一刻在不在念);嘴停了、脑也写完了点一下头
+    // 实时取 liveStep 的状态，录像取这一刻是否在念
     const status = LV.on ? LV.model.status : ps.status === 'playing' && !S.pending ? 'mouth' : ps.status;
     document.body.classList.toggle('speaking', status === 'mouth');
-    if (LV.was === 'mouth' && (LV.on ? status !== 'mouth' : status === 'waiting' || status === 'done') && !S.pending) liveNod();
-    LV.was = status;
     // 录像里孩子的屏幕:老师的字幕由 reelLiveCap 照那一刻画,孩子刚说的那句照孩子端一样写在左栏(板上不挂孩子的话)
     if (!REEL) liveCaption(); else lvKid();
     voiceSync();
@@ -2314,34 +2286,19 @@ __WORD_DRAW_JS__
     const c = $('#lv-cap .lv-cur'); c.textContent = i >= 0 ? R.cap[i].text : ''; c.classList.toggle('nm', i < 0);
     $('#lv-cap').classList.toggle('done', !speaking);
   };
-  /** 按住说话:有实录(hold)照它画——话筒没开「等一下…」、在听、上滑「松手取消」、松手「正在听清…」,波形照记下的音量(声音流式推给嘴,按着的时候没有字);
-   *  没有实录的话题:原声那一段就是孩子按着的时候,嘴认成的字按原声的进度一点点露、波形是浮层的假波形 */
+  /** 录像按实录的阶段显示老师签；更早的话题由孩子原声的起止时间恢复按住状态。 */
   const reelHold = (f) => {
     const R = S.reel;
     const recorded = R.d.reel.holds.length > 0;
     const c = !f.hold && !recorded && f.clip && f.clip.kind === 'voice' ? f.clip : null;
-    const on = Boolean(f.hold || c);
-    // 平板横屏的按钮照这一刻画(按着、话筒开没开、上滑);孩子的竖条照录下的音量(最新那一格)。嘴的音量录像里没有,老师的弧只按最低深浅画
+    // 录像没有指尖坐标，用同一侧老师签的中心重放这次按住。
     const rh = f.hold ? { phase: f.hold.phase, slide: Boolean(f.hold.slide) } : c ? { phase: c.offset < 900 ? 'wait' : 'live', slide: false } : null;
-    if (JSON.stringify(rh) !== JSON.stringify(VB.reelHold)) { VB.reelHold = rh; voiceSync(); }
-    if (f.hold && f.hold.lv) VB.btn.level('kid', Number(f.hold.lv[f.hold.lv.length - 1] || 0) / 9);
-    $('#hold').classList.toggle('on', on);
-    if (!on) { if (R.hold) { R.hold = false; $('#hold .t').textContent = ''; $('#hold').classList.remove('real'); holdBars.forEach((b, i) => { b.style.height = R.barsH[i]; }); } return; }
-    R.hold = true;
-    let text = '', phase = 'live', slide = false, lv = null;
-    if (f.hold) ({ phase, slide, lv } = f.hold);
-    else {
-      const clip = R.d.reel.clips.find((x) => x.kind === 'voice' && x.job === c.job);
-      const dur = clip ? clip.to - clip.from : 1;
-      const all = c.text || '';
-      text = all.slice(0, Math.max(0, Math.min(all.length, Math.ceil(all.length * (c.offset - 900) / Math.max(1, dur - 1200)))));
-      phase = c.offset < 900 ? 'wait' : 'live';
+    if (JSON.stringify(rh) !== JSON.stringify(VB.reelHold)) {
+      VB.reelHold = rh; voiceSync();
+      if (S.stage?.lesson && rh && rh.phase !== 'tail' && !rh.slide) pressAtAvatar();
+      else CV.paper?.set(false);
     }
-    $('#hold .t').textContent = text.length > 60 ? '…' + text.slice(-60) : text;
-    $('#hold').classList.toggle('wait', phase !== 'live');
-    $('#hold span').textContent = phase === 'tail' ? '正在听清…' : slide ? '松手取消' : phase === 'wait' ? '等一下…' : '松手发送,上移取消';
-    $('#hold').classList.toggle('real', lv !== null);
-    if (lv !== null) holdBars.forEach((b, i) => { b.style.height = Math.round(4 + Number(lv[i] || 0) / 9 * 24) + 'px'; });
+
   };
   /** 输入条:在打字就是输入框里那一刻的字;没听清那 2.5 秒是「没听清,再按住说一次」;别的时候是占位字 */
   const reelInput = (f) => {
@@ -2533,7 +2490,7 @@ __WORD_DRAW_JS__
     const v0 = d.reel.views[0];
     // 示意的键盘(打字时垫在底下):三排字母一排空格,不画真键盘
     document.body.append(h('div', { id: 'rl-kbd' }, ...['qwertyuiop', 'asdfghjkl', 'zxcvbnm', ' '].map((r) => h('div', { class: 'r' }, ...[...r].map((k) => h('span', { class: k === ' ' ? 'sp' : '' }, k === ' ' ? '拼音' : k))))));
-    S.reel = { d, entries: sectionsFromMessages(d.kid), said: kidSaid(d.kid), size: v0 ? [v0.w, v0.h] : REEL_SIZES[d.device] || REEL_SIZES['tablet-landscape'], barsH: holdBars.map((b) => b.style.height), kb: 0, inKey: '', psKey: '', real: false, speed: 1, p: 0, playing: false, seeking: false, last: 0, key: '', now: '', voice: null, timer: null, clock: null, seen: 0, follow: false, pend: null, subKey: '', hold: null, f: null, t: 0, realtime: Boolean(d.realtime), cap: null, capOf: null, capKey: '' };
+    S.reel = { d, entries: sectionsFromMessages(d.kid), said: kidSaid(d.kid), size: v0 ? [v0.w, v0.h] : REEL_SIZES[d.device] || REEL_SIZES['tablet-landscape'], kb: 0, inKey: '', psKey: '', real: false, speed: 1, p: 0, playing: false, seeking: false, last: 0, key: '', now: '', voice: null, timer: null, clock: null, seen: 0, follow: false, pend: null, subKey: '', hold: null, f: null, t: 0, realtime: Boolean(d.realtime), cap: null, capOf: null, capKey: '' };
     reelSetClock();
     // ?at=时:分:秒 停在那一刻(调试、截图);那天的日期从录像起点取
     const at = /^(\\d{1,2}):(\\d{2})(?::(\\d{2}))?$/.exec(debug.get('at') || '');
@@ -2570,7 +2527,6 @@ __REEL_DOCK_JS__
     else if (mode !== 'typing' && S.bar === 'typing') typeRec('blur');
     S.bar = mode; avListen();
     $('#ph').hidden = mode === 'typing'; $('#typed').hidden = mode !== 'typing'; $('#go').hidden = mode !== 'typing';
-    $('#hold').classList.toggle('on', mode === 'holding');
     // 平板横屏实时:输入条平时收着,打字时贴着软键盘上沿出来(先露出来才 focus 得上)
     document.body.classList.toggle('typing', mode === 'typing');
     if (mode === 'typing') $('#typed').focus();
@@ -2587,7 +2543,6 @@ __REEL_DOCK_JS__
   typed.addEventListener('blur', () => { if (!typed.value.trim()) setBar(barNext(S.bar, 'blur')); });
   $('#plus').addEventListener('click', () => $('#sheet').classList.add('on'));
   $('#sheet .dimmer').addEventListener('click', () => $('#sheet').classList.remove('on'));
-  $('#hold .w').replaceChildren(...[6, 10, 16, 22, 12, 26, 18, 8, 14, 24, 20, 10, 16, 28, 12, 8, 18, 22, 10, 14, 6, 12, 20, 16, 8].map((v, i) => h('i', { style: 'height:' + v + 'px;animation-delay:' + (i * 37 % 400) + 'ms' })));
 
   // 中间那段:点 = 打字;实时老师页上按住 150ms = 说话(推给嘴),松手发,上滑 60px 取消
   const PH_IDLE = () => (LV.on && LV.model.open ? (LV.model.muted ? '麦关了,点右边的麦克风再听' : '我在听,直接说就行…') : '发消息或按住说话…');
@@ -2667,15 +2622,7 @@ __REEL_DOCK_JS__
   document.addEventListener('touchstart', () => {}, { passive: true }); // iOS Safari:没有触摸监听时 :active 不一定触发,按压反馈靠它
   // 按住时那行字:话筒还没开 → 等一下(这时说的话进不去);开了 → 松手发送
   const hold = { audio: false };
-  const renderHold = () => {
-    $('#hold').classList.toggle('wait', !hold.audio);
-    $('#hold span').textContent = press && press.cancelled ? '松手取消' : hold.audio ? '松手发送,上移取消' : '等一下…';
-    voiceSync();
-  };
   let phTimer = 0;
-  // 真音量:25 根条往左滚;没有麦克风那一路(老浏览器、没授权)就还是原来的假波形
-  const holdBars = [...document.querySelectorAll('#hold .w i')], holdLv = new Array(25).fill(0);
-  const holdLevel = (v) => { holdLvRec(v); $('#hold').classList.add('real'); holdLv.shift(); holdLv.push(v); for (let i = 0; i < 25; i++) holdBars[i].style.height = Math.round(4 + holdLv[i] * 24) + 'px'; };
   // ---- 实时的老师:嘴是 realtime,讲稿由它照念,声音从 WebSocket /api/live/<老师>/ws 下来,
   //      孩子端不念讲稿(板上的节的 step 照旧收事件);讲稿和动作照旧从「今天」拉。谁出声、谁停走 liveDispatch → liveStep(runtime/delivery/player.ts),
   //      这里只照单执行。按住说话推 PCM(常开那路麦克风,makeAudio().use);连不上、断了 → 回到「正在叫老师」,过一会儿再连 ----
@@ -2733,7 +2680,7 @@ __REEL_DOCK_JS__
     avListen();
     phIdle();
   };
-  /** 这一刻的状态凑成 VoiceIn(voice-view.ts);录像里孩子的屏幕照录像这一刻(没有一直听、嘴的音量取不到——老师的弧只按最低深浅画) */
+  /** 这一刻的状态凑成 VoiceIn(voice-view.ts);录像里孩子的屏幕照记录的按住与播放状态 */
   const voiceNow = () => {
     if (!LV.on) {
       if (S.readonly && !REEL) return voiceIn({ readonly: true });
@@ -2747,10 +2694,12 @@ __REEL_DOCK_JS__
   function voiceSync() {
     if (!S.pending) VB.photo = false;
     const side = document.body.classList.contains('hand-left') ? 'right' : 'left';
-    if (VB.side !== side) { VB.side = side; VB.btn.side(side); }
+    if (VB.side !== side) { VB.side = side; for (const button of voiceButtons) button.side(side); }
     const v = voiceView(voiceNow());
-    VB.btn.set(v);
-    $('#cv-hold').classList.toggle('lit', LV.model.status === 'holding' || Boolean(VB.hint));
+    for (const button of voiceButtons) button.set(v);
+    const ph = $('#ph');
+    if (LV.model.status === 'holding') { ph.textContent = v.big; ph.dataset.holding = '1'; }
+    else if (ph.dataset.holding) { delete ph.dataset.holding; ph.textContent = PH_IDLE(); }
     voiceFace($('#lv-av'), v.face);
     clearTimeout(VB.silentT);
     if (v.key === 'hold') { const left = VOICE_SILENT_MS - (Date.now() - Math.max(VB.loudAt, LV.holdAt)); if (left > 0) VB.silentT = setTimeout(voiceSync, left + 30); }
@@ -2759,7 +2708,7 @@ __REEL_DOCK_JS__
   const voiceHint = (k, ph) => {
     VB.hint = k; clearTimeout(VB.hintT); VB.hintT = setTimeout(() => { VB.hint = ''; voiceSync(); }, 2000);
     voiceSync();
-    VB.btn.shake();
+    for (const button of voiceButtons) button.shake();
     if (ph) { $('#ph').textContent = ph; clearTimeout(phTimer); phTimer = setTimeout(() => { $('#ph').textContent = PH_IDLE(); }, 2000); }
   };
   /** 实时老师页按了按住说话却不接的那几下记一笔 voice-diag(where: busy):看一晚碰到几次、等了多久;st = 嘴那时的状态,还没连上记 connecting */
@@ -3153,7 +3102,7 @@ __REEL_DOCK_JS__
     document.body.classList.add('live');
     $('#tutor').style.setProperty('--tc', colorOf(t));
     $('#lv-av').replaceChildren(avatarEl(t));
-    VB.btn.avatar(avatarEl(t)); VB.btn.color(colorOf(t));
+    for (const button of voiceButtons) button.avatar(avatarEl(t));
   };
   const liveOpen = (intent) => {
     if (LV.ws) liveClose();
@@ -3172,13 +3121,13 @@ __REEL_DOCK_JS__
       LV.audio.onLevel = (v) => {
         if (LV.model.status === 'holding') {
           const lv = Math.min(1, v * 4);
-          holdLevel(lv); VB.btn.level('kid', lv);
+          holdLvRec(lv);
           // 有声音了:3 秒没声音那句小字收回
-          if (lv > 0.12) { VB.loudAt = Date.now(); if (VB.btn.el.dataset.voice === 'hold-silent') voiceSync(); }
+          if (lv > 0.12) { VB.loudAt = Date.now(); if (voiceButtons[0].el.dataset.voice === 'hold-silent') voiceSync(); }
           if (LV.diag && v > LV.diag.peak) LV.diag.peak = v;
           return;
         }
-        if (LV.gateOn) { const lv = Math.min(1, v * 6); $('#lv-mic').style.setProperty('--lv', String(lv)); VB.btn.level('kid', lv); }
+        if (LV.gateOn) { const lv = Math.min(1, v * 6); $('#lv-mic').style.setProperty('--lv', String(lv)); }
       };
     }
     LV.audio.wake().catch(() => {});
@@ -3229,6 +3178,9 @@ __REEL_DOCK_JS__
     if (ws) { ws.onclose = null; try { if (ws.readyState === 1) ws.send(JSON.stringify({ t: 'bye' })); ws.close(); } catch {} }
     liveAudioDrop();
     clearInterval(LV.drain); LV.drain = 0;
+    clearTimeout(VB.hintT); clearTimeout(VB.silentT); VB.hint = ''; VB.photo = false; VB.loudAt = 0;
+    CV.paper?.reset();
+    if (press && !press.held) { clearTimeout(press.timer); press = null; }
     if (!LV.on) return;
     LV.on = false;
     document.body.classList.remove('speaking', 'lv-open');
@@ -3248,15 +3200,16 @@ __REEL_DOCK_JS__
     $('#st-go').classList.toggle('holding', LV.holdKind === 'give');
     setBar(barNext(S.bar, 'holdStart'));
     dispatch({ type: 'halt' });
-    hold.audio = false; renderHold();
+    hold.audio = false; voiceSync();
     holdRec('down');
     LV.holdAt = Date.now();
+    const gesture = press;
     const d = LV.diag = liveDiagOf();
     liveDispatch({ type: 'press' });
     if (LV.model.cut) LV.cap.cut = LV.cap.cur;
     renderSubtitle();
-    if (fed) { d.mark('fed'); hold.audio = true; renderHold(); holdRec('audio'); return; }
-    micOpen().then((how) => { d.mark('mic', how); return mic.stream && LV.audio ? LV.audio.use(mic.stream) : Promise.reject(new Error('no mic')); }).then(() => { d.mark('audio', LV.audio.ctx ? LV.audio.ctx.state : ''); if (press && press.live) { hold.audio = true; renderHold(); holdRec('audio'); } }, (e) => d.mark('fail', String(e && (e.name || e.message))));
+    if (fed) { d.mark('fed'); hold.audio = true; voiceSync(); holdRec('audio'); return; }
+    micOpen().then((how) => { d.mark('mic', how); return mic.stream && LV.audio ? LV.audio.use(mic.stream) : Promise.reject(new Error('no mic')); }).then(() => { d.mark('audio', LV.audio.ctx ? LV.audio.ctx.state : ''); if (press === gesture && press?.live) { hold.audio = true; voiceSync(); holdRec('audio'); } }, (e) => d.mark('fail', String(e && (e.name || e.message))));
   };
   /** 松手:告诉服务端 release(嘴马上接住);上滑、太短(不到 0.4 秒)、麦克风没开上 = 作废(hush)——麦克风没开上时输入条上说「没听清」,不能什么都不出(2026-10-19 真机:按了几次都没反应)。
    *  sys = 不是孩子松的手,是系统抢走了这次触摸(pointercancel:iPadOS 底部手势等);行为照旧发出去,voice-diag 记 cancel 不记 up,好分清 */
@@ -3288,6 +3241,7 @@ __REEL_DOCK_JS__
         LV.letGo = false;
         if (!patch) { liveDispatch({ type: 'cancel' }); renderSubtitle(); return; }
         liveDispatch({ type: 'release' }, { ...liveBody(), ...patch });
+        VB.photo = true;
         S.pending = true; S.waitSince = Date.now(); renderSubtitle();
       });
       return;
@@ -3306,7 +3260,7 @@ __REEL_DOCK_JS__
     dispatch({ type: 'halt' });
     const body = { text, device: S.device };
     if (opts.action) body.action = opts.action;
-    if (opts.photos && opts.photos.length) { body.photos = opts.photos; VB.photo = true; }
+    if (opts.photos && opts.photos.length) body.photos = opts.photos;
     // 新话题只由按钮开(via,服务端定);别的接着这个话题
     if (!S.newThread && S.thread) body.thread = S.thread;
     if (S.via) body.via = S.via;
@@ -3314,6 +3268,7 @@ __REEL_DOCK_JS__
       if (lb) { body.lecture = lb; lectureSent(); }
       liveDispatch({ type: 'send' }, body);
       if (LV.model.cut) LV.cap.cut = LV.cap.cur;
+      VB.photo = Boolean(body.photos?.length || body.action === 'submit');
       S.pending = true; S.waitSince = Date.now(); renderSubtitle();
     };
     if (S.lecture) lectureBody().then(go, () => go(null)); else go(null);
@@ -3325,7 +3280,6 @@ __REEL_DOCK_JS__
   const tvSleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const tvPush = (ab) => { if (LV.ws && LV.ws.readyState === 1) LV.ws.send(ab); };
   /** 按钮跟着推的这块的音量动(同麦克风那路的 onLevel) */
-  const tvLevel = (ab) => { const a = new Int16Array(ab); let s = 0; for (let i = 0; i < a.length; i++) s += (a[i] / 32768) ** 2; VB.btn.level('kid', Math.min(1, Math.sqrt(s / a.length) * 4)); };
   /** 配音 → 16k 单声道 PCM16,100 毫秒一块(同 audio-client 推的),不到半秒的后面补静音(松手太短算没说);{ error: null } = 没有这个口子 */
   const trialPcm = async (text) => {
     let r;
@@ -3350,14 +3304,14 @@ __REEL_DOCK_JS__
   /** 按住说的:装成按住满 150 毫秒,推完松手;中途被收了(换老师、断了、孩子真按了一下)就不松 */
   const trialHold = async (chunks) => {
     press = { y: 0, cancelled: false, held: true, live: true, cancelPx: 0, onTap: () => {}, timer: 0, fed: true };
-    liveHold(true);
+    pressAtAvatar(); liveHold(true);
     for (const c of chunks) {
       if (!press || !press.fed || LV.model.status !== 'holding') return;
-      tvPush(c); tvLevel(c);
+      tvPush(c);
       await tvSleep(100);
     }
     if (!press || !press.fed) return;
-    press = null;
+    press = null; CV.paper?.set(false);
     liveRelease(false, false);
   };
   /** 一直听的:见上 */
@@ -3366,7 +3320,7 @@ __REEL_DOCK_JS__
     TV.wait = (m) => { if (m.t === 'vad' && m.on === false) seen.stopped = true; if (m.t === 'kid' || m.t === 'skip') seen.judged = true; };
     try {
       if (!LV.gateOn) { LV.gateOn = true; lvSend({ t: 'gate', on: true }); }
-      for (const c of chunks) { if (!LV.on) return; tvPush(c); tvLevel(c); await tvSleep(100); }
+      for (const c of chunks) { if (!LV.on) return; tvPush(c); await tvSleep(100); }
       const quiet = new Int16Array(1600);
       for (const until = Date.now() + 6000; !seen.stopped && Date.now() < until && LV.on; ) { tvPush(quiet.slice().buffer); await tvSleep(100); }
       for (const until = Date.now() + 8000; seen.stopped && !seen.judged && Date.now() < until && LV.on; ) await tvSleep(100);
@@ -3392,82 +3346,81 @@ __REEL_DOCK_JS__
       if (LV.model.open) await trialOpen(v.chunks); else await trialHold(v.chunks);
     } finally { TV.feeding = false; }
   };
-  /** 按住说话的那块:输入条中间那段(点一下 = 打字)、平板横屏实时左栏浮层里那块(点一下 = 一直听时关麦 / 开麦,别的时候提示要按住);
-   *  上滑过 cancelPx 松手取消(浮层那块大,门限放宽到它的高) */
-  const bindHold = (el, cancelPx, onTap) => {
-  el.addEventListener('pointerdown', (e) => {
-    if (S.bar === 'typing' || LV.letGo) return;
-    e.preventDefault(); unlock();
-    // 看以前的话题:不接,晃一下
-    if (S.readonly && !REEL) { VB.btn.shake(); return; }
-    // 嘴还没连上:不接,说一声
-    if (LV.on && !LV.ready) { connectingHint(); return; }
-    // 老师在想:不接,说一声(busyHint);嘴一出声 body.pending 就摘掉,能按。一直听时这颗是开关麦,照旧接
-    if (document.body.classList.contains('pending') && !(LV.on && LV.model.open)) { busyHint(); return; }
-    if (LV.audio && LV.on) LV.audio.wake().catch(() => {});
-    press = { y: e.clientY, cancelled: false, held: false, live: false, cancelPx, onTap, timer: setTimeout(() => {
-      if (!press) return;
-      // 实时:按住推声音给嘴;一直听时这颗是开关麦,不是按住说话
-      // 一直听:那条不是按住说话,按久了也当点了一下(打字)
-      if (LV.on && LV.ready && !LV.model.open) { press.held = true; press.live = true; liveHold(); }
-    }, 150) };
-    try { el.setPointerCapture(e.pointerId); } catch {}
-  });
-  el.addEventListener('pointermove', (e) => { if (press && press.held) { const up = press.y - e.clientY > press.cancelPx; if (up !== press.cancelled) { press.cancelled = up; renderHold(); holdRec('slide', { on: up }); } } });
-  /** pointerup = 孩子松手;pointercancel = 系统抢走了触摸(iPadOS 底部手势),照旧当松手,实录与 voice-diag 分开记 */
-  const release = (e) => {
-    if (!press) return;
-    const sys = Boolean(e && e.type === 'pointercancel');
-    clearTimeout(press.timer);
-    const p = press; press = null;
-    if (!p.held) { p.onTap(); return; }
-    if (p.live) liveRelease(p.cancelled, sys);
-  };
-  el.addEventListener('pointerup', release);
-  el.addEventListener('pointercancel', release);
-  el.addEventListener('contextmenu', (e) => e.preventDefault());
+  /** 共用按住手势。压头像时，谷底固定在头像中央；声音仍按各入口自己的长按门限开始。 */
+  const bindHold = (el, cancelPx, onTap, give = false) => {
+    let handledAt = -Infinity;
+    const begin = (id, y) => {
+      if (press || LV.letGo || S.bar === 'typing') return;
+      if (give && (el.disabled || !penInk() || !LV.on || !LV.ready || LV.model.open || document.body.classList.contains('pending'))) return;
+      unlock();
+      if (S.readonly && !REEL) { for (const b of voiceButtons) b.shake(); toast('回到今天'); return; }
+      if (LV.on && !LV.ready) { connectingHint(); return; }
+      if (document.body.classList.contains('pending') && !(LV.on && LV.model.open)) { busyHint(); return; }
+      if (LV.on && LV.audio) LV.audio.wake().catch(() => {});
+      const paper = (give || el.id === 'cv-hold') && S.stage?.lesson ? lessonPaper() : null;
+      paper?.start(give ? el : $('#cv-hold .vb-av'));
+      const gesture = { id, el, y, paper, give, held: false, live: false, cancelled: false, timer: 0 };
+      press = gesture;
+      gesture.timer = setTimeout(() => {
+        if (press !== gesture || !LV.on || !LV.ready || LV.model.open) return;
+        gesture.held = true; gesture.live = true; liveHold();
+      }, give ? 300 : 150);
+      return true;
+    };
+    const finish = (id, system, abort) => {
+      if (press?.el !== el || press.id !== id) return;
+      const p = press; press = null;
+      handledAt = performance.now();
+      clearTimeout(p.timer); p.paper?.set(false);
+      if (p.held) liveRelease(abort || p.cancelled, system);
+      else if (!abort) onTap();
+    };
+    el.addEventListener('pointerdown', e => {
+      if (!e.isPrimary || e.button !== 0) return;
+      if (begin(e.pointerId, e.clientY)) {
+        e.preventDefault();
+        el.setPointerCapture(e.pointerId);
+      }
+    });
+    el.addEventListener('pointermove', e => {
+      if (press?.el !== el || press.id !== e.pointerId || !press.held) return;
+      const cancel = press.y - e.clientY > cancelPx;
+      if (cancel === press.cancelled) return;
+      press.cancelled = cancel; press.paper?.set(!cancel);
+      voiceSync(); holdRec('slide', { on: cancel });
+    });
+    el.addEventListener('pointerup', e => finish(e.pointerId, false, false));
+    el.addEventListener('pointercancel', e => finish(e.pointerId, true, false));
+    el.addEventListener('lostpointercapture', e => finish(e.pointerId, true, true));
+    window.addEventListener('blur', () => { if (press?.el === el) finish(press.id, true, true); });
+    el.addEventListener('contextmenu', e => e.preventDefault());
+    if (give) {
+      // 短按已交过图；单独的 click 也支持键盘及只能轻点的状态。
+      el.addEventListener('click', () => { if (performance.now() - handledAt >= 800 && !LV.letGo) onTap(); });
+    } else if (el !== mid) {
+      el.addEventListener('keydown', e => {
+        if (e.key === 'Escape') { finish('keyboard', true, true); return; }
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        if (e.repeat) return;
+        const r = el.getBoundingClientRect();
+        begin('keyboard', r.top + r.height / 2);
+      });
+      el.addEventListener('keyup', e => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); finish('keyboard', false, false); }
+      });
+      el.addEventListener('blur', () => finish('keyboard', true, true));
+    }
   };
   bindHold(mid, 60, () => setBar(barNext(S.bar, 'tap')));
-  /** 点了一下没按住:一直听时关麦 / 开麦(按钮上写着「点一下关麦」);别的时候晃一下提示,不打字(打字是下面那颗) */
   const holdTap = () => {
     if (LV.on && LV.model.open) { liveDispatch({ type: LV.model.muted ? 'unmute' : 'mute' }); return; }
     voiceHint('tap');
   };
   bindHold($('#lv-hold'), 120, holdTap);
-  // 板铺满时那颗小头像:同左栏那颗(同一组按钮,字一样;口语课、看图说话铺着照片时只露这颗,关麦也在这)
   bindHold($('#cv-hold'), 80, holdTap);
-  // 按过一次签,孩子知道它在哪了:不等 5 秒,直接淡(按着时 .lit 让它整张在)
-  $('#cv-hold').addEventListener('pointerdown', () => { if ($('#stage').classList.contains('bk')) cvGhost(true); });
-  /**
-   * 「给老师看」(板):轻点 = 只交板;按住说(满 300 毫秒,比头像长一点,免得点一下成了按住)= 板和这句话一起给老师。
-   * 嘴没连上、一直听、老师在想、板上没画:只能点(点了照旧交)
-   */
-  const bindGive = (el) => {
-    let tapAt = 0;
-    el.addEventListener('pointerdown', (e) => {
-      if (el.disabled || press || LV.letGo || !penInk() || !LV.on || !LV.ready || LV.model.open || S.bar === 'typing' || document.body.classList.contains('pending')) return;
-      e.preventDefault(); unlock();
-      if (LV.audio) LV.audio.wake().catch(() => {});
-      press = { y: e.clientY, cancelled: false, held: false, live: false, give: true, cancelPx: 80, onTap: giveTap, timer: setTimeout(() => { if (!press || !press.give) return; press.held = true; press.live = true; liveHold(); }, 300) };
-      try { el.setPointerCapture(e.pointerId); } catch {}
-    });
-    el.addEventListener('pointermove', (e) => { if (press && press.give && press.held) { const up = press.y - e.clientY > press.cancelPx; if (up !== press.cancelled) { press.cancelled = up; renderHold(); holdRec('slide', { on: up }); } } });
-    const up = (e) => {
-      if (!press || !press.give) return;
-      const sys = Boolean(e && e.type === 'pointercancel');
-      clearTimeout(press.timer);
-      const p = press; press = null;
-      tapAt = Date.now();
-      if (!p.held) { p.onTap(); return; }
-      if (p.live) liveRelease(p.cancelled, sys);
-    };
-    el.addEventListener('pointerup', up);
-    el.addEventListener('pointercancel', up);
-    el.addEventListener('contextmenu', (e) => e.preventDefault());
-    // 没走按住的那几种(嘴没连上、不是画板、键盘):照点
-    el.addEventListener('click', () => { if (Date.now() - tapAt < 800 || LV.letGo) return; giveTap(); });
-  };
-  bindGive($('#st-go'));
+  $('#cv-hold').addEventListener('pointerdown', () => { if (S.stage?.lesson) cvGhost(true); });
+  bindHold($('#st-go'), 80, giveTap, true);
   // 左栏最底下那排:拍照、相册走输入条与加号面板的那两个 file input(wireFile),打字同点输入条中间那段
   $('#lv-cam .ic').innerHTML = ICON.cameraLg; $('#lv-album .ic').innerHTML = ICON.album; $('#lv-type .ic').innerHTML = ICON.keyboard;
   $('#lv-cam').addEventListener('click', () => $('#cam input').click());

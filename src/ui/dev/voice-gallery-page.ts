@@ -1,123 +1,118 @@
-/**
- * 工作台 /dev/voice:按钮样张。孩子端老师页那颗「头像 + 按住说话」按钮的每一种样子摆在一页上,
- * 用的是真的按钮(src/ui/kid/voice-ui.ts)和真的状态 → 样子(src/ui/kid/voice-view.ts),场景表是 src/ui/dev/voice-scenes.ts;声音是模拟的
- *(老师一段一段说、孩子说说停停、按着没声音)。孩子用几天要改动画:改 voice-ui.ts 开头的调参表,开这一页看全部。
- * 最上面一颗自己循环「打断的那一下」:老师在说 → 孩子按下 → 孩子在说 → 松手(老师在想)。有镜像开关。样子用工作台的色板(dev-theme.ts),按钮自己的颜色是孩子端的。
- */
+/** 工作台的交互样张。场景只提供通话状态；工作台和孩子端用同一颗老师签和同一张纸的位移场。 */
+import { readFileSync } from 'node:fs';
 import { inlineScript } from '../shared/inline-lib.ts';
+import { SUBJECT_COLORS } from '../shared/tutor-color.ts';
 import { DEV_CSS } from './dev-theme.ts';
 import { VOICE_CSS, VOICE_JS } from '../kid/voice-ui.ts';
 import { faviconLinks } from '../shared/favicon.ts';
 
-const PAGE = `<!doctype html>
-<html lang="zh-CN">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-${faviconLinks()}
-<title>按钮样张 · 工作台</title>
-<style>
-__DEV_CSS__
-  body { padding:28px 32px 48px; }
-  header { display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:8px; }
-  h1 { margin:0; font-size:22px; font-weight:650; }
-  header p { margin:0; color:var(--muted); font-size:13px; flex:1 1 360px; }
-  label.sw { display:inline-flex; align-items:center; gap:6px; font-size:13px; color:var(--ink-2); }
-  h2 { margin:28px 0 12px; font-size:15px; font-weight:650; color:var(--ink-2); }
-  .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(340px, 1fr)); gap:16px; }
-  .cell { background:var(--surface); border-radius:var(--r-card); box-shadow:var(--lift),0 0 0 1px var(--line); padding:14px 14px 12px; display:flex; flex-direction:column; gap:10px; }
-  .cell b { font-size:14px; }
-  .cell .k { font:500 11.5px/1 var(--mono); color:var(--faint); margin-left:6px; }
-  .cell small { font-size:12.5px; color:var(--muted); line-height:1.5; }
-  .stage { background:var(--surface-2); border-radius:var(--r-item); padding:14px 0; display:flex; justify-content:center; }
-  .demo .stage { padding:22px 0; }
-  .demo small b { font-weight:600; color:var(--ink); }
-  /* 孩子端头像的样子(同 kid-page.ts 的 .av):学科色的 C 形开口环 + 白底圆里的字 */
-  .av { position:relative; display:grid; place-items:center; font-weight:700; flex:0 0 auto; }
-  .av .ring { position:absolute; left:0; top:0; width:100%; height:100%; overflow:visible; pointer-events:none; }
-  .av .ring circle { fill:none; stroke:currentColor; stroke-width:7; stroke-linecap:round; stroke-dasharray:221.17 55.29; transform-origin:50px 50px; transform:rotate(36deg); }
-  .av .face { position:absolute; left:15%; top:15%; width:70%; height:70%; border-radius:50%; background:#fff; display:grid; place-items:center; font-size:.76em; line-height:1; }
-__VOICE_CSS__
-</style>
-</head>
-<body>
-<header>
-  <h1>按钮样张</h1>
-  <p>孩子端老师页那颗「头像 + 按住说话」的每一种样子,声音是模拟的。要改动画:改 src/ui/kid/voice-ui.ts 开头的调参表;样子的种类在 src/ui/kid/voice-view.ts,场景表在 src/ui/dev/voice-scenes.ts。</p>
-  <label class="sw"><input type="checkbox" id="mirror">按住说话在右边</label>
-</header>
-<main id="main"></main>
-<script>
-(() => {
-__VOICE_VIEW_JS__
-__VOICE_SCENES_JS__
-__VOICE_JS__
-  const TUTORS = { chinese: { color: '#c43c74', text: '语' }, english: { color: '#2f8a7a', text: '英' } };
-  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text) e.textContent = text; return e; };
-  const avatar = (t) => { const a = el('span', 'av'); a.style.color = t.color; a.innerHTML = '<svg class="ring" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="44"></circle></svg><span class="face">' + t.text + '</span>'; return a; };
-  const t0 = performance.now();
-  /** 模拟的老师:一句 2.5 秒、停 0.6 秒,一个字 180 毫秒一起一落(放出去那条链上的 RMS 大约这么大) */
-  const tutorLv = () => { const t = performance.now() - t0; if (t % 3100 > 2500) return 0; return 0.03 + 0.09 * Math.sin((t % 180) / 180 * Math.PI) * (0.6 + 0.4 * Math.sin(t / 700)); };
-  /** 模拟的孩子:说 3 秒、停 1.2 秒,高高低低 */
-  const kidLv = () => { const t = performance.now() - t0; if (t % 4200 > 3000) return 0; return Math.max(0, 0.2 + 0.6 * Math.abs(Math.sin(t / 130)) * (0.5 + 0.5 * Math.sin(t / 900))); };
-  const all = [];
-  const mount = (stage, tutor, sound) => {
-    const b = el('button'); b.type = 'button';
-    stage.append(b);
-    const vb = voiceButton(b, { side: 'left', color: TUTORS[tutor].color });
-    vb.avatar(avatar(TUTORS[tutor]));
-    if (sound === 'tutor' || sound === 'both') vb.tutorSource(tutorLv);
-    all.push({ vb, sound });
-    return vb;
-  };
-  // 打断的那一下:自己循环
-  const demo = el('section', 'cell demo');
-  demo.append(el('b', '', '打断的那一下(自己循环)'));
-  const ds = el('div', 'stage'); demo.append(ds);
-  const dnote = el('small'); demo.append(dnote);
-  const dvb = mount(ds, 'chinese', 'none');
-  dvb.tutorSource(tutorLv);
-  const steps = [
-    { ms: 3200, input: { status: 'mouth' }, kid: false, say: '老师在说:头像旁三道小弧,深浅跟老师的音量' },
-    { ms: 3600, input: { status: 'holding', holdAudio: true }, kid: true, say: '孩子按满 150 毫秒:老师的弧 0.15 秒收掉,整块变蓝,竖条往头像里走' },
-    { ms: 2600, input: { pending: true }, kid: false, say: '松手:路上剩下的竖条 0.4 秒走进头像,按钮回灰白,头像转圈(老师在想)' },
-  ];
-  let si = 0;
-  const step = () => { const s = steps[si % steps.length]; si++; dvb.set(voiceView(voiceIn(s.input))); dnote.replaceChildren(el('b', '', (si - 1) % steps.length + 1 + ' / ' + steps.length + ' '), document.createTextNode(s.say)); demo.dataset.kid = s.kid ? '1' : ''; setTimeout(step, s.ms); };
-  step();
-  const main = document.getElementById('main');
-  main.append(demo);
-  const groups = [];
-  for (const s of VOICE_SCENES) if (!groups.includes(s.group)) groups.push(s.group);
-  for (const g of groups) {
-    main.append(el('h2', '', g));
-    const grid = el('div', 'grid'); main.append(grid);
-    for (const s of VOICE_SCENES.filter((x) => x.group === g)) {
-      const c = el('section', 'cell');
-      const t = el('b', '', s.name); t.append(el('span', 'k', s.expect));
-      const st = el('div', 'stage');
-      c.append(t, st, el('small', '', s.note));
-      grid.append(c);
-      const vb = mount(st, s.tutor, s.sound);
-      vb.set(voiceView(voiceIn(s.input)));
-      // 提示类的样子只晃一下;样张上每 3 秒再晃一次,看得见
-      if (s.input.hint) setInterval(() => vb.shake(), 3000);
-    }
-  }
-  setInterval(() => {
-    for (const x of all) if (x.sound === 'kid' || x.sound === 'both') x.vb.level('kid', kidLv()); else if (x.sound === 'kidQuiet') x.vb.level('kid', 0);
-    if (demo.dataset.kid) dvb.level('kid', kidLv());
-  }, 60);
-  document.getElementById('mirror').addEventListener('change', (e) => { for (const x of all) x.vb.side(e.target.checked ? 'right' : 'left'); });
-})();
-</script>
-</body>
-</html>
-`;
+const portraits = Object.fromEntries(['chinese', 'english'].map(subject => [
+  subject, 'data:image/webp;base64,' + readFileSync(new URL(`../../../avatars/${subject}.webp`, import.meta.url)).toString('base64'),
+]));
 
-export const VOICE_GALLERY_PAGE = PAGE
-  .replace('__DEV_CSS__', () => DEV_CSS)
-  .replace('__VOICE_CSS__', () => VOICE_CSS)
-  .replace('__VOICE_VIEW_JS__', () => inlineScript(new URL('../kid/voice-view.ts', import.meta.url)))
-  .replace('__VOICE_SCENES_JS__', () => inlineScript(new URL('./voice-scenes.ts', import.meta.url)))
-  .replace('__VOICE_JS__', () => VOICE_JS);
+export const VOICE_GALLERY_PAGE = `<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+${faviconLinks()}<title>老师签 · 工作台</title><style>
+${DEV_CSS}
+* { box-sizing:border-box; }
+body { max-width:1000px; margin:auto; padding:clamp(12px,4vw,42px); }
+h1 { font-size:24px; }
+form { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin:16px 0; }
+select,form button { font:inherit; padding:6px; }
+#sample { position:relative; height:clamp(370px,65vh,720px); overflow:hidden; border:1px solid #cec7ba; border-radius:12px; background:#fbf8ef; }
+#paper { position:absolute; inset:0; overflow:hidden; padding:7% 10%; color:#473e31; background:repeating-linear-gradient(transparent 0 35px,#c8baa633 35px 36px),#fbf8ef; font:clamp(16px,2vw,24px)/1.95 "Songti SC",serif; }
+#paper h2 { margin:8px 0 22px; font-size:1.6em; }
+#paper p:last-child { margin-top:clamp(1em,9vh,5em); }
+#sample button { position:absolute; z-index:2; left:0; top:50%; translate:0 -50%; }
+#sample button.vb-right { left:auto; right:0; }
+.av { position:relative; display:grid; place-items:center; }
+.av .ring { position:absolute; inset:0; width:100%; height:100%; overflow:visible; }
+.av .ring circle { fill:none; stroke:currentColor; stroke-width:7; stroke-linecap:round; stroke-dasharray:221.17 55.29; transform-origin:50px 50px; transform:rotate(36deg); }
+.av img { width:100%; height:100%; border-radius:50%; pointer-events:none; }
+.av .face { position:absolute; inset:15%; display:grid; place-items:center; background:#fff; border-radius:50%; }
+#caption { position:absolute; bottom:5%; left:50%; translate:-50% 0; width:max-content; max-width:90%; background:#fffdf3ef; padding:4px 12px; border-radius:8px; }
+${VOICE_CSS}
+</style></head><body><h1>老师签</h1>
+<form onsubmit="return false"><label>通话状态 <select id="scene"></select></label><label><input type="checkbox" id="mirror">头像在右侧</label><button type="button" id="again">重看此状态</button></form>
+<div id="sample"><article id="paper"><small>语文　／　读一读</small><h2>溪边的柳树</h2><p>风从水面走过，柳条低下了头。<br>柳梢点着水，溪水画了一个圆。</p><p>读一读，找出写柳条动作的词。</p></article><button type="button" class="vb-sign" id="teacher"></button><div id="caption" hidden>柳条碰到水时，你看见了什么？</div></div>
+<p id="note"></p><p>按住头像试试压纸。</p><script>
+(() => {
+${inlineScript(new URL('../kid/voice-view.ts', import.meta.url))}
+${inlineScript(new URL('./voice-scenes.ts', import.meta.url))}
+${VOICE_JS}
+const byId = id => document.getElementById(id);
+const teacher = byId('teacher'), scene = byId('scene');
+const button = voiceButton(teacher), paper = paperPress(byId('paper'));
+const portraits = ${JSON.stringify(portraits)};
+const av = document.createElement('span');
+av.className = 'av';
+av.innerHTML = '<svg class="ring" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="44"/></svg><span class="face"><img alt="" draggable="false"></span>';
+button.avatar(av);
+for (const [index, s] of VOICE_SCENES.entries()) scene.add(new Option(s.group + ' · ' + s.name, index));
+let finger = null, ghostTimer = 0, timer = 0, shown = {};
+function display(input) {
+  shown = input;
+  const view = voiceView(voiceIn(input));
+  button.set(view);
+  byId('caption').hidden = input.status !== 'mouth';
+}
+function preview() {
+  finger = null;
+  clearTimeout(ghostTimer); clearTimeout(timer);
+  const s = VOICE_SCENES[Number(scene.value)];
+  byId('note').textContent = s.note;
+  button.side(byId('mirror').checked ? 'right' : 'left');
+  av.style.color = s.tutor === 'english' ? '${SUBJECT_COLORS.英语}' : '${SUBJECT_COLORS.语文}';
+  av.querySelector('img').src = portraits[s.tutor];
+  teacher.classList.remove('ghost');
+  ghostTimer = setTimeout(() => teacher.classList.add('ghost'), 5000);
+  display(s.input);
+  if (s.input.status === 'holding' && !s.input.cancel) {
+    paper.start(av);
+  } else paper.set(false);
+}
+teacher.onpointerdown = e => {
+  if (!e.isPrimary || e.button !== 0 || finger) return;
+  const input = shown, view = voiceView(voiceIn(input));
+  if (view.press === 'hint') { button.shake(); return; }
+  clearTimeout(timer);
+  teacher.setPointerCapture(e.pointerId);
+  finger = { id:e.pointerId, y:e.clientY, input, started:0, cancel:false };
+  paper.start(av);
+  teacher.classList.add('ghost');
+  if (!input.open) timer = setTimeout(() => {
+    finger.started = performance.now(); display({status:'holding', holdAudio:true});
+  },150);
+};
+teacher.onpointermove = e => {
+  if (!finger?.started || e.pointerId !== finger.id) return;
+  finger.cancel = finger.y - e.clientY > 80;
+  paper.set(!finger.cancel); display({status:'holding',holdAudio:true,cancel:finger.cancel});
+};
+function finish(cancelled) {
+  if (!finger) return;
+  const { input, started, cancel } = finger;
+  finger = null; clearTimeout(timer); paper.set(false);
+  if (cancelled || cancel) { display(input.open ? input : {}); return; }
+  if (input.open) { display({...input,muted:!input.muted}); return; }
+  if (!started || performance.now()-started < 400) {
+    display({hint:started?'unclear':'tap'}); button.shake();
+    timer=setTimeout(()=>display({}),2000); return;
+  }
+  display({pending:true});
+  timer=setTimeout(()=>{
+    display({status:'mouth'});
+    timer=setTimeout(()=>display({}),1900);
+  },4000);
+}
+teacher.onpointerup = () => finish(false);
+teacher.onlostpointercapture = teacher.onpointercancel = () => finish(true);
+teacher.oncontextmenu = e => e.preventDefault();
+scene.onchange = byId('mirror').onchange = preview;
+byId('again').onclick = () => {
+  preview();
+  for (const animation of av.getAnimations({subtree:true})) animation.currentTime = 0;
+};
+preview();
+})();
+</script></body></html>`;

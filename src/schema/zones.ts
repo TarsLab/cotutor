@@ -28,6 +28,7 @@ export const ZONE_FORMAT = 3;
 /** 页的种类:只有正文、单元页、附录分块;封面这些只记种类(zones 空着) */
 export const PAGE_KINDS = ['封面', '扉页', '版权', '目录', '单元页', '正文', '附录', '后记', '封底', '空白'] as const;
 export type PageKind = (typeof PAGE_KINDS)[number];
+export const needsZones = (kind: PageKind): boolean => kind === '正文' || kind === '单元页' || kind === '附录';
 
 /** 页名:印的页码(`4`;重了的第二页 `4之2`)或页的种类(`封面`、`目录-1`、`无页码-3`) */
 export const pageName = z.string().regex(/^[\p{L}\p{N}][\p{L}\p{N}-]*$/u);

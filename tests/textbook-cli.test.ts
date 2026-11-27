@@ -59,6 +59,8 @@ check('空着的分块:写好协议版本、PDF 页、页名、种类', empty.v 
 
 // ---- 空着的就 check:有字的行、能写的格都没人认领 ----
 {
+  const all = await checkZoneDir(ws, dir);
+  check('整册 check 允许有字的目录页只记种类', all.pages === ix.pages.length && !all.problems.some((p) => p.includes('页 目录-1')), JSON.stringify(all.problems));
   const c = await checkZoneDir(ws, dir, { lesson: '小鱼吹泡泡' });
   check('check 空着的一课:有字的行没有块认领、候选没有作答区认领', c.problems.some((p) => p.includes('L1「') && p.includes('没有块认领')) && c.problems.some((p) => p.includes('候选 1-格0(填空)没有作答区认领')), JSON.stringify(c.problems.slice(0, 4)));
 }

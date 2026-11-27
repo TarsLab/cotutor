@@ -341,8 +341,19 @@ export function parseToc(pages: readonly PdfPage[]): { rows: TocRow[]; pages: nu
         }
         if (prefix) { out.push({ title: `${prefix.title} ${title}`, unit, no: null, kind: 'garden', from: h.from, at }); prefix = null; lastLesson = null; continue; }
         if (h.mark === '◎') { out.push({ title, unit, no: null, kind: 'garden', from: h.from, at }); lastLesson = null; continue; }
-        const no = big ? flat(big.map((g) => g.c).join('')) : h.mark;
-        if (no) { out.push({ title, unit, no, kind: 'lesson', from: h.from, at }); lastLesson = title; continue; }
+        const ordinal = unit ? /^(\d{1,2})[.．、](?=[\p{Script=Han}“「])/u.exec(title) : null;
+        const no = big ? flat(big.map((g) => g.c).join('')) : h.mark ?? ordinal?.[1];
+        if (no) {
+          const name = ordinal ? title.slice(ordinal[0].length) : title;
+          out.push({ title: name, unit, no, kind: 'lesson', from: h.from, at });
+          lastLesson = name;
+          continue;
+        }
+        if (unit && /^(单元小结|科学阅读)$/.test(title)) {
+          out.push({ title: unit + '的' + title, unit, no: null, kind: 'garden', from: h.from, at });
+          lastLesson = null;
+          continue;
+        }
         if (!centered && lastLesson && l.g[0].x1 - base > 0.8 * h.z) { out.push({ title, unit, no: null, kind: 'lesson', parent: lastLesson, from: h.from, at }); continue; }
         out.push({ title, unit: null, no: null, kind: centered ? 'garden' : 'other', from: h.from, at });
         lastLesson = null;
@@ -390,6 +401,25 @@ export function pdfPageOf(pages: readonly Pick<BookPage, 'n' | 'printed'>[], pri
   if (!near) return null;
   const n = near.n + (printed - near.printed!);
   return n >= 1 && n <= pages.length ? n : null;
+}
+
+/** 科学目录的单元名有时没标页码。第一课前一页印着完全相同的单元序号和名称,那页就是单元导入。 */
+function scienceRows(rows: readonly TocRow[], pages: readonly BookPage[]): TocRow[] {
+  const seen = new Set<string>();
+  const out: TocRow[] = [];
+  for (const row of rows) {
+    if (row.unit && !seen.has(row.unit)) {
+      seen.add(row.unit);
+      const first = pdfPageOf(pages, row.from);
+      const intro = first === null ? undefined : pages.find((p) => p.n === first - 1);
+      const heading = intro && flat(intro.lines.slice(0, 3).map((l) => l.text).join(''));
+      if (row.no && row.from > 1 && heading && heading.startsWith(flat(row.unit))) {
+        out.push({ title: row.unit, unit: row.unit, no: null, kind: 'lesson', from: row.from - 1 });
+      }
+    }
+    out.push(row);
+  }
+  return out;
 }
 
 /** 目录项算出止于哪一页:到下一项(不是自己下面的)的前一页;最后一项到最后一页印了页码的 */
@@ -635,7 +665,17 @@ export function buildBookIndex(raw: readonly PdfPage[], meta: { file: string; sh
   });
   const toc = parseToc(raw);
   const layout = layoutOf(meta.title);
-  const lessons = lessonsOf(layout === 'math' ? mathRows(toc.rows, pages) : toc.rows, pages);
+  // 目录可以自己从 1 编页,正文再从 1 开始。目录的页脚仍在字行里,查正文页码时跳过。
+  const tocEnd = toc.pages.at(-1);
+  if (tocEnd !== undefined) {
+    const firstBody = pages.find((p) => p.n > tocEnd && p.printed !== null)?.printed;
+    const contents = pages.filter((p) => toc.pages.includes(p.n));
+    if (firstBody != null && contents.some((p) => p.printed !== null && p.printed >= firstBody)) {
+      for (const p of contents) p.printed = null;
+    }
+  }
+  const rows = layout === 'math' ? mathRows(toc.rows, pages) : layout === 'science' ? scienceRows(toc.rows, pages) : toc.rows;
+  const lessons = lessonsOf(rows, pages);
   const decoded = pages.reduce((a, p) => a + p.lines.reduce((b, l) => b + l.chars.filter((c) => c.py).length, 0), 0);
   const problems: string[] = [];
   const chars = pages.reduce((a, p) => a + p.lines.reduce((b, l) => b + l.chars.length, 0), 0);

@@ -21,7 +21,7 @@ import { bookPageNames, type PageName } from '../../memory/textbook-page-names.t
 import { bookIndex, bookFile, listBooks } from '../../memory/textbook-pdf.ts';
 import { linePermille } from '../../memory/textbook-zones-rules.ts';
 import { bookZones, vaultZonesDir, writeZonePages } from '../../memory/textbook-zones.ts';
-import { LINE_REF, ZONE_FORMAT, ZoneFileSchema, bookChrome, resolveDraft, lineStyle, pickBookZones, pickZones, spacedText, styleOf, walkZones, zonePageProblems, zoneStem, type BookIndex, type BookLesson, type BookLine, type BookPage, type BookZones, type PermilleBox, type Workspace, type Zone, type ZonePage, type ZoneRegion } from '../../schema/index.ts';
+import { LINE_REF, ZONE_FORMAT, ZoneFileSchema, bookChrome, needsZones, resolveDraft, lineStyle, pickBookZones, pickZones, spacedText, styleOf, walkZones, zonePageProblems, zoneStem, type BookIndex, type BookLesson, type BookLine, type BookPage, type BookZones, type PermilleBox, type Workspace, type Zone, type ZonePage, type ZoneRegion } from '../../schema/index.ts';
 import { decodePng, encodePng } from '../../ui/shared/png.ts';
 import { UsageError, loadWorkspace, redactDeep, redactHome } from '../workspace.ts';
 
@@ -270,7 +270,7 @@ export async function listCommand(ws: Workspace, name?: string): Promise<{ books
 
 // ——— prep ———
 
-/** --lesson:这一课(写单元就是整个单元)的页 */
+/** --lesson 取目录项的页段。单元导入单列一页的课本,选单元名只取那一页。 */
 function lessonPages(b: Book, want: string): number[] {
   const l = b.index.lessons.find((x) => x.title === want) ?? b.index.lessons.find((x) => x.title.includes(want));
   if (!l) throw new UsageError(`《${b.file}》里没有「${want}」这一课(cotutor textbook list 看有哪些)`);
@@ -346,6 +346,7 @@ function refBox(cand: Candidates, ref: string): PermilleBox | null {
 /** 一页的问题:这一页的候选、索引的页对着查;strict = 编程助手整页写的(有字的行都要有块认领) */
 function pageProblems(zp: ZonePage, cand: Candidates, at: string, strict: boolean): { problems: string[]; notes: string[] } {
   const problems: string[] = [], notes: string[] = [];
+  if (zp.kind && !needsZones(zp.kind) && !zp.zones.length && !zp.regions?.length) return { problems, notes };
   const byId = new Map(cand.cells.map((c) => [c.id, c]));
   const regions: { r: ZoneRegion; where: string }[] = [];
   walkZones(zp.zones, (z) => { for (const r of z.regions ?? []) regions.push({ r, where: `「${z.label}」` }); });

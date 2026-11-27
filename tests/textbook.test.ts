@@ -57,6 +57,16 @@ check('目录的每一项记下印在哪一行:从编号到页码(点线也算);
     ...[1, 2, 3, 4, 5, 6, 7, 8].map((n) => ({ n: n + 1, w: W, h: H, items: [it(n === 4 ? '一共有几个苹果?' : '正文', 80, 200), ...(n === 4 ? [it('3', 440, 200), it('还剩几个?', 80, 240), it('2', 440, 240)] : []), foot(n)] })),
   ], { file: 'x.pdf', sha: 'x', title: '英语一年级上册' });
   check('没有「目录」两个字、没有点线的目录也认:一行末尾空开一大截是页码;正文里带数的行不当目录', other.toc.join() === '1' && other.lessons.map((l) => `${l.title}@${l.from}:${l.pages.join('-')}`).join() === 'Hello你好@2:3-5,Colours颜色@5:6-8,Numbers数字@8:9-9' && other.lessons.every((l) => l.toc?.n === 1), JSON.stringify(other.lessons));
+  // 目录页自己印 2,单元导入没印页码,正文第一课也从 2 开始。
+  const science = buildBookIndex([
+    { n: 1, w: W, h: H, items: [it('第一单元看一看', 60, 80), it('1.小草', 60, 160), it('2', 440, 160),
+      it('2.小树', 60, 200), it('3', 440, 200), it('单元小结', 60, 240), it('4', 440, 240), foot(2)] },
+    { n: 2, w: W, h: H, items: [it('第一单元', 100, 80), it('看一看', 100, 120)] },
+    ...[2, 3, 4].map((n) => ({ n: n + 1, w: W, h: H, items: [it('观察', 80, 200), foot(n)] })),
+  ], { file: 'science.pdf', sha: 'ocr', title: '科学' });
+  check('目录与正文重编号:课名去掉点号编号,页段避开目录,无页码的单元导入单列',
+    science.lessons.map((l) => [l.title, l.no, ...l.pages].join(':')).join('|') === '第一单元看一看::2:2|小草:1:3:3|小树:2:4:4|第一单元看一看的单元小结::5:5',
+    JSON.stringify(science.lessons));
 }
 {
   // 统编语文有两个「古诗二首」(第 7 课、第 18 课)

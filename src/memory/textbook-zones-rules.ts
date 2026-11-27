@@ -12,7 +12,7 @@
  * 表格成一块(kind table,不带字行),它的空格挂在它上面;打勾的小方框是 tick 作答区。语文正文后面的块写上点了念什么(say)。
  */
 import { bookPageNames } from './textbook-page-names.ts';
-import { ZONE_FORMAT, MATH_COLUMNS, bodySize, bookChrome, mathHeading, scienceColumn, spacedText, styleOf, walkZones, withPinyin, type BookIndex, type BookLayout, type BookLine, type BookPage, type PermilleBox, type Zone, type ZonePage, type ZoneRegion } from '../schema/index.ts';
+import { ZONE_FORMAT, MATH_COLUMNS, bodySize, bookChrome, needsZones, mathHeading, scienceColumn, spacedText, styleOf, walkZones, withPinyin, type BookIndex, type BookLayout, type BookLine, type BookPage, type PermilleBox, type Zone, type ZonePage, type ZoneRegion } from '../schema/index.ts';
 
 /**
  * 一课里的一块:标题、一段(no 从 1 起)、一个栏目(head)、别的(认字栏、写字栏、课后题、注释)。
@@ -232,7 +232,7 @@ function renameZones(index: BookIndex, pages: ZonePage[]): ZonePage[] {
   return pages.map((zp) => {
     const nm = names.get(zp.page)!;
     const head = { v: ZONE_FORMAT as typeof ZONE_FORMAT, page: zp.page, name: nm.name, kind: nm.kind };
-    if (nm.kind !== '正文' && nm.kind !== '单元页' && nm.kind !== '附录') return { ...head, zones: [] };
+    if (!needsZones(nm.kind)) return { ...head, zones: [] };
     const region = (r: ZoneRegion): ZoneRegion => ({ ...r, id: `${nm.name}-格${r.id}` });
     const seen = new Map<Zone, string>();
     const visit = (zs: readonly Zone[], stem: string, sep: string): Zone[] => zs.map((z, k) => {

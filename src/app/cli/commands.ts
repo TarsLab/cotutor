@@ -290,7 +290,7 @@ export const COMMANDS: readonly CommandSpec[] = [
     ],
     subs: ['list', 'prep', 'check', 'preview', 'push'], subRequired: true, maxArgs: 2, workspace: true, sandbox: true, json: true,
     flags: [
-      { name: 'lesson', value: '<课名>', desc: '只要这一课(写单元就是整个单元)', subs: ['prep', 'check', 'preview', 'push'] },
+      { name: 'lesson', value: '<课名>', desc: '照目录中这一项的 PDF 页段选页', subs: ['prep', 'check', 'preview', 'push'] },
       { name: 'out', value: '<目录>', desc: '摊开到哪(缺省 .cotutor/zones-work/<册名>/)', subs: ['prep'] },
     ],
     notes: [

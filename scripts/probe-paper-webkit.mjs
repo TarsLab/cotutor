@@ -85,9 +85,11 @@ try {
         const [near, slope, shoulder, crest, middle, fade, beyond] = shift.map(column => column[3]);
         assert(near > slope && slope > shoulder && shoulder >= crest && near >= 12, '从谷底向峰顶逐渐回升: ' + shift);
         for (const col of shift.slice(0, 2)) assert(col[1] >= 3 && col[5] >= 3, '上下接近四分之一页高处的字行仍要明显移动: ' + col);
+        const [, top, above, center, below, bottom] = shift[0];
+        assert(center >= Math.max(above, below) + 3 && above > top && below > bottom, '谷底应收在指腹，上下相邻的行分别抬升: ' + shift[0]);
         // 桌面样张较窄，位移深度随页宽缩小，SVG 采样在整像素行上取整。
         assert(crest > middle && middle >= (mini ? 2.5 : 2) && middle <= 4 && fade <= 1.5 && beyond === 0, '页中线附近仍可见位移，外侧缓缓回平: ' + shift);
-        assert(shift.every(col => col[0] === 0 && col[6] === 0), '渐退区以外应平整');
+        assert(shift.every(col => col[0] === 0 && col[6] === 0), '渐退区以外应平整: ' + shift);
         assert.equal((await page.locator('#teacher').innerText()).trim(), '松手发送');
         if (previous) assert.deepEqual(shift, previous, '按头像上下缘的谷底位置应一致');
         previous = shift;

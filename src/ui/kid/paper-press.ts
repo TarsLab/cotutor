@@ -20,20 +20,17 @@ function paperSurface(right: boolean) {
   const offset = m.createImageData(paperWidth, paperHeight), shade = l.createImageData(paperWidth, paperHeight);
   // 多算一圈高度，求坡度时直接取相邻点。
   const stride = paperWidth + 2, heights = new Float32Array(stride * (paperHeight + 2));
-  // 上下先保持宽阔的谷底，再沿外缘逐渐归零。整张纹理包含最后的浅坡。
-  const vertical = new Float32Array(paperHeight + 2);
-  for (let row = -1; row <= paperHeight; row++) {
-    const v = Math.abs(2 * row / paperHeight - 1);
-    vertical[row + 1] = 1 - paperSmooth((v - .55) / .45);
-  }
+  // 宽缓的坡面上，指腹再压深一小块。等高线环绕接触点，同一列的字行各有不同的下沉量。
   for (let x = -1; x <= paperWidth; x++) {
     const column = right ? paperWidth - 1 - x : x;
-    // 页中宽峰和周围平纸在同一高度。只把指下的谷底压低，坡度在接近峰顶时渐渐归零。
-    const t = Math.abs(column - paperOrigin) / (paperWidth - 1 - paperOrigin);
-    const rise = paperSmooth((t - .10) / .90);
-    const profile = -.96 * (1 - rise);
+    const u = Math.abs(column - paperOrigin) / (paperWidth - 1 - paperOrigin);
     for (let row = -1; row <= paperHeight; row++) {
-      heights[(row + 1) * stride + x + 1] = profile * vertical[row + 1];
+      const v = Math.abs(2 * row / paperHeight - 1);
+      // 在斜向略微放宽坡面，头像斜上、斜下方的正文也能逐行弯起。
+      const radius = Math.cbrt(u ** 3 + v ** 3);
+      const slope = (1 - paperSmooth(.86 * radius)) * (1 - paperSmooth((radius - .89) / .11));
+      const fingertip = 1 - paperSmooth(Math.sqrt(u * u + v * v) / .35);
+      heights[(row + 1) * stride + x + 1] = -.96 * (.80 * slope + .20 * fingertip);
     }
   }
   for (let row = 0; row < paperHeight; row++) for (let x = 0; x < paperWidth; x++) {
@@ -44,7 +41,7 @@ function paperSurface(right: boolean) {
     offset.data[i + 1] = 128 + 118 * z;
     offset.data[i + 2] = 128;
     offset.data[i + 3] = 255 * Math.min(1, 60 * (Math.abs(z) + Math.abs(dx) + Math.abs(dy)));
-    const tone = 2.1 * dy + 1.3 * dx;
+    const tone = 1.6 * dy + 1.3 * dx;
     shade.data[i] = tone < 0 ? 50 : 255;
     shade.data[i + 1] = tone < 0 ? 46 : 255;
     shade.data[i + 2] = tone < 0 ? 42 : 250;
@@ -96,8 +93,8 @@ export function paperPress(page: HTMLElement) {
     const right = x > w / 2;
     // 可见范围以字行仍有约 3 CSS px 位移计。页中线和上下四分之一页高处仍在坡上，之后平滑收尾。
     const origin = paperOrigin + .5;
-    const scale = Math.max(1, Math.abs(w / 2 - x)) * 1.27 / (paperWidth - origin);
-    const extent = h * .58;
+    const scale = Math.max(1, Math.abs(w / 2 - x)) * 1.21 / (paperWidth - origin);
+    const extent = h * .66;
     active = filters[Number(right)];
     const left = x - (right ? paperWidth - origin : origin) * scale;
     const top = y - extent / 2;

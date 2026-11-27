@@ -210,7 +210,7 @@ try {
   const last = (await day()).messages.slice(-1)[0];
   const run = JSON.parse(readFileSync(join(wsRoot, 'conversations', T, `${(await day()).date}.${last.job}.run.json`), 'utf8'));
   const pr = run.prompt.slice(run.prompt.indexOf('  board:'), run.prompt.indexOf('  board:') + 2000);
-  ok('下一轮的上下文包:底是这一课、全文分好段、点了「朋」、孩子在看', pr.includes('《坐井观天》第 54–55 页') && pr.includes('第1段 青蛙坐在井里') && pr.includes('朋') && pr.includes('孩子在看:'), pr);
+  ok('下一轮的上下文包:底是这一课、全文分好段、点了「朋」、孩子在看', pr.includes('《坐井观天》第 54–55 页') && /第\s*1\s*段 青蛙坐在井里/.test(pr) && pr.includes('朋') && pr.includes('孩子在看:'), pr);
   // 六、笔画一道:「擦掉」贴着屏幕边冒出来(课本铺满屏宽,没有工具那一栏),「给老师看」这才出现;擦掉了两颗都收起
   for (let i = 0; i < 60 && (await day()).messages.some((m) => m.result === 'running'); i++) await sleep(250);
   await sleep(1500);
@@ -330,6 +330,15 @@ try {
     const rowWent = await until(`document.querySelector('#st-ttl').textContent === ${JSON.stringify(nav1.ttl)}`, 10000);
     ok('点那一行:翻到下一课,报 open', Boolean(rowWent) && frames.slice(nRow).some((f) => f.t === 'board' && f.body?.k === 'open' && f.body.title === nav1.ttl));
   }
+  // 真实课本也通过同一个老师签压纸；手指上滑取消后回平，不交新的一轮。
+  const sign = await center('#cv-hold');
+  await mouse('mousePressed', sign.x, sign.y);
+  const folded = await until("!!document.querySelector('#st-frame').style.filter", 500);
+  await sleep(200);
+  await mouse('mouseMoved', sign.x, sign.y - 100);
+  const flat = await until("!document.querySelector('#st-frame').style.filter", 800);
+  await mouse('mouseReleased', sign.x, sign.y - 100);
+  ok('按住课本上的头像纸面下陷，上滑取消后回平', folded && flat);
   ok('页面没有脚本报错', errors.length === 0, errors.slice(0, 3).join(' | '));
   console.log(`\n截图在 ${shots}`);
   ws.close();

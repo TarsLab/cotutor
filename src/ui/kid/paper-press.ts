@@ -20,16 +20,20 @@ function paperSurface(right: boolean) {
   const offset = m.createImageData(paperWidth, paperHeight), shade = l.createImageData(paperWidth, paperHeight);
   // 多算一圈高度，求坡度时直接取相邻点。
   const stride = paperWidth + 2, heights = new Float32Array(stride * (paperHeight + 2));
+  // 上下先保持宽阔的谷底，再沿外缘逐渐归零。整张纹理包含最后的浅坡。
+  const vertical = new Float32Array(paperHeight + 2);
+  for (let row = -1; row <= paperHeight; row++) {
+    const v = Math.abs(2 * row / paperHeight - 1);
+    vertical[row + 1] = 1 - paperSmooth((v - .55) / .45);
+  }
   for (let x = -1; x <= paperWidth; x++) {
     const column = right ? paperWidth - 1 - x : x;
     // 页中宽峰和周围平纸在同一高度。只把指下的谷底压低，坡度在接近峰顶时渐渐归零。
     const t = Math.abs(column - paperOrigin) / (paperWidth - 1 - paperOrigin);
-    const rise = paperSmooth((t - .08) / .87);
-    const profile = -.96 * (1 - rise) ** 1.5;
-    const band = 64 + 34 * paperSmooth(t);
+    const rise = paperSmooth((t - .10) / .90);
+    const profile = -.96 * (1 - rise);
     for (let row = -1; row <= paperHeight; row++) {
-      const y = row - paperHeight / 2;
-      heights[(row + 1) * stride + x + 1] = profile * Math.exp(-((y / band) ** 2)) * (1 - paperSmooth((Math.abs(y) - 130) / 29));
+      heights[(row + 1) * stride + x + 1] = profile * vertical[row + 1];
     }
   }
   for (let row = 0; row < paperHeight; row++) for (let x = 0; x < paperWidth; x++) {
@@ -90,10 +94,10 @@ export function paperPress(page: HTMLElement) {
     const x = (face.left + face.width / 2 - bounds.left) * w / bounds.width;
     const y = (face.top + face.height / 2 - bounds.top) * h / bounds.height;
     const right = x > w / 2;
-    // 谷底对准按钮中心，向内的一端在页宽中线回平。上下两端各离谷底四分之一页高。
+    // 可见范围以字行仍有约 3 CSS px 位移计。页中线和上下四分之一页高处仍在坡上，之后平滑收尾。
     const origin = paperOrigin + .5;
-    const scale = Math.max(1, Math.abs(w / 2 - x)) / (paperWidth - origin);
-    const extent = h / 2;
+    const scale = Math.max(1, Math.abs(w / 2 - x)) * 1.27 / (paperWidth - origin);
+    const extent = h * .58;
     active = filters[Number(right)];
     const left = x - (right ? paperWidth - origin : origin) * scale;
     const top = y - extent / 2;

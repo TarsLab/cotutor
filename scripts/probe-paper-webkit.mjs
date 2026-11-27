@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 在 WebKit 的桌面和 iPad 尺寸样张上量压纸后的像素。样张位于屏幕中段，能检出滤镜误用屏幕坐标的问题。
+ * 在 WebKit 截图中量字行的实际位移。iPad mini 用全屏课本画布，桌面样张用 SVG 滤镜。
  * PLAYWRIGHT_CORE=<含 node_modules/playwright-core 的目录> node scripts/probe-paper-webkit.mjs
  */
 import assert from 'node:assert/strict';
@@ -13,15 +13,32 @@ if (!playwrightRoot) throw Error('请设置 PLAYWRIGHT_CORE 为含 node_modules/
 const { webkit } = createRequire(import.meta.url)(join(playwrightRoot, 'node_modules/playwright-core'));
 const browser = await webkit.launch();
 try {
-  for (const viewport of [{ width: 744, height: 1047 }, { width: 1047, height: 744 }, { width: 1440, height: 900 }]) {
+  for (const viewport of [{ width: 744, height: 1047 }, { width: 1133, height: 658 }, { width: 1440, height: 900 }]) {
+    const mini = viewport.width !== 1440;
     const page = await browser.newPage({ viewport, reducedMotion: 'reduce' });
-    await page.setContent(VOICE_GALLERY_PAGE);
+    // 同一个老师签。mini 使用真课页的 iframe 和栅格化路径，画标线使页上的留白也能量。
+    const html = mini ? VOICE_GALLERY_PAGE.replace(/<article id="paper">.*?<\/article>/, '<iframe id="paper"></iframe>') : VOICE_GALLERY_PAGE;
+    await page.setContent(html);
+    if (mini) await page.addStyleTag({ content: '#sample{position:fixed;inset:0;height:100%;border:0;z-index:10}#paper{width:100%;height:100%;padding:0;border:0}' });
     const avatar = page.locator('#teacher .vb-av'), paper = page.locator('#paper');
     const bounds = await paper.boundingBox();
     const rows = await paper.evaluate(el => {
       const paper = el.getBoundingClientRect(), face = document.querySelector('#teacher .vb-av').getBoundingClientRect();
       const cy = face.y + face.height / 2 - paper.y;
-      const rows = [-.28, -.10, 0, .10, .28].map(d => Math.round(cy + d * paper.height));
+      const rows = [-.34, -.24, -.13, 0, .13, .24, .34].map(d => Math.round(cy + d * paper.height));
+      if (el instanceof HTMLIFrameElement) {
+        const doc = el.contentDocument;
+        doc.body.style.margin = '0';
+        doc.body.innerHTML = '<main class="bk-view" style="position:absolute;inset:0"><div class="bk-paper"><canvas class="bk-page"></canvas><svg class="bk-svg" style="position:absolute;inset:0;width:100%;height:100%"></svg></div></main>';
+        const cv = doc.querySelector('canvas');
+        cv.width = el.clientWidth; cv.height = el.clientHeight;
+        doc.querySelector('svg').setAttribute('viewBox', '0 0 ' + cv.width + ' ' + cv.height);
+        const ctx = cv.getContext('2d');
+        ctx.fillStyle = 'white'; ctx.fillRect(0, 0, cv.width, cv.height);
+        ctx.fillStyle = 'black';
+        for (const y of rows) ctx.fillRect(0, y, cv.width, 2);
+        return rows;
+      }
       el.replaceChildren();
       el.style.background = 'white';
       for (const y of rows) {
@@ -53,10 +70,10 @@ try {
       }, { rows, png: png.toString('base64'), columns });
     };
     for (const right of [false, true]) {
-      await page.locator('#mirror').setChecked(right);
+      await page.locator('#mirror').evaluate((el, on) => { if (el.checked !== on) el.click(); }, right);
       const face = await avatar.boundingBox(), cx = face.x + face.width / 2;
       const origin = (cx - bounds.x) / bounds.width;
-      const columns = [.20, .45, .70, .85, 1, 1.15].map(t => origin + (.5 - origin) * t);
+      const columns = [.20, .45, .70, .85, 1, 1.15, 1.32].map(t => origin + (.5 - origin) * t);
       const flat = await readRows(columns);
       let previous;
       for (const fraction of [.18, .82]) {
@@ -65,11 +82,12 @@ try {
         await page.waitForTimeout(180); // 等长按进入说话态。
         const bent = await readRows(columns);
         const shift = bent.map((column, x) => column.map((y, i) => y - flat[x][i]));
-        const [near, slope, shoulder, crest, middle, beyond] = shift.map(column => column[2]);
+        const [near, slope, shoulder, crest, middle, fade, beyond] = shift.map(column => column[3]);
         assert(near > slope && slope > shoulder && shoulder >= crest && near >= 12, '从谷底向峰顶逐渐回升: ' + shift);
-        assert(shift[0][1] >= 3 && shift[0][3] >= 3, '指下的上下两侧都应下沉: ' + shift[0]);
-        assert(Math.abs(crest) <= 1 && middle === 0 && beyond === 0, '页中线附近应宽平: ' + shift);
-        assert(shift.every(col => col[0] === 0 && col[4] === 0), '竖向半页以外应平整');
+        for (const col of shift.slice(0, 2)) assert(col[1] >= 3 && col[5] >= 3, '上下接近四分之一页高处的字行仍要明显移动: ' + col);
+        // 桌面样张较窄，位移深度随页宽缩小，SVG 采样在整像素行上取整。
+        assert(crest > middle && middle >= (mini ? 2.5 : 2) && middle <= 4 && fade <= 1.5 && beyond === 0, '页中线附近仍可见位移，外侧缓缓回平: ' + shift);
+        assert(shift.every(col => col[0] === 0 && col[6] === 0), '渐退区以外应平整');
         assert.equal((await page.locator('#teacher').innerText()).trim(), '松手发送');
         if (previous) assert.deepEqual(shift, previous, '按头像上下缘的谷底位置应一致');
         previous = shift;
